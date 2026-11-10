@@ -1,0 +1,17 @@
+# Cowork sidebar.
+#
+# The app's own sidebar and this one must never both be on: the app would not load. So:
+# 1. this bundle switches the app's own sidebar (`ui-sidebar`) off, and
+# 2. the Cowork sidebar row switches itself on only while `ui-sidebar` is off.
+# `ui-sidebar` comes before this row, so rule 2 always sees its current state, also when the
+# bundle is switched on or off live from the Plugins page.
+#
+# To get the normal sidebar back: switch this bundle off on the Plugins page (or remove it).
+# Switching the app's own "Sidebar" row back on also works: rule 2 then keeps this one off.
+- id: ui-sidebar
+  disabled: true
+- insert:
+    - id: cowork-shell
+      name: '@local/dsh-cowork-shell'
+      disabled: !!js "![...ctx.loader.entries()].some((e) => e.options.name === '@deepseek-ai/dsh-client-ui-sidebar' && e.disabled)"
+      config: {}

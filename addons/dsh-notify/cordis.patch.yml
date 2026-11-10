@@ -1,0 +1,13 @@
+- insert:
+    - id: notify
+      name: '@local/dsh-notify'
+      config:
+        # Does nothing until you list a rule. Example shape:
+        #   rules:
+        #     - id: <ID>
+        #       on: turnEnd                      # turnEnd | approval
+        #       reasons: [completed, error]      # turnEnd only: completed | error | aborted | blocked | interrupted
+        #       minSeconds: 30                   # turnEnd only: skip turns shorter than this
+        #       command: [<PROGRAM>, <ARG>, ...] # run without a shell; the message is in the environment
+        #   # The command sees DSH_NOTIFY_MESSAGE, DSH_NOTIFY_EVENT, DSH_NOTIFY_REASON, DSH_NOTIFY_TOOL, DSH_NOTIFY_PROJECT
+        rules: []

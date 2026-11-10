@@ -1,0 +1,17 @@
+- insert:
+    - id: agent-swarm
+      name: '@local/dsh-agent-swarm'
+      config:
+        # Does nothing until you define a swarm. Example shape:
+        #   swarms:
+        #     <NAME>:
+        #       description: '<WHAT IT IS FOR>'
+        #       strategy: fanout                  # fanout | pipeline | debate
+        #       maxActive: 3                      # at most 8
+        #       budget: { tokens: 0, usd: 0 }     # 0 = no cap
+        #       members:
+        #         - { id: <ID>, role: <plan|implement|review|fast>, instructions: '<PERSONA OR FOCUS>' }
+        #         - { id: <ID>, provider: <ROUTE>, model: <MODEL ID>, instructions: '...' }   # an explicit route
+        #   pricing: { '<ROUTE>/<MODEL ID>': { inputPerMTok: <USD>, outputPerMTok: <USD> } }
+        #   defaultSwarmByMode: { <MODE ID>: <SWARM NAME> }
+        swarms: {}

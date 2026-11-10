@@ -1,0 +1,10 @@
+- insert:
+    - id: route-health
+      name: '@local/dsh-route-health'
+      config:
+        # No routes are configured by default: the plugin does nothing until you add your own.
+        # routes:
+        #   <ROUTE_NAME>:               # the provider route id, as in llm-pi-ai `providers`
+        #     probeUrl: <PROBE_URL>     # for example <BASE_URL>/models; any HTTP answer below 500 counts as reachable
+        #     label: <LABEL>
+        routes: {}

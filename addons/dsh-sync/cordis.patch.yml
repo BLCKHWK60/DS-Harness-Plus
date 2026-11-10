@@ -1,0 +1,19 @@
+- insert:
+    - id: sync
+      name: '@local/dsh-sync'
+      config:
+        # Does nothing until you set a remote. Example shape:
+        #   remote: <GIT REMOTE: a URL or a path to a bare repository>   # no credentials in it
+        #   backend: git                      # git = plaintext (loud warning) | encrypted = age
+        #   encryption: optional              # optional | required (required = nothing is sent unless age is fully set up)
+        #   ageRecipient: <AGE PUBLIC KEY>    # for backend: encrypted
+        #   ageIdentity: <ABSOLUTE PATH OF THE AGE KEY FILE>   # a PATH, never the key
+        #   deviceLabel: <A NAME FOR THIS MACHINE>
+        #   autoPullOnStart: false
+        #   autoPushOnTurnEnd: false
+        #   pullIntervalMinutes: 0
+        #   projects:
+        #     sync: false
+        #     autoCreate: false
+        #     folderMap: [ { from: <FOLDER ON ANOTHER MACHINE>, to: <FOLDER ON THIS ONE> } ]
+        remote: ''

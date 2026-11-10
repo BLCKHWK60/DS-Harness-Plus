@@ -1,0 +1,9 @@
+- insert:
+    - id: code-power
+      name: '@local/dsh-code-power'
+      config:
+        # Defaults apply; nothing user-specific is preset. Optional settings:
+        #   prReview: { lanes: [correctness, security, tests] }
+        #   bestOfN: { n: 3, judgeRole: review, criteria: [correctness, completeness, simplicity, test coverage], consistencyCheck: true }
+        #   ciFix: { maxRounds: 5, command: '<YOUR CHECK COMMAND>' }   # empty = the skill tells the model to ask or find it
+        enabled: true

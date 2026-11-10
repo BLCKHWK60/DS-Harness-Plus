@@ -1,0 +1,29 @@
+{
+  "name": "@local/dsh-context-saver",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shortens large tool results before the model sees them and keeps the original for retrieval. Off until enabled.",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "README.md",
+    "locale/*.json",
+    "icon.svg",
+    "node_modules/@deepseek-ai/schemastery/**",
+    "node_modules/@deepseek-ai/cosmokit/**"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

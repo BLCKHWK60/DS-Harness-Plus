@@ -1,0 +1,14 @@
+- insert:
+    - id: sampling-presets
+      name: '@local/dsh-sampling-presets'
+      config:
+        # Does nothing until you add presets. Load it AFTER the Tier plugin. Example shape:
+        #   presets:
+        #     <NAME>: { temperature: <0 to 2>, maxTokens: <TOKENS>, notes: '<WHY>' }
+        #   categories: { <CATEGORY>: <PRESET NAME> }     # for example code, plan, chat, research, summarize
+        #   byMode: { <MODE ID>: <CATEGORY> }              # with the Modes plugin
+        #   defaultCategory: <CATEGORY>
+        #   perModel:                                       # optional, keyed "<provider>/<model>"
+        #     '<ROUTE>/<MODEL ID>': { allowedPresets: [<NAME>], aliases: { <NAME>: <ALIAS MODEL ID> } }
+        #   strategy: mixed                                 # in-dsh | server-alias | mixed
+        presets: {}

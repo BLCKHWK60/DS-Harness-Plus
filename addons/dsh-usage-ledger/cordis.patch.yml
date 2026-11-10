@@ -1,0 +1,9 @@
+- insert:
+    - id: usage-ledger
+      name: '@local/dsh-usage-ledger'
+      config:
+        # Counts only; no prompt or response text is stored. Optional settings:
+        #   freeModels: ['<provider>/<model-pattern>']   # `*` matches any characters
+        #   modelAliases: { '<alias-model-id>': '<name to record>' }
+        #   dataDir: <ABSOLUTE_DIR>                      # default: a folder in the dsh home
+        retentionDays: 365

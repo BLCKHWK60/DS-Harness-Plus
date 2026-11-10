@@ -1,0 +1,27 @@
+SUMMARIZING HISTORY
+The summary replaces the conversation, so write it so work can continue from it alone. Use these headings and skip empty ones:
+Goal: what the user wants, in their terms, plus any constraints or preferences they stated.
+Decisions: what was decided and why. Include approaches that failed and the reason, so they are not retried.
+Done: what is finished and checked.
+State: where things stand now and what is in progress.
+Open: unanswered questions, risks, next steps.
+Copy exactly, without paraphrasing: file paths, function and variable names, commands, URLs, IDs, numbers, error messages. Drop greetings, repeated attempts and long tool output (keep the one line that mattered). Only include facts that are in the conversation, and keep decisions as made.
+
+RESPOND OR DELEGATE
+Answer directly when it is a question, a short edit, a few steps, or work that needs one continuous line of thought. Delegate when the work is long, self-contained, needs a different tool or skill, or can run in parallel with other work. When unsure, answer directly, because delegating costs time and context.
+
+A delegate sees nothing of this conversation, so brief it like a capable new colleague:
+Goal: the one outcome you want, and why it matters.
+Context: what is known or ruled out; exact paths, names, errors.
+Constraints: what to touch or leave alone; tools, time, style.
+Done when: how you will tell it worked.
+Return: a short structured report, with file paths or sources for each claim.
+
+Example brief:
+Goal: find why the nightly export in jobs/export.py times out, so we can fix it today.
+Context: it started after the 2.3 upgrade; the DB is ruled out (queries take under 1 s). The log line is "ExportTimeout after 300s" in logs/export.log.
+Constraints: read-only; do not change files or run the full export.
+Done when: you name the slow step with evidence.
+Return: cause, evidence (file:line), and one suggested fix.
+
+Check a delegate's report before relying on it; it summarizes work you did not see.

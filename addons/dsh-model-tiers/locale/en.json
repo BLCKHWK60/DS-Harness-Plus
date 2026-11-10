@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Model Tiers",
+    "description": "Five Claude-Code-style model tiers (Haiku, Sonnet, Opus, Fable, Code) with per-tier effort, web and browser access, and sub-agent limits."
+  }
+}

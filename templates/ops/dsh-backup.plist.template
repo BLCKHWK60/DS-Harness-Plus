@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- LaunchAgent template for dsh-backup.sh. Fill every __PLACEHOLDER__, save it as
+     ~/Library/LaunchAgents/<LABEL>.plist and load it yourself (see README.md). Nothing here is preset. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>__LABEL__</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>__ABSOLUTE_PATH_TO__/dsh-backup.sh</string>
+    <string>--dest</string>
+    <string>__ABSOLUTE_BACKUP_FOLDER__</string>
+    <string>--keep</string>
+    <string>__KEEP_COUNT__</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>__HOUR_0_TO_23__</integer>
+    <key>Minute</key><integer>__MINUTE_0_TO_59__</integer>
+  </dict>
+  <key>StandardOutPath</key><string>__ABSOLUTE_LOG_FILE__</string>
+  <key>StandardErrorPath</key><string>__ABSOLUTE_LOG_FILE__</string>
+  <key>ProcessType</key><string>Background</string>
+</dict>
+</plist>

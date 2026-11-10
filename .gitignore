@@ -1,0 +1,7 @@
+.DS_Store
+.pnpm-workspace-state-v1.json
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.venv/

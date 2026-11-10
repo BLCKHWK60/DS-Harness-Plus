@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Model router",
+    "description": "Routes each turn to one of 2 to 5 candidate models using a small routing model."
+  }
+}

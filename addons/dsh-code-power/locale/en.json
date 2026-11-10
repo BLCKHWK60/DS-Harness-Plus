@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Code power",
+    "description": "Skills for PR review, a CI fix loop, best-of-N and hunk review, and a blind judge tool for comparing candidate diffs."
+  }
+}

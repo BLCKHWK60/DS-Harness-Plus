@@ -1,0 +1,29 @@
+{
+  "name": "@local/dsh-code-power",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Skills for PR review, a CI fix loop, best-of-N and hunk review, plus a judge_candidates tool that compares candidate diffs blind with a reversed-order consistency check.",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "README.md",
+    "locale/*.json",
+    "icon.svg",
+    "node_modules/@deepseek-ai/schemastery/**",
+    "node_modules/@deepseek-ai/cosmokit/**"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

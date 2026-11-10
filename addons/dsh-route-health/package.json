@@ -1,0 +1,39 @@
+{
+  "name": "@local/dsh-route-health",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Probes configured model routes, keeps an up/slow/down state per route, and moves Sessions to a tier's fallback route when a route is unreachable.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "locale/*.json",
+    "icon.svg",
+    "node_modules/@deepseek-ai/schemastery/**",
+    "node_modules/@deepseek-ai/cosmokit/**"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "@local/dsh-deep-research",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A deep_research tool: plan sub-questions, research them in parallel with child agents, and write a report whose citations are checked against what the children actually fetched.",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "README.md",
+    "locale/*.json",
+    "icon.svg",
+    "node_modules/@deepseek-ai/schemastery/**",
+    "node_modules/@deepseek-ai/cosmokit/**"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

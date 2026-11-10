@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Model tiers">
+  <defs>
+    <linearGradient id="mt-accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5b8cff"/>
+      <stop offset="1" stop-color="#8f6bff"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#101826"/>
+  <g fill="url(#mt-accent)">
+    <rect x="11" y="40" width="7" height="13" rx="2.5"/>
+    <rect x="22" y="34" width="7" height="19" rx="2.5"/>
+    <rect x="33" y="27" width="7" height="26" rx="2.5"/>
+    <rect x="44" y="19" width="7" height="34" rx="2.5"/>
+  </g>
+  <path d="M29 9.5 36 17l-7 7.5L22 17z" fill="#9db7ff"/>
+  <path d="M29 14.2 31.8 17 29 19.8 26.2 17z" fill="#101826"/>
+</svg>

@@ -1,0 +1,12 @@
+- insert:
+    - id: model-arena
+      name: '@local/dsh-model-arena'
+      config:
+        # Does nothing until you list candidates. Example shape:
+        #   candidates:
+        #     - { id: <ID>, provider: <ROUTE>, model: <MODEL ID>, reasoningEffort: <EFFORT> }
+        #   maxContestants: 4                       # 2 to 4 answers per round
+        #   judge: { provider: <ROUTE>, model: <MODEL ID> }        # needed only for `/arena judge`
+        #   criteria: [<CRITERION>, ...]            # empty = a generic set
+        #   dataDir: <ABSOLUTE_DIR>                 # optional; default is a folder in the dsh home
+        candidates: []

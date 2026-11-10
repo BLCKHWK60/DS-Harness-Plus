@@ -1,0 +1,48 @@
+- insert:
+    - id: model-tiers
+      name: '@local/dsh-model-tiers'
+      config:
+        tiers:
+          haiku:
+            provider: omlx-max
+            model: claude-haiku
+            effort: low
+            webSearch: true
+            webFetch: true
+            browser: true
+            subagents: true
+          sonnet:
+            provider: omlx-max
+            model: claude-sonnet
+            effort: medium
+            webSearch: true
+            webFetch: true
+            browser: true
+            subagents: true
+          opus:
+            provider: omlx-max
+            model: claude-opus
+            effort: high
+            webSearch: true
+            webFetch: true
+            browser: true
+            subagents: true
+          fable:
+            provider: omlx-max
+            model: Qwen3.8-27B-TURBO-Fable-Cold-Fusion-735-882-Heretic-Uncensored-NM-DAU-mlx-oQ4e-1M
+            effort: medium
+            webSearch: true
+            webFetch: true
+            browser: true
+            subagents: true
+          code:
+            provider: omlx-max
+            model: claude-opus
+            effort: ultra
+            webSearch: true
+            webFetch: true
+            browser: true
+            subagents: true
+        maxSubagents: 4
+        ultraAutoDelegate: true
+        activeTiers: '{}'

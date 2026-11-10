@@ -1,0 +1,11 @@
+- insert:
+    - id: model-router
+      name: '@local/dsh-model-router'
+      config:
+        # Does nothing until you configure 2 to 5 candidates and a routing model. Example shape:
+        #   candidates:
+        #     - { id: <ID>, tier: <TIER_ID>, strengths: '<WHAT IT IS GOOD AT>' }          # a Tier id, or
+        #     - { id: <ID>, provider: <ROUTE>, model: <MODEL_ID>, strengths: '...' }       # an explicit route
+        #   routingModel: { provider: <ROUTE>, model: <MODEL_ID> }
+        #   policy: { stickyTurns: 2, minConfidence: 0.6, defaultCandidate: <ID>, respectHealth: true }
+        candidates: []

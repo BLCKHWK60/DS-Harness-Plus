@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Role prompts",
+    "description": "Adds your own instruction sections to the system prompt, optionally only for chosen tiers."
+  }
+}

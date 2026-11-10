@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Context Saver",
+    "description": "Shortens large tool results before the model sees them and keeps the original for retrieval."
+  }
+}

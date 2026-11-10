@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "模型层级",
+    "description": "五种 Claude Code 风格的模型层级（Haiku、Sonnet、Opus、Fable、Code），可为每一层设置推理强度、网络与浏览器权限以及子代理上限。"
+  }
+}

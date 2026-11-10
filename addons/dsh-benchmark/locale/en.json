@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Benchmark",
+    "description": "Runs prompt suites over a grid of models and sampling settings and recommends the best ones."
+  }
+}

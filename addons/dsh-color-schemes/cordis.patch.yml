@@ -1,0 +1,5 @@
+# Colour schemes. The default is `stock` (the app's own colours); pick another in Settings > Colours.
+- insert:
+    - id: color-schemes
+      name: '@local/dsh-color-schemes'
+      config: {}

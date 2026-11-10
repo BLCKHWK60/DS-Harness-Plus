@@ -1,0 +1,34 @@
+# EXAMPLE provider routes for DeepSeek Harness 0.2.2-rc.1 (llm-pi-ai). Not applied by anything.
+#
+# Nothing here is a default for any particular user: every <PLACEHOLDER> is yours to fill.
+# Copy this file, fill the placeholders, then merge the entries into your profile's
+# cordis.patch.yml (a patch replaces a row's whole `config`, so merge by hand if the row exists).
+# Never put an API key in this file: `apiKeyEnv` is the NAME of an environment variable or
+# credential reference.
+#
+# Repeat the route block under `providers:` for each server or gateway you use.
+- id: llm-pi-ai
+  config:
+    providers:
+      <ROUTE_NAME>:                        # your own route id, for example one per machine or gateway
+        displayName: <LABEL>
+        api: openai-completions            # wire protocol of the server
+        baseURL: <BASE_URL>                # for example http://<host>:<port>/v1; no default on purpose
+        apiKeyEnv: <API_KEY_ENV_NAME>      # name only; omit if the server needs no key
+        # Used for every model below that does not set its own value. 65,536 / 8,192 is a
+        # conservative start for local models; raise them to what your server really serves.
+        defaultContextWindow: 65536
+        defaultMaxTokens: 8192
+        models:                            # replaces the route's catalog; list what the server serves
+          - id: <MODEL_ID>
+            name: <MODEL_LABEL>
+            # contextWindow: <TOKENS>      # optional per-model override
+            # maxTokens: <TOKENS>          # optional per-model override
+            # reasoningEfforts: { low: low, high: high }   # only if the model takes an effort setting
+
+# Needed when a route's context window is 65,536 tokens or smaller: dsh keeps 65,536 tokens of
+# headroom by default, which does not fit such a window, and a model switch then fails with
+# MODEL_SWITCH_COMPACTION_FAILED. Delete this row if all your routes have larger windows.
+- id: compaction-basic
+  config:
+    headroomTokens: 8192

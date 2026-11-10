@@ -1,0 +1,33 @@
+{
+  "name": "@local/dsh-sync",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Syncs dsh sessions (and the project list) between machines through a git remote you choose, with optional or required age encryption. A reviewed and changed fork of dsh-session-sync.",
+  "exports": {
+    ".": "./index.mjs",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.mjs",
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "NOTICE",
+    "LICENSE",
+    "locale/*.json",
+    "icon.svg",
+    "node_modules/@deepseek-ai/schemastery/**",
+    "node_modules/@deepseek-ai/cosmokit/**"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "license": "Apache-2.0",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

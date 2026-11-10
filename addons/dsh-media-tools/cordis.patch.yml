@@ -1,0 +1,17 @@
+- insert:
+    - id: media-tools
+      name: '@local/dsh-media-tools'
+      config:
+        # Does nothing until you configure it. Example shape:
+        #   images:
+        #     baseUrl: <IMAGES API BASE URL, ending in /v1>
+        #     model: <IMAGE MODEL ID>
+        #     apiKeyEnv: <NAME OF THE ENVIRONMENT VARIABLE THAT HOLDS THE KEY>   # a NAME, never the key; leave out for a keyless server
+        #     approval: first                 # first | every | never : ask before an image call
+        #     maxCallsPerSession: 20
+        #     outputDir: generated-images     # inside the session's working folder
+        #   gate:
+        #     patterns: ['<REGEX OF A TOOL NAME TO ASK ABOUT>']    # browser-use / computer-use tools of the provider you chose
+        #     mode: first                     # first | every
+        images: {}
+        gate: {}

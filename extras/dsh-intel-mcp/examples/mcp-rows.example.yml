@@ -1,0 +1,40 @@
+# EXAMPLE dsh MCP client rows for the three servers. Not applied by anything.
+# Every <PLACEHOLDER> is yours to fill; nothing here is a default for any user.
+# Merge the rows into your profile's cordis.patch.yml (an `- insert:` list). Rows are
+# independent: add only the servers you want. dsh enables none by default.
+#
+#   <PYTHON>        a Python 3.12 or 3.13 interpreter that has dsh-intel-mcp installed
+#   <DATA_DIR>      an absolute directory the servers may use for caches and stores
+#   <PROJECT_ROOT>  absolute path of the repository the Code Map should index
+- insert:
+    - id: mcp-codemap
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: codemap            # tools appear as mcp__codemap__code_overview, ...
+        transport: stdio
+        command: <PYTHON>
+        args: ['-m', 'dsh_intel_mcp.codemap', '--root', '<PROJECT_ROOT>']
+        env:
+          DSH_INTEL_HOME: <DATA_DIR>
+
+    - id: mcp-reverse
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: reverse            # mcp__reverse__re_survey, re_inspect, re_evidence, ...
+        transport: stdio
+        command: <PYTHON>
+        # --target-kind is workspace or path (URL targets are not part of this build);
+        # --max-target-mb defaults to 500.
+        args: ['-m', 'dsh_intel_mcp.reverse', '--target-kind', 'path', '--target', '<TARGET_PATH>', '--root', '<PROJECT_ROOT>']
+        env:
+          DSH_INTEL_HOME: <DATA_DIR>
+
+    - id: mcp-context
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: context            # mcp__context__context_retrieve
+        transport: stdio
+        command: <PYTHON>
+        args: ['-m', 'dsh_intel_mcp.context']
+        env:
+          DSH_INTEL_HOME: <DATA_DIR>

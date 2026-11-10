@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Usage ledger",
+    "description": "Counts model requests and tokens per day, provider and model. Stores no prompt text."
+  }
+}

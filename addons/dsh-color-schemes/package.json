@@ -1,0 +1,23 @@
+{
+  "name": "@local/dsh-color-schemes",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Colour schemes for the whole app: DeepSeek Harness stock colours, MindsHub Cowork (navy and teal), Graphite and Forest, each in light and dark, plus an optional custom scheme. Pick one in Settings > Colours.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": ["index.js", "client.js", "cordis.patch.yml", "README.md", "locale/*.json", "icon.svg", "node_modules/@deepseek-ai/schemastery/**", "node_modules/@deepseek-ai/cosmokit/**"],
+  "engines": { "dsh": ">=0.2.2-rc.1 <0.3.0" },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-api-remotes", "@deepseek-ai/dsh-client-locale"]
+    }
+  }
+}

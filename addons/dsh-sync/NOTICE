@@ -1,0 +1,14 @@
+dsh-sync is a modified copy of dsh-session-sync 0.2.32
+  Copyright PerryLink and the dsh-session-sync contributors
+  Source: https://github.com/PerryLink/dsh-session-sync (npm: dsh-session-sync@0.2.32)
+  License: Apache License 2.0 (see LICENSE)
+
+Files under lib/ come from that package. Files changed from the original:
+  lib/constants.mjs  names, reserved folder, our temp-file pattern, tool settings removed
+  lib/mirror.mjs     atomic writes; records live file sizes; restore never writes the reserved folder and never
+                     replaces a live file that changed after it was mirrored
+  lib/encrypted.mjs  pulled sessions are now copied into the live session store (the original skipped this step);
+                     warning text for a degraded backend made explicit
+  lib/engine.mjs, lib/errors.mjs  names, restore result reported
+Files added by this project: index.mjs (new host face), lib/runner.mjs, lib/state.mjs, lib/policy.mjs, lib/projects.mjs.
+Files not carried over: the original index.mjs, lib/gate.mjs, lib/domain.mjs, types.d.ts.

@@ -1,0 +1,12 @@
+- insert:
+    - id: deep-research
+      name: '@local/dsh-deep-research'
+      config:
+        # Defaults apply; nothing user-specific is preset. Optional settings:
+        #   roles: { planner: plan, searcher: fast, writer: plan }   # Tier role names
+        #   maxSources: 40
+        #   maxMinutes: 20
+        #   searchToolNames: [web_search]     # other tool names if you use another search backend
+        #   fetchToolNames: [web_fetch]
+        #   requireFetched: false             # true drops findings whose page was not fetched
+        maxMinutes: 20

@@ -1,0 +1,12 @@
+- insert:
+    - id: benchmark
+      name: '@local/dsh-benchmark'
+      config:
+        # Does nothing until you define targets and suites. Example shape:
+        #   targets: [ { id: <ID>, provider: <ROUTE>, model: <MODEL ID> } ]        # an alias model id works too
+        #   suites:
+        #     <SUITE>: { category: <CATEGORY>, prompts: [ { id: <ID>, prompt: '<TEXT>', grader: { type: contains, expect: '<TEXT>' } } ] }
+        #   grid: { temperature: [0.2, 0.7], maxTokens: [1024], seeds: 3 }
+        #   judge: { provider: <ROUTE>, model: <MODEL ID> }                        # only for `judge` graders
+        #   pricing: { '<ROUTE>/<MODEL ID>': { inputPerMTok: <USD>, outputPerMTok: <USD> } }
+        targets: []

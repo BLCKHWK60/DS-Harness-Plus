@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sync",
+    "description": "Syncs sessions and the project list between machines through a git remote you choose."
+  }
+}

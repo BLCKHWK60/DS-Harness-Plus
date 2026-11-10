@@ -1,0 +1,66 @@
+# EXAMPLE memory options for DeepSeek Harness 0.2.2-rc.1. Not applied by anything.
+#
+# All five are built here and every one is DISABLED. Enable exactly one (remove its
+# `disabled: true` line); `check.sh` fails when more than one is enabled.
+# Every <PLACEHOLDER> is yours to fill: nothing here is a default for any user, and no secret
+# belongs in this file (use key names / environment variables).
+#
+# Options 1-3 are MCP servers started by dsh's MCP client; you install their pinned executable
+# yourself first. Options 4-5 are dsh plugins: install the pinned version with
+# `dsh plugin --profile <name> add <package>@<version>`, THEN merge its override row below
+# (their bundle patch would otherwise enable them with the package's own defaults).
+# Review notes for each are in README.md.
+
+# 1. MCP reference memory (official modelcontextprotocol server): knowledge graph in one JSONL file.
+#    Install: npm install --global @modelcontextprotocol/server-memory@2026.7.4
+- insert:
+    - id: memory-mcp-reference
+      name: '@deepseek-ai/dsh-mcp-client'
+      disabled: true
+      config:
+        serverName: reference_memory
+        transport: stdio
+        command: mcp-server-memory
+        env:
+          MEMORY_FILE_PATH: <MEMORY_FILE_PATH>      # absolute path of the graph file
+
+# 2. Memorix 1.3.0: heuristic local memory (needs Node 22.18+). Not source-reviewed here (69 MB unpacked).
+#    Install: npm install --global memorix@1.3.0
+    - id: memory-memorix
+      name: '@deepseek-ai/dsh-mcp-client'
+      disabled: true
+      config:
+        serverName: memorix
+        transport: stdio
+        command: memorix
+        args: [serve]
+        env:
+          MEMORIX_DATA_DIR: <MEMORIX_DATA_DIR>      # absolute; Memorix defaults to a folder in your home
+
+# 3. Engram 1.20.0 (Go, Gentleman-Programming/engram). Not source-reviewed here (39 MB repo).
+#    Install: go install github.com/Gentleman-Programming/engram/cmd/engram@v1.20.0
+    - id: memory-engram
+      name: '@deepseek-ai/dsh-mcp-client'
+      disabled: true
+      config:
+        serverName: engram
+        transport: stdio
+        command: engram
+        args: [mcp]
+        env:
+          ENGRAM_DATA_DIR: <ENGRAM_DATA_DIR>        # absolute; Engram defaults to ~/.engram
+
+# 4. dsh-mnemon 0.5.42 (community plugin). Install first: dsh plugin add dsh-mnemon@0.5.42
+#    Override row (top level, as the plugin's own bundle patch asks): keeps it off until you remove `disabled`.
+# - id: mnemon
+#   disabled: true
+
+# 5. @kenz1117/dsh-engram 0.13.9 (community plugin). Install first: dsh plugin add @kenz1117/dsh-engram@0.13.9
+#    Its bundle patch ships `ingest: 'light'` (automatic capture of your messages); this override sets it off.
+#    A patch replaces the whole config of a row.
+# - id: dsh-engram
+#   disabled: true
+#   config:
+#     ingest: 'off'
+#     dbDir: <ENGRAM_DB_DIR>                         # absolute; the plugin defaults to ~/.dsh/engram
+#     modelCacheDir: <ENGRAM_MODEL_CACHE_DIR>

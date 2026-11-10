@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Notify",
+    "description": "Runs a command you choose when a turn ends or dsh needs your approval."
+  }
+}

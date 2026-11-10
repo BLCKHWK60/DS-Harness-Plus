@@ -1,0 +1,14 @@
+- insert:
+    - id: role-prompts
+      name: '@local/dsh-role-prompts'
+      config:
+        # No sections are configured by default. Add your own, for example:
+        #   sections:
+        #     <NAME>:
+        #       enabled: true
+        #       order: 60               # lower = earlier in the prompt (Tier's section is 70)
+        #       appliesToTiers: []      # tier ids; empty = every tier
+        #       text: |
+        #         <YOUR INSTRUCTIONS>
+        # Ready-made texts to start from are in examples/*.txt.
+        sections: {}

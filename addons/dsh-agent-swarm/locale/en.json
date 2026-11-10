@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Agent swarm",
+    "description": "Runs named swarms of child agents on Tier role routes with caps and a budget."
+  }
+}

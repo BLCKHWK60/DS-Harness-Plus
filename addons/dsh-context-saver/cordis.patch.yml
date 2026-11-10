@@ -1,0 +1,9 @@
+- insert:
+    - id: context-saver
+      name: '@local/dsh-context-saver'
+      config:
+        # Off until you enable it. When enabled, `python` and `dataDir` are required:
+        #   enabled: true
+        #   python: <PYTHON>      # interpreter with the dsh-intel-mcp package installed
+        #   dataDir: <DATA_DIR>   # absolute; must be the DSH_INTEL_HOME of the `context` MCP server
+        enabled: false

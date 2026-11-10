@@ -1,0 +1,90 @@
+# EXAMPLE starter pack of MCP servers for DeepSeek Harness 0.2.2-rc.1. Not applied by anything.
+#
+# Eight servers, every one DISABLED and pinned to an exact version (decision D4: pin, never
+# `@latest`). Enable a row by removing its `disabled: true` line, then restart or reload the
+# profile; its tools appear as mcp__<serverName>__<tool>. Merge only the rows you want into your
+# profile's cordis.patch.yml (an `- insert:` list).
+#
+# Every <PLACEHOLDER> is yours to fill; nothing here is a default for any user and no secret
+# belongs in this file (use key names / environment variables). Versions are the ones current
+# on 2026-11-09, NOT source-reviewed; see README.md. MCP servers run with your user's rights,
+# outside dsh's file sandbox: enable only what you trust.
+#
+# Needs: Node 24+ with npx for the npm servers, uv with uvx for the Python servers.
+- insert:
+    - id: mcp-filesystem
+      name: '@deepseek-ai/dsh-mcp-client'
+      disabled: true
+      config:
+        serverName: filesystem
+        transport: stdio
+        command: npx
+        args: ['-y', '@modelcontextprotocol/server-filesystem@2.2.0', '<ALLOWED_FOLDER>']   # absolute; only this folder is reachable
+
+    - id: mcp-git
+      name: '@deepseek-ai/dsh-mcp-client'
+      disabled: true
+      config:
+        serverName: git
+        transport: stdio
+        command: uvx
+        args: ['mcp-server-git==2026.11.4']
+
+    - id: mcp-fetch
+      name: '@deepseek-ai/dsh-mcp-client'
+      disabled: true
+      config:
+        serverName: fetch
+        transport: stdio
+        command: uvx
+        args: ['mcp-server-fetch==2026.11.4']       # fetches any URL you or the model give it
+
+    - id: mcp-playwright
+      name: '@deepseek-ai/dsh-mcp-client'
+      disabled: true
+      config:
+        serverName: playwright
+        transport: stdio
+        command: npx
+        args: ['-y', '@playwright/mcp@0.0.85']      # drives a real browser; Playwright may download browser binaries on first use
+
+    - id: mcp-chrome-devtools
+      name: '@deepseek-ai/dsh-mcp-client'
+      disabled: true
+      config:
+        serverName: chrome-devtools
+        transport: stdio
+        command: npx
+        args: ['-y', 'chrome-devtools-mcp@1.12.0']  # inspects and controls Chrome pages
+
+    - id: mcp-context7
+      name: '@deepseek-ai/dsh-mcp-client'
+      disabled: true
+      config:
+        serverName: context7
+        transport: stdio
+        command: npx
+        args: ['-y', '@upstash/context7-mcp@4.6.0']  # sends library names you ask about to Upstash's service
+        # An optional key is read from the environment, never written here:
+        # env: { CONTEXT7_API_KEY: !!js process.env.CONTEXT7_API_KEY }
+
+    # Same row id as option 1 in config/memory/, so the one-memory-option check covers it. Use one copy only.
+    - id: memory-mcp-reference
+      name: '@deepseek-ai/dsh-mcp-client'
+      disabled: true
+      config:
+        serverName: reference_memory
+        transport: stdio
+        command: npx
+        args: ['-y', '@modelcontextprotocol/server-memory@2026.7.4']   # the version dsh's own example is tested with
+        env:
+          MEMORY_FILE_PATH: <MEMORY_FILE_PATH>      # absolute path of the graph file
+
+    - id: mcp-sequential-thinking
+      name: '@deepseek-ai/dsh-mcp-client'
+      disabled: true
+      config:
+        serverName: sequential-thinking
+        transport: stdio
+        command: npx
+        args: ['-y', '@modelcontextprotocol/server-sequential-thinking@2.1.1']
