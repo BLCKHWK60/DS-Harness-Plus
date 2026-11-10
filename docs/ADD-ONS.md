@@ -41,6 +41,8 @@ Replaces the left sidebar with a MindsHub-style one:
   - **Cowork:** Automation tasks, **Connectors** and **Skills**.
   - **Code:** Connectors and Skills.
 
+  **Each tab lists only its own conversations.** Code shows your coding projects, Chat your chats, Cowork your tasks. Use the `⋯` on a conversation or a project to move it to another tab; **Show all** gives the app's full list with search.
+
   The start page shows a greeting per tab, and on the Cowork tab, suggestion chips under the chat box (Create slides, Build website, …) that fill in a starter prompt.
 
   **Connectors** lists your MCP servers. Each shows whether it is connected and how many tools it brings, with an on/off switch. A short form writes out the settings lines for a new one. **Skills** lists the skills the assistant can use, with search.

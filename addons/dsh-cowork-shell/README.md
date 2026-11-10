@@ -25,6 +25,27 @@ The tab you pick decides the mode of every **new** conversation, and the Chat / 
 
 This needs the Modes add-on. Without it, the tabs only switch which sections show. How it works: this add-on provides a small `coworkShell` service, and Modes checks for it. Modes reads a conversation's internal turn counter to tell whether it has started. If a future app version hides that counter, Modes treats every conversation as started, which is the old behaviour.
 
+## Conversations per tab
+
+Each tab lists only its own conversations: **Recent chats** under Chat, **Recent tasks** under Cowork, **Code projects** under Code.
+- Conversations are grouped under their project; a project appears in a tab when it has at least one conversation of that tab.
+- Conversations outside any project come after, under "Other conversations".
+- Pinned conversations come first, then newest first. Archived and helper (sub-agent) conversations are hidden, as in the app's own list. An empty new conversation shows only while it is open.
+
+**Which tab a conversation belongs to** is the mode it runs in (recorded by the Modes add-on at its first message). Conversations from before that was recorded are placed by where they live:
+
+| Where it lives | Tab |
+| --- | --- |
+| no project | Chat |
+| the app's `default-workspace` | Cowork |
+| any other project folder | Code |
+
+**Moving:** the `⋯` button on a conversation moves it to another tab. The `⋯` on a project moves all its conversations. Moving also switches the conversation's mode from its next message, so the tab and the mode always agree. The `+` on a project starts a new conversation in it.
+
+**Show all** switches to the app's full list, with its search, rename, pin and archive menus. **<Tab> only** switches back. Each window remembers the choice.
+
+The list reads the app's own project and conversation data in the browser. If that data is not available (a different app version), the sidebar falls back to the app's full list.
+
 ## Start page
 
 - **Greeting per tab** instead of "Into the Unknown":
@@ -110,6 +131,7 @@ In the throwaway web profile only, through the app's browser view:
 | Pages per tab | Chat: Model Arena. Cowork: Automation tasks, Connectors, Skills. Code: Connectors, Skills. Plugins and More on every tab |
 | Model Arena page | Rounds and blind columns shown, same as Settings → Arena |
 | Skills page | Listed a test skill from the user skills folder plus a shared one; search filters. The route answers 401 without login and 405 to POST |
+| Conversations per tab | Each tab listed only its own conversations, grouped by project. Moving a conversation from Cowork to Code took it out of Cowork (11 → 10) and put it under the same project in Code, and the move was saved. **Show all** switched to the app's full list and back. Helper (sub-agent) sessions stayed hidden |
 | Start page | The greeting replaced the stock title, with the stock title hidden. The Code tab showed its own greeting. The chips sat under the chat box, and "Build website" filled it with "Build a website for:" |
 | Connectors page | A local test MCP server (one `echo` tool) showed "Connected · 1 tool". The switch turned it off ("Off") and on again live, with the tool coming back and no restart. The add form produced exactly the row format that loaded the test server |
 | Switching to Cowork afterwards | That chat stayed in Chat, and a new task started in Cowork |

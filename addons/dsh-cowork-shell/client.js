@@ -74,6 +74,28 @@ window.__ModuleLoader__.load({
         'skills.user': '/ command',
         'refresh': 'Refresh',
         'chips.label': 'Suggestions',
+        'untitled': 'New conversation',
+        'running': 'Running',
+        'move.to': 'Move to {tab}',
+        'move.label': 'Move "{title}" to another tab',
+        'move.failed': 'Could not move the conversation.',
+        'proj.move': 'Move all conversations of "{title}" to another tab',
+        'proj.new': 'New conversation in this project',
+        'show.more': 'Show {n} more',
+        'lib.title.chat': 'Recent chats',
+        'lib.title.cowork': 'Recent tasks',
+        'lib.title.code': 'Code projects',
+        'lib.title.other': '{tab}',
+        'lib.all': 'Show all',
+        'lib.all.hint': 'Show every project and conversation, with search and the app\'s menus',
+        'lib.showingAll': 'All conversations',
+        'lib.mine': '{tab} only',
+        'lib.empty': 'Nothing in {tab} yet. New conversations you start here show up in this list.',
+        'lib.loose': 'Other conversations',
+        'ago.now': 'now',
+        'ago.m': '{n}m',
+        'ago.h': '{n}h',
+        'ago.d': '{n}d',
       },
       zh: {
         'tabs.label': '工作区类型',
@@ -126,6 +148,28 @@ window.__ModuleLoader__.load({
         'skills.user': '/ 命令',
         'refresh': '刷新',
         'chips.label': '建议',
+        'untitled': '新对话',
+        'running': '运行中',
+        'move.to': '移到 {tab}',
+        'move.label': '把“{title}”移到其他标签页',
+        'move.failed': '无法移动该对话。',
+        'proj.move': '把“{title}”的所有对话移到其他标签页',
+        'proj.new': '在此项目中新建对话',
+        'show.more': '再显示 {n} 个',
+        'lib.title.chat': '最近的聊天',
+        'lib.title.cowork': '最近的任务',
+        'lib.title.code': '代码项目',
+        'lib.title.other': '{tab}',
+        'lib.all': '显示全部',
+        'lib.all.hint': '显示所有项目和对话，包括搜索和应用菜单',
+        'lib.showingAll': '全部对话',
+        'lib.mine': '仅 {tab}',
+        'lib.empty': '{tab} 中还没有内容。在这里新建的对话会出现在此列表。',
+        'lib.loose': '其他对话',
+        'ago.now': '刚刚',
+        'ago.m': '{n} 分钟',
+        'ago.h': '{n} 小时',
+        'ago.d': '{n} 天',
       },
     };
 
@@ -275,6 +319,28 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
 @media (hover:hover){.cws-chip-btn:hover{background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-l3)}}
 .cws-chip-btn svg{color:var(--dsw-alias-label-secondary)}
 .cws-chip-btn:focus-visible{outline:2px solid var(--dsw-focus-ring-color,currentColor);outline-offset:2px}
+.cws-lib{display:flex;flex-direction:column;gap:1px;padding-bottom:8px}
+.cws-lib-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 6px 4px;color:var(--dsw-alias-label-secondary);font-size:12px;font-weight:500}
+.cws-lib-allbar{padding-top:4px}
+.cws-link{border:0;background:transparent;color:var(--dsw-alias-state-business-primary);cursor:pointer;font:inherit;font-size:12px;padding:2px 4px;border-radius:4px}
+.cws-lib-empty{margin:6px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.5}
+.cws-proj-row,.cws-conv{display:flex;align-items:center;border-radius:var(--dsw-radius-sm);position:relative}
+.cws-proj-main,.cws-conv-main{flex:1;min-width:0;display:flex;align-items:center;gap:8px;min-height:30px;padding:4px 6px 4px 9px;border:0;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;font:inherit;text-align:left;border-radius:var(--dsw-radius-sm)}
+.cws-conv-main{padding-left:12px;color:var(--dsw-alias-label-primary)}
+.cws-proj-list .cws-conv-main{padding-left:34px}
+.cws-conv[aria-current='page']{background:var(--dsw-alias-interactive-bg-hover)}
+.cws-conv[aria-current='page'] .cws-conv-main{font-weight:500}
+.cws-count,.cws-time{flex:none;color:var(--dsw-alias-label-secondary);font-size:11px}
+.cws-dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-state-business-primary)}
+.cws-pin{flex:none;color:var(--dsw-alias-label-secondary)}
+.cws-mini{flex:none;width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:14px;line-height:1;opacity:0}
+.cws-proj-row:hover .cws-mini,.cws-conv:hover .cws-mini,.cws-mini:focus-visible,.cws-mini[aria-expanded='true']{opacity:1}
+@media (hover:none){.cws-mini{opacity:1}}
+.cws-move{position:relative;display:inline-flex}
+.cws-movepop{position:absolute;right:0;top:calc(100% + 2px);z-index:50;min-width:150px;padding:4px;border:1px solid var(--dsw-alias-border-l3);border-radius:var(--dsw-radius-md);background:var(--dsw-alias-bg-overlay);box-shadow:0 6px 24px #0004}
+.cws-moveitem{display:block;width:100%;padding:6px 10px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;font:inherit;font-size:13px;text-align:left;white-space:nowrap}
+.cws-more-btn{border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:12px;padding:4px 12px;text-align:left}
+@media (hover:hover){.cws-proj-main:hover,.cws-conv-main:hover,.cws-mini:hover,.cws-moveitem:hover,.cws-link:hover{background:var(--dsw-alias-interactive-bg-hover)}}
 .cws-error{margin:0 4px 8px;color:var(--dsw-alias-state-business-primary, inherit);font-size:12px}
 @media (hover:hover){.cws-icon:hover,.cws-tab:hover:not([aria-selected='true']),.cws-row:hover{background:var(--dsw-alias-interactive-bg-hover)}.cws-new:hover{background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 18%,transparent)}}
 .cws-root :is(button):focus-visible,.cws-lead button:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,currentColor);outline-offset:-2px}
@@ -291,6 +357,8 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
       dot: 'M12 11.5a.5.5 0 1 0 0 1 .5.5 0 1 0 0-1',
       link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
       sparkle: 'M12 4l1.8 5.2L19 11l-5.2 1.8L12 18l-1.8-5.2L5 11l5.2-1.8z',
+      folder: 'M3 7h6l2 2h10v10H3z',
+      folderOpen: 'M3 7h6l2 2h10v3M3 7v12h15l3-7H6l-3 7',
     };
     function Glyph({ name, size = 16 }) {
       const map = {
@@ -302,6 +370,8 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
         grid: 'IconAppsAddOutlineRegular',
         link: 'IconLinkOutlineRegular',
         sparkle: 'IconSparkleRegular',
+        folder: 'IconFolderCloseRegular',
+        folderOpen: 'IconFolderOpenRegular',
       };
       const Native = UI[map[name]];
       if (typeof Native === 'function' || (Native && typeof Native === 'object')) return h(Native, { size });
@@ -329,7 +399,7 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
      * tab layout. One store for the whole page, refreshed on demand and every 10 seconds.
      */
     function createModel(ctx) {
-      let state = { modes: FALLBACK_MODES, selected: readLocal(), tabs: DEFAULT_TABS, maxTabs: 3, modesOn: false, error: '' };
+      let state = { modes: FALLBACK_MODES, selected: readLocal(), tabs: DEFAULT_TABS, maxTabs: 3, modesOn: false, error: '', sessionModes: {} };
       const listeners = new Set();
       const emit = () => { for (const l of listeners) l(); };
       const set = (patch) => { state = { ...state, ...patch }; emit(); };
@@ -368,6 +438,7 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
             }));
             patch.modes = defined.length > 0 ? defined : FALLBACK_MODES;
             patch.modesOn = true;
+            if (started === clicks) patch.sessionModes = readObject(modesNs.value?.sessionModes);
             const current = modesNs.value?.defaultMode;
             if (started === clicks && typeof current === 'string' && patch.modes.some((m) => m.id === current)) {
               patch.selected = current;
@@ -404,11 +475,45 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
         }
       }
 
+      /**
+       * Move conversations to a tab: their recorded mode becomes the tab's mode (the Modes add-on applies
+       * it at the next turn), so they show under that tab from now on.
+       */
+      async function move(sessionIds, modeId) {
+        if (!state.modesOn || sessionIds.length === 0) return false;
+        clicks += 1;
+        const before = state.sessionModes;
+        const optimistic = { ...before };
+        for (const id of sessionIds) optimistic[id] = modeId;
+        set({ sessionModes: optimistic, error: '' });
+        try {
+          let spaces = await describe();
+          let entry = spaces.find((item) => item.ns === MODES_NS);
+          const build = (value) => {
+            const next = { ...readObject(value?.sessionModes) };
+            for (const id of sessionIds) next[id] = modeId;
+            return [{ op: 'set', path: ['sessionModes'], value: JSON.stringify(next) }];
+          };
+          let result = await ctx.remote.settings.mutate(MODES_NS, build(entry.value), entry.revision);
+          if (!result.ok && result.error.code === 'settings/conflict') {
+            spaces = await describe();
+            entry = spaces.find((item) => item.ns === MODES_NS);
+            result = await ctx.remote.settings.mutate(MODES_NS, build(entry.value), entry.revision);
+          }
+          if (!result.ok) throw new Error(result.error.code);
+          return true;
+        } catch {
+          set({ sessionModes: before, error: ctx.locale.bind(NS)('move.failed') });
+          return false;
+        }
+      }
+
       return {
         subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
         get: () => state,
         refresh,
         select,
+        move,
       };
     }
 
@@ -470,8 +575,182 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
     const SCROLLER = { bindScrollerRef: () => {} };
     const HOOK_CONTEXT = { useSectionScroller: () => SCROLLER };
 
+
+    /**
+     * The app's own project and conversation lists (read-only views of its client services), kept as
+     * one snapshot. Missing services make `ok` false; the sidebar then shows the app's own list.
+     */
+    function createLibrary(ctx) {
+      const get = (name) => { try { return ctx.get(name) ?? null; } catch { return null; } };
+      let snapshot = { ok: false, workspaces: [], byId: {}, pinned: [], archived: [], currentId: null };
+      let version = 0;
+      const read = () => {
+        const ws = get('workspaces')?.list?.getSnapshot?.();
+        const ss = get('sessions')?.list?.getSnapshot?.();
+        if (!ws || !ss || ws.phase !== 'ready' || ss.phase !== 'ready') return { ...snapshot, ok: false };
+        let currentId = null;
+        try { currentId = get('uiWorkspace')?.selection?.getSnapshot?.()?.sessionId ?? null; } catch { currentId = null; }
+        return {
+          ok: true,
+          workspaces: Array.isArray(ws.items) ? ws.items : [],
+          byId: ss.byId ?? {},
+          pinned: Array.isArray(ws.pinnedSessionIds) ? ws.pinnedSessionIds : [],
+          archived: Array.isArray(ws.archivedSessionIds) ? ws.archivedSessionIds : [],
+          currentId,
+        };
+      };
+      return {
+        get: () => snapshot,
+        subscribe: (listener) => {
+          const update = () => { version += 1; snapshot = read(); listener(); };
+          snapshot = read();
+          const offs = [
+            get('workspaces')?.list?.subscribe?.(update),
+            get('sessions')?.list?.subscribe?.(update),
+            get('uiWorkspace')?.selection?.subscribe?.(update),
+          ];
+          // Titles and times change without always notifying; refresh gently.
+          const timer = setInterval(update, 5000);
+          return () => { clearInterval(timer); for (const off of offs) { try { off?.(); } catch { /* ignore */ } } };
+        },
+      };
+    }
+
+    const LIST_KEY = 'dsh-cowork-shell.listAll';
+
+    function ago(t, ms) {
+      if (!Number.isFinite(ms)) return '';
+      const s = Math.max(0, (Date.now() - ms) / 1000);
+      if (s < 60) return t('ago.now');
+      if (s < 3600) return t('ago.m', { n: Math.floor(s / 60) });
+      if (s < 86400) return t('ago.h', { n: Math.floor(s / 3600) });
+      return t('ago.d', { n: Math.floor(s / 86400) });
+    }
+
+    /**
+     * Which tab a conversation belongs to: its recorded mode when there is one; an empty new conversation
+     * follows the open tab; otherwise a guess from where it lives: no project = Chat, the app's default
+     * workspace = Cowork, any other project folder = Code.
+     */
+    function tabOfSession(id, session, workspace, state, tabIds) {
+      const recorded = state.sessionModes?.[id];
+      if (typeof recorded === 'string' && tabIds.includes(recorded)) return recorded;
+      if (session?.blank) return state.selected;
+      let guess;
+      if (!workspace) guess = 'chat';
+      else if (/(^|\/)default-workspace\/?$/.test(String(workspace.path ?? '')) || workspace.title === 'default-workspace') guess = 'cowork';
+      else guess = 'code';
+      return tabIds.includes(guess) ? guess : tabIds[0];
+    }
+
+    function MoveMenu({ t, tabs, current, onMove, label }) {
+      const [open, setOpen] = useState(false);
+      useEffect(() => {
+        if (!open) return undefined;
+        const close = () => setOpen(false);
+        const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+        window.addEventListener('pointerdown', close);
+        window.addEventListener('keydown', onKey);
+        return () => { window.removeEventListener('pointerdown', close); window.removeEventListener('keydown', onKey); };
+      }, [open]);
+      return h('span', { className: 'cws-move', onPointerDown: (e) => e.stopPropagation() },
+        h('button', {
+          type: 'button', className: 'cws-mini', 'aria-label': label, 'aria-haspopup': 'menu', 'aria-expanded': open, title: label,
+          onClick: (e) => { e.stopPropagation(); setOpen((v) => !v); },
+        }, '⋯'),
+        open ? h('div', { className: 'cws-movepop', role: 'menu' },
+          tabs.filter((m) => m.id !== current).map((m) => h('button', {
+            key: m.id, type: 'button', role: 'menuitem', className: 'cws-moveitem',
+            onClick: (e) => { e.stopPropagation(); setOpen(false); onMove(m.id); },
+          }, t('move.to', { tab: m.label })))) : null);
+    }
+
+    /** The open tab's conversations, grouped under their projects. */
+    function TabLibrary({ appCtx, model, library, tabs, selected, onShowAll }) {
+      const t = appCtx.locale.bind(NS);
+      const state = useSyncExternalStore(model.subscribe, model.get);
+      const lib = useSyncExternalStore(library.subscribe, library.get);
+      const [open, setOpen] = useState({});
+      const [more, setMore] = useState({});
+      const tabIds = tabs.map((m) => m.id);
+      const uw = (() => { try { return appCtx.get('uiWorkspace'); } catch { return null; } })();
+
+      const archived = new Set(lib.archived);
+      const pinned = new Set(lib.pinned);
+      const placed = new Set();
+      // An empty new conversation shows only while it is the open one.
+      const sortRows = (ids) => ids
+        .filter((id) => lib.byId[id] && lib.byId[id].origin !== 'subagent' && !archived.has(id) && (!lib.byId[id].blank || id === lib.currentId))
+        .sort((a, b) => (pinned.has(b) - pinned.has(a)) || ((lib.byId[b].updatedAt ?? 0) - (lib.byId[a].updatedAt ?? 0)));
+
+      const projects = [];
+      for (const ws of lib.workspaces) {
+        const ids = sortRows(ws.sessionIds ?? []);
+        for (const id of ws.sessionIds ?? []) placed.add(id);
+        const mine = ids.filter((id) => tabOfSession(id, lib.byId[id], ws, state, tabIds) === selected.id);
+        if (mine.length > 0) projects.push({ ws, ids: mine, all: ids, latest: Math.max(...mine.map((id) => lib.byId[id].updatedAt ?? 0)) });
+      }
+      projects.sort((a, b) => b.latest - a.latest);
+      const loose = sortRows(Object.keys(lib.byId).filter((id) => !placed.has(id)))
+        .filter((id) => tabOfSession(id, lib.byId[id], null, state, tabIds) === selected.id);
+
+      const openSession = (id) => {
+        try { appCtx.layout.selectPanel(null); } catch { /* already there */ }
+        uw?.openSession?.(id);
+      };
+
+      const row = (id, ws) => {
+        const sess = lib.byId[id];
+        const title = (!sess.blank && sess.displayTitle && String(sess.displayTitle).trim()) || t('untitled');
+        const current = lib.currentId === id;
+        return h('div', { key: id, className: 'cws-conv', 'aria-current': current ? 'page' : undefined },
+          h('button', { type: 'button', className: 'cws-conv-main', onClick: () => openSession(id), title },
+            sess.running ? h('span', { className: 'cws-dot', 'aria-label': t('running') }) : null,
+            pinned.has(id) ? h('span', { className: 'cws-pin', 'aria-hidden': true }, '•') : null,
+            h('span', { className: 'cws-label' }, title),
+            h('span', { className: 'cws-time' }, ago(t, sess.updatedAt))),
+          sess.blank ? null : h(MoveMenu, {
+            t, tabs, current: tabOfSession(id, sess, ws, state, tabIds),
+            label: t('move.label', { title }),
+            onMove: (modeId) => void model.move([id], modeId),
+          }));
+      };
+
+      const list = (ids, key, ws) => {
+        const limit = more[key] ? ids.length : 8;
+        return h(React.Fragment, null, ids.slice(0, limit).map((id) => row(id, ws)),
+          ids.length > limit ? h('button', { type: 'button', className: 'cws-more-btn', onClick: () => setMore((m) => ({ ...m, [key]: true })) }, t('show.more', { n: ids.length - limit })) : null);
+      };
+
+      const empty = projects.length === 0 && loose.length === 0;
+      return h('div', { className: 'cws-lib' },
+        h('div', { className: 'cws-lib-head' },
+          h('span', null, t('lib.title.' + (['chat', 'cowork', 'code'].includes(selected.id) ? selected.id : 'other'), { tab: selected.label })),
+          h('button', { type: 'button', className: 'cws-link', onClick: onShowAll, title: t('lib.all.hint') }, t('lib.all'))),
+        empty ? h('p', { className: 'cws-lib-empty' }, t('lib.empty', { tab: selected.label })) : null,
+        projects.map(({ ws, ids, all }) => {
+          const isOpen = open[ws.workspaceId] ?? ids.includes(lib.currentId);
+          return h('div', { key: ws.workspaceId, className: 'cws-proj' },
+            h('div', { className: 'cws-proj-row' },
+              h('button', { type: 'button', className: 'cws-proj-main', 'aria-expanded': isOpen, onClick: () => setOpen((o) => ({ ...o, [ws.workspaceId]: !isOpen })) },
+                h('span', { className: 'cws-glyph', 'aria-hidden': true }, h(Glyph, { name: isOpen ? 'folderOpen' : 'folder', size: 16 })),
+                h('span', { className: 'cws-label' }, ws.title || ws.path || t('untitled')),
+                h('span', { className: 'cws-count' }, String(ids.length))),
+              h('button', { type: 'button', className: 'cws-mini', title: t('proj.new'), 'aria-label': t('proj.new'), onClick: () => { try { appCtx.layout.selectPanel(null); } catch { /* */ } uw?.startSession?.(ws.workspaceId); } }, '+'),
+              h(MoveMenu, { t, tabs, current: selected.id, label: t('proj.move', { title: ws.title || '' }), onMove: (modeId) => void model.move(all.filter((id) => !lib.byId[id]?.blank), modeId) })),
+            isOpen ? h('div', { className: 'cws-proj-list' }, list(ids, ws.workspaceId, ws)) : null);
+        }),
+        loose.length ? h(React.Fragment, null,
+          h('div', { className: 'cws-head' }, t('lib.loose')),
+          list(loose, '__loose', null)) : null);
+    }
+
     function CoworkSidebar(props) {
-      const { collapsed, width, drawer, renderSlot, renderFactorySlot, usePanelInfo, appCtx, model, pages } = props;
+      const { collapsed, width, drawer, renderSlot, renderFactorySlot, usePanelInfo, appCtx, model, pages, library } = props;
+      const libSnap = useSyncExternalStore(library.subscribe, library.get);
+      const libReady = libSnap.ok && model.get().modesOn;
+      const [showAll, setShowAllState] = useState(() => { try { return window.localStorage.getItem(LIST_KEY) === '1'; } catch { return false; } });
+      const setShowAll = (value) => { setShowAllState(value); try { window.localStorage.setItem(LIST_KEY, value ? '1' : '0'); } catch { /* private mode */ } };
       const t = appCtx.locale.bind(NS);
       const state = useSyncExternalStore(model.subscribe, model.get);
       const allPages = useSyncExternalStore(pages.subscribe, pages.get);
@@ -570,7 +849,13 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
           shortcut ? h('span', { className: 'cws-kbd', 'aria-hidden': true }, UI.ShortcutKeys ? h(UI.ShortcutKeys, { keys: shortcut.keys }) : shortcut.keys.join('')) : null),
         h('div', { className: 'cws-scroll', 'data-sidebar-scrollport': '' },
           rows.length > 0 || more ? h('nav', { className: 'cws-pages', 'aria-label': t('pages.label', { tab: selected.label }) }, rows.map(pageRow), more) : null,
-          renderSlot('sidebar.workspaces', { wide: true, expandSidebar: () => { if (collapsed) appCtx.layout.toggleSidebar(); } }, { hookContext: HOOK_CONTEXT })),
+          libReady && !showAll
+            ? h(TabLibrary, { appCtx, model, library, tabs, selected, onShowAll: () => setShowAll(true) })
+            : h(React.Fragment, null,
+              libReady ? h('div', { className: 'cws-lib-head cws-lib-allbar' },
+                h('span', null, t('lib.showingAll')),
+                h('button', { type: 'button', className: 'cws-link', onClick: () => setShowAll(false) }, t('lib.mine', { tab: selected.label }))) : null,
+              renderSlot('sidebar.workspaces', { wide: true, expandSidebar: () => { if (collapsed) appCtx.layout.toggleSidebar(); } }, { hookContext: HOOK_CONTEXT }))),
         h('div', { className: 'cws-foot' }, renderSlot('sidebar.footer.action', { wide: true }), renderSlot('sidebar.settings', { wide: true })));
     }
 
@@ -851,7 +1136,8 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
 
         const model = createModel(ctx);
         const pages = createPages(ctx);
-        const shared = () => ({ appCtx: ctx, model, pages });
+        const library = createLibrary(ctx);
+        const shared = () => ({ appCtx: ctx, model, pages, library });
 
         ctx.effect(() => ctx.slots.inject('sidebar', function* () {
           yield ctx.slots.registerFactory({

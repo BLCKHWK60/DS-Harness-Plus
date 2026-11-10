@@ -38,7 +38,7 @@ bash scripts/install.sh
 
 ### What works the moment you install
 
-- **Cowork sidebar:** Chat, Cowork and Code tabs at the top of the left sidebar, each with its own sections: Model Arena under Chat, and Automation tasks, Connectors (your MCP servers, with on/off switches) and Skills under Cowork and Code. The start page gets a greeting and suggestion chips. A tab picks the mode of new conversations, so the chat box no longer needs a mode drop-down. To get the normal sidebar back, switch **Cowork sidebar** off on the **Plugins** page.
+- **Cowork sidebar:** Chat, Cowork and Code tabs at the top of the left sidebar. Each tab lists only its own conversations and projects, and has its own sections: Model Arena under Chat, and Automation tasks, Connectors (your MCP servers, with on/off switches) and Skills under Cowork and Code. The start page gets a greeting and suggestion chips. A tab picks the mode of new conversations, so the chat box no longer needs a mode drop-down. To get the normal sidebar back, switch **Cowork sidebar** off on the **Plugins** page.
 - **Colours:** pick a colour scheme in **Settings → Colours**: DeepSeek Harness (the stock colours, the default), MindsHub Cowork, Graphite or Forest, each in light and dark.
 - **Modes:** Chat, Cowork and Code modes, switchable per conversation, plus **Search** and **Deep research** buttons in the chat box.
 - **Model Tiers:** quick tier switching with effort levels.
