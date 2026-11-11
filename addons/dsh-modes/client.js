@@ -2,6 +2,7 @@ window.__ModuleLoader__.load({
   id: '@local/dsh-modes',
   factory(require) {
     const React = require('react');
+    const ReactDOM = require('react-dom');
     const h = React.createElement;
     const { useCallback, useEffect, useRef, useState } = React;
 
@@ -22,6 +23,18 @@ window.__ModuleLoader__.load({
         'toggle.research': 'Deep research',
         'toggle.research.on': 'Deep research is on: questions get a researched, cited report. Click to switch it off.',
         'toggle.research.off': 'Switch on deep research: questions get a researched, cited report.',
+        'toggle.tools.on': 'Tools on',
+        'toggle.tools.off': 'Tools off',
+        'toggle.tools.title': 'What the model can call in this conversation',
+        'tools.switch': 'Tools for this conversation',
+        'tools.switch.hint': 'Off: the model is offered no tool at all, so it cannot try to call one. Search and Deep research are off too.',
+        'tools.chat': 'In Chat, tools means searching and reading the web. For files and commands, use Cowork or Code.',
+        'tools.can': 'Can call',
+        'tools.cannot': 'Cannot call',
+        'tools.none': 'Nothing',
+        'tools.next': 'A change applies from your next message.',
+        'tools.unknown': 'The list appears once this conversation has started.',
+        'tools.blocked': 'Tools are off for this conversation.',
         'section.title': 'Modes',
         'head.hint': 'A mode narrows the tools the model sees, can set the file sandbox, can move the conversation to a tier and adds a short prompt. A conversation picks a mode in the chat box or with /mode. Changes apply from the next message.',
         'default.label': 'Mode for conversations that have not chosen one',
@@ -64,6 +77,18 @@ window.__ModuleLoader__.load({
         'toggle.research': '深度研究',
         'toggle.research.on': '深度研究已开启：问题会得到经过研究、带引用的报告。点击关闭。',
         'toggle.research.off': '开启深度研究：问题会得到经过研究、带引用的报告。',
+        'toggle.tools.on': '工具已开',
+        'toggle.tools.off': '工具已关',
+        'toggle.tools.title': '模型在此对话中可以调用什么',
+        'tools.switch': '此对话的工具',
+        'tools.switch.hint': '关闭后，模型得不到任何工具，也就不会尝试调用。搜索和深度研究也会关闭。',
+        'tools.chat': '在聊天中，工具指搜索和阅读网页。处理文件和命令请使用 Cowork 或 Code。',
+        'tools.can': '可以调用',
+        'tools.cannot': '不能调用',
+        'tools.none': '无',
+        'tools.next': '更改从你的下一条消息开始生效。',
+        'tools.unknown': '此对话开始后会显示列表。',
+        'tools.blocked': '此对话的工具已关闭。',
         'section.title': '模式',
         'head.hint': '模式会限制模型可见的工具，可设置文件沙箱、切换档位并附加一小段提示词。会话在输入框或用 /mode 选择模式，修改在下一轮开始时生效。',
         'default.label': '尚未选择模式的会话使用',
@@ -266,10 +291,24 @@ window.__ModuleLoader__.load({
 @media (hover:hover){.dsh-mt button:hover:not([aria-pressed='true']){background:var(--dsw-alias-interactive-bg-hover)}}
 @media (max-width:760px){.dsh-mt button{padding:0 8px}.dsh-mt button .lbl{display:none}}
 .dsh-mt svg{flex:none}
+.dsh-mt button[data-tools='off']{border-color:var(--dsw-alias-state-warn-primary);color:var(--dsw-alias-state-warn-primary)}
+.dsh-mt-pop{position:fixed;z-index:1000;box-sizing:border-box;width:320px;max-width:calc(100vw - 24px);overflow:auto;padding:14px 16px;border-radius:16px;border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-base));color:var(--dsw-alias-label-primary);font-size:12px;line-height:18px;box-shadow:0 8px 28px rgba(0,0,0,.28)}
+.dsh-mt-pop .row{display:flex;align-items:center;gap:12px}
+.dsh-mt-pop .row > span:first-child{flex:1;font-size:14px;line-height:22px}
+.dsh-mt-pop .hint{margin:4px 0 0;color:var(--dsw-alias-label-secondary)}
+.dsh-mt-pop .head{margin:12px 0 4px;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}
+.dsh-mt-pop .names{display:flex;flex-wrap:wrap;gap:4px}
+.dsh-mt-pop .names span{padding:0 7px;border-radius:9px;line-height:18px;font-size:11px;background:color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent)}
+.dsh-mt-pop .names[data-no='true'] span{color:var(--dsw-alias-label-secondary);text-decoration:line-through}
+.dsh-mt-pop .sw{flex:none;position:relative;width:36px;height:20px;padding:2px;border:0;border-radius:999px;cursor:pointer;background:var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));transition:background .12s ease}
+.dsh-mt-pop .sw[aria-checked='true']{background:var(--dsw-alias-brand-primary)}
+.dsh-mt-pop .sw::after{content:'';display:block;width:16px;height:16px;border-radius:50%;background:var(--dsw-alias-switch-thumb, var(--dsw-alias-label-primary));transition:transform .12s ease}
+.dsh-mt-pop .sw[aria-checked='true']::after{transform:translateX(16px);background:var(--dsw-alias-bg-base)}
 `;
     const ICON = {
       search: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3.5 12h17M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z',
       research: 'M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.3 15.3 20 20M8 10.5h5M10.5 8v5',
+      tools: 'M14.5 6.5a4 4 0 0 0-5.4 5L4 16.6V20h3.4l5.1-5.1a4 4 0 0 0 5-5.4l-2.6 2.6-2.4-.6-.6-2.4 2.6-2.6z',
     };
     const icon = (name) => h('svg', { width: 15, height: 15, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }, h('path', { d: ICON[name] }));
 
@@ -303,18 +342,23 @@ window.__ModuleLoader__.load({
       const web = typeof chosenWeb === 'boolean'
         ? chosenWeb
         : tools === 'none' ? false : Array.isArray(tools) ? tools.some((tool) => tool === 'web_search' || tool === 'web_fetch') : true;
-      const research = readObject(state.view.sessionResearch)[sessionId] === true;
+      const off = readObject(state.view.sessionTools)[sessionId] === false;
+      const research = !off && readObject(state.view.sessionResearch)[sessionId] === true;
+      const searching = !off && web;
+      // No tools at all: switched off here, or a mode without tools and neither switch on.
+      const none = off || (tools === 'none' && !searching && !research);
 
-      const flip = async (field, value) => {
+      const flip = async (field, value, more) => {
         if (state.busy) return;
         setState((prev) => ({ ...prev, busy: true }));
         try {
-          const build = (current) => {
-            const next = { ...readObject(current[field]) };
-            if (value === undefined) delete next[sessionId];
-            else next[sessionId] = value;
-            return [{ op: 'set', path: [field], value: JSON.stringify(next) }];
-          };
+          const build = (current) =>
+            [[field, value], ...(more ?? [])].map(([name, wanted]) => {
+              const next = { ...readObject(current[name]) };
+              if (wanted === undefined) delete next[sessionId];
+              else next[sessionId] = wanted;
+              return { op: 'set', path: [name], value: JSON.stringify(next) };
+            });
           let fresh = await load(appCtx);
           let result = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
           if (!result.ok && result.error.code === 'settings/conflict') {
@@ -333,15 +377,85 @@ window.__ModuleLoader__.load({
         h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
         h('span', { className: 'dsh-mt' },
           h('button', {
-            type: 'button', 'aria-pressed': web, disabled: state.busy, title: t(web ? 'toggle.search.on' : 'toggle.search.off'),
+            type: 'button', 'aria-pressed': searching, disabled: state.busy || off, title: off ? t('tools.blocked') : t(web ? 'toggle.search.on' : 'toggle.search.off'),
             onClick: () => void flip('sessionWeb', !web),
             'aria-label': t('toggle.search'),
           }, icon('search'), h('span', { className: 'lbl' }, t('toggle.search'))),
           h('button', {
-            type: 'button', 'aria-pressed': research, disabled: state.busy, title: t(research ? 'toggle.research.on' : 'toggle.research.off'),
+            type: 'button', 'aria-pressed': research, disabled: state.busy || off, title: off ? t('tools.blocked') : t(research ? 'toggle.research.on' : 'toggle.research.off'),
             onClick: () => void flip('sessionResearch', research ? undefined : true),
             'aria-label': t('toggle.research'),
-          }, icon('research'), h('span', { className: 'lbl' }, t('toggle.research')))));
+          }, icon('research'), h('span', { className: 'lbl' }, t('toggle.research'))),
+          h(ToolsButton, {
+            t, sessionId, none, off, chat: tools === 'none', busy: state.busy,
+            // Off: nothing at all. On: back to what the mode allows; in a mode without tools of its own, that is the web.
+            onSwitch: (on) => void (on ? flip('sessionTools', undefined, tools === 'none' && !web && !research ? [['sessionWeb', true]] : []) : flip('sessionTools', false)),
+          })));
+    }
+
+    /**
+     * The Tools button and its small panel: one switch for all tools of the conversation, and the
+     * list of what the model can and cannot call.
+     */
+    function ToolsButton({ t, sessionId, none, off, chat, busy, onSwitch }) {
+      const [open, setOpen] = useState(false);
+      const [list, setList] = useState(null);
+      const [place, setPlace] = useState({ left: 12, bottom: 80, maxHeight: 360 });
+      const button = useRef(null);
+      const panel = useRef(null);
+      useEffect(() => {
+        if (!open) return undefined;
+        const rect = button.current?.getBoundingClientRect();
+        if (rect) setPlace({ left: Math.max(12, Math.min(rect.left, window.innerWidth - 332)), bottom: window.innerHeight - rect.top + 8, maxHeight: Math.max(160, rect.top - 24) });
+        let alive = true;
+        const load = () =>
+          fetch(new URL('dsh-modes/tools', document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: { 'x-dsh-session': sessionId } })
+            .then((response) => (response.ok ? response.json() : null))
+            .then((data) => alive && setList(data))
+            .catch(() => {});
+        load();
+        const timer = setInterval(load, 3000);
+        const away = (event) => {
+          if (panel.current?.contains(event.target) || button.current?.contains(event.target)) return;
+          setOpen(false);
+        };
+        const key = (event) => event.key === 'Escape' && setOpen(false);
+        document.addEventListener('pointerdown', away, true);
+        document.addEventListener('keydown', key, true);
+        return () => {
+          alive = false;
+          clearInterval(timer);
+          document.removeEventListener('pointerdown', away, true);
+          document.removeEventListener('keydown', key, true);
+        };
+      }, [open, sessionId]);
+
+      const names = (items, no) => (items.length > 0 ? h('div', { className: 'names', 'data-no': String(Boolean(no)) }, items.map((name) => h('span', { key: name }, name))) : h('div', { className: 'hint', style: { margin: 0 } }, t('tools.none')));
+      return h(React.Fragment, null,
+        h('button', {
+          ref: button, type: 'button', 'data-tools': none ? 'off' : 'on', 'aria-expanded': open, title: t('toggle.tools.title'),
+          'aria-label': t(none ? 'toggle.tools.off' : 'toggle.tools.on'), onClick: () => setOpen(!open),
+        }, icon('tools'), h('span', { className: 'lbl' }, t(none ? 'toggle.tools.off' : 'toggle.tools.on'))),
+        open
+          ? ReactDOM.createPortal(
+              h('div', { ref: panel, className: 'dsh-mt-pop', role: 'dialog', 'aria-label': t('toggle.tools.title'), style: { left: place.left, bottom: place.bottom, maxHeight: place.maxHeight } },
+                h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
+                h('div', { className: 'row' },
+                  h('span', null, t('tools.switch')),
+                  h('button', { type: 'button', role: 'switch', className: 'sw', 'aria-checked': !none, 'aria-label': t('tools.switch'), disabled: busy, onClick: () => onSwitch(none) })),
+                h('p', { className: 'hint' }, t('tools.switch.hint')),
+                chat ? h('p', { className: 'hint' }, t('tools.chat')) : null,
+                list?.known
+                  ? h(React.Fragment, null,
+                      h('div', { className: 'head' }, `${t('tools.can')} (${list.can.length})`),
+                      names(list.can, false),
+                      h('div', { className: 'head' }, `${t('tools.cannot')} (${list.cannot.length})`),
+                      names(list.cannot, true))
+                  : h('p', { className: 'hint' }, t('tools.unknown')),
+                h('p', { className: 'hint' }, t('tools.next'))),
+              document.body,
+            )
+          : null);
     }
 
     const BUILTIN = {

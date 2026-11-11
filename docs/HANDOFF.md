@@ -1,13 +1,13 @@
 # Handoff: DeepSeek Harness Plus
 
-Written 2026-11-11, updated the same day after the 0.10.0 to 0.19.0 work. For the next working session. Read this first. Then read only the files the task touches.
+Written 2026-11-11, updated the same day after the 0.10.0 to 0.20.0 work. For the next working session. Read this first. Then read only the files the task touches.
 
 ## 1. What this is
 
 **DeepSeek Harness Plus** is 26 add-ons for the **DeepSeek Harness** desktop app (Electron, Cordis plugin framework), version **0.2.2-rc.1**, on macOS. The add-ons install into the app's data folder (`~/.dsh/addons/deepseek-harness-plus`) and register with the app's own `dsh plugin add`. The app itself is never modified.
 
 - **Repo:** `deepseek-harness-plus/`. It is a git repository, published since 2026-11-11 at `https://github.com/BLCKHWK60/DS-Harness-Plus` (public, remote `origin`, branch `main`). Push only when the owner asks. Before the first push every commit was rewritten to the owner's GitHub no-reply address, so hashes written down before that day no longer exist; the repo's `user.email` is set to that address. The download is a DMG attached to a GitHub release, built with `bash scripts/build-dmg.sh` (needs a clean tree; writes `dist/`, which git ignores). The DMG holds the committed files only: add-ons, installer, docs. It does not hold the app, and it is not signed or notarised, so macOS asks for right-click → Open on `Install.command`. The latest commit is Release 0.15.0 (the one after `cc1cd77`, Release 0.14.0). `VERSION` reads `0.15.0`.
-- **Installed in the owner's real app:** 0.19.0, 26 add-ons. The backup is `~/.dsh/backups/deepseek-harness-plus/20261111-233310-install`.
+- **Installed in the owner's real app:** 0.20.0, 26 add-ons, of which `dsh-learn` is switched off by the owner (he is not using it at the moment; leave it off). The backup is `~/.dsh/backups/deepseek-harness-plus/20261112-000800-install`.
 - **Parent folder `DeepSeek_Harness_Custom/`:**
   - `deepseek-harness-master/`: the app's source. It is **newer than the installed app**; read it for docs only.
   - `spike-lab/`: the throwaway lab.
@@ -103,7 +103,7 @@ Each add-on has a `README.md` with technical notes, plus what was and was not ve
 ## 4. How to test
 
 - **Unit tests** for one add-on: `cd addons/<name> && ELECTRON_RUN_AS_NODE=1 "/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness" --test test/*.test.mjs`.
-  - Suites exist for swarm (13), benchmark (12), code-map (37), activity (7), diagram (10), evolve (29), learn (9), pdf (8), media (15), arena (31), model-tiers (14), notify (13), privacy (3), shared-settings (13) and sync (25).
+  - Suites exist for swarm (13), benchmark (12), code-map (37), activity (7), diagram (10), evolve (29), learn (9), modes (4), pdf (8), media (15), arena (31), model-tiers (14), notify (13), privacy (3), shared-settings (13) and sync (25).
   - Other add-ons have none yet; adding them is a reasonable improvement.
 - **Release check:** `bash scripts/check.sh` runs all tests, then install, re-install, `--settings`/`--no-settings` and uninstall in a throwaway `DSH_HOME`. It must end with "All checks passed".
 - **Live lab (app web version, throwaway data):**
@@ -153,6 +153,14 @@ Each add-on has a `README.md` with technical notes, plus what was and was not ve
   - `dsh-evolve`: setting `target` (a version id); one store per version under `versions/<id>/`.
   - Facts learned: `ctx.get('agentPresets').presetForSession(session)` gives a conversation's preset (ids `standard`, `ptc`, `minimal`, `cordis` = Creator; the shipped ones have no name of their own). In the browser the list is `remote.agentPresets.list()` → `{presets: [{id, name?, isDefault}]}`, and it is only reachable after injecting `remote.agentPresets` (done optionally with `ctx.inject` inside `apply`).
   - Not verified: PTC, Minimal, Creator and custom presets; the mode prompt and role prompts being left out (same switch, but neither had text in the lab); two versions improved side by side.
+- **0.20.0 is committed, pushed and released on GitHub (tag `v0.20.0`, with its DMG), and installed in the owner's app.** It changes `dsh-modes` only, after the owner hit "deep_research found no usable sources" in the Chat tab:
+  - **Bug fixed:** a helper agent was treated as a new conversation and got the default mode (with the Cowork sidebar, the tab in use). In Chat that meant no tools, so deep-research searchers could not search. Now `modeOf`, `webOn`, `researchOn` and the new `toolsOff` resolve a helper to its top conversation (`parentSession` in the header, kept in a map), helpers of a conversation with Deep research on get the web tools, and helpers get no mode wording. The mask logic moved to `lib/mask.js` with the add-on's first tests.
+  - **New:** `sessionTools` (`{sessionId: false}` = no tools at all) and a Tools button in the chat box with a panel: one switch, plus "can call / cannot call" from `GET /dsh-modes/tools`. The owner asked to be asked at every new conversation; we agreed on the always-visible button instead of a pop-up.
+  - **Fact:** `ctx.tools.definitions(agent)` gives the tools an agent can see after restrictions, and `ctx.tools.view(agent).knownNames` everything before them. `web_search` is registered with a condition: a step only gets it while `ctx.web.searchReady()` is true for the model route, so the lab (mock model) never has it.
+  - **Also in 0.20:** `dsh-cowork-shell` no longer hides the app's preset picker on a new chat in the Chat tab (it had since 0.10). The owner had a Chat conversation in PTC without knowing: under PTC only `run_code` is callable directly, and the model's first direct calls to `deep_research` failed. The app fixes the preset when a conversation starts; the "Standard mode" label on a started conversation is not a control.
+  - **Open, offered to the owner, not decided:** the add-ons' notes and skills say "use the X tool" and have never been tested under PTC, where a tool must be called inside a `run_code` program. Making that wording follow the preset, and testing the add-ons under PTC, is the proposed next step.
+  - **Installer:** an add-on the owner switched off in the app is linked in the profile's `package.json` `dependencies` but missing from `dsh.profile.bundles`; `dsh plugin add` leaves it that way. The installer used to treat that as "did not register" and roll back. It now notes which add-ons were off before it starts, accepts them as long as they are linked, prints `off <name>`, and says how many are off. `scripts/check.sh` rehearses this. The owner also has two plugins of his own in that state (`dsh-llm-viz`, `dsh-weightlattice`); they are not part of Plus.
+  - Not verified: a real deep-research run finding sources (the lab's mock helpers do not search); the Mac desktop app.
 - **0.19.0 is committed, pushed and released on GitHub (tag `v0.19.0`, with its DMG), and installed in the owner's app.** It adds `dsh-learn`, the last of the three pieces the owner asked for (PDF reader 0.17, diagrams 0.18, learning 0.19). The owner chose: adjustable strictness with Firm as default; material from own PDFs and notes, any topic, and code; reviews with a due list and no reminders; studying in any conversation, not a tab of its own. Facts learned:
   - **A slash command cannot start a model turn.** Its handler can only answer `{kind: 'success' | 'error', text}`. `/learn` therefore stores the wish, and the study bar's Start button sends a chat message.
   - **Sending a chat message from an add-on's client:** the study bar (in `conversation.input.dock`) first tries `props.inputActions.setDraft(text)` then `inputActions.submit()` (the `conversation.chat.turnTail` props do carry `inputActions`; whether the dock's do was not checked), and otherwise types into the chat box and presses Enter. Sending worked in the lab; which of the two paths ran was not checked.

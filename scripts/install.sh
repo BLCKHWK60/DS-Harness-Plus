@@ -87,6 +87,19 @@ STALE=$(stale_addons "$PROFILE_DIR/package.json" "$ADDONS_DIR" "$ADDON_LIST")
 COUNT=$(printf '%s\n' "$ADDON_LIST" | wc -l | tr -d ' ')
 say "$COUNT add-ons copied to $ADDONS_DIR"
 
+# Add-ons the owner switched off in the app: still installed (linked), but taken out of the list the
+# app loads. They are updated like the rest and left switched off; that is the owner's choice.
+SWITCHED_OFF=$(app_node -e '
+  const fs = require("fs");
+  const [file, list] = process.argv.slice(1);
+  let pkg = {};
+  try { pkg = JSON.parse(fs.readFileSync(file, "utf8")); } catch { process.exit(0); }
+  const deps = pkg.dependencies || {}, bundles = (pkg.dsh && pkg.dsh.profile && pkg.dsh.profile.bundles) || [];
+  for (const line of list.split("\n").filter(Boolean)) {
+    const name = line.split("\t")[0];
+    if (deps[name] && !bundles.includes(name)) console.log(name);
+  }' "$PROFILE_DIR/package.json" "$ADDON_LIST" 2>/dev/null)
+
 step "Registering the add-ons with $APP_NAME (this can take a minute)"
 set --
 while IFS="$(printf '\t')" read -r _name folder; do set -- "$@" "$folder"; done <<EOF
@@ -112,15 +125,17 @@ fi
 step "Checking"
 MISSING=$(app_node -e '
   const fs = require("fs");
-  const [file, dir, list] = process.argv.slice(1);
+  const [file, dir, list, off] = process.argv.slice(1);
+  const leftOff = new Set(String(off || "").split("\n").filter(Boolean));
   const pkg = JSON.parse(fs.readFileSync(file, "utf8"));
   const deps = pkg.dependencies || {}, bundles = (pkg.dsh && pkg.dsh.profile && pkg.dsh.profile.bundles) || [];
   for (const line of list.split("\n").filter(Boolean)) {
     const [name, folder] = line.split("\t");
     const real = (p) => { try { return fs.realpathSync(p); } catch { return p; } };
     const linked = String(deps[name] || "").replace(/^link:/, "");
-    if (!linked || real(linked) !== real(folder) || !bundles.includes(name)) console.log(name);
-  }' "$PROFILE_DIR/package.json" "$ADDONS_DIR" "$ADDON_LIST")
+    // An add-on that was switched off before this install only has to be linked; it stays off.
+    if (!linked || real(linked) !== real(folder) || (!bundles.includes(name) && !leftOff.has(name))) console.log(name);
+  }' "$PROFILE_DIR/package.json" "$ADDONS_DIR" "$ADDON_LIST" "$SWITCHED_OFF")
 if [ -n "$MISSING" ]; then
   say "These add-ons did not register: $MISSING"
   say "Putting everything back..."
@@ -129,11 +144,27 @@ if [ -n "$MISSING" ]; then
 fi
 trap - INT TERM HUP
 rm -rf "$OLD"
-printf '%s\n' "$ADDON_LIST" | while IFS="$(printf '\t')" read -r name _folder; do say "ok  $name"; done
+# Which of those are still off now (the app may have switched one back on while registering).
+STILL_OFF=$(app_node -e '
+  const fs = require("fs");
+  const [file, off] = process.argv.slice(1);
+  const pkg = JSON.parse(fs.readFileSync(file, "utf8"));
+  const bundles = (pkg.dsh && pkg.dsh.profile && pkg.dsh.profile.bundles) || [];
+  for (const name of String(off || "").split("\n").filter(Boolean)) if (!bundles.includes(name)) console.log(name);
+  ' "$PROFILE_DIR/package.json" "$SWITCHED_OFF" 2>/dev/null)
+printf '%s\n' "$ADDON_LIST" | while IFS="$(printf '\t')" read -r name _folder; do
+  if printf '%s\n' "$STILL_OFF" | grep -qxF "$name"; then say "off $name (you switched it off in the app; updated and left off)"; else say "ok  $name"; fi
+done
+OFF_COUNT=$(printf '%s\n' "$STILL_OFF" | grep -c . || true)
 record_shared_folder
 
 step "Done"
-say "$PLUS_NAME $PLUS_VERSION is installed ($COUNT add-ons)."
+if [ "$OFF_COUNT" -gt 0 ]; then
+  say "$PLUS_NAME $PLUS_VERSION is installed ($COUNT add-ons, $OFF_COUNT of them switched off by you)."
+  say "Switch one back on in $APP_NAME under Plugins."
+else
+  say "$PLUS_NAME $PLUS_VERSION is installed ($COUNT add-ons)."
+fi
 say ""
 say "Next:"
 say "  1. Open $APP_NAME."

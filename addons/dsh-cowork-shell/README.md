@@ -40,7 +40,8 @@ Details:
 
 - The pickers are hidden only while the Chat tab is open **and** the open conversation is in the default workspace (or nothing is open). If you start a conversation in another project while on the Chat tab (the app's own New Session shortcut can do this, or `+` under **Show all**), the pickers show, so you can see where you are.
 - If the app has no `default-workspace` project, nothing is hidden and New chat behaves as before.
-- The pickers are hidden with CSS, by the app's seat names (`conversation.hero.workspace`, `conversation.hero.agentPreset`). Switching the add-on off removes it.
+- The folder picker is hidden with CSS, by the app's seat name (`conversation.hero.workspace`). Switching the add-on off removes it.
+- The preset picker (Standard, PTC, Minimal, Creator) is **not** hidden (since 0.20). It was hidden from 0.10 to 0.19, which left a new chat on the app's default preset with no way to see or change it. The preset decides how the model calls tools, and the app fixes it when a conversation starts: the label at the top of a started conversation is text, not a control.
 - A conversation now shows in its tab's list right after its first message. Before, it could drop out of the list for up to 10 seconds.
 
 ## Conversations per tab

@@ -11,8 +11,11 @@
  * middle of a turn.
  */
 import z from '@deepseek-ai/schemastery';
+import { maskFor, parentIdOf, rootOf, webDefault } from './lib/mask.js';
 
 export const name = 'modes';
+/** The chat box asks here which tools the model can call in a conversation (header `x-dsh-session`). */
+export const TOOLS_PATH = '/dsh-modes/tools';
 export const inject = ['tools'];
 
 /** Modes that exist until the user supplies their own `modes` JSON. */
@@ -29,10 +32,9 @@ const BUILTIN_MODES = {
   code: { label: 'Code', tools: 'all', sandbox: 'workspace-write', defaultTier: '', prompt: '' },
 };
 
-/** Web tools the Search switch turns on or off. */
-const WEB_TOOLS = ['web_search', 'web_fetch'];
-/** Tools the Deep research switch makes available. */
-const RESEARCH_TOOLS = ['deep_research', 'web_search', 'web_fetch'];
+/** Added while the conversation's tools are switched off. */
+const TOOLS_OFF_PROMPT =
+  'Tools are switched off for this conversation. Answer from what you know and do not try to call a tool. If the task cannot be done without tools, say so in one sentence.';
 /** Added in a restricted mode (for example Chat) while the Search switch is on. */
 const WEB_PROMPT =
   'Search is switched on for this conversation: you may use web_search and web_fetch to look things up, even though other tools are unavailable in this mode.';
@@ -61,6 +63,8 @@ export const Config = z.object({
   sessionWeb: z.string().default('{}').volatile(),
   /** Per-session deep-research switch as JSON: `{ sessionId: true }`. While on, the model is told to use `deep_research`. */
   sessionResearch: z.string().default('{}').volatile(),
+  /** Per-session tools switch as JSON: `{ sessionId: false }`. While off, the model is offered no tool at all. */
+  sessionTools: z.string().default('{}').volatile(),
   /** Name of the slash command that switches modes. */
   commandName: z.string().default('mode'),
 });
@@ -163,7 +167,22 @@ export function apply(ctx, config) {
    * @param {string} sessionId - Agent id.
    * @returns {object} mode definition.
    */
-  function modeOf(sessionId) {
+  /** Helper agent id -> the id of what started it. */
+  const parents = new Map();
+  /**
+   * Note who started an agent, so a helper can follow its conversation.
+   * @param {object} agent - live Agent.
+   */
+  function noteParent(agent) {
+    const parent = parentIdOf(agent?.header ?? agent?.session?.header);
+    if (parent && agent?.id && parent !== agent.id) parents.set(agent.id, parent);
+  }
+  /** @returns {string} the conversation an agent works for: itself, or the top of its chain of starters. */
+  const topOf = (agentId) => rootOf(agentId, parents);
+
+  function modeOf(agentId) {
+    // A helper agent has no mode of its own: it follows the conversation that started it.
+    const sessionId = topOf(agentId);
     const modes = readModes(config);
     const fallback = plain(config.defaultMode);
     // With the Cowork sidebar, the selected tab (defaultMode) decides until the first message.
@@ -252,28 +271,24 @@ export function apply(ctx, config) {
     // Names are not filtered against a visible list: in this dsh version many tools (web_fetch,
     // read, grep...) come from the Agent's preset and are not listed to plugins, yet a restriction
     // can name them. Names the app refuses are dropped when the mask is applied (applyTools).
-    const web = webOn(sessionId, mode);
-    const research = researchOn(sessionId);
-    if (mode.tools === 'all') return web ? null : { deny: [...WEB_TOOLS] };
-    const base = mode.tools === 'none' ? [] : [...mode.tools];
-    const extra = [...(web ? WEB_TOOLS : []), ...(research ? RESEARCH_TOOLS : [])];
-    let allow = [...new Set([...base, ...extra])];
-    if (!web) allow = allow.filter((tool) => !WEB_TOOLS.includes(tool));
-    return { allow };
+    return maskFor({ tools: mode.tools, web: webOn(sessionId, mode), research: researchOn(sessionId), off: toolsOff(sessionId), child: topOf(sessionId) !== sessionId });
+  }
+
+  /** @returns {boolean} whether the conversation's tools are switched off altogether. A helper follows its conversation. */
+  function toolsOff(sessionId) {
+    return readObject(config.sessionTools)[topOf(sessionId)] === false;
   }
 
   /** @returns {boolean} whether web tools are on for the Session (explicit switch, else the mode's default). */
   function webOn(sessionId, mode) {
-    const chosen = readObject(config.sessionWeb)[sessionId];
-    if (typeof chosen === 'boolean') return chosen;
-    if (mode.tools === 'none') return false;
-    if (Array.isArray(mode.tools)) return WEB_TOOLS.some((tool) => mode.tools.includes(tool));
-    return true;
+    if (toolsOff(sessionId)) return false;
+    const chosen = readObject(config.sessionWeb)[topOf(sessionId)];
+    return typeof chosen === 'boolean' ? chosen : webDefault(mode.tools);
   }
 
   /** @returns {boolean} whether the Deep research switch is on for the Session. */
   function researchOn(sessionId) {
-    return readObject(config.sessionResearch)[sessionId] === true;
+    return !toolsOff(sessionId) && readObject(config.sessionResearch)[topOf(sessionId)] === true;
   }
 
   /**
@@ -366,7 +381,10 @@ export function apply(ctx, config) {
           order: 58,
           interpolate: false,
           text: () => {
+            // A helper gets no mode wording: "answer in one reply, no tools" would stop a searcher from searching.
+            if (topOf(agent.id) !== agent.id) return '';
             const mode = modeOf(agent.id);
+            if (toolsOff(agent.id)) return [mode.tools === 'none' ? mode.prompt : '', TOOLS_OFF_PROMPT].filter(Boolean).join('\n\n');
             const webGranted = mode.tools !== 'all' && webOn(agent.id, mode);
             // A model version that stands alone leaves out the mode's own wording; the notes about tools stay.
             let alone = false;
@@ -401,6 +419,7 @@ export function apply(ctx, config) {
   // opening: never throw, and do the one-off cleanup in the background.
   ctx.on('agent/created', async ({ agent }) => {
     try {
+      noteParent(agent);
       if (neverRan(agent)) fresh.add(agent.id);
       installPrompt(agent);
       await applyMode(agent, modeOf(agent.id), false);
@@ -410,6 +429,7 @@ export function apply(ctx, config) {
     void pruneStale().catch(report);
   });
   for (const agent of ctx.get('agents')?.list() ?? []) {
+    noteParent(agent);
     if (neverRan(agent)) fresh.add(agent.id);
     installPrompt(agent);
     void applyMode(agent, modeOf(agent.id), false).catch(report);
@@ -481,6 +501,7 @@ export function apply(ctx, config) {
     overlay.delete(agent.id);
     pendingIdle.delete(agent.id);
     promptDisposers.delete(agent.id);
+    parents.delete(agent.id);
   });
 
   let pruned = false;
@@ -496,7 +517,7 @@ export function apply(ctx, config) {
     if (!persistence || !settings) return;
     try {
       const live = new Set((ctx.get('agents')?.list() ?? []).map((agent) => agent.id));
-      const fields = ['sessionModes', 'sessionWeb', 'sessionResearch'];
+      const fields = ['sessionModes', 'sessionWeb', 'sessionResearch', 'sessionTools'];
       const ids = new Set(fields.flatMap((field) => Object.keys(readObject(config[field]))));
       const gone = new Set();
       for (const sessionId of ids) {
@@ -561,6 +582,62 @@ export function apply(ctx, config) {
     },
   };
   ctx.effect(() => ctx.provide('modes', Object.freeze(modes)), 'modes service');
+
+  /**
+   * What the model can and cannot call in a conversation right now, for the Tools list in the chat box.
+   * @param {string} sessionId - the conversation.
+   * @returns {object} `{known, mode, off, can, cannot}`; `known` is false when the conversation is not loaded.
+   */
+  function toolsView(sessionId) {
+    const agent = ctx.get('agents')?.get?.(sessionId) ?? (ctx.get('agents')?.list() ?? []).find((item) => item.id === sessionId);
+    if (!agent) return { known: false, mode: '', off: false, can: [], cannot: [] };
+    const mode = modeOf(sessionId);
+    let can = [];
+    let all = [];
+    try {
+      can = ctx.tools.definitions(agent).map((definition) => definition.name);
+      // Everything the app has, before this conversation's restrictions.
+      all = [...(ctx.tools.view?.(agent)?.knownNames ?? [])];
+    } catch {
+      // An older app: show what is known.
+    }
+    const allowed = new Set(can);
+    return { known: true, mode: mode.label, off: toolsOff(sessionId), can: can.sort(), cannot: all.filter((name) => !allowed.has(name)).sort() };
+  }
+
+  ctx.inject(['webServer', 'connection'], (inner) => {
+    inner.effect(
+      () =>
+        inner.webServer.register({
+          kind: 'exact',
+          path: TOOLS_PATH,
+          handler: (req, res) => {
+            const refused = inner.connection.requestRejection(req);
+            if (refused !== undefined) {
+              res.statusCode = refused;
+              res.end();
+              return;
+            }
+            if (req.method !== 'GET') {
+              res.statusCode = 405;
+              res.setHeader('allow', 'GET');
+              res.end();
+              return;
+            }
+            res.setHeader('content-type', 'application/json; charset=utf-8');
+            res.setHeader('cache-control', 'no-store');
+            try {
+              const header = req.headers?.['x-dsh-session'];
+              res.end(JSON.stringify(toolsView(typeof header === 'string' && /^[\w.:-]{1,120}$/.test(header) ? header : '')));
+            } catch (error) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 200) }));
+            }
+          },
+        }),
+      'modes: GET tools route',
+    );
+  });
 
   const commandName = plain(config.commandName);
   if (commandName) {

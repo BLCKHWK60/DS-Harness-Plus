@@ -403,7 +403,7 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
 .cws-movelist{max-height:220px;overflow-y:auto;max-width:230px}
 .cws-movelist .cws-moveitem{overflow:hidden;text-overflow:ellipsis}
 .cws-movesep{height:0.5px;margin:4px 6px;background:var(--dsw-alias-border-l2)}
-html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='menu'],html[data-cws-plain-chat] [data-slot='conversation.hero.workspace'],html[data-cws-plain-chat] [data-slot='conversation.hero.agentPreset']{display:none !important}
+html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='menu'],html[data-cws-plain-chat] [data-slot='conversation.hero.workspace']{display:none !important}
 .cws-more-btn{border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:12px;padding:4px 12px;text-align:left}
 @media (hover:hover){.cws-proj-main:hover,.cws-conv-main:hover,.cws-mini:hover,.cws-moveitem:hover,.cws-link:hover{background:var(--dsw-alias-interactive-bg-hover)}}
 .cws-error{margin:0 4px 8px;color:var(--dsw-alias-state-error-primary, inherit);font-size:12px}
@@ -940,7 +940,8 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
 
       const startSession = () => startNew(appCtx, library, selected.id);
       // Chat does not choose a folder: while the open tab is Chat and the open conversation lives in the
-      // app's default workspace (or nothing is open), the start page's two pickers are hidden by CSS.
+      // app's default workspace (or nothing is open), the start page's folder picker is hidden by CSS.
+      // The preset picker (Standard, PTC, ...) stays: it changes how the model calls tools, so it must be visible.
       const home = defaultWorkspace(libSnap.workspaces);
       const currentWs = libSnap.currentId ? libSnap.workspaces.find((ws) => (ws.sessionIds ?? []).includes(libSnap.currentId)) : null;
       const plainChat = selected.id === 'chat' && libSnap.ok && !!home && (!currentWs || currentWs.workspaceId === home.workspaceId);

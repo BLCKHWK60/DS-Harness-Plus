@@ -13,6 +13,7 @@
   "files": [
     "index.js",
     "client.js",
+    "lib/*.js",
     "cordis.patch.yml",
     "README.md",
     "locale/*.json",

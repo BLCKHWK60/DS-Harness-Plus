@@ -46,6 +46,16 @@ else
   say "FAIL  install"; cat "$home/install.log" "$home/dump.err" 2>/dev/null | tail -30; failed=1
 fi
 run install && say "ok    re-install (update)" || { say "FAIL  re-install"; tail -20 "$home/install.log"; failed=1; }
+# An add-on the owner switched off in the app (still linked, no longer in the list the app loads)
+# must not stop an update, and must stay off.
+off_pkg="$home/profiles/check/package.json"
+bundled() { ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/$APP_NAME" -e 'const p=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.exit(((p.dsh||{}).profile||{}).bundles.includes(process.argv[2])?0:1)' "$off_pkg" "$1"; }
+ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/$APP_NAME" -e 'const fs=require("fs");const f=process.argv[1];const p=JSON.parse(fs.readFileSync(f,"utf8"));p.dsh.profile.bundles=p.dsh.profile.bundles.filter((n)=>n!=="@local/dsh-notify");fs.writeFileSync(f,JSON.stringify(p,null,2));' "$off_pkg"
+if run install && ! bundled @local/dsh-notify && bundled @local/dsh-modes && grep -q '^off @local/dsh-notify' "$home/install.log" && grep -q '1 of them switched off by you' "$home/install.log"; then
+  say "ok    an add-on switched off in the app stays off, and the update goes through"
+else
+  say "FAIL  update with an add-on switched off"; tail -20 "$home/install.log"; failed=1
+fi
 # Shared settings: --settings records a folder (with a space in its name, as iCloud Drive has); --no-settings clears it.
 shared="$home/Shared Plus"
 record="$home/shared-settings/folder.txt"

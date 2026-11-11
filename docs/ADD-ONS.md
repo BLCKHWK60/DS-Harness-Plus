@@ -51,7 +51,7 @@ Replaces the left sidebar with a MindsHub-style one:
 
   **Each tab lists only its own conversations.** Code shows your coding projects, Chat your chats, Cowork your tasks. Use the `⋯` on a conversation or a project to move it to another tab; **Show all** gives the app's full list with search.
 
-  **The Chat tab has no folders.** A chat lives on its own, so the Chat tab hides the workspace and preset pickers, always starts a new chat in the app's default workspace, and shows your chats as one flat list. The `⋯` on a chat can **Promote to Cowork** or **Promote to Code** (the same conversation, in the new mode) or **Continue in a project…** (a new conversation in a project you pick, with the chat attached for the assistant to read).
+  **The Chat tab has no folders.** A chat lives on its own, so the Chat tab hides the workspace picker, always starts a new chat in the app's default workspace, and shows your chats as one flat list. The `⋯` on a chat can **Promote to Cowork** or **Promote to Code** (the same conversation, in the new mode) or **Continue in a project…** (a new conversation in a project you pick, with the chat attached for the assistant to read).
 
   The start page shows a greeting per tab, and on the Cowork and Code tabs, suggestion chips under the chat box (Create slides, Build website, …) that fill in a starter prompt.
 
@@ -75,8 +75,9 @@ Each has a light and a dark version and follows **Settings → General → Appea
 
 Chat, Cowork and Code modes, chosen per conversation with the selector in the chat box or `/mode`.
 
-The chat box also gets two buttons for the open conversation:
+The chat box also gets three buttons for the open conversation:
 - **Search** switches the web tools on or off. It starts off in Chat and on in Cowork and Code.
+- **Tools** says whether the assistant has any tools ("Tools on" or "Tools off"). Click it for one switch that turns every tool off or back on for this conversation, and for the list of what the assistant can and cannot call. With tools off, the assistant is offered nothing, so it does not try and you see no failed attempts.
 - **Deep research** has the assistant research questions thoroughly and answer with a cited report. With the Cowork sidebar on, the sidebar tabs choose instead, and the chat-box selector is hidden. A mode decides which tools the assistant may use, how its sandbox is set, a default tier, and a short instruction. The default mode, Cowork, allows every tool, so nothing is restricted until you choose otherwise. Edit or add modes on **Settings → Modes**.
 
 ## Model Tiers
