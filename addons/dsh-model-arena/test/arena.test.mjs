@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { apply, shuffle, redact, genericFailure, parseAsk } from '../index.js';
+import { Readable } from 'node:stream';
+import { apply, shuffle, redact, genericFailure, parseAsk, readSettings, readJsonBody } from '../index.js';
 
 const CANDS = [
   { id: 'alpha', provider: 'prov-one', model: 'model-aaa' },
@@ -43,7 +44,16 @@ function harness(config, { llm, services = {} } = {}) {
     routes[path]({ method, url: path }, res);
     return { status: res.statusCode, headers: res.headers, raw: res.body ?? '', json: res.body ? JSON.parse(res.body) : null };
   };
-  return { ctx, provided, commands, run, routes, fence, get };
+  /** POST a JSON body (or raw text) to the write route; returns status and parsed body. */
+  const post = async (body, { method = 'POST', raw } = {}) => {
+    const req = Readable.from([Buffer.from(raw ?? JSON.stringify(body))]);
+    req.method = method;
+    req.url = '/dsh-model-arena/action';
+    const res = { statusCode: 0, headers: {}, setHeader(k, v) { this.headers[k] = v; }, end(text) { this.body = text; } };
+    await routes['/dsh-model-arena/action'](req, res);
+    return { status: res.statusCode, headers: res.headers, raw: res.body ?? '', json: res.body ? JSON.parse(res.body) : null };
+  };
+  return { ctx, provided, commands, run, routes, fence, get, post };
 }
 
 const base = () => ({ dataDir: mkdtempSync(join(tmpdir(), 'arena-')), candidates: CANDS });
@@ -76,7 +86,8 @@ test('parseAsk reads flags then the prompt', () => {
 });
 
 test('config checks', () => {
-  assert.throws(() => harness({ dataDir: '/tmp/x', candidates: [CANDS[0]] }), /at least two/);
+  // One contestant is a setup in progress (the Settings page saves as you pick), not a broken file.
+  assert.ok(harness({ dataDir: '/tmp/x', candidates: [CANDS[0]] }).provided.modelArena);
   assert.throws(() => harness({ dataDir: '/tmp/x', candidates: [CANDS[0], CANDS[0]] }), /duplicate/);
   assert.throws(() => harness({ dataDir: 'relative', candidates: CANDS }), /absolute/);
   const off = harness({});
@@ -352,4 +363,117 @@ test('a running round shows only how many answered, never which', async () => {
   release();
   await pending;
   assert.equal(h.get('/dsh-model-arena/rounds').json.running.length, 0);
+});
+
+test('settings are read live: the page can add contestants while the app runs', async () => {
+  const config = { dataDir: mkdtempSync(join(tmpdir(), 'arena-')), candidates: [] };
+  const h = harness(config);
+  assert.equal((await h.run('ask hi')).kind, 'error');
+  config.candidates = [CANDS[0]];
+  assert.match((await h.run('ask hi')).text, /at least two/);
+  config.candidates = [CANDS[0], CANDS[1]];
+  assert.equal((await h.run('ask hi')).kind, 'success');
+  assert.equal(h.get('/dsh-model-arena/rounds').json.candidates, 2);
+  config.judge = { provider: 'p', model: 'm' };
+  assert.equal(h.get('/dsh-model-arena/rounds').json.judge, true);
+});
+
+test('readSettings drops unusable entries and clamps numbers', () => {
+  const s = readSettings({
+    candidates: [CANDS[0], { id: 'alpha', provider: 'x', model: 'y' }, { id: '', provider: 'x', model: 'y' }, { id: 'nomodel', provider: 'x' }, { ...CANDS[1], reasoningEffort: ' high ' }],
+    maxContestants: 9,
+    limits: { timeoutMs: 5, maxTokens: -3 },
+    criteria: ['  ', 'tone'],
+    judge: { provider: 'p' },
+  });
+  assert.deepEqual(s.candidates.map((c) => c.id), ['alpha', 'beta']);
+  assert.equal(s.candidates[1].reasoningEffort, 'high');
+  assert.equal(s.maxContestants, 4);
+  assert.equal(s.timeoutMs, 1000);
+  assert.equal(s.maxTokens, 0);
+  assert.deepEqual(s.criteria, ['tone']);
+  assert.equal(s.judge, null);
+  assert.equal(readSettings({}).criteria.length, 4);
+});
+
+test('readJsonBody refuses oversize, broken and non-object bodies', async () => {
+  assert.deepEqual(await readJsonBody(Readable.from([Buffer.from('{"a":1}')])), { ok: true, value: { a: 1 } });
+  assert.equal((await readJsonBody(Readable.from([Buffer.from('nope')]))).status, 400);
+  assert.equal((await readJsonBody(Readable.from([Buffer.from('[1]')]))).status, 400);
+  assert.equal((await readJsonBody(Readable.from([Buffer.alloc(70 * 1024, 97)]))).status, 413);
+});
+
+test('write route: fence, POST only, known actions, checked ids, size cap', async () => {
+  const h = harness(base());
+  h.fence.rejection = 401;
+  assert.equal((await h.post({ action: 'ask', prompt: 'hi' })).status, 401);
+  assert.equal(h.provided.modelArena.list().length, 0, 'a refused request must not start a round');
+  h.fence.rejection = undefined;
+  const wrong = await h.post({ action: 'ask', prompt: 'hi' }, { method: 'GET' });
+  assert.equal(wrong.status, 405);
+  assert.equal(wrong.headers.allow, 'POST');
+  assert.equal((await h.post({ action: 'drop-everything' })).status, 400);
+  assert.equal((await h.post({ action: 'reveal', id: '../../etc/passwd' })).status, 400);
+  assert.equal((await h.post({ action: 'reveal' })).status, 400);
+  assert.equal((await h.post({ action: 'reveal', id: '20990101000000-abc' })).status, 404);
+  assert.equal((await h.post(null, { raw: 'not json' })).status, 400);
+  assert.equal((await h.post(null, { raw: JSON.stringify({ action: 'ask', prompt: 'x'.repeat(70 * 1024) }) })).status, 413);
+  assert.equal((await h.post({ action: 'ask', prompt: '   ' })).status, 400);
+  assert.equal(h.provided.modelArena.list().length, 0);
+});
+
+test('write route: ask, pick, reveal and delete, and it stays blind until reveal', async () => {
+  const h = harness(base());
+  const asked = await h.post({ action: 'ask', prompt: 'what is two plus two' });
+  assert.equal(asked.status, 200);
+  assert.match(asked.json.id, /^\d{14}-[a-z0-9]{1,3}$/);
+  for (let i = 0; i < 50 && h.provided.modelArena.list().length === 0; i += 1) await new Promise((r) => setTimeout(r, 10));
+  const id = asked.json.id;
+  assert.equal(h.provided.modelArena.list()[0].id, id);
+  const leaks = (raw) => ['alpha', 'beta', 'gamma', 'prov-', 'model-aaa', 'model-bbb', 'model-ccc', 'latencyMs', 'candidateId', 'provider'].filter((word) => raw.includes(word));
+  assert.deepEqual(leaks(asked.raw), []);
+  assert.equal((await h.post({ action: 'pick', id, label: 'Z' })).status, 400);
+  const picked = await h.post({ action: 'pick', id, label: 'b' });
+  assert.equal(picked.status, 200);
+  assert.deepEqual(leaks(picked.raw), []);
+  // No judge is set: refused with a plain reason, and nothing identifying in it.
+  const judged = await h.post({ action: 'judge', id });
+  assert.equal(judged.status, 409);
+  assert.match(judged.json.error, /judge/);
+  // The reason names the setting (`judge.provider`), never a contestant.
+  assert.deepEqual(leaks(judged.raw).filter((word) => word !== "provider"), []);
+  const revealed = await h.post({ action: 'reveal', id });
+  assert.equal(revealed.status, 200);
+  assert.deepEqual(leaks(revealed.raw), [], 'the write route never carries names; the read route does after reveal');
+  assert.equal(h.provided.modelArena.list()[0].revealed, true);
+  assert.equal(h.provided.modelArena.list()[0].picked, true);
+  assert.equal((await h.post({ action: 'delete', id })).status, 200);
+  assert.equal(h.provided.modelArena.list().length, 0);
+});
+
+test('write route: asking with fewer than two contestants is refused', async () => {
+  const h = harness({ dataDir: mkdtempSync(join(tmpdir(), 'arena-')), candidates: [CANDS[0]] });
+  const asked = await h.post({ action: 'ask', prompt: 'hi' });
+  assert.equal(asked.status, 409);
+  assert.match(asked.json.error, /at least two/);
+});
+
+test('write route: judge runs the shared judge and answers in labels only', async () => {
+  const judgeService = {
+    compare: async (spec) => ({ winner: 1, consistent: true, average: spec.texts.map((_, i) => i + 1), verdicts: [{}, {}] }),
+  };
+  const h = harness({ ...base(), judge: { provider: 'prov-j', model: 'model-j' } }, { services: { candidateJudge: judgeService } });
+  await h.run('ask q');
+  const id = h.provided.modelArena.list()[0].id;
+  const judged = await h.post({ action: 'judge', id });
+  assert.equal(judged.status, 200);
+  for (const word of ['alpha', 'beta', 'gamma', 'prov-', 'model-']) assert.ok(!judged.raw.includes(word), `judge answer leaked ${word}`);
+  assert.equal(h.provided.modelArena.list()[0].judged, true);
+  assert.equal(h.get('/dsh-model-arena/rounds').json.judgeService, true);
+  // A judge that fails is reported in plain words, without the contestants.
+  const failing = harness({ ...base(), judge: { provider: 'prov-j', model: 'model-j' } }, { services: { candidateJudge: { compare: async () => { throw new Error('no json'); } } } });
+  await failing.run('ask q');
+  const bad = await failing.post({ action: 'judge', id: failing.provided.modelArena.list()[0].id });
+  assert.equal(bad.status, 409);
+  assert.match(bad.json.error, /could not give a verdict/);
 });

@@ -17,6 +17,8 @@ One button beside the send button shows the model (or version) and the effort. I
 - **Tier:** one chip per tier. "Reset" forgets this conversation's tier and settings; the model stays.
 - **Sampling:** temperature and max output tokens for this conversation. **Save as new version…** keeps the settings in use under a name; **Update "name"** writes changes back into the version in use.
 
+The panel fits the window: it opens above the button when there is room, otherwise beside it on the left, centred on the button, and the model list shrinks before anything else scrolls. A click anywhere outside closes it, including on the part of the Mac window that drags the window (a clear sheet behind the panel catches the click).
+
 The app's own model menu is hidden while this add-on is on (it comes back when the add-on is switched off). The control uses the app's own model directory, so `/model` and the button always agree.
 
 ## Starter tiers and your tiers
@@ -27,7 +29,7 @@ The app's own model menu is hidden while this add-on is on (it comes back when t
 |---|---|
 | Name | Your own name for the starter. Empty uses the built-in name |
 | Instructions | Given to the model whenever the tier is active. Empty uses the starter's built-in guidance |
-| Model | Optional. With a model, picking the tier switches the conversation to it. "Clear model" removes it |
+| Model | Optional. One list; its first entry is "No model: keep the model the conversation is on". A search box shows only when there are more than 12 models. "Type a model by hand" opens two fields for a provider and model id that are not in the list |
 | Effort, Access | As before: effort level, web search, web fetch, browser, sub-agents |
 | Model version | A saved version that supplies the tier's model and sampling |
 | Sub-agents | "Ask for at least" (an instruction to the model) and "allow at most" (enforced; empty uses the app-wide cap) |
@@ -235,5 +237,7 @@ A composer-selected tier is now matched to its fallback and role routes by its t
 - **End to end**, read from the exact request the model received: model and temperature (0.9) of the tier's version, effort Low, the tier's instructions, the text of the chosen skill, "Connectors are switched off", and the "at least 2 sub-agents" line. A Sampling preset (0.1) did not override the version's temperature.
 - **Carry-over:** a profile that already had tier models kept the names Haiku … Code.
 - **Settings:** every tab renders; version create, rename, effort and temperature edits were saved; the skills list came from the app.
+
+The Settings page follows `docs/UI-STYLE.md` (the app's own fonts, fields, cards, switches and tabs; colours only from the app's variables). Checked in the Forest scheme, dark and light.
 
 **Not checked:** hiding the tools of a real connector (the lab has no MCP server running; only the "none allowed" prompt line and the code path were exercised); project profiles and role lanes in the new panel beyond rendering; the Chinese strings; the Mac desktop app; a model with real thinking levels beyond the mock's.

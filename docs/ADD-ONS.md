@@ -14,13 +14,14 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Colour schemes](#colour-schemes) | yes (stock colours until you pick) | Settings → Colours | |
 | [Modes](#modes) | yes | Settings → Modes | `/mode` |
 | [Model Tiers](#model-tiers) | yes | Settings → Model Tiers | |
+| [Code map](#code-map) | yes | Settings → Code map | `/codemap` |
 | [Usage counter](#usage-counter) | yes | Settings → Usage | `/usage` |
 | [Deep research](#deep-research) | yes | | |
 | [Code power](#code-power) | yes | | `/review` |
 | [Sampling presets](#sampling-presets) | after setup | Settings → Sampling | `/sampling` |
-| [Model arena](#model-arena) | after setup | Settings → Arena | `/arena` |
+| [Model arena](#model-arena) | after setup, in its page | Settings → Arena | `/arena` |
 | [Agent swarm](#agent-swarm) | after setup | Settings → Swarm | |
-| [Benchmark](#benchmark) | after setup | Settings → Benchmark | `/bench` |
+| [Benchmark](#benchmark) | after setup, in its page | Settings → Benchmark | `/bench` |
 | [Route health](#route-health) | after setup | dot in the chat box | `/routes` |
 | [Model router](#model-router) | after setup | | `/router` |
 | [Role prompts](#role-prompts) | after setup | | |
@@ -46,7 +47,7 @@ Replaces the left sidebar with a MindsHub-style one:
 
   **The Chat tab has no folders.** A chat lives on its own, so the Chat tab hides the workspace and preset pickers, always starts a new chat in the app's default workspace, and shows your chats as one flat list. The `⋯` on a chat can **Promote to Cowork** or **Promote to Code** (the same conversation, in the new mode) or **Continue in a project…** (a new conversation in a project you pick, with the chat attached for the assistant to read).
 
-  The start page shows a greeting per tab, and on the Cowork tab, suggestion chips under the chat box (Create slides, Build website, …) that fill in a starter prompt.
+  The start page shows a greeting per tab, and on the Cowork and Code tabs, suggestion chips under the chat box (Create slides, Build website, …) that fill in a starter prompt.
 
   **Connectors** lists your MCP servers. Each shows whether it is connected and how many tools it brings, with an on/off switch. A short form writes out the settings lines for a new one. **Skills** lists the skills the assistant can use, with search.
 - **Your projects and Settings**, as before.
@@ -99,6 +100,21 @@ The app can only send temperature and max output tokens to a model. Top-p, top-k
 
 If you used Tiers before 0.10, your tiers keep their names (Haiku, Sonnet, Opus, Fable, Code) and models.
 
+## Code map
+
+Makes a compact map of the project a conversation works in: its files, the functions and classes in them, and what uses what. The assistant looks things up in the map and reads one function at a time instead of whole files, which uses far fewer tokens on a large project. Nothing is installed, and nothing is written into your project; the map is kept in the app's own data folder.
+
+**Settings → Code map** shows each mapped folder with its numbers, lets you map it again or delete its map, and sets the limits and extra patterns to leave out. It will not map your whole home folder or whole personal folders such as Documents. `/codemap` shows the state in a chat.
+
+It also adds four "reverse engineer" skills. Type `/` in the chat box and pick:
+
+- `reverse-codebase`: how a project works, as an architecture document;
+- `reverse-website`: a specification to rebuild a site from;
+- `reverse-api-format`: documentation of an API or file format, from examples;
+- `reverse-app-binary`: what an installed app is made of and what it does. This one is for software you own or may analyse, and it does not remove protections.
+
+Connections in the map are found by reading the text, not by compiling, so they are right for ordinary code and can miss unusual constructs. Measured on this project: about 2.2 million characters of source, a 4,200-character overview, and under 7,000 characters for a five-step look-up. A real task also reads some files in full, so real savings are smaller.
+
 ## Usage counter
 
 Counts requests and tokens per day, provider and model. It never stores what you wrote. See the totals on **Settings → Usage** or with `/usage`. To mark some models as free:
@@ -123,41 +139,19 @@ Named settings such as "precise" (low temperature) or "creative", picked automat
 
 ## Model arena
 
-Ask several models the same question at once, read the answers under neutral labels (A, B, C), pick a winner, then reveal which model was which. Smallest setup, two models:
+Ask several models the same question at once, read the answers under neutral labels (A, B, C), pick a winner, then reveal which model was which.
 
-```yaml
-- id: model-arena
-  config:
-    candidates:
-      - { id: first, provider: <PROVIDER>, model: <MODEL> }
-      - { id: second, provider: <PROVIDER>, model: <MODEL> }
-```
+Open **Settings → Arena** (or **Model Arena** in the sidebar). Under **Setup**, pick at least two models from the list; you can set an effort for each. Optionally pick a **judge model**, which compares the answers without knowing who wrote them. The other options each have a one-line explanation: answers per round, hiding names, the judge's criteria, the time limit, the longest answer, and how long rounds are kept. Changes save as you make them.
 
-Then in a chat: `/arena ask <your question>`, then `/arena pick A` and `/arena reveal`. Rounds also appear on the **Model Arena** page in the sidebar (Chat tab) and on **Settings → Arena**. For `/arena judge` (an AI judge), add `judge: { provider: <PROVIDER>, model: <MODEL> }` under `config`.
-
-## Agent swarm
-
-A named team of helper agents that work on one task together: all at once, one after another, or as a debate. The assistant starts a swarm when you ask ("use the review swarm on this"). Watch runs on **Settings → Swarm**. A small three-reviewer team:
-
-```yaml
-- id: agent-swarm
-  config:
-    swarms:
-      review-team:
-        description: 'Three reviewers look at the same work'
-        strategy: fanout
-        maxActive: 3
-        members:
-          - { id: correctness, role: review, instructions: 'Look for mistakes.' }
-          - { id: security, role: review, instructions: 'Look for security problems.' }
-          - { id: simplicity, role: review, instructions: 'Look for needless complexity.' }
-```
-
-`role: review` uses the review model from Model Tiers. To use a specific model instead, write `provider: <PROVIDER>, model: <MODEL>` in place of `role: review`.
+Then type a question and press **Ask the models**. The answers appear side by side as A, B, C, D. Press **Pick this answer** on the one you prefer, **Ask the judge** if you set one, and **Reveal the models** to see who wrote what, with speed and token counts. The `/arena` commands still work in a chat. The judge needs the Code power add-on, which is installed with Plus.
 
 ## Benchmark
 
-Runs your own test questions over several models and settings, scores the answers and reports quality, speed and cost. It needs targets (models) and suites (questions); the full example is in `addons/dsh-benchmark/README.md`. Start a run with `/bench run`; results show on **Settings → Benchmark**.
+Runs your own test questions over several models and settings, scores the answers and reports quality, speed and cost.
+
+Open **Settings → Benchmark**. The page walks you through the first run in three steps. First, add the **models to test**. Second, create a **suite**: press **New suite** (or **Add an example suite**), write what to ask, and choose how each answer is graded: contains a text, is exactly a text, matches a pattern, or is scored by a judge model. Third, choose the suite and press **Run**; the page says how many model calls that makes.
+
+Optional settings: temperatures and max output tokens to try on each model, how many times each prompt is repeated, limits on time and spend, and prices per model for the cost column. Results show score, speed, errors and cost per model and setting, plus a recommendation per category. The `/bench` commands still work in a chat.
 
 ## Route health
 

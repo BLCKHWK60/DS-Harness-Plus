@@ -1,8 +1,8 @@
 # Model arena
 
-Host plugin `@local/dsh-model-arena` (dsh 0.2.2-rc.1). Ask **one prompt to several models at once**, read the answers under **shuffled labels** (A, B, C, D) with no model name anywhere, let a **blind judge** and **you** pick, then **reveal** who wrote what, with latency and token counts. **Nothing is configured by default**: with no candidates the plugin does nothing; a bad config fails at load.
+Host plugin `@local/dsh-model-arena` (dsh 0.2.2-rc.1). Ask **one prompt to several models at once**, read the answers under **shuffled labels** (A, B, C, D) with no model name anywhere, let a **blind judge** and **you** pick, then **reveal** who wrote what, with latency and token counts. **Nothing is configured by default**: until you pick at least two models (Settings > Arena, or `candidates` in the config) the arena only shows its setup page.
 
-The commands and the service are the way to ask, judge, pick and reveal. Settings > **Arena** (below) shows the rounds side by side, read-only. Live streaming columns and a vote button are deliberately not built.
+Everything can be done on the page: **Settings > Arena** (or **Model Arena** in the sidebar) has the setup form, an Ask box, and Judge, Pick and Reveal buttons. The `/arena` commands and the `modelArena` service work as before. Live streaming columns are deliberately not built.
 
 ## Configuration
 
@@ -52,15 +52,31 @@ The judge is the **same one as in Code power** (`candidateJudge` service: shuffl
 
 The same page also opens as a full page from the sidebar (**Model Arena**). The Cowork sidebar lists it under the Chat tab.
 
-Settings > **Arena** lists your rounds (newest first, with blind / judged / picked / revealed chips) and lays the selected round out in **one column per label**: the redacted answer text, a generic failure word if a contestant failed, the judge's average score for that label, a marker on the judge's pick and on yours. After `/arena reveal` the column header also shows candidate id, provider/model, latency and tokens, and whether you and the judge agree.
+**Setup** (saved as you change it, applied at once, no restart):
 
-The page keeps the test blind exactly as the commands do: before reveal, the route that feeds it carries no model, provider, candidate id, latency or token count (a unit test and a check against the running route search the JSON for them). The candidates' names are never sent to the page at all, only how many there are. **No live streaming**: while a round is being asked the page shows only "N of M answers in", not which ones, because text arriving live or the order of finishing would show which model is fastest, which is the bias a blind test removes. A finished round appears as soon as it is saved. Rounds poll every 10 seconds (2 seconds while one is running).
+| On the page | Setting | What it does |
+| --- | --- | --- |
+| Models to compare | `candidates` | Add models from the app's model list, set an effort for each, remove them. At least two are needed. The id is made from the model's name |
+| Judge model | `judge` | Optional. A model that compares the answers blind |
+| Judge twice | `consistencyCheck` | A second reading in reverse order; a different result is a tie |
+| What the judge looks at | `criteria` | Words separated by commas; empty uses accuracy, completeness, clarity, relevance |
+| Answers per round | `maxContestants` | 2 to 4; with more models, each round draws that many at random |
+| Hide the names until I reveal | `blindByDefault` | Off shows names at once for `/arena ask` in a chat. Rounds asked on the page are always blind until you press Reveal |
+| Remove model names from answers | `redactNames` | Replaces a model's own name by `[model]` |
+| Time limit per answer, Longest answer | `limits` | Seconds (stored as `timeoutMs`), and max output tokens (0 = no limit) |
+| Keep rounds for | `storeDays` | Days |
 
-It reads two fenced, GET-only routes of the host half: `GET /dsh-model-arena/rounds` and `GET /dsh-model-arena/round?id=<id>` (login cookie and Host/Origin check; the id must look like `20261110120000-a1b`). The page cannot ask, judge, pick or reveal: use `/arena`. It does show your own prompt and the model answers, to a fenced caller only. Needs one app restart to load.
+Until two models are picked, Setup sits at the top of the page; after that, Ask and the rounds come first and Setup moves below.
 
-Host change: `run()` now also keeps a per-round counter of answered contestants while a round runs (no names, no text). 24 unit tests pass (3 new: the fence and GET-only checks, blindness before and after reveal, and the running counter that names no one).
+**Ask and the rounds:** type a question, press **Ask the models**; the round shows "N of M answers in" while it runs, then one column per label. **Pick this answer** on a column records your choice, **Ask the judge** runs the judge, **Reveal the models** shows who wrote what with speed and tokens, **Delete round** asks once more first. A refused action says why in plain words (no judge set, the judge gave no usable verdict, and so on).
 
-Tested in a throwaway web profile with three seeded rounds (a failed contestant, a revealed round with a disagreeing judge, an unjudged round): route statuses (401, 405, 400, 404), the blind JSON checked for names, the page text for blind, revealed and failed rounds, and column layout numbers. **Not tested:** looking at the page by eye (the browser pane was hidden, so no screenshot; layout was checked by measuring), light theme, narrow widths, a round that is really running, real models, the desktop app.
+**How it is wired:**
+
+- The form reads and writes the add-on's own settings through the app's settings channel (`remote.settings.describe` / `mutate`, namespace `model-arena`; on a `settings/conflict` it reloads and retries once). The fields above are `.volatile()` in the Config schema, and the host half reads them at every use (`readSettings`), so nothing is captured at load. The YAML shape is unchanged; existing config files keep working.
+- A config with one contestant, or none, now loads (it used to stop the add-on at start): it is a setup in progress. A repeated id in a hand-written file still stops it.
+- Buttons go to one write route, `POST /dsh-model-arena/action`, body `{ action: ask | judge | pick | reveal | delete, id?, prompt?, label? }`. It sits behind the same fence as the read routes (login cookie and Host/Origin check), accepts POST only, reads at most 64 KB of JSON, accepts only those five actions, and checks the round id (`20261110120000-a1b`) and label (A to D). `ask` answers with the round id as soon as the models are being asked; the page then follows the round through the read routes. Its answers never name a model: names come only from the read route, and only after reveal.
+- The read routes are unchanged and GET-only: `GET /dsh-model-arena/rounds` (now also says whether a judge is set and whether the judge service is loaded) and `GET /dsh-model-arena/round?id=<id>`. Before reveal they carry no model, provider, candidate id, latency or token count.
+- The Setup area shows which models are in the arena, because you chose them. It never shows which model wrote which answer.
 
 ## Data
 
@@ -73,3 +89,12 @@ A route that Route health reports as down is skipped (shown as `route unavailabl
 ## Checked
 
 21 unit tests (shuffle, redaction, no leak of names in output, failure and timeout isolation, parallelism, sampling, route-down skip, judge wiring and same-family note, pick/reveal, persistence, pruning, file mode) and a mock run in a real dsh headless profile (3 contestants with one unreachable, judge consistent and split, reveal, command registered). Not tested: real models (do they reveal themselves in ways the redaction misses), long answers, the cost of many rounds.
+
+## Checked (0.10 setup page, throwaway web profile, mock models)
+
+- **Unit tests:** 31 (7 new): settings read live, unusable entries dropped, the write route's refusals (no login, wrong method, unknown action, bad or missing id, unknown round, broken JSON, oversize body, empty prompt, fewer than two models), ask / pick / reveal / delete through the route with no name in any answer, the judge through the route with a stand-in judge service.
+- **Live, starting from an empty config:** picked two models and a judge on the page; asked a round; picked an answer; revealed; the settings landed in the profile's `cordis.patch.yml` in the shape documented above and were still there after a restart. Every option (effort, answers per round, both switches, criteria, time limit, longest answer, days) was changed on the page and checked in the file.
+- **`/arena list`** in a chat and the sidebar **Model Arena** page still work.
+- **Look:** checked in the stock scheme (dark) and Forest (dark and light), and at a 900 px wide window; no sideways scrolling.
+
+**Not checked:** a judge verdict with a real model (the mock model does not answer the judge's question in the needed form, so the page showed the plain "could not give a verdict" message; the success path is covered by a unit test with a stand-in judge); a long-running round on the page (the mock answers at once); the Chinese strings (new texts fall back to English); the Mac desktop app.

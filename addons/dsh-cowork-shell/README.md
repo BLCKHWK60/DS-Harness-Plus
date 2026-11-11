@@ -71,7 +71,7 @@ The list reads the app's own project and conversation data in the browser. If th
   - Code: "What should we build?"
 
   The greeting sits in the start page's logo seat, and the stock title next to it is hidden only while a greeting shows. A tab with an empty greeting shows the stock title.
-- **Suggestion chips** under the chat box, each with an icon: Create slides, Build website, Develop apps, Spreadsheet, Visualization, Wide research, Create games (Cowork tab). A chip fills the chat box with a starter prompt to finish and send. Chip icons: `slides`, `website`, `app`, `spreadsheet`, `chart`, `research`, `game`, `spark`.
+- **Suggestion chips** under the chat box, each with an icon: Create slides, Build website, Develop apps, Spreadsheet, Visualization, Wide research, Create games (Cowork and Code tabs). A chip fills the chat box with a starter prompt to finish and send. Chip icons: `slides`, `website`, `app`, `spreadsheet`, `chart`, `research`, `game`, `spark`.
 - **New chat / task / code task** is drawn in the scheme's accent colour, with the app's own New Session shortcut as a badge (shown only when the app exposes one).
 - In narrow windows the greeting wraps, and the chat-box Search and Deep research buttons shrink to icons.
 - The **Search** and **Deep research** buttons in the chat box come from the Modes add-on.

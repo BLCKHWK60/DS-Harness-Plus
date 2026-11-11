@@ -23,8 +23,8 @@ window.__ModuleLoader__.load({
         'toggle.research.on': 'Deep research is on: questions get a researched, cited report. Click to switch it off.',
         'toggle.research.off': 'Switch on deep research: questions get a researched, cited report.',
         'section.title': 'Modes',
-        'head.hint': 'A mode narrows the tools the model sees, can set the file sandbox, can move the session to a tier and adds a short prompt. Sessions pick a mode in the composer or with /mode. Changes apply at the next turn boundary.',
-        'default.label': 'Mode for sessions that have not chosen one',
+        'head.hint': 'A mode narrows the tools the model sees, can set the file sandbox, can move the conversation to a tier and adds a short prompt. A conversation picks a mode in the chat box or with /mode. Changes apply from the next message.',
+        'default.label': 'Mode for conversations that have not chosen one',
         'add': 'Add mode',
         'remove': 'Remove',
         'save': 'Save',
@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
         'f.sandbox.inherit': 'Leave as it is',
         'f.sandbox.read-only': 'Read only',
         'f.sandbox.workspace-write': 'Write in the workspace',
-        'f.tier': 'Default tier when switching to this mode (needs the Tier plugin; empty = none)',
+        'f.tier': 'Tier to switch to with this mode (optional)',
         'f.prompt': 'Prompt added while this mode is active',
         'f.count': '{n} of 4000',
         'e.id': 'Ids use lower-case letters, digits and dashes, and must be unique.',
@@ -51,7 +51,7 @@ window.__ModuleLoader__.load({
         'e.default': 'The default mode must be one of the modes.',
         'e.broken': 'The stored mode list is not valid JSON. Saving replaces it with what you see here (the built-in three until you edit).',
         'e.tools': 'Choose at least one tool name, or pick All or None.',
-        'failed': 'Could not read the Modes settings. Is the Modes plugin loaded in this profile?',
+        'failed': 'Could not read the Modes settings. Is the Modes add-on switched on?',
         'loading': 'Loading modes…',
         'save.failed': 'Could not save',
       },
@@ -101,45 +101,47 @@ window.__ModuleLoader__.load({
 
     const CSS = `
 .dsh-modes-select {
-  height: 28px; padding: 0 6px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 8px;
+  height: 28px; padding: 0 8px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px;
   background: transparent; color: var(--dsw-alias-label-secondary);
   font: inherit; font-size: 12px; cursor: pointer;
 }
-.dsh-modes-select:hover { background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); }
+.dsh-modes-select:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-label-primary); }
 .dsh-modes-select[disabled] { opacity: .55; cursor: default; }
 
-.dsh-me-page { display: flex; flex-direction: column; gap: 16px; padding: 2px 0 36px; }
-.dsh-me-head h2 { margin: 0 0 4px; font-size: 18px; font-weight: 650; color: var(--dsw-alias-label-primary); }
-.dsh-me-head p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-secondary); max-width: 68ch; }
-.dsh-me-card { border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
-.dsh-me-row { display: flex; flex-wrap: wrap; gap: 10px; }
-.dsh-me-field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 200px; min-width: 0; }
-.dsh-me-field.wide { flex-basis: 100%; }
-.dsh-me-page > .dsh-me-field, .dsh-me-card > .dsh-me-field { flex: none; max-width: 100%; }
-.dsh-me-page > .dsh-me-field { max-width: 360px; }
-.dsh-me-field > span { font-size: 11px; color: var(--dsw-alias-label-secondary); }
-.dsh-me-in, .dsh-me-ta, .dsh-me-sel { font: inherit; font-size: 12px; color: var(--dsw-alias-label-primary); background: transparent; border: 1px solid var(--dsw-alias-border-l1); border-radius: 8px; padding: 6px 8px; min-width: 0; }
-.dsh-me-in, .dsh-me-sel { height: 30px; padding-top: 0; padding-bottom: 0; }
-.dsh-me-ta { min-height: 64px; resize: vertical; line-height: 1.45; }
-.dsh-me-in:focus-visible, .dsh-me-ta:focus-visible, .dsh-me-sel:focus-visible { outline: 2px solid var(--dsw-alias-label-secondary); outline-offset: 1px; }
-.dsh-me-in[data-bad="true"] { border-color: var(--dsw-alias-state-error-primary); }
-.dsh-me-seg { display: inline-flex; border: 1px solid var(--dsw-alias-border-l1); border-radius: 8px; overflow: hidden; width: fit-content; }
-.dsh-me-seg button { height: 28px; padding: 0 10px; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; cursor: pointer; }
-.dsh-me-seg button + button { border-left: 1px solid var(--dsw-alias-border-l1); }
-.dsh-me-seg button[aria-pressed="true"] { background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); }
-.dsh-me-btn { height: 28px; padding: 0 10px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 8px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; cursor: pointer; }
-.dsh-me-btn:hover:not([disabled]) { background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); }
+.dsh-me-page { display: flex; flex-direction: column; gap: 16px; padding: 0 0 36px; color: var(--dsw-alias-label-primary); }
+.dsh-me-head h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--dsw-alias-label-primary); }
+.dsh-me-head p { margin: 2px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); max-width: 72ch; }
+.dsh-me-card { box-sizing: border-box; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 20px; padding: 16px; background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-1)); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.dsh-me-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: end; }
+.dsh-me-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dsh-me-field.wide { grid-column: 1 / -1; }
+.dsh-me-field > span { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+/* The page's own setting is a row: text on the left, the control on the right. */
+.dsh-me-page > .dsh-me-field { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 0 0 16px; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
+.dsh-me-page > .dsh-me-field > span { font-size: 14px; line-height: 22px; color: var(--dsw-alias-label-primary); }
+.dsh-me-page > .dsh-me-field > .dsh-me-sel { flex: 0 1 220px; }
+.dsh-me-in, .dsh-me-ta, .dsh-me-sel { box-sizing: border-box; height: 36px; padding: 0 14px; border: 0; border-radius: 12px; background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); color: var(--dsw-alias-label-primary); font: inherit; font-size: 14px; min-width: 0; }
+.dsh-me-in:focus-visible, .dsh-me-ta:focus-visible, .dsh-me-sel:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); outline-offset: 0; }
+.dsh-me-ta { height: auto; min-height: 76px; padding: 8px 14px; resize: vertical; line-height: 20px; }
+.dsh-me-in[data-bad="true"] { outline: 1px solid var(--dsw-alias-state-error-primary); }
+.dsh-me-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 10px; background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); width: fit-content; max-width: 100%; }
+.dsh-me-seg button { height: 28px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.dsh-me-seg button:hover { color: var(--dsw-alias-label-primary); }
+.dsh-me-seg button[aria-pressed="true"] { background: color-mix(in srgb, var(--dsw-alias-label-primary) 12%, transparent); color: var(--dsw-alias-label-primary); }
+.dsh-me-seg button:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+.dsh-me-btn { box-sizing: border-box; height: 28px; padding: 0 10px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; cursor: pointer; white-space: nowrap; }
+.dsh-me-btn:hover:not([disabled]) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
 .dsh-me-btn[disabled] { opacity: .5; cursor: default; }
-.dsh-me-btn.primary { color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-label-secondary); }
-.dsh-me-btn:focus-visible, .dsh-me-seg button:focus-visible { outline: 2px solid var(--dsw-alias-label-secondary); outline-offset: 1px; }
+.dsh-me-btn:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+.dsh-me-btn.primary { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
 .dsh-me-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .dsh-me-spacer { flex: 1; }
-.dsh-me-note { font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.dsh-me-note { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
 .dsh-me-note[data-bad="true"] { color: var(--dsw-alias-state-error-primary); }
-.dsh-me-count { font-size: 11px; color: var(--dsw-alias-label-secondary); align-self: flex-end; }
+.dsh-me-count { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); align-self: flex-end; }
 .dsh-me-title { display: flex; align-items: center; gap: 8px; }
-.dsh-me-title b { font-size: 13px; color: var(--dsw-alias-label-primary); }
-.dsh-me-title code { font-size: 11px; color: var(--dsw-alias-label-secondary); }
+.dsh-me-title b { font-size: 14px; line-height: 22px; font-weight: 500; color: var(--dsw-alias-label-primary); }
+.dsh-me-title code { font-size: 12px; color: var(--dsw-alias-label-secondary); }
 `;
 
     /**

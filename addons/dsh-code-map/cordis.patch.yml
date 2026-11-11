@@ -1,0 +1,9 @@
+- insert:
+    - id: code-map
+      name: '@local/dsh-code-map'
+      config:
+        # Works with nothing set. The switches and limits are on Settings > Code map. Optional:
+        #   dataDir: <ABSOLUTE_DIR>      # where maps are kept; default is a folder in the dsh home
+        #   commandName: codemap         # empty registers no slash command
+        #   skills: true                 # the four reverse-engineer skills
+        enabled: true

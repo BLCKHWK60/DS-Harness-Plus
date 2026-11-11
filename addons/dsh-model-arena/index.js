@@ -23,26 +23,33 @@ export const name = 'model-arena';
 /** Paths of the read-only routes the browser page reads. */
 const ROUNDS_PATH = '/dsh-model-arena/rounds';
 const ROUND_PATH = '/dsh-model-arena/round';
+/** The one write route: the page's Ask, Judge, Pick, Reveal and Delete buttons. POST only. */
+const ACTION_PATH = '/dsh-model-arena/action';
+const ACTIONS = ['ask', 'judge', 'pick', 'reveal', 'delete'];
+/** Largest request body the write route reads. */
+const MAX_BODY = 64 * 1024;
 /** Round ids are `YYYYMMDDHHMMSS-xxx`. */
 const ROUND_ID = /^\d{14}-[a-z0-9]{1,3}$/;
 
+// Everything the Settings page edits is volatile, so a change applies at once, without a restart.
 export const Config = z.object({
   enabled: z.boolean().default(true),
   dataDir: z.string(),
-  candidates: z.array(z.object({ id: z.string().required(), provider: z.string().required(), model: z.string().required(), reasoningEffort: z.string() })).default([]),
-  maxContestants: z.number().min(2).max(4).default(4),
-  blindByDefault: z.boolean().default(true),
-  redactNames: z.boolean().default(true),
-  judge: z.object({ provider: z.string(), model: z.string() }).default({}),
-  criteria: z.array(z.string()).default([]),
-  consistencyCheck: z.boolean().default(true),
+  candidates: z.array(z.object({ id: z.string().required(), provider: z.string().required(), model: z.string().required(), reasoningEffort: z.string() })).default([]).volatile(),
+  maxContestants: z.number().min(2).max(4).default(4).volatile(),
+  blindByDefault: z.boolean().default(true).volatile(),
+  redactNames: z.boolean().default(true).volatile(),
+  judge: z.object({ provider: z.string(), model: z.string() }).default({}).volatile(),
+  criteria: z.array(z.string()).default([]).volatile(),
+  consistencyCheck: z.boolean().default(true).volatile(),
   limits: z
     .object({
       timeoutMs: z.number().min(1000).max(1800000).default(120000),
       maxTokens: z.number().min(0).max(1000000).default(0),
     })
-    .default({ timeoutMs: 120000, maxTokens: 0 }),
-  storeDays: z.number().min(1).max(3650).default(30),
+    .default({ timeoutMs: 120000, maxTokens: 0 })
+    .volatile(),
+  storeDays: z.number().min(1).max(3650).default(30).volatile(),
   commandName: z.string().default('arena'),
 });
 
@@ -163,6 +170,65 @@ export function formatBlind(round, shown, { next = true } = {}) {
   return lines.join('\n');
 }
 
+/**
+ * The settings as they are right now. Read at every use, because the Settings page can change
+ * them while the app runs. Entries that cannot be used (no id, no model, a repeated id) are left out.
+ * @param {object} config - plugin config (may hold live references).
+ * @returns {object} candidates, ids, limits, judge and switches.
+ */
+export function readSettings(config) {
+  const cfg = plain(config) ?? {};
+  const ids = new Set();
+  const candidates = [];
+  for (const item of Array.isArray(cfg.candidates) ? cfg.candidates : []) {
+    const id = String(item?.id ?? '').trim();
+    const provider = String(item?.provider ?? '').trim();
+    const model = String(item?.model ?? '').trim();
+    if (!id || !provider || !model || ids.has(id)) continue;
+    ids.add(id);
+    const effort = String(item.reasoningEffort ?? '').trim();
+    candidates.push({ id, provider, model, ...(effort ? { reasoningEffort: effort } : {}) });
+  }
+  const criteria = (Array.isArray(cfg.criteria) ? cfg.criteria : []).map((item) => String(item ?? '').trim()).filter(Boolean);
+  const judge = cfg.judge && cfg.judge.provider && cfg.judge.model ? { provider: String(cfg.judge.provider), model: String(cfg.judge.model) } : null;
+  return {
+    candidates,
+    ids,
+    maxContestants: Math.min(4, Math.max(2, Number(cfg.maxContestants) || 4)),
+    timeoutMs: Math.min(1800000, Math.max(1000, Number(cfg.limits?.timeoutMs) || 120000)),
+    maxTokens: Math.max(0, Number(cfg.limits?.maxTokens) || 0),
+    storeDays: Math.max(1, Number(cfg.storeDays) || 30),
+    criteria: criteria.length ? criteria : DEFAULT_CRITERIA,
+    judge,
+    redactNames: cfg.redactNames !== false,
+    blindByDefault: cfg.blindByDefault !== false,
+    consistencyCheck: cfg.consistencyCheck !== false,
+  };
+}
+
+/**
+ * Read a small JSON body from a request.
+ * @param {AsyncIterable<Uint8Array | string>} req - the request.
+ * @returns {Promise<{ok: true, value: object} | {ok: false, status: number}>} the object, or why not.
+ */
+export async function readJsonBody(req) {
+  let size = 0;
+  const parts = [];
+  try {
+    for await (const chunk of req) {
+      const part = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
+      size += part.length;
+      if (size > MAX_BODY) return { ok: false, status: 413 };
+      parts.push(part);
+    }
+    const value = JSON.parse(Buffer.concat(parts).toString('utf8'));
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, status: 400 };
+    return { ok: true, value };
+  } catch {
+    return { ok: false, status: 400 };
+  }
+}
+
 // ---- plugin ----------------------------------------------------------------------------
 
 /**
@@ -174,25 +240,20 @@ export function apply(ctx, config) {
   const cfg0 = plain(config) ?? {};
   if (cfg0.enabled === false) return;
 
-  const candidates = Array.isArray(cfg0.candidates) ? cfg0.candidates : [];
-  const ids = new Set();
-  for (const candidate of candidates) {
-    if (ids.has(candidate.id)) throw new Error(`model-arena: duplicate candidate id "${candidate.id}"`);
-    ids.add(candidate.id);
+  // A config file that names the same contestant twice is a mistake worth stopping for.
+  const listed = new Set();
+  for (const candidate of Array.isArray(cfg0.candidates) ? cfg0.candidates : []) {
+    if (listed.has(candidate.id)) throw new Error(`model-arena: duplicate candidate id "${candidate.id}"`);
+    listed.add(candidate.id);
   }
-  if (candidates.length === 1) throw new Error('model-arena: list at least two candidates (or none, to leave the arena off)');
-  const maxContestants = Math.min(4, Math.max(2, Number(cfg0.maxContestants) || 4));
-  const timeoutMs = Number(cfg0.limits?.timeoutMs) || 120000;
-  const maxTokens = Number(cfg0.limits?.maxTokens) || 0;
-  const storeDays = Number(cfg0.storeDays) || 30;
-  const criteria = cfg0.criteria?.length ? cfg0.criteria : DEFAULT_CRITERIA;
+  /** @returns {object} the settings in force right now. */
+  const live = () => readSettings(config);
   const commandName = String(cfg0.commandName ?? 'arena').trim();
 
-  const dir = candidates.length
-    ? String(cfg0.dataDir ?? '').trim() || String(ctx.get('dshHomePath')?.('arena') ?? '')
-    : '';
-  if (candidates.length && (!dir || !(dir.startsWith('/') || /^[A-Za-z]:[\\/]/.test(dir)))) {
-    throw new Error('model-arena: `dataDir` must be an absolute path (no dsh home folder was available as a default)');
+  const ownDir = String(cfg0.dataDir ?? '').trim();
+  const dir = ownDir || String(ctx.get('dshHomePath')?.('arena') ?? '');
+  if (ownDir && !(ownDir.startsWith('/') || /^[A-Za-z]:[\\/]/.test(ownDir))) {
+    throw new Error('model-arena: `dataDir` must be an absolute path');
   }
 
   /** Round id -> round. Loaded lazily from disk. */
@@ -223,7 +284,7 @@ export function apply(ctx, config) {
   function prune() {
     if (!dir) return;
     try {
-      const cutoff = Date.now() - storeDays * 86400000;
+      const cutoff = Date.now() - live().storeDays * 86400000;
       for (const file of readdirSync(dir)) {
         if (!/^arena-[\w-]+\.json$/.test(file)) continue;
         const path = join(dir, file);
@@ -289,6 +350,7 @@ export function apply(ctx, config) {
   async function ask(target, prompt, options = {}) {
     const llm = ctx.get('llm');
     if (!llm?.stream) throw new Error('the llm service is unavailable');
+    const { timeoutMs, maxTokens } = live();
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(new Error('timed out')), timeoutMs);
     const forward = () => abort.abort(options.signal?.reason);
@@ -333,26 +395,29 @@ export function apply(ctx, config) {
    * @param {string} text - stored answer.
    * @returns {string} display text.
    */
-  const shownText = (round, text) => (cfg0.redactNames === false ? text : redact(text, namesOf(round)));
+  const shownText = (round, text) => (live().redactNames ? redact(text, namesOf(round)) : text);
 
   const arena = {
     apiVersion: 1,
 
     /** @returns {Array<{id: string, provider: string, model: string}>} the configured candidates. */
     candidates() {
-      return candidates.map(({ id, provider, model }) => ({ id, provider, model }));
+      return live().candidates.map(({ id, provider, model }) => ({ id, provider, model }));
     },
 
     /**
      * Ask the contestants one prompt in parallel.
-     * @param {{prompt: string, only?: string[], signal?: AbortSignal, temperature?: number}} spec - the round.
+     * @param {{prompt: string, only?: string[], signal?: AbortSignal, temperature?: number, onStart?: (id: string) => void}} spec - the round;
+     *   `onStart` is told the round id as soon as the models are being asked.
      * @returns {Promise<object>} the stored round (slots carry names; show with `view`).
      */
-    async run({ prompt, only = [], signal, temperature }) {
+    async run({ prompt, only = [], signal, temperature, onStart }) {
       load();
       const text = String(prompt ?? '').trim();
       if (!text) throw new Error('give a prompt');
-      if (candidates.length < 2) throw new Error('the arena has no candidates. List at least two under `candidates`.');
+      const { candidates, ids, maxContestants } = live();
+      if (candidates.length < 2) throw new Error('the arena needs at least two models to compare. Pick them in Settings > Arena, or list them under `candidates`.');
+      if (!dir) throw new Error('the arena has no folder to keep rounds in. Set `dataDir`.');
       let pool = candidates;
       if (only.length) {
         for (const id of only) if (!ids.has(id)) throw new Error(`unknown candidate "${id}". Candidates: ${[...ids].join(', ')}`);
@@ -367,6 +432,11 @@ export function apply(ctx, config) {
       const id = `${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}-${Math.random().toString(36).slice(2, 5).padEnd(3, '0')}`;
       const progress = { id, createdAt: Date.now(), prompt: text, total: order.length, answered: 0 };
       inflight.set(id, progress);
+      try {
+        onStart?.(id);
+      } catch {
+        // The caller's own problem; the round goes on.
+      }
       let slots;
       try {
         slots = await Promise.all(
@@ -423,8 +493,9 @@ export function apply(ctx, config) {
      */
     async judge(id, options = {}) {
       const round = need(id);
-      const judgeCfg = cfg0.judge ?? {};
-      if (!judgeCfg.provider || !judgeCfg.model) throw new Error('set `judge.provider` and `judge.model` to use the judge');
+      const settings = live();
+      const judgeCfg = settings.judge;
+      if (!judgeCfg) throw new Error('no judge model is set. Pick one in Settings > Arena, or set `judge.provider` and `judge.model`.');
       const service = ctx.get('candidateJudge');
       if (!service?.compare) throw new Error('the judge service is unavailable. Load dsh-code-power, which provides it.');
       const answered = round.slots.filter((slot) => !slot.error);
@@ -433,8 +504,8 @@ export function apply(ctx, config) {
       const outcome = await service.compare({
         task: round.prompt,
         texts: answered.map((slot) => shownText(round, slot.text)),
-        criteria,
-        consistencyCheck: cfg0.consistencyCheck !== false,
+        criteria: settings.criteria,
+        consistencyCheck: settings.consistencyCheck,
         signal: options.signal,
         ask: async (message, signal) => (await ask({ provider: judgeCfg.provider, model: judgeCfg.model }, message, { temperature: 0, signal })).text,
       });
@@ -616,8 +687,10 @@ export function apply(ctx, config) {
             body: {
               at: Date.now(),
               // Counts only; the candidates' names stay out of the page so a blind round cannot be matched to them.
-              candidates: candidates.length,
-              judge: Boolean(cfg0.judge?.provider && cfg0.judge?.model),
+              candidates: live().candidates.length,
+              judge: Boolean(live().judge),
+              // Whether the shared judge (Code power) is loaded, so the page can say why Judge is unavailable.
+              judgeService: Boolean(ctx.get('candidateJudge')?.compare),
               running: [...inflight.values()].map((item) => ({ id: item.id, createdAt: item.createdAt, prompt: item.prompt, total: item.total, answered: item.answered })),
               rounds: arena.list().slice(0, 50),
             },
@@ -644,6 +717,80 @@ export function apply(ctx, config) {
         }),
       'model-arena: GET round route',
     );
+
+    // The write route for the page's buttons. Same fence as the read routes (login cookie and
+    // Host/Origin check), POST only, a small JSON body, a fixed list of actions, ids checked.
+    // Answers carry labels only, exactly like the read routes: nothing here names a model.
+    inner.effect(
+      () =>
+        inner.webServer.register({
+          kind: 'exact',
+          path: ACTION_PATH,
+          handler: async (req, res) => {
+            const send = (status, body) => {
+              res.statusCode = status;
+              res.setHeader('content-type', 'application/json; charset=utf-8');
+              res.setHeader('cache-control', 'no-store');
+              res.end(JSON.stringify(body));
+            };
+            try {
+              const rejection = inner.connection.requestRejection(req);
+              if (rejection !== undefined) {
+                res.statusCode = rejection;
+                res.end();
+                return;
+              }
+              if (req.method !== 'POST') {
+                res.statusCode = 405;
+                res.setHeader('allow', 'POST');
+                res.end();
+                return;
+              }
+              const body = await readJsonBody(req);
+              if (!body.ok) return send(body.status, { error: body.status === 413 ? 'too large' : 'bad request' });
+              const { action, id, prompt, label } = body.value;
+              if (!ACTIONS.includes(action)) return send(400, { error: 'unknown action' });
+              if (action !== 'ask' && (typeof id !== 'string' || !ROUND_ID.test(id))) return send(400, { error: 'bad round id' });
+              if (action === 'ask') {
+                if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 20000) return send(400, { error: 'give a prompt (at most 20,000 characters)' });
+                // Answer as soon as the round has started; the page then follows it through the read routes.
+                const started = await new Promise((resolve) => {
+                  arena
+                    .run({ prompt, onStart: (roundId) => resolve({ id: roundId }) })
+                    .catch((error) => resolve({ error: String(error?.message ?? error).slice(0, 300) }));
+                });
+                return started.id ? send(200, { ok: true, id: started.id }) : send(409, { error: started.error });
+              }
+              try {
+                need(id);
+              } catch {
+                return send(404, { error: 'unknown round' });
+              }
+              if (action === 'judge') {
+                if (!live().judge) return send(409, { error: 'No judge model is set. Pick one in Setup.' });
+                try {
+                  await arena.judge(id);
+                } catch (error) {
+                  // The judge model answered in a way that cannot be read, or could not be reached.
+                  return send(409, { error: `The judge could not give a verdict (${String(error?.message ?? error).slice(0, 200)}). Try again, or pick another judge model.` });
+                }
+              } else if (action === 'pick') {
+                if (typeof label !== 'string' || !/^[A-Da-d]$/.test(label)) return send(400, { error: 'bad label' });
+                arena.pick(label, id);
+              } else if (action === 'reveal') {
+                arena.reveal(id);
+              } else {
+                arena.delete(id);
+              }
+              return send(200, { ok: true, id });
+            } catch (error) {
+              // A refused action (no judge set, nothing to pick, the judge failed) says why, in plain words.
+              return send(409, { error: String(error?.message ?? error).slice(0, 300) });
+            }
+          },
+        }),
+      'model-arena: POST action route',
+    );
   });
 
   if (!commandName) return;
@@ -663,7 +810,7 @@ export function apply(ctx, config) {
               if (verb === 'ask') {
                 const parsed = parseAsk(rest);
                 const round = await arena.run({ prompt: parsed.prompt, only: parsed.with, signal });
-                const open = parsed.open ?? cfg0.blindByDefault === false;
+                const open = parsed.open ?? !live().blindByDefault;
                 return { kind: 'success', text: open ? `${formatBlind(round, (text) => shownText(round, text))}\n\n${arena.reveal(round.id)}` : formatBlind(round, (text) => shownText(round, text)) };
               }
               if (verb === 'judge') return { kind: 'success', text: await arena.judge(args[0], { signal }) };
@@ -677,7 +824,7 @@ export function apply(ctx, config) {
               }
               if (verb === 'list' || !verb) {
                 const rows = arena.list();
-                if (!candidates.length) return { kind: 'success', text: 'The arena has no candidates configured.' };
+                if (!live().candidates.length) return { kind: 'success', text: 'The arena has no candidates configured. Pick the models to compare in Settings > Arena.' };
                 return { kind: 'success', text: rows.length ? rows.map((row) => `${row.id}${row.judged ? ' judged' : ''}${row.picked ? ' picked' : ''}${row.revealed ? ' revealed' : ''}: ${row.prompt.slice(0, 60)}`).join('\n') : 'No rounds yet.' };
               }
               return { kind: 'error', text: `Usage: /${commandName} ask [--with id,id] [--open] <prompt> | judge [round] | pick <label> [round] | reveal [round] | show [round] | list | delete <round>` };

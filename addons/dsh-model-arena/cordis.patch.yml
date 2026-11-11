@@ -2,7 +2,7 @@
     - id: model-arena
       name: '@local/dsh-model-arena'
       config:
-        # Does nothing until you list candidates. Example shape:
+        # Does nothing until you pick models: use Settings > Arena, or list them here. Example shape:
         #   candidates:
         #     - { id: <ID>, provider: <ROUTE>, model: <MODEL ID>, reasoningEffort: <EFFORT> }
         #   maxContestants: 4                       # 2 to 4 answers per round

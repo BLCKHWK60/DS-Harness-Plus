@@ -73,7 +73,43 @@ export const DEFAULT_TABS = {
       "skills"
     ],
     "greeting": "What should we build?",
-    "chips": []
+    "chips": [
+      {
+        "label": "Create slides",
+        "icon": "slides",
+        "prompt": "Create a slide deck about: "
+      },
+      {
+        "label": "Build website",
+        "icon": "website",
+        "prompt": "Build a website for: "
+      },
+      {
+        "label": "Develop apps",
+        "icon": "app",
+        "prompt": "Help me develop an app that: "
+      },
+      {
+        "label": "Spreadsheet",
+        "icon": "spreadsheet",
+        "prompt": "Make a spreadsheet that: "
+      },
+      {
+        "label": "Visualization",
+        "icon": "chart",
+        "prompt": "Make a chart or visual that shows: "
+      },
+      {
+        "label": "Wide research",
+        "icon": "research",
+        "prompt": "Research a list of items and put the findings in a table: "
+      },
+      {
+        "label": "Create games",
+        "icon": "game",
+        "prompt": "Create a small game: "
+      }
+    ]
   }
 };
 

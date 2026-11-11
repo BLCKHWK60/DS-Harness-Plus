@@ -2,7 +2,7 @@
     - id: benchmark
       name: '@local/dsh-benchmark'
       config:
-        # Does nothing until you define targets and suites. Example shape:
+        # Does nothing until you add models and a suite: use Settings > Benchmark, or define them here. Example shape:
         #   targets: [ { id: <ID>, provider: <ROUTE>, model: <MODEL ID> } ]        # an alias model id works too
         #   suites:
         #     <SUITE>: { category: <CATEGORY>, prompts: [ { id: <ID>, prompt: '<TEXT>', grader: { type: contains, expect: '<TEXT>' } } ] }

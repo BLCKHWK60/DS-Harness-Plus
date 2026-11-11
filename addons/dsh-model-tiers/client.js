@@ -312,9 +312,9 @@ window.__ModuleLoader__.load({
   border-radius: 999px; padding: 1px 7px; color: var(--dsw-alias-label-secondary);
 }
 .dsh-mt-healthbadge[data-state="ok"] { color: var(--dsw-alias-state-success-primary); border-color: currentColor; }
-.dsh-mt-healthbadge[data-state="warning"] { color: var(--dsw-alias-state-warning-primary); border-color: currentColor; }
+.dsh-mt-healthbadge[data-state="warning"] { color: var(--dsw-alias-state-warn-primary); border-color: currentColor; }
 .dsh-mt-issue {
-  font-size: 11px; line-height: 1.45; color: var(--dsw-alias-state-warning-primary);
+  font-size: 11px; line-height: 1.45; color: var(--dsw-alias-state-warn-primary);
   padding: 6px 0; border-top: 1px solid var(--dsw-alias-border-l1);
 }
 .dsh-mt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px; }
@@ -476,6 +476,100 @@ window.__ModuleLoader__.load({
 .dsh-mt-btn:hover { background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); }
 .dsh-mt-btn[data-primary="true"] { background: var(--dsw-alias-brand-primary); border-color: transparent; color: var(--dsw-alias-bg-base); }
 .dsh-mt-hint { font-size: 11px; color: var(--dsw-alias-label-secondary); line-height: 1.45; }
+/* ---- settings page: the app's own look (docs/UI-STYLE.md). These rules come last on purpose. ---- */
+.dsh-mt-page { gap: 18px; padding: 0 0 32px; color: var(--dsw-alias-label-primary); }
+.dsh-mt-head h2 { margin: 0 0 6px; font-size: 16px; line-height: 24px; font-weight: 500; }
+.dsh-mt-head p { font-size: 12px; line-height: 18px; max-width: none; }
+.dsh-mt-head p + p { margin-top: 4px; }
+/* Tabs: plain text with an accent underline; no bar of their own, so they sit on the dialog's own colour. */
+.dsh-mt-addbox.dsh-mt-byhand { border-top: 0; padding-top: 0; }
+.dsh-mt-addbox.dsh-mt-byhand > summary { font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.dsh-mt-tabs {
+  position: static; gap: 2px 16px; padding: 0; background: transparent;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+}
+.dsh-mt-tab {
+  gap: 6px; padding: 8px 0 9px; border-radius: 0; font-size: 13px; line-height: 18px;
+  border-bottom: 2px solid transparent; margin-bottom: -0.5px;
+}
+.dsh-mt-tab:hover { background: transparent; color: var(--dsw-alias-label-primary); }
+.dsh-mt-tab[data-active="true"] {
+  background: transparent; color: var(--dsw-alias-label-primary); font-weight: 500;
+  border-bottom-color: var(--dsw-alias-brand-primary);
+}
+.dsh-mt-tab:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); outline-offset: 2px; border-radius: 4px; }
+.dsh-mt-tabcount { font-size: 11px; border: 0; padding: 0; color: var(--dsw-alias-label-secondary); font-weight: 400; }
+.dsh-mt-tabstatus { font-size: 12px; align-self: center; }
+.dsh-mt-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.dsh-mt-card, .dsh-mt-profile {
+  border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 20px; padding: 16px; gap: 14px;
+  background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-1));
+}
+.dsh-mt-profile { padding: 0; }
+.dsh-mt-customtier { padding: 0; }
+.dsh-mt-customhead, .dsh-mt-profilehead { padding: 14px 16px; border-radius: 20px; }
+.dsh-mt-customhead:hover, .dsh-mt-profilehead:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+.dsh-mt-custombody, .dsh-mt-profilebody { padding: 2px 16px 16px; }
+.dsh-mt-cardtitle { font-size: 14px; line-height: 22px; font-weight: 500; }
+.dsh-mt-cardrole { font-size: 12px; line-height: 18px; margin-top: -8px; }
+.dsh-mt-label { font-size: 12px; line-height: 18px; font-weight: 400; color: var(--dsw-alias-label-secondary); }
+.dsh-mt-hint, .dsh-mt-status, .dsh-mt-rolelabel, .dsh-mt-projectname, .dsh-mt-profilemeta, .dsh-mt-healthmeta, .dsh-mt-healthlabel { font-size: 12px; line-height: 18px; }
+.dsh-mt-field { gap: 6px; }
+/* Fields: the app's filled, borderless controls. */
+.dsh-mt-select, .dsh-mt-input, .dsh-mt-textarea, .dsh-mt-backup {
+  border: 0; border-radius: 12px;
+  /* A tint of the text colour: visible on the dialog and inside a card, in every scheme. */
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent);
+  color: var(--dsw-alias-label-primary); font-size: 14px;
+}
+.dsh-mt-select, .dsh-mt-input { height: 36px; padding: 0 14px; }
+.dsh-mt-textarea, .dsh-mt-input.dsh-mt-textarea { height: auto; min-height: 72px; padding: 9px 14px; line-height: 20px; }
+.dsh-mt-backup { padding: 10px 14px; font-size: 12px; }
+.dsh-mt-select:focus, .dsh-mt-input:focus, .dsh-mt-textarea:focus, .dsh-mt-backup:focus {
+  outline: 1px solid var(--dsw-alias-brand-primary); outline-offset: 0;
+}
+.dsh-mt-input::placeholder, .dsh-mt-textarea::placeholder { color: var(--dsw-alias-label-secondary); opacity: .75; }
+.dsh-mt-num { width: 96px; }
+.dsh-mt-inline { font-size: 14px; gap: 8px; }
+.dsh-mt-inline .dsh-mt-select { min-width: 76px; }
+/* Buttons: the app's small outline button. */
+.dsh-mt-btn {
+  height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; line-height: 18px;
+  border: 0.5px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-label-primary);
+}
+.dsh-mt-btn:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+.dsh-mt-btn[disabled] { opacity: .45; cursor: default; }
+.dsh-mt-btn[data-primary="true"] { color: var(--dsw-alias-label-primary-inverted, var(--dsw-alias-bg-base)); }
+.dsh-mt-link { font-size: 12px; }
+.dsh-mt-link:hover { text-decoration: underline; }
+/* Switches: the app's 20px pill. */
+.dsh-mt-switches { gap: 10px 16px; }
+.dsh-mt-switch { gap: 10px; font-size: 14px; line-height: 22px; color: var(--dsw-alias-label-primary); padding: 0; }
+.dsh-mt-track { width: 36px; height: 20px; background: var(--dsw-alias-border-l3, var(--dsw-alias-border-l2)); }
+.dsh-mt-knob { top: 2px; left: 2px; width: 16px; height: 16px; background: var(--dsw-alias-switch-thumb, var(--dsw-alias-label-primary)); box-shadow: 0 1px 2px color-mix(in srgb, #000 25%, transparent); }
+.dsh-mt-track[data-on="true"] .dsh-mt-knob { transform: translateX(16px); background: var(--dsw-alias-bg-base); }
+.dsh-mt-switch:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); outline-offset: 3px; border-radius: 6px; }
+.dsh-mt-rangevalue { font-size: 12px; font-weight: 500; }
+.dsh-mt-ticks { font-size: 11px; }
+.dsh-mt-effort, .dsh-mt-profilebadge, .dsh-mt-healthbadge {
+  font-size: 11px; line-height: 16px; padding: 2px 8px; border: 0.5px solid var(--dsw-alias-border-l2);
+}
+.dsh-mt-profileused { font-size: 11px; }
+.dsh-mt-badge { width: 22px; height: 22px; border-radius: 7px; font-size: 11px; font-weight: 600; }
+.dsh-mt-fallback, .dsh-mt-addbox, .dsh-mt-customtools, .dsh-mt-extras, .dsh-mt-healthrow, .dsh-mt-issue { border-top: 0.5px solid var(--dsw-alias-border-l1); }
+.dsh-mt-fallback, .dsh-mt-addbox { padding-top: 12px; }
+.dsh-mt-fallbackhead, .dsh-mt-addbox > summary { font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); }
+.dsh-mt-fallbackhead::before { content: '▸'; display: inline-block; width: 14px; font-size: 10px; color: var(--dsw-alias-label-secondary); }
+.dsh-mt-fallback[open] > .dsh-mt-fallbackhead::before { content: '▾'; }
+.dsh-mt-variant { font-size: 12px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; padding: 6px 10px; }
+.dsh-mt-tiercheck, .dsh-mt-check { font-size: 13px; color: var(--dsw-alias-label-primary); }
+.dsh-mt-healthcard { border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 14px; padding: 12px 14px; background: transparent; }
+.dsh-mt-healthvalue { font-size: 18px; font-weight: 500; }
+.dsh-mt-healthroute, .dsh-mt-issue { font-size: 13px; line-height: 20px; }
+.dsh-mt-versiongrid, .dsh-mt-customgrid { gap: 12px; }
+.dsh-mt-pill { height: 26px; font-size: 12px; padding: 0 4px 0 10px; }
+.dsh-mt-global { gap: 20px; }
+@media (max-width: 720px) { .dsh-mt-switches { grid-template-columns: 1fr; } }
 /* ---- chat box: the one model control ---- */
 /* The app's own model menu steps aside while this control is on; it returns when the add-on is off. */
 body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !important; }
@@ -491,8 +585,9 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
 .dsh-mc-triggername { overflow: hidden; text-overflow: ellipsis; font-weight: 550; }
 .dsh-mc-triggereffort { color: var(--dsw-alias-label-secondary); }
 .dsh-mc-chevron { font-size: 9px; opacity: .6; }
+.dsh-mc-backdrop { position: fixed; inset: 0; z-index: 999; background: transparent; -webkit-app-region: no-drag; }
 .dsh-mc-pop {
-  z-index: 1000; display: flex; flex-direction: column; overflow: hidden auto; padding: 6px;
+  z-index: 1000; display: flex; flex-direction: column; overflow: hidden; padding: 6px; -webkit-app-region: no-drag;
   background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-layer-1)); color: var(--dsw-alias-label-primary);
   border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; font-size: 12px;
   box-shadow: 0 14px 36px color-mix(in srgb, #000 28%, transparent);
@@ -504,7 +599,9 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
 }
 .dsh-mc-search { border-color: transparent; background: transparent; flex: none; }
 .dsh-mc-search:focus, .dsh-mc-input:focus, .dsh-mc-select:focus { outline: none; border-color: var(--dsw-alias-brand-primary); }
-.dsh-mc-list { flex: 0 1 auto; min-height: 72px; max-height: 232px; overflow: auto; margin: 2px 0 4px; }
+.dsh-mc-list { flex: 0 1 auto; min-height: 64px; max-height: min(232px, 34vh); overflow: auto; margin: 2px 0 4px; }
+/* In a short window the list gives way first, then the lower sections scroll. */
+.dsh-mc-rest { flex: 0 1 auto; min-height: 0; overflow: hidden auto; display: flex; flex-direction: column; }
 .dsh-mc-group {
   position: sticky; top: 0; padding: 6px 8px 3px; font-size: 10px; font-weight: 650; letter-spacing: .03em;
   text-transform: uppercase; color: var(--dsw-alias-label-secondary);
@@ -600,7 +697,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
   display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 4px 0 9px; border-radius: 12px; font-size: 11px;
   color: var(--dsw-alias-brand-primary); background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);
 }
-.dsh-mt-pill[data-missing="true"] { color: var(--dsw-alias-state-warning-primary); background: color-mix(in srgb, var(--dsw-alias-state-warning-primary) 12%, transparent); }
+.dsh-mt-pill[data-missing="true"] { color: var(--dsw-alias-state-warn-primary); background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 12%, transparent); }
 .dsh-mt-pill button { border: 0; background: transparent; color: inherit; font: inherit; font-size: 13px; line-height: 1; cursor: pointer; padding: 0 4px; }
 .dsh-mt-textarea { height: auto; min-height: 64px; padding: 6px 8px; line-height: 1.4; resize: vertical; font-family: inherit; }
 .dsh-mt-versiongrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
@@ -1293,7 +1390,10 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           (group) =>
             group.id === tier.provider && group.models.some((model) => model.id === tier.model),
         );
-      const options = [];
+      const modelCount = groups.reduce((sum, group) => sum + group.models.length, 0);
+      const options = [
+        h('option', { key: 'none', value: '' }, 'No model: keep the model the conversation is on'),
+      ];
       if ((!known || !visible) && tier.model) {
         options.push(
           h('option', { key: 'custom-current', value }, `${tier.provider} / ${tier.model}`),
@@ -1314,20 +1414,28 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         'div',
         { className: 'dsh-mt-field' },
         h('span', { className: 'dsh-mt-label' }, 'Model'),
-        h('input', {
-          className: 'dsh-mt-input',
-          type: 'search',
-          placeholder: 'Filter models…',
-          value: modelQuery,
-          'aria-label': 'Filter models',
-          onChange: (event) => setModelQuery(event.target.value),
-        }),
+        // A search box only earns its place with a long list.
+        modelCount > 12
+          ? h('input', {
+              className: 'dsh-mt-input',
+              type: 'search',
+              placeholder: 'Search models',
+              value: modelQuery,
+              'aria-label': 'Search models',
+              onChange: (event) => setModelQuery(event.target.value),
+            })
+          : null,
         h(
           'select',
           {
             className: 'dsh-mt-select',
-            value,
+            value: tier.provider && tier.model ? value : '',
+            'aria-label': 'Model',
             onChange: (event) => {
+              if (event.target.value === '') {
+                if (tier.provider || tier.model) onChange('', '');
+                return;
+              }
               const [provider, model] = event.target.value.split('\u0000');
               if (provider && model) onChange(provider, model);
             },
@@ -1338,12 +1446,17 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           ? h('span', { className: 'dsh-mt-hint' }, 'No models match that filter.')
           : null,
         h(
+          'details',
+          { className: 'dsh-mt-addbox dsh-mt-byhand' },
+          h('summary', null, 'Type a model by hand'),
+          h(
           'div',
           { className: 'dsh-mt-pair' },
           h('input', {
             className: 'dsh-mt-input',
             value: providerDraft,
             spellCheck: false,
+            placeholder: 'Provider',
             'aria-label': 'Provider id',
             onChange: (event) => setProviderDraft(event.target.value),
             onBlur: commit,
@@ -1353,11 +1466,13 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             className: 'dsh-mt-input',
             value: modelDraft,
             spellCheck: false,
+            placeholder: 'Model id',
             'aria-label': 'Model id',
             onChange: (event) => setModelDraft(event.target.value),
             onBlur: commit,
             onKeyDown: onEnter,
           }),
+          ),
         ),
       );
     }
@@ -3461,7 +3576,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             { id: 'models', label: 'Model versions', count: config.modelVersions.length },
             {
               id: 'projects',
-              label: 'Project profiles',
+              label: 'Projects',
               count: config.projectProfiles.profiles.length,
             },
             { id: 'backup', label: 'Backup' },
@@ -3493,7 +3608,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
               'aria-live': 'polite',
               'data-error': state.error ? 'true' : 'false',
             },
-            state.error ? 'Error' : state.saving ? 'Saving…' : 'Saved',
+            state.error ? 'Could not save' : state.saving ? 'Saving…' : '',
           ),
         ),
         h(
@@ -3554,18 +3669,6 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                   : tier.ownProvider && tier.ownModel
                     ? 'Picking this tier switches the conversation to this model, with default settings.'
                     : 'No model set: this tier keeps whatever model the conversation is on.',
-                tier.ownProvider && tier.ownModel && !tier.versionId
-                  ? h(
-                      'button',
-                      {
-                        type: 'button',
-                        className: 'dsh-mt-link',
-                        style: { marginLeft: 8 },
-                        onClick: () => setTier(id, { provider: '', model: '' }),
-                      },
-                      'Clear model',
-                    )
-                  : null,
               ),
               h(FallbackEditor, {
                 tierId: id,
@@ -3937,7 +4040,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
       const triggerRef = useRef(null);
       const popRef = useRef(null);
       const autoProfileAppliedRef = useRef(false);
-      const [anchor, setAnchor] = useState({ left: 8, bottom: 80, maxHeight: 520 });
+      const [anchor, setAnchor] = useState({ left: 8, top: 8, width: POP_WIDTH, maxHeight: 520, ready: false });
 
       useEffect(() => {
         autoProfileAppliedRef.current = false;
@@ -3980,12 +4083,47 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         const element = triggerRef.current;
         if (!element) return;
         const rect = element.getBoundingClientRect();
-        const width = Math.min(POP_WIDTH, window.innerWidth - 16);
-        // Right edges aligned, as the app's own menus do; kept inside the window.
-        const left = Math.min(Math.max(8, rect.right - width), Math.max(8, window.innerWidth - width - 8));
-        const bottom = Math.max(8, window.innerHeight - rect.top + 8);
-        setAnchor({ left, bottom, width, maxHeight: Math.max(220, window.innerHeight - bottom - 12) });
+        const margin = 16;
+        const width = Math.min(POP_WIDTH, window.innerWidth - 2 * margin);
+        const maxHeight = Math.max(200, window.innerHeight - 2 * margin);
+        // The panel's real height, once it is on screen; the model list shrinks to fit maxHeight.
+        const height = Math.min(popRef.current?.offsetHeight ?? 440, maxHeight);
+        const clampTop = (top) => Math.min(Math.max(margin, top), Math.max(margin, window.innerHeight - margin - height));
+        let left;
+        let top;
+        if (rect.top - 8 - height >= margin) {
+          // Enough room: above the button, right edges aligned, as the app's own menus do.
+          left = rect.right - width;
+          top = rect.top - 8 - height;
+        } else if (rect.left - 8 - width >= margin) {
+          // A short window: beside the button, on its left, kept clear of the window's edges.
+          left = rect.left - 8 - width;
+          top = clampTop(rect.top + rect.height / 2 - height / 2);
+        } else {
+          left = rect.right - width;
+          top = clampTop(rect.top - 8 - height);
+        }
+        left = Math.min(Math.max(margin, left), Math.max(margin, window.innerWidth - width - margin));
+        setAnchor((prev) =>
+          prev.ready && prev.left === left && prev.top === top && prev.width === width && prev.maxHeight === maxHeight
+            ? prev
+            : { left, top, width, maxHeight, ready: true },
+        );
       }, []);
+
+      // Place the panel again whenever its own size changes (search results, the Sampling section opening).
+      React.useLayoutEffect(() => {
+        if (!open) {
+          setAnchor((prev) => (prev.ready ? { ...prev, ready: false } : prev));
+          return undefined;
+        }
+        place();
+        const element = popRef.current;
+        if (!element || typeof ResizeObserver === 'undefined') return undefined;
+        const observer = new ResizeObserver(() => place());
+        observer.observe(element);
+        return () => observer.disconnect();
+      }, [open, place]);
 
       const reload = useCallback(async () => {
         try {
@@ -4397,9 +4535,11 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
               style: {
                 position: 'fixed',
                 left: anchor.left,
-                bottom: anchor.bottom,
-                width: anchor.width ?? POP_WIDTH,
+                top: anchor.top,
+                width: anchor.width,
                 maxHeight: anchor.maxHeight,
+                // Measured first, shown once it is in place.
+                visibility: anchor.ready ? 'visible' : 'hidden',
               },
             },
             // ---- model list
@@ -4475,6 +4615,9 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                   )
                 : null,
             ),
+            h(
+              'div',
+              { className: 'dsh-mc-rest' },
             // ---- effort
             h(
               'div',
@@ -4756,6 +4899,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                   ),
             ),
             state.error ? h('div', { className: 'dsh-mc-error', role: 'alert' }, state.error) : null,
+            ),
             h('div', { className: 'dsh-mc-foot' }, 'Tiers and saved versions: Settings → Model Tiers'),
           );
 
@@ -4779,7 +4923,6 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             onClick: () => {
               if (open) setOpen(false);
               else {
-                place();
                 setQuery('');
                 setSaveName(null);
                 setOpen(true);
@@ -4791,7 +4934,19 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           effortLabel ? h('span', { className: 'dsh-mc-triggereffort' }, effortLabel) : null,
           h('span', { className: 'dsh-mc-chevron', 'aria-hidden': true }, busy ? '…' : '▾'),
         ),
-        panel && typeof document !== 'undefined' ? ReactDOM.createPortal(panel, document.body) : null,
+        panel && typeof document !== 'undefined'
+          ? ReactDOM.createPortal(
+              h(
+                React.Fragment,
+                null,
+                // A clear sheet behind the panel: a click anywhere outside closes it, also on the
+                // part of the Mac window that otherwise only drags the window.
+                h('div', { className: 'dsh-mc-backdrop', 'aria-hidden': true, onPointerDown: () => setOpen(false) }),
+                panel,
+              ),
+              document.body,
+            )
+          : null,
       );
     }
 

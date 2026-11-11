@@ -44,15 +44,34 @@ It is a separate plugin and does not touch Bench Lab (a community plugin; its ru
 
 ## Settings page
 
-Settings > **Benchmark** shows what the plugin has measured, read-only: the suites you can run, a list of jobs (state, progress, errors, start time), and for the job you pick a report table (category, target, temperature, max tokens, runs, seeds, score with a bar, spread across seeds, latency, errors, cost; click Score, Spread, Latency, Errors, Cost, Temp or Max tokens to sort), a **Recommended** or **Low confidence** tag on each pick, the total cost, the list of picks with their caveats, and the sampling-presets fragment the export would write, with a Copy button. A cell where every request failed shows dashes instead of a score. Distinct error messages (at most five, 200 characters each) are shown so you can see why runs were not scored. The page polls every 3 seconds while a job runs and every 15 seconds otherwise.
+Settings > **Benchmark** now sets the add-on up and runs it; no file editing is needed.
 
-It reads two new fenced, GET-only routes of the host half: `GET /dsh-benchmark/jobs` and `GET /dsh-benchmark/report?job=<id>` (same login cookie and Host/Origin check as the other browser halves; the job id must look like `20261110090000-1`, so no file name can be built from other input). They return scores, timings, token counts and costs; never prompts, answers or keys. Nothing can be started, cancelled or changed from the page. Needs one app restart to load.
+**Your first run, in three steps** (shown at the top until there has been a run): pick the models to test, create a suite, press Run.
 
-Tested in a throwaway web profile with three seeded job files (one with an unreachable target, one marked running): routes 401 without a cookie, 403 for a wrong Host, 405 for POST, 400 for a bad or missing id, 404 for an unknown job; the table, sort, the picks, the export text, dark and light. Not tested: a job that is actually running (progress and the 3-second refresh were not watched live), the Copy button on a normal browser (the embedded pane denied clipboard access, so only the select-the-text fallback ran), narrow widths, the desktop app.
+**Setup** (saved as you change it, applied at once, no restart):
+
+| On the page | Setting | What it does |
+| --- | --- | --- |
+| Models to test | `targets` | Add models from the app's model list, set an effort for each, remove them |
+| Suites | `suites` | **New suite** or **Add an example suite** (two simple prompts). A suite has a name, a category and prompts. Each prompt has what to ask and how to grade the answer |
+| How to grade | `grader` | **Contains this text** (`contains`), **Is exactly this text** (`exact`), **Matches a pattern** (`regex`), **The judge scores it** (`judge`, 1 to 5 against your description of a good answer). Each has a one-line explanation under it |
+| Temperatures, Max output tokens, Repeats | `grid` | Lists separated by commas; empty uses each model's default. Repeats is `seeds` |
+| Judge model | `judge` | Only for prompts graded by the judge |
+| At the same time, Time limit per answer, Longest run, Spend limit per run | `limits` | `maxParallel`, `timeoutMs` (shown in seconds), `maxJobMinutes`, `maxCloudUsdPerJob` |
+| Prices | `pricing` | US dollars per million tokens in and out, per model; 0 removes the entry |
+
+**Run and results:** choose a suite and press **Run**; the line beside it says how many model calls the run makes, or what the suite still needs ("prompt "p1" has no text"). A running job shows its progress and a **Cancel** button. The results table, the recommendations and the text for the Sampling page are as before.
+
+**How it is wired:**
+
+- The form reads and writes the add-on's own settings through the app's settings channel (namespace `benchmark`; on a `settings/conflict` it reloads and retries once). `targets`, `suites`, `grid`, `judge`, `pricing` and `limits` are `.volatile()`, and the host half reads them at every use (`readSetup`). The YAML shape is unchanged.
+- The add-on now always loads. Before, it did nothing until targets and suites were set, and a mistake in a suite stopped it at start. Now a suite that cannot run is logged, shown on the page with the reason, and refused by `/bench run`. A job uses the limits and prices in force when it starts.
+- Buttons go to one write route, `POST /dsh-benchmark/action`, body `{ action: run, suite }` or `{ action: cancel, id }`. Same fence as the read routes (login cookie and Host/Origin check), POST only, at most 16 KB of JSON, the suite name and job id are checked before use.
+- The read routes are unchanged and GET-only. `GET /dsh-benchmark/jobs` now lists each suite with its prompt count, what it still needs, and how many calls a run makes. They still carry no prompts and no answers; the page reads the prompts you wrote from the settings channel, not from these routes.
 
 ## Not done
 
-- **Starting or cancelling a job from the page**: the Settings page is read-only (see below); use `/bench run` and `/bench cancel`. **`ctx.jobs` integration** is also not done: jobs run in this plugin's own background task and do not survive a Host restart (finished jobs do, as files; a running job's partial runs are not saved).
+- **`ctx.jobs` integration** is also not done: jobs run in this plugin's own background task and do not survive a Host restart (finished jobs do, as files; a running job's partial runs are not saved).
 - **Judge cost** is not added to the job cost or the spend cap.
 - **Top-p, min-p and other server-side sampling** cannot be swept from dsh (it sends only temperature and max tokens); sweep them with server-side profile aliases as targets.
 - Cost uses prices you supply; there is no live price lookup.
@@ -70,3 +89,13 @@ Spec hazard 4: the `benchlab` row in your live profile patch holds the runner to
 
 
 Real models (every answer was scripted), long jobs, the `/bench` command in the web app, cancel mid-run, parallelism above 1, and whether the exported presets improve real work.
+
+## Checked (0.10 setup page, throwaway web profile, mock models)
+
+- **Unit tests:** 12 (the add-on had none): graders, statistics, what a prompt still needs, settings read live, loading with nothing or with a mistake in the file, a full job with one failing model (errors never scored), the read routes (fence, GET only, id check, no prompt or answer in them), the write route's refusals (no login, wrong method, unknown action, bad suite name, bad or unknown job id, broken JSON, oversize body, unknown suite), run and cancel through the route.
+- **Live, starting from an empty config:** added two models, made a suite on the page (prompt, grading, name, category), added the example suite, set two temperatures and two repeats, ran the suite (8 calls, finished, results table and recommendations shown), set limits and a price and saw the cost appear in the next run. The settings landed in the profile's `cordis.patch.yml` in the documented shape.
+- A name with a slash was refused with a plain message. Switching the way of grading to the judge and back kept the text (a bug found and fixed during the check).
+- **`/bench list`** in a chat still works.
+- **Look:** checked in the stock scheme (dark) and Forest (dark and light).
+
+**Not checked:** Cancel on the page (the mock answers at once, so no job stays running; cancel is covered by a unit test); a judge-graded prompt with a real model; the spend limit stopping a real run; the Chinese strings (new texts fall back to English); a narrow window for this page specifically (it shares its layout rules with the Arena page, which was checked at 900 px); the Mac desktop app.
