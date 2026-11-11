@@ -46,6 +46,17 @@ else
   say "FAIL  install"; cat "$home/install.log" "$home/dump.err" 2>/dev/null | tail -30; failed=1
 fi
 run install && say "ok    re-install (update)" || { say "FAIL  re-install"; tail -20 "$home/install.log"; failed=1; }
+# Shared settings: --settings records a folder (with a space in its name, as iCloud Drive has); --no-settings clears it.
+shared="$home/Shared Plus"
+record="$home/shared-settings/folder.txt"
+if bash "$HERE/scripts/install.sh" --profile check --yes --settings "$shared/" >"$home/shared.log" 2>&1 \
+   && [ -d "$shared" ] && [ "$(cat "$record")" = "$shared" ] \
+   && bash "$HERE/scripts/install.sh" --profile check --yes --no-settings >>"$home/shared.log" 2>&1 \
+   && [ ! -f "$record" ]; then
+  say "ok    shared settings folder: recorded and cleared"
+else
+  say "FAIL  shared settings folder"; tail -20 "$home/shared.log"; failed=1
+fi
 if run uninstall && [ ! -d "$home/addons/deepseek-harness-plus" ] && ! grep -q '"@local/dsh-' "$home/profiles/check/package.json"; then
   say "ok    uninstall"
 else

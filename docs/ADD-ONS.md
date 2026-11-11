@@ -27,6 +27,7 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Notify](#notify) | after setup | | `/notify` |
 | [Media tools](#media-tools) | after setup | | |
 | [Sync](#sync) | after setup | | `/sync` |
+| [Shared settings](#shared-settings) | after setup (installer asks) | | `/shared-settings` |
 | [Context saver](#context-saver) | after setup, needs Python | | `/saved` |
 
 ---
@@ -192,7 +193,13 @@ Keeps your conversations (and, if you want, your project list) the same on sever
     deviceLabel: <A NAME FOR THIS MAC>
 ```
 
+For iCloud Drive instead of GitHub, make an empty repository in iCloud once (`git init --bare "$HOME/Library/Mobile Documents/com~apple~CloudDocs/DeepSeek Harness Plus/sessions.git"`) and use that full path as `remote`. Apple does not support git inside iCloud; if it ever misbehaves, a private GitHub repository works the same way.
+
 Then `/sync push` on one Mac and `/sync pull` on the other. **Before the first pull, back up `~/.dsh/sessions`**, because pulling copies the other Mac's conversations in. A conversation tied to a project folder can only be continued on a Mac where that folder has the same path. The details, including automatic sync and encryption, are in `addons/dsh-sync/README.md`.
+
+## Shared settings
+
+Keeps the settings you change in the app's pages the same on two Macs, through one `settings.json` in a folder such as iCloud Drive. Those settings are Modes, Model Tiers, the Cowork tabs, Sampling presets and Colours. It holds no secrets. The installer asks about it, or you can choose the folder yourself with `bash scripts/install.sh --settings "<folder>"`. The README section **Same settings on both Macs** explains how to use it. The details are in `addons/dsh-shared-settings/README.md`.
 
 ## Context saver
 

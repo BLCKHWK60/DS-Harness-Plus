@@ -116,3 +116,58 @@ stale_addons() {
       if (parent === root || real(linked).startsWith(root)) console.log(name);
     }' "$1" "$2" "$3"
 }
+
+# Ask a yes/no question whose default answer is no. --yes does not answer it.
+ask_no() {
+  [ -t 0 ] || return 1
+  printf '%s [y/N] ' "$1"
+  read -r answer
+  case "$answer" in [yY]*) return 0 ;; *) return 1 ;; esac
+}
+
+# Shared settings: where the folder choice is recorded for the Shared settings add-on.
+ICLOUD_DRIVE="$HOME/Library/Mobile Documents/com~apple~CloudDocs"
+
+# Settle SHARE (from --settings / --no-settings, or by asking once) before anything changes.
+# SHARE ends up empty (leave as is), "-" (switch off) or an absolute folder.
+choose_shared_folder() {
+  SHARED_RECORD="$DSH_HOME/shared-settings/folder.txt"
+  [ "$SHARE" = - ] && return 0
+  if [ -z "$SHARE" ]; then
+    # Ask only when someone is at the keyboard, nothing is set up yet and iCloud Drive is on.
+    [ "${ASSUME_YES:-0}" = 1 ] && return 0
+    [ -t 0 ] && [ ! -f "$SHARED_RECORD" ] && [ -d "$ICLOUD_DRIVE" ] || return 0
+    say ""
+    say "Optional: keep your Plus settings (modes, tiers, tabs, colours) the same on your other Mac,"
+    say "through a file in iCloud Drive. Secrets such as API keys are never put in it."
+    ask_no "Share settings through iCloud Drive?" || return 0
+    SHARE="$ICLOUD_DRIVE/DeepSeek Harness Plus"
+  fi
+  case "$SHARE" in "~"|"~/"*) SHARE="$HOME${SHARE#\~}" ;; esac
+  case "$SHARE" in /*) ;; *) fail "--settings needs a full folder path (starting with / or ~/), not '$SHARE'." ;; esac
+  while [ "${SHARE%/}" != "$SHARE" ] && [ "$SHARE" != / ]; do SHARE=${SHARE%/}; done
+  say "Shared settings folder: $SHARE"
+}
+
+# After a successful install: record (or clear) the folder. A problem here only warns.
+record_shared_folder() {
+  [ -n "$SHARE" ] || return 0
+  if [ "$SHARE" = - ]; then
+    rm -f "$SHARED_RECORD"
+    say "Settings sharing is off on this Mac. The shared file itself was left alone."
+    return 0
+  fi
+  if ! mkdir -p "$SHARE" || ! mkdir -p "$(dirname "$SHARED_RECORD")" || ! printf '%s\n' "$SHARE" >"$SHARED_RECORD"; then
+    say "WARNING: could not set up $SHARE; settings sharing was not switched on."
+    return 0
+  fi
+  if [ -f "$SHARE/settings.json" ]; then
+    say "Shared settings: when $APP_NAME opens, this Mac takes the settings in"
+    say "  $SHARE/settings.json"
+    say "  (its own current settings are backed up first, in $DSH_HOME/shared-settings/backups)."
+  else
+    say "Shared settings: when $APP_NAME opens, this Mac's settings are written to"
+    say "  $SHARE/settings.json"
+    say "  On your other Mac, run the installer with the same folder."
+  fi
+}

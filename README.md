@@ -1,6 +1,6 @@
 # DeepSeek Harness Plus
 
-Extra features for the **DeepSeek Harness** desktop app on the Mac: a MindsHub-style sidebar with Chat, Cowork and Code tabs, colour schemes (including MindsHub's navy and teal), work modes, model tiers, a blind model arena, agent swarms, deep research, a usage counter, benchmarks, syncing between Macs and more. Eighteen add-ons in all, listed in [docs/ADD-ONS.md](docs/ADD-ONS.md).
+Extra features for the **DeepSeek Harness** desktop app on the Mac: a MindsHub-style sidebar with Chat, Cowork and Code tabs, colour schemes (including MindsHub's navy and teal), work modes, model tiers, a blind model arena, agent swarms, deep research, a usage counter, benchmarks, syncing between Macs and more. Nineteen add-ons in all, listed in [docs/ADD-ONS.md](docs/ADD-ONS.md).
 
 The add-ons plug into the normal app. Nothing in the app itself is changed, so app updates do not wipe them, and you can remove them at any time.
 
@@ -64,15 +64,33 @@ Download the newer version and double-click **`Install.command`** again. It repl
 
 ## Removing
 
-Double-click **`Uninstall.command`**. It removes all eighteen add-ons and their files. Your conversations and your models are not touched. Any settings you wrote for the add-ons stay in the settings file and do nothing; if you install again, they come back into effect.
+Double-click **`Uninstall.command`**. It removes all nineteen add-ons and their files. Your conversations and your models are not touched. Any settings you wrote for the add-ons stay in the settings file and do nothing; if you install again, they come back into effect.
 
 ## Using it on a second Mac
 
 1. Install the DeepSeek Harness app on the other Mac and open it once.
 2. Run **`Install.command`** there too.
 3. Add your models in **Settings → Models**.
-4. Optional: to have the same add-on settings, copy `~/.dsh/profiles/desktop/cordis.patch.yml` from the first Mac. It can contain API keys, so move it by AirDrop or a USB stick, never by email or a shared folder.
+4. Optional: to keep the same **settings** on both Macs, use iCloud Drive (below).
 5. Optional: to see the same **conversations** on both Macs, set up the **Sync** add-on (see [docs/ADD-ONS.md](docs/ADD-ONS.md#sync)). It needs a private git repository that both Macs can reach. Neither Mac has to be switched on for the other to sync.
+
+### Same settings on both Macs, through iCloud Drive
+
+The **Shared settings** add-on keeps the settings you change in the app's own pages in one file, `settings.json`, in a folder in iCloud Drive. Those settings are Modes, Model Tiers, the Cowork tabs, Sampling presets and Colours. Change something on one Mac and the other Mac picks it up within about a minute. The file never holds secrets: API keys, tokens and passwords stay on each Mac.
+
+1. On the first Mac, double-click **`Install.command`** and answer **y** when it asks *"Share settings through iCloud Drive?"*. It uses the folder **iCloud Drive → DeepSeek Harness Plus**.
+2. On the second Mac, do the same. When the app opens there, it takes the settings from the file. Its own earlier settings are kept in `~/.dsh/shared-settings/backups`.
+
+To use another folder, or from Terminal: `bash scripts/install.sh --settings "<folder>"`. To stop sharing on one Mac: `bash scripts/install.sh --no-settings`. Type `/shared-settings` in a conversation to see what is shared and when it last synced.
+
+**Good to know:**
+- Not shared:
+  - which conversation sits in which tab;
+  - the tier a conversation uses;
+  - which add-ons are switched on;
+  - settings written by hand into the settings file rather than in a Settings page.
+- If you change the same setting on both Macs at once, the copy in iCloud wins. The other value is kept in the backups folder.
+- iCloud sometimes makes a copy such as `settings 2.json` when both Macs write at the same moment. `/shared-settings` tells you if one appears; check it, then delete it.
 
 ## Giving it to someone else
 
@@ -92,7 +110,7 @@ Send them the link to this project. They follow **Install** above. Nothing in he
 | Folder or file | What it is |
 | --- | --- |
 | `Install.command`, `Uninstall.command` | Double-click to install or remove. |
-| `addons/` | The eighteen add-ons. Each has a `README.md` with its full technical notes. |
+| `addons/` | The nineteen add-ons. Each has a `README.md` with its full technical notes. |
 | `docs/ADD-ONS.md` | What each add-on does and how to set it up. |
 | `docs/HOW-IT-WORKS.md` | For technical readers: how the install works, how to test, how to change an add-on. |
 | `templates/` | Optional ready-to-fill examples: model servers, memory, MCP tool servers, backups. |
@@ -102,7 +120,7 @@ Send them the link to this project. They follow **Install** above. Nothing in he
 
 ## Status
 
-Release 0.8.0 (the version in `VERSION`). Tested so far:
+Release 0.9.0 (the version in `VERSION`). Tested so far:
 
 - **Install, update and uninstall:** run on a fresh setup and on a copy of a real, long-used setup.
 - **Live start:** the app starts with every add-on loaded.

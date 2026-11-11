@@ -1,0 +1,12 @@
+- insert:
+    - id: shared-settings
+      name: '@local/dsh-shared-settings'
+      config:
+        # Off until a folder is set. Either set it here, or let the installer record it:
+        #   Install.command --settings "<FOLDER>"
+        # Optional settings:
+        #   folder: <ABSOLUTE_DIR or ~/...>   # holds settings.json; e.g. a folder in iCloud Drive
+        #   include: [<entry id>]             # also share these entries (for example ui-theme)
+        #   exclude: [<entry id>]             # never share these entries
+        #   skipFields: ['<entry id>.<field>'] # fields that stay on each Mac
+        pollSeconds: 30

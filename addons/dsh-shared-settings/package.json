@@ -1,0 +1,30 @@
+{
+  "name": "@local/dsh-shared-settings",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Keeps the settings you change in the app's pages in one settings.json in a folder you choose (for example iCloud Drive), so two Macs share one setup. Holds no secrets.",
+  "exports": {
+    ".": "./index.mjs",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.mjs",
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "locale/*.json",
+    "icon.svg",
+    "node_modules/@deepseek-ai/schemastery/**",
+    "node_modules/@deepseek-ai/cosmokit/**"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

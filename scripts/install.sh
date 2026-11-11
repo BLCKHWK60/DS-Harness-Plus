@@ -15,6 +15,9 @@
 # Options:
 #   --yes              answer yes to every question (quit the app, open it at the end)
 #   --profile <name>   install into another app profile (default: desktop, the one the app uses)
+#   --settings <dir>   share your Plus settings through settings.json in this folder, for example
+#                      a folder in iCloud Drive; run with the same folder on your other Mac
+#   --no-settings      stop sharing settings on this Mac (the file itself is left alone)
 #   --help             show this text
 set -u
 
@@ -23,11 +26,14 @@ HERE=$(cd "$(dirname "$0")/.." && pwd -P)
 
 PROFILE=desktop
 ASSUME_YES=0
+SHARE=
 while [ $# -gt 0 ]; do
   case "$1" in
     --yes|-y) ASSUME_YES=1 ;;
     --profile) shift; PROFILE=${1:?--profile needs a name} ;;
-    --help|-h) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --settings) shift; SHARE=${1:?--settings needs a folder} ;;
+    --no-settings) SHARE=- ;;
+    --help|-h) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) fail "Unknown option: $1 (try --help)" ;;
   esac
   shift
@@ -42,6 +48,7 @@ check_version
 pick_home
 say "App: $APP (version $VERSION)"
 say "App data: $DSH_HOME (setup: $PROFILE)"
+choose_shared_folder
 make_sure_app_is_closed
 
 step "Backing up your current setup"
@@ -123,6 +130,7 @@ fi
 trap - INT TERM HUP
 rm -rf "$OLD"
 printf '%s\n' "$ADDON_LIST" | while IFS="$(printf '\t')" read -r name _folder; do say "ok  $name"; done
+record_shared_folder
 
 step "Done"
 say "$PLUS_NAME $PLUS_VERSION is installed ($COUNT add-ons)."
