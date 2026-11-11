@@ -1,13 +1,13 @@
 # Handoff: DeepSeek Harness Plus
 
-Written 2026-11-11, updated the same day after the 0.10.0 and 0.11.0 work. For the next working session. Read this first. Then read only the files the task touches.
+Written 2026-11-11, updated the same day after the 0.10.0, 0.11.0 and 0.12.0 work. For the next working session. Read this first. Then read only the files the task touches.
 
 ## 1. What this is
 
-**DeepSeek Harness Plus** is 20 add-ons for the **DeepSeek Harness** desktop app (Electron, Cordis plugin framework), version **0.2.2-rc.1**, on macOS. The add-ons install into the app's data folder (`~/.dsh/addons/deepseek-harness-plus`) and register with the app's own `dsh plugin add`. The app itself is never modified.
+**DeepSeek Harness Plus** is 21 add-ons for the **DeepSeek Harness** desktop app (Electron, Cordis plugin framework), version **0.2.2-rc.1**, on macOS. The add-ons install into the app's data folder (`~/.dsh/addons/deepseek-harness-plus`) and register with the app's own `dsh plugin add`. The app itself is never modified.
 
-- **Repo:** `deepseek-harness-plus/`. It is a git repository, local only, with no remote. The latest commit is Release 0.11.0 (the one after `c790464`, Release 0.10.0). `VERSION` reads `0.11.0`.
-- **Installed in the owner's real app:** 0.11.0, 20 add-ons. The backup is `~/.dsh/backups/deepseek-harness-plus/20261111-165636-install`.
+- **Repo:** `deepseek-harness-plus/`. It is a git repository, local only, with no remote. The latest commit is Release 0.12.0 (the one after `307d17f`, Release 0.11.0). `VERSION` reads `0.12.0`.
+- **Installed in the owner's real app:** 0.12.0, 21 add-ons. The backup is `~/.dsh/backups/deepseek-harness-plus/20261111-172715-install`.
 - **Parent folder `DeepSeek_Harness_Custom/`:**
   - `deepseek-harness-master/`: the app's source. It is **newer than the installed app**; read it for docs only.
   - `spike-lab/`: the throwaway lab.
@@ -22,6 +22,7 @@ Written 2026-11-11, updated the same day after the 0.10.0 and 0.11.0 work. For t
 | `dsh-modes` | Chat, Cowork and Code modes per conversation: tools, sandbox, default tier and prompt. `/mode`. Settings → Modes. |
 | `dsh-model-tiers` | Reworked in 0.10. **Tiers** (five generic starters with no model, plus your own): effort, access, sub-agent floor and cap, own instructions, skills, connectors, fallback chains, role models. **Model versions**: named copies of a model with their own effort, temperature and max tokens. **The one model control of the chat box** (model list, effort slider, tier chips, sampling, Save as new version); it hides the app's own model menu. Settings → Model Tiers. The largest add-on: `index.js` about 2650 lines, `client.js` about 4850. |
 | `dsh-code-map` | New in 0.11. A compact map of a project (files, symbols, imports, what uses what) built with Node only, kept under `$DSH_HOME/code-map/`, never in the project. Five look-up tools for the model, a short hint, `/codemap`, Settings → Code map. Also ships four "reverse engineer" skills (code base, website, API or file format, installed app; the last is analysis only and excludes removing protections). 37 tests. |
+| `dsh-evolve` | New in 0.12. A self-improvement loop for the instructions around a model: test tasks with checks in three groups (Learn, Check, Guard), a reviewer model that proposes bounded edits to a playbook and a few instruction sections, four automatic gates, the owner's approval for every change, versions kept for good. Settings → Self-improve, `/evolve`. Built from the owner's research spec; its README lists what was changed and what was left out (reviewer-written tools and plugins, the meta loop, weight training). 24 tests. |
 | `dsh-sampling-presets` | Temperature and max-token presets per category, mode or conversation. |
 | `dsh-model-router` | Routes each turn to one of 2–5 models, chosen by a small routing model. |
 | `dsh-route-health` | Probes routes and moves a conversation to its fallback route when its route is down. Shows a dot in the composer. |
@@ -97,7 +98,7 @@ Each add-on has a `README.md` with technical notes, plus what was and was not ve
 ## 4. How to test
 
 - **Unit tests** for one add-on: `cd addons/<name> && ELECTRON_RUN_AS_NODE=1 "/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness" --test test/*.test.mjs`.
-  - Suites exist for swarm (13), benchmark (12), code-map (37), media (15), arena (31), model-tiers (12), notify (13), shared-settings (13) and sync (25).
+  - Suites exist for swarm (13), benchmark (12), code-map (37), evolve (24), media (15), arena (31), model-tiers (12), notify (13), shared-settings (13) and sync (25).
   - Other add-ons have none yet; adding them is a reasonable improvement.
 - **Release check:** `bash scripts/check.sh` runs all tests, then install, re-install, `--settings`/`--no-settings` and uninstall in a throwaway `DSH_HOME`. It must end with "All checks passed".
 - **Live lab (app web version, throwaway data):**
@@ -113,6 +114,7 @@ Each add-on has a `README.md` with technical notes, plus what was and was not ve
   - Settings is in the bottom-left **More** menu. `/settings` returns 404.
   - Update the lab first: `DSH_HOME=$PWD/home bash ../deepseek-harness-plus/scripts/install.sh --profile web --yes`.
   - When done, stop both processes by PID: `lsof -nP -iTCP:3391 -iTCP:18801 -sTCP:LISTEN`.
+  - `MOCK_SCRIPT=<file.json>` makes the mock answer by rule: a list of `{match, reply}` (a regular expression on the last user text) and optionally `tool: {name, args}` to make it call a tool first. `spike-lab/evolve-script.json` is an example that plays a student, a reviewer and a helper that writes a file.
   - `MOCK_DUMP=<folder>` before the mock server command saves every full request as JSON, so you can read the exact prompt and settings a model received.
   - `spike-lab/home` already has tier models set, so it shows the **update** case. For the **fresh install** case make a new profile: `DSH_HOME=$PWD/home-fresh dsh --profile fresh --from-default-profile web --dump-config`, then install with `--profile fresh` and start with `--profile fresh --port 3392`. `home-fresh` and `home-chat` were left in place; both are throwaway.
 - **Installing into the real app** quits and reopens it. Do it only when the owner asks.
@@ -133,6 +135,13 @@ Each add-on has a `README.md` with technical notes, plus what was and was not ve
   - Facts learned: the app's warning colour variable is `--dsw-alias-state-warn-primary` (`…-warning-…` is empty); the app has two accents (`--dsw-alias-brand-primary` for settings and switches, `--dsw-alias-state-business-primary` for the sidebar and chat-box buttons); Mac window areas marked as drag regions do not deliver clicks, so "click outside to close" needs a backdrop with `-webkit-app-region: no-drag`.
   - Not verified in 0.11: a real model calling the code-map tools or following the skills; a real judge verdict and Cancel in the Arena and Benchmark pages (unit-tested only); the route-health chip on screen; everything on the Mac desktop app.
   - Open from this round: the Swarm page still tells people to edit the settings file (no setup form); native drop-downs keep the browser's own arrow; the first mapping of a folder under `~/Documents` was slow once (over 40 s, then 0.1 s) for an unknown reason; `extras/dsh-intel-mcp` has an older Python code map that overlaps with `dsh-code-map`.
+- **0.12.0 is committed (local only) and installed in the owner's app.** It adds `dsh-evolve` only. Not yet tried with a real model or seen on the Mac desktop app. Facts learned while building it:
+  - `agent/turn-stopping` is a serial event with `{turn, signal}`; a listener keeps the turn open by steering the agent (`agent.steer(input)`). Not used yet.
+  - A helper agent started with `subagents.startActivation({provider: 'spawn', request: {prompt, parent, cwd, agentOptions: {provider, model}}, delivery: 'caller'})` runs fresh (no parent transcript) in its own `cwd`, and `delivery: 'caller'` posts nothing into the parent conversation. **It may only write inside the parent conversation's folder**: a `cwd` elsewhere is refused by the sandbox ("file access denied under workspace-write mode").
+  - To give one helper its own prompt text, set a pending value before `startActivation` and claim it in `agent/created` (the next child created); this needs helpers to be started one at a time.
+  - **The lab's default workspace is the real folder `~/Documents/deepseek-harness/default-workspace`**, not a folder inside the lab. Anything a lab conversation writes lands there. The evolve test made and removed a temporary `.dsh-evolve-test` folder in it.
+  - Not verified in 0.12: a real student and reviewer model (only a scripted mock), judge checks with a real judge, dark mode and other schemes for its page, the Mac desktop app.
+  - Next steps the owner may want: mining real conversations for failing cases (with a per-conversation "never send" tag), a schedule that runs a cycle at night, verify-before-stop through `agent/turn-stopping`, helpful/harmful counters per lesson, then the spec's levels 3–4 behind a real sandbox.
 - **Proposed, waiting for the owner's pick** (listed in the session report of 2026-11-11):
   - a small local relay so top-p, top-k, min-p and repeat penalty can be set per model version (local models only);
   - the Modes page's "default tier" box as a drop-down of tier names (it suggests the internal ids `haiku … code`);

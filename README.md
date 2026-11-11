@@ -65,7 +65,7 @@ Download the newer version and double-click **`Install.command`** again. It repl
 
 ## Removing
 
-Double-click **`Uninstall.command`**. It removes all twenty add-ons and their files. Your conversations and your models are not touched. Any settings you wrote for the add-ons stay in the settings file and do nothing; if you install again, they come back into effect.
+Double-click **`Uninstall.command`**. It removes all twenty-one add-ons and their files. Your conversations and your models are not touched. Any settings you wrote for the add-ons stay in the settings file and do nothing; if you install again, they come back into effect.
 
 ## Using it on a second Mac
 
@@ -111,7 +111,7 @@ Send them the link to this project. They follow **Install** above. Nothing in he
 | Folder or file | What it is |
 | --- | --- |
 | `Install.command`, `Uninstall.command` | Double-click to install or remove. |
-| `addons/` | The twenty add-ons. Each has a `README.md` with its full technical notes. |
+| `addons/` | The twenty-one add-ons. Each has a `README.md` with its full technical notes. |
 | `docs/ADD-ONS.md` | What each add-on does and how to set it up. |
 | `docs/HOW-IT-WORKS.md` | For technical readers: how the install works, how to test, how to change an add-on. |
 | `templates/` | Optional ready-to-fill examples: model servers, memory, MCP tool servers, backups. |
@@ -121,7 +121,7 @@ Send them the link to this project. They follow **Install** above. Nothing in he
 
 ## Status
 
-Release 0.11.0 (the version in `VERSION`). Tested so far:
+Release 0.12.0 (the version in `VERSION`). Tested so far:
 
 - **Install, update and uninstall:** run on a fresh setup and on a copy of a real, long-used setup.
 - **Live start:** the app starts with every add-on loaded.

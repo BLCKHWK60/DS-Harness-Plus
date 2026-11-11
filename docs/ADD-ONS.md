@@ -15,6 +15,7 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Modes](#modes) | yes | Settings → Modes | `/mode` |
 | [Model Tiers](#model-tiers) | yes | Settings → Model Tiers | |
 | [Code map](#code-map) | yes | Settings → Code map | `/codemap` |
+| [Self-improvement](#self-improvement) | after setup, in its page | Settings → Self-improve | `/evolve` |
 | [Usage counter](#usage-counter) | yes | Settings → Usage | `/usage` |
 | [Deep research](#deep-research) | yes | | |
 | [Code power](#code-power) | yes | | `/review` |
@@ -114,6 +115,22 @@ It also adds four "reverse engineer" skills. Type `/` in the chat box and pick:
 - `reverse-app-binary`: what an installed app is made of and what it does. This one is for software you own or may analyse, and it does not remove protections.
 
 Connections in the map are found by reading the text, not by compiling, so they are right for ordinary code and can miss unusual constructs. Measured on this project: about 2.2 million characters of source, a 4,200-character overview, and under 7,000 characters for a five-step look-up. A real task also reads some files in full, so real savings are smaller.
+
+## Self-improvement
+
+Makes a model better at your kind of work by improving the instructions it is given, never the model itself.
+
+Open **Settings → Self-improve**:
+
+1. Under **Setup**, pick the model to improve (usually a local one) and a stronger model as reviewer.
+2. Under **Tasks**, add tasks from your real work, each with a way to check the result (the answer contains a text, is valid JSON, matches a pattern, a file exists, or a judge model scores it). Put them in three groups: **Learn** (the reviewer studies these), **Check** (prove a change helps) and **Guard** (things that must keep working). Or press **Add example tasks** to try it first.
+3. Press **Measure** to see today's score, then **Run a cycle**.
+
+In a cycle the reviewer looks at what fails on the Learn tasks and proposes small changes: a new lesson, a reworded one, or a section of standing instructions. Each change is tested on the Check and Guard tasks, which the reviewer never saw. A change reaches you only if it raises the score, breaks nothing, does not make answers much longer and does not contain a test answer. You then **Approve** or **Decline** it. Every version is kept, and **Use this version** puts an earlier one back.
+
+Approved instructions are used in your real conversations too; a switch turns that off. Only the Learn tasks, the model's answers and why they failed are sent to the reviewer, with keys, addresses and home-folder paths removed. Your conversations are never sent.
+
+What it cannot do: make a small model reason like a large one on work it has never seen. Expect gains on kinds of work you repeat and can check, and use ten or more tasks per kind of work.
 
 ## Usage counter
 

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Self-improvement",
+    "description": "Improves the instructions around a model: test tasks with checks, a reviewer model that proposes small changes, and gates that only let through what measurably helps. You approve every change."
+  }
+}

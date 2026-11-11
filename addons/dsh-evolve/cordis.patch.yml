@@ -1,0 +1,9 @@
+- insert:
+    - id: evolve
+      name: '@local/dsh-evolve'
+      config:
+        # Does nothing until you pick a model to improve and add test tasks on
+        # Settings > Self-improvement. No models are preconfigured. Optional:
+        #   dataDir: <ABSOLUTE_DIR>   # where tasks, versions and results are kept; default is a folder in the dsh home
+        #   commandName: evolve       # empty registers no slash command
+        enabled: true
