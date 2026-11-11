@@ -56,6 +56,8 @@ const STARTER_GUIDANCE = {
     'explore broadly. Gather context, connect disparate parts, and produce a coherent synthesis before editing.',
 };
 
+/** Longest instruction text of a model version, per field. */
+const VERSION_TEXT_LIMIT = 4000;
 /** Longest skill text added to the prompt, per skill. */
 const SKILL_TEXT_LIMIT = 8000;
 /** Most skills one tier can load. */
@@ -244,8 +246,9 @@ export const Config = z.object({
   modelProfilesMigrated: z.boolean().default(false).volatile(),
   /**
    * Saved model versions as a JSON array:
-   * `[{ id, name, provider, model, effort?, wireEffort?, temperature?, maxTokens?, note? }]`.
-   * A version is a named copy of a model with its own settings; the plain model stays as it is.
+   * `[{ id, name, provider, model, effort?, wireEffort?, temperature?, maxTokens?, note?,
+   *     instructions?, replace?, presets?: { <agent preset id>: { text, replace? } } }]`.
+   * A version is a named copy of a model with its own settings and instructions; the plain model stays as it is.
    */
   modelVersions: z.string().default('[]').volatile(),
   /** One-time marker: installs from before 0.10 keep their starter names and model defaults. */
@@ -581,9 +584,46 @@ function readModelVersions(config) {
         typeof value.maxTokens === 'number' && Number.isFinite(value.maxTokens) && value.maxTokens > 0
           ? Math.min(1_000_000, Math.floor(value.maxTokens))
           : undefined,
+      instructions: typeof value.instructions === 'string' ? value.instructions.trim().slice(0, VERSION_TEXT_LIMIT) : '',
+      replace: value.replace === true,
+      presets: readVersionPresets(value.presets),
     };
   }
   return result;
+}
+
+/**
+ * Read a version's instructions per agent preset (the app's Standard, PTC, Minimal, Creator, or the user's own).
+ * @param {unknown} value - stored `{ presetId: { text, replace } }`.
+ * @returns {Record<string, {text: string, replace: boolean}>} entries that have text.
+ */
+function readVersionPresets(value) {
+  const result = {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return result;
+  for (const [id, entry] of Object.entries(value)) {
+    const text = typeof entry?.text === 'string' ? entry.text.trim().slice(0, VERSION_TEXT_LIMIT) : '';
+    if (!id || id.length > 80 || !text || Object.keys(result).length >= 12) continue;
+    result[id] = { text, replace: entry.replace === true };
+  }
+  return result;
+}
+
+/**
+ * The instructions a model version gives for one agent preset.
+ *  - The version's own text applies in every preset.
+ *  - A preset's text is added to it, or, with its "replace" switch, used alone.
+ *  - "Replace" also leaves out the other added instructions: the tier's, the
+ *    mode's and the role prompts. The app's own text about its tools always stays.
+ * @param {object | undefined} version - normalized version.
+ * @param {string | undefined} presetId - the conversation's agent preset.
+ * @returns {{texts: string[], replace: boolean}} what to add, and whether it stands alone.
+ */
+function versionInstructions(version, presetId) {
+  if (!version) return { texts: [], replace: false };
+  const preset = presetId ? version.presets?.[presetId] : undefined;
+  if (preset?.replace) return { texts: [preset.text], replace: true };
+  const texts = [version.instructions, preset?.text].filter(Boolean);
+  return { texts, replace: version.replace === true && texts.length > 0 };
 }
 
 /**
@@ -1053,13 +1093,15 @@ function tierForRoute(
  * @param {number} maxSubagents - current global cap.
  * @param {boolean} ultraAutoDelegate - whether Ultra Code should push delegation.
  * @param {Record<string, Record<string, {provider: string, model: string}>>} [roles] - role routes.
- * @param {{skillText?: (name: string) => string | undefined}} [extras] - loaded skill text, by skill name.
+ * @param {{skillText?: (name: string) => string | undefined, version?: {name: string, texts: string[], replace: boolean}}} [extras] -
+ *   loaded skill text by skill name, and the instructions of the model version in use.
  * @returns {string} prompt section text, or an empty string.
  */
 function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = {}) {
   if (!tier) return '';
   const lines = [
-    `## Active model tier: ${tierLabel(tier)}`,
+    // A model picked on its own, with no tier, is not a tier called "custom".
+    tier.id === 'custom' && !tier.custom ? '## Active model' : `## Active model tier: ${tierLabel(tier)}`,
     `Effort: ${EFFORT_LABELS[tier.effort] ?? tier.effort}. Route: \`${tier.provider}/${tier.model}\`.`,
   ];
   if (tier.role && ROLE_META[tier.role]) {
@@ -1078,9 +1120,13 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
       : 'Internet access for this tier: none. Do not attempt web search, web fetch, or browser automation.',
   );
 
+  // A model version that stands alone leaves out the tier's own wording; the rules above and below stay.
+  const alone = extras.version?.replace === true;
   // A tier's own instructions replace the starter's built-in guidance.
   const own = typeof tier.prompt === 'string' ? tier.prompt.trim() : '';
-  if (tier.custom) {
+  if (alone) {
+    // Nothing from the tier.
+  } else if (tier.custom) {
     lines.push(
       `Custom tier "${tier.name}". ${tier.role ? `${tier.role} ` : ''}Follow this tier's role and the user's request; do not silently switch to another tier.`,
     );
@@ -1119,7 +1165,13 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
     );
   }
 
-  if (tier.effort === 'off') {
+  if (extras.version?.texts?.length > 0) {
+    lines.push(`Instructions for ${extras.version.name}:`, ...extras.version.texts);
+  }
+
+  if (alone) {
+    // The effort wording is the tier's; the reasoning effort itself is still sent to the model.
+  } else if (tier.effort === 'off') {
     lines.push('Answer directly with no extended reasoning preamble and no self-review loop.');
   } else if (tier.effort === 'low') {
     lines.push('Keep reasoning brief and act on the first sound approach.');
@@ -1149,7 +1201,7 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
     }
   }
 
-  if (tier.effort === 'ultra') {
+  if (tier.effort === 'ultra' && !alone) {
     if (tier.subagents && ultraAutoDelegate) {
       lines.push(
         '**Ultra Code.** Decompose the task before acting. When two or more pieces are genuinely independent, start them as sub-agents together in one assistant message and keep doing useful work while they run.',
@@ -1274,6 +1326,36 @@ export function apply(ctx, config) {
     } catch {
       return '';
     }
+  }
+
+  /**
+   * The app's agent preset of one conversation (Standard, PTC, Minimal, Creator, or the user's own).
+   * @param {object} agent - live Agent.
+   * @returns {string | undefined} preset id, or undefined when it is not known.
+   */
+  function presetOf(agent) {
+    try {
+      const presets = ctx.get('agentPresets');
+      const session = agent?.session ?? ctx.get('sessions')?.get?.(agent?.id);
+      const state = session && presets?.presetForSession ? presets.presetForSession(session) : undefined;
+      const id = typeof state === 'string' ? state : state?.id ?? state?.presetId ?? state?.preset?.id ?? state?.preset;
+      return typeof id === 'string' && id ? id : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * The instructions of the model version one Agent is on.
+   * @param {object} agent - live Agent.
+   * @param {object | undefined} tier - its resolved selection.
+   * @returns {{name: string, texts: string[], replace: boolean} | undefined} instructions, when the version has any.
+   */
+  function versionExtras(agent, tier) {
+    const version = tier?.versionId ? readModelVersions(config)[tier.versionId] : undefined;
+    if (!version) return undefined;
+    const found = versionInstructions(version, presetOf(agent));
+    return found.texts.length > 0 ? { name: version.name, ...found } : undefined;
   }
 
   /** @param {object} agent - live Agent. @param {string} name - skill name. @returns {string} cache key. */
@@ -1417,7 +1499,7 @@ export function apply(ctx, config) {
                 readMaxSubagents(config, tier),
                 plain(config.ultraAutoDelegate) !== false,
                 readRoleModels(config),
-                { skillText: (name) => skillTexts.get(skillKey(agent, name))?.text },
+                { skillText: (name) => skillTexts.get(skillKey(agent, name))?.text, version: versionExtras(agent, tier) },
               );
             },
           }),
@@ -2372,9 +2454,35 @@ export function apply(ctx, config) {
       return deck.ids.map((id) => tierInfo(deck.tiers[id]));
     },
 
-    /** @returns {object[]} the saved model versions: id, name, provider, model and the settings each one sets. */
+    /** @returns {object[]} the saved model versions: id, name, provider, model, the settings and instructions each one sets. */
     listVersions() {
       return Object.values(readModelVersions(config)).map((version) => Object.freeze({ ...version }));
+    },
+
+    /**
+     * The saved model version one Session is on.
+     * @param {string} sessionId - Agent id.
+     * @returns {object | null} the version, or null on a plain model.
+     */
+    sessionVersion(sessionId) {
+      const id = resolveTierOf(sessionId)?.versionId;
+      const version = id ? readModelVersions(config)[id] : undefined;
+      return version ? Object.freeze({ ...version }) : null;
+    },
+
+    /**
+     * Whether the Session's model version asks to stand alone: other add-ons then leave out
+     * their own added instructions (mode prompt, role prompts, shared lessons).
+     * @param {string} sessionId - Agent id.
+     * @returns {boolean} true when added instructions should be left out.
+     */
+    instructionsReplaced(sessionId) {
+      try {
+        const agent = ctx.get('agents')?.get(sessionId);
+        return agent ? versionExtras(agent, resolveTierOf(sessionId))?.replace === true : false;
+      } catch {
+        return false;
+      }
     },
 
     /**
@@ -2668,6 +2776,7 @@ export function apply(ctx, config) {
 export const testing = {
   readDeck,
   readModelVersions,
+  versionInstructions,
   readConnectors,
   readNameList,
   normalizeSelection,

@@ -121,7 +121,7 @@ Send them the link to this project. They follow **Install** above. Nothing in he
 
 ## Status
 
-Release 0.12.0 (the version in `VERSION`). Tested so far:
+Release 0.13.0 (the version in `VERSION`). Tested so far:
 
 - **Install, update and uninstall:** run on a fresh setup and on a copy of a real, long-used setup.
 - **Live start:** the app starts with every add-on loaded.

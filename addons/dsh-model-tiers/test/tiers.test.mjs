@@ -151,3 +151,43 @@ test('sub-agents off means no floor is asked for', () => {
   assert.match(text, /delegation is disabled/);
   assert.doesNotMatch(text, /at least/);
 });
+
+// ---- instructions on model versions ---------------------------------------
+
+const INSTRUCTED = JSON.stringify([
+  {
+    id: 'writer', name: 'Writer', provider: 'prov-a', model: 'model-x',
+    instructions: 'BASE-TEXT', replace: false,
+    presets: { standard: { text: 'STANDARD-EXTRA' }, minimal: { text: 'MINIMAL-ONLY', replace: true }, empty: { text: '  ' } },
+  },
+  { id: 'solo', name: 'Solo', provider: 'prov-a', model: 'model-x', instructions: 'SOLO-TEXT', replace: true },
+  { id: 'bare', name: 'Bare', provider: 'prov-a', model: 'model-x', replace: true },
+]);
+
+test('a version carries instructions, and per-preset text that adds or replaces', () => {
+  const versions = testing.readModelVersions({ modelVersions: INSTRUCTED });
+  assert.deepEqual(Object.keys(versions.writer.presets), ['standard', 'minimal']);
+  const { versionInstructions } = testing;
+  assert.deepEqual(versionInstructions(versions.writer, undefined), { texts: ['BASE-TEXT'], replace: false });
+  assert.deepEqual(versionInstructions(versions.writer, 'standard'), { texts: ['BASE-TEXT', 'STANDARD-EXTRA'], replace: false });
+  assert.deepEqual(versionInstructions(versions.writer, 'minimal'), { texts: ['MINIMAL-ONLY'], replace: true });
+  assert.deepEqual(versionInstructions(versions.writer, 'unknown'), { texts: ['BASE-TEXT'], replace: false });
+  assert.deepEqual(versionInstructions(versions.solo, 'standard'), { texts: ['SOLO-TEXT'], replace: true });
+  // "Replace" with nothing to say replaces nothing.
+  assert.deepEqual(versionInstructions(versions.bare, 'standard'), { texts: [], replace: false });
+  assert.deepEqual(versionInstructions(undefined, 'standard'), { texts: [], replace: false });
+});
+
+test('a version that stands alone leaves out the tier wording but keeps the rules', () => {
+  const tier = { ...readDeck({ tiers: { haiku: { instructions: 'TIER-TEXT', webSearch: false } } }).tiers.haiku, provider: 'p', model: 'm', effort: 'ultra' };
+  const added = tierPrompt(tier, 3, true, {}, { version: { name: 'Writer', texts: ['BASE-TEXT'], replace: false } });
+  assert.match(added, /TIER-TEXT/);
+  assert.match(added, /Instructions for Writer:\nBASE-TEXT/);
+  assert.match(added, /Decompose the task/);
+  const alone = tierPrompt(tier, 3, true, {}, { version: { name: 'Writer', texts: ['ONLY-THIS'], replace: true } });
+  assert.match(alone, /Instructions for Writer:\nONLY-THIS/);
+  assert.doesNotMatch(alone, /TIER-TEXT|Decompose the task|prefer fast, narrow actions/);
+  // Access and sub-agent rules are facts about what works, so they stay.
+  assert.match(alone, /Internet access for this tier: web fetch, browser/);
+  assert.match(alone, /at most 3 concurrent children/);
+});

@@ -36,7 +36,12 @@ const TEST_FOLDER = '.dsh-evolve-test';
 export const Config = z.object({
   /** Master switch: off stops jobs and adds nothing to any conversation. */
   enabled: z.boolean().default(true).volatile(),
-  /** The model being improved. Empty until the owner picks one. */
+  /**
+   * What is being improved: the id of a saved model version (from Model Tiers), or empty
+   * for a plain model. Each version has its own tasks, lessons and versions.
+   */
+  target: z.string().default('').volatile(),
+  /** The plain model being improved when no version is chosen. Empty until the owner picks one. */
   studentProvider: z.string().default('').volatile(),
   studentModel: z.string().default('').volatile(),
   /** The model that reviews failures and proposes changes. */
@@ -91,8 +96,10 @@ export function readSettings(config) {
     return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
   };
   const route = (provider, model) => (text(provider) && text(model) ? { provider: text(provider), model: text(model) } : null);
+  const target = text(config.target).toLowerCase();
   return {
     enabled: plain(config.enabled) !== false,
+    target: /^[a-z0-9][a-z0-9-]{0,63}$/.test(target) ? target : '',
     student: route(config.studentProvider, config.studentModel),
     reviewer: route(config.reviewerProvider, config.reviewerModel),
     judge: route(config.judgeProvider, config.judgeModel),
@@ -169,8 +176,39 @@ export function apply(ctx, config) {
     ctx.logger.warn('evolve: no data folder is available; the add-on stays off');
     return;
   }
-  const store = openStore(dataDir);
-  const settings = () => readSettings(config);
+  /** One store per thing being improved: the plain model's, and one per model version. */
+  const stores = new Map();
+  /**
+   * @param {string} [target] - a model version id, or empty for the plain model.
+   * @returns {object} that target's store.
+   */
+  function storeFor(target = '') {
+    if (!stores.has(target)) stores.set(target, openStore(target ? join(dataDir, 'versions', target) : dataDir));
+    return stores.get(target);
+  }
+
+  /** @returns {object[]} the saved model versions of Model Tiers, or an empty list without it. */
+  function modelVersions() {
+    try {
+      return ctx.get('modelTiers')?.listVersions?.() ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * The settings, with the chosen model version resolved: the version supplies the model,
+   * its sampling and its own instructions.
+   * @returns {object} settings.
+   */
+  const settings = () => {
+    const now = readSettings(config);
+    const version = now.target ? modelVersions().find((item) => item.id === now.target) : undefined;
+    if (now.target && !version) return { ...now, missingTarget: now.target, target: '', student: null, version: null };
+    return version ? { ...now, student: { provider: version.provider, model: version.model }, version } : { ...now, version: null };
+  };
+  /** @returns {object} the store of what is being improved now. */
+  const activeStore = () => storeFor(settings().target);
 
   /** The job in progress or the last one finished. One at a time. */
   let job = null;
@@ -206,7 +244,20 @@ export function apply(ctx, config) {
     } catch {
       // Without the Modes add-on, only the general lessons apply.
     }
-    return renderPolicy(store.active(), families);
+    // Lessons learned for a model version belong to conversations on that version. The plain
+    // model's lessons are shared, unless the version asks to stand alone.
+    let version = null;
+    let alone = false;
+    try {
+      const tiers = ctx.get('modelTiers');
+      version = tiers?.sessionVersion?.(agent.id) ?? null;
+      alone = tiers?.instructionsReplaced?.(agent.id) === true;
+    } catch {
+      version = null;
+    }
+    return [alone ? '' : renderPolicy(storeFor('').active(), families), version ? renderPolicy(storeFor(version.id).active(), families) : '']
+      .filter(Boolean)
+      .join('\n\n');
   }
 
   /** @param {object} agent - live Agent. */
@@ -281,7 +332,7 @@ export function apply(ctx, config) {
    * Ask a model one question.
    * @param {{provider: string, model: string}} target - the model.
    * @param {string} text - the message.
-   * @param {{temperature?: number, signal?: AbortSignal}} [options] - call options.
+   * @param {{temperature?: number, maxTokens?: number, signal?: AbortSignal}} [options] - call options.
    * @returns {Promise<{text: string, inTokens: number, outTokens: number}>} the answer.
    */
   async function ask(target, text, options = {}) {
@@ -294,6 +345,7 @@ export function apply(ctx, config) {
       model: target.model,
       messages: [{ role: 'user', content: [{ type: 'text', text }] }],
       ...(options.temperature === undefined ? {} : { temperature: options.temperature }),
+      ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
       signal: options.signal,
     })) {
       if (chunk.type === 'text-delta') answer += chunk.text;
@@ -323,7 +375,7 @@ export function apply(ctx, config) {
    */
   async function runTask(task, notes, signal, context) {
     if (task.kind !== 'agent') {
-      const outcome = await ask(context.student, notes ? `${notes}\n\n---\n\n${task.prompt}` : task.prompt, { signal });
+      const outcome = await ask(context.student, notes ? `${notes}\n\n---\n\n${task.prompt}` : task.prompt, { signal, ...context.sampling });
       return { answer: outcome.text, inTokens: outcome.inTokens, outTokens: outcome.outTokens };
     }
     // A task that uses tools runs as a fresh helper agent in its own empty folder.
@@ -409,8 +461,10 @@ export function apply(ctx, config) {
    */
   function startJob(kind, options = {}) {
     const now = settings();
+    const store = storeFor(now.target);
     if (!now.enabled) return { error: 'Self-improvement is switched off.' };
     if (job?.state === 'running') return { error: 'A run is already in progress.' };
+    if (now.missingTarget) return { error: 'The model version chosen to improve no longer exists. Pick another.' };
     if (!now.student) return { error: 'Pick the model to improve first.' };
     if (kind === 'improve' && !now.reviewer) return { error: 'Pick a reviewer model first.' };
     const tasks = store.tasks().filter((task) => task.enabled && task.checks.length > 0);
@@ -419,10 +473,16 @@ export function apply(ctx, config) {
     const controller = new AbortController();
     const budget = makeBudget(now.tokenBudget);
     const id = Date.now().toString(36);
-    const context = { id, student: now.student, parent: options.parent, cleanup: new Set() };
+    const context = {
+      id, student: now.student, parent: options.parent, cleanup: new Set(),
+      // A model version is tested with its own sampling.
+      sampling: { temperature: now.version?.temperature, maxTokens: now.version?.maxTokens },
+    };
+    // ...and with its own instructions in front of the lessons under test.
+    const prefix = now.version?.instructions ? `## Instructions for ${now.version.name}\n${now.version.instructions}` : '';
     const current = { id, kind, state: 'running', phase: 'Starting', done: 0, total: 0, startedAt: new Date().toISOString(), endedAt: null, summary: '', usedTokens: 0, controller };
     job = current;
-    const run = (task, notes, signal) => runTask(task, notes, signal, context);
+    const run = (task, notes, signal) => runTask(task, [prefix, notes].filter(Boolean).join('\n\n'), signal, context);
     const judge = now.judge ? (task, rubric, answer, signal) => judgeAnswer(task, rubric, answer, signal, now.judge) : undefined;
     const onPhase = (phase, done = 0, total = 0) => Object.assign(current, { phase, done, total, usedTokens: budget.used });
 
@@ -481,6 +541,7 @@ export function apply(ctx, config) {
   /** @returns {object} everything the page shows. */
   function status() {
     const now = settings();
+    const store = storeFor(now.target);
     const tasks = store.tasks();
     const active = store.active();
     const kept = store.results(active.version);
@@ -493,7 +554,8 @@ export function apply(ctx, config) {
     }
     return {
       at: Date.now(),
-      settings: now,
+      settings: { ...now, version: now.version ? { id: now.version.id, name: now.version.name, provider: now.version.provider, model: now.version.model, hasInstructions: Boolean(now.version.instructions) } : null },
+      targets: modelVersions().map((version) => ({ id: version.id, name: version.name, model: version.model })),
       checkTypes: CHECK_TYPES.map((type) => ({ type, help: CHECK_HELP[type] })),
       tasks: tasks.map((task) => {
         const result = kept?.results?.find((item) => item.taskId === task.id);
@@ -519,6 +581,7 @@ export function apply(ctx, config) {
    * @returns {{error?: string, code?: number}} outcome.
    */
   function act(body, options = {}) {
+    const store = activeStore();
     switch (body.action) {
       case 'measure':
       case 'improve': {
@@ -572,10 +635,10 @@ export function apply(ctx, config) {
         'evolve',
         Object.freeze({
           apiVersion: 1,
-          /** @returns {object} the version in use. */
-          active: () => store.active(),
-          /** @param {string} [family] - task family. @returns {string} the notes the version in use adds. */
-          notes: (family) => renderPolicy(store.active(), family ?? '*'),
+          /** @param {string} [target] - a model version id; empty for the plain model. @returns {object} the instructions in use for it. */
+          active: (target = '') => storeFor(target).active(),
+          /** @param {string} [family] - task family. @param {string} [target] - a model version id. @returns {string} the notes in use. */
+          notes: (family, target = '') => renderPolicy(storeFor(target).active(), family ?? '*'),
           status,
         }),
       ),

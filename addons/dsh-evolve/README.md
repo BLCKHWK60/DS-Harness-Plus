@@ -9,6 +9,16 @@ Plugin `@local/dsh-evolve` (dsh 0.2.2-rc.1). It makes a model better at your kin
 
 Nothing is preconfigured: it does nothing until you pick a model and add tasks on **Settings → Self-improvement**.
 
+## One set of lessons per model version (0.13)
+
+**What to improve** on the page is either a plain model or a saved **model version** from Model Tiers. Each version has its own tasks, lessons, scores and history (kept in `versions/<id>/` inside the data folder), so "Qwen – Coding" and "Qwen – Writing" improve separately.
+
+- Test runs use the version's model, its temperature and max tokens, and its own instructions in front of the lessons under test.
+- Approved lessons for a version are used only in conversations that are on that version. The plain model's lessons are used in every conversation, unless the version in use says "Use only these".
+- This is how the loop tunes a version's instructions for a job: write the starting instructions on the version, add tasks for that job, and let the loop add lessons on top.
+
+Checked live with the mock model: choosing a version gave an empty task list of its own; a cycle ran on the version's model; the approved lesson was stored for that version and arrived in a conversation on it. Not checked: two versions improved side by side.
+
 ## How to use it
 
 1. **Setup.** Pick the model to improve (usually a local one) and a stronger model as reviewer. Both come from your model list in Settings → Models.

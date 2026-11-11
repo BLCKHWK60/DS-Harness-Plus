@@ -12,6 +12,9 @@ test('nothing is preconfigured', () => {
   assert.equal(settings.reviewer, null);
   assert.equal(settings.judge, null);
   assert.equal(settings.repeats, 3);
+  assert.equal(settings.target, '');
+  assert.equal(readSettings({ target: ' Qwen-Coding ' }).target, 'qwen-coding');
+  assert.equal(readSettings({ target: '../escape' }).target, '');
   const patch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8');
   assert.doesNotMatch(patch, /^\s*(studentModel|reviewerModel|judgeModel|studentProvider|reviewerProvider):/m);
 });

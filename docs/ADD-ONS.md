@@ -97,6 +97,12 @@ This replaces the app's own model menu while the add-on is on.
 
 **Model versions** are named copies of one model with their own effort, temperature and max output tokens, for example one for writing and one for coding. The plain model always stays in the list with default settings. Make them on the **Model versions** tab or with **Save as new version…** in the chat box.
 
+**Instructions per version.** A version can also carry its own instructions, so the same model can be set up for different jobs. On the **Model versions** tab each version has:
+
+- **Instructions for this version**, given to the model whenever the version is in use;
+- a switch, **Use only these**, that leaves out the instructions of the tier, the Chat / Cowork / Code mode and the role prompts while the version is in use. The app's own text about its tools always stays;
+- **Instructions per app mode**: a text for each of the app's modes (Standard, PTC, Minimal, Creator, and any you add in Settings → Agent presets), either added to the version's instructions or used alone.
+
 The app can only send temperature and max output tokens to a model. Top-p, top-k and similar settings stay on your model server.
 
 If you used Tiers before 0.10, your tiers keep their names (Haiku, Sonnet, Opus, Fable, Code) and models.
@@ -127,6 +133,8 @@ Open **Settings → Self-improve**:
 3. Press **Measure** to see today's score, then **Run a cycle**.
 
 In a cycle the reviewer looks at what fails on the Learn tasks and proposes small changes: a new lesson, a reworded one, or a section of standing instructions. Each change is tested on the Check and Guard tasks, which the reviewer never saw. A change reaches you only if it raises the score, breaks nothing, does not make answers much longer and does not contain a test answer. You then **Approve** or **Decline** it. Every version is kept, and **Use this version** puts an earlier one back.
+
+**Per model version.** Under Setup, **What to improve** can be a saved model version. Each version has its own tasks and lessons, tested with that version's settings and instructions, and its approved lessons are used only in conversations on that version. This is how you tune one model for one job: write starting instructions on the version, add tasks for the job, and let the loop improve on them.
 
 Approved instructions are used in your real conversations too; a switch turns that off. Only the Learn tasks, the model's answers and why they failed are sent to the reviewer, with keys, addresses and home-folder paths removed. Your conversations are never sent.
 

@@ -48,6 +48,20 @@ What applies, strongest first: a value set in the chat box for this conversation
 
 The app sends only `temperature` and `maxTokens`. `top_p`, `top_k`, `min_p` and the penalties cannot be sent by this app version: they stay on the model server (verified in the installed app's `llm-pi-ai` adapter).
 
+### Instructions on a version (0.13)
+
+A version can carry its own instructions, so one model can be set up for different jobs:
+
+- **Instructions for this version** are given to the model whenever the version is in use, in any mode.
+- **Use only these** leaves out the other *added* instructions while the version is in use: the tier's own instructions and effort wording, the Chat / Cowork / Code mode's prompt, and the role prompts. The app's own text about its tools always stays, and so do the tier's limits (internet access, sub-agent cap), because they describe what will actually work.
+- **Instructions per app mode**: the app's modes are its agent presets, picked above the chat box of a new conversation (Standard, PTC, Minimal, Creator), plus any you add in Settings → Agent presets. Each can have its own text for this version, either **added** to the version's instructions or **used alone** (which replaces the version's instructions and the other added instructions for that mode).
+
+How it is decided, for the mode a conversation is in: a mode text marked "use only this" stands alone; otherwise the version's text and the mode's text are both used, and "Use only these" on the version decides whether the tier, mode and role instructions are left out. A switch with no text replaces nothing.
+
+Stored on the version as `instructions`, `replace` and `presets: { <preset id>: { text, replace } }` (at most 4,000 characters per text). The service gains `sessionVersion(sessionId)` and `instructionsReplaced(sessionId)`; Modes, Role prompts and Self-improvement ask the second one before adding their own text.
+
+Checked live with the mock model, read from the requests it received: the version's text and the Standard-mode text both arrived; with "Use only these" off, the tier's instructions were there too; with it on, they were gone while the version's text stayed. The preset of a conversation is read with `agentPresets.presetForSession`. Not checked: the PTC, Minimal and Creator modes, a mode of your own, and the mode prompt and role prompts being left out (both add-ons call the same switch; neither had text set in the lab).
+
 ## Carry-over from before 0.10
 
 On the first start after an update, once:

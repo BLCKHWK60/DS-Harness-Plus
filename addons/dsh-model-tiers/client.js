@@ -953,7 +953,22 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
               ? Math.min(1_000_000, Math.floor(raw.maxTokens))
               : undefined,
           note: typeof raw.note === 'string' ? raw.note.slice(0, 200) : '',
+          instructions: typeof raw.instructions === 'string' ? raw.instructions.slice(0, 4000) : '',
+          replace: raw.replace === true,
+          presets: normalizeVersionPresets(raw.presets),
         });
+      }
+      return result;
+    }
+
+    /** A version's instructions per agent preset: `{ presetId: { text, replace } }`, entries with text only. */
+    function normalizeVersionPresets(value) {
+      const result = {};
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return result;
+      for (const [id, entry] of Object.entries(value)) {
+        const text = typeof entry?.text === 'string' ? entry.text.slice(0, 4000) : '';
+        if (!id || !text.trim()) continue;
+        result[id] = { text, replace: entry.replace === true };
       }
       return result;
     }
@@ -970,7 +985,41 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         ...(typeof version.temperature === 'number' ? { temperature: version.temperature } : {}),
         ...(typeof version.maxTokens === 'number' ? { maxTokens: version.maxTokens } : {}),
         ...(version.note ? { note: version.note } : {}),
+        ...(version.instructions && version.instructions.trim() ? { instructions: version.instructions.trim() } : {}),
+        ...(version.replace ? { replace: true } : {}),
+        ...(version.presets && Object.keys(version.presets).length > 0 ? { presets: version.presets } : {}),
       };
+    }
+
+    /**
+     * The app's agent presets (Standard, PTC, Minimal, Creator and the user's own). Never throws.
+     * @returns {Promise<Array<{id: string, name: string}>>} presets, or an empty list.
+     */
+    let presetRemote = null;
+    async function loadPresets(ctx) {
+      try {
+        // The preset list is its own remote; it is wired up in apply() when the app has it.
+        const result = await (presetRemote ?? ctx.remote?.agentPresets)?.list?.();
+        const value = result?.ok === false ? null : result?.value ?? result;
+        const rows = Array.isArray(value) ? value : value?.presets ?? value?.items ?? value?.roster ?? [];
+        return (Array.isArray(rows) ? rows : [])
+          .map((row) => {
+            const id = typeof row?.id === 'string' ? row.id : '';
+            const raw = row?.displayName ?? row?.name ?? row?.title ?? row?.label;
+            let name = id;
+            try {
+              name = typeof raw === 'string' ? raw : raw ? String(ctx.locale?.resolveText?.(raw) ?? id) : id;
+            } catch {
+              name = id;
+            }
+            // The app ships these four without a name of their own; it names them in its own menus.
+            const shipped = { standard: 'Standard mode', ptc: 'PTC mode', minimal: 'Minimal mode', cordis: 'Creator mode' };
+            return { id, name: name && name !== id ? name : shipped[id] ?? id };
+          })
+          .filter((row) => row.id);
+      } catch {
+        return [];
+      }
     }
 
     /** A unique id for a new version. */
@@ -992,6 +1041,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
       if (version.effort) parts.push(EFFORTS.find((entry) => entry.id === version.effort)?.label ?? version.effort);
       if (typeof version.temperature === 'number') parts.push(`temp ${version.temperature.toFixed(2)}`);
       if (typeof version.maxTokens === 'number') parts.push(`${version.maxTokens} tokens`);
+      if ((version.instructions && version.instructions.trim()) || Object.keys(version.presets ?? {}).length > 0) parts.push('own instructions');
       return parts.length > 0 ? parts.join(' · ') : 'default settings';
     }
 
@@ -2902,6 +2952,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
       versions: [],
       extras: { skills: [], connectors: [] },
       globalMax: 4,
+      presets: [],
     });
 
     /**
@@ -3113,8 +3164,112 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
       );
     }
 
+    /** A text box that saves when you leave it. */
+    function SavedText({ value, placeholder, label, rows = 3, onCommit }) {
+      const [draft, setDraft] = useState(value ?? '');
+      useEffect(() => setDraft(value ?? ''), [value]);
+      return h('textarea', {
+        className: 'dsh-mt-input dsh-mt-textarea',
+        rows,
+        maxLength: 4000,
+        value: draft,
+        placeholder,
+        'aria-label': label,
+        onChange: (event) => setDraft(event.target.value),
+        onBlur: () => {
+          if (draft !== (value ?? '')) onCommit(draft);
+        },
+      });
+    }
+
     /**
-     * One saved model version: a named copy of a model with its own effort and sampling.
+     * A version's own instructions: one text for every mode, and optional text per app mode
+     * (Standard, PTC, Minimal, Creator, or your own) that is added to it or used alone.
+     */
+    function VersionInstructions({ version, onChange }) {
+      const { presets } = React.useContext(TierExtrasContext);
+      const own = version.presets ?? {};
+      // Modes the app lists, plus any this version still has text for.
+      const rows = [...presets, ...Object.keys(own).filter((id) => !presets.some((preset) => preset.id === id)).map((id) => ({ id, name: `${id} (no longer in the app)` }))];
+      const setPreset = (id, patch) => {
+        const next = { ...own, [id]: { text: '', replace: false, ...own[id], ...patch } };
+        if (!next[id].text.trim()) delete next[id];
+        onChange({ ...version, presets: next });
+      };
+      const filled = Object.keys(own).length;
+      return h(
+        'div',
+        { className: 'dsh-mt-extras' },
+        h(
+          'div',
+          { className: 'dsh-mt-field' },
+          h('span', { className: 'dsh-mt-label' }, 'Instructions for this version'),
+          h(SavedText, {
+            value: version.instructions,
+            label: 'Instructions for this version',
+            placeholder: 'What this model should do and how, for this job. Given to the model whenever this version is in use. Empty means none.',
+            onCommit: (text) => onChange({ ...version, instructions: text }),
+          }),
+          h(Switch, {
+            checked: version.replace === true,
+            label: 'Use only these: leave out the tier, mode and role instructions',
+            onChange: (value) => onChange({ ...version, replace: value }),
+          }),
+          h(
+            'span',
+            { className: 'dsh-mt-hint' },
+            version.replace
+              ? 'While this version is in use, the instructions of the tier, the Chat / Cowork / Code mode and the role prompts are left out. The app’s own text about its tools, and the tier’s limits, always stay.'
+              : 'These are added on top of the tier, mode and role instructions.',
+          ),
+        ),
+        h(
+          'details',
+          { className: 'dsh-mt-fallback' },
+          h('summary', { className: 'dsh-mt-fallbackhead' }, `Instructions per app mode (${filled})`),
+          h(
+            'div',
+            { className: 'dsh-mt-fallbackbody' },
+            h(
+              'span',
+              { className: 'dsh-mt-hint' },
+              'The app’s modes are the ones you pick above the chat box of a new conversation (Standard, PTC, Minimal, Creator), plus any you add in Settings → Agent presets. Give a mode its own text for this version, and choose whether it is added to the instructions above or used alone.',
+            ),
+            rows.length === 0 ? h('span', { className: 'dsh-mt-hint' }, 'The list of modes could not be read from the app.') : null,
+            rows.map((preset) =>
+              h(
+                'div',
+                { className: 'dsh-mt-field', key: preset.id },
+                h('span', { className: 'dsh-mt-label' }, preset.name),
+                h(SavedText, {
+                  value: own[preset.id]?.text ?? '',
+                  rows: 2,
+                  label: `Instructions in ${preset.name}`,
+                  placeholder: 'Empty: this mode uses the instructions above.',
+                  onCommit: (text) => setPreset(preset.id, { text }),
+                }),
+                own[preset.id]
+                  ? h(
+                      'select',
+                      {
+                        className: 'dsh-mt-select',
+                        value: own[preset.id].replace ? 'replace' : 'add',
+                        'aria-label': `How the ${preset.name} text is used`,
+                        onChange: (event) => setPreset(preset.id, { replace: event.target.value === 'replace' }),
+                      },
+                      h('option', { value: 'add' }, 'Add this to the instructions above'),
+                      h('option', { value: 'replace' }, 'Use only this: replace the instructions above and the tier, mode and role instructions'),
+                    )
+                  : null,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    /**
+     * One saved model version: a named copy of a model with its own effort, sampling and instructions.
      */
     function VersionRow({ version, catalog, usedBy, onChange, onDuplicate, onDelete }) {
       const [name, setName] = useState(version.name);
@@ -3251,6 +3406,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             }),
           ),
         ),
+        h(VersionInstructions, { version, onChange }),
         h(
           'div',
           { className: 'dsh-mt-actions' },
@@ -3298,7 +3454,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           h(
             'div',
             { className: 'dsh-mt-hint' },
-            'A version is a named copy of a model with its own effort, temperature and max tokens, for example one for writing and one for coding. ' +
+            'A version is a named copy of a model with its own effort, temperature, max tokens and instructions, for example one for writing and one for coding. ' +
               'The plain model always stays in the chat box list with default settings. ' +
               'The app sends temperature and max tokens only: top-p, top-k and similar settings stay on your model server.',
           ),
@@ -3417,10 +3573,14 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
       const [state, setState] = useState({ status: 'loading', config: null, revision: 0, catalog: null, error: null, saving: false });
       const [section, setSection] = useState('tiers');
       const [extras, setExtras] = useState({ skills: [], connectors: [] });
+      const [presets, setPresets] = useState([]);
       useEffect(() => {
         let alive = true;
         loadExtras().then((value) => {
           if (alive) setExtras(value);
+        });
+        loadPresets(appCtx).then((value) => {
+          if (alive) setPresets(value);
         });
         return () => {
           alive = false;
@@ -3546,7 +3706,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
 
       return h(
         TierExtrasContext.Provider,
-        { value: { versions: config.modelVersions, extras, globalMax: config.maxSubagents } },
+        { value: { versions: config.modelVersions, extras, globalMax: config.maxSubagents, presets } },
         h(
         'div',
         { className: 'dsh-mt-page' },
@@ -4954,6 +5114,14 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
       inject: ['slots', 'remote', 'remote.settings', 'remote.session', 'locale'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register('model-tiers', DICT));
+        // Optional: without the app's preset service the per-mode fields simply say so.
+        try {
+          ctx.inject(['remote.agentPresets'], (inner) => {
+            presetRemote = inner.remote.agentPresets;
+          });
+        } catch {
+          presetRemote = null;
+        }
         const t = ctx.locale.bind('model-tiers');
 
         ctx.effect(() =>

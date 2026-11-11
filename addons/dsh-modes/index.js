@@ -368,7 +368,14 @@ export function apply(ctx, config) {
           text: () => {
             const mode = modeOf(agent.id);
             const webGranted = mode.tools !== 'all' && webOn(agent.id, mode);
-            return [mode.prompt, webGranted ? WEB_PROMPT : '', researchOn(agent.id) ? RESEARCH_PROMPT : ''].filter(Boolean).join('\n\n');
+            // A model version that stands alone leaves out the mode's own wording; the notes about tools stay.
+            let alone = false;
+            try {
+              alone = ctx.get('modelTiers')?.instructionsReplaced?.(agent.id) === true;
+            } catch {
+              alone = false;
+            }
+            return [alone ? '' : mode.prompt, webGranted ? WEB_PROMPT : '', researchOn(agent.id) ? RESEARCH_PROMPT : ''].filter(Boolean).join('\n\n');
           },
         }),
       'modes prompt section',

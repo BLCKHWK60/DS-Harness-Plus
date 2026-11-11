@@ -1,13 +1,13 @@
 # Handoff: DeepSeek Harness Plus
 
-Written 2026-11-11, updated the same day after the 0.10.0, 0.11.0 and 0.12.0 work. For the next working session. Read this first. Then read only the files the task touches.
+Written 2026-11-11, updated the same day after the 0.10.0 to 0.13.0 work. For the next working session. Read this first. Then read only the files the task touches.
 
 ## 1. What this is
 
 **DeepSeek Harness Plus** is 21 add-ons for the **DeepSeek Harness** desktop app (Electron, Cordis plugin framework), version **0.2.2-rc.1**, on macOS. The add-ons install into the app's data folder (`~/.dsh/addons/deepseek-harness-plus`) and register with the app's own `dsh plugin add`. The app itself is never modified.
 
-- **Repo:** `deepseek-harness-plus/`. It is a git repository, local only, with no remote. The latest commit is Release 0.12.0 (the one after `307d17f`, Release 0.11.0). `VERSION` reads `0.12.0`.
-- **Installed in the owner's real app:** 0.12.0, 21 add-ons. The backup is `~/.dsh/backups/deepseek-harness-plus/20261111-172715-install`.
+- **Repo:** `deepseek-harness-plus/`. It is a git repository, local only, with no remote. The latest commit is Release 0.13.0 (the one after `f6cada7`, Release 0.12.0). `VERSION` reads `0.13.0`.
+- **Installed in the owner's real app:** 0.13.0, 21 add-ons. The backup is `~/.dsh/backups/deepseek-harness-plus/20261111-174913-install`.
 - **Parent folder `DeepSeek_Harness_Custom/`:**
   - `deepseek-harness-master/`: the app's source. It is **newer than the installed app**; read it for docs only.
   - `spike-lab/`: the throwaway lab.
@@ -142,6 +142,12 @@ Each add-on has a `README.md` with technical notes, plus what was and was not ve
   - **The lab's default workspace is the real folder `~/Documents/deepseek-harness/default-workspace`**, not a folder inside the lab. Anything a lab conversation writes lands there. The evolve test made and removed a temporary `.dsh-evolve-test` folder in it.
   - Not verified in 0.12: a real student and reviewer model (only a scripted mock), judge checks with a real judge, dark mode and other schemes for its page, the Mac desktop app.
   - Next steps the owner may want: mining real conversations for failing cases (with a per-conversation "never send" tag), a schedule that runs a cycle at night, verify-before-stop through `agent/turn-stopping`, helpful/harmful counters per lesson, then the spec's levels 3–4 behind a real sandbox.
+- **0.13.0 is committed (local only) and installed in the owner's app.** Not yet seen on the Mac desktop app. Decisions by the owner: a model's instructions live **on the model version**; "replace" means **only the added instructions** (tier, mode, role prompts, shared lessons), never the app's own text; per-mode instructions follow **the app's agent presets**; self-improvement keeps **one set of lessons per version**.
+  - `dsh-model-tiers`: versions gain `instructions`, `replace` and `presets`; service methods `sessionVersion` and `instructionsReplaced`.
+  - `dsh-modes`, `dsh-role-prompts`: leave out their own text when `instructionsReplaced` is true.
+  - `dsh-evolve`: setting `target` (a version id); one store per version under `versions/<id>/`.
+  - Facts learned: `ctx.get('agentPresets').presetForSession(session)` gives a conversation's preset (ids `standard`, `ptc`, `minimal`, `cordis` = Creator; the shipped ones have no name of their own). In the browser the list is `remote.agentPresets.list()` → `{presets: [{id, name?, isDefault}]}`, and it is only reachable after injecting `remote.agentPresets` (done optionally with `ctx.inject` inside `apply`).
+  - Not verified: PTC, Minimal, Creator and custom presets; the mode prompt and role prompts being left out (same switch, but neither had text in the lab); two versions improved side by side.
 - **Proposed, waiting for the owner's pick** (listed in the session report of 2026-11-11):
   - a small local relay so top-p, top-k, min-p and repeat penalty can be set per model version (local models only);
   - the Modes page's "default tier" box as a drop-down of tier names (it suggests the internal ids `haiku … code`);

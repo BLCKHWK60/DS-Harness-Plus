@@ -67,6 +67,12 @@ export function apply(ctx, config) {
   function textFor(agent, key) {
     const section = sections()[key];
     if (!section || section.enabled === false) return '';
+    // A model version that stands alone leaves out the other added instructions.
+    try {
+      if (ctx.get('modelTiers')?.instructionsReplaced?.(agent.id) === true) return '';
+    } catch {
+      // Without Model Tiers nothing is left out.
+    }
     const tiers = Array.isArray(section.appliesToTiers) ? section.appliesToTiers : [];
     if (tiers.length > 0) {
       const tier = ctx.get('modelTiers')?.resolveTier?.(agent.id);

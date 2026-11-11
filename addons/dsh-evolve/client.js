@@ -408,7 +408,7 @@ textarea.dsh-ev-field { width: 100%; height: auto; min-height: 72px; padding: 9p
           ? h(
               'ol',
               { className: 'dsh-ev-steps' },
-              h('li', { 'data-done': String(ready.model && ready.reviewer) }, 'Pick the model to improve and a stronger model as reviewer, under Setup.'),
+              h('li', { 'data-done': String(ready.model && ready.reviewer) }, 'Pick what to improve (a model version or a plain model) and a stronger model as reviewer, under Setup.'),
               h('li', { 'data-done': String(ready.tasks) }, 'Add tasks from your real work to each of the three groups (Learn, Check, Guard), or start with the example tasks.'),
               h('li', { 'data-done': String(Boolean(measured.overall)) }, 'Press Measure to see how the model does today. Then Run a cycle to look for improvements.'),
             )
@@ -473,7 +473,24 @@ textarea.dsh-ev-field { width: 100%; height: auto; min-height: 72px; padding: 9p
         // ---- setup
         h('div', { className: 'dsh-ev-group' }, h('span', null, 'Setup')),
         h(Row, { title: 'Use self-improvement', hint: 'Off stops runs and adds nothing to any conversation.' }, h(Switch, { checked: value.enabled !== false, label: 'Use self-improvement', onChange: (next) => setField('enabled', next) })),
-        h(Row, { title: 'Model to improve', hint: 'Usually a local model. The test tasks run on it.' }, h(ModelSelect, { catalog, provider: value.studentProvider, model: value.studentModel, none: 'Pick a model', label: 'Model to improve', onPick: (provider, model) => setModel('student', provider, model) })),
+        h(
+          Row,
+          {
+            title: 'What to improve',
+            hint: now.missingTarget
+              ? 'The model version chosen before no longer exists. Pick another.'
+              : 'A saved model version (from Settings → Model Tiers → Model versions) or a plain model. Each has its own tasks, lessons and history, so "Qwen – Coding" and "Qwen – Writing" improve separately.',
+          },
+          h(
+            'select',
+            { className: 'dsh-ev-field', value: now.target ?? '', disabled: running, 'aria-label': 'What to improve', onChange: (event) => setField('target', event.target.value) },
+            h('option', { value: '' }, 'A plain model'),
+            (status.targets ?? []).map((target) => h('option', { key: target.id, value: target.id }, `${target.name} (${target.model})`)),
+          ),
+        ),
+        now.version
+          ? h(Row, { title: 'Model', hint: `Tests run on this version's model, with its sampling settings${now.version.hasInstructions ? ' and its own instructions' : ''}. Approved lessons are used in conversations that are on this version.` }, h('span', { className: 'dsh-ev-tag', 'data-tone': 'accent' }, now.version.model))
+          : h(Row, { title: 'Model to improve', hint: 'Usually a local model. The test tasks run on it, and approved lessons are used in every conversation.' }, h(ModelSelect, { catalog, provider: value.studentProvider, model: value.studentModel, none: 'Pick a model', label: 'Model to improve', onPick: (provider, model) => setModel('student', provider, model) })),
         h(Row, { title: 'Reviewer model', hint: 'A stronger model. It sees the Learn tasks, the answers and why they failed, with secrets, addresses and home paths removed. It never sees your conversations.' }, h(ModelSelect, { catalog, provider: value.reviewerProvider, model: value.reviewerModel, none: 'Pick a model', label: 'Reviewer model', onPick: (provider, model) => setModel('reviewer', provider, model) })),
         h(Row, { title: 'Judge model (optional)', hint: 'Only for tasks with a "judge" check. Without it, such a check never counts as passed.' }, h(ModelSelect, { catalog, provider: value.judgeProvider, model: value.judgeModel, none: 'None', label: 'Judge model', onPick: (provider, model) => setModel('judge', provider, model) })),
         h(Row, { title: 'Use approved instructions in real conversations', hint: 'Off keeps them to test runs only, so you can try the loop without changing how the app behaves.' }, h(Switch, { checked: value.applyLive !== false, label: 'Use approved instructions in real conversations', onChange: (next) => setField('applyLive', next) })),
@@ -526,7 +543,7 @@ textarea.dsh-ev-field { width: 100%; height: auto; min-height: 72px; padding: 9p
         tasks.length > 8 ? h('div', { className: 'dsh-ev-actions' }, h('button', { type: 'button', className: 'dsh-ev-btn', onClick: () => setShowAll(!showAll) }, showAll ? 'Show fewer' : `Show all ${tasks.length}`)) : null,
 
         // ---- instructions in use
-        h('div', { className: 'dsh-ev-group' }, h('span', null, `Instructions in use (${status.active.version})`)),
+        h('div', { className: 'dsh-ev-group' }, h('span', null, `Lessons in use${now.version ? ` for ${now.version.name}` : ''} (${status.active.version})`)),
         status.active.text
           ? h('pre', { className: 'dsh-ev-pre' }, status.active.text)
           : h('p', { className: 'dsh-ev-desc', style: { marginTop: 0 } }, 'Nothing has been added yet. Approved changes appear here, and are given to the model with its other instructions.'),
