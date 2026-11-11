@@ -15,6 +15,7 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Modes](#modes) | yes | Settings → Modes | `/mode` |
 | [Model Tiers](#model-tiers) | yes | Settings → Model Tiers | |
 | [Privacy](#privacy) | yes | | `/privacy` |
+| [Activity indicator](#activity-indicator) | yes | Settings → Activity | `/activity` |
 | [Code map](#code-map) | yes | Settings → Code map | `/codemap` |
 | [Self-improvement](#self-improvement) | after setup, in its page | Settings → Self-improve | `/evolve` |
 | [Usage counter](#usage-counter) | yes | Settings → Usage | `/usage` |
@@ -165,6 +166,18 @@ Counts requests and tokens per day, provider and model. It never stores what you
 ## Deep research
 
 Gives the assistant a `deep_research` tool: it splits a question into sub-questions, researches them in parallel and writes a report whose sources are checked. Ask for it in plain words ("do deep research on ..."). It uses your web search, so it costs tokens; nothing to set up.
+
+## Activity indicator
+
+A thin bar that shows what the model and its helpers are doing right now, so you can see at a glance that work is still going on. It works the moment it is installed.
+
+- **What it shows:** prompt processing, thinking, writing, tool calls, web search, scripts, sub-agents, other conversations, waiting for your approval (everything pulses in one colour) and errors (everything pulses red). A short text beside it adds figures such as `TG 42 t/s · Tool read_file 2s · BG 2`.
+- **Seven designs** in **Settings → Activity**: a line or a lane of threads above the chat box, lanes or a history tape on the lower window edge, small spinning rings beside the model button, or two of them together. The page has a preview.
+- **You choose what is tracked:** each kind of work has its own switch and colour. You can also turn the text or its figures off, use words in place of short codes, hide the bar while nothing runs, or switch off all movement.
+- **Sounds:** it can play a short sound when the app starts waiting for you and when a turn fails. Pick from nine sounds, set the volume, and choose whether the waiting sound repeats until you answer.
+- It keeps no text of your conversations and sends nothing anywhere.
+
+The speeds for thinking and writing are estimates from the live stream that correct themselves after each answer. The prompt-processing speed is known once the first token arrives, so while a prompt is being read you see the seconds so far and the last measured speed. Details: `addons/dsh-activity/README.md`.
 
 ## Code power
 

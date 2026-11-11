@@ -1,0 +1,8 @@
+- insert:
+    - id: activity
+      name: '@local/dsh-activity'
+      config:
+        # Works as soon as it is installed; nothing to set up. Change the look and
+        # what is tracked on Settings > Activity. Optional:
+        #   commandName: activity   # empty registers no slash command
+        enabled: true

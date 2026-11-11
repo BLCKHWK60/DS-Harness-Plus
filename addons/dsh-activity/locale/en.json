@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Activity indicator",
+    "description": "A thin activity indicator by the chat box or on the window edge: prompt processing, thinking, writing, tool calls, web search, sub-agents and more, with tokens per second. Stores nothing."
+  }
+}
