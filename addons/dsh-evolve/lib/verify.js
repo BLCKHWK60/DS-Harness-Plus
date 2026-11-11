@@ -8,15 +8,18 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
-export const CHECK_TYPES = ['contains', 'notContains', 'equals', 'regex', 'json', 'fileExists', 'fileContains', 'judge'];
+export const CHECK_TYPES = ['contains', 'notContains', 'noneOf', 'equals', 'regex', 'json', 'wordCount', 'lineCount', 'fileExists', 'fileContains', 'judge'];
 
 /** What each check type means, for the page. */
 export const CHECK_HELP = {
   contains: 'The answer contains this text (upper and lower case count as the same).',
   notContains: 'The answer does not contain this text.',
+  noneOf: 'The answer contains none of these words or marks. Separate them with a vertical bar, like delve | tapestry | **.',
   equals: 'The answer is exactly this text, ignoring spaces at the ends.',
   regex: 'The answer matches this pattern (a regular expression).',
   json: 'The answer is valid JSON. Optionally list keys it must have, separated by commas.',
+  wordCount: 'The answer has this many words: one number like 10, or a range like 150-220.',
+  lineCount: 'The answer has this many lines, not counting empty ones: one number like 12, or a range like 8-40.',
   fileExists: 'A file exists at this path in the task folder (tasks that use tools only).',
   fileContains: 'A file in the task folder contains this text. Write it as path :: text (tasks that use tools only).',
   judge: 'A judge model scores the answer against this description, 1 to 5; 4 or more passes.',
@@ -35,6 +38,8 @@ export function normalizeCheck(raw) {
   const value = typeof raw.value === 'string' ? raw.value.slice(0, 4000) : '';
   if (!type) return undefined;
   if (type !== 'json' && value.trim() === '') return undefined;
+  if ((type === 'wordCount' || type === 'lineCount') && !rangeOf(value)) return undefined;
+  if (type === 'noneOf' && phrasesOf(value).length === 0) return undefined;
   if (type === 'regex') {
     try {
       new RegExp(value);
@@ -94,6 +99,14 @@ export function runCheck(check, run) {
         return lower.includes(value.toLowerCase()) ? ok() : fail(`The answer does not contain "${clip(value)}".`);
       case 'notContains':
         return lower.includes(value.toLowerCase()) ? fail(`The answer contains "${clip(value)}".`) : ok();
+      case 'noneOf': {
+        const found = phrasesOf(value).find((phrase) => lower.includes(phrase.toLowerCase()));
+        return found ? fail(`The answer contains "${clip(found)}".`) : ok();
+      }
+      case 'wordCount':
+        return inRange(value, answer.trim().split(/\s+/).filter(Boolean).length, 'words');
+      case 'lineCount':
+        return inRange(value, answer.split('\n').filter((line) => line.trim() !== '').length, 'lines');
       case 'equals':
         return answer.trim() === value.trim() ? ok() : fail('The answer is not exactly the expected text.');
       case 'regex':
@@ -149,6 +162,36 @@ export function verdictOf(checks, run) {
   const undecided = outcomes.find((outcome) => outcome.status === 'NOT_EVALUATED');
   if (undecided) return undecided;
   return ok();
+}
+
+/**
+ * Read a count or a range such as `12` or `150-220`.
+ * @param {string} text - what the check holds.
+ * @returns {{min: number, max: number} | undefined} the range, or undefined when it is not one.
+ */
+export function rangeOf(text) {
+  const match = String(text ?? '').trim().match(/^(\d{1,6})(?:\s*-\s*(\d{1,6}))?$/);
+  if (!match) return undefined;
+  const min = Number(match[1]);
+  const max = match[2] === undefined ? min : Number(match[2]);
+  return max >= min ? { min, max } : undefined;
+}
+
+/**
+ * Split a `noneOf` list on vertical bars.
+ * @param {string} text - what the check holds.
+ * @returns {string[]} the phrases, without empty ones.
+ */
+export function phrasesOf(text) {
+  return String(text ?? '').split('|').map((phrase) => phrase.trim()).filter(Boolean);
+}
+
+function inRange(value, count, unit) {
+  const range = rangeOf(value);
+  if (!range) return skip('Write this check as one number or a range like 150-220.');
+  if (count >= range.min && count <= range.max) return ok();
+  const wanted = range.min === range.max ? `${range.min}` : `${range.min} to ${range.max}`;
+  return fail(`The answer has ${count} ${unit}; it should have ${wanted}.`);
 }
 
 function ok() {

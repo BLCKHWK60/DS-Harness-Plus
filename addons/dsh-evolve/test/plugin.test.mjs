@@ -2,9 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
-import { EXAMPLE_TASKS, readSettings, readBody } from '../index.js';
-import { normalizeTask } from '../lib/store.js';
-import { verdictOf } from '../lib/verify.js';
+import { readSettings, readBody } from '../index.js';
 
 test('nothing is preconfigured', () => {
   const settings = readSettings({});
@@ -28,23 +26,6 @@ test('settings are clamped and a model needs both parts', () => {
   assert.equal(settings.tokenBudget, 0);
   assert.equal(settings.costCeiling, 1);
   assert.equal(settings.enabled, false);
-});
-
-test('the example tasks are valid, cover all three groups, and their checks can pass', () => {
-  const tasks = EXAMPLE_TASKS.map(normalizeTask);
-  assert.ok(tasks.every(Boolean));
-  assert.deepEqual([...new Set(tasks.map((task) => task.split))].sort(), ['check', 'guard', 'learn']);
-  assert.ok(tasks.every((task) => task.checks.length > 0));
-  const answers = {
-    'example-units': '625 g',
-    'example-json': '{"city": "Tokyo", "country": "Japan"}',
-    'example-steps': '12:15',
-    'example-list': '{"primes": [2, 3, 5, 7, 11, 13, 17, 19]}',
-    'example-plain': '42',
-    'example-short': 'Jupiter.',
-  };
-  for (const task of tasks) assert.equal(verdictOf(task.checks, { answer: answers[task.id] }).status, 'PASS', task.id);
-  assert.equal(verdictOf(tasks.find((task) => task.id === 'example-short').checks, { answer: 'It is Jupiter, of course.' }).status, 'FAIL');
 });
 
 test('request bodies must be small JSON objects', async () => {

@@ -1,13 +1,13 @@
 # Handoff: DeepSeek Harness Plus
 
-Written 2026-11-11, updated the same day after the 0.10.0 to 0.14.0 work. For the next working session. Read this first. Then read only the files the task touches.
+Written 2026-11-11, updated the same day after the 0.10.0 to 0.15.0 work. For the next working session. Read this first. Then read only the files the task touches.
 
 ## 1. What this is
 
 **DeepSeek Harness Plus** is 22 add-ons for the **DeepSeek Harness** desktop app (Electron, Cordis plugin framework), version **0.2.2-rc.1**, on macOS. The add-ons install into the app's data folder (`~/.dsh/addons/deepseek-harness-plus`) and register with the app's own `dsh plugin add`. The app itself is never modified.
 
-- **Repo:** `deepseek-harness-plus/`. It is a git repository, local only, with no remote. The latest commit is Release 0.14.0 (the one after `25d5586`, Release 0.13.0). `VERSION` reads `0.14.0`.
-- **Installed in the owner's real app:** 0.14.0, 22 add-ons. The backup is `~/.dsh/backups/deepseek-harness-plus/20261111-180357-install`.
+- **Repo:** `deepseek-harness-plus/`. It is a git repository, local only, with no remote. The latest commit is Release 0.15.0 (the one after `e7a7185`, Release 0.14.0). `VERSION` reads `0.15.0`.
+- **Installed in the owner's real app:** 0.15.0, 22 add-ons. The backup is `~/.dsh/backups/deepseek-harness-plus/20261111-183443-install`.
 - **Parent folder `DeepSeek_Harness_Custom/`:**
   - `deepseek-harness-master/`: the app's source. It is **newer than the installed app**; read it for docs only.
   - `spike-lab/`: the throwaway lab.
@@ -99,7 +99,7 @@ Each add-on has a `README.md` with technical notes, plus what was and was not ve
 ## 4. How to test
 
 - **Unit tests** for one add-on: `cd addons/<name> && ELECTRON_RUN_AS_NODE=1 "/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness" --test test/*.test.mjs`.
-  - Suites exist for swarm (13), benchmark (12), code-map (37), evolve (24), media (15), arena (31), model-tiers (14), notify (13), privacy (3), shared-settings (13) and sync (25).
+  - Suites exist for swarm (13), benchmark (12), code-map (37), evolve (29), media (15), arena (31), model-tiers (14), notify (13), privacy (3), shared-settings (13) and sync (25).
   - Other add-ons have none yet; adding them is a reasonable improvement.
 - **Release check:** `bash scripts/check.sh` runs all tests, then install, re-install, `--settings`/`--no-settings` and uninstall in a throwaway `DSH_HOME`. It must end with "All checks passed".
 - **Live lab (app web version, throwaway data):**
@@ -149,6 +149,12 @@ Each add-on has a `README.md` with technical notes, plus what was and was not ve
   - `dsh-evolve`: setting `target` (a version id); one store per version under `versions/<id>/`.
   - Facts learned: `ctx.get('agentPresets').presetForSession(session)` gives a conversation's preset (ids `standard`, `ptc`, `minimal`, `cordis` = Creator; the shipped ones have no name of their own). In the browser the list is `remote.agentPresets.list()` → `{presets: [{id, name?, isDefault}]}`, and it is only reachable after injecting `remote.agentPresets` (done optionally with `ctx.inject` inside `apply`).
   - Not verified: PTC, Minimal, Creator and custom presets; the mode prompt and role prompts being left out (same switch, but neither had text in the lab); two versions improved side by side.
+- **0.15.0 is committed (local only) and installed in the owner's app.** Only `dsh-evolve` changed, at the owner's request (the six example tasks were too easy for a local 35B model):
+  - `lib/packs.js`: eight example sets, 104 tasks (reasoning 16, coding 16, structured 12, instructions 12, knowledge 14, writing 14, tools 10, agentic 10). Task ids are `<set>-NN`, family = set id. `test/packs.test.mjs` works out every expected answer and file again.
+  - New checks in `lib/verify.js`: `noneOf` (list separated by `|`), `wordCount`, `lineCount` (a number or a range; empty lines are not counted).
+  - Page: **Add example tasks** opens a tick-box list (Select all, Add ticked, Remove ticked). Actions `addPacks` / `removePacks` with `{packs: [ids]}`; `status().packs`. The old `EXAMPLE_TASKS` / `exampleTasks` are gone.
+  - Behaviour change: real conversations now also get lessons whose family is a set id (before: only `all`, `general` and the mode).
+  - Not verified: the sets against a real model (difficulty is a design aim, not a measurement); the tool and agentic sets run end to end; the writing set with a real judge.
 - **0.14.0 is committed (local only) and installed in the owner's app.** The owner was asked to confirm with `/privacy`; no answer recorded yet. The installer stops if the app does not quit when asked: have the owner quit it first, never force it. It adds `dsh-privacy` after a privacy audit the owner asked for. What the audit found in the installed app (0.2.2-rc.1):
   - **Usage events** (desktop only, on by default, no control in Settings): row `product-analytics` (`@deepseek-ai/dsh-client-product-analytics`, in the `dsh-web-app` bundle), exported by row `desktop-product-telemetry`. Per message: model name, effort, mode, session id, device and account ids, app version, hardware. Off value: `enabled: false` (volatile).
   - **Conversation upload on feedback**: row `session-telemetry-otel` in `dsh-base`, mode `FEEDBACK_ONLY`, endpoint `dsh-otel-collector.deepseeksvc.com/v1/logs`, no redaction rules mounted. Off: disable the row (what `DSH_TELEMETRY_DISABLED` does) or mode `DISABLED`.

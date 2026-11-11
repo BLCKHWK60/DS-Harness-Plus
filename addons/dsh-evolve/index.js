@@ -23,6 +23,7 @@ import { approve, BudgetError, decline, improve, makeBudget, measure } from './l
 import { isSolid, summarize } from './lib/gates.js';
 import { applyEdit, nextVersion, renderPolicy, validateEdit } from './lib/policy.js';
 import { fingerprint, openStore } from './lib/store.js';
+import { PACKS, packList } from './lib/packs.js';
 import { CHECK_HELP, CHECK_TYPES } from './lib/verify.js';
 
 export const STATUS_PATH = '/dsh-evolve/status';
@@ -110,16 +111,6 @@ export function readSettings(config) {
     applyLive: plain(config.applyLive) !== false,
   };
 }
-
-/** Six generic starter tasks, two per group, so the page can be tried at once. No model or personal data is involved. */
-export const EXAMPLE_TASKS = [
-  { id: 'example-units', family: 'general', split: 'learn', prompt: 'A recipe needs 250 g of flour for 4 people. How much flour is needed for 10 people? Answer with the number and the unit only.', checks: [{ type: 'regex', value: '\\b625\\s*g\\b' }] },
-  { id: 'example-json', family: 'general', split: 'learn', prompt: 'Return a JSON object with the keys "city" and "country" for the capital of Japan. Return only the JSON.', checks: [{ type: 'json', value: 'city, country' }, { type: 'contains', value: 'Tokyo' }] },
-  { id: 'example-steps', family: 'general', split: 'check', prompt: 'A train leaves at 09:40 and the trip takes 2 hours 35 minutes. At what time does it arrive? Answer with the time only, as HH:MM.', checks: [{ type: 'contains', value: '12:15' }] },
-  { id: 'example-list', family: 'general', split: 'check', prompt: 'Return a JSON object with one key "primes" holding the prime numbers below 20 as a list. Return only the JSON.', checks: [{ type: 'json', value: 'primes' }, { type: 'regex', value: '2\\s*,\\s*3\\s*,\\s*5\\s*,\\s*7\\s*,\\s*11\\s*,\\s*13\\s*,\\s*17\\s*,\\s*19' }] },
-  { id: 'example-plain', family: 'general', split: 'guard', prompt: 'What is 17 + 25? Answer with the number only.', checks: [{ type: 'equals', value: '42' }] },
-  { id: 'example-short', family: 'general', split: 'guard', prompt: 'Name the largest planet of the solar system in one word.', checks: [{ type: 'contains', value: 'Jupiter' }, { type: 'regex', value: '^\\W*\\w+\\W*$' }] },
-];
 
 /**
  * Read a small JSON request body.
@@ -237,7 +228,8 @@ export function apply(ctx, config) {
     if (!now.enabled || !now.applyLive) return '';
     // A real conversation gets the lessons for all work, for "general" work, and for its own mode
     // (a lesson for "code" tasks applies in Code conversations, and so on).
-    const families = ['general'];
+    // Lessons learned on an example set (reasoning, writing, ...) are general lessons too.
+    const families = ['general', ...PACKS.map((item) => item.id)];
     try {
       const mode = ctx.get('modes')?.get?.(agent.id)?.id;
       if (mode) families.push(String(mode));
@@ -557,6 +549,7 @@ export function apply(ctx, config) {
       settings: { ...now, version: now.version ? { id: now.version.id, name: now.version.name, provider: now.version.provider, model: now.version.model, hasInstructions: Boolean(now.version.instructions) } : null },
       targets: modelVersions().map((version) => ({ id: version.id, name: version.name, model: version.model })),
       checkTypes: CHECK_TYPES.map((type) => ({ type, help: CHECK_HELP[type] })),
+      packs: packList(tasks),
       tasks: tasks.map((task) => {
         const result = kept?.results?.find((item) => item.taskId === task.id);
         return { ...task, result: result && !stale ? { passes: result.passes, runs: result.runs, solid: isSolid(result), detail: result.details[0] ?? '' } : null };
@@ -598,9 +591,27 @@ export function apply(ctx, config) {
       }
       case 'deleteTask':
         return store.deleteTask(String(body.id ?? '')) ? {} : { error: 'There is no such task.', code: 404 };
-      case 'exampleTasks':
-        for (const task of EXAMPLE_TASKS) if (!store.tasks().some((item) => item.id === task.id)) store.saveTask(task);
+      case 'addPacks': {
+        // Add the chosen example sets. Tasks that are already there are left as they are.
+        const wanted = new Set(Array.isArray(body.packs) ? body.packs.map(String) : []);
+        const chosen = PACKS.filter((item) => wanted.has(item.id));
+        if (chosen.length === 0) return { error: 'Tick at least one set first.', code: 400 };
+        const have = new Set(store.tasks().map((item) => item.id));
+        for (const task of chosen.flatMap((item) => item.tasks)) {
+          if (have.has(task.id)) continue;
+          const saved = store.saveTask(task);
+          if (saved.error) return { error: saved.error, code: 400 };
+        }
         return {};
+      }
+      case 'removePacks': {
+        const wanted = new Set(Array.isArray(body.packs) ? body.packs.map(String) : []);
+        const ids = PACKS.filter((item) => wanted.has(item.id)).flatMap((item) => item.tasks.map((task) => task.id));
+        if (ids.length === 0) return { error: 'Tick at least one set first.', code: 400 };
+        if (job?.state === 'running') return { error: 'Wait for the run to finish first.', code: 409 };
+        for (const id of ids) store.deleteTask(id);
+        return {};
+      }
       case 'approve': {
         const done = approve(store, String(body.id ?? ''));
         return done.error ? { error: done.error, code: 409 } : {};

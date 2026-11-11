@@ -141,7 +141,7 @@ Makes a model better at your kind of work by improving the instructions it is gi
 Open **Settings → Self-improve**:
 
 1. Under **Setup**, pick the model to improve (usually a local one) and a stronger model as reviewer.
-2. Under **Tasks**, add tasks from your real work, each with a way to check the result (the answer contains a text, is valid JSON, matches a pattern, a file exists, or a judge model scores it). Put them in three groups: **Learn** (the reviewer studies these), **Check** (prove a change helps) and **Guard** (things that must keep working). Or press **Add example tasks** to try it first.
+2. Under **Tasks**, add tasks from your real work, each with a way to check the result (the answer contains a text, is valid JSON, matches a pattern, a file exists, or a judge model scores it). Put them in three groups: **Learn** (the reviewer studies these), **Check** (prove a change helps) and **Guard** (things that must keep working). Or press **Add example tasks**: tick the kinds of work you want (reasoning, reading code, structured output, exact instructions, general knowledge, writing, tool use, agentic coding; 10 to 16 hard tasks each) and add only those.
 3. Press **Measure** to see today's score, then **Run a cycle**.
 
 In a cycle the reviewer looks at what fails on the Learn tasks and proposes small changes: a new lesson, a reworded one, or a section of standing instructions. Each change is tested on the Check and Guard tasks, which the reviewer never saw. A change reaches you only if it raises the score, breaks nothing, does not make answers much longer and does not contain a test answer. You then **Approve** or **Decline** it. Every version is kept, and **Use this version** puts an earlier one back.

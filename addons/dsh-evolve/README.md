@@ -22,7 +22,7 @@ Checked live with the mock model: choosing a version gave an empty task list of 
 ## How to use it
 
 1. **Setup.** Pick the model to improve (usually a local one) and a stronger model as reviewer. Both come from your model list in Settings → Models.
-2. **Tasks.** Add tasks from your real work, or press **Add example tasks** to try it. Each task has a prompt, a "kind of work" name, one or more checks, and a group:
+2. **Tasks.** Add tasks from your real work, or press **Add example tasks** and tick the sets you want (see "Example tasks" below). Each task has a prompt, a "kind of work" name, one or more checks, and a group:
 
    | Group | What it is for | Does the reviewer see it? |
    | --- | --- | --- |
@@ -42,11 +42,34 @@ Every check of a task must pass. A check that cannot be decided never counts as 
 | Check | Passes when |
 | --- | --- |
 | `contains` / `notContains` | the answer contains / does not contain a text |
+| `noneOf` | the answer contains none of a list of words or marks, written as `delve \| tapestry \| **` |
 | `equals` | the answer is exactly a text |
 | `regex` | the answer matches a pattern |
 | `json` | the answer is valid JSON, optionally with the listed keys |
+| `wordCount`, `lineCount` | the answer has a number of words / non-empty lines: one number (`12`) or a range (`150-220`) |
 | `fileExists`, `fileContains` | a file exists / contains a text in the task's folder (tasks with tools) |
 | `judge` | the judge model gives 4 or 5 out of 5 against your description |
+
+### Example tasks
+
+**Add example tasks** opens a list of ready-made sets. Tick any of them and press **Add ticked**; **Select all** ticks every set; **Remove ticked** takes a set's tasks out again. Tasks you already have are left alone. Each set is spread over Learn, Check and Guard.
+
+| Set | Tasks | What it tests | Needs |
+| --- | --- | --- | --- |
+| Reasoning and exact calculation | 16 | counting, long arithmetic, dates, logic puzzles, state tracking | |
+| Reading and tracing code | 16 | what JavaScript, Python and SQL snippets print, with the usual traps | |
+| Structured output and extraction | 12 | exact JSON from messy text: totals, dates, phone numbers, units, versions | |
+| Following exact instructions | 12 | several formatting rules at once | |
+| General knowledge, two steps | 14 | two facts combined into one exact answer | |
+| Writing | 14 | technical writing, blog, web copy, fiction, literary description, e-mail, news, poem | a judge model |
+| Tool use | 10 | create files, run code, leave an exact result in a file | an open Cowork or Code conversation |
+| Agentic coding | 10 | write a program, run it, leave the result and a README | an open Cowork or Code conversation |
+
+Every answer with one right value was worked out by code, and `test/packs.test.mjs` works each one out again. A writing task passes only when the text is inside its length, contains none of a list of machine-sounding phrases and marks (`AI_ISMS` in `lib/packs.js`: "delve", "tapestry", em dashes, bold, headings and so on), and the judge model gives it 4 or 5. Without a judge model, writing tasks are never counted as passed.
+
+Lessons learned on a set are used in every real conversation, like lessons for "general" work.
+
+The sets live in `lib/packs.js`. They are meant to be hard for local models; how hard they are for a given model is only known after you press Measure.
 
 ### Two ways a task can run
 
@@ -132,9 +155,9 @@ Data folder (`$DSH_HOME/evolve`): `tasks.json`, `policies/v0001.json …`, `acti
 
 ## Checked
 
-- **Unit tests:** 24 (`test/`): every check type, path escapes in file checks, the policy and its limits, leak detection, each gate, redaction, the reviewer packet (it contains no Check or Guard task), strict reading of the reviewer's answer, storage, a full simulated cycle with approval and going back, budget stop, refusals.
+- **Unit tests:** 29 (`test/`): the example sets (every expected answer and file worked out again, a wrong answer fails, 10 to 30 tasks per set), every check type, path escapes in file checks, the policy and its limits, leak detection, each gate, redaction, the reviewer packet (it contains no Check or Guard task), strict reading of the reviewer's answer, storage, a full simulated cycle with approval and going back, budget stop, refusals.
 - **Live, in the throwaway web profile with a scripted mock model:**
-  - Set up entirely on the page: both models picked, the six example tasks added.
+  - Set up entirely on the page: both models picked, example tasks added (0.15: the tick-box list; adding two sets, then removing one, changed the task count as expected).
   - A cycle from a 33% score: the reviewer proposed two lessons; the useful one cleared all four gates and waited; the useless one was stopped by "helps on the check tasks"; nothing changed until Approve.
   - After Approve: version v0002 in use, measured 100%; both versions listed with their scores; going back to v0001 and forward again worked.
   - The approved lesson was in the request of a normal Code conversation (read from the request the mock received).

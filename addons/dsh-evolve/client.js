@@ -73,6 +73,9 @@ textarea.dsh-ev-field { width: 100%; height: auto; min-height: 72px; padding: 9p
 .dsh-ev-tag[data-tone="good"] { color: var(--dsw-alias-state-success-primary); background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, transparent); }
 .dsh-ev-tag[data-tone="bad"] { color: var(--dsw-alias-state-error-primary); background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent); }
 .dsh-ev-tag[data-tone="accent"] { color: var(--dsw-alias-brand-primary); background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent); }
+.dsh-ev-pack { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l1); cursor: pointer; }
+.dsh-ev-packbody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dsh-ev-check { flex: none; width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--dsw-alias-brand-primary); cursor: pointer; }
 .dsh-ev-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .dsh-ev-btn {
   height: 28px; padding: 0 10px; border-radius: 8px; border: 0.5px solid var(--dsw-alias-border-l2); background: transparent;
@@ -229,6 +232,58 @@ textarea.dsh-ev-field { width: 100%; height: auto; min-height: 72px; padding: 9p
       );
     }
 
+    /** The example sets: tick the kinds of work you want and add only those. */
+    function PackPicker({ packs, busy, running, act, onClose }) {
+      const [picked, setPicked] = useState([]);
+      const chosen = packs.filter((item) => picked.includes(item.id));
+      const toAdd = chosen.reduce((sum, item) => sum + (item.count - item.added), 0);
+      const toRemove = chosen.reduce((sum, item) => sum + item.added, 0);
+      const all = picked.length === packs.length;
+      const toggle = (id) => setPicked((now) => (now.includes(id) ? now.filter((item) => item !== id) : [...now, id]));
+      return h(
+        'div',
+        { className: 'dsh-ev-card', 'data-main': 'true' },
+        h(
+          'div',
+          { className: 'dsh-ev-cardhead' },
+          h('span', { className: 'dsh-ev-cardtitle' }, 'Example tasks'),
+          h('button', { type: 'button', className: 'dsh-ev-btn', onClick: () => setPicked(all ? [] : packs.map((item) => item.id)) }, all ? 'Clear all' : 'Select all'),
+        ),
+        h('div', { className: 'dsh-ev-line' }, 'Hard, ready-made tasks for each kind of work, with answers that were worked out by code. Tick the sets you want. Each set is spread over Learn, Check and Guard.'),
+        packs.map((item) =>
+          h(
+            'label',
+            { className: 'dsh-ev-pack', key: item.id },
+            h('input', { type: 'checkbox', className: 'dsh-ev-check', checked: picked.includes(item.id), onChange: () => toggle(item.id) }),
+            h(
+              'span',
+              { className: 'dsh-ev-packbody' },
+              h(
+                'span',
+                { className: 'dsh-ev-cardhead' },
+                h('span', { className: 'dsh-ev-cardtitle' }, item.name),
+                h('span', { className: 'dsh-ev-tag' }, `${item.count} tasks`),
+                item.needsJudge ? h('span', { className: 'dsh-ev-tag', 'data-tone': 'accent' }, 'needs a judge model') : null,
+                item.needsTools ? h('span', { className: 'dsh-ev-tag', 'data-tone': 'accent' }, 'uses tools') : null,
+                item.added > 0 ? h('span', { className: 'dsh-ev-tag', 'data-tone': 'good' }, item.added === item.count ? 'added' : `${item.added} added`) : null,
+              ),
+              h('span', { className: 'dsh-ev-line' }, item.description),
+            ),
+          ),
+        ),
+        h(
+          'div',
+          { className: 'dsh-ev-actions', style: { marginTop: 12 } },
+          h('span', { className: 'dsh-ev-line', style: { flex: 1 } }, picked.length === 0 ? 'Nothing ticked yet.' : `${picked.length} set${picked.length === 1 ? '' : 's'} ticked.`),
+          h('button', { type: 'button', className: 'dsh-ev-btn', onClick: onClose }, 'Close'),
+          toRemove > 0
+            ? h('button', { type: 'button', className: 'dsh-ev-btn', 'data-danger': 'true', disabled: busy || running, onClick: async () => { if (await act({ action: 'removePacks', packs: picked }, `${toRemove} example task${toRemove === 1 ? ' was' : 's were'} removed.`)) setPicked([]); } }, `Remove ticked (${toRemove})`)
+            : null,
+          h('button', { type: 'button', className: 'dsh-ev-btn', 'data-main': 'true', disabled: busy || toAdd === 0, onClick: async () => { if (await act({ action: 'addPacks', packs: picked }, `${toAdd} example task${toAdd === 1 ? ' was' : 's were'} added.`)) setPicked([]); } }, `Add ticked (${toAdd} task${toAdd === 1 ? '' : 's'})`),
+        ),
+      );
+    }
+
     const EMPTY_TASK = { id: '', family: 'general', split: 'learn', kind: 'answer', prompt: '', checks: [{ type: 'contains', value: '' }] };
 
     /** The form for a new task or an edited one. */
@@ -305,6 +360,7 @@ textarea.dsh-ev-field { width: 100%; height: auto; min-height: 72px; padding: 9p
       const [editing, setEditing] = useState(null);
       const [lesson, setLesson] = useState({ family: 'all', text: '' });
       const [showAll, setShowAll] = useState(false);
+      const [showPacks, setShowPacks] = useState(false);
       const alive = useRef(true);
 
       const refresh = useCallback(async () => {
@@ -503,10 +559,11 @@ textarea.dsh-ev-field { width: 100%; height: auto; min-height: 72px; padding: 9p
           'div',
           { className: 'dsh-ev-group' },
           h('span', null, `Tasks (${tasks.length})`),
-          tasks.length === 0 ? h('button', { type: 'button', className: 'dsh-ev-btn', disabled: busy, onClick: () => act({ action: 'exampleTasks' }, 'Six example tasks were added.') }, 'Add example tasks') : null,
+          h('button', { type: 'button', className: 'dsh-ev-btn', onClick: () => setShowPacks(!showPacks) }, showPacks ? 'Hide example tasks' : 'Add example tasks'),
           h('button', { type: 'button', className: 'dsh-ev-btn', 'data-main': 'true', disabled: Boolean(editing), onClick: () => setEditing({ ...EMPTY_TASK, family: families[0] ?? 'general' }) }, 'New task'),
         ),
         h('p', { className: 'dsh-ev-desc', style: { margin: '0 0 8px' } }, 'Use tasks from your own work, with a result you can check. Aim for ten or more per kind of work, spread over the three groups. The loop can read these tasks but never change them.'),
+        showPacks ? h(PackPicker, { packs: status.packs ?? [], busy, running, act, onClose: () => setShowPacks(false) }) : null,
         editing
           ? h(TaskForm, {
               key: editing.id || 'new',
