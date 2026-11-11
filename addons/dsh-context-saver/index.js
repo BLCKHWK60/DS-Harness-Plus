@@ -171,7 +171,12 @@ export function apply(ctx, config) {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(id);
-        reject(new Error(`context-saver helper did not answer within ${config.helperTimeoutMs} ms`));
+        reject(new Error(`context-saver helper did not answer within ${Number(plain(config.helperTimeoutMs)) || 10000} ms`));
+        // A helper that stops answering is restarted on the next call rather than left hung.
+        if (helper === child) {
+          helper = null;
+          child.kill();
+        }
       }, Number(plain(config.helperTimeoutMs)) || 10000);
       timer.unref?.();
       pending.set(id, { resolve, reject, timer });
@@ -281,10 +286,27 @@ export function apply(ctx, config) {
         `\`${plain(config.retrieveToolName)}\` only for detail you need, and fetch a slice with ` +
         '`start_line`/`end_line` or `grep` rather than the whole text.',
     };
+    const owned = new Map();
+    ctx.effect(() => () => {
+      for (const dispose of owned.values()) {
+        try {
+          dispose?.();
+        } catch {
+          // The Agent context may already be unwinding.
+        }
+      }
+      owned.clear();
+    }, 'context-saver section ownership');
+    ctx.on('agent/disposed', ({ agent }) => owned.delete(agent?.id));
+    // The section goes when the Agent or this plugin goes, and a failure never blocks a new Session.
     const install = (agent) => {
       const agentCtx = agent?.ctx;
-      if (!agentCtx?.systemPrompt) return;
-      agentCtx.effect(() => agentCtx.systemPrompt.section(section), 'context-saver prompt section');
+      if (!agentCtx?.systemPrompt || owned.has(agent.id)) return;
+      try {
+        owned.set(agent.id, agentCtx.effect(() => agentCtx.systemPrompt.section({ ...section, interpolate: false }), 'context-saver prompt section'));
+      } catch (error) {
+        ctx.logger.warn(`context-saver: prompt section not added: ${error?.message ?? error}`);
+      }
     };
     ctx.on('agent/created', ({ agent }) => install(agent));
     for (const agent of ctx.get('agents')?.list() ?? []) install(agent);

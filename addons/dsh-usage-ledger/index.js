@@ -89,11 +89,25 @@ export function apply(ctx, config) {
    * @returns {{version: number, days: Record<string, Record<string, object>>}} ledger.
    */
   function load() {
+    let text;
     try {
-      const data = JSON.parse(readFileSync(file, 'utf8'));
+      text = readFileSync(file, 'utf8');
+    } catch {
+      return emptyLedger(); // No file yet.
+    }
+    try {
+      const data = JSON.parse(text);
       if (data && typeof data === 'object' && data.days && typeof data.days === 'object') return data;
     } catch {
-      // No file yet, or it is not valid JSON: start empty.
+      // Not valid JSON: handled below.
+    }
+    // A damaged file is kept aside, never overwritten, so its history can still be recovered by hand.
+    const aside = `${file}.damaged-${Date.now()}`;
+    try {
+      renameSync(file, aside);
+      ctx.logger.warn(`usage-ledger: ${file} could not be read; kept it as ${aside} and started a new ledger`);
+    } catch (error) {
+      ctx.logger.warn(`usage-ledger: ${file} could not be read or moved aside: ${error?.message ?? error}`);
     }
     return emptyLedger();
   }

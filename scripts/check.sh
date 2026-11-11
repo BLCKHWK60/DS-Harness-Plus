@@ -13,11 +13,10 @@ failed=0
 
 step "Add-on tests"
 for dir in "$HERE"/addons/*/; do
-  tests=$(ls "$dir"test/*.test.mjs 2>/dev/null)
-  [ -n "$tests" ] || continue
+  set -- "$dir"test/*.test.mjs
+  [ -e "$1" ] || continue
   name=$(basename "$dir")
-  # shellcheck disable=SC2086
-  if (cd "$dir" && app_node --test $tests >/tmp/plus-check-$$.log 2>&1); then
+  if (cd "$dir" && app_node --test test/*.test.mjs >/tmp/plus-check-$$.log 2>&1); then
     say "ok    $name ($(grep -E '^(# |ℹ )pass' /tmp/plus-check-$$.log | awk '{print $NF}') passed)"
   else
     say "FAIL  $name"; tail -30 /tmp/plus-check-$$.log; failed=1

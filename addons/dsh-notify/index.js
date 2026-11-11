@@ -199,7 +199,7 @@ export function apply(ctx, config) {
       .catch((error) => {
         stats.failed += 1;
         stats.lastError = String(error?.code ?? error?.message ?? error).slice(0, 120);
-        ctx.logger?.('notify')?.warn?.(`rule ${rule.id}: command failed (${stats.lastError})`);
+        ctx.logger?.warn?.(`notify: rule ${rule.id}: command failed (${stats.lastError})`);
       });
     return true;
   }
@@ -249,7 +249,7 @@ export function apply(ctx, config) {
           }
         }
       } catch (error) {
-        ctx.logger?.('notify')?.warn?.(`could not handle an event: ${error?.message ?? error}`);
+        ctx.logger?.warn?.(`notify: could not handle an event: ${error?.message ?? error}`);
       }
     });
   }

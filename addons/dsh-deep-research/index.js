@@ -14,6 +14,33 @@
  */
 import z from '@deepseek-ai/schemastery';
 
+
+/**
+ * Wait for a started child agent, stopping it when the signal aborts.
+ * The host's own signal only covers start-up, so a running child is stopped through its receipt.
+ * @param {{result: Promise<object>, dispose?: () => Promise<void>}} started - the activation receipt.
+ * @param {AbortSignal | undefined} signal - the caller's signal.
+ * @returns {Promise<object>} the child's result.
+ */
+async function awaitChild(started, signal) {
+  if (!signal) return started.result;
+  let onAbort;
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => {
+      Promise.resolve(started.dispose?.()).catch(() => {});
+      reject(signal.reason instanceof Error ? signal.reason : new Error('Cancelled.'));
+    };
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  });
+  aborted.catch(() => {});
+  try {
+    return await Promise.race([started.result, aborted]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+}
+
 export const name = 'deep-research';
 export const inject = ['tools'];
 
@@ -22,9 +49,9 @@ export const Config = z.object({
   toolName: z.string().default('deep_research'),
   roles: z
     .object({
-      planner: z.string().default('plan'),
-      searcher: z.string().default('fast'),
-      writer: z.string().default('plan'),
+      planner: z.union([z.const('plan'), z.const('implement'), z.const('review'), z.const('fast')]).default('plan'),
+      searcher: z.union([z.const('plan'), z.const('implement'), z.const('review'), z.const('fast')]).default('fast'),
+      writer: z.union([z.const('plan'), z.const('implement'), z.const('review'), z.const('fast')]).default('plan'),
     })
     .default({ planner: 'plan', searcher: 'fast', writer: 'plan' }),
   maxSubquestions: z.number().min(1).max(12).default(6),
@@ -125,7 +152,9 @@ async function mapLimit(items, limit, fn) {
  * @returns {string} CSV text.
  */
 function csvField(value) {
-  const text = value === null || value === undefined ? '' : String(value);
+  let text = value === null || value === undefined ? '' : String(value);
+  // A cell starting with = + - @ (or a tab / CR) runs as a formula in spreadsheets; quote it as text.
+  if (/^[=+\-@\t\r]/.test(text) && !/^-?\d+(\.\d+)?$/.test(text)) text = `'${text}`;
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
@@ -167,7 +196,7 @@ export function apply(ctx, config) {
       signal,
     });
     childIds.add(started.childId);
-    const result = await started.result;
+    const result = await awaitChild(started, signal);
     const text = (result.output ?? [])
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
@@ -215,8 +244,11 @@ export function apply(ctx, config) {
           const url = normalizeUrl(JSON.parse(event.data.arguments)?.url);
           if (url) logOf(id).fetched.add(url);
         }
-      } else if (searchNames.has(calls.get(id)?.get(event.data.callId))) {
-        const text = JSON.stringify(event.data.content ?? event.data.result ?? '');
+      } else {
+        const callId = event.data.message?.toolCallId ?? event.data.callId;
+        if (!searchNames.has(calls.get(id)?.get(callId))) return;
+        calls.get(id)?.delete(callId);
+        const text = JSON.stringify(event.data.message?.content ?? event.data.content ?? event.data.result ?? '');
         for (const match of text.matchAll(/https?:\/\/[^\s"'<>\\)]+/g)) {
           const url = normalizeUrl(match[0]);
           if (url) logOf(id).seen.add(url);

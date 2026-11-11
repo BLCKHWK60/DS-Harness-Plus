@@ -245,6 +245,8 @@ export function apply(ctx, config) {
    * @param {{ok: boolean, ms: number, error?: string}} outcome - probe result.
    */
   function applyOutcome(route, settings, outcome) {
+    // A probe that finishes after the plugin stopped must not move Sessions any more.
+    if (disposed) return;
     const entry = record(route);
     const before = entry.state;
     entry.lastProbeAt = Date.now();
@@ -299,7 +301,8 @@ export function apply(ctx, config) {
       skip: (candidate) => isDown(candidate.provider),
     });
     if (!moved) return null;
-    if (!switched.has(agent.id)) switched.set(agent.id, { tierId: moved.tierId, route });
+    const prior = switched.get(agent.id);
+    switched.set(agent.id, { tierId: moved.tierId, route: prior?.route ?? route, to: moved.to });
     ctx.logger.warn(
       `route-health: ${labelOf(route, readRoutes(config)[route])} is unreachable; ${agent.id} will use ${moved.to.provider}/${moved.to.model}`,
     );
@@ -334,7 +337,14 @@ export function apply(ctx, config) {
           }
           atTurnBoundary(agent, async () => {
             if (isDown(route)) return;
-            const moved = await tiers()?.restorePrimary?.(sessionId, entry.tierId);
+            // If the person picked another model since the fallback, leave their choice alone.
+            const current = agent.model?.current?.();
+            const latest = switched.get(sessionId) ?? entry;
+            if (latest.to && current && (current.provider !== latest.to.provider || current.model !== latest.to.model)) {
+              switched.delete(sessionId);
+              return;
+            }
+            const moved = await tiers()?.restorePrimary?.(sessionId, latest.tierId);
             switched.delete(sessionId);
             if (moved) emit('route/fallback', sessionId, moved.from, moved.to, 'recovered');
           });

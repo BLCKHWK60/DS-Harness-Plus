@@ -13,6 +13,33 @@
  */
 import z from '@deepseek-ai/schemastery';
 
+
+/**
+ * Wait for a started child agent, stopping it when the signal aborts.
+ * The host's own signal only covers start-up, so a running child is stopped through its receipt.
+ * @param {{result: Promise<object>, dispose?: () => Promise<void>}} started - the activation receipt.
+ * @param {AbortSignal | undefined} signal - the caller's signal.
+ * @returns {Promise<object>} the child's result.
+ */
+async function awaitChild(started, signal) {
+  if (!signal) return started.result;
+  let onAbort;
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => {
+      Promise.resolve(started.dispose?.()).catch(() => {});
+      reject(signal.reason instanceof Error ? signal.reason : new Error('Cancelled.'));
+    };
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  });
+  aborted.catch(() => {});
+  try {
+    return await Promise.race([started.result, aborted]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+}
+
 export const name = 'code-power';
 export const inject = ['tools'];
 
@@ -266,7 +293,7 @@ export function apply(ctx, config) {
       signal,
     });
     childIds.add(started.childId);
-    const result = await started.result;
+    const result = await awaitChild(started, signal);
     return (result.output ?? [])
       .filter((block) => block.type === 'text')
       .map((block) => block.text)

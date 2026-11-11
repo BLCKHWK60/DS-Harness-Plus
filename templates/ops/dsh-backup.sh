@@ -71,6 +71,8 @@ trap cleanup EXIT INT TERM
     echo "/profiles/*/cordis.patch.yml"
     echo "/profiles/*/cordis.yml"
     echo "/profiles/*/package.json"
+    # The Plus installer keeps copies of those same files here.
+    echo "/backups/deepseek-harness-plus/"
   fi
 } >"$work/excludes"
 if [ -d "$srcp/attachments" ]; then

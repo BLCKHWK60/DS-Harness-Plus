@@ -290,7 +290,7 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
 .cws-item-sub{margin-top:2px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.45;overflow-wrap:anywhere}
 .cws-chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border:1px solid var(--dsw-alias-border-l3);border-radius:10px;font-size:11px;color:var(--dsw-alias-label-secondary);white-space:nowrap}
 .cws-chip[data-tone=good]{color:var(--dsw-alias-state-success-primary,inherit);border-color:currentColor}
-.cws-chip[data-tone=bad]{color:var(--dsw-alias-state-danger-primary,inherit);border-color:currentColor}
+.cws-chip[data-tone=bad]{color:var(--dsw-alias-state-error-primary,inherit);border-color:currentColor}
 .cws-btn{height:28px;padding:0 10px;border:1px solid var(--dsw-alias-border-l3);border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;font:inherit;font-size:13px;white-space:nowrap}
 .cws-btn:disabled{opacity:.5;cursor:default}
 .cws-switch{position:relative;width:34px;height:20px;flex:none;border:0;border-radius:10px;background:var(--dsw-alias-border-l3);cursor:pointer;padding:0}
@@ -306,7 +306,7 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
 .cws-clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .cws-note{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.5}
 .cws-msg{font-size:12px;color:var(--dsw-alias-label-secondary)}
-.cws-msg[data-tone=bad]{color:var(--dsw-alias-state-danger-primary,inherit)}
+.cws-msg[data-tone=bad]{color:var(--dsw-alias-state-error-primary,inherit)}
 @media (max-width:640px){.cws-form{grid-template-columns:1fr}.cws-item{flex-wrap:wrap}}
 [class*='_fishHitbox']:has([data-cws-hero]){width:auto;height:auto;display:inline-flex;align-items:center}
 [class*='_fishHitbox']:has([data-cws-hero]) + [class*='_titleGroup']{display:none}
@@ -705,7 +705,7 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
         const current = lib.currentId === id;
         return h('div', { key: id, className: 'cws-conv', 'aria-current': current ? 'page' : undefined },
           h('button', { type: 'button', className: 'cws-conv-main', onClick: () => openSession(id), title },
-            sess.running ? h('span', { className: 'cws-dot', 'aria-label': t('running') }) : null,
+            sess.running ? h('span', { className: 'cws-dot', role: 'img', 'aria-label': t('running'), title: t('running') }) : null,
             pinned.has(id) ? h('span', { className: 'cws-pin', 'aria-hidden': true }, '•') : null,
             h('span', { className: 'cws-label' }, title),
             h('span', { className: 'cws-time' }, ago(t, sess.updatedAt))),
@@ -741,7 +741,7 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
             isOpen ? h('div', { className: 'cws-proj-list' }, list(ids, ws.workspaceId, ws)) : null);
         }),
         loose.length ? h(React.Fragment, null,
-          h('div', { className: 'cws-head' }, t('lib.loose')),
+          h('div', { className: 'cws-lib-head' }, h('span', null, t('lib.loose'))),
           list(loose, '__loose', null)) : null);
     }
 
@@ -871,7 +871,7 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
       const key = ['chat', 'cowork', 'code'].includes(state.selected) ? 'new.' + state.selected : 'new.other';
       return h('div', { className: 'cws-lead' },
         h('button', { type: 'button', className: 'cws-icon', 'data-sidebar-opener': '', 'aria-label': t('toggle.open'), onClick: () => appCtx.layout.toggleSidebar() }, h(Glyph, { name: 'panel', size: 16 })),
-        h('button', { type: 'button', className: 'cws-icon', 'aria-label': t(key), onClick: () => appCtx.uiWorkspace.startSession() }, h(Glyph, { name: 'plus', size: 16 })));
+        h('button', { type: 'button', className: 'cws-icon', 'aria-label': t(key), onClick: () => { try { appCtx.layout.selectPanel(null); } catch { /* already there */ } appCtx.uiWorkspace.startSession(); } }, h(Glyph, { name: 'plus', size: 16 })));
     }
 
 

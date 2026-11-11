@@ -64,6 +64,26 @@ function device(config, { registry } = {}) {
 const plainCfg = (remote, extra = {}) => ({ remote, ...extra });
 const walk = (dir, base = dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (e.name === '.git' ? [] : walk(join(dir, e.name), base)) : [join(dir, e.name).slice(base.length + 1)]));
 
+test('an absolute folder path with spaces (iCloud Drive) is a valid remote; a URL with spaces is not', () => {
+  const icloud = '/Users/someone/Library/Mobile Documents/com~apple~CloudDocs/dsh-sync.git';
+  assert.equal(checkRemote(icloud), icloud);
+  assert.throws(() => checkRemote('https://example.com/a b.git'), /spaces/);
+  assert.throws(() => checkRemote('/tmp/a\nb'), /spaces/);
+});
+
+test('plaintext git through a remote folder whose path has spaces', async () => {
+  const parent = join(tmp(), 'Mobile Documents');
+  mkdirSync(parent);
+  const remote = join(parent, 'hub.git');
+  execFileSync('git', ['init', '--bare', '-b', 'main', remote], { stdio: 'ignore' });
+  const a = device(plainCfg(remote));
+  const b = device(plainCfg(remote));
+  a.put('p/s/session.jsonl', 'hello\n');
+  assert.equal((await a.run('push')).kind, 'success');
+  assert.equal((await b.run('pull')).kind, 'success');
+  assert.equal(b.read('p/s/session.jsonl'), 'hello\n');
+});
+
 test('checkRemote and resolveSettings refuse unsafe values', () => {
   assert.equal(checkRemote(''), '');
   assert.equal(checkRemote('git@host:me/repo.git'), 'git@host:me/repo.git');
@@ -188,6 +208,25 @@ test('restore leaves a live file alone when it changed after it was mirrored, an
   assert.deepEqual(walk(sessionRoot).filter((f) => f.endsWith('.tmp')), []);
 });
 
+test('restore leaves a session that is open in the app (session.lock present) for the next pull', async () => {
+  const root = tmp();
+  const sessionRoot = join(root, 'live');
+  const repoDir = join(root, 'repo');
+  mkdirSync(join(sessionRoot, 'p', 's'), { recursive: true });
+  mkdirSync(join(repoDir, '.git'), { recursive: true });
+  writeFileSync(join(sessionRoot, 'p', 's', 'session.jsonl'), 'a\n');
+  await mirrorSessionRoot({ sessionRoot, repoDir, mirrorDir: 'sessions' });
+  writeFileSync(join(repoDir, 'sessions', 'p', 's', 'session.jsonl'), 'a\nremote\n');
+  writeFileSync(join(sessionRoot, 'p', 's', 'session.lock'), '');
+  const open = await restoreSessionRoot({ repoDir, mirrorRoot: join(repoDir, 'sessions'), sessionRoot });
+  assert.deepEqual(open.skippedChanged, ['p/s/session.jsonl']);
+  assert.equal(readFileSync(join(sessionRoot, 'p', 's', 'session.jsonl'), 'utf8'), 'a\n');
+  execFileSync('rm', [join(sessionRoot, 'p', 's', 'session.lock')]);
+  const closed = await restoreSessionRoot({ repoDir, mirrorRoot: join(repoDir, 'sessions'), sessionRoot });
+  assert.equal(closed.restored, 1);
+  assert.equal(readFileSync(join(sessionRoot, 'p', 's', 'session.jsonl'), 'utf8'), 'a\nremote\n');
+});
+
 test('the reserved folder never reaches the live session store', async () => {
   const root = tmp();
   const sessionRoot = join(root, 'live');
@@ -241,6 +280,52 @@ test('encrypted backend: the remote holds only ciphertext, and pulled sessions r
   assert.equal((await b.run('pull')).kind, 'success');
   assert.equal(b.read('p/s/session.jsonl'), 'TOP-SECRET-TEXT\nsecond\nthird\n');
   assert.match((await a.run('status')).text, /transport: encrypted/);
+});
+
+test('encrypted backend: a machine that pulled can push again, both ways, without forcing', async () => {
+  const remote = makeRemote();
+  const age = makeAgeShim();
+  const key = join(tmp(), 'key.txt');
+  writeFileSync(key, 'shim identity');
+  const cfg = { remote, backend: 'encrypted', encryption: 'required', ageBin: age, ageRecipient: 'age1recipient', ageIdentity: key };
+  const a = device(cfg);
+  const b = device(cfg);
+  a.put('p/a/session.jsonl', 'from a\n');
+  assert.equal((await a.run('push')).kind, 'success');
+  b.put('p/b/session.jsonl', 'from b\n');
+  assert.equal((await b.run('pull')).kind, 'success');
+  // Before the fix this push was rejected every time: the pull commit was not a descendant of the remote.
+  const pushedB = await b.run('push');
+  assert.equal(pushedB.kind, 'success', pushedB.text);
+  assert.equal((await a.run('pull')).kind, 'success');
+  assert.equal(a.read('p/b/session.jsonl'), 'from b\n');
+  a.add('p/a/session.jsonl', 'more from a\n');
+  const pushedA = await a.run('push');
+  assert.equal(pushedA.kind, 'success', pushedA.text);
+  assert.equal((await b.run('pull')).kind, 'success');
+  assert.equal(b.read('p/a/session.jsonl'), 'from a\nmore from a\n');
+  // No merge left half-done in either repository.
+  assert.throws(() => git(b.repo, 'rev-parse', '--verify', '-q', 'MERGE_HEAD'));
+});
+
+test('encrypted backend: pushing again with nothing changed adds no commit (no re-encryption churn)', async () => {
+  const remote = makeRemote();
+  const age = makeAgeShim();
+  const key = join(tmp(), 'key.txt');
+  writeFileSync(key, 'shim identity');
+  const a = device({ remote, backend: 'encrypted', encryption: 'required', ageBin: age, ageRecipient: 'age1recipient', ageIdentity: key });
+  a.put('p/s/session.jsonl', 'one\n');
+  a.put('p/t/session.jsonl', 'two\n');
+  assert.equal((await a.run('push')).kind, 'success');
+  const first = git(remote, 'rev-parse', 'main').trim();
+  const before = statSync(join(a.repo, 'encrypted', 'p', 't', 'session.jsonl.age')).mtimeMs;
+  assert.equal((await a.run('push')).kind, 'success');
+  assert.equal(git(remote, 'rev-parse', 'main').trim(), first, 'nothing changed, so nothing new was pushed');
+  a.add('p/s/session.jsonl', 'more\n');
+  assert.equal((await a.run('push')).kind, 'success');
+  const changed = git(remote, 'diff', '--name-only', first, 'main').trim().split('\n');
+  assert.deepEqual(changed, ['encrypted/p/s/session.jsonl.age'], 'only the changed session was re-encrypted');
+  assert.equal(statSync(join(a.repo, 'encrypted', 'p', 't', 'session.jsonl.age')).mtimeMs, before);
 });
 
 test('encryption optional with encrypted backend but no age: it still works, in plaintext, with a loud warning', async () => {

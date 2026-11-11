@@ -100,7 +100,9 @@ function plain(value) {
 export function checkRemote(remote) {
   const value = String(remote ?? '').trim()
   if (!value) return ''
-  if (/[\s\0]/.test(value) || value.startsWith('-')) throw badConfig('remote must be one git URL or path (no spaces, not starting with "-")')
+  // An absolute folder path may contain spaces (iCloud Drive's is ".../Mobile Documents/..."); URLs may not.
+  const localPath = value.startsWith('/')
+  if ((localPath ? /[\0\r\n\t]/ : /[\s\0]/).test(value) || value.startsWith('-')) throw badConfig('remote must be one git URL or path (spaces only in an absolute folder path, not starting with "-")')
   if (/^[A-Za-z][A-Za-z0-9+.-]*::/.test(value)) throw badConfig('remote: git transport helpers ("ext::" and similar) are not allowed')
   const scheme = value.match(/^([A-Za-z][A-Za-z0-9+.-]*):\/\//)
   if (scheme) {
@@ -311,7 +313,7 @@ export function apply(ctx, config) {
                 const result = await service.pull(options)
                 const lines = [renderPull(result)]
                 if (result.ok && (result.restored ?? 0) > 0) lines.push(`  copied ${result.restored} session file(s) into this machine's session store`)
-                if (result.restoredSkipped?.length) lines.push(`  left ${result.restoredSkipped.length} live session file(s) alone because they changed during the pull; pull again when they are idle`)
+                if (result.restoredSkipped?.length) lines.push(`  left ${result.restoredSkipped.length} live session file(s) alone because they are open in the app or changed during the pull; pull again when those conversations are closed`)
                 if (result.projectPlan?.some((item) => item.state === 'create')) lines.push(`  ${result.projectPlan.filter((item) => item.state === 'create').length} project(s) from other devices can be added: /${settings.commandName} projects`)
                 return { kind: result.ok ? 'success' : 'error', text: withWarnings(lines.join('\n'), result) }
               }

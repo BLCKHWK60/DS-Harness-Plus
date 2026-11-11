@@ -21,6 +21,33 @@
  */
 import z from '@deepseek-ai/schemastery';
 
+
+/**
+ * Wait for a started child agent, stopping it when the signal aborts.
+ * The host's own signal only covers start-up, so a running child is stopped through its receipt.
+ * @param {{result: Promise<object>, dispose?: () => Promise<void>}} started - the activation receipt.
+ * @param {AbortSignal | undefined} signal - the caller's signal.
+ * @returns {Promise<object>} the child's result.
+ */
+async function awaitChild(started, signal) {
+  if (!signal) return started.result;
+  let onAbort;
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => {
+      Promise.resolve(started.dispose?.()).catch(() => {});
+      reject(signal.reason instanceof Error ? signal.reason : new Error('Cancelled.'));
+    };
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  });
+  aborted.catch(() => {});
+  try {
+    return await Promise.race([started.result, aborted]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+}
+
 export const name = 'agent-swarm';
 export const inject = ['tools'];
 
@@ -338,7 +365,7 @@ export function apply(ctx, config) {
     run.children.add(started.childId);
     onChild?.(started.childId);
     run.check();
-    const result = await started.result;
+    const result = await awaitChild(started, signal);
     const text = (result.output ?? [])
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
@@ -570,10 +597,23 @@ export function apply(ctx, config) {
   // Tell the model which swarm suits the session's mode.
   const byMode = cfg0.defaultSwarmByMode ?? {};
   if (Object.keys(byMode).length > 0) {
+    const owned = new Map();
+    ctx.effect(() => () => {
+      for (const dispose of owned.values()) {
+        try {
+          dispose?.();
+        } catch {
+          // The Agent context may already be unwinding.
+        }
+      }
+      owned.clear();
+    }, 'agent-swarm section ownership');
+    ctx.on('agent/disposed', ({ agent }) => owned.delete(agent?.id));
     const install = (agent) => {
       const agentCtx = agent?.ctx;
-      if (!agentCtx?.systemPrompt) return;
-      agentCtx.effect(
+      if (!agentCtx?.systemPrompt || owned.has(agent.id)) return;
+      try {
+      owned.set(agent.id, agentCtx.effect(
         () =>
           agentCtx.systemPrompt.section({
             name: 'agent-swarm:hint',
@@ -585,7 +625,10 @@ export function apply(ctx, config) {
             },
           }),
         'agent-swarm hint',
-      );
+      ));
+      } catch (error) {
+        ctx.logger?.warn?.(`agent-swarm: hint not added: ${error?.message ?? error}`);
+      }
     };
     ctx.on('agent/created', ({ agent }) => install(agent));
     for (const agent of ctx.get('agents')?.list() ?? []) install(agent);

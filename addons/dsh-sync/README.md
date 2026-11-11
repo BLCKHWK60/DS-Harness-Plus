@@ -13,7 +13,7 @@ It is a **reviewed and changed fork** of `dsh-session-sync` 0.2.32 (PerryLink, A
 ```yaml
 - id: sync
   config:
-    remote: <GIT REMOTE>              # a URL or a path to a bare repository; NO credentials in it (use git's credential helper or an ssh key)
+    remote: <GIT REMOTE>              # a URL or an absolute path to a bare repository (a path may contain spaces); NO credentials in it
     backend: git                      # git = plaintext | encrypted = age
     encryption: optional              # optional | required
     ageRecipient: <AGE PUBLIC KEY>    # backend: encrypted
@@ -82,4 +82,11 @@ With `projects.sync: true`, each machine writes one manifest of its projects (ti
 
 ## Checked
 
-20 unit tests with real git on temporary "machines" and a bare remote: config refusals, no remote, sessions both ways byte-identical and no false conflicts, the plaintext warning everywhere, append-both conflict kept as a fork file never written into the live store, push rejection recovery without forcing, restore skipping a live file that grew, reserved folder never restored, `required` with age missing (the remote receives nothing), encrypted round trip (remote holds only ciphertext, secret text not found in it, pulled sessions arrive), `optional` degraded with a loud reason, project manifests (mapping, plan states, nothing created until asked, `autoCreate`, ciphertext only on the remote), auto push debounce (sub-agents and replayed history ignored), state file private and stable, no key text in saved files. **Live in real dsh headless (two throwaway homes sharing a bare remote):** a real session pushed from one home, pulled into the other (byte-identical zstd log), continued there with `--session-id`, pushed back, pulled and resumed on the first (byte-identical again); when both sides had continued the same session, the pull kept the local copy and made a fork file, as designed.
+25 unit tests with real git on temporary "machines" and a bare remote: config refusals, no remote, sessions both ways byte-identical and no false conflicts, the plaintext warning everywhere, append-both conflict kept as a fork file never written into the live store, push rejection recovery without forcing, restore skipping a live file that grew, restore leaving a conversation open in the app (its `session.lock`) for the next pull, an encrypted machine that pulled pushing again (two-parent merge commit), no re-encryption of unchanged files, a remote folder whose path has spaces, reserved folder never restored, `required` with age missing (the remote receives nothing), encrypted round trip (remote holds only ciphertext, secret text not found in it, pulled sessions arrive), `optional` degraded with a loud reason, project manifests (mapping, plan states, nothing created until asked, `autoCreate`, ciphertext only on the remote), auto push debounce (sub-agents and replayed history ignored), state file private and stable, no key text in saved files. **Live in real dsh headless (two throwaway homes sharing a bare remote):** a real session pushed from one home, pulled into the other (byte-identical zstd log), continued there with `--session-id`, pushed back, pulled and resumed on the first (byte-identical again); when both sides had continued the same session, the pull kept the local copy and made a fork file, as designed.
+
+## Changes in Plus 0.8.0
+
+- **Encrypted backend, push after pull:** a pull now records the remote head as a second parent. Before, the pull commit was not a descendant of the remote, so every later push from that machine was rejected as "remote moved".
+- **Encrypted backend, no churn:** age output differs on every run, so each push re-encrypted (and re-committed) every session. A cache inside `.git` now skips files whose content did not change.
+- **Open conversations:** a pull no longer replaces the files of a conversation that is open in the app (it holds a `session.lock`); they are listed as left alone and arrive on the next pull.
+- **Paths with spaces:** an absolute folder path may now contain spaces, so a bare repository in iCloud Drive (`~/Library/Mobile Documents/com~apple~CloudDocs/...`) works as the remote. URLs still may not.

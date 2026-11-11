@@ -36,7 +36,6 @@ say "$PLUS_NAME uninstaller"
 step "Checking $APP_NAME"
 find_app
 pick_home
-make_sure_app_is_closed
 
 # Every package name this release ships, taken from this folder.
 NAMES=$(list_addons "$HERE/addons" | cut -f1)
@@ -47,11 +46,15 @@ INSTALLED=$(app_node -e '
   const deps = JSON.parse(fs.readFileSync(file, "utf8")).dependencies || {};
   for (const n of names.split("\n").filter(Boolean)) if (n in deps) console.log(n);
   ' "$PROFILE_DIR/package.json" "$NAMES")
+# Plus add-ons an older release installed that this folder no longer lists.
+EXTRA=$(stale_addons "$PROFILE_DIR/package.json" "$ADDONS_DIR" "$INSTALLED")
+[ -n "$EXTRA" ] && INSTALLED=$(printf '%s\n%s\n' "$INSTALLED" "$EXTRA" | grep . | sort -u)
 
 if [ -z "$INSTALLED" ] && [ ! -d "$ADDONS_DIR" ]; then
   say "Nothing to remove: no $PLUS_NAME add-ons are installed."
   exit 0
 fi
+make_sure_app_is_closed
 ask_yes "Remove $(printf '%s\n' "$INSTALLED" | grep -c .) add-ons from $APP_NAME?" || fail "Nothing was changed."
 
 step "Backing up your current setup"

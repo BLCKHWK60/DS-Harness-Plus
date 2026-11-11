@@ -215,7 +215,7 @@ export function apply(ctx, config) {
       writeFileSync(temp, JSON.stringify(round), { mode: 0o600 });
       renameSync(temp, file);
     } catch (error) {
-      ctx.logger?.('model-arena')?.warn?.(`could not save round ${round.id}: ${error.message}`);
+      ctx.logger?.warn?.(`model-arena: could not save round ${round.id}: ${error.message}`);
     }
   }
 
@@ -309,7 +309,9 @@ export function apply(ctx, config) {
         if (chunk.type === 'text-delta') text += chunk.text;
         else if (chunk.type === 'usage') usage = chunk.usage;
         else if (chunk.type === 'finish' && chunk.reason?.kind === 'error') throw new Error(chunk.reason.failure?.message ?? 'model error');
+        else if (chunk.type === 'finish' && chunk.reason?.kind === 'aborted') break;
       }
+      if (options.signal?.aborted) throw new Error('cancelled');
       if (abort.signal.aborted) throw new Error('timed out');
     } finally {
       clearTimeout(timer);
@@ -391,6 +393,8 @@ export function apply(ctx, config) {
       } finally {
         inflight.delete(id);
       }
+      // A cancelled round is dropped, not saved as a round of failed answers.
+      if (signal?.aborted) throw new Error('cancelled');
       const round = { id, createdAt: Date.now(), prompt: text, slots, judge: null, pick: null, revealed: false };
       rounds.set(id, round);
       latest = id;

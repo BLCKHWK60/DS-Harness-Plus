@@ -299,6 +299,20 @@ export async function pruneRestoredSessions(deps) {
  * @param {object} deps - {repoDir, mirrorRoot, sessionRoot, forkNameRe?}.
  * @returns {Promise<{restored: number, unchanged: number, skipped: number, tracked: number, skippedChanged: string[]}>}
  */
+/**
+ * Whether the app has the session in this folder open (its lease file exists).
+ * @param {string} dir - live session folder.
+ * @returns {Promise<boolean>}
+ */
+async function isOpenSession(dir) {
+  try {
+    await fs.access(path.join(dir, 'session.lock'))
+    return true
+  } catch {
+    return false
+  }
+}
+
 export async function restoreSessionRoot(deps) {
   const forkRe = deps.forkNameRe ?? FORK_NAME_RE
   let entries
@@ -323,6 +337,16 @@ export async function restoreSessionRoot(deps) {
     // dsh-sync addition: the plugin's own files never go into the live store.
     if (rel === RESERVED_DIR || rel.startsWith(`${RESERVED_DIR}/`)) { skipped += 1; continue }
     const target = path.join(deps.sessionRoot, ...rel.split('/'))
+    // dsh-sync addition: a session that is open in the app holds a session.lock beside its files. The app keeps
+    // that session in memory, so a file replaced underneath it would be overwritten or ignored. Leave it for the
+    // next pull, when the session is closed.
+    if (await isOpenSession(path.dirname(target))) {
+      const content = await fs.readFile(absolute)
+      const live = await fs.readFile(target).catch(() => undefined)
+      if (live !== undefined && live.equals(content)) { unchanged += 1; continue }
+      skippedChanged.push(rel)
+      continue
+    }
     let existed = false
     try {
       const st = await fs.lstat(target)

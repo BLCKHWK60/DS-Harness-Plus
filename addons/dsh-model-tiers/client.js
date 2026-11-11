@@ -945,13 +945,25 @@ window.__ModuleLoader__.load({
       return undefined;
     }
 
+    /**
+     * Write settings. `operations` may be a function `(config) => ops`: on a revision conflict it is
+     * rebuilt from the freshly loaded config, so a retry never overwrites a newer change.
+     */
     async function mutateSettings(ctx, operations, revision) {
       let current = revision;
-      let result = await ctx.remote.settings.mutate(NS, operations, current);
+      const first = typeof operations === 'function' ? null : operations;
+      let ops = first;
+      if (typeof operations === 'function') {
+        const fresh = await loadSettings(ctx);
+        current = fresh.revision;
+        ops = operations(fresh.config);
+      }
+      let result = await ctx.remote.settings.mutate(NS, ops, current);
       if (!result.ok && result.error.code === 'settings/conflict') {
         const fresh = await loadSettings(ctx);
         current = fresh.revision;
-        result = await ctx.remote.settings.mutate(NS, operations, current);
+        if (typeof operations === 'function') ops = operations(fresh.config);
+        result = await ctx.remote.settings.mutate(NS, ops, current);
       }
       if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
       return { config: normalizeConfig(result.value.value), revision: result.value.revision };
@@ -3631,22 +3643,19 @@ window.__ModuleLoader__.load({
         setState((prev) => ({ ...prev, busy: 'apply', error: null }));
         let saved;
         try {
-          const nextMap = {
-            ...config.activeTiers,
-            [sessionId]: {
-              tier: tierId ?? null,
-              provider,
-              model,
-              effort,
-              ...(typeof temperature === 'number' ? { temperature } : {}),
-              ...(typeof maxTokens === 'number' && maxTokens > 0
-                ? { maxTokens: Math.floor(maxTokens) }
-                : {}),
-            },
+          const entry = {
+            tier: tierId ?? null,
+            provider,
+            model,
+            effort,
+            ...(typeof temperature === 'number' ? { temperature } : {}),
+            ...(typeof maxTokens === 'number' && maxTokens > 0
+              ? { maxTokens: Math.floor(maxTokens) }
+              : {}),
           };
           saved = await mutateSettings(
             appCtx,
-            [{ op: 'set', path: ['activeTiers'], value: JSON.stringify(nextMap) }],
+            (latest) => [{ op: 'set', path: ['activeTiers'], value: JSON.stringify({ ...latest.activeTiers, [sessionId]: entry }) }],
             state.revision,
           );
           const catalogModel = findCatalogModel(state.catalog, provider, model);
@@ -3670,9 +3679,16 @@ window.__ModuleLoader__.load({
           // override behind; restore the previous map when the write landed.
           if (saved) {
             try {
+              // Put back only this Session's previous entry; leave every other Session as it is now.
+              const previous = config.activeTiers?.[sessionId];
               await mutateSettings(
                 appCtx,
-                [{ op: 'set', path: ['activeTiers'], value: JSON.stringify(config.activeTiers) }],
+                (latest) => {
+                  const next = { ...latest.activeTiers };
+                  if (previous === undefined) delete next[sessionId];
+                  else next[sessionId] = previous;
+                  return [{ op: 'set', path: ['activeTiers'], value: JSON.stringify(next) }];
+                },
                 saved.revision,
               );
             } catch {
@@ -3770,13 +3786,15 @@ window.__ModuleLoader__.load({
       const setProfile = async (profileId) => {
         if (!config) return;
         setState((prev) => ({ ...prev, busy: 'profile', error: null }));
-        const nextMap = { ...config.sessionProfiles };
-        if (profileId) nextMap[sessionId] = profileId;
-        else delete nextMap[sessionId];
         try {
           const saved = await mutateSettings(
             appCtx,
-            [{ op: 'set', path: ['sessionProfiles'], value: JSON.stringify(nextMap) }],
+            (latest) => {
+              const nextMap = { ...latest.sessionProfiles };
+              if (profileId) nextMap[sessionId] = profileId;
+              else delete nextMap[sessionId];
+              return [{ op: 'set', path: ['sessionProfiles'], value: JSON.stringify(nextMap) }];
+            },
             state.revision,
           );
           const nextProfile = profileId
@@ -3808,11 +3826,13 @@ window.__ModuleLoader__.load({
         if (!config) return;
         setState((prev) => ({ ...prev, busy: 'clear', error: null }));
         try {
-          const nextMap = { ...config.activeTiers };
-          delete nextMap[sessionId];
           const saved = await mutateSettings(
             appCtx,
-            [{ op: 'set', path: ['activeTiers'], value: JSON.stringify(nextMap) }],
+            (latest) => {
+              const nextMap = { ...latest.activeTiers };
+              delete nextMap[sessionId];
+              return [{ op: 'set', path: ['activeTiers'], value: JSON.stringify(nextMap) }];
+            },
             state.revision,
           );
           setState((prev) => ({ ...prev, busy: null, config: saved.config, revision: saved.revision, error: null }));

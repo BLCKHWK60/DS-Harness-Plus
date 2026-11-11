@@ -390,11 +390,17 @@ export function apply(ctx, config) {
   }, 'modes ownership');
 
   // Apply the mode to a new or resumed Agent before its first step.
+  // The app waits for these listeners before a Session opens, and a failure here would stop it
+  // opening: never throw, and do the one-off cleanup in the background.
   ctx.on('agent/created', async ({ agent }) => {
-    if (neverRan(agent)) fresh.add(agent.id);
-    installPrompt(agent);
-    await applyMode(agent, modeOf(agent.id), false);
-    await pruneStale();
+    try {
+      if (neverRan(agent)) fresh.add(agent.id);
+      installPrompt(agent);
+      await applyMode(agent, modeOf(agent.id), false);
+    } catch (error) {
+      report(error);
+    }
+    void pruneStale().catch(report);
   });
   for (const agent of ctx.get('agents')?.list() ?? []) {
     if (neverRan(agent)) fresh.add(agent.id);
@@ -483,23 +489,26 @@ export function apply(ctx, config) {
     if (!persistence || !settings) return;
     try {
       const live = new Set((ctx.get('agents')?.list() ?? []).map((agent) => agent.id));
-      const keep = {};
-      let dropped = 0;
-      for (const [sessionId, value] of Object.entries(readObject(config.sessionModes))) {
-        let missing = false;
-        if (!live.has(sessionId)) {
-          try {
-            missing = (await persistence.stat(sessionId)) === undefined;
-          } catch {
-            missing = false;
-          }
+      const fields = ['sessionModes', 'sessionWeb', 'sessionResearch'];
+      const ids = new Set(fields.flatMap((field) => Object.keys(readObject(config[field]))));
+      const gone = new Set();
+      for (const sessionId of ids) {
+        if (live.has(sessionId)) continue;
+        try {
+          if ((await persistence.stat(sessionId)) === undefined) gone.add(sessionId);
+        } catch {
+          // keep it when unsure
         }
-        if (missing) dropped += 1;
-        else keep[sessionId] = value;
       }
-      if (dropped > 0) {
-        await settings.mutate('modes', [{ op: 'set', path: ['sessionModes'], value: JSON.stringify(keep) }]);
-        ctx.logger.info(`modes: pruned ${dropped} stale session entries`);
+      if (gone.size > 0) {
+        // Build from the current values (they may have changed while checking) and drop only the gone ids.
+        const ops = fields.map((field) => {
+          const next = { ...readObject(config[field]) };
+          for (const id of gone) delete next[id];
+          return { op: 'set', path: [field], value: JSON.stringify(next) };
+        });
+        await settings.mutate('modes', ops);
+        ctx.logger.info(`modes: pruned ${gone.size} stale session entries`);
       }
     } catch (error) {
       report(error);

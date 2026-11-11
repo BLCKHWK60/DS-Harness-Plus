@@ -310,6 +310,16 @@ window.__ModuleLoader__.load({
 
     const COLOUR = /^(#[0-9a-fA-F]{3,8}|(rgb|rgba|hsl|hsla|oklch|oklab|color-mix|var)\([^;{}<>]*\)|transparent)$/;
     const NAME = /^--[a-z0-9-]{3,80}$/;
+    /** A colour value only: no url(), images, comments or escapes, and the browser must accept it as a colour. */
+    function isColour(value) {
+      if (!COLOUR.test(value) || /url\(|image|\/\*|\\/i.test(value)) return false;
+      if (value.startsWith('var(')) return true; // resolved later; the name pattern above keeps it a plain reference
+      try {
+        return typeof CSS === 'undefined' || CSS.supports('color', value);
+      } catch {
+        return false;
+      }
+    }
 
     /** Validate a custom scheme; throws with a readable message. */
     function parseCustom(text) {
@@ -320,7 +330,7 @@ window.__ModuleLoader__.load({
         if (!map || typeof map !== 'object' || Array.isArray(map)) throw new Error(`"${mode}" must be an object`);
         for (const [name, value] of Object.entries(map)) {
           if (!NAME.test(name)) throw new Error(`"${name}" is not a colour name`);
-          if (typeof value !== 'string' || !COLOUR.test(value.trim())) throw new Error(`"${name}": "${value}" is not a colour`);
+          if (typeof value !== 'string' || !isColour(value.trim())) throw new Error(`"${name}": "${value}" is not a colour`);
           out[mode][name] = value.trim();
         }
       }
@@ -462,6 +472,7 @@ window.__ModuleLoader__.load({
 .dsh-cs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
 .dsh-cs-card{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;cursor:pointer;background:var(--dsw-alias-bg-layer-1)}
 .dsh-cs-card[aria-checked='true']{border-color:var(--dsw-alias-state-business-primary);box-shadow:0 0 0 1px var(--dsw-alias-state-business-primary)}
+.dsh-cs-card:disabled{opacity:.5;cursor:default}
 .dsh-cs-card:focus-visible{outline:2px solid var(--dsw-focus-ring-color,currentColor);outline-offset:2px}
 .dsh-cs-name{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:600}
 .dsh-cs-chip{font-size:11px;font-weight:500;padding:1px 7px;border-radius:9px;border:1px solid currentColor;color:var(--dsw-alias-state-business-primary)}

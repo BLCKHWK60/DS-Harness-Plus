@@ -98,3 +98,21 @@ list_addons() {
       if (pkg.dsh && pkg.dsh.bundle) console.log(pkg.name + "\t" + path.join(dir, entry));
     }' "$1"
 }
+
+# Plus add-ons the setup lists (linked into the Plus folder) that are not in the given list.
+# Args: package.json, Plus add-on folder, "name<TAB>folder" lines. Prints one name per line.
+stale_addons() {
+  app_node -e '
+    const fs = require("fs"), path = require("path");
+    const [file, dir, list] = process.argv.slice(1);
+    const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+    const keep = new Set(list.split("\n").filter(Boolean).map((line) => line.split("\t")[0]));
+    const root = real(dir) + path.sep;
+    const deps = JSON.parse(fs.readFileSync(file, "utf8")).dependencies || {};
+    for (const [name, spec] of Object.entries(deps)) {
+      const linked = String(spec).startsWith("link:") ? String(spec).slice(5) : "";
+      if (!linked || keep.has(name)) continue;
+      const parent = real(path.dirname(linked)) + path.sep;
+      if (parent === root || real(linked).startsWith(root)) console.log(name);
+    }' "$1" "$2" "$3"
+}

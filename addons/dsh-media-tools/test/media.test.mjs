@@ -50,8 +50,8 @@ test('sniffImage, isPublicAddress, checkSize, parseImages', () => {
   assert.equal(sniffImage(Buffer.from('<html>')), null);
   const webp = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP')]);
   assert.equal(sniffImage(webp).ext, 'webp');
-  for (const ip of ['127.0.0.1', '10.1.1.1', '192.168.0.4', '172.16.0.1', '172.31.255.255', '169.254.169.254', '100.64.0.1', '0.0.0.0', '224.0.0.1', '::1', '::', 'fe80::1', 'fd00::1', '::ffff:10.0.0.1', '2001:db8::1', 'not-an-ip']) assert.equal(isPublicAddress(ip), false, ip);
-  for (const ip of ['8.8.8.8', '1.1.1.1', '172.32.0.1', '2606:4700::1111', '::ffff:8.8.8.8']) assert.equal(isPublicAddress(ip), true, ip);
+  for (const ip of ['127.0.0.1', '10.1.1.1', '192.168.0.4', '172.16.0.1', '172.31.255.255', '169.254.169.254', '100.64.0.1', '0.0.0.0', '224.0.0.1', '::1', '::', 'fe80::1', 'fd00::1', '::ffff:10.0.0.1', '2001:db8::1', 'not-an-ip', '::ffff:7f00:1', '::7f00:1', '64:ff9b::a9fe:a9fe', '2002:7f00:1::', 'fec0::1', '::ffff:0:a00:1', '2001:0:4136:e378::1', '::ffff:169.254.169.254']) assert.equal(isPublicAddress(ip), false, ip);
+  for (const ip of ['8.8.8.8', '1.1.1.1', '172.32.0.1', '2606:4700::1111', '::ffff:8.8.8.8', '::ffff:808:808', '2002:808:808::1', '2a00:1450:4001::200e']) assert.equal(isPublicAddress(ip), true, ip);
   assert.equal(checkSize(undefined), undefined);
   assert.equal(checkSize('1024x1024'), '1024x1024');
   assert.throws(() => checkSize('big'), /WIDTHxHEIGHT/);

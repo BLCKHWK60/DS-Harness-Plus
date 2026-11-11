@@ -15,6 +15,7 @@
 // - 加密模式下 age 加解密失败 → AGE_FAILED fail closed，绝不回退明文传输。
 
 import { promises as fs } from 'node:fs'
+import { createHash } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
 import { BACKENDS, ENC_DIR, ENC_EXT, FORK_NAME_RE, MERGE_KINDS, MIRROR_DIR } from './constants.mjs'
@@ -90,19 +91,47 @@ export async function encryptTree(plainRoot, encRoot, deps) {
   for (const rel of await listRelFiles(encRoot)) {
     if (!expected.has(rel)) await fs.unlink(path.join(encRoot, ...rel.split('/')))
   }
+  // dsh-sync addition: age output differs on every run, so re-encrypting an unchanged file gave git a new
+  // blob each push and the sync repository grew by the whole session store every time. A small cache
+  // (outside the tracked tree) remembers which plaintext each ciphertext holds; unchanged files are skipped.
+  const cache = deps.cacheFile ? await readEncCache(deps.cacheFile) : {}
+  const next = {}
   for (const rel of plainFiles) {
     await fs.mkdir(encRoot, { recursive: true })
+    const inPath = path.join(plainRoot, ...rel.split('/'))
     const outPath = path.join(encRoot, ...`${rel}${ENC_EXT}`.split('/'))
+    const digest = createHash('sha256').update(deps.recipient ?? '').update('\0').update(await fs.readFile(inPath)).digest('hex')
+    const known = cache[rel]
+    if (known && known.digest === digest) {
+      const st = await fs.stat(outPath).catch(() => undefined)
+      if (st && st.size === known.size && st.mtimeMs === known.mtimeMs) {
+        next[rel] = known
+        continue
+      }
+    }
     await fs.mkdir(path.dirname(outPath), { recursive: true })
     await ageEncrypt(deps.run, {
       ageBin: deps.ageBin,
       recipient: deps.recipient,
-      inPath: path.join(plainRoot, ...rel.split('/')),
+      inPath,
       outPath,
       timeoutMs: deps.timeoutMs,
     })
+    const st = await fs.stat(outPath)
+    next[rel] = { digest, size: st.size, mtimeMs: st.mtimeMs }
   }
+  if (deps.cacheFile) await fs.writeFile(deps.cacheFile, JSON.stringify(next))
   return plainFiles.length
+}
+
+/** Read the encryption cache; a missing or damaged file means "encrypt everything". */
+async function readEncCache(file) {
+  try {
+    const data = JSON.parse(await fs.readFile(file, 'utf8'))
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : {}
+  } catch {
+    return {}
+  }
 }
 
 /**
@@ -342,6 +371,8 @@ export class EncryptedBackend {
       ageBin: this.#ageBin,
       recipient: this.#recipient,
       timeoutMs: this.#timeoutMs,
+      // Inside .git, so it is never committed or synced.
+      cacheFile: path.join(this.#repoDir, '.git', 'dsh-sync-encrypt-cache.json'),
     })
   }
 
@@ -510,30 +541,44 @@ export class EncryptedBackend {
     // fork 路径统一加 sessions/ 前缀，与 git 后端的 ls-files 约定一致（handleForks
     // 与展示都依赖该前缀）。
     const forks = rawForks.map(rel => `${MIRROR_DIR}/${rel}`)
-    await writeTree(path.join(this.#repoDir, MIRROR_DIR), merged)
-    // dsh-sync fix: the original encrypted backend merged into the worktree but never copied the result into the live
-    // session store, so sessions pulled from another device never appeared. Same step as the plaintext engine.
-    const mirrorRoot = path.join(this.#repoDir, MIRROR_DIR)
-    const pruned = await pruneRestoredSessions({ repoDir: this.#repoDir, mirrorRoot, sessionRoot: this.#sessionRoot })
-    const restored = await restoreSessionRoot({ repoDir: this.#repoDir, mirrorRoot, sessionRoot: this.#sessionRoot })
-    await this.#encryptMirror()
-    const newHead = await this.#git.commitAll('dsh-sync: pull merge (encrypted)')
-    await this.#git.setRef(BASE_REF, remoteHead)
-    this.#reportMeta({ lastPullAt: Date.now() })
-    this.#logger.info(`sync pull ok (encrypted): merged remote head ${remoteHead} → ${newHead ?? ''} (${appended} appended-both, ${diverged} diverged, ${forks.length} forks)`)
-    if (forks.length > 0) this.#onForks(forks)
-    return {
-      ok: true,
-      pulled: true,
-      merged: true,
-      adopted,
-      appended,
-      diverged,
-      forks,
-      restored: restored.restored,
-      restoredSkipped: restored.skippedChanged,
-      head: newHead ?? undefined,
-      warnings: this.#warnings,
+    // dsh-sync fix: record the remote head as a second parent. Without it the pull commit is not a
+    // descendant of the remote, so every later push was rejected as "remote moved".
+    const merging = await this.#git.beginOursMerge(remoteHead)
+    try {
+      await writeTree(path.join(this.#repoDir, MIRROR_DIR), merged)
+      // dsh-sync fix: the original encrypted backend merged into the worktree but never copied the result into the live
+      // session store, so sessions pulled from another device never appeared. Same step as the plaintext engine.
+      const mirrorRoot = path.join(this.#repoDir, MIRROR_DIR)
+      const pruned = await pruneRestoredSessions({ repoDir: this.#repoDir, mirrorRoot, sessionRoot: this.#sessionRoot })
+      const restored = await restoreSessionRoot({ repoDir: this.#repoDir, mirrorRoot, sessionRoot: this.#sessionRoot })
+      await this.#encryptMirror()
+      let newHead
+      if (merging) {
+        await this.#git.addAll()
+        newHead = await this.#git.commitMerge()
+      } else {
+        newHead = await this.#git.commitAll('dsh-sync: pull merge (encrypted)')
+      }
+      await this.#git.setRef(BASE_REF, remoteHead)
+      this.#reportMeta({ lastPullAt: Date.now() })
+      this.#logger.info(`sync pull ok (encrypted): merged remote head ${remoteHead} → ${newHead ?? ''} (${appended} appended-both, ${diverged} diverged, ${forks.length} forks)`)
+      if (forks.length > 0) this.#onForks(forks)
+      return {
+        ok: true,
+        pulled: true,
+        merged: true,
+        adopted,
+        appended,
+        diverged,
+        forks,
+        restored: restored.restored,
+        restoredSkipped: restored.skippedChanged,
+        head: newHead ?? undefined,
+        warnings: this.#warnings,
+      }
+    } catch (error) {
+      await this.#git.abortMerge().catch(() => {})
+      throw error
     }
   }
 }

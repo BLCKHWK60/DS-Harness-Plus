@@ -3,7 +3,7 @@ window.__ModuleLoader__.load({
   factory(require) {
     const React = require('react');
     const h = React.createElement;
-    const { useCallback, useEffect, useState } = React;
+    const { useCallback, useEffect, useRef, useState } = React;
 
     const NS = 'modes';
     const FALLBACK_MODES = [
@@ -193,16 +193,25 @@ window.__ModuleLoader__.load({
       const refresh = useCallback(async () => {
         try {
           const loaded = await load(appCtx);
-          setState({ status: 'ready', view: loaded.value, revision: loaded.revision, busy: false, shell: loaded.shell });
+          // A refresh never ends a switch that is still being saved.
+          setState((prev) => (prev.busy ? prev : { status: 'ready', view: loaded.value, revision: loaded.revision, busy: false, shell: loaded.shell }));
         } catch {
-          setState((prev) => ({ ...prev, status: 'error', busy: false }));
+          setState((prev) => ({ ...prev, status: prev.view ? prev.status : 'error' }));
         }
       }, [appCtx]);
+      const shellRef = useRef(false);
+      shellRef.current = state.shell;
 
       // Re-read now and every few seconds, so a switch made with the /mode command shows up.
+      // Hidden windows skip it; with the Cowork sidebar on (selector hidden) it checks only every 30 s.
       useEffect(() => {
         void refresh();
-        const timer = setInterval(() => void refresh(), 3000);
+        let ticks = 0;
+        const timer = setInterval(() => {
+          ticks += 1;
+          // With the Cowork sidebar on, only check now and then whether it was switched off.
+          if (!document.hidden && (!shellRef.current || ticks % 10 === 0)) void refresh();
+        }, 3000);
         return () => clearInterval(timer);
       }, [refresh, sessionId]);
 
@@ -210,13 +219,13 @@ window.__ModuleLoader__.load({
         if (!sessionId || state.busy) return;
         setState((prev) => ({ ...prev, busy: true }));
         try {
+          // Build the write from the latest value, and rebuild it if someone else wrote in between.
+          const build = (value) => [{ op: 'set', path: ['sessionModes'], value: JSON.stringify({ ...readObject(value.sessionModes), [sessionId]: modeId }) }];
           let fresh = await load(appCtx);
-          const next = { ...readObject(fresh.value.sessionModes), [sessionId]: modeId };
-          const op = [{ op: 'set', path: ['sessionModes'], value: JSON.stringify(next) }];
-          let result = await appCtx.remote.settings.mutate(NS, op, fresh.revision);
+          let result = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
           if (!result.ok && result.error.code === 'settings/conflict') {
             fresh = await load(appCtx);
-            result = await appCtx.remote.settings.mutate(NS, op, fresh.revision);
+            result = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
           }
           if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
           setState((prev) => ({ ...prev, status: 'ready', view: result.value.value, revision: result.value.revision, busy: false }));
@@ -298,15 +307,17 @@ window.__ModuleLoader__.load({
         if (state.busy) return;
         setState((prev) => ({ ...prev, busy: true }));
         try {
+          const build = (current) => {
+            const next = { ...readObject(current[field]) };
+            if (value === undefined) delete next[sessionId];
+            else next[sessionId] = value;
+            return [{ op: 'set', path: [field], value: JSON.stringify(next) }];
+          };
           let fresh = await load(appCtx);
-          const next = { ...readObject(fresh.value[field]) };
-          if (value === undefined) delete next[sessionId];
-          else next[sessionId] = value;
-          const op = [{ op: 'set', path: [field], value: JSON.stringify(next) }];
-          let result = await appCtx.remote.settings.mutate(NS, op, fresh.revision);
+          let result = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
           if (!result.ok && result.error.code === 'settings/conflict') {
             fresh = await load(appCtx);
-            result = await appCtx.remote.settings.mutate(NS, op, fresh.revision);
+            result = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
           }
           if (!result.ok) throw new Error(result.error.code);
           setState({ status: 'ready', view: result.value.value, busy: false });

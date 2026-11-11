@@ -85,7 +85,9 @@ export function apply(ctx, config) {
     if (!agentCtx?.systemPrompt) return;
     const installed = [];
     for (const [key, section] of Object.entries(sections())) {
-      installed.push(
+      // A section that is somehow already there must not stop the Session from opening.
+      try {
+        installed.push(
         agentCtx.effect(
           () =>
             agentCtx.systemPrompt.section({
@@ -97,7 +99,10 @@ export function apply(ctx, config) {
             }),
           `role-prompts section ${key}`,
         ),
-      );
+        );
+      } catch (error) {
+        ctx.logger.warn(`role-prompts: section ${key} not added: ${error?.message ?? error}`);
+      }
     }
     disposers.set(agent.id, () => {
       for (const dispose of installed) {

@@ -9,6 +9,8 @@ How to use it:
 
 Secrets: `apiKeyEnv` is the name of an environment variable or credential reference, never the key.
 
+**When the app is opened from the Dock or Finder**, it does not see variables set in your shell profile (`~/.zshrc`). Either use a credential reference the app can read, or set the variable for apps with `launchctl setenv <NAME> <value>` (run by you; it lasts until restart) and reopen the app. Starting the app from Terminal (`open -a "DeepSeek Harness"`) does not help either, since `open` does not pass your shell's variables.
+
 Defaults in the template: `defaultContextWindow: 65536`, `defaultMaxTokens: 8192` (raise them to what your server serves).
 
 **Known interaction (verified on 0.2.2-rc.1 with mock servers):** with a window of 65,536 tokens or smaller, switching to that route fails with `MODEL_SWITCH_COMPACTION_FAILED`, because dsh keeps 65,536 tokens of compaction headroom by default. The template therefore includes a `compaction-basic` row with `headroomTokens: 8192`; with it the same switch succeeds. Remove that row only if all your routes have larger windows.

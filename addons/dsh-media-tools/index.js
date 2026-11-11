@@ -107,6 +107,34 @@ export function sniffImage(data) {
 }
 
 /**
+ * The 16 bytes of an IPv6 literal (with an optional embedded IPv4 tail), or null.
+ * @param {string} address - IPv6 literal, without brackets or zone.
+ * @returns {number[] | null} bytes.
+ */
+function ipv6Bytes(address) {
+  let text = String(address).toLowerCase().split('%')[0];
+  const tail = text.match(/(\d+\.\d+\.\d+\.\d+)$/);
+  let tailBytes = [];
+  if (tail) {
+    tailBytes = tail[1].split('.').map(Number);
+    if (tailBytes.some((n) => n > 255)) return null;
+    text = text.slice(0, -tail[1].length) + '0:0';
+  }
+  const halves = text.split('::');
+  if (halves.length > 2) return null;
+  const parse = (part) => (part === '' ? [] : part.split(':'));
+  const head = parse(halves[0]);
+  const rest = halves.length === 2 ? parse(halves[1]) : [];
+  const missing = 8 - head.length - rest.length;
+  if (missing < 0 || (halves.length === 1 && missing !== 0)) return null;
+  const groups = [...head, ...Array(halves.length === 2 ? missing : 0).fill('0'), ...rest];
+  if (groups.length !== 8 || groups.some((g) => !/^[0-9a-f]{1,4}$/.test(g))) return null;
+  const bytes = groups.flatMap((g) => { const n = parseInt(g, 16); return [n >> 8, n & 0xff]; });
+  if (tailBytes.length) bytes.splice(12, 4, ...tailBytes);
+  return bytes;
+}
+
+/**
  * Is an address one a provider-returned image URL may connect to (public only)?
  * @param {string} address - IPv4 or IPv6 literal.
  * @returns {boolean} true for a public address.
@@ -125,12 +153,22 @@ export function isPublicAddress(address) {
     return true;
   }
   if (kind === 6) {
-    const lower = address.toLowerCase();
-    const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped) return isPublicAddress(mapped[1]);
-    if (lower === '::' || lower === '::1') return false;
-    if (/^f[cd]/.test(lower) || /^fe[89ab]/.test(lower) || lower.startsWith('ff')) return false;
-    if (lower.startsWith('2001:db8')) return false;
+    const bytes = ipv6Bytes(address);
+    if (!bytes) return false;
+    const v4 = (offset) => `${bytes[offset]}.${bytes[offset + 1]}.${bytes[offset + 2]}.${bytes[offset + 3]}`;
+    const zero = (from, to) => bytes.slice(from, to).every((b) => b === 0);
+    // Forms that carry an IPv4 address: check that address instead.
+    if (zero(0, 10) && bytes[10] === 0xff && bytes[11] === 0xff) return isPublicAddress(v4(12)); // ::ffff:a.b.c.d (mapped)
+    if (zero(0, 8) && bytes[8] === 0xff && bytes[9] === 0xff && zero(10, 12)) return isPublicAddress(v4(12)); // ::ffff:0:a.b.c.d (translated)
+    if (zero(0, 12)) return zero(12, 16) ? false : isPublicAddress(v4(12)); // :: and ::a.b.c.d (compatible)
+    if (bytes[0] === 0x00 && bytes[1] === 0x64 && bytes[2] === 0xff && bytes[3] === 0x9b && zero(4, 12)) return isPublicAddress(v4(12)); // 64:ff9b::/96 NAT64
+    if (bytes[0] === 0x20 && bytes[1] === 0x02) return isPublicAddress(v4(2)); // 2002::/16 6to4
+    if (bytes[0] === 0x20 && bytes[1] === 0x01 && bytes[2] === 0x00 && bytes[3] === 0x00) return false; // 2001::/32 Teredo
+    if (bytes[0] === 0x20 && bytes[1] === 0x01 && bytes[2] === 0x0d && bytes[3] === 0xb8) return false; // 2001:db8::/32 documentation
+    if ((bytes[0] & 0xfe) === 0xfc) return false; // fc00::/7 unique local
+    if (bytes[0] === 0xfe && (bytes[1] & 0xc0) === 0x80) return false; // fe80::/10 link local
+    if (bytes[0] === 0xfe && (bytes[1] & 0xc0) === 0xc0) return false; // fec0::/10 site local (deprecated)
+    if (bytes[0] === 0xff) return false; // multicast
     return true;
   }
   return false;

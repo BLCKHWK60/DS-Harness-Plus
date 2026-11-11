@@ -91,17 +91,27 @@ export function targetOf(config) {
   if (!config || typeof config !== 'object') return '';
   if (typeof config.url === 'string') {
     try {
-      const url = new URL(config.url.replace(/\$\{[^}]*\}/g, 'x'));
-      return url.origin + url.pathname;
+      // Only where it goes: some services put a key in the path or the query.
+      return new URL(config.url.replace(/\$\{[^}]*\}/g, 'x')).origin;
     } catch {
       return '';
     }
   }
   if (typeof config.command === 'string') {
-    const args = Array.isArray(config.args)
-      ? config.args.filter((a) => typeof a === 'string' && !a.includes('${') && !/token|key|secret|password/i.test(a)).slice(0, 3)
-      : [];
-    return [config.command, ...args].join(' ').slice(0, 160);
+    const SECRET_NAME = /token|key|secret|password|passwd|auth|bearer|credential/i;
+    const looksSecret = (a) => a.includes('${') || SECRET_NAME.test(a) || /^[A-Za-z0-9_\-+/=.]{24,}$/.test(a);
+    const shown = [];
+    const args = Array.isArray(config.args) ? config.args.filter((a) => typeof a === 'string') : [];
+    for (let i = 0; i < args.length && shown.length < 3; i += 1) {
+      const arg = args[i];
+      if (looksSecret(arg)) {
+        // A flag like --api-key is usually followed by its value: drop that too.
+        if (/^-/.test(arg) && !arg.includes('=')) i += 1;
+        continue;
+      }
+      shown.push(arg);
+    }
+    return [config.command, ...shown].join(' ').slice(0, 160);
   }
   return '';
 }
@@ -130,7 +140,7 @@ export const Config = z.object({
    */
   tabs: z.string().default(JSON.stringify(DEFAULT_TABS)).volatile(),
   /** At most this many tabs (the first modes in order). */
-  maxTabs: z.natural().min(1).max(5).default(3),
+  maxTabs: z.natural().min(1).max(5).default(3).volatile(),
 });
 
 /**

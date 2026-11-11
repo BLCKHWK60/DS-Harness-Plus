@@ -32,7 +32,7 @@ function harness(config, { down = [] } = {}) {
       const result = new Promise((r) => { resolve = r; });
       const child = { childId: `child-${children.length + 1}`, route: spec.request.agentOptions, label: spec.label, resolve, spec };
       children.push(child);
-      return { childId: child.childId, result };
+      return { childId: child.childId, result, dispose: async () => { child.disposed = true; } };
     },
   };
   const ctx = {
@@ -152,7 +152,17 @@ test('a token budget stops the run: status stopped, unanswered members cancelled
   const r = h.get().json.runs[0];
   assert.equal(r.status, 'stopped');
   assert.match(r.stopped, /token budget/);
-  assert.deepEqual(r.members.map((m) => m.state), ['done', 'cancelled']);
+  // The member over budget is stopped at once rather than left running (and spending) to the end.
+  assert.deepEqual(r.members.map((m) => m.state), ['cancelled', 'cancelled']);
+});
+
+test('a stopped run disposes the child agents it started', async () => {
+  const h = harness(cfg({ duo: swarm({ budget: { tokens: 30, usd: 0 } }) }));
+  const run = h.execute({ swarm: 'duo', task: 'x task' });
+  await h.tick();
+  h.emit('child-1', 40, 5);
+  await run;
+  assert.equal(h.children[0].disposed, true);
 });
 
 test('dollar spend uses the pricing map', async () => {

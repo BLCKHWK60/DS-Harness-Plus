@@ -55,16 +55,27 @@ OLD="$PARENT/.deepseek-harness-plus.old"
 mkdir -p "$PARENT" && rm -rf "$NEW" "$OLD" || fail "Could not prepare $PARENT"
 ditto "$HERE/addons" "$NEW" || fail "Could not copy the add-ons to $NEW"
 find "$NEW" -type d -name test -prune -exec rm -rf {} + 2>/dev/null
-[ -d "$ADDONS_DIR" ] && { mv "$ADDONS_DIR" "$OLD" || fail "Could not move the previous add-ons aside"; }
-mv "$NEW" "$ADDONS_DIR" || fail "Could not move the add-ons into place"
-printf '%s\n' "$PLUS_VERSION" >"$ADDONS_DIR/VERSION"
 
 undo_copy() {
-  rm -rf "$ADDONS_DIR"
+  rm -rf "$ADDONS_DIR" "$NEW"
   [ -d "$OLD" ] && mv "$OLD" "$ADDONS_DIR"
 }
+# Put everything back: the previous add-on files first, then the setup that points at them.
+roll_back() {
+  undo_copy
+  restore_profile
+}
+# If the window is closed or Ctrl-C is pressed half-way, undo instead of leaving a broken setup.
+trap 'say ""; say "Interrupted. Putting everything back..."; roll_back; exit 1' INT TERM HUP
+
+[ -d "$ADDONS_DIR" ] && { mv "$ADDONS_DIR" "$OLD" || { rm -rf "$NEW"; fail "Could not move the previous add-ons aside"; }; }
+mv "$NEW" "$ADDONS_DIR" || { undo_copy; fail "Could not move the add-ons into place"; }
+printf '%s\n' "$PLUS_VERSION" >"$ADDONS_DIR/VERSION"
 
 ADDON_LIST=$(list_addons "$ADDONS_DIR")
+# Add-ons an older release installed that this one no longer ships: their folders are gone now,
+# so they must be unregistered or the app would fail to load them.
+STALE=$(stale_addons "$PROFILE_DIR/package.json" "$ADDONS_DIR" "$ADDON_LIST")
 [ -n "$ADDON_LIST" ] || { undo_copy; fail "No add-ons found in $HERE/addons"; }
 COUNT=$(printf '%s\n' "$ADDON_LIST" | wc -l | tr -d ' ')
 say "$COUNT add-ons copied to $ADDONS_DIR"
@@ -74,9 +85,19 @@ set --
 while IFS="$(printf '\t')" read -r _name folder; do set -- "$@" "$folder"; done <<EOF
 $ADDON_LIST
 EOF
+if [ -n "$STALE" ]; then
+  say "Removing add-ons this release no longer ships: $(printf '%s ' $STALE)"
+  # shellcheck disable=SC2086
+  if ! "$DSH" plugin --profile "$PROFILE" remove $STALE >>"$LOG" 2>&1; then
+    say "The app's add-on tool reported a problem. Putting everything back..."
+    roll_back
+    say "Last lines of the log ($LOG):"; tail -15 "$LOG"
+    fail "Nothing was changed. The full log is in $LOG"
+  fi
+fi
 if ! "$DSH" plugin --profile "$PROFILE" add "$@" >>"$LOG" 2>&1; then
   say "The app's add-on tool reported a problem. Putting everything back..."
-  restore_profile; undo_copy
+  roll_back
   say "Last lines of the log ($LOG):"; tail -15 "$LOG"
   fail "Nothing was changed. The full log is in $LOG"
 fi
@@ -89,15 +110,17 @@ MISSING=$(app_node -e '
   const deps = pkg.dependencies || {}, bundles = (pkg.dsh && pkg.dsh.profile && pkg.dsh.profile.bundles) || [];
   for (const line of list.split("\n").filter(Boolean)) {
     const [name, folder] = line.split("\t");
+    const real = (p) => { try { return fs.realpathSync(p); } catch { return p; } };
     const linked = String(deps[name] || "").replace(/^link:/, "");
-    if (linked !== folder || !bundles.includes(name)) console.log(name);
+    if (!linked || real(linked) !== real(folder) || !bundles.includes(name)) console.log(name);
   }' "$PROFILE_DIR/package.json" "$ADDONS_DIR" "$ADDON_LIST")
 if [ -n "$MISSING" ]; then
   say "These add-ons did not register: $MISSING"
   say "Putting everything back..."
-  restore_profile; undo_copy
+  roll_back
   fail "Nothing was changed. The log is in $LOG"
 fi
+trap - INT TERM HUP
 rm -rf "$OLD"
 printf '%s\n' "$ADDON_LIST" | while IFS="$(printf '\t')" read -r name _folder; do say "ok  $name"; done
 

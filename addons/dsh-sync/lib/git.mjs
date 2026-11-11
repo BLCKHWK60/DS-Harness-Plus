@@ -290,6 +290,19 @@ export class GitBackend {
     return { conflicted: inProgress, inProgress }
   }
 
+  /**
+   * Start a merge that records `remoteHead` as a second parent but keeps our tree
+   * (`-s ours`). The caller writes the reconciled tree, then calls addAll + commitMerge.
+   * The encrypted backend merges plaintext itself; this only makes the history a
+   * fast-forward of the remote so the next push is accepted.
+   * @param {string} remoteHead - remote head sha.
+   * @returns {Promise<boolean>} whether a merge is now in progress.
+   */
+  async beginOursMerge(remoteHead) {
+    await this.#must(['merge', '--no-commit', '--no-ff', '-s', 'ours', '--allow-unrelated-histories', remoteHead])
+    return this.mergeInProgress()
+  }
+
   /** 是否存在进行中的合并（MERGE_HEAD）。 */
   async mergeInProgress() {
     const out = await this.#maybe(['rev-parse', '--verify', 'MERGE_HEAD'])

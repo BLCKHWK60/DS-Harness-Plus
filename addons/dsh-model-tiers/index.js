@@ -108,6 +108,33 @@ const REVIEW_ANGLE_IDS = Object.keys(REVIEW_ANGLES);
  * @param {object} result - SubagentResult.
  * @returns {string} suffix for empty-output messages, or an empty string.
  */
+
+/**
+ * Wait for a started child agent, stopping it when the signal aborts.
+ * The host's own signal only covers start-up, so a running child is stopped through its receipt.
+ * @param {{result: Promise<object>, dispose?: () => Promise<void>}} started - the activation receipt.
+ * @param {AbortSignal | undefined} signal - the caller's signal.
+ * @returns {Promise<object>} the child's result.
+ */
+async function awaitChild(started, signal) {
+  if (!signal) return started.result;
+  let onAbort;
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => {
+      Promise.resolve(started.dispose?.()).catch(() => {});
+      reject(signal.reason instanceof Error ? signal.reason : new Error('Cancelled.'));
+    };
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  });
+  aborted.catch(() => {});
+  try {
+    return await Promise.race([started.result, aborted]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+}
+
 function childResultNote(result) {
   if (result?.diagnostic) {
     return ` (${result.stopReason ?? 'error'}: ${result.diagnostic})`;
@@ -1034,7 +1061,11 @@ export function apply(ctx, config) {
     const llm = ctx.get('llm');
     if (!llm) return [];
     try {
-      const info = await llm.resolveModelInfo(provider, model);
+      // Never let a down inference server hold up a Session: give up after a few seconds.
+      const info = await Promise.race([
+        llm.resolveModelInfo(provider, model),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('model info timeout')), 5000)),
+      ]);
       const ids = (info?.reasoning?.efforts ?? []).map((effort) => String(effort.id));
       effortCache.set(key, ids);
       return ids;
@@ -1058,6 +1089,8 @@ export function apply(ctx, config) {
           agentCtx.systemPrompt.section({
             name: 'model-tiers',
             order: 70,
+            // The section carries user text (custom tier prompts); a stray {{...}} must not break prompt assembly.
+            interpolate: false,
             text: () => {
               // The route is only recorded at the first request, so a new Session
               // resolves its tier from the Agent's current selection until then.
@@ -1181,7 +1214,7 @@ export function apply(ctx, config) {
         delivery: 'parent',
         signal: exec.signal,
       });
-      const result = await started.result;
+      const result = await awaitChild(started, exec.signal);
       const text = (result.output ?? [])
         .filter((block) => block.type === 'text')
         .map((block) => block.text)
@@ -1324,7 +1357,7 @@ export function apply(ctx, config) {
               delivery: 'parent',
               signal: exec.signal,
             });
-            const result = await started.result;
+            const result = await awaitChild(started, exec.signal);
             const text = (result.output ?? [])
               .filter((block) => block.type === 'text')
               .map((block) => block.text)
@@ -1456,7 +1489,7 @@ export function apply(ctx, config) {
           delivery: 'parent',
           signal: exec.signal,
         });
-        const result = await started.result;
+        const result = await awaitChild(started, exec.signal);
         const text = (result.output ?? [])
           .filter((block) => block.type === 'text')
           .map((block) => block.text)
@@ -1649,7 +1682,13 @@ export function apply(ctx, config) {
           else keep[sessionId] = value;
         }
         if (dropped > 0) {
-          ops.push({ op: 'set', path: [field], value: JSON.stringify(keep) });
+          // Rebuild from the value as it is now (a new Session may have been added while checking)
+          // and remove only the Sessions found missing.
+          const gone = Object.keys(map).filter((id) => !(id in keep));
+          const current = field === 'activeTiers' ? readPersistedActiveTiers(config) : readJsonObject(config.sessionProfiles);
+          const next = { ...current };
+          for (const id of gone) delete next[id];
+          ops.push({ op: 'set', path: [field], value: JSON.stringify(next) });
           removed[field] = dropped;
         }
       }
@@ -1660,8 +1699,9 @@ export function apply(ctx, config) {
       ctx.logger.warn(`model-tiers: could not prune stale sessions: ${error?.message ?? error}`);
     }
   }
-  ctx.on('agent/created', async () => {
-    await pruneStale();
+  // In the background: the app waits for agent/created listeners before a Session opens.
+  ctx.on('agent/created', () => {
+    void pruneStale();
   });
 
   // ---- modelTiers service (T3) ------------------------------------------
@@ -2037,7 +2077,7 @@ export function apply(ctx, config) {
     }
     if (!tier.browser) {
       const command = String(exec.arguments?.command ?? '');
-      if (/browser|ego/i.test(exec.name) || (exec.name === 'bash' && /\bego(-browser)?\b/i.test(command))) {
+      if (/browser/i.test(exec.name) || /(^|[_-])ego([_-]|$)/i.test(exec.name) || (exec.name === 'bash' && /\bego(-browser)?\b/i.test(command))) {
         return {
           kind: 'deny',
           reason:
