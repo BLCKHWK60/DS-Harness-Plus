@@ -1,0 +1,8 @@
+- insert:
+    - id: diagram
+      name: '@local/dsh-diagram'
+      config:
+        # Works with nothing set. Pictures are saved in a "diagrams" folder inside the
+        # conversation's folder; change that on Settings > Diagrams. Optional:
+        #   skills: true   # the draw-diagram skill
+        enabled: true

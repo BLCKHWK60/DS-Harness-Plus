@@ -17,6 +17,7 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Privacy](#privacy) | yes | | `/privacy` |
 | [Activity indicator](#activity-indicator) | yes | Settings → Activity | `/activity` |
 | [PDF reader](#pdf-reader) | yes | Settings → PDF reader | `/pdf` |
+| [Diagram builder](#diagram-builder) | yes | Settings → Diagrams | |
 | [Code map](#code-map) | yes | Settings → Code map | `/codemap` |
 | [Self-improvement](#self-improvement) | after setup, in its page | Settings → Self-improve | `/evolve` |
 | [Usage counter](#usage-counter) | yes | Settings → Usage | `/usage` |
@@ -190,6 +191,17 @@ Lets the model read PDF files properly. It uses what comes with macOS, so nothin
 - **Where it may read:** the conversation's folder, plus folders you add in **Settings → PDF reader**. "Allow any PDF on this Mac" is off unless you switch it on.
 
 Complex tables and maths formulas can still come out wrong as text; for those the model can look at the page as a picture if it is a model that can see images. Password-protected PDFs cannot be read. Details: `addons/dsh-pdf/README.md`.
+
+## Diagram builder
+
+Lets the model draw accurate diagrams. The model only describes what is in the diagram; the layout, the drawing and a check for overlaps are done for it, so text fits its box and arrows land where they should. Nothing is installed and nothing leaves your Mac.
+
+- **Ask in plain words:** "Draw a flowchart of how a bill becomes law", "Make a mind map of this chapter", "Plot sin(x) and cos(x) from 0 to 2 pi", "Chart these sales figures".
+- **Kinds:** flowcharts and concept maps, trees and mind maps, sequences (who tells whom what, in order), timelines, charts (bars, lines, points) and plots of formulas.
+- **Where it appears:** in the chat, under the answer, in the app's colours. Click it for full size. It is also saved as an SVG file in a `diagrams` folder inside the conversation's folder; change or switch that off in **Settings → Diagrams**.
+- **The check:** if boxes overlap, a label does not fit, or too many arrows cross, the model is told and usually draws it again. A small note on the picture says if something was left unfixed.
+
+The drawing is exact, but what goes into it is still the model's. Read a diagram with the same care as the answer it belongs to. Details: `addons/dsh-diagram/README.md`.
 
 ## Code power
 
