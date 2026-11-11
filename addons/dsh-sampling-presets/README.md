@@ -20,7 +20,7 @@ Whether your server can hold several sampling profiles for one model (spec quest
 2. `categories[<category>]` names the preset;
 3. `perModel[<provider>/<model>].allowedPresets`, when non-empty, can forbid it for that model (the model then runs with its normal sampling).
 
-**Precedence with Tier**: a preset overrides Tier's model-profile defaults whichever plugin loads first (tested both orders), but never a temperature or max-token value you set for the Session in the Tier composer (`modelTiers.sessionSampling`). Tier's `modelTiers` service must be the copy with `sessionSampling` (`plugins/dsh-model-tiers`).
+**Precedence with Tier**: a preset overrides Tier's old per-model defaults whichever plugin loads first (tested both orders), but never a temperature or max-token value you set for the Session in the chat box, and (from Plus 0.10) never a value set by the saved model version the Session is on (`modelTiers.sessionSampling` returns both). Checked live in 0.10: a tier's version asked for 0.9, a preset for 0.1, and the request carried 0.9; the preset's max tokens still applied because the version set none. Tier's `modelTiers` service must be the copy with `sessionSampling` (`plugins/dsh-model-tiers`).
 
 ## Configuration
 

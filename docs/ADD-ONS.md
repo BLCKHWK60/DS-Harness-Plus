@@ -44,6 +44,8 @@ Replaces the left sidebar with a MindsHub-style one:
 
   **Each tab lists only its own conversations.** Code shows your coding projects, Chat your chats, Cowork your tasks. Use the `⋯` on a conversation or a project to move it to another tab; **Show all** gives the app's full list with search.
 
+  **The Chat tab has no folders.** A chat lives on its own, so the Chat tab hides the workspace and preset pickers, always starts a new chat in the app's default workspace, and shows your chats as one flat list. The `⋯` on a chat can **Promote to Cowork** or **Promote to Code** (the same conversation, in the new mode) or **Continue in a project…** (a new conversation in a project you pick, with the chat attached for the assistant to read).
+
   The start page shows a greeting per tab, and on the Cowork tab, suggestion chips under the chat box (Create slides, Build website, …) that fill in a starter prompt.
 
   **Connectors** lists your MCP servers. Each shows whether it is connected and how many tools it brings, with an on/off switch. A short form writes out the settings lines for a new one. **Skills** lists the skills the assistant can use, with search.
@@ -72,7 +74,30 @@ The chat box also gets two buttons for the open conversation:
 
 ## Model Tiers
 
-Five ready-made tiers (from quick to most thorough), each with its own model, effort level, internet access and limit on helper agents. Switch tiers from the chat box. On **Settings → Model Tiers** you pick the model per tier, add your own tiers, set a backup model per tier for when one is unreachable, and set role models (plan, implement, review, fast) that other add-ons use.
+**In the chat box:** one button beside the send button shows the model and the effort. It opens a panel where you:
+
+- pick any model, or one of your saved versions of a model;
+- drag the **effort** slider from Off to Ultra Code;
+- pick a **tier**;
+- open **Sampling** to set temperature and max output tokens for this conversation, and **Save as new version…** to keep them under a name.
+
+This replaces the app's own model menu while the add-on is on.
+
+**Tiers** are ways of working. Five starters ship: Fast, Balanced, Deep, Creative and Code review. None has a model: a tier applies its rules to whatever model you are on, until you give it one. On **Settings → Model Tiers** each tier has:
+
+- a name and its own instructions for the model;
+- a model, or a saved model version (optional);
+- effort, and switches for web search, web fetch, browser and sub-agents;
+- sub-agents: "ask for at least" and "allow at most". The most is enforced. The least is an instruction, because the app cannot force a model to delegate;
+- skills to load whenever the tier is active (for example a skill written for a small, fast model);
+- connectors (your MCP servers) the tier may use;
+- a backup model for when one is unreachable, and role models (plan, implement, review, fast) that other add-ons use.
+
+**Model versions** are named copies of one model with their own effort, temperature and max output tokens, for example one for writing and one for coding. The plain model always stays in the list with default settings. Make them on the **Model versions** tab or with **Save as new version…** in the chat box.
+
+The app can only send temperature and max output tokens to a model. Top-p, top-k and similar settings stay on your model server.
+
+If you used Tiers before 0.10, your tiers keep their names (Haiku, Sonnet, Opus, Fable, Code) and models.
 
 ## Usage counter
 

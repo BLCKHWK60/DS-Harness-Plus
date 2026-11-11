@@ -79,6 +79,15 @@ window.__ModuleLoader__.load({
         'move.to': 'Move to {tab}',
         'move.label': 'Move "{title}" to another tab',
         'move.failed': 'Could not move the conversation.',
+        'promote.to': 'Promote to {tab}',
+        'promote.label': 'Promote or continue "{title}"',
+        'continue.open': 'Continue in a project…',
+        'continue.title': 'Continue in a project',
+        'continue.as': 'Start as',
+        'continue.none': 'No projects yet. Add one from the Cowork or Code tab.',
+        'continue.back': 'Back',
+        'continue.prompt': 'Continue from my chat {mention}. ',
+        'continue.failed': 'Could not start the new conversation.',
         'proj.move': 'Move all conversations of "{title}" to another tab',
         'proj.new': 'New conversation in this project',
         'show.more': 'Show {n} more',
@@ -153,6 +162,15 @@ window.__ModuleLoader__.load({
         'move.to': '移到 {tab}',
         'move.label': '把“{title}”移到其他标签页',
         'move.failed': '无法移动该对话。',
+        'promote.to': '升级为 {tab}',
+        'promote.label': '升级或继续“{title}”',
+        'continue.open': '在项目中继续…',
+        'continue.title': '在项目中继续',
+        'continue.as': '开始为',
+        'continue.none': '还没有项目。请在 Cowork 或 Code 标签页中添加。',
+        'continue.back': '返回',
+        'continue.prompt': '接着我的聊天 {mention} 继续。',
+        'continue.failed': '无法开始新对话。',
         'proj.move': '把“{title}”的所有对话移到其他标签页',
         'proj.new': '在此项目中新建对话',
         'show.more': '再显示 {n} 个',
@@ -339,6 +357,15 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
 .cws-move{position:relative;display:inline-flex}
 .cws-movepop{position:absolute;right:0;top:calc(100% + 2px);z-index:50;min-width:150px;padding:4px;border:1px solid var(--dsw-alias-border-l3);border-radius:var(--dsw-radius-md);background:var(--dsw-alias-bg-overlay);box-shadow:0 6px 24px #0004}
 .cws-moveitem{display:block;width:100%;padding:6px 10px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;font:inherit;font-size:13px;text-align:left;white-space:nowrap}
+.cws-movehead{display:flex;align-items:center;gap:6px;padding:4px 6px 6px;color:var(--dsw-alias-label-secondary);font-size:12px;font-weight:500;white-space:nowrap}
+.cws-movehead .cws-link{padding:2px 6px}
+.cws-moveas{display:flex;align-items:center;gap:4px;padding:0 6px 6px;color:var(--dsw-alias-label-secondary);font-size:12px;white-space:nowrap}
+.cws-moveas button{border:1px solid var(--dsw-alias-border-l3);border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:12px;padding:1px 8px}
+.cws-moveas button[aria-pressed='true']{background:var(--dsw-alias-button-elevated-fill);color:var(--dsw-alias-label-primary)}
+.cws-movelist{max-height:220px;overflow-y:auto;max-width:230px}
+.cws-movelist .cws-moveitem{overflow:hidden;text-overflow:ellipsis}
+.cws-movesep{height:1px;margin:4px 6px;background:var(--dsw-alias-border-l3)}
+html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='menu'],html[data-cws-plain-chat] [data-slot='conversation.hero.workspace'],html[data-cws-plain-chat] [data-slot='conversation.hero.agentPreset']{display:none !important}
 .cws-more-btn{border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:12px;padding:4px 12px;text-align:left}
 @media (hover:hover){.cws-proj-main:hover,.cws-conv-main:hover,.cws-mini:hover,.cws-moveitem:hover,.cws-link:hover{background:var(--dsw-alias-interactive-bg-hover)}}
 .cws-error{margin:0 4px 8px;color:var(--dsw-alias-state-business-primary, inherit);font-size:12px}
@@ -514,6 +541,7 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
         refresh,
         select,
         move,
+        fail: (message) => set({ error: String(message) }),
       };
     }
 
@@ -643,29 +671,72 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
       return tabIds.includes(guess) ? guess : tabIds[0];
     }
 
-    function MoveMenu({ t, tabs, current, onMove, label }) {
+    /** The app's default workspace (the folder Chat lives in), or null when there is none. */
+    function defaultWorkspace(workspaces) {
+      return (Array.isArray(workspaces) ? workspaces : []).find((ws) => ws
+        && (/(^|[\\/])default-workspace[\\/]?$/.test(String(ws.path ?? '')) || ws.title === 'default-workspace')) ?? null;
+    }
+
+    /** The app's own mention of another conversation, as its chat box and server read it. */
+    function sessionMention(id, title) {
+      const bytes = new TextEncoder().encode(JSON.stringify(String(id)));
+      let binary = '';
+      for (const b of bytes) binary += String.fromCharCode(b);
+      const payload = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      // The chat box only shows a mention as a chip when its label has no brackets.
+      const label = String(title).replace(/[\[\]\\\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'chat';
+      return `@[${label}](dsh-session:${payload})`;
+    }
+
+    /**
+     * The `⋯` menu of a conversation or project: move it to another tab. On the Chat tab (`promote`) the
+     * entries read "Promote to …", and `onContinue` adds "Continue in a project…", a second pane that
+     * lists the projects and starts a new conversation there.
+     */
+    function MoveMenu({ t, tabs, current, onMove, label, promote, projects, onContinue }) {
       const [open, setOpen] = useState(false);
+      const [pane, setPane] = useState('root');
+      const targets = tabs.filter((m) => m.id !== current);
+      const [as, setAs] = useState(() => (targets.find((m) => m.id === 'code') ?? targets[targets.length - 1])?.id);
       useEffect(() => {
-        if (!open) return undefined;
+        if (!open) { setPane('root'); return undefined; }
         const close = () => setOpen(false);
         const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
         window.addEventListener('pointerdown', close);
         window.addEventListener('keydown', onKey);
         return () => { window.removeEventListener('pointerdown', close); window.removeEventListener('keydown', onKey); };
       }, [open]);
+      const asMode = targets.find((m) => m.id === as) ?? targets[targets.length - 1];
+      const root = () => h(React.Fragment, null,
+        targets.map((m) => h('button', {
+          key: m.id, type: 'button', role: 'menuitem', className: 'cws-moveitem',
+          onClick: (e) => { e.stopPropagation(); setOpen(false); onMove(m.id); },
+        }, t(promote ? 'promote.to' : 'move.to', { tab: m.label }))),
+        onContinue && asMode ? h(React.Fragment, null,
+          h('div', { className: 'cws-movesep', role: 'separator' }),
+          h('button', { type: 'button', role: 'menuitem', className: 'cws-moveitem', 'aria-haspopup': 'menu', onClick: (e) => { e.stopPropagation(); setPane('projects'); } }, t('continue.open'))) : null);
+      const projectPane = () => h(React.Fragment, null,
+        h('div', { className: 'cws-movehead' },
+          h('button', { type: 'button', className: 'cws-link', onClick: (e) => { e.stopPropagation(); setPane('root'); } }, '‹ ' + t('continue.back')),
+          h('span', null, t('continue.title'))),
+        targets.length > 1 ? h('div', { className: 'cws-moveas', role: 'group', 'aria-label': t('continue.as') },
+          h('span', null, t('continue.as')),
+          targets.map((m) => h('button', { key: m.id, type: 'button', 'aria-pressed': m.id === asMode.id, onClick: (e) => { e.stopPropagation(); setAs(m.id); } }, m.label))) : null,
+        h('div', { className: 'cws-movelist' },
+          (projects ?? []).length === 0 ? h('p', { className: 'cws-lib-empty' }, t('continue.none')) : null,
+          (projects ?? []).map((ws) => h('button', {
+            key: ws.workspaceId, type: 'button', role: 'menuitem', className: 'cws-moveitem', title: ws.path || ws.title || '',
+            onClick: (e) => { e.stopPropagation(); setOpen(false); onContinue(ws, asMode); },
+          }, ws.title || ws.path || t('untitled')))));
       return h('span', { className: 'cws-move', onPointerDown: (e) => e.stopPropagation() },
         h('button', {
           type: 'button', className: 'cws-mini', 'aria-label': label, 'aria-haspopup': 'menu', 'aria-expanded': open, title: label,
           onClick: (e) => { e.stopPropagation(); setOpen((v) => !v); },
         }, '⋯'),
-        open ? h('div', { className: 'cws-movepop', role: 'menu' },
-          tabs.filter((m) => m.id !== current).map((m) => h('button', {
-            key: m.id, type: 'button', role: 'menuitem', className: 'cws-moveitem',
-            onClick: (e) => { e.stopPropagation(); setOpen(false); onMove(m.id); },
-          }, t('move.to', { tab: m.label })))) : null);
+        open ? h('div', { className: 'cws-movepop', role: 'menu' }, pane === 'projects' ? projectPane() : root()) : null);
     }
 
-    /** The open tab's conversations, grouped under their projects. */
+    /** The open tab's conversations: one flat list on the Chat tab, grouped under their projects elsewhere. */
     function TabLibrary({ appCtx, model, library, tabs, selected, onShowAll }) {
       const t = appCtx.locale.bind(NS);
       const state = useSyncExternalStore(model.subscribe, model.get);
@@ -694,9 +765,36 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
       const loose = sortRows(Object.keys(lib.byId).filter((id) => !placed.has(id)))
         .filter((id) => tabOfSession(id, lib.byId[id], null, state, tabIds) === selected.id);
 
+      // A conversation's tab is recorded at its first message; read it right away, so the row does not
+      // drop out of its tab until the next 10-second refresh.
+      const openBlank = lib.currentId ? !!lib.byId[lib.currentId]?.blank : null;
+      useEffect(() => {
+        if (openBlank !== false) return undefined;
+        void model.refresh();
+        const timer = setTimeout(() => void model.refresh(), 1500);
+        return () => clearTimeout(timer);
+      }, [lib.currentId, openBlank, model]);
+
+      // Chat is not about projects: one list, pinned first, then newest first.
+      const flat = selected.id === 'chat';
+      const wsOf = {};
+      if (flat) for (const p of projects) for (const id of p.ids) wsOf[id] = p.ws;
+      const flatIds = flat ? sortRows([...projects.flatMap((p) => p.ids), ...loose]) : [];
+
       const openSession = (id) => {
         try { appCtx.layout.selectPanel(null); } catch { /* already there */ }
         uw?.openSession?.(id);
+      };
+
+      /** A new conversation in a project, with this chat attached the app's own way (an @ mention). */
+      const continueIn = async (id, title, ws, mode) => {
+        try {
+          if (mode.id !== state.selected) await model.select(mode.id, mode.label);
+          try { appCtx.layout.selectPanel(null); } catch { /* already there */ }
+          uw.startSession(ws.workspaceId, { prompt: t('continue.prompt', { mention: sessionMention(id, title) }), whenDraftExists: 'replace' });
+        } catch {
+          model.fail(t('continue.failed'));
+        }
       };
 
       const row = (id, ws) => {
@@ -711,8 +809,11 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
             h('span', { className: 'cws-time' }, ago(t, sess.updatedAt))),
           sess.blank ? null : h(MoveMenu, {
             t, tabs, current: tabOfSession(id, sess, ws, state, tabIds),
-            label: t('move.label', { title }),
+            label: t(flat ? 'promote.label' : 'move.label', { title }),
             onMove: (modeId) => void model.move([id], modeId),
+            promote: flat,
+            projects: flat ? lib.workspaces : undefined,
+            onContinue: flat && typeof uw?.startSession === 'function' ? (target, mode) => void continueIn(id, title, target, mode) : undefined,
           }));
       };
 
@@ -723,6 +824,15 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
       };
 
       const empty = projects.length === 0 && loose.length === 0;
+      if (flat) {
+        return h('div', { className: 'cws-lib' },
+          h('div', { className: 'cws-lib-head' },
+            h('span', null, t('lib.title.chat', { tab: selected.label })),
+            h('button', { type: 'button', className: 'cws-link', onClick: onShowAll, title: t('lib.all.hint') }, t('lib.all'))),
+          empty ? h('p', { className: 'cws-lib-empty' }, t('lib.empty', { tab: selected.label })) : null,
+          h(React.Fragment, null, flatIds.slice(0, more.__flat ? flatIds.length : 30).map((id) => row(id, wsOf[id] ?? null)),
+            flatIds.length > 30 && !more.__flat ? h('button', { type: 'button', className: 'cws-more-btn', onClick: () => setMore((m) => ({ ...m, __flat: true })) }, t('show.more', { n: flatIds.length - 30 })) : null));
+      }
       return h('div', { className: 'cws-lib' },
         h('div', { className: 'cws-lib-head' },
           h('span', null, t('lib.title.' + (['chat', 'cowork', 'code'].includes(selected.id) ? selected.id : 'other'), { tab: selected.label })),
@@ -743,6 +853,14 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
         loose.length ? h(React.Fragment, null,
           h('div', { className: 'cws-lib-head' }, h('span', null, t('lib.loose'))),
           list(loose, '__loose', null)) : null);
+    }
+
+    /** The New button: on the Chat tab it always starts in the app's default workspace, when there is one. */
+    function startNew(appCtx, library, tabId) {
+      try { appCtx.layout.selectPanel(null); } catch { /* already on the conversation */ }
+      let home = null;
+      if (tabId === 'chat') { try { home = defaultWorkspace(library.get().workspaces); } catch { home = null; } }
+      appCtx.uiWorkspace.startSession(home ? home.workspaceId : undefined);
     }
 
     function CoworkSidebar(props) {
@@ -782,10 +900,18 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
         || (['chat', 'cowork', 'code'].includes(selected.id) ? t('new.' + selected.id) : t('new.other'));
       const toggleLabel = collapsed ? t('toggle.open') : t('toggle.collapse');
 
-      const startSession = () => {
-        try { appCtx.layout.selectPanel(null); } catch { /* already on the conversation */ }
-        appCtx.uiWorkspace.startSession();
-      };
+      const startSession = () => startNew(appCtx, library, selected.id);
+      // Chat does not choose a folder: while the open tab is Chat and the open conversation lives in the
+      // app's default workspace (or nothing is open), the start page's two pickers are hidden by CSS.
+      const home = defaultWorkspace(libSnap.workspaces);
+      const currentWs = libSnap.currentId ? libSnap.workspaces.find((ws) => (ws.sessionIds ?? []).includes(libSnap.currentId)) : null;
+      const plainChat = selected.id === 'chat' && libSnap.ok && !!home && (!currentWs || currentWs.workspaceId === home.workspaceId);
+      useEffect(() => {
+        const root = document.documentElement;
+        if (plainChat) root.setAttribute('data-cws-plain-chat', '');
+        else root.removeAttribute('data-cws-plain-chat');
+        return () => root.removeAttribute('data-cws-plain-chat');
+      }, [plainChat]);
       const onTabKey = (event) => {
         const index = tabs.findIndex((m) => m.id === selected.id);
         let next = -1;
@@ -865,13 +991,14 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
     }
 
     /** macOS desktop: while the sidebar is hidden, the frame shows these beside the traffic lights. */
-    function Leading({ appCtx, model }) {
+    function Leading({ appCtx, model, library }) {
       const t = appCtx.locale.bind(NS);
       const state = useSyncExternalStore(model.subscribe, model.get);
+      useSyncExternalStore(library.subscribe, library.get); // keeps the project list fresh for the New button
       const key = ['chat', 'cowork', 'code'].includes(state.selected) ? 'new.' + state.selected : 'new.other';
       return h('div', { className: 'cws-lead' },
         h('button', { type: 'button', className: 'cws-icon', 'data-sidebar-opener': '', 'aria-label': t('toggle.open'), onClick: () => appCtx.layout.toggleSidebar() }, h(Glyph, { name: 'panel', size: 16 })),
-        h('button', { type: 'button', className: 'cws-icon', 'aria-label': t(key), onClick: () => { try { appCtx.layout.selectPanel(null); } catch { /* already there */ } appCtx.uiWorkspace.startSession(); } }, h(Glyph, { name: 'plus', size: 16 })));
+        h('button', { type: 'button', className: 'cws-icon', 'aria-label': t(key), onClick: () => startNew(appCtx, library, state.selected) }, h(Glyph, { name: 'plus', size: 16 })));
     }
 
 
@@ -1100,7 +1227,7 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
     }
 
     /** Suggestion chips: each fills the chat box with a starter prompt. */
-    function HeroChips({ appCtx, model }) {
+    function HeroChips({ appCtx, model, library }) {
       const state = useSyncExternalStore(model.subscribe, model.get);
       const tabs = state.modes.slice(0, state.maxTabs);
       const selected = tabs.find((m) => m.id === state.selected) ?? tabs[0];
@@ -1111,7 +1238,11 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
       return h('div', { className: 'cws-chips', role: 'group', 'aria-label': appCtx.locale.bind(NS)('chips.label') },
         chips.map((chip) => h('button', {
           key: chip.label, type: 'button', className: 'cws-chip-btn',
-          onClick: () => appCtx.uiWorkspace.startSession(undefined, { prompt: String(chip.prompt ?? chip.label), whenDraftExists: 'replace' }),
+          onClick: () => {
+            let home = null;
+            if (selected.id === 'chat') { try { home = defaultWorkspace(library.get().workspaces); } catch { home = null; } }
+            appCtx.uiWorkspace.startSession(home ? home.workspaceId : undefined, { prompt: String(chip.prompt ?? chip.label), whenDraftExists: 'replace' });
+          },
         }, h(ChipIcon, { name: typeof chip.icon === 'string' ? chip.icon : 'spark' }), chip.label)));
     }
 

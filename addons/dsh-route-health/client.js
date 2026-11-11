@@ -41,7 +41,8 @@ window.__ModuleLoader__.load({
 
     const CSS = `
 .dsh-rh { position: relative; display: inline-flex; align-items: center; }
-.dsh-rh-btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 8px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+.dsh-rh-btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 8px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; max-width: 200px; }
+.dsh-rh-btn > span:last-child { overflow: hidden; text-overflow: ellipsis; }
 .dsh-rh-btn:hover { background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); }
 .dsh-rh-btn:focus-visible { outline: 2px solid var(--dsw-alias-label-secondary); outline-offset: 1px; }
 .dsh-rh-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--dsh-rh-colour); border: 1.5px solid var(--dsh-rh-colour); }

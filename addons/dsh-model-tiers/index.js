@@ -2,10 +2,12 @@
  * Host half of the Model Tiers bundle.
  *
  * Responsibilities:
- *  - own the five tier definitions and the global sub-agent cap;
+ *  - own the five starter tiers, custom tiers, saved model versions and the global sub-agent cap;
  *  - map a tier's plugin-level effort to an adapter-supported reasoning effort;
  *  - gate web_search, web_fetch, browser use, and sub-agent delegation per tier;
- *  - contribute one compact per-Agent prompt section describing the active tier.
+ *  - contribute one compact per-Agent prompt section describing the active tier,
+ *    with the tier's own instructions and any skills it loads;
+ *  - hide the tools of connectors (MCP servers) a tier does not allow.
  *
  * Tier selection itself is persisted by the Client through the normal settings
  * service (`activeTiers`, keyed by Session id). Model selection is applied by the
@@ -14,21 +16,50 @@
  */
 import z from '@deepseek-ai/schemastery';
 
-/** Canonical tier order. Later tiers are the more expensive defaults. */
+/**
+ * Starter tier ids, in deck order. The ids are historical (they are stored in
+ * settings and in per-Session choices); the names people see are STARTER_LABELS.
+ */
 const TIER_IDS = ['haiku', 'sonnet', 'opus', 'fable', 'code'];
 
 /** Plugin-level effort levels, from no thinking to the most aggressive mode. */
 const EFFORT_LEVELS = ['off', 'low', 'medium', 'high', 'extra-high', 'ultra'];
 
-/** Display labels used in the model-visible tier section. */
+/** Names of the starter tiers. A tier's own `label` replaces its name. */
 const TIER_LABELS = {
+  haiku: 'Fast',
+  sonnet: 'Balanced',
+  opus: 'Deep',
+  fable: 'Creative',
+  code: 'Code review',
+  custom: 'Custom',
+};
+
+/** Names the starter tiers had before 0.10, kept for installs that already use them. */
+const LEGACY_TIER_LABELS = {
   haiku: 'Haiku',
   sonnet: 'Sonnet',
   opus: 'Opus',
   fable: 'Fable',
   code: 'Code',
-  custom: 'Custom',
 };
+
+/** Built-in guidance of each starter tier, used while the tier has no instructions of its own. */
+const STARTER_GUIDANCE = {
+  haiku:
+    'prefer fast, narrow actions. Locate the relevant code, make the smallest correct change, and avoid broad refactors unless the user asks for them.',
+  sonnet:
+    'plan briefly, implement the change, then verify the touched path. Balance speed against completeness.',
+  opus:
+    'take the harder reasoning path. State assumptions, weigh alternatives, and verify edge cases before declaring success.',
+  fable:
+    'explore broadly. Gather context, connect disparate parts, and produce a coherent synthesis before editing.',
+};
+
+/** Longest skill text added to the prompt, per skill. */
+const SKILL_TEXT_LIMIT = 8000;
+/** Most skills one tier can load. */
+const SKILL_LIMIT = 6;
 
 /** Effort labels used in the model-visible tier section. */
 const EFFORT_LABELS = {
@@ -146,53 +177,17 @@ function childResultNote(result) {
 }
 
 
-/** Default tier definitions. Keep in sync with cordis.patch.yml. */
+/**
+ * Starter tier defaults. No model is preconfigured: a starter applies its
+ * rules to whatever model the conversation uses until the user picks one.
+ */
+const STARTER_DEFAULTS = { webSearch: true, webFetch: true, browser: true, subagents: true };
 const DEFAULTS = {
-  haiku: {
-    provider: 'omlx-max',
-    model: 'claude-haiku',
-    effort: 'low',
-    webSearch: true,
-    webFetch: true,
-    browser: true,
-    subagents: true,
-  },
-  sonnet: {
-    provider: 'omlx-max',
-    model: 'claude-sonnet',
-    effort: 'medium',
-    webSearch: true,
-    webFetch: true,
-    browser: true,
-    subagents: true,
-  },
-  opus: {
-    provider: 'omlx-max',
-    model: 'claude-opus',
-    effort: 'high',
-    webSearch: true,
-    webFetch: true,
-    browser: true,
-    subagents: true,
-  },
-  fable: {
-    provider: 'omlx-max',
-    model: 'Qwen3.8-27B-TURBO-Fable-Cold-Fusion-735-882-Heretic-Uncensored-NM-DAU-mlx-oQ4e-1M',
-    effort: 'medium',
-    webSearch: true,
-    webFetch: true,
-    browser: true,
-    subagents: true,
-  },
-  code: {
-    provider: 'omlx-max',
-    model: 'claude-opus',
-    effort: 'ultra',
-    webSearch: true,
-    webFetch: true,
-    browser: true,
-    subagents: true,
-  },
+  haiku: { provider: '', model: '', effort: 'low', ...STARTER_DEFAULTS },
+  sonnet: { provider: '', model: '', effort: 'medium', ...STARTER_DEFAULTS },
+  opus: { provider: '', model: '', effort: 'high', ...STARTER_DEFAULTS },
+  fable: { provider: '', model: '', effort: 'medium', ...STARTER_DEFAULTS },
+  code: { provider: '', model: '', effort: 'ultra', ...STARTER_DEFAULTS },
 };
 
 /**
@@ -212,6 +207,18 @@ function tierSchema(fallback) {
     subagents: z.boolean().default(fallback.subagents).volatile(),
     /** Optional cap on concurrent child Agents for this tier; absent uses the global `maxSubagents`. */
     maxSubagents: z.number().min(1).max(8).volatile(),
+    /** How many sub-agents the tier asks the model to use for work with independent parts; 0 asks for none. */
+    minSubagents: z.number().min(0).max(8).default(0).volatile(),
+    /** The user's own name for this starter; empty uses the built-in name. */
+    label: z.string().default('').volatile(),
+    /** Id of a saved model version; when set it supplies this tier's model and sampling. */
+    version: z.string().default('').volatile(),
+    /** The tier's own instructions; empty uses the starter's built-in guidance. */
+    instructions: z.string().default('').volatile(),
+    /** Skill names loaded into the prompt while this tier is active, as a JSON array. */
+    skills: z.string().default('[]').volatile(),
+    /** Connectors (MCP servers) this tier may use: empty for all, or a JSON array of server names. */
+    connectors: z.string().default('').volatile(),
   });
 }
 
@@ -236,6 +243,14 @@ export const Config = z.object({
   /** One-time client migration marker for the route-keyed model registry. */
   modelProfilesMigrated: z.boolean().default(false).volatile(),
   /**
+   * Saved model versions as a JSON array:
+   * `[{ id, name, provider, model, effort?, wireEffort?, temperature?, maxTokens?, note? }]`.
+   * A version is a named copy of a model with its own settings; the plain model stays as it is.
+   */
+  modelVersions: z.string().default('[]').volatile(),
+  /** One-time marker: installs from before 0.10 keep their starter names and model defaults. */
+  startersMigrated: z.boolean().default(false).volatile(),
+  /**
    * User-created tiers as a JSON array. Built-in tiers stay in `tiers`; custom
    * entries are additive and can never shadow a built-in id.
    */
@@ -253,6 +268,9 @@ export const Config = z.object({
 });
 
 export const inject = ['tools', 'systemPrompt'];
+
+/** Read-only route the Settings page reads for the skills and connectors a tier can pick. */
+export const CATALOG_PATH = '/dsh-model-tiers/catalog';
 
 /**
  * Recursively detach live Config references.
@@ -302,6 +320,16 @@ function readTierCap(value) {
   return value === undefined || value === null || value === '' || !Number.isFinite(number)
     ? undefined
     : clamp(Math.round(number), 1, 8);
+}
+
+/**
+ * Normalize how many sub-agents a tier asks for.
+ * @param {unknown} value - stored value.
+ * @returns {number} whole number 0..8.
+ */
+function readMinSubagents(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? clamp(Math.round(number), 0, 8) : 0;
 }
 
 /**
@@ -470,6 +498,124 @@ function readRoleModels(config) {
 }
 
 /**
+ * Read a list of names stored as a JSON array (or already an array).
+ * @param {unknown} value - stored value.
+ * @param {number} [limit] - most names kept.
+ * @returns {string[]} trimmed, de-duplicated names.
+ */
+function readNameList(value, limit = 64) {
+  let raw = plain(value);
+  if (typeof raw === 'string') {
+    if (raw.trim() === '') return [];
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(raw)) return [];
+  const names = [];
+  for (const item of raw) {
+    const name = typeof item === 'string' ? item.trim() : '';
+    if (name && !names.includes(name)) names.push(name);
+    if (names.length >= limit) break;
+  }
+  return names;
+}
+
+/**
+ * Read which connectors (MCP servers) a tier may use.
+ * @param {unknown} value - stored value: empty or null for all, or a list of server names.
+ * @returns {string[] | null} allowed server names, or null when every connector is allowed.
+ */
+function readConnectors(value) {
+  const raw = plain(value);
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw === 'string' && raw.trim() === '') return null;
+  if (typeof raw === 'string') {
+    try {
+      if (!Array.isArray(JSON.parse(raw))) return null;
+    } catch {
+      return null;
+    }
+  } else if (!Array.isArray(raw)) return null;
+  return readNameList(raw);
+}
+
+/**
+ * Read the saved model versions.
+ * Invalid entries are ignored rather than failing a model request.
+ * @param {object} config - live plugin Config.
+ * @returns {Record<string, object>} version id -> normalized version.
+ */
+function readModelVersions(config) {
+  let raw = plain(config.modelVersions);
+  if (typeof raw === 'string') {
+    try {
+      raw = raw.trim() ? JSON.parse(raw) : [];
+    } catch {
+      return {};
+    }
+  }
+  if (!Array.isArray(raw)) return {};
+  const result = {};
+  for (const value of raw) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+    const id = typeof value.id === 'string' ? value.id.trim().toLowerCase() : '';
+    const provider = typeof value.provider === 'string' ? value.provider.trim() : '';
+    const model = typeof value.model === 'string' ? value.model.trim() : '';
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(id) || Object.hasOwn(result, id) || !provider || !model) continue;
+    result[id] = {
+      id,
+      name: typeof value.name === 'string' && value.name.trim() ? value.name.trim().slice(0, 80) : model,
+      provider,
+      model,
+      effort: EFFORT_LEVELS.includes(value.effort) ? value.effort : undefined,
+      wireEffort:
+        typeof value.wireEffort === 'string' && value.wireEffort.trim() ? value.wireEffort.trim() : undefined,
+      temperature:
+        typeof value.temperature === 'number' && Number.isFinite(value.temperature)
+          ? clamp(value.temperature, 0, 2)
+          : undefined,
+      maxTokens:
+        typeof value.maxTokens === 'number' && Number.isFinite(value.maxTokens) && value.maxTokens > 0
+          ? Math.min(1_000_000, Math.floor(value.maxTokens))
+          : undefined,
+    };
+  }
+  return result;
+}
+
+/**
+ * The sampling fields a version sets, ready to spread into a selection.
+ * @param {object | undefined} version - normalized version.
+ * @returns {object} `versionId`, `versionName` and the fields the version sets.
+ */
+function versionFields(version) {
+  if (!version) return {};
+  return {
+    versionId: version.id,
+    versionName: version.name,
+    ...(version.temperature === undefined ? {} : { temperature: version.temperature }),
+    ...(version.maxTokens === undefined ? {} : { maxTokens: version.maxTokens }),
+    ...(version.wireEffort === undefined ? {} : { wireEffort: version.wireEffort }),
+  };
+}
+
+/**
+ * Point a tier at its saved model version, when it names one that exists.
+ * The version supplies the tier's model and sampling.
+ * @param {object} tier - normalized tier.
+ * @param {Record<string, object>} versions - saved versions.
+ * @returns {object} the tier, bound to its version.
+ */
+function bindVersion(tier, versions) {
+  const version = tier.version ? versions[tier.version] : undefined;
+  if (!version) return tier;
+  return { ...tier, provider: version.provider, model: version.model, ...versionFields(version) };
+}
+
+/**
  * Resolve one enabled model profile by exact route.
  * @param {Record<string, Record<string, object>>} profiles - normalized registry.
  * @param {string} provider - provider route.
@@ -489,6 +635,7 @@ function profileFor(profiles, provider, model) {
  * @returns {object} selection with profile defaults merged.
  */
 function withModelProfile(selection, profiles) {
+  if (selection.versionId) return selection;
   const profile = profileFor(profiles, selection.provider, selection.model);
   if (!profile) return selection;
   return {
@@ -519,7 +666,6 @@ function normalizeCustomTier(value, index, usedIds) {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(id) || usedIds.has(id)) return undefined;
   const provider = typeof value.provider === 'string' ? value.provider.trim() : '';
   const model = typeof value.model === 'string' ? value.model.trim() : '';
-  if (!provider || !model) return undefined;
   const variants = [];
   if (Array.isArray(value.variants)) {
     for (const variant of value.variants) {
@@ -552,6 +698,10 @@ function normalizeCustomTier(value, index, usedIds) {
     browser: value.browser !== false,
     subagents: value.subagents !== false,
     maxSubagents: readTierCap(value.maxSubagents),
+    minSubagents: readMinSubagents(value.minSubagents),
+    version: typeof value.version === 'string' ? value.version.trim().toLowerCase() : '',
+    skills: readNameList(value.skills, SKILL_LIMIT),
+    connectors: readConnectors(value.connectors),
     order:
       typeof value.order === 'number' && Number.isFinite(value.order) ? value.order : 100 + index,
     variants,
@@ -566,28 +716,35 @@ function normalizeCustomTier(value, index, usedIds) {
  */
 function readDeck(config) {
   const raw = plain(config.tiers) ?? {};
+  const versions = readModelVersions(config);
   const tiers = {};
   for (const [index, id] of TIER_IDS.entries()) {
     const tier = raw[id] ?? {};
     const fallback = DEFAULTS[id];
-    tiers[id] = {
+    const name =
+      typeof tier.label === 'string' && tier.label.trim() ? tier.label.trim().slice(0, 40) : TIER_LABELS[id] ?? id;
+    tiers[id] = bindVersion({
       id,
-      name: TIER_LABELS[id] ?? id,
-      short: (TIER_LABELS[id] ?? id).slice(0, 1).toUpperCase(),
+      name,
+      short: name.slice(0, 1).toUpperCase(),
       role: '',
-      prompt: '',
-      provider: typeof tier.provider === 'string' ? tier.provider : fallback.provider,
-      model: typeof tier.model === 'string' ? tier.model : fallback.model,
+      prompt: typeof tier.instructions === 'string' ? tier.instructions.slice(0, 4000) : '',
+      provider: typeof tier.provider === 'string' ? tier.provider.trim() : fallback.provider,
+      model: typeof tier.model === 'string' ? tier.model.trim() : fallback.model,
       effort: EFFORT_LEVELS.includes(tier.effort) ? tier.effort : fallback.effort,
       webSearch: tier.webSearch !== false,
       webFetch: tier.webFetch !== false,
       browser: tier.browser !== false,
       subagents: tier.subagents !== false,
       maxSubagents: readTierCap(tier.maxSubagents),
+      minSubagents: readMinSubagents(tier.minSubagents),
+      version: typeof tier.version === 'string' ? tier.version.trim().toLowerCase() : '',
+      skills: readNameList(tier.skills, SKILL_LIMIT),
+      connectors: readConnectors(tier.connectors),
       order: index,
       variants: [],
       custom: false,
-    };
+    }, versions);
   }
 
   const usedIds = new Set(TIER_IDS);
@@ -606,7 +763,7 @@ function readDeck(config) {
     custom = [];
   }
   custom.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
-  for (const tier of custom) tiers[tier.id] = tier;
+  for (const tier of custom) tiers[tier.id] = bindVersion(tier, versions);
   return { ids: [...TIER_IDS, ...custom.map((tier) => tier.id)], tiers };
 }
 
@@ -627,7 +784,7 @@ function readTiers(config) {
  * @returns {boolean} whether the tier uses the route.
  */
 function tierHasRoute(tier, provider, model) {
-  if (!tier) return false;
+  if (!tier || !provider || !model) return false;
   if (tier.provider === provider && tier.model === model) return true;
   return Array.isArray(tier.variants)
     ? tier.variants.some((variant) => variant.provider === provider && variant.model === model)
@@ -711,32 +868,52 @@ function chooseEffort(ids, level) {
  * @param {Record<string, Record<string, object>>} profiles - normalized model profiles.
  * @returns {object | undefined} selection with an `id`, route, effort, and flags.
  */
-function normalizeSelection(entry, tiers, profiles) {
+function normalizeSelection(entry, tiers, profiles, versions = {}) {
   if (typeof entry === 'string') {
     const tier = tiers[entry];
-    return tier ? withModelProfile({ id: entry, ...tier, explicit: true }, profiles) : undefined;
+    // A tier with no model of its own cannot name a route; route matching decides instead.
+    if (!tier || !tier.provider || !tier.model) return undefined;
+    return withModelProfile({ ...tier, id: entry, explicit: true }, profiles);
   }
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return undefined;
 
   const tierId =
     typeof entry.tier === 'string' && Object.hasOwn(tiers, entry.tier) ? entry.tier : undefined;
   const tier = tierId ? tiers[tierId] : undefined;
+  // A saved version the Session picked supplies the route; otherwise the stored route, then the tier's.
+  const picked =
+    typeof entry.version === 'string' && Object.hasOwn(versions, entry.version)
+      ? versions[entry.version]
+      : undefined;
   const provider =
-    typeof entry.provider === 'string' && entry.provider.length > 0 ? entry.provider : tier?.provider;
-  const model = typeof entry.model === 'string' && entry.model.length > 0 ? entry.model : tier?.model;
+    picked?.provider ??
+    (typeof entry.provider === 'string' && entry.provider.length > 0 ? entry.provider : tier?.provider);
+  const model =
+    picked?.model ??
+    (typeof entry.model === 'string' && entry.model.length > 0 ? entry.model : tier?.model);
   if (!provider || !model) return undefined;
 
   const matchedId =
     tierId ??
     Object.keys(tiers).find((id) => tierHasRoute(tiers[id], provider, model));
-  const base = matchedId
-    ? tiers[matchedId]
-    : { webSearch: true, webFetch: true, browser: true, subagents: true };
+  const matched = matchedId ? tiers[matchedId] : undefined;
+  // The tier's own version settings follow the tier's own model only.
+  const {
+    temperature: tierTemperature,
+    maxTokens: tierMaxTokens,
+    wireEffort: tierWireEffort,
+    versionId: tierVersionId,
+    versionName: tierVersionName,
+    ...rules
+  } = matched ?? { webSearch: true, webFetch: true, browser: true, subagents: true };
+  const version =
+    picked ??
+    (matched?.versionId && matched.provider === provider && matched.model === model
+      ? versions[matched.versionId]
+      : undefined);
   const effort = EFFORT_LEVELS.includes(entry.effort)
     ? entry.effort
-    : matchedId
-      ? tiers[matchedId].effort
-      : 'medium';
+    : version?.effort ?? (matched ? matched.effort : 'medium');
   const temperature =
     typeof entry.temperature === 'number' && Number.isFinite(entry.temperature)
       ? Math.min(2, Math.max(0, entry.temperature))
@@ -748,12 +925,13 @@ function normalizeSelection(entry, tiers, profiles) {
 
   return withModelProfile(
     {
+      ...rules,
       id: matchedId ?? 'custom',
-      ...base,
       provider,
       model,
       effort,
       explicit: true,
+      ...versionFields(version),
       ...(temperature === undefined ? {} : { temperature }),
       ...(maxTokens === undefined ? {} : { maxTokens }),
     },
@@ -781,7 +959,7 @@ function tierForSession(
   roles = readRoleModels(config),
 ) {
   const tiers = readTiers(config);
-  const selection = normalizeSelection(readActiveTiers(config)[sessionId], tiers, profiles);
+  const selection = normalizeSelection(readActiveTiers(config)[sessionId], tiers, profiles, readModelVersions(config));
   const route = lastRoute.get(sessionId);
   if (
     selection &&
@@ -843,7 +1021,7 @@ function tierForRoute(
   roles = readRoleModels(config),
 ) {
   const tiers = readTiers(config);
-  const selection = normalizeSelection(readActiveTiers(config)[sessionId], tiers, profiles);
+  const selection = normalizeSelection(readActiveTiers(config)[sessionId], tiers, profiles, readModelVersions(config));
   if (selection && selection.provider === provider && selection.model === model) return selection;
   if (selection && tierFallbackHasRoute(fallbacks, selection.id, provider, model)) {
     return { ...selection, provider, model };
@@ -875,9 +1053,10 @@ function tierForRoute(
  * @param {number} maxSubagents - current global cap.
  * @param {boolean} ultraAutoDelegate - whether Ultra Code should push delegation.
  * @param {Record<string, Record<string, {provider: string, model: string}>>} [roles] - role routes.
+ * @param {{skillText?: (name: string) => string | undefined}} [extras] - loaded skill text, by skill name.
  * @returns {string} prompt section text, or an empty string.
  */
-function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}) {
+function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = {}) {
   if (!tier) return '';
   const lines = [
     `## Active model tier: ${tierLabel(tier)}`,
@@ -899,47 +1078,45 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}) {
       : 'Internet access for this tier: none. Do not attempt web search, web fetch, or browser automation.',
   );
 
-  switch (tier.id) {
-    case 'haiku':
-      lines.push(
-        'Haiku behavior: prefer fast, narrow actions. Locate the relevant code, make the smallest correct change, and avoid broad refactors unless the user asks for them.',
-      );
-      break;
-    case 'sonnet':
-      lines.push(
-        'Sonnet behavior: plan briefly, implement the change, then verify the touched path. Balance speed against completeness.',
-      );
-      break;
-    case 'opus':
-      lines.push(
-        'Opus behavior: take the harder reasoning path. State assumptions, weigh alternatives, and verify edge cases before declaring success.',
-      );
-      break;
-    case 'fable':
-      lines.push(
-        'Fable behavior: explore broadly. Gather context, connect disparate parts, and produce a coherent synthesis before editing.',
-      );
-      break;
-    case 'code':
-      lines.push(
-        'This is the Code tier. Its sole purpose is to review, check, and fix code. Do not plan features or start new product scope.',
-        'Begin with the diff or the named files, then run the narrowest checks that prove the change (typecheck, focused tests, lint).',
-        'Report findings first, ordered by severity, each with `file:line` and a concrete failure mode. Then apply the fixes and re-run the checks.',
-        'If nothing is wrong, say so plainly and name the checks you ran.',
-      );
-      break;
-    default:
-      if (tier.custom) {
-        lines.push(
-          `Custom tier "${tier.name}". ${tier.role ? `${tier.role} ` : ''}Follow this tier's role and the user's request; do not silently switch to a built-in tier.`,
-        );
-        if (tier.prompt) lines.push(tier.prompt);
-      } else {
-        lines.push(
-          'This is a custom model selection. Use the selected model at the depth requested; do not silently switch to a configured tier.',
-        );
-      }
-      break;
+  // A tier's own instructions replace the starter's built-in guidance.
+  const own = typeof tier.prompt === 'string' ? tier.prompt.trim() : '';
+  if (tier.custom) {
+    lines.push(
+      `Custom tier "${tier.name}". ${tier.role ? `${tier.role} ` : ''}Follow this tier's role and the user's request; do not silently switch to another tier.`,
+    );
+    if (own) lines.push(own);
+  } else if (own) {
+    lines.push(`Instructions for the ${tierLabel(tier)} tier:`, own);
+  } else if (tier.id === 'code') {
+    lines.push(
+      `This is the ${tierLabel(tier)} tier. Its sole purpose is to review, check, and fix code. Do not plan features or start new product scope.`,
+      'Begin with the diff or the named files, then run the narrowest checks that prove the change (typecheck, focused tests, lint).',
+      'Report findings first, ordered by severity, each with `file:line` and a concrete failure mode. Then apply the fixes and re-run the checks.',
+      'If nothing is wrong, say so plainly and name the checks you ran.',
+    );
+  } else if (STARTER_GUIDANCE[tier.id]) {
+    lines.push(`${tierLabel(tier)} behavior: ${STARTER_GUIDANCE[tier.id]}`);
+  } else {
+    lines.push(
+      'This is a custom model selection. Use the selected model at the depth requested; do not silently switch to a configured tier.',
+    );
+  }
+
+  if (Array.isArray(tier.connectors)) {
+    lines.push(
+      tier.connectors.length > 0
+        ? `Connectors available in this tier: ${tier.connectors.join(', ')}. Tools of other connectors are switched off.`
+        : 'Connectors are switched off for this tier.',
+    );
+  }
+
+  for (const name of tier.skills ?? []) {
+    const text = extras.skillText?.(name);
+    lines.push(
+      text
+        ? `### Skill loaded for this tier: ${name}\n${text}`
+        : `This tier uses the skill \`${name}\`: load it with the skill tool before you start, if it is available.`,
+    );
   }
 
   if (tier.effort === 'off') {
@@ -964,6 +1141,12 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}) {
     lines.push(
       `You may delegate to sub-agents, with at most ${maxSubagents} concurrent children for this tier. Prefer local models for cheap independent checks and cloud models for hard reasoning when both are configured.`,
     );
+    const wanted = Math.min(tier.minSubagents ?? 0, maxSubagents);
+    if (wanted > 0) {
+      lines.push(
+        `When a task has independent parts, split it across at least ${wanted} sub-agent${wanted === 1 ? '' : 's'} started together. For a small or indivisible task, do it directly and say so in one line.`,
+      );
+    }
   }
 
   if (tier.effort === 'ultra') {
@@ -989,7 +1172,7 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}) {
     );
     if (tier.id === 'code') {
       lines.push(
-        'At Ultra on the Code tier, fan out independent review angles when sub-agents are available (correctness, security, performance, tests), then consolidate their findings yourself and verify each fix.',
+        'At Ultra on this review tier, fan out independent review angles when sub-agents are available (correctness, security, performance, tests), then consolidate their findings yourself and verify each fix.',
       );
     }
   }
@@ -1074,6 +1257,140 @@ export function apply(ctx, config) {
     }
   }
 
+  /** Loaded skill text, by folder and skill name: `{ text, at }`. */
+  const skillTexts = new Map();
+  /** Agent id -> the connector restriction in force: `{ key, undo }`. */
+  const connectorState = new Map();
+
+  /**
+   * @param {object} agent - live Agent.
+   * @returns {string} the folder the Agent works in, or an empty string.
+   */
+  function folderOf(agent) {
+    const header = agent?.header ?? agent?.session?.header;
+    if (typeof header?.cwd === 'string' && header.cwd) return header.cwd;
+    try {
+      return String(ctx.get('workingDirectory')?.defaultDirectory ?? '');
+    } catch {
+      return '';
+    }
+  }
+
+  /** @param {object} agent - live Agent. @param {string} name - skill name. @returns {string} cache key. */
+  function skillKey(agent, name) {
+    return `${folderOf(agent)}\0${name}`;
+  }
+
+  /**
+   * Load the text of the skills the Agent's tier names, so the prompt section can include it.
+   * Never throws and never waits long: a skill that cannot be read is named in the prompt instead.
+   * @param {object} agent - live Agent.
+   * @returns {Promise<void>}
+   */
+  async function loadTierSkills(agent) {
+    try {
+      const names = resolveTierOf(agent.id)?.skills ?? [];
+      const skills = ctx.get('skills');
+      if (names.length === 0 || !skills) return;
+      const now = Date.now();
+      const wanted = names.filter((name) => now - (skillTexts.get(skillKey(agent, name))?.at ?? 0) > 60_000);
+      if (wanted.length === 0) return;
+      const work = (async () => {
+        const cwd = folderOf(agent) || undefined;
+        // Skills are read through the default preset's scope, as the app's own "/" menu does.
+        const presets = ctx.get('agentPresets');
+        let lease;
+        try {
+          lease = presets ? await presets.acquireScope(undefined) : undefined;
+        } catch {
+          lease = undefined;
+        }
+        try {
+          for (const name of wanted) {
+            let text;
+            try {
+              const skill = await skills.get(name, { cwd, scope: lease?.key });
+              text = typeof skill?.content === 'string' ? skill.content.trim() : undefined;
+            } catch {
+              text = undefined;
+            }
+            if (text && text.length > SKILL_TEXT_LIMIT) {
+              text = `${text.slice(0, SKILL_TEXT_LIMIT)}\n[Skill text shortened. Load the skill with the skill tool for the rest.]`;
+            }
+            skillTexts.set(skillKey(agent, name), { text: text || undefined, at: Date.now() });
+          }
+        } finally {
+          await lease?.[Symbol.asyncDispose]?.();
+        }
+      })();
+      await Promise.race([work, new Promise((resolve) => setTimeout(resolve, 3000))]);
+      work.catch(() => {});
+    } catch (error) {
+      ctx.logger.warn(`model-tiers: could not load tier skills: ${error?.message ?? error}`);
+    }
+  }
+
+  /** @returns {string[]} names of the connector (MCP) tools registered right now. */
+  function connectorToolNames() {
+    try {
+      return ctx.tools
+        .definitions()
+        .map((definition) => String(definition.name))
+        .filter((name) => name.startsWith('mcp__'));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Whether a connector tool belongs to one of the allowed servers.
+   * @param {string} toolName - `mcp__<server>__<tool>`.
+   * @param {string[]} allowed - allowed server names.
+   * @returns {boolean} true when allowed.
+   */
+  function connectorAllowed(toolName, allowed) {
+    return allowed.some(
+      (server) =>
+        toolName.startsWith(`mcp__${server}__`) ||
+        toolName.startsWith(`mcp__${server.replace(/[^A-Za-z0-9_-]/g, '_')}__`),
+    );
+  }
+
+  /**
+   * Hide the tools of connectors the Agent's tier does not allow. Replaces the
+   * earlier restriction when the tier or the connected servers changed.
+   * @param {object} agent - live Agent.
+   */
+  function applyConnectors(agent) {
+    try {
+      const allowed = resolveTierOf(agent.id)?.connectors ?? null;
+      const deny =
+        allowed === null ? [] : connectorToolNames().filter((name) => !connectorAllowed(name, allowed));
+      const key = deny.join('\n');
+      const state = connectorState.get(agent.id);
+      if ((state?.key ?? '') === key) return;
+      state?.undo?.();
+      let undo;
+      if (deny.length > 0 && typeof agent.ctx?.tools?.restrict === 'function') {
+        undo = agent.ctx.effect(() => agent.ctx.tools.restrict({ deny }), 'model-tiers connector restriction');
+      }
+      connectorState.set(agent.id, { key, undo });
+    } catch (error) {
+      ctx.logger.warn(`model-tiers: could not limit connectors: ${error?.message ?? error}`);
+    }
+  }
+
+  ctx.effect(() => () => {
+    for (const state of connectorState.values()) {
+      try {
+        state.undo?.();
+      } catch {
+        // The Agent context may already be disposed.
+      }
+    }
+    connectorState.clear();
+  }, 'model-tiers connector ownership');
+
   /**
    * Install the tier prompt section on one live Agent.
    * @param {object} agent - live Agent.
@@ -1100,6 +1417,7 @@ export function apply(ctx, config) {
                 readMaxSubagents(config, tier),
                 plain(config.ultraAutoDelegate) !== false,
                 readRoleModels(config),
+                { skillText: (name) => skillTexts.get(skillKey(agent, name))?.text },
               );
             },
           }),
@@ -1560,7 +1878,7 @@ export function apply(ctx, config) {
   async function desiredEffort(sessionId, provider, model) {
     const profiles = readModelProfiles(config);
     const tier = tierForRoute(sessionId, provider, model, config, profiles, readFallbackChains(config));
-    const profile = profileFor(profiles, provider, model);
+    const profile = tier?.versionId ? undefined : profileFor(profiles, provider, model);
     if (!tier && !profile) return undefined;
     const ids = await effortIds(provider, model);
     const pinned = tier?.wireEffort ?? profile?.wireEffort;
@@ -1594,17 +1912,34 @@ export function apply(ctx, config) {
 
   // Before the first step of a new or resumed Agent, and ahead of each later
   // step, make the recorded selection carry the tier's effort.
+  // An agent/created listener must never throw: each helper catches its own errors.
   ctx.on('agent/created', async ({ agent }) => {
     await reconcileEffort(agent, agent.model?.current?.());
+    applyConnectors(agent);
+    await loadTierSkills(agent);
   });
   ctx.on('agent/pre-step', async (payload, next) => {
+    await loadTierSkills(payload.agent);
     const decision = await next();
     await reconcileEffort(payload.agent, payload.modelSelection);
     return decision;
   });
   for (const agent of ctx.get('agents')?.list() ?? []) {
     void reconcileEffort(agent, agent.model?.current?.());
+    applyConnectors(agent);
+    void loadTierSkills(agent);
   }
+
+  // A tier picked in the chat box, or edited in Settings, arrives as a settings change.
+  // Tools never change in the middle of a turn: a busy Agent is updated when it goes idle.
+  ctx.on('loader/volatile-update', () => {
+    for (const agent of ctx.get('agents')?.list() ?? []) {
+      if (agent.status === 'idle') applyConnectors(agent);
+    }
+  });
+  ctx.on('agent/status', ({ agent, status }) => {
+    if (status === 'idle') applyConnectors(agent);
+  });
 
   // `agent/request` is deprecated for provider, model and effort: on rc.1 the
   // loop throws if a listener changes any of them after step preparation. It
@@ -1621,7 +1956,7 @@ export function apply(ctx, config) {
       profiles,
       readFallbackChains(config),
     );
-    const profile = profileFor(profiles, base.provider, base.model);
+    const profile = tier?.versionId ? undefined : profileFor(profiles, base.provider, base.model);
     if (!tier) {
       lastRoute.delete(sessionId);
       lastSelection.delete(sessionId);
@@ -1704,6 +2039,172 @@ export function apply(ctx, config) {
     void pruneStale();
   });
 
+  // ---- carry-over from before 0.10 ---------------------------------------
+  let carried = false;
+
+  /**
+   * One-time carry-over for an install that used Tier before 0.10:
+   *  - a starter tier that already has a model keeps the name it had (Haiku, Sonnet, ...);
+   *  - per-model defaults that set something become saved model versions, and the
+   *    tiers on that model point at the new version, so they behave as before.
+   * A fresh install has no models set, so nothing is written but the marker.
+   * @returns {Promise<void>}
+   */
+  async function carryOver() {
+    if (carried || plain(config.startersMigrated) === true) return;
+    const settings = ctx.get('settings');
+    if (!settings) return;
+    carried = true;
+    try {
+      const ops = [];
+      const rawTiers = plain(config.tiers) ?? {};
+      for (const id of TIER_IDS) {
+        const tier = rawTiers[id] ?? {};
+        const hasModel = typeof tier.provider === 'string' && tier.provider.trim() && typeof tier.model === 'string' && tier.model.trim();
+        const hasLabel = typeof tier.label === 'string' && tier.label.trim();
+        if (hasModel && !hasLabel) ops.push({ op: 'set', path: ['tiers', id, 'label'], value: LEGACY_TIER_LABELS[id] });
+      }
+
+      const profiles = readModelProfiles(config);
+      const versions = Object.values(readModelVersions(config));
+      const usedIds = new Set(versions.map((version) => version.id));
+      const created = new Map();
+      const keptProfiles = {};
+      for (const [provider, models] of Object.entries(profiles)) {
+        for (const [model, profile] of Object.entries(models)) {
+          const sets = profile.temperature !== undefined || profile.maxTokens !== undefined || profile.wireEffort !== undefined;
+          if (!sets || profile.enabled === false) {
+            (keptProfiles[provider] ??= {})[model] = profile;
+            continue;
+          }
+          let id = `${model}-saved`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'saved';
+          for (let n = 2; usedIds.has(id); n += 1) id = `${id.replace(/-\d+$/, '')}-${n}`;
+          usedIds.add(id);
+          versions.push({
+            id,
+            name: `${profile.label ?? model} (saved settings)`,
+            provider,
+            model,
+            ...(profile.wireEffort === undefined ? {} : { wireEffort: profile.wireEffort }),
+            ...(profile.temperature === undefined ? {} : { temperature: profile.temperature }),
+            ...(profile.maxTokens === undefined ? {} : { maxTokens: profile.maxTokens }),
+          });
+          created.set(`${provider}\0${model}`, id);
+        }
+      }
+      if (created.size > 0) {
+        ops.push({ op: 'set', path: ['modelVersions'], value: JSON.stringify(versions) });
+        ops.push({ op: 'set', path: ['modelProfiles'], value: JSON.stringify(keptProfiles) });
+        for (const id of TIER_IDS) {
+          const tier = rawTiers[id] ?? {};
+          const version = created.get(`${String(tier.provider ?? '').trim()}\0${String(tier.model ?? '').trim()}`);
+          if (version && !(typeof tier.version === 'string' && tier.version.trim())) {
+            ops.push({ op: 'set', path: ['tiers', id, 'version'], value: version });
+          }
+        }
+        let custom = plain(config.customTiers);
+        try {
+          custom = typeof custom === 'string' ? JSON.parse(custom || '[]') : custom;
+        } catch {
+          custom = [];
+        }
+        if (Array.isArray(custom)) {
+          let touched = false;
+          const next = custom.map((tier) => {
+            const version = tier && typeof tier === 'object' ? created.get(`${String(tier.provider ?? '').trim()}\0${String(tier.model ?? '').trim()}`) : undefined;
+            if (!version || tier.version) return tier;
+            touched = true;
+            return { ...tier, version };
+          });
+          if (touched) ops.push({ op: 'set', path: ['customTiers'], value: JSON.stringify(next) });
+        }
+      }
+      ops.push({ op: 'set', path: ['startersMigrated'], value: true });
+      await settings.mutate('model-tiers', ops);
+      if (ops.length > 1) ctx.logger.info(`model-tiers: carried over earlier settings (${ops.length - 1} changes)`);
+    } catch (error) {
+      // Tried again at the next start; the tiers work without it, under their new names.
+      ctx.logger.warn(`model-tiers: could not carry over earlier settings: ${error?.message ?? error}`);
+    }
+  }
+  ctx.on('agent/created', () => {
+    void carryOver();
+  });
+  void carryOver();
+
+  // ---- lists for the Settings page -----------------------------------------
+  // Skills and connectors a tier can pick from. GET only, behind the app's login and
+  // Host/Origin check, never cached. Names and descriptions only: no skill text, no keys.
+  ctx.inject(['webServer', 'connection'], (inner) => {
+    inner.effect(() => inner.webServer.register({
+      kind: 'exact',
+      path: CATALOG_PATH,
+      handler: async (req, res) => {
+        const refused = inner.connection.requestRejection(req);
+        if (refused !== undefined) {
+          res.statusCode = refused;
+          res.end();
+          return;
+        }
+        if (req.method !== 'GET') {
+          res.statusCode = 405;
+          res.setHeader('allow', 'GET');
+          res.end();
+          return;
+        }
+        res.setHeader('content-type', 'application/json; charset=utf-8');
+        res.setHeader('cache-control', 'no-store');
+        try {
+          const toolNames = connectorToolNames();
+          const loader = ctx.get('loader') ?? ctx.loader;
+          const connectors = (loader ? [...loader.entries()] : [])
+            .filter((entry) => entry.options?.name === '@deepseek-ai/dsh-mcp-client')
+            .map((entry) => {
+              const rowConfig = plain(entry.options.config) ?? {};
+              const name = String(rowConfig.serverName ?? entry.options.id ?? '');
+              return {
+                name,
+                enabled: !entry.disabled,
+                toolCount: toolNames.filter((tool) => connectorAllowed(tool, [name])).length,
+              };
+            })
+            .filter((row) => row.name);
+
+          let skills = [];
+          const registry = ctx.get('skills');
+          if (registry) {
+            const presets = ctx.get('agentPresets');
+            let lease;
+            try {
+              lease = presets ? await presets.acquireScope(undefined) : undefined;
+            } catch {
+              lease = undefined;
+            }
+            try {
+              let cwd;
+              try {
+                cwd = ctx.get('workingDirectory')?.defaultDirectory;
+              } catch {
+                cwd = undefined;
+              }
+              const list = await registry.list({ cwd, scope: lease?.key });
+              skills = list.map((skill) => ({
+                name: String(skill.name),
+                description: typeof skill.description === 'string' ? skill.description.slice(0, 300) : '',
+              }));
+            } finally {
+              await lease?.[Symbol.asyncDispose]?.();
+            }
+          }
+          res.end(JSON.stringify({ at: Date.now(), skills, connectors }));
+        } catch (error) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 300) }));
+        }
+      },
+    }), 'model-tiers catalog route');
+  });
+
   // ---- modelTiers service (T3) ------------------------------------------
   /** Handlers per event name; only `tier/changed` exists. */
   const tierListeners = { 'tier/changed': new Set() };
@@ -1731,6 +2232,10 @@ export function apply(ctx, config) {
       browser: tier.browser,
       subagents: tier.subagents,
       maxSubagents: readMaxSubagents(config, tier),
+      minSubagents: tier.minSubagents ?? 0,
+      version: tier.versionId ?? null,
+      skills: Object.freeze([...(tier.skills ?? [])]),
+      connectors: Array.isArray(tier.connectors) ? Object.freeze([...tier.connectors]) : null,
       custom: tier.custom === true,
     });
   }
@@ -1792,6 +2297,7 @@ export function apply(ctx, config) {
       readActiveTiers(config)[sessionId],
       tiers,
       readModelProfiles(config),
+      readModelVersions(config),
     );
     if (chosen && chosen.id === tierId) return { provider: chosen.provider, model: chosen.model };
     const tier = tiers[tierId];
@@ -1866,6 +2372,11 @@ export function apply(ctx, config) {
       return deck.ids.map((id) => tierInfo(deck.tiers[id]));
     },
 
+    /** @returns {object[]} the saved model versions: id, name, provider, model and the settings each one sets. */
+    listVersions() {
+      return Object.values(readModelVersions(config)).map((version) => Object.freeze({ ...version }));
+    },
+
     /**
      * @param {string} sessionId - Agent id.
      * @returns {object | null} the tier the Agent is on, or null.
@@ -1887,7 +2398,16 @@ export function apply(ctx, config) {
       if (!tier) throw new Error(`model-tiers: unknown tier "${tierId}"`);
       const agent = ctx.get('agents')?.get(sessionId);
       if (!agent) throw new Error(`model-tiers: unknown session "${sessionId}"`);
-      const entry = { tier: tierId, provider: tier.provider, model: tier.model, effort: tier.effort };
+      // A tier with no model of its own applies its rules to the model the conversation is on.
+      const current = agent.model?.current?.();
+      const route =
+        tier.provider && tier.model
+          ? { provider: tier.provider, model: tier.model }
+          : current
+            ? { provider: current.provider, model: current.model }
+            : undefined;
+      if (!route) throw new Error(`model-tiers: tier "${tierId}" has no model and the session has none selected`);
+      const entry = { tier: tierId, provider: route.provider, model: route.model, effort: tier.effort };
       const from = resolveTierOf(sessionId)?.id;
       overlay.set(sessionId, entry);
       const settings = ctx.get('settings');
@@ -1906,14 +2426,16 @@ export function apply(ctx, config) {
           );
         }
       }
-      const effort = await desiredEffort(sessionId, tier.provider, tier.model);
+      const effort = await desiredEffort(sessionId, route.provider, route.model);
       agent.model.select({
-        provider: tier.provider,
-        model: tier.model,
+        provider: route.provider,
+        model: route.model,
         ...(effort === undefined ? {} : { reasoningEffort: effort }),
       });
-      lastRoute.set(sessionId, { provider: tier.provider, model: tier.model });
+      lastRoute.set(sessionId, { provider: route.provider, model: route.model });
       knownTier.set(sessionId, tierId);
+      if (agent.status === 'idle') applyConnectors(agent);
+      void loadTierSkills(agent);
       if (from !== tierId) emitTierChanged(sessionId, from, tierId);
     },
 
@@ -1940,7 +2462,8 @@ export function apply(ctx, config) {
     },
 
     /**
-     * Sampling the user set explicitly for one Session in the composer (not model-profile defaults).
+     * Sampling the user chose for one Session: values set in the chat box, and those of the saved
+     * model version the Session is on. Never the old per-model defaults.
      * @param {string} sessionId - Agent id.
      * @returns {{temperature?: number, maxTokens?: number}} only the fields the Session sets.
      */
@@ -1955,6 +2478,12 @@ export function apply(ctx, config) {
       if (live && typeof live === 'object') {
         if (typeof live.temperature === 'number') result.temperature = live.temperature;
         if (typeof live.maxTokens === 'number') result.maxTokens = live.maxTokens;
+      }
+      // A saved model version the Session is on is the user's choice too: what it sets is not overridden.
+      const chosen = resolveTierOf(sessionId);
+      if (chosen?.versionId) {
+        if (result.temperature === undefined && typeof chosen.temperature === 'number') result.temperature = chosen.temperature;
+        if (result.maxTokens === undefined && typeof chosen.maxTokens === 'number') result.maxTokens = chosen.maxTokens;
       }
       return Object.freeze(result);
     },
@@ -2046,6 +2575,12 @@ export function apply(ctx, config) {
     lastSelection.delete(agent.id);
     knownTier.delete(agent.id);
     overlay.delete(agent.id);
+    try {
+      connectorState.get(agent.id)?.undo?.();
+    } catch {
+      // The Agent context is already unwinding.
+    }
+    connectorState.delete(agent.id);
     const dispose = promptDisposers.get(agent.id);
     promptDisposers.delete(agent.id);
     try {
@@ -2086,6 +2621,13 @@ export function apply(ctx, config) {
       }
     }
 
+    if (Array.isArray(tier.connectors) && exec.name.startsWith('mcp__') && !connectorAllowed(exec.name, tier.connectors)) {
+      return {
+        kind: 'deny',
+        reason: `The ${tierLabel(tier)} tier does not include this connector. Work without it, or ask the user to allow it in Settings → Model Tiers.`,
+      };
+    }
+
     if (SUBAGENT_TOOLS.has(exec.name) || extraSubagentTools.has(exec.name)) {
       if (!tier.subagents) {
         return {
@@ -2121,3 +2663,16 @@ export function apply(ctx, config) {
     return next();
   });
 }
+
+/** Pure helpers, exported for the automated tests. */
+export const testing = {
+  readDeck,
+  readModelVersions,
+  readConnectors,
+  readNameList,
+  normalizeSelection,
+  tierForRoute,
+  tierPrompt,
+  DEFAULTS,
+  TIER_IDS,
+};

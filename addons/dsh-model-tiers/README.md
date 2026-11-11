@@ -1,19 +1,59 @@
 # Model Tiers
 
-Five built-in Claude-Code-style model tiers for DSH, plus additive custom tiers. Each tier has a model, effort level, internet policy, and sub-agent policy. Sampling defaults are defined once per model route and shared by every tier using that model.
+Two lists that work together, plus the one model control of the chat box:
 
-## Custom tiers
+- **Tiers** are ways of working. A tier sets how hard the model thinks (effort), what it may reach (web search, web fetch, browser, sub-agents), how many sub-agents it runs, its own instructions, the skills it loads and the connectors it may use. Five **starter tiers** ship: Fast, Balanced, Deep, Creative and Code review. You can add your own.
+- **Model versions** are named copies of a model with their own effort, temperature and max output tokens, for example "Qwen – Writing" and "Qwen – Coding". The plain model always stays available with default settings.
+- A tier can point at a model version, at a plain model, or at no model at all. A tier with no model applies its rules to whatever model the conversation is on.
 
-**Settings → Model Tiers → Custom tiers** adds tiers without modifying the five built-ins:
+**No models are preconfigured.** A fresh install has five starter tiers with no model.
 
-- **Copy** on any built-in tier to fork its model, effort, and access flags into an editable custom tier.
-- **New tier**, **Duplicate**, **Move up/down**, and **Delete**.
-- Name and two-character badge.
-- Role summary and free-form tier instructions injected while the tier is active.
-- Primary model plus optional model variants.
-- Effort, web search, web fetch, browser, and sub-agent policy.
+## The chat box control
 
-Custom tier IDs are stable (`custom-…`), and deleting a custom tier leaves the built-ins and model profiles intact. Sessions pinned to a deleted custom tier fall back to normal route matching.
+One button beside the send button shows the model (or version) and the effort. It opens one panel:
+
+- **Search and list:** saved versions first, then every model by provider. Picking a plain model always gives default settings.
+- **Effort slider:** Off, Low, Medium, High, Extra high, Ultra Code. It applies when you let go.
+- **Tier:** one chip per tier. "Reset" forgets this conversation's tier and settings; the model stays.
+- **Sampling:** temperature and max output tokens for this conversation. **Save as new version…** keeps the settings in use under a name; **Update "name"** writes changes back into the version in use.
+
+The app's own model menu is hidden while this add-on is on (it comes back when the add-on is switched off). The control uses the app's own model directory, so `/model` and the button always agree.
+
+## Starter tiers and your tiers
+
+**Settings → Model Tiers → Starter tiers** has one card per starter:
+
+| Field | What it does |
+|---|---|
+| Name | Your own name for the starter. Empty uses the built-in name |
+| Instructions | Given to the model whenever the tier is active. Empty uses the starter's built-in guidance |
+| Model | Optional. With a model, picking the tier switches the conversation to it. "Clear model" removes it |
+| Effort, Access | As before: effort level, web search, web fetch, browser, sub-agents |
+| Model version | A saved version that supplies the tier's model and sampling |
+| Sub-agents | "Ask for at least" (an instruction to the model) and "allow at most" (enforced; empty uses the app-wide cap) |
+| Skills loaded with this tier | Up to 6 skills whose text is added to the model's instructions while the tier is active (8,000 characters each; longer text is cut with a note) |
+| Connectors | All, or only the MCP servers you tick. Tools of the others are hidden from the model, and refused if called anyway |
+
+**Your tiers** adds tiers without changing the starters: **New tier**, **Copy** on a starter, **Duplicate**, **Move up/down** and **Delete**. They have the same fields, plus a two-character badge, a role line and model variants. Ids are stable (`custom-…`). A conversation on a deleted tier falls back to normal matching.
+
+A model that belongs to a tier (its own model, a variant, a fallback or a role model) gets that tier's rules even when you only picked the model.
+
+## Model versions
+
+**Settings → Model Tiers → Model versions**: "New version of…" a model, then set a name, effort, temperature (0–2) and max output tokens. Empty fields mean "default". Each row says which tiers use it. Versions can also be saved from the chat box.
+
+What applies, strongest first: a value set in the chat box for this conversation → the saved version in use → the adapter default. The **Sampling presets** add-on never overrides the first two.
+
+The app sends only `temperature` and `maxTokens`. `top_p`, `top_k`, `min_p` and the penalties cannot be sent by this app version: they stay on the model server (verified in the installed app's `llm-pi-ai` adapter).
+
+## Carry-over from before 0.10
+
+On the first start after an update, once:
+
+- a starter tier that already has a model keeps the name it had (Haiku, Sonnet, Opus, Fable, Code), stored as its Name;
+- old per-model defaults ("model profiles") that set something become model versions named "… (saved settings)", and the tiers on that model point at the new version. Empty profiles are left alone and no longer shown.
+
+The marker is `startersMigrated`. Old per-model defaults that remain still apply to conversations that use no version.
 
 ## Project profiles
 
@@ -102,41 +142,9 @@ It can copy a plain-text report and never mutates configuration.
 
 Exports exclude session pins and per-session profile overrides. Imports are **merge-only**: choose the sections to apply, matching entries are updated, and entries absent from the file are preserved. A live preview validates the JSON and shows how many setting updates will be written.
 
-## Model profiles
+## Where things are stored
 
-**Settings → Model Tiers → Model profiles** defines sampling defaults for a `provider/model` pair:
-
-- **Wire effort** — a specific adapter-advertised reasoning effort, or Auto to let the tier behavior choose the nearest one.
-- **Temperature** — 0–2, or Auto for the adapter/model default.
-- **Max tokens** — positive integer, or Auto.
-- **Enabled** — disable a profile without deleting it.
-
-Profiles are keyed by route, so the same local or cloud model gets the same defaults in Haiku, Sonnet, Code, custom tiers, or any later tier. The first visit to Settings, or opening the composer selector, imports the built-in and custom tier routes into the registry. The tier cards show which model defaults apply.
-
-Precedence: session override → model profile default → adapter default. Selector fields marked Auto inherit the model profile; unchecking Auto writes a session-specific override.
-
-| Tier | Default model | Default effort | Intended use |
-|---|---|---|---|
-| Haiku | `omlx-max/claude-haiku` | Low | Fast search, small edits, quick checks |
-| Sonnet | `omlx-max/claude-sonnet` | Medium | Balanced planning and everyday coding |
-| Opus | `omlx-max/claude-opus` | High | Hard reasoning |
-| Fable | `omlx-max/Qwen3.8-27B-TURBO-Fable-…` | Medium | Long-context, exploratory work |
-| Code | `omlx-max/claude-opus` | Ultra Code | Review, check, and fix code only |
-
-## Use it
-
-- **Composer:** a **Tier** control sits at the left of the composer tool row. It shows the project profile, a searchable model picker, an effort slider, temperature, and max-output-tokens for the current Session. Pick a tier preset, or choose any catalog model and then slide effort from **Off** through **Ultra Code**; the effort commits when you release it.
-- **Settings → Model Tiers:** change every built-in tier's defaults, create custom tiers, and manage model profiles and project profiles. The page also sets the global concurrent sub-agent cap and the Ultra Code auto-delegation policy. Settings holds defaults only; a per-Session slider move does not rewrite them.
-
-Tier definitions persist in the active profile patch through the normal settings service. Per-Session choices are stored as objects in `activeTiers`, so a custom model or custom effort does not rewrite the tier defaults.
-
-## Sampling
-
-The selector controls the model route, reasoning effort, **temperature**, and **max output tokens**. Temperature and max tokens default to **Auto**, which inherits the model profile for that route; with no profile they fall back to the adapter default. Unchecking Auto writes a session-specific override. A model profile may also pin **wire effort**, in which case that advertised effort wins over the tier behavior mapping; otherwise the tier behavior chooses the nearest effort.
-
-The OMLX/OpenAI-compatible and DeepSeek adapters serialize temperature, max tokens, and effort. The plugin does not expose `top_p`, `top_k`, `min_p`, `presence_penalty`, `frequency_penalty`, or repetition penalties: DSH's call config has no fields for them, so they are owned by the inference server (OMLX model configuration) or by the cloud provider.
-
-Reasoning effort is protocol-dependent: the adapters send an effort only for models that advertise one. Local OMLX models with no reasoning metadata still get the behavior prompt, but no provider-side thinking budget. Temperature and max output tokens are independent of that and are forwarded for any model whose adapter accepts them.
+Tier settings are saved through the app's settings service into the active profile. Starters are `tiers.<id>` (ids `haiku, sonnet, opus, fable, code` are kept for existing installs; people see the names). Your tiers are the JSON list `customTiers`, versions the JSON list `modelVersions`. What each conversation picked is `activeTiers`: `{ tier, version?, provider, model, effort, temperature?, maxTokens? }`.
 
 ## Effort mapping
 
@@ -190,12 +198,13 @@ Other plugins read tiers and change a session's tier through the service `modelT
 | Member | Behaviour |
 |---|---|
 | `apiVersion` | `1` |
-| `listTiers()` | `TierInfo[]` in deck order: `id, label, provider, model, effort, webSearch, webFetch, browser, subagents, custom` |
+| `listTiers()` | `TierInfo[]` in deck order: `id, label, provider, model, effort, webSearch, webFetch, browser, subagents, maxSubagents, minSubagents, version, skills, connectors, custom`. `provider` and `model` are empty for a tier with no model |
+| `listVersions()` | the saved model versions: `id, name, provider, model` and the settings each one sets |
 | `resolveTier(sessionId)` | the tier the Agent is on (session choice, current route, or a fallback route of a tier), or `null` |
-| `setSessionTier(sessionId, tierId)` | the single write path: records the per-session choice (same entry the composer writes), selects the tier's route and effort with `agent.model.select()` for the next step, emits `tier/changed`. Throws for an unknown tier or session. If Settings refuses the write (for example the Tier row comes from a `--patch` overlay) the choice is kept in memory for this run and a warning is logged |
+| `setSessionTier(sessionId, tierId)` | the single write path: records the per-session choice (same entry the composer writes), selects the tier's route and effort with `agent.model.select()` for the next step, emits `tier/changed`. A tier with no model keeps the session's current model. The tier's version sampling applies. Throws for an unknown tier or session. If Settings refuses the write (for example the Tier row comes from a `--patch` overlay) the choice is kept in memory for this run and a warning is logged |
 | `roleRoute(tierId, role)` | `{provider, model}` for `plan`, `implement`, `review` or `fast`, or `null`; throws for another role |
 | `fallbackChain(tierId)` | `{provider, model}[]` in order, empty when none |
-| `sessionSampling(sessionId)` | the `temperature` and `maxTokens` the user set for this Session in the composer (never model-profile defaults), so other plugins do not override an explicit choice |
+| `sessionSampling(sessionId)` | the `temperature` and `maxTokens` the user chose for this Session: values set in the chat box, and those of the saved version the Session is on (never the old per-model defaults), so other plugins do not override a choice |
 | `advanceFallback(sessionId, {skip?})` | moves a Session to the next usable route of its tier's fallback chain for the next step; `skip(route)` passes over routes (route health uses it for routes known to be down); returns `{tierId, from, to}` or `null` |
 | `restorePrimary(sessionId, tierId)` | moves a Session back to the tier's primary route (its composer choice when it selected that tier); returns `{from, to}` or `null` when already there |
 | `registerSubagentTool(name)` | subjects a tool that starts child Agents to the tier's sub-agent switch and concurrency cap; returns a disposer |
@@ -212,8 +221,19 @@ Listener errors are logged and do not reach the caller. The per-session override
 
 ## Per-tier sub-agent cap (T5)
 
-A tier may set `maxSubagents` (1 to 8) to override the global `maxSubagents` for that tier; leave it unset to use the global value. In `cordis.patch.yml` it is a field of `tiers.<id>`; custom tiers take it in their `customTiers` JSON entry. The effective cap is used by the tier prompt text, the concurrency gate (`subagent`, `subagent_fork`, `delegate_role`, `review_lanes`, `run_pipeline` and tools added with `registerSubagentTool`), and `TierInfo.maxSubagents` in the `modelTiers` service. The Settings page has no field for it yet.
+A tier may set `maxSubagents` (1 to 8) to override the global `maxSubagents` for that tier; leave it unset to use the global value. In `cordis.patch.yml` it is a field of `tiers.<id>`; custom tiers take it in their `customTiers` JSON entry. The effective cap is used by the tier prompt text, the concurrency gate (`subagent`, `subagent_fork`, `delegate_role`, `review_lanes`, `run_pipeline` and tools added with `registerSubagentTool`), and `TierInfo.maxSubagents` in the `modelTiers` service. The tier cards have a field for it ("allow at most").
 
 A new Session's tier prompt section is now resolved from the Agent's current route, so the first step carries it. Before, it appeared only from the second step.
 
 A composer-selected tier is now matched to its fallback and role routes by its tier id (before, `selection.tierId` was read where only `selection.id` exists, so those matches never succeeded for composer-selected tiers).
+
+## Checked (0.10, throwaway web profile, mock model)
+
+- **Unit tests:** 12 in `test/tiers.test.mjs` (starters without a model, versions, the plain model keeping defaults, tier rules on any model, prompt text, no model names in the bundle patch).
+- **Chat box:** the panel opens above the button inside the window; the slider set High and the button showed it; picking a tier with a version switched model, effort and temperature; a failed switch shows its error and puts the earlier choice back.
+- **Save as new version:** created a version from a temperature set in the chat box; the plain model stayed in the list with default settings.
+- **End to end**, read from the exact request the model received: model and temperature (0.9) of the tier's version, effort Low, the tier's instructions, the text of the chosen skill, "Connectors are switched off", and the "at least 2 sub-agents" line. A Sampling preset (0.1) did not override the version's temperature.
+- **Carry-over:** a profile that already had tier models kept the names Haiku … Code.
+- **Settings:** every tab renders; version create, rename, effort and temperature edits were saved; the skills list came from the app.
+
+**Not checked:** hiding the tools of a real connector (the lab has no MCP server running; only the "none allowed" prompt line and the code path were exercised); project profiles and role lanes in the new panel beyond rendering; the Chinese strings; the Mac desktop app; a model with real thinking levels beyond the mock's.

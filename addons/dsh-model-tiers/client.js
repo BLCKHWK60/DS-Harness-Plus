@@ -7,6 +7,8 @@ window.__ModuleLoader__.load({
     const { useCallback, useEffect, useRef, useState } = React;
 
     const NS = 'model-tiers';
+    /** Width of the chat box's model panel. */
+    const POP_WIDTH = 340;
     const TIER_IDS = ['haiku', 'sonnet', 'opus', 'fable', 'code'];
     const EFFORTS = [
       { id: 'off', label: 'Off' },
@@ -25,92 +27,58 @@ window.__ModuleLoader__.load({
     ];
     const ROLE_IDS = ROLES.map((role) => role.id);
 
+    /** Starter tiers. The ids are historical; people see the labels (or their own name for a tier). */
     const TIER_META = {
       haiku: {
-        label: 'Haiku',
-        short: 'H',
-        role: 'Fast, cheap work: search, small edits, quick checks.',
+        label: 'Fast',
+        short: 'F',
+        role: 'Quick, cheap work: search, small edits, quick checks.',
       },
       sonnet: {
-        label: 'Sonnet',
-        short: 'S',
-        role: 'Balanced default: planning and everyday coding.',
+        label: 'Balanced',
+        short: 'B',
+        role: 'Everyday default: plan briefly, do the work, check it.',
       },
       opus: {
-        label: 'Opus',
-        short: 'O',
-        role: 'Deepest reasoning for hard problems.',
+        label: 'Deep',
+        short: 'D',
+        role: 'Careful reasoning for hard problems.',
       },
       fable: {
-        label: 'Fable',
-        short: 'F',
-        role: 'Long-context creative and exploratory work.',
+        label: 'Creative',
+        short: 'C',
+        role: 'Long-context writing and exploratory work.',
       },
       code: {
-        label: 'Code',
-        short: 'C',
-        role: 'Review-only tier: check, fix, and verify code.',
+        label: 'Code review',
+        short: 'R',
+        role: 'Review only: check, fix, and verify code.',
       },
     };
 
+    /** Starter rules. No model is preconfigured: a tier with no model uses the conversation's model. */
+    const STARTER_RULES = { webSearch: true, webFetch: true, browser: true, subagents: true };
     const DEFAULT_TIERS = {
-      haiku: {
-        provider: 'omlx-max',
-        model: 'Ornith-1.5-122B-oQ4e-mtp',
-        effort: 'low',
-        webSearch: true,
-        webFetch: true,
-        browser: true,
-        subagents: true,
-      },
-      sonnet: {
-        provider: 'omlx-max',
-        model: 'claude-sonnet',
-        effort: 'medium',
-        webSearch: true,
-        webFetch: true,
-        browser: true,
-        subagents: true,
-      },
-      opus: {
-        provider: 'omlx-max',
-        model: 'claude-opus',
-        effort: 'high',
-        webSearch: true,
-        webFetch: true,
-        browser: true,
-        subagents: true,
-      },
-      fable: {
-        provider: 'omlx-max',
-        model: 'Qwen3.8-27B-TURBO-Fable-Cold-Fusion-735-882-Heretic-Uncensored-NM-DAU-mlx-oQ4e-1M',
-        effort: 'medium',
-        webSearch: true,
-        webFetch: true,
-        browser: true,
-        subagents: true,
-      },
-      code: {
-        provider: 'omlx-max',
-        model: 'claude-opus',
-        effort: 'ultra',
-        webSearch: true,
-        webFetch: true,
-        browser: true,
-        subagents: true,
-      },
+      haiku: { provider: '', model: '', effort: 'low', ...STARTER_RULES },
+      sonnet: { provider: '', model: '', effort: 'medium', ...STARTER_RULES },
+      opus: { provider: '', model: '', effort: 'high', ...STARTER_RULES },
+      fable: { provider: '', model: '', effort: 'medium', ...STARTER_RULES },
+      code: { provider: '', model: '', effort: 'ultra', ...STARTER_RULES },
     };
+
+    /** Where the Settings page reads the skills and connectors a tier can pick. */
+    const CATALOG_PATH = '/dsh-model-tiers/catalog';
 
     const DICT = {
       en: {
         'section.title': 'Model Tiers',
         'section.description':
           'Five model slots for planning, coding, and review. Each tier carries its own model, effort, internet access, and sub-agent policy.',
-        'tier.haiku': 'Haiku',
-        'tier.sonnet': 'Sonnet',
-        'tier.opus': 'Opus',
-        'tier.fable': 'Fable',
-        'tier.code': 'Code',
+        'tier.haiku': 'Fast',
+        'tier.sonnet': 'Balanced',
+        'tier.opus': 'Deep',
+        'tier.fable': 'Creative',
+        'tier.code': 'Code review',
         'effort.off': 'Off',
         'effort.low': 'Low',
         'effort.medium': 'Medium',
@@ -140,7 +108,7 @@ window.__ModuleLoader__.load({
         'settings.loading': 'Loading model tiers…',
         'settings.noCatalog': 'No model catalog available. Enter provider and model ids manually.',
         'settings.writable': 'These tiers save to the active profile patch.',
-        'composer.tier': 'Tier',
+        'composer.tier': 'Model',
         'composer.configure': 'Configure tiers in Settings → Model Tiers',
         'composer.clear': 'Use normal model selection',
         'composer.noConfig': 'Model tiers are not configured yet.',
@@ -153,11 +121,11 @@ window.__ModuleLoader__.load({
         'section.title': '模型层级',
         'section.description':
           '用于规划、编码和审查的五个模型位。每个层级都有自己的模型、推理强度、网络权限和子代理策略。',
-        'tier.haiku': 'Haiku',
-        'tier.sonnet': 'Sonnet',
-        'tier.opus': 'Opus',
-        'tier.fable': 'Fable',
-        'tier.code': 'Code',
+        'tier.haiku': 'Fast',
+        'tier.sonnet': 'Balanced',
+        'tier.opus': 'Deep',
+        'tier.fable': 'Creative',
+        'tier.code': 'Code review',
         'effort.off': '关闭',
         'effort.low': '低',
         'effort.medium': '中',
@@ -185,7 +153,7 @@ window.__ModuleLoader__.load({
         'settings.loading': '正在加载模型层级…',
         'settings.noCatalog': '没有可用的模型目录，请手动填写提供商和模型 ID。',
         'settings.writable': '这些设置会写入当前配置补丁。',
-        'composer.tier': '层级',
+        'composer.tier': '模型',
         'composer.configure': '在 设置 → 模型层级 中配置',
         'composer.clear': '使用普通模型选择',
         'composer.noConfig': '尚未配置模型层级。',
@@ -508,6 +476,135 @@ window.__ModuleLoader__.load({
 .dsh-mt-btn:hover { background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); }
 .dsh-mt-btn[data-primary="true"] { background: var(--dsw-alias-brand-primary); border-color: transparent; color: var(--dsw-alias-bg-base); }
 .dsh-mt-hint { font-size: 11px; color: var(--dsw-alias-label-secondary); line-height: 1.45; }
+/* ---- chat box: the one model control ---- */
+/* The app's own model menu steps aside while this control is on; it returns when the add-on is off. */
+body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !important; }
+.dsh-mc-wrap { position: relative; display: inline-flex; align-items: center; min-width: 0; }
+.dsh-mc-trigger {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; max-width: 230px; padding: 0 8px;
+  border: 1px solid transparent; border-radius: 8px; background: transparent;
+  color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 1;
+  cursor: pointer; white-space: nowrap;
+}
+.dsh-mc-trigger:hover, .dsh-mc-trigger[data-open="true"] { background: var(--dsw-alias-bg-layer-2); }
+.dsh-mc-trigger:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+.dsh-mc-triggername { overflow: hidden; text-overflow: ellipsis; font-weight: 550; }
+.dsh-mc-triggereffort { color: var(--dsw-alias-label-secondary); }
+.dsh-mc-chevron { font-size: 9px; opacity: .6; }
+.dsh-mc-pop {
+  z-index: 1000; display: flex; flex-direction: column; overflow: hidden auto; padding: 6px;
+  background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-layer-1)); color: var(--dsw-alias-label-primary);
+  border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; font-size: 12px;
+  box-shadow: 0 14px 36px color-mix(in srgb, #000 28%, transparent);
+}
+.dsh-mc-search, .dsh-mc-input, .dsh-mc-select {
+  width: 100%; box-sizing: border-box; height: 28px; padding: 0 8px; border-radius: 7px;
+  border: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px;
+}
+.dsh-mc-search { border-color: transparent; background: transparent; flex: none; }
+.dsh-mc-search:focus, .dsh-mc-input:focus, .dsh-mc-select:focus { outline: none; border-color: var(--dsw-alias-brand-primary); }
+.dsh-mc-list { flex: 0 1 auto; min-height: 72px; max-height: 232px; overflow: auto; margin: 2px 0 4px; }
+.dsh-mc-group {
+  position: sticky; top: 0; padding: 6px 8px 3px; font-size: 10px; font-weight: 650; letter-spacing: .03em;
+  text-transform: uppercase; color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-layer-1));
+}
+.dsh-mc-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 30px; padding: 4px 8px;
+  border: 0; border-radius: 7px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.dsh-mc-item:hover, .dsh-mc-item:focus-visible { background: var(--dsw-alias-bg-layer-2); outline: none; }
+.dsh-mc-item[data-active="true"] { background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent); }
+.dsh-mc-item[disabled] { opacity: .55; cursor: default; }
+.dsh-mc-itemmain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.dsh-mc-itemname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsh-mc-itemmeta { font-size: 10px; color: var(--dsw-alias-label-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsh-mc-check { color: var(--dsw-alias-brand-primary); font-size: 12px; }
+.dsh-mc-empty { padding: 14px 8px; color: var(--dsw-alias-label-secondary); text-align: center; }
+.dsh-mc-block { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 9px 8px; border-top: 1px solid var(--dsw-alias-border-l1); }
+.dsh-mc-rowhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dsh-mc-label { font-weight: 600; }
+.dsh-mc-value { margin-left: auto; color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; }
+.dsh-mc-rowhead .dsh-mc-value { color: var(--dsw-alias-brand-primary); font-weight: 600; }
+.dsh-mc-details > summary { cursor: pointer; list-style: none; }
+.dsh-mc-details > summary::-webkit-details-marker { display: none; }
+.dsh-mc-details > summary .dsh-mc-label::before { content: '▸'; display: inline-block; width: 12px; font-size: 9px; opacity: .7; }
+.dsh-mc-details[open] > summary .dsh-mc-label::before { content: '▾'; }
+.dsh-mc-details > summary .dsh-mc-value { color: var(--dsw-alias-label-secondary); font-weight: 400; }
+/* Effort slider: a slim track with six stops and a round thumb. */
+.dsh-mc-slider { position: relative; height: 20px; display: flex; align-items: center; }
+.dsh-mc-slider::before {
+  content: ''; position: absolute; left: 0; right: 0; height: 4px; border-radius: 2px;
+  background: linear-gradient(to right, var(--dsw-alias-brand-primary) var(--dsh-mc-fill, 0%), var(--dsw-alias-border-l1) var(--dsh-mc-fill, 0%));
+}
+.dsh-mc-slider[data-unset="true"]::before { background: var(--dsw-alias-border-l1); }
+.dsh-mc-stops { position: absolute; left: 7px; right: 7px; display: flex; justify-content: space-between; pointer-events: none; }
+.dsh-mc-stops span { width: 4px; height: 4px; border-radius: 50%; background: var(--dsw-alias-label-secondary); opacity: .55; }
+.dsh-mc-stops span[data-on="true"] { background: var(--dsw-alias-bg-base); opacity: .9; }
+.dsh-mc-slider input[type="range"] {
+  position: relative; z-index: 1; width: 100%; height: 20px; margin: 0; background: transparent;
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+}
+.dsh-mc-slider input[type="range"]::-webkit-slider-runnable-track { height: 4px; background: transparent; }
+.dsh-mc-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%;
+  background: var(--dsw-alias-bg-base); border: 2px solid var(--dsw-alias-brand-primary);
+  box-shadow: 0 1px 4px color-mix(in srgb, #000 30%, transparent);
+}
+.dsh-mc-slider[data-unset="true"] input[type="range"]::-webkit-slider-thumb { border-color: var(--dsw-alias-label-secondary); }
+.dsh-mc-slider input[type="range"]:focus-visible { outline: none; }
+.dsh-mc-slider input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-brand-primary) 35%, transparent); }
+.dsh-mc-slider input[type="range"]:disabled { cursor: default; opacity: .5; }
+.dsh-mc-ends { display: flex; justify-content: space-between; font-size: 10px; color: var(--dsw-alias-label-secondary); }
+.dsh-mc-note { font-size: 10px; line-height: 1.35; color: var(--dsw-alias-label-secondary); }
+.dsh-mc-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.dsh-mc-chip {
+  height: 24px; padding: 0 9px; border-radius: 12px; border: 1px solid var(--dsw-alias-border-l1);
+  background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 11px; cursor: pointer;
+}
+.dsh-mc-chip:hover { background: var(--dsw-alias-bg-layer-2); }
+.dsh-mc-chip[data-active="true"] {
+  border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary);
+  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);
+}
+.dsh-mc-chip[disabled] { opacity: .55; cursor: default; }
+.dsh-mc-chip-quiet { border-style: dashed; }
+.dsh-mc-link { border: 0; background: transparent; color: var(--dsw-alias-brand-primary); font: inherit; font-size: 11px; cursor: pointer; padding: 0; }
+.dsh-mc-link[disabled] { opacity: .5; cursor: default; }
+.dsh-mc-field { display: flex; flex-direction: column; gap: 4px; }
+.dsh-mc-checkrow { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.dsh-mc-checkrow input { accent-color: var(--dsw-alias-brand-primary); margin: 0; }
+.dsh-mc-range { width: 100%; margin: 0; accent-color: var(--dsw-alias-brand-primary); }
+.dsh-mc-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dsh-mc-actions .dsh-mc-input { flex: 1 1 140px; width: auto; }
+.dsh-mc-btn {
+  height: 26px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--dsw-alias-border-l1);
+  background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 11px; cursor: pointer;
+}
+.dsh-mc-btn:hover { background: var(--dsw-alias-bg-layer-2); }
+.dsh-mc-btn[disabled] { opacity: .5; cursor: default; }
+.dsh-mc-btn-primary { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
+.dsh-mc-error { flex: none; margin: 2px 8px 6px; padding: 6px 8px; border-radius: 7px; font-size: 11px;
+  color: var(--dsw-alias-state-error-primary); background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); }
+.dsh-mc-foot { flex: none; padding: 7px 8px 3px; border-top: 1px solid var(--dsw-alias-border-l1); font-size: 10px; color: var(--dsw-alias-label-secondary); }
+@media (prefers-reduced-motion: no-preference) {
+  .dsh-mc-item, .dsh-mc-chip, .dsh-mc-trigger, .dsh-mc-btn { transition: background .12s ease; }
+}
+/* ---- settings: tier extras and model versions ---- */
+.dsh-mt-extras { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; border-top: 1px solid var(--dsw-alias-border-l1); }
+.dsh-mt-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--dsw-alias-label-primary); }
+.dsh-mt-inline .dsh-mt-select { width: auto; min-width: 64px; }
+.dsh-mt-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.dsh-mt-pill {
+  display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 4px 0 9px; border-radius: 12px; font-size: 11px;
+  color: var(--dsw-alias-brand-primary); background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);
+}
+.dsh-mt-pill[data-missing="true"] { color: var(--dsw-alias-state-warning-primary); background: color-mix(in srgb, var(--dsw-alias-state-warning-primary) 12%, transparent); }
+.dsh-mt-pill button { border: 0; background: transparent; color: inherit; font: inherit; font-size: 13px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.dsh-mt-textarea { height: auto; min-height: 64px; padding: 6px 8px; line-height: 1.4; resize: vertical; font-family: inherit; }
+.dsh-mt-versiongrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.dsh-mt-btn[data-danger="true"] { color: var(--dsw-alias-state-error-primary); border-color: var(--dsw-alias-state-error-primary); }
 `;
 
     function Styles() {
@@ -592,34 +689,6 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Seed one model profile per distinct tier route.
-     * @param {Record<string, object>} tiers - normalized tier definitions.
-     * @returns {Record<string, Record<string, object>>} profile registry.
-     */
-    function profilesFromTiers(tiers) {
-      const result = {};
-      for (const tier of Object.values(tiers ?? {})) {
-        if (!tier?.provider || !tier?.model) continue;
-        const routes = [
-          { provider: tier.provider, model: tier.model },
-          ...(Array.isArray(tier.variants) ? tier.variants : []),
-        ];
-        for (const route of routes) {
-          if (!route?.provider || !route?.model) continue;
-          result[route.provider] ??= {};
-          result[route.provider][route.model] ??= {
-            label: route.model,
-            wireEffort: undefined,
-            temperature: undefined,
-            maxTokens: undefined,
-            enabled: true,
-          };
-        }
-      }
-      return result;
-    }
-
-    /**
      * Normalize one user-created tier. Invalid/duplicate ids are ignored so a
      * malformed custom entry can never break the built-in deck.
      */
@@ -629,7 +698,6 @@ window.__ModuleLoader__.load({
       if (!/^[a-z0-9][a-z0-9-]*$/.test(id) || usedIds.has(id)) return undefined;
       const provider = typeof value.provider === 'string' ? value.provider.trim() : '';
       const model = typeof value.model === 'string' ? value.model.trim() : '';
-      if (!provider || !model) return undefined;
       const variants = [];
       if (Array.isArray(value.variants)) {
         for (const variant of value.variants) {
@@ -664,6 +732,11 @@ window.__ModuleLoader__.load({
         webFetch: value.webFetch !== false,
         browser: value.browser !== false,
         subagents: value.subagents !== false,
+        maxSubagents: readTierCap(value.maxSubagents),
+        minSubagents: readMinSubagents(value.minSubagents),
+        version: typeof value.version === 'string' ? value.version.trim().toLowerCase() : '',
+        skills: readNameList(value.skills),
+        connectors: readConnectors(value.connectors),
         order: typeof value.order === 'number' && Number.isFinite(value.order) ? value.order : 100 + index,
         variants,
         custom: true,
@@ -695,8 +768,145 @@ window.__ModuleLoader__.load({
       return result;
     }
 
+    /** Optional per-tier cap on concurrent sub-agents: 1..8, or undefined for the global cap. */
+    function readTierCap(value) {
+      const number = Number(value);
+      return value === undefined || value === null || value === '' || !Number.isFinite(number)
+        ? undefined
+        : clamp(Math.round(number), 1, 8);
+    }
+
+    /** How many sub-agents a tier asks for: 0..8. */
+    function readMinSubagents(value) {
+      const number = Number(value);
+      return Number.isFinite(number) ? clamp(Math.round(number), 0, 8) : 0;
+    }
+
+    /** A list of names stored as a JSON array or an array. */
+    function readNameList(value) {
+      let raw = value;
+      if (typeof raw === 'string') {
+        if (raw.trim() === '') return [];
+        try {
+          raw = JSON.parse(raw);
+        } catch {
+          return [];
+        }
+      }
+      if (!Array.isArray(raw)) return [];
+      const names = [];
+      for (const item of raw) {
+        const name = typeof item === 'string' ? item.trim() : '';
+        if (name && !names.includes(name)) names.push(name);
+      }
+      return names;
+    }
+
+    /** Connectors a tier may use: null for all, or a list of server names. */
+    function readConnectors(value) {
+      if (value === undefined || value === null) return null;
+      if (typeof value === 'string') {
+        if (value.trim() === '') return null;
+        try {
+          if (!Array.isArray(JSON.parse(value))) return null;
+        } catch {
+          return null;
+        }
+      } else if (!Array.isArray(value)) return null;
+      return readNameList(value);
+    }
+
+    /**
+     * Parse the saved model versions.
+     * @param {unknown} value - JSON string or array from settings.
+     * @returns {object[]} normalized versions, in stored order.
+     */
+    function normalizeModelVersions(value) {
+      let parsed = value;
+      if (typeof value === 'string') {
+        try {
+          parsed = value.trim() ? JSON.parse(value) : [];
+        } catch {
+          return [];
+        }
+      }
+      if (!Array.isArray(parsed)) return [];
+      const seen = new Set();
+      const result = [];
+      for (const raw of parsed) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+        const id = typeof raw.id === 'string' ? raw.id.trim().toLowerCase() : '';
+        const provider = typeof raw.provider === 'string' ? raw.provider.trim() : '';
+        const model = typeof raw.model === 'string' ? raw.model.trim() : '';
+        if (!/^[a-z0-9][a-z0-9-]*$/.test(id) || seen.has(id) || !provider || !model) continue;
+        seen.add(id);
+        result.push({
+          id,
+          name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 80) : model,
+          provider,
+          model,
+          effort: EFFORT_IDS.includes(raw.effort) ? raw.effort : undefined,
+          wireEffort: typeof raw.wireEffort === 'string' && raw.wireEffort.trim() ? raw.wireEffort.trim() : undefined,
+          temperature:
+            typeof raw.temperature === 'number' && Number.isFinite(raw.temperature)
+              ? clamp(raw.temperature, 0, 2)
+              : undefined,
+          maxTokens:
+            typeof raw.maxTokens === 'number' && Number.isFinite(raw.maxTokens) && raw.maxTokens > 0
+              ? Math.min(1_000_000, Math.floor(raw.maxTokens))
+              : undefined,
+          note: typeof raw.note === 'string' ? raw.note.slice(0, 200) : '',
+        });
+      }
+      return result;
+    }
+
+    /** The stored form of a version: only the fields it sets. */
+    function versionForStorage(version) {
+      return {
+        id: version.id,
+        name: version.name,
+        provider: version.provider,
+        model: version.model,
+        ...(version.effort ? { effort: version.effort } : {}),
+        ...(version.wireEffort ? { wireEffort: version.wireEffort } : {}),
+        ...(typeof version.temperature === 'number' ? { temperature: version.temperature } : {}),
+        ...(typeof version.maxTokens === 'number' ? { maxTokens: version.maxTokens } : {}),
+        ...(version.note ? { note: version.note } : {}),
+      };
+    }
+
+    /** A unique id for a new version. */
+    function uniqueVersionId(name, versions) {
+      const base =
+        String(name ?? '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 40) || 'version';
+      let id = base;
+      for (let n = 2; versions.some((version) => version.id === id); n += 1) id = `${base}-${n}`;
+      return id;
+    }
+
+    /** One line describing what a version sets. */
+    function versionSummary(version) {
+      const parts = [];
+      if (version.effort) parts.push(EFFORTS.find((entry) => entry.id === version.effort)?.label ?? version.effort);
+      if (typeof version.temperature === 'number') parts.push(`temp ${version.temperature.toFixed(2)}`);
+      if (typeof version.maxTokens === 'number') parts.push(`${version.maxTokens} tokens`);
+      return parts.length > 0 ? parts.join(' · ') : 'default settings';
+    }
+
+    /** Point a tier at its saved version: the version supplies the model. */
+    function bindVersion(tier, versionsById) {
+      const version = tier.version ? versionsById[tier.version] : undefined;
+      if (!version) return tier;
+      return { ...tier, provider: version.provider, model: version.model, versionId: version.id, versionName: version.name };
+    }
+
     function tierHasRoute(tier, provider, model) {
-      if (!tier) return false;
+      if (!tier || !provider || !model) return false;
       if (tier.provider === provider && tier.model === model) return true;
       return Array.isArray(tier.variants)
         ? tier.variants.some((variant) => variant.provider === provider && variant.model === model)
@@ -850,31 +1060,45 @@ window.__ModuleLoader__.load({
 
     function normalizeConfig(value) {
       const source = value ?? {};
+      const modelVersions = normalizeModelVersions(source.modelVersions);
+      const versionsById = Object.fromEntries(modelVersions.map((version) => [version.id, version]));
       const tiers = {};
       for (const [index, id] of TIER_IDS.entries()) {
         const tier = source.tiers?.[id] ?? {};
         const fallback = DEFAULT_TIERS[id];
-        tiers[id] = {
+        const ownLabel = typeof tier.label === 'string' ? tier.label.trim().slice(0, 40) : '';
+        const name = ownLabel || TIER_META[id].label;
+        tiers[id] = bindVersion({
           id,
-          name: TIER_META[id].label,
-          short: TIER_META[id].short,
+          name,
+          label: ownLabel,
+          short: ownLabel ? name.slice(0, 1).toUpperCase() : TIER_META[id].short,
           role: TIER_META[id].role,
-          prompt: '',
+          prompt: typeof tier.instructions === 'string' ? tier.instructions.slice(0, 4000) : '',
           custom: false,
           order: index,
           variants: [],
-          provider: typeof tier.provider === 'string' ? tier.provider : fallback.provider,
-          model: typeof tier.model === 'string' ? tier.model : fallback.model,
+          provider: typeof tier.provider === 'string' ? tier.provider.trim() : fallback.provider,
+          model: typeof tier.model === 'string' ? tier.model.trim() : fallback.model,
+          ownProvider: typeof tier.provider === 'string' ? tier.provider.trim() : fallback.provider,
+          ownModel: typeof tier.model === 'string' ? tier.model.trim() : fallback.model,
           effort: EFFORT_IDS.includes(tier.effort) ? tier.effort : fallback.effort,
           webSearch: tier.webSearch !== false,
           webFetch: tier.webFetch !== false,
           browser: tier.browser !== false,
           subagents: tier.subagents !== false,
-        };
+          maxSubagents: readTierCap(tier.maxSubagents),
+          minSubagents: readMinSubagents(tier.minSubagents),
+          version: typeof tier.version === 'string' ? tier.version.trim().toLowerCase() : '',
+          skills: readNameList(tier.skills),
+          connectors: readConnectors(tier.connectors),
+        }, versionsById);
       }
       const customTiers = parseCustomTiers(source.customTiers);
-      for (const tier of customTiers) tiers[tier.id] = tier;
-      const deck = [...TIER_IDS.map((id) => tiers[id]), ...customTiers];
+      for (const tier of customTiers) {
+        tiers[tier.id] = bindVersion({ ...tier, ownProvider: tier.provider, ownModel: tier.model }, versionsById);
+      }
+      const deck = [...TIER_IDS.map((id) => tiers[id]), ...customTiers.map((tier) => tiers[tier.id])];
       const tierIds = deck.map((tier) => tier.id);
       const projectProfiles = normalizeProjectProfiles(source.projectProfiles, tierIds);
       const sessionProfiles = normalizeSessionProfiles(source.sessionProfiles, projectProfiles);
@@ -893,6 +1117,8 @@ window.__ModuleLoader__.load({
         activeTiers: parseActiveTiers(source.activeTiers),
         modelProfiles: normalizeModelProfiles(source.modelProfiles),
         modelProfilesMigrated: source.modelProfilesMigrated === true,
+        modelVersions,
+        versionsById,
       };
     }
 
@@ -978,23 +1204,26 @@ window.__ModuleLoader__.load({
      * @returns {Promise<{config: object, revision: number}>} migrated settings.
      */
     async function ensureModelProfiles(ctx, settings) {
-      if (settings.config.modelProfilesMigrated) return settings;
-      const seeded =
-        Object.keys(settings.config.modelProfiles).length > 0
-          ? settings.config.modelProfiles
-          : profilesFromTiers(settings.config.tiers);
+      // Per-model defaults were replaced by saved model versions in 0.10. Nothing is seeded any more.
+      return settings;
+    }
+
+    /**
+     * The skills and connectors a tier can pick from. Never throws: an older
+     * server half, or a failed request, gives empty lists.
+     * @returns {Promise<{skills: object[], connectors: object[]}>} lists.
+     */
+    async function loadExtras() {
       try {
-        return await mutateSettings(
-          ctx,
-          [
-            { op: 'set', path: ['modelProfiles'], value: JSON.stringify(seeded) },
-            { op: 'set', path: ['modelProfilesMigrated'], value: true },
-          ],
-          settings.revision,
-        );
+        const response = await fetch(CATALOG_PATH, { credentials: 'same-origin', cache: 'no-store' });
+        if (!response.ok) return { skills: [], connectors: [] };
+        const body = await response.json();
+        return {
+          skills: Array.isArray(body.skills) ? body.skills : [],
+          connectors: Array.isArray(body.connectors) ? body.connectors : [],
+        };
       } catch {
-        // Manual import remains available in the Model profiles card.
-        return settings;
+        return { skills: [], connectors: [] };
       }
     }
 
@@ -1162,24 +1391,6 @@ window.__ModuleLoader__.load({
       );
     }
 
-    /**
-     * Compact summary of one model profile.
-     * @param {object | undefined} profile - enabled normalized profile.
-     * @param {object | undefined} [rawProfile] - registry entry, including disabled.
-     * @returns {string} display text.
-     */
-    function profileSummary(profile, rawProfile) {
-      if (rawProfile && rawProfile.enabled === false) {
-        return 'Model profile disabled; adapter defaults.';
-      }
-      if (!profile) return 'No model profile; adapter defaults.';
-      const parts = [];
-      if (profile.wireEffort) parts.push(`wire ${profile.wireEffort}`);
-      if (typeof profile.temperature === 'number') parts.push(`temp ${profile.temperature}`);
-      if (typeof profile.maxTokens === 'number') parts.push(`max ${profile.maxTokens}`);
-      return parts.length > 0 ? `Model defaults: ${parts.join(' · ')}` : 'Model defaults: adapter defaults';
-    }
-
     /** Parse an optional number input, clamped when present. */
     function optionalNumber(value, min, max) {
       if (String(value ?? '').trim() === '') return undefined;
@@ -1193,381 +1404,6 @@ window.__ModuleLoader__.load({
       if (String(value ?? '').trim() === '') return undefined;
       const number = Math.floor(Number(value));
       return Number.isFinite(number) && number > 0 ? Math.min(1_000_000, number) : undefined;
-    }
-
-    function ProfileRow({ provider, model, profile, efforts, usedBy = [], onChange, onDelete }) {
-      const [label, setLabel] = useState(profile.label ?? model);
-      const [wireEffort, setWireEffort] = useState(profile.wireEffort ?? '');
-      const [temperature, setTemperature] = useState(
-        profile.temperature === undefined ? '' : String(profile.temperature),
-      );
-      const [maxTokens, setMaxTokens] = useState(
-        profile.maxTokens === undefined ? '' : String(profile.maxTokens),
-      );
-      const [confirmDelete, setConfirmDelete] = useState(false);
-
-      useEffect(() => {
-        setLabel(profile.label ?? model);
-        setWireEffort(profile.wireEffort ?? '');
-        setTemperature(profile.temperature === undefined ? '' : String(profile.temperature));
-        setMaxTokens(profile.maxTokens === undefined ? '' : String(profile.maxTokens));
-        setConfirmDelete(false);
-      }, [provider, model, profile.label, profile.wireEffort, profile.temperature, profile.maxTokens]);
-
-      const commit = (overrides = {}) => {
-        onChange({
-          label: (overrides.label ?? label).trim() || model,
-          wireEffort: Object.hasOwn(overrides, 'wireEffort')
-            ? overrides.wireEffort
-            : wireEffort || undefined,
-          temperature: optionalNumber(
-            overrides.temperature !== undefined ? overrides.temperature : temperature,
-            0,
-            2,
-          ),
-          maxTokens: optionalInteger(
-            overrides.maxTokens !== undefined ? overrides.maxTokens : maxTokens,
-          ),
-          enabled: overrides.enabled !== undefined ? overrides.enabled : profile.enabled !== false,
-        });
-      };
-      const blurOnEnter = (event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          event.target.blur();
-        }
-      };
-
-      const effortOptions = (efforts ?? []).map((entry) => ({ id: entry.id, name: entry.name ?? entry.id }));
-      const staleEffort =
-        wireEffort && !effortOptions.some((entry) => entry.id === wireEffort) ? wireEffort : undefined;
-
-      return h(
-        'details',
-        { className: 'dsh-mt-profile' },
-        h(
-          'summary',
-          { className: 'dsh-mt-profilehead' },
-          h('span', { className: 'dsh-mt-profilechevron', 'aria-hidden': true }, '▸'),
-          h('span', { className: 'dsh-mt-rowtitle' }, label || model),
-          h('span', { className: 'dsh-mt-profilemeta' }, `${provider}/${model}`),
-          h(
-            'span',
-            { className: 'dsh-mt-profilebadges' },
-            h(
-              'span',
-              { className: 'dsh-mt-effort' },
-              profile.enabled === false ? 'Disabled' : 'Enabled',
-            ),
-            h(
-              'span',
-              { className: 'dsh-mt-profilebadge' },
-              profile.enabled === false
-                ? 'ignored'
-                : profileSummary(profile).replace('Model defaults: ', ''),
-            ),
-          ),
-          usedBy.length > 0
-            ? h('span', { className: 'dsh-mt-profileused' }, `Used by ${usedBy.join(', ')}`)
-            : null,
-        ),
-        h(
-          'div',
-          { className: 'dsh-mt-profilebody' },
-          h(
-            'div',
-            { className: 'dsh-mt-profilegrid' },
-          h(
-            'div',
-            { className: 'dsh-mt-field' },
-            h('span', { className: 'dsh-mt-label' }, 'Label'),
-            h('input', {
-              className: 'dsh-mt-input',
-              value: label,
-              'aria-label': 'Profile label',
-              onChange: (event) => setLabel(event.target.value),
-              onBlur: () => commit(),
-              onKeyDown: blurOnEnter,
-            }),
-          ),
-          h(
-            'div',
-            { className: 'dsh-mt-field' },
-            h('span', { className: 'dsh-mt-label' }, 'Wire effort'),
-            h(
-              'select',
-              {
-                className: 'dsh-mt-select',
-                value: wireEffort,
-                'aria-label': 'Wire effort',
-                onChange: (event) => {
-                  const next = event.target.value;
-                  setWireEffort(next);
-                  commit({ wireEffort: next || undefined });
-                },
-              },
-              h('option', { value: '' }, 'Auto (from tier)'),
-              effortOptions.map((entry) => h('option', { key: entry.id, value: entry.id }, entry.name)),
-              staleEffort ? h('option', { value: staleEffort }, `Stale: ${staleEffort}`) : null,
-            ),
-          ),
-          h(
-            'div',
-            { className: 'dsh-mt-field' },
-            h('span', { className: 'dsh-mt-label' }, 'Temperature'),
-            h('input', {
-              className: 'dsh-mt-input',
-              type: 'number',
-              min: 0,
-              max: 2,
-              step: 0.05,
-              placeholder: 'Auto',
-              value: temperature,
-              'aria-label': 'Profile temperature',
-              onChange: (event) => setTemperature(event.target.value),
-              onBlur: () => commit(),
-              onKeyDown: blurOnEnter,
-            }),
-          ),
-          h(
-            'div',
-            { className: 'dsh-mt-field' },
-            h('span', { className: 'dsh-mt-label' }, 'Max tokens'),
-            h('input', {
-              className: 'dsh-mt-input',
-              type: 'number',
-              min: 1,
-              max: 1000000,
-              step: 1,
-              placeholder: 'Auto',
-              value: maxTokens,
-              'aria-label': 'Profile max output tokens',
-              onChange: (event) => setMaxTokens(event.target.value),
-              onBlur: () => commit(),
-              onKeyDown: blurOnEnter,
-            }),
-          ),
-          h(
-            'div',
-            { className: 'dsh-mt-field' },
-            h('span', { className: 'dsh-mt-label' }, 'Enabled'),
-            h(Switch, {
-              checked: profile.enabled !== false,
-              label: 'Use profile',
-              onChange: (value) => commit({ enabled: value }),
-            }),
-          ),
-        ),
-          h(
-            'div',
-            { className: 'dsh-mt-profiletools' },
-            usedBy.length > 0
-              ? h(
-                  'span',
-                  { className: 'dsh-mt-hint' },
-                  `Removing this profile falls back to adapter defaults for ${usedBy.join(', ')}.`,
-                )
-              : null,
-            h(
-              'button',
-              {
-                type: 'button',
-                className: 'dsh-mt-btn dsh-mt-danger',
-                onClick: () => {
-                  if (usedBy.length > 0 && !confirmDelete) {
-                    setConfirmDelete(true);
-                    return;
-                  }
-                  onDelete();
-                },
-              },
-              confirmDelete ? 'Click again to remove' : 'Remove',
-            ),
-          ),
-        ),
-      );
-    }
-
-    function ModelProfilesEditor({ profiles, tiers, catalog, onSave }) {
-      const [provider, setProvider] = useState('');
-      const [model, setModel] = useState('');
-      const [label, setLabel] = useState('');
-      const [profileQuery, setProfileQuery] = useState('');
-      const [addError, setAddError] = useState('');
-
-      const entries = [];
-      for (const [providerId, models] of Object.entries(profiles ?? {})) {
-        for (const [modelId, profile] of Object.entries(models ?? {})) {
-          entries.push({ provider: providerId, model: modelId, profile });
-        }
-      }
-      entries.sort((a, b) =>
-        `${a.provider}/${a.model}`.localeCompare(`${b.provider}/${b.model}`),
-      );
-      const query = profileQuery.trim().toLowerCase();
-      const visibleEntries = query
-        ? entries.filter((entry) =>
-            `${entry.provider}/${entry.model} ${entry.profile.label}`
-              .toLowerCase()
-              .includes(query),
-          )
-        : entries;
-      const usedBy = (providerId, modelId) =>
-        Object.values(tiers ?? {})
-          .filter((tier) => tierHasRoute(tier, providerId, modelId))
-          .map((tier) => tierLabel(tier));
-
-      const update = (providerId, modelId, nextProfile) => {
-        const next = JSON.parse(JSON.stringify(profiles ?? {}));
-        next[providerId] ??= {};
-        next[providerId][modelId] = nextProfile;
-        onSave(next);
-      };
-      const remove = (providerId, modelId) => {
-        const next = JSON.parse(JSON.stringify(profiles ?? {}));
-        if (next[providerId]) {
-          delete next[providerId][modelId];
-          if (Object.keys(next[providerId]).length === 0) delete next[providerId];
-        }
-        onSave(next);
-      };
-      const add = () => {
-        const nextProvider = provider.trim();
-        const nextModel = model.trim();
-        if (!nextProvider || !nextModel) {
-          setAddError('Provider and model are required.');
-          return;
-        }
-        if (profiles?.[nextProvider]?.[nextModel]) {
-          setAddError('That route already has a profile.');
-          return;
-        }
-        const next = JSON.parse(JSON.stringify(profiles ?? {}));
-        next[nextProvider] ??= {};
-        next[nextProvider][nextModel] = {
-          label: label.trim() || nextModel,
-          wireEffort: undefined,
-          temperature: undefined,
-          maxTokens: undefined,
-          enabled: true,
-        };
-        onSave(next);
-        setAddError('');
-        setProvider('');
-        setModel('');
-        setLabel('');
-      };
-      const importTiers = () => {
-        setAddError('');
-        const next = JSON.parse(JSON.stringify(profiles ?? {}));
-        const seeded = profilesFromTiers(tiers);
-        for (const [providerId, models] of Object.entries(seeded)) {
-          next[providerId] ??= {};
-          for (const [modelId, profile] of Object.entries(models)) {
-            next[providerId][modelId] ??= profile;
-          }
-        }
-        onSave(next);
-      };
-
-      return h(
-        'div',
-        { className: 'dsh-mt-card' },
-        h(
-          'div',
-          { className: 'dsh-mt-cardhead' },
-          h('span', { className: 'dsh-mt-cardtitle' }, 'Model profiles'),
-          h('span', { className: 'dsh-mt-effort' }, `${entries.length} configured`),
-          h(
-            'button',
-            { type: 'button', className: 'dsh-mt-btn', onClick: importTiers },
-            'Import tier routes',
-          ),
-        ),
-        h(
-          'div',
-          { className: 'dsh-mt-hint' },
-          'Sampling defaults attach to a provider/model route and are shared by every tier using that model. Wire effort is pinned only when the adapter advertises it; otherwise the tier behavior chooses the nearest effort.',
-        ),
-        entries.length > 0
-          ? h('input', {
-              className: 'dsh-mt-input',
-              type: 'search',
-              placeholder: 'Filter profiles…',
-              value: profileQuery,
-              'aria-label': 'Filter model profiles',
-              onChange: (event) => setProfileQuery(event.target.value),
-            })
-          : null,
-        entries.length > 0
-          ? h(
-              'div',
-              { className: 'dsh-mt-profiles' },
-              visibleEntries.map((entry) =>
-                h(ProfileRow, {
-                  key: `${entry.provider}:${entry.model}`,
-                  provider: entry.provider,
-                  model: entry.model,
-                  profile: entry.profile,
-                  usedBy: usedBy(entry.provider, entry.model),
-                  efforts: findCatalogModel(catalog, entry.provider, entry.model)?.reasoning?.efforts,
-                  onChange: (nextProfile) => update(entry.provider, entry.model, nextProfile),
-                  onDelete: () => remove(entry.provider, entry.model),
-                }),
-              ),
-              query && visibleEntries.length === 0
-                ? h('div', { className: 'dsh-mt-hint' }, 'No profiles match that filter.')
-                : null,
-            )
-          : h(
-              'div',
-              { className: 'dsh-mt-hint' },
-              'No model profiles yet. Import the current tier routes or add a model below.',
-            ),
-        h(
-          'details',
-          { className: 'dsh-mt-addbox' },
-          h('summary', null, 'Add a model manually'),
-          h(
-            'div',
-            { className: 'dsh-mt-addrow' },
-            h('input', {
-              className: 'dsh-mt-input',
-              placeholder: 'Provider',
-              value: provider,
-              spellCheck: false,
-              'aria-label': 'Provider id',
-              onChange: (event) => {
-                setProvider(event.target.value);
-                setAddError('');
-              },
-            }),
-            h('input', {
-              className: 'dsh-mt-input',
-              placeholder: 'Model id',
-              value: model,
-              spellCheck: false,
-              'aria-label': 'Model id',
-              onChange: (event) => {
-                setModel(event.target.value);
-                setAddError('');
-              },
-            }),
-            h('input', {
-              className: 'dsh-mt-input',
-              placeholder: 'Label (optional)',
-              value: label,
-              'aria-label': 'Profile label',
-              onChange: (event) => {
-                setLabel(event.target.value);
-                setAddError('');
-              },
-            }),
-            h('button', { type: 'button', className: 'dsh-mt-btn', onClick: add }, 'Add model'),
-          ),
-          addError ? h('div', { className: 'dsh-mt-error' }, addError) : null,
-        ),
-      );
     }
 
     function RoleRouteRow({ role, label, route, onChange }) {
@@ -1899,6 +1735,11 @@ window.__ModuleLoader__.load({
             h(
               'div',
               { className: 'dsh-mt-span2' },
+              h(TierExtras, { tier, onPatch: (patch) => onChange({ ...tier, ...patch }) }),
+            ),
+            h(
+              'div',
+              { className: 'dsh-mt-span2' },
               h(ModelPicker, {
                 tier,
                 catalog,
@@ -1907,10 +1748,11 @@ window.__ModuleLoader__.load({
               h(
                 'div',
                 { className: 'dsh-mt-hint' },
-                profileSummary(
-                  profileFor(profiles, tier.provider, tier.model),
-                  profiles?.[tier.provider]?.[tier.model],
-                ),
+                tier.version
+                  ? 'The model version above is in charge of this tier’s model.'
+                  : tier.provider && tier.model
+                    ? 'Picking this tier switches the conversation to this model, with default settings.'
+                    : 'No model set: this tier keeps whatever model the conversation is on.',
               ),
             ),
             h(
@@ -2096,7 +1938,6 @@ window.__ModuleLoader__.load({
         customTiers.reduce((max, tier) => Math.max(max, tier.order ?? 0), 0) + 10;
 
       const addTier = () => {
-        const template = tiers.haiku ?? Object.values(tiers ?? {})[0] ?? {};
         const id = uniqueCustomId('New tier', tiers);
         const next = [
           ...customTiers,
@@ -2106,8 +1947,9 @@ window.__ModuleLoader__.load({
             short: 'N',
             role: '',
             prompt: '',
-            provider: template.provider ?? '',
-            model: template.model ?? '',
+            // No model: a new tier follows the model the conversation is on until you pick one.
+            provider: '',
+            model: '',
             effort: 'medium',
             webSearch: true,
             webFetch: true,
@@ -2150,14 +1992,14 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'dsh-mt-cardhead' },
-          h('span', { className: 'dsh-mt-cardtitle' }, 'Custom tiers'),
-          h('span', { className: 'dsh-mt-effort' }, `${customTiers.length} custom`),
+          h('span', { className: 'dsh-mt-cardtitle' }, 'Your tiers'),
+          h('span', { className: 'dsh-mt-effort' }, `${customTiers.length} of your own`),
           h('button', { type: 'button', className: 'dsh-mt-btn', onClick: addTier }, 'New tier'),
         ),
         h(
           'div',
           { className: 'dsh-mt-hint' },
-          'Custom tiers are additive. Built-in tiers stay untouched; custom tiers inherit the same access, sub-agent, Ultra, and model-profile behavior.',
+          'Tiers you add yourself. The five starter tiers stay as they are; your tiers have the same settings, plus a short badge, a role line and model variants.',
         ),
         customTiers.length > 0
           ? h(
@@ -2188,7 +2030,7 @@ window.__ModuleLoader__.load({
           : h(
               'div',
               { className: 'dsh-mt-hint' },
-              'No custom tiers yet. Use New tier to create one; the five built-ins remain available.',
+              'No tiers of your own yet. Use New tier, or Copy on a starter tier. The five starters stay as they are.',
             ),
       );
     }
@@ -2455,13 +2297,20 @@ window.__ModuleLoader__.load({
       for (const id of TIER_IDS) {
         const tier = config.tiers[id];
         tiers[id] = {
-          provider: tier.provider,
-          model: tier.model,
+          provider: tier.ownProvider ?? '',
+          model: tier.ownModel ?? '',
           effort: tier.effort,
           webSearch: tier.webSearch,
           webFetch: tier.webFetch,
           browser: tier.browser,
           subagents: tier.subagents,
+          label: tier.label ?? '',
+          instructions: tier.prompt ?? '',
+          version: tier.version ?? '',
+          minSubagents: tier.minSubagents ?? 0,
+          ...(tier.maxSubagents === undefined ? {} : { maxSubagents: tier.maxSubagents }),
+          skills: tier.skills ?? [],
+          connectors: tier.connectors ?? null,
         };
       }
       return {
@@ -2471,6 +2320,7 @@ window.__ModuleLoader__.load({
         tiers,
         customTiers: config.customTiers,
         modelProfiles: config.modelProfiles,
+        modelVersions: config.modelVersions.map(versionForStorage),
         projectProfiles: config.projectProfiles,
         fallbackChains: config.fallbackChains,
         roleModels: config.roleModels,
@@ -2503,6 +2353,14 @@ window.__ModuleLoader__.load({
           for (const flag of ['webSearch', 'webFetch', 'browser', 'subagents']) {
             if (typeof raw[flag] === 'boolean') fields[flag] = raw[flag];
           }
+          if (typeof raw.label === 'string') fields.label = raw.label.trim().slice(0, 40);
+          if (typeof raw.instructions === 'string') fields.instructions = raw.instructions.slice(0, 4000);
+          if (typeof raw.version === 'string') fields.version = raw.version.trim().toLowerCase();
+          if (raw.minSubagents !== undefined) fields.minSubagents = readMinSubagents(raw.minSubagents);
+          if (readTierCap(raw.maxSubagents) !== undefined) fields.maxSubagents = readTierCap(raw.maxSubagents);
+          if (Array.isArray(raw.skills)) fields.skills = JSON.stringify(readNameList(raw.skills));
+          if (Array.isArray(raw.connectors)) fields.connectors = JSON.stringify(readNameList(raw.connectors));
+          else if (raw.connectors === null) fields.connectors = '';
           for (const [field, value] of Object.entries(fields)) {
             ops.push({ op: 'set', path: ['tiers', id, field], value });
           }
@@ -2521,6 +2379,16 @@ window.__ModuleLoader__.load({
           (a, b) => a.order - b.order || a.name.localeCompare(b.name),
         );
         ops.push({ op: 'set', path: ['customTiers'], value: JSON.stringify(customTiers) });
+      }
+
+      // Saved versions travel with the model settings section.
+      if (selected('modelProfiles') && Object.prototype.hasOwnProperty.call(imported, 'modelVersions')) {
+        const incoming = normalizeModelVersions(imported.modelVersions);
+        if (incoming.length > 0) {
+          const merged = new Map(config.modelVersions.map((version) => [version.id, version]));
+          for (const version of incoming) merged.set(version.id, version);
+          ops.push({ op: 'set', path: ['modelVersions'], value: JSON.stringify([...merged.values()].map(versionForStorage)) });
+        }
       }
 
       if (selected('modelProfiles') && Object.prototype.hasOwnProperty.call(imported, 'modelProfiles')) {
@@ -2592,9 +2460,9 @@ window.__ModuleLoader__.load({
     }
 
     const IMPORT_SECTIONS = [
-      { id: 'tiers', label: 'Built-in tiers' },
-      { id: 'customTiers', label: 'Custom tiers' },
-      { id: 'modelProfiles', label: 'Model profiles' },
+      { id: 'tiers', label: 'Starter tiers' },
+      { id: 'customTiers', label: 'Your tiers' },
+      { id: 'modelProfiles', label: 'Model versions' },
       { id: 'projectProfiles', label: 'Project profiles' },
       { id: 'fallbackChains', label: 'Fallbacks' },
       { id: 'roleModels', label: 'Role routes' },
@@ -2679,12 +2547,12 @@ window.__ModuleLoader__.load({
           h(
             'p',
             { className: 'dsh-mt-hint' },
-            'Export includes tiers, custom tiers, model profiles, project profiles, fallbacks, and role routes. Session pins and session-profile overrides are intentionally excluded.',
+            'The export holds starter tiers, your tiers, model versions, project profiles, fallbacks and role routes. What each conversation picked is left out on purpose.',
           ),
           h(
             'p',
             { className: 'dsh-mt-hint' },
-            'Import is merge-only: existing entries not present in the file are preserved. Matching custom tiers, model profiles, project profiles, fallbacks, and role routes are updated.',
+            'An import only adds and updates: anything that is not in the file stays as it is. Tiers, model versions, project profiles, fallbacks and role routes with the same id are updated.',
           ),
           h(
             'div',
@@ -2758,6 +2626,9 @@ window.__ModuleLoader__.load({
           }
         };
         routeMissing('Primary', { provider: tier.provider, model: tier.model });
+        if (tier.version && !config.versionsById?.[tier.version]) {
+          tierIssues.push(`Model version "${tier.version}" no longer exists; the tier uses its own model, or the conversation's.`);
+        }
         for (const variant of tier.variants ?? []) routeMissing('Variant', variant);
         for (const fallback of config.fallbackChains?.[tier.id] ?? []) routeMissing('Fallback', fallback);
         const roleRoutes = config.roleModels?.[tier.id] ?? {};
@@ -2911,6 +2782,517 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /** What the Settings page shares with every tier card: saved versions, pickable skills and connectors, the global cap. */
+    const TierExtrasContext = React.createContext({
+      versions: [],
+      extras: { skills: [], connectors: [] },
+      globalMax: 4,
+    });
+
+    /**
+     * The parts of a tier beyond model, effort and access: its saved model version,
+     * sub-agent limits, skills and connectors. Used by starter and custom tier cards.
+     * @param {{tier: object, onPatch: (patch: object) => void}} props - `onPatch` receives
+     *   `version` (string), `minSubagents` (0..8), `maxSubagents` (1..8 or undefined),
+     *   `skills` (string[]) and `connectors` (null for all, or string[]).
+     */
+    function TierExtras({ tier, onPatch }) {
+      const { versions, extras, globalMax } = React.useContext(TierExtrasContext);
+      const [skillDraft, setSkillDraft] = useState('');
+      const skills = tier.skills ?? [];
+      const connectors = tier.connectors ?? null;
+      const version = versions.find((item) => item.id === tier.version);
+      const max = tier.maxSubagents ?? globalMax;
+      const knownSkills = extras.skills.filter((skill) => !skills.includes(skill.name));
+      const connectorNames = [
+        ...extras.connectors.map((item) => item.name),
+        ...(connectors ?? []).filter((name) => !extras.connectors.some((item) => item.name === name)),
+      ];
+      const addSkill = (name) => {
+        const clean = String(name ?? '').trim();
+        if (!clean || skills.includes(clean)) return;
+        onPatch({ skills: [...skills, clean] });
+        setSkillDraft('');
+      };
+
+      return h(
+        'div',
+        { className: 'dsh-mt-extras' },
+        h(
+          'div',
+          { className: 'dsh-mt-field' },
+          h('span', { className: 'dsh-mt-label' }, 'Model version'),
+          h(
+            'select',
+            {
+              className: 'dsh-mt-select',
+              value: version ? version.id : '',
+              'aria-label': 'Model version',
+              onChange: (event) => onPatch({ version: event.target.value }),
+            },
+            h('option', { value: '' }, 'None: use the model above with default settings'),
+            tier.version && !version ? h('option', { value: tier.version }, `Missing version (${tier.version})`) : null,
+            versions.map((item) =>
+              h('option', { key: item.id, value: item.id }, `${item.name} (${shortModel(item.model)} · ${versionSummary(item)})`),
+            ),
+          ),
+          h(
+            'span',
+            { className: 'dsh-mt-hint' },
+            version
+              ? `This tier runs on ${version.provider}/${version.model} with that version's settings.`
+              : versions.length === 0
+                ? 'Create versions on the Model versions tab, or with “Save as new version…” in the chat box.'
+                : 'A saved version supplies the tier’s model and its sampling settings.',
+          ),
+        ),
+        h(
+          'div',
+          { className: 'dsh-mt-field' },
+          h('span', { className: 'dsh-mt-label' }, 'Sub-agents'),
+          h(
+            'div',
+            { className: 'dsh-mt-inline' },
+            h('span', null, 'Ask for at least'),
+            h(
+              'select',
+              {
+                className: 'dsh-mt-select dsh-mt-num',
+                value: String(Math.min(tier.minSubagents ?? 0, max)),
+                disabled: tier.subagents === false,
+                'aria-label': 'Fewest sub-agents to ask for',
+                onChange: (event) => onPatch({ minSubagents: Number(event.target.value) }),
+              },
+              Array.from({ length: max + 1 }, (_, n) => h('option', { key: n, value: String(n) }, n === 0 ? 'none' : String(n))),
+            ),
+            h('span', null, 'and allow at most'),
+            h(
+              'select',
+              {
+                className: 'dsh-mt-select dsh-mt-num',
+                value: tier.maxSubagents === undefined ? '' : String(tier.maxSubagents),
+                disabled: tier.subagents === false,
+                'aria-label': 'Most sub-agents at once',
+                onChange: (event) => {
+                  const next = event.target.value === '' ? undefined : Number(event.target.value);
+                  onPatch({
+                    maxSubagents: next,
+                    minSubagents: Math.min(tier.minSubagents ?? 0, next ?? globalMax),
+                  });
+                },
+              },
+              h('option', { value: '' }, `${globalMax} (app-wide)`),
+              Array.from({ length: 8 }, (_, n) => h('option', { key: n + 1, value: String(n + 1) }, String(n + 1))),
+            ),
+            h('span', null, 'at once'),
+          ),
+          h(
+            'span',
+            { className: 'dsh-mt-hint' },
+            tier.subagents === false
+              ? 'Sub-agents are switched off for this tier.'
+              : 'The most is enforced. The least is an instruction to the model: the app cannot force a model to delegate.',
+          ),
+        ),
+        h(
+          'div',
+          { className: 'dsh-mt-field' },
+          h('span', { className: 'dsh-mt-label' }, 'Skills loaded with this tier'),
+          skills.length > 0
+            ? h(
+                'div',
+                { className: 'dsh-mt-pills' },
+                skills.map((name) =>
+                  h(
+                    'span',
+                    { key: name, className: 'dsh-mt-pill', 'data-missing': String(extras.skills.length > 0 && !extras.skills.some((skill) => skill.name === name)) },
+                    name,
+                    h(
+                      'button',
+                      {
+                        type: 'button',
+                        'aria-label': `Remove skill ${name}`,
+                        onClick: () => onPatch({ skills: skills.filter((item) => item !== name) }),
+                      },
+                      '×',
+                    ),
+                  ),
+                ),
+              )
+            : null,
+          knownSkills.length > 0
+            ? h(
+                'select',
+                {
+                  className: 'dsh-mt-select',
+                  value: '',
+                  'aria-label': 'Add a skill',
+                  onChange: (event) => addSkill(event.target.value),
+                },
+                h('option', { value: '' }, 'Add a skill…'),
+                knownSkills.map((skill) =>
+                  h('option', { key: skill.name, value: skill.name, title: skill.description }, skill.name),
+                ),
+              )
+            : extras.skills.length === 0
+              ? h('input', {
+                  className: 'dsh-mt-input',
+                  placeholder: 'Skill name, then Enter',
+                  value: skillDraft,
+                  'aria-label': 'Add a skill by name',
+                  onChange: (event) => setSkillDraft(event.target.value),
+                  onKeyDown: (event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      addSkill(skillDraft);
+                    }
+                  },
+                })
+              : null,
+          h(
+            'span',
+            { className: 'dsh-mt-hint' },
+            'The skill’s instructions are added to the model’s instructions whenever this tier is active. Good for a skill written for a small, fast model. Up to 6.',
+          ),
+        ),
+        h(
+          'div',
+          { className: 'dsh-mt-field' },
+          h('span', { className: 'dsh-mt-label' }, 'Connectors'),
+          h(
+            'select',
+            {
+              className: 'dsh-mt-select',
+              value: connectors === null ? 'all' : 'some',
+              'aria-label': 'Which connectors this tier may use',
+              onChange: (event) => onPatch({ connectors: event.target.value === 'all' ? null : [] }),
+            },
+            h('option', { value: 'all' }, 'All connectors'),
+            h('option', { value: 'some' }, 'Only the ones ticked below'),
+          ),
+          connectors !== null
+            ? connectorNames.length > 0
+              ? h(
+                  'div',
+                  { className: 'dsh-mt-switches' },
+                  connectorNames.map((name) =>
+                    h(Switch, {
+                      key: name,
+                      checked: connectors.includes(name),
+                      label: name,
+                      onChange: (value) =>
+                        onPatch({
+                          connectors: value ? [...connectors, name] : connectors.filter((item) => item !== name),
+                        }),
+                    }),
+                  ),
+                )
+              : h('span', { className: 'dsh-mt-hint' }, 'No connectors are set up yet, so this tier uses none.')
+            : null,
+          h(
+            'span',
+            { className: 'dsh-mt-hint' },
+            'Connectors are your MCP servers. Tools of a connector that is not ticked are hidden from the model in this tier.',
+          ),
+        ),
+      );
+    }
+
+    /**
+     * One saved model version: a named copy of a model with its own effort and sampling.
+     */
+    function VersionRow({ version, catalog, usedBy, onChange, onDuplicate, onDelete }) {
+      const [name, setName] = useState(version.name);
+      const [temperature, setTemperature] = useState(version.temperature === undefined ? '' : String(version.temperature));
+      const [maxTokens, setMaxTokens] = useState(version.maxTokens === undefined ? '' : String(version.maxTokens));
+      const [confirmDelete, setConfirmDelete] = useState(false);
+      useEffect(() => {
+        setName(version.name);
+        setTemperature(version.temperature === undefined ? '' : String(version.temperature));
+        setMaxTokens(version.maxTokens === undefined ? '' : String(version.maxTokens));
+      }, [version.id, version.name, version.temperature, version.maxTokens]);
+
+      const groups = catalog?.groups ?? [];
+      const inCatalog = groups.some(
+        (group) => group.id === version.provider && group.models.some((model) => model.id === version.model),
+      );
+      const blurOnEnter = (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          event.target.blur();
+        }
+      };
+      return h(
+        'div',
+        { className: 'dsh-mt-card dsh-mt-version' },
+        h(
+          'div',
+          { className: 'dsh-mt-versiongrid' },
+          h(
+            'div',
+            { className: 'dsh-mt-field' },
+            h('span', { className: 'dsh-mt-label' }, 'Name'),
+            h('input', {
+              className: 'dsh-mt-input',
+              value: name,
+              maxLength: 80,
+              'aria-label': 'Version name',
+              onChange: (event) => setName(event.target.value),
+              onKeyDown: blurOnEnter,
+              onBlur: () => {
+                const clean = name.trim();
+                if (clean && clean !== version.name) onChange({ ...version, name: clean });
+                else setName(version.name);
+              },
+            }),
+          ),
+          h(
+            'div',
+            { className: 'dsh-mt-field' },
+            h('span', { className: 'dsh-mt-label' }, 'Model'),
+            h(
+              'select',
+              {
+                className: 'dsh-mt-select',
+                value: `${version.provider}\u0000${version.model}`,
+                'aria-label': 'Model of this version',
+                onChange: (event) => {
+                  const [provider, model] = event.target.value.split('\u0000');
+                  if (provider && model) onChange({ ...version, provider, model });
+                },
+              },
+              inCatalog
+                ? null
+                : h('option', { value: `${version.provider}\u0000${version.model}` }, `${version.provider} / ${version.model} (not available now)`),
+              groups.map((group) =>
+                h(
+                  'optgroup',
+                  { key: group.id, label: group.name },
+                  group.models.map((model) =>
+                    h('option', { key: `${group.id}:${model.id}`, value: `${group.id}\u0000${model.id}` }, model.name),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          h(
+            'div',
+            { className: 'dsh-mt-field' },
+            h('span', { className: 'dsh-mt-label' }, 'Effort'),
+            h(
+              'select',
+              {
+                className: 'dsh-mt-select',
+                value: version.effort ?? '',
+                'aria-label': 'Effort of this version',
+                onChange: (event) => onChange({ ...version, effort: event.target.value || undefined }),
+              },
+              h('option', { value: '' }, 'Not set (the tier or slider decides)'),
+              EFFORTS.map((effort) => h('option', { key: effort.id, value: effort.id }, effort.label)),
+            ),
+          ),
+          h(
+            'div',
+            { className: 'dsh-mt-field' },
+            h('span', { className: 'dsh-mt-label' }, 'Temperature'),
+            h('input', {
+              className: 'dsh-mt-input',
+              type: 'number',
+              min: 0,
+              max: 2,
+              step: 0.05,
+              placeholder: 'Default',
+              value: temperature,
+              'aria-label': 'Temperature, 0 to 2, empty for the default',
+              onChange: (event) => setTemperature(event.target.value),
+              onKeyDown: blurOnEnter,
+              onBlur: () => {
+                const next = optionalNumber(temperature, 0, 2);
+                if (next !== version.temperature) onChange({ ...version, temperature: next });
+                setTemperature(next === undefined ? '' : String(next));
+              },
+            }),
+          ),
+          h(
+            'div',
+            { className: 'dsh-mt-field' },
+            h('span', { className: 'dsh-mt-label' }, 'Max output tokens'),
+            h('input', {
+              className: 'dsh-mt-input',
+              type: 'number',
+              min: 1,
+              max: 1000000,
+              step: 1,
+              placeholder: 'Default',
+              value: maxTokens,
+              'aria-label': 'Max output tokens, empty for the default',
+              onChange: (event) => setMaxTokens(event.target.value),
+              onKeyDown: blurOnEnter,
+              onBlur: () => {
+                const next = optionalInteger(maxTokens);
+                if (next !== version.maxTokens) onChange({ ...version, maxTokens: next });
+                setMaxTokens(next === undefined ? '' : String(next));
+              },
+            }),
+          ),
+        ),
+        h(
+          'div',
+          { className: 'dsh-mt-actions' },
+          h(
+            'span',
+            { className: 'dsh-mt-hint', style: { marginRight: 'auto' } },
+            usedBy.length > 0 ? `Used by: ${usedBy.join(', ')}` : 'Not used by a tier. Pick it in the chat box, or assign it to a tier.',
+          ),
+          h('button', { type: 'button', className: 'dsh-mt-btn', onClick: onDuplicate }, 'Duplicate'),
+          confirmDelete
+            ? h(
+                React.Fragment,
+                null,
+                h('button', { type: 'button', className: 'dsh-mt-btn', 'data-danger': 'true', onClick: onDelete }, 'Delete for good'),
+                h('button', { type: 'button', className: 'dsh-mt-btn', onClick: () => setConfirmDelete(false) }, 'Keep'),
+              )
+            : h('button', { type: 'button', className: 'dsh-mt-btn', onClick: () => setConfirmDelete(true) }, 'Delete'),
+        ),
+      );
+    }
+
+    /**
+     * The "Model versions" tab: named copies of a model with their own settings.
+     */
+    function VersionsEditor({ versions, deck, catalog, onSave }) {
+      const [pick, setPick] = useState('');
+      const groups = catalog?.groups ?? [];
+      const write = (next) => onSave(next.map(versionForStorage));
+      const add = (value) => {
+        const [provider, model] = String(value).split('\u0000');
+        if (!provider || !model) return;
+        const modelName = groups.find((group) => group.id === provider)?.models.find((item) => item.id === model)?.name ?? model;
+        let name = `${modelName} copy`;
+        for (let n = 2; versions.some((item) => item.name === name); n += 1) name = `${modelName} copy ${n}`;
+        write([...versions, { id: uniqueVersionId(name, versions), name, provider, model }]);
+        setPick('');
+      };
+      return h(
+        'div',
+        { className: 'dsh-mt-grid' },
+        h(
+          'div',
+          { className: 'dsh-mt-card' },
+          h('div', { className: 'dsh-mt-cardtitle' }, 'Saved versions of a model'),
+          h(
+            'div',
+            { className: 'dsh-mt-hint' },
+            'A version is a named copy of a model with its own effort, temperature and max tokens, for example one for writing and one for coding. ' +
+              'The plain model always stays in the chat box list with default settings. ' +
+              'The app sends temperature and max tokens only: top-p, top-k and similar settings stay on your model server.',
+          ),
+          h(
+            'div',
+            { className: 'dsh-mt-actions' },
+            groups.length > 0
+              ? h(
+                  'select',
+                  {
+                    className: 'dsh-mt-select',
+                    style: { maxWidth: 320 },
+                    value: pick,
+                    'aria-label': 'New version of which model',
+                    onChange: (event) => add(event.target.value),
+                  },
+                  h('option', { value: '' }, 'New version of…'),
+                  groups.map((group) =>
+                    h(
+                      'optgroup',
+                      { key: group.id, label: group.name },
+                      group.models.map((model) =>
+                        h('option', { key: `${group.id}:${model.id}`, value: `${group.id}\u0000${model.id}` }, model.name),
+                      ),
+                    ),
+                  ),
+                )
+              : h('span', { className: 'dsh-mt-hint' }, 'Add a model in Settings → Models first.'),
+          ),
+        ),
+        versions.length === 0
+          ? h('div', { className: 'dsh-mt-hint' }, 'No saved versions yet.')
+          : versions.map((version) =>
+              h(VersionRow, {
+                key: version.id,
+                version,
+                catalog,
+                usedBy: deck.filter((tier) => tier.version === version.id).map((tier) => tierLabel(tier)),
+                onChange: (next) => write(versions.map((item) => (item.id === version.id ? next : item))),
+                onDuplicate: () => {
+                  let name = `${version.name} copy`;
+                  for (let n = 2; versions.some((item) => item.name === name); n += 1) name = `${version.name} copy ${n}`;
+                  write([...versions, { ...version, id: uniqueVersionId(name, versions), name }]);
+                },
+                onDelete: () => write(versions.filter((item) => item.id !== version.id)),
+              }),
+            ),
+      );
+    }
+
+    /** A starter tier's own name and instructions, saved when the field loses focus. */
+    function StarterText({ tier, meta, onPatch }) {
+      const [label, setLabel] = useState(tier.label ?? '');
+      const [instructions, setInstructions] = useState(tier.prompt ?? '');
+      useEffect(() => {
+        setLabel(tier.label ?? '');
+        setInstructions(tier.prompt ?? '');
+      }, [tier.id, tier.label, tier.prompt]);
+      return h(
+        React.Fragment,
+        null,
+        h(
+          'div',
+          { className: 'dsh-mt-field' },
+          h('span', { className: 'dsh-mt-label' }, 'Name'),
+          h('input', {
+            className: 'dsh-mt-input',
+            value: label,
+            maxLength: 40,
+            placeholder: meta.label,
+            'aria-label': 'Tier name',
+            onChange: (event) => setLabel(event.target.value),
+            onKeyDown: (event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                event.target.blur();
+              }
+            },
+            onBlur: () => {
+              const clean = label.trim();
+              if (clean !== (tier.label ?? '')) onPatch({ label: clean });
+            },
+          }),
+        ),
+        h(
+          'div',
+          { className: 'dsh-mt-field' },
+          h(
+            'div',
+            { className: 'dsh-mt-rangehead' },
+            h('span', { className: 'dsh-mt-label' }, 'Instructions'),
+            h('span', { className: 'dsh-mt-hint' }, `${instructions.length} / 4000`),
+          ),
+          h('textarea', {
+            className: 'dsh-mt-input dsh-mt-textarea',
+            rows: 3,
+            maxLength: 4000,
+            value: instructions,
+            placeholder: 'Leave empty to use this starter’s built-in guidance. What you write here is given to the model whenever this tier is active.',
+            'aria-label': 'Tier instructions',
+            onChange: (event) => setInstructions(event.target.value),
+            onBlur: () => {
+              if (instructions !== (tier.prompt ?? '')) onPatch({ instructions });
+            },
+          }),
+        ),
+      );
+    }
+
     function SettingsPage({ appCtx, useWorkspaces }) {
       const workspaceSnapshot =
         typeof useWorkspaces === 'function' ? useWorkspaces((value) => value) : undefined;
@@ -2919,6 +3301,16 @@ window.__ModuleLoader__.load({
         : workspaceSnapshot?.items ?? [];
       const [state, setState] = useState({ status: 'loading', config: null, revision: 0, catalog: null, error: null, saving: false });
       const [section, setSection] = useState('tiers');
+      const [extras, setExtras] = useState({ skills: [], connectors: [] });
+      useEffect(() => {
+        let alive = true;
+        loadExtras().then((value) => {
+          if (alive) setExtras(value);
+        });
+        return () => {
+          alive = false;
+        };
+      }, []);
 
       useEffect(() => {
         let alive = true;
@@ -2980,11 +3372,18 @@ window.__ModuleLoader__.load({
       const activeCount = Object.keys(config.activeTiers).length;
 
       const setTier = (id, patch) => {
-        const ops = Object.entries(patch).map(([field, value]) => ({
-          op: 'set',
-          path: ['tiers', id, field],
-          value,
-        }));
+        const ops = [];
+        for (const [field, raw] of Object.entries(patch)) {
+          let value = raw;
+          if (field === 'skills') value = JSON.stringify(raw ?? []);
+          if (field === 'connectors') value = raw === null || raw === undefined ? '' : JSON.stringify(raw);
+          // An unset cap falls back to the app-wide one.
+          if (field === 'maxSubagents' && raw === undefined) {
+            ops.push({ op: 'unset', path: ['tiers', id, field] });
+            continue;
+          }
+          ops.push({ op: 'set', path: ['tiers', id, field], value });
+        }
         save(ops);
       };
       const saveFallbacks = (next) =>
@@ -2995,22 +3394,27 @@ window.__ModuleLoader__.load({
         const source = config.tiers[id];
         const meta = TIER_META[id];
         if (!source || !meta) return;
-        const customId = uniqueCustomId(`${meta.label} copy`, config.tiers);
+        const customId = uniqueCustomId(`${source.name} copy`, config.tiers);
         const order =
           config.customTiers.reduce((max, tier) => Math.max(max, tier.order ?? 0), 0) + 10;
         const tier = {
           id: customId,
-          name: `${meta.label} copy`,
-          short: `${meta.short}c`.slice(0, 2),
+          name: `${source.name} copy`,
+          short: `${source.short}c`.slice(0, 2),
           role: meta.role,
-          prompt: '',
-          provider: source.provider,
-          model: source.model,
+          prompt: source.prompt ?? '',
+          provider: source.ownProvider ?? '',
+          model: source.ownModel ?? '',
           effort: source.effort,
           webSearch: source.webSearch,
           webFetch: source.webFetch,
           browser: source.browser,
           subagents: source.subagents,
+          maxSubagents: source.maxSubagents,
+          minSubagents: source.minSubagents ?? 0,
+          version: source.version ?? '',
+          skills: source.skills ?? [],
+          connectors: source.connectors ?? null,
           order,
           variants: [],
           custom: true,
@@ -3026,6 +3430,9 @@ window.__ModuleLoader__.load({
       };
 
       return h(
+        TierExtrasContext.Provider,
+        { value: { versions: config.modelVersions, extras, globalMax: config.maxSubagents } },
+        h(
         'div',
         { className: 'dsh-mt-page' },
         h(Styles),
@@ -3036,28 +3443,22 @@ window.__ModuleLoader__.load({
           h(
             'p',
             null,
-            'Built-in and custom tiers for planning, coding, and review. Use the tabs to manage tiers, models, projects, and delegation.',
+            'A tier is a way of working: how hard the model thinks, what it may use, how many sub-agents it runs, its own instructions, skills and connectors. ' +
+              'A model version is a named copy of a model with its own sampling settings. A tier can point at a version, or simply follow the model you pick in the chat box.',
           ),
           h(
             'p',
             null,
-            'Models come from the providers you configured in Settings → Models. If a provider is missing from the dropdown, add its credentials there first, then assign its model here.',
+            'Models come from Settings → Models. If a model is missing from a list here, add it there first.',
           ),
         ),
         h(
           'div',
           { className: 'dsh-mt-tabs', role: 'tablist', 'aria-label': 'Model tiers sections' },
           [
-            { id: 'tiers', label: 'Built-in tiers', count: TIER_IDS.length },
-            { id: 'custom', label: 'Custom tiers', count: config.customTiers.length },
-            {
-              id: 'models',
-              label: 'Model profiles',
-              count: Object.values(config.modelProfiles).reduce(
-                (sum, models) => sum + Object.keys(models).length,
-                0,
-              ),
-            },
+            { id: 'tiers', label: 'Starter tiers', count: TIER_IDS.length },
+            { id: 'custom', label: 'Your tiers', count: config.customTiers.length },
+            { id: 'models', label: 'Model versions', count: config.modelVersions.length },
             {
               id: 'projects',
               label: 'Project profiles',
@@ -3098,12 +3499,12 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'dsh-mt-section', 'data-hidden': String(section !== 'models') },
-          h(ModelProfilesEditor, {
-            profiles: config.modelProfiles,
-            tiers: config.tiers,
+          h(VersionsEditor, {
+            versions: config.modelVersions,
+            deck: config.deck,
             catalog: state.catalog,
             onSave: (next) =>
-              save([{ op: 'set', path: ['modelProfiles'], value: JSON.stringify(next) }]),
+              save([{ op: 'set', path: ['modelVersions'], value: JSON.stringify(next) }]),
           }),
         ),
         h(
@@ -3115,35 +3516,57 @@ window.__ModuleLoader__.load({
             TIER_IDS.map((id) => {
             const tier = config.tiers[id];
             const meta = TIER_META[id];
-            const rawProfile = config.modelProfiles?.[tier.provider]?.[tier.model];
-            const profile = profileFor(config.modelProfiles, tier.provider, tier.model);
             return h(
               'div',
               { className: 'dsh-mt-card', key: id },
               h(
                 'div',
                 { className: 'dsh-mt-cardhead' },
-                h('span', { className: 'dsh-mt-badge' }, meta.short),
-                h('span', { className: 'dsh-mt-cardtitle' }, meta.label),
+                h('span', { className: 'dsh-mt-badge' }, tier.short),
+                h('span', { className: 'dsh-mt-cardtitle' }, tier.name),
+                tier.name !== meta.label
+                  ? h('span', { className: 'dsh-mt-hint' }, `starter: ${meta.label}`)
+                  : null,
                 h(
                   'button',
                   {
                     type: 'button',
                     className: 'dsh-mt-link',
                     style: { marginLeft: 'auto' },
-                    title: 'Copy as an editable custom tier',
+                    title: 'Make a copy under Your tiers',
                     onClick: () => copyTier(id),
                   },
                   'Copy',
                 ),
               ),
               h('div', { className: 'dsh-mt-cardrole' }, meta.role),
+              h(StarterText, { tier, meta, onPatch: (patch) => setTier(id, patch) }),
               h(ModelPicker, {
-                tier,
+                tier: { ...tier, provider: tier.ownProvider, model: tier.ownModel },
                 catalog: state.catalog,
                 onChange: (provider, model) => setTier(id, { provider, model }),
               }),
-              h('div', { className: 'dsh-mt-hint' }, profileSummary(profile, rawProfile)),
+              h(
+                'div',
+                { className: 'dsh-mt-hint' },
+                tier.versionId
+                  ? `The model version below is in charge: ${tier.versionName}.`
+                  : tier.ownProvider && tier.ownModel
+                    ? 'Picking this tier switches the conversation to this model, with default settings.'
+                    : 'No model set: this tier keeps whatever model the conversation is on.',
+                tier.ownProvider && tier.ownModel && !tier.versionId
+                  ? h(
+                      'button',
+                      {
+                        type: 'button',
+                        className: 'dsh-mt-link',
+                        style: { marginLeft: 8 },
+                        onClick: () => setTier(id, { provider: '', model: '' }),
+                      },
+                      'Clear model',
+                    )
+                  : null,
+              ),
               h(FallbackEditor, {
                 tierId: id,
                 chains: config.fallbackChains,
@@ -3184,6 +3607,7 @@ window.__ModuleLoader__.load({
                   }),
                 ),
               ),
+              h(TierExtras, { tier, onPatch: (patch) => setTier(id, patch) }),
             );
           }),
           ),
@@ -3309,8 +3733,10 @@ window.__ModuleLoader__.load({
                 disabled: state.saving,
                 onClick: () => {
                   const ops = [];
+                  // Rules only: a reset never removes the models, names or instructions you set.
                   for (const id of TIER_IDS) {
                     for (const [field, value] of Object.entries(DEFAULT_TIERS[id])) {
+                      if (field === 'provider' || field === 'model') continue;
                       ops.push({ op: 'set', path: ['tiers', id, field], value });
                     }
                   }
@@ -3319,7 +3745,7 @@ window.__ModuleLoader__.load({
                   save(ops);
                 },
               },
-              'Reset to defaults',
+              'Reset tier rules',
             ),
           ),
         ),
@@ -3327,7 +3753,8 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'dsh-mt-status', 'data-error': state.error ? 'true' : 'false' },
-          state.error ?? (state.saving ? 'Saving…' : 'Saved to the active profile patch.'),
+          state.error ?? (state.saving ? 'Saving…' : 'Changes are saved as you make them.'),
+        ),
         ),
       );
     }
@@ -3343,19 +3770,18 @@ window.__ModuleLoader__.load({
       const entry = config?.activeTiers?.[sessionId];
       if (!entry) return undefined;
 
-      let base;
       let tierId;
       let provider;
       let model;
       let effort;
+      let picked;
       let sessionTemperature;
       let sessionMaxTokens;
 
       if (typeof entry === 'string') {
         const tier = config.tiers[entry];
-        if (!tier) return undefined;
+        if (!tier || !tier.provider || !tier.model) return undefined;
         tierId = entry;
-        base = tier;
         provider = tier.provider;
         model = tier.model;
         effort = tier.effort;
@@ -3366,26 +3792,17 @@ window.__ModuleLoader__.load({
             ? entry.tier
             : undefined;
         const tier = tierId ? config.tiers[tierId] : undefined;
+        picked = typeof entry.version === 'string' ? config.versionsById?.[entry.version] : undefined;
         provider =
-          typeof entry.provider === 'string' && entry.provider.length > 0
-            ? entry.provider
-            : tier?.provider;
+          picked?.provider ??
+          (typeof entry.provider === 'string' && entry.provider.length > 0 ? entry.provider : tier?.provider);
         model =
-          typeof entry.model === 'string' && entry.model.length > 0 ? entry.model : tier?.model;
+          picked?.model ??
+          (typeof entry.model === 'string' && entry.model.length > 0 ? entry.model : tier?.model);
         if (!provider || !model) return undefined;
 
-        const matched =
-          tierId ??
-          (config.deck ?? []).find((tier) => tierHasRoute(tier, provider, model))?.id;
-        base = matched
-          ? config.tiers[matched]
-          : { webSearch: true, webFetch: true, browser: true, subagents: true };
-        tierId = matched;
-        effort = EFFORT_IDS.includes(entry.effort)
-          ? entry.effort
-          : matched
-            ? config.tiers[matched].effort
-            : 'medium';
+        tierId = tierId ?? (config.deck ?? []).find((item) => tierHasRoute(item, provider, model))?.id;
+        effort = EFFORT_IDS.includes(entry.effort) ? entry.effort : undefined;
         sessionTemperature =
           typeof entry.temperature === 'number' && Number.isFinite(entry.temperature)
             ? Math.min(2, Math.max(0, entry.temperature))
@@ -3398,20 +3815,35 @@ window.__ModuleLoader__.load({
             : undefined;
       }
 
-      const profile = profileFor(config.modelProfiles, provider, model);
+      const matched = tierId ? config.tiers[tierId] : undefined;
+      // A tier's own version follows the tier's own model only.
+      const version =
+        picked ??
+        (matched?.versionId && matched.provider === provider && matched.model === model
+          ? config.versionsById?.[matched.versionId]
+          : undefined);
+      const profile = version ? undefined : profileFor(config.modelProfiles, provider, model);
+      const defaults = version ?? profile;
+      const rules = matched ?? { webSearch: true, webFetch: true, browser: true, subagents: true };
       return {
-        ...base,
+        webSearch: rules.webSearch,
+        webFetch: rules.webFetch,
+        browser: rules.browser,
+        subagents: rules.subagents,
         tierId,
         provider,
         model,
-        effort,
+        effort: effort ?? version?.effort ?? matched?.effort ?? 'medium',
+        versionId: version?.id,
+        versionName: version?.name,
+        pickedVersionId: picked?.id,
         temperature: sessionTemperature,
-        modelTemperature: profile?.temperature,
-        effectiveTemperature: sessionTemperature ?? profile?.temperature,
+        modelTemperature: defaults?.temperature,
+        effectiveTemperature: sessionTemperature ?? defaults?.temperature,
         maxTokens: sessionMaxTokens,
-        modelMaxTokens: profile?.maxTokens,
-        effectiveMaxTokens: sessionMaxTokens ?? profile?.maxTokens,
-        wireEffort: profile?.wireEffort,
+        modelMaxTokens: defaults?.maxTokens,
+        effectiveMaxTokens: sessionMaxTokens ?? defaults?.maxTokens,
+        wireEffort: defaults?.wireEffort,
       };
     }
 
@@ -3458,15 +3890,6 @@ window.__ModuleLoader__.load({
       return tier?.variants?.length ? `${route} +${tier.variants.length}` : route;
     }
 
-    const SHORT_EFFORTS = {
-      off: 'Off',
-      low: 'Low',
-      medium: 'Med',
-      high: 'High',
-      'extra-high': 'XH',
-      ultra: 'Ultra',
-    };
-
     /**
      * Short display name for a custom model id.
      * @param {string} model - full model id.
@@ -3478,7 +3901,12 @@ window.__ModuleLoader__.load({
       return tail.length > 22 ? `${tail.slice(0, 20)}…` : tail || 'Custom';
     }
 
-    function TierControl({ appCtx, sessionId, useWorkspaces }) {
+    /**
+     * The one model control of the chat box: model or saved version, effort slider,
+     * tier, and sampling for this conversation. It replaces the app's own model menu
+     * while this add-on is on.
+     */
+    function ModelControl({ appCtx, sessionId, useWorkspaces }) {
       const workspaceSnapshot =
         typeof useWorkspaces === 'function' ? useWorkspaces((value) => value) : undefined;
       const workspaceRows = Array.isArray(workspaceSnapshot)
@@ -3489,12 +3917,14 @@ window.__ModuleLoader__.load({
       );
       const projectKey = workspace?.workspaceId ?? 'ungrouped';
       const [open, setOpen] = useState(false);
-      const [draftEffort, setDraftEffort] = useState('medium');
+      const [query, setQuery] = useState('');
+      const [draftEffort, setDraftEffort] = useState(null);
       const [draftTemperature, setDraftTemperature] = useState(0.7);
       const [autoTemperature, setAutoTemperature] = useState(true);
       const [draftMaxTokens, setDraftMaxTokens] = useState(4096);
       const [autoMaxTokens, setAutoMaxTokens] = useState(true);
-      const [modelQuery, setModelQuery] = useState('');
+      const [saveName, setSaveName] = useState(null);
+      const [current, setCurrent] = useState(null);
       const [state, setState] = useState({
         status: 'loading',
         config: null,
@@ -3507,36 +3937,64 @@ window.__ModuleLoader__.load({
       const triggerRef = useRef(null);
       const popRef = useRef(null);
       const autoProfileAppliedRef = useRef(false);
-      const [anchor, setAnchor] = useState({ left: 8, bottom: 80 });
+      const [anchor, setAnchor] = useState({ left: 8, bottom: 80, maxHeight: 520 });
 
       useEffect(() => {
         autoProfileAppliedRef.current = false;
+        setDraftEffort(null);
+        setSaveName(null);
       }, [sessionId]);
+
+      // The app's own record of this conversation's model, so the button is right even when no tier is set.
+      const directory = (() => {
+        try {
+          return appCtx.get('modelDirectories')?.directoryFor?.(sessionId) ?? null;
+        } catch {
+          return null;
+        }
+      })();
+      useEffect(() => {
+        if (!directory?.store) {
+          setCurrent(null);
+          return undefined;
+        }
+        const read = () => {
+          try {
+            const snapshot = directory.store.getSnapshot();
+            setCurrent(snapshot?.pending ?? snapshot?.current ?? null);
+          } catch {
+            setCurrent(null);
+          }
+        };
+        read();
+        try {
+          directory.load?.().catch(() => {});
+        } catch {
+          // Addressed sub-agent sessions have no model directory.
+        }
+        const stop = directory.store.subscribe?.(read);
+        return typeof stop === 'function' ? stop : undefined;
+      }, [directory]);
 
       const place = useCallback(() => {
         const element = triggerRef.current;
         if (!element) return;
         const rect = element.getBoundingClientRect();
-        const width = 356;
-        const left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - width - 8));
-        setAnchor({ left, bottom: Math.max(8, window.innerHeight - rect.top + 8) });
+        const width = Math.min(POP_WIDTH, window.innerWidth - 16);
+        // Right edges aligned, as the app's own menus do; kept inside the window.
+        const left = Math.min(Math.max(8, rect.right - width), Math.max(8, window.innerWidth - width - 8));
+        const bottom = Math.max(8, window.innerHeight - rect.top + 8);
+        setAnchor({ left, bottom, width, maxHeight: Math.max(220, window.innerHeight - bottom - 12) });
       }, []);
-
-      const openMenu = useCallback(() => {
-        place();
-        setModelQuery('');
-        setOpen(true);
-      }, [place]);
 
       const reload = useCallback(async () => {
         try {
           const [settings, catalog] = await Promise.all([loadSettings(appCtx), loadCatalog(appCtx)]);
-          const next = await ensureModelProfiles(appCtx, settings);
           setState((prev) => ({
             ...prev,
             status: 'ready',
-            config: next.config,
-            revision: next.revision,
+            config: settings.config,
+            revision: settings.revision,
             catalog,
             error: null,
           }));
@@ -3551,14 +4009,17 @@ window.__ModuleLoader__.load({
 
       useEffect(() => {
         reload();
-      }, [reload]);
+      }, [reload, sessionId]);
 
       useEffect(() => {
         if (!open) return undefined;
         reload();
         place();
         const onKey = (event) => {
-          if (event.key === 'Escape') setOpen(false);
+          if (event.key === 'Escape') {
+            setOpen(false);
+            triggerRef.current?.focus?.();
+          }
         };
         const onPointer = (event) => {
           const target = event.target;
@@ -3572,114 +4033,114 @@ window.__ModuleLoader__.load({
         document.addEventListener('keydown', onKey);
         document.addEventListener('pointerdown', onPointer, true);
         window.addEventListener('resize', onViewport);
-        window.addEventListener('scroll', onViewport, true);
         return () => {
           document.removeEventListener('keydown', onKey);
           document.removeEventListener('pointerdown', onPointer, true);
           window.removeEventListener('resize', onViewport);
-          window.removeEventListener('scroll', onViewport, true);
         };
       }, [open, reload, place]);
 
       const config = state.config;
-      const selection = resolveSelection(config, sessionId);
-      const activeId = selection?.tierId;
-      const activeMeta = activeId ? tierMeta(config, activeId) : null;
+      const selection = config ? resolveSelection(config, sessionId) : undefined;
+      // The route in use: this conversation's tier choice, else what the app has selected.
+      const route = selection
+        ? { provider: selection.provider, model: selection.model }
+        : current?.provider && current?.model
+          ? { provider: current.provider, model: current.model }
+          : null;
+      const activeTierId = selection?.tierId ?? (route ? matchTierId(config, route.provider, route.model) : undefined);
+      const activeTier = activeTierId ? config?.tiers?.[activeTierId] : undefined;
+      const activeVersion = selection?.versionId ? config?.versionsById?.[selection.versionId] : undefined;
+      const catalogModel = route ? findCatalogModel(state.catalog, route.provider, route.model) : undefined;
+      const hasThinking = (catalogModel?.reasoning?.efforts ?? []).length > 0;
+
       const sessionProfileId = config?.sessionProfiles?.[sessionId];
       const projectProfileId = config?.projectProfiles?.projects?.[projectKey]?.profileId;
-      const projectProfile = config?.projectProfiles?.profiles?.find(
-        (profile) => profile.id === projectProfileId,
-      );
       const activeProfileId = sessionProfileId ?? projectProfileId;
-      const activeProfile = config?.projectProfiles?.profiles?.find(
-        (profile) => profile.id === activeProfileId,
-      );
+      const profiles = config?.projectProfiles?.profiles ?? [];
+      const projectProfile = profiles.find((profile) => profile.id === projectProfileId);
+      const activeProfile = profiles.find((profile) => profile.id === activeProfileId);
       const visibleDeck = activeProfile
         ? (config?.deck ?? []).filter((tier) => activeProfile.tierIds.includes(tier.id))
         : config?.deck ?? [];
       const projectDefaultTierId = activeProfile?.defaultTierId;
-      const projectDefaultTier = projectDefaultTierId
-        ? config?.tiers?.[projectDefaultTierId]
-        : undefined;
-      const outsideProfile =
-        selection?.tierId !== undefined &&
-        activeProfile !== undefined &&
-        !activeProfile.tierIds.includes(selection.tierId);
-      const activeRoleRoutes = activeId ? config.roleModels?.[activeId] : undefined;
-      const configuredRoleIds = activeRoleRoutes
-        ? ROLE_IDS.filter((role) => activeRoleRoutes[role])
-        : [];
-      const activeRole = selection
-        ? configuredRoleIds.find((role) => {
-            const route = activeRoleRoutes?.[role];
-            return route?.provider === selection.provider && route?.model === selection.model;
-          })
-        : undefined;
+      const roleRoutes = activeTierId ? config?.roleModels?.[activeTierId] : undefined;
+      const roleIds = roleRoutes ? ROLE_IDS.filter((role) => roleRoutes[role]) : [];
+
+      const effort = draftEffort ?? selection?.effort ?? null;
+      const effortIndex = effort ? Math.max(0, EFFORT_IDS.indexOf(effort)) : EFFORT_IDS.indexOf('medium');
 
       useEffect(() => {
-        if (selection?.effort) setDraftEffort(selection.effort);
-      }, [selection?.effort, sessionId]);
-
+        setDraftEffort(null);
+      }, [selection?.effort, selection?.provider, selection?.model]);
       useEffect(() => {
-        if (selection) {
-          setAutoTemperature(selection.temperature === undefined);
-          setDraftTemperature(selection.effectiveTemperature ?? 0.7);
-        }
+        setAutoTemperature(selection?.temperature === undefined);
+        setDraftTemperature(selection?.effectiveTemperature ?? 0.7);
       }, [selection?.temperature, selection?.modelTemperature, sessionId]);
-
       useEffect(() => {
-        if (selection) {
-          setAutoMaxTokens(selection.maxTokens === undefined);
-          setDraftMaxTokens(selection.effectiveMaxTokens ?? 4096);
-        }
+        setAutoMaxTokens(selection?.maxTokens === undefined);
+        setDraftMaxTokens(selection?.effectiveMaxTokens ?? 4096);
       }, [selection?.maxTokens, selection?.modelMaxTokens, sessionId]);
 
-      const applySelection = async ({ tierId, provider, model, effort, temperature, maxTokens }) => {
+      const fail = (error) =>
+        setState((prev) => ({
+          ...prev,
+          busy: null,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+
+      /**
+       * Record this conversation's choice and switch the app to its model.
+       * @param {object} choice - tierId, version, provider, model, effort, temperature, maxTokens.
+       * @param {(latest: object) => object[]} [extraOps] - more settings changes for the same save.
+       */
+      const applySelection = async (choice, extraOps) => {
         if (!config) return;
-        if (!provider || !model) {
-          setState((prev) => ({ ...prev, error: 'Choose a model or configure this tier first.' }));
+        if (!choice.provider || !choice.model) {
+          setState((prev) => ({ ...prev, error: 'Pick a model first.' }));
           return;
         }
         setState((prev) => ({ ...prev, busy: 'apply', error: null }));
         let saved;
         try {
           const entry = {
-            tier: tierId ?? null,
-            provider,
-            model,
-            effort,
-            ...(typeof temperature === 'number' ? { temperature } : {}),
-            ...(typeof maxTokens === 'number' && maxTokens > 0
-              ? { maxTokens: Math.floor(maxTokens) }
+            tier: choice.tierId ?? null,
+            ...(choice.version ? { version: choice.version } : {}),
+            provider: choice.provider,
+            model: choice.model,
+            effort: choice.effort,
+            ...(typeof choice.temperature === 'number' ? { temperature: choice.temperature } : {}),
+            ...(typeof choice.maxTokens === 'number' && choice.maxTokens > 0
+              ? { maxTokens: Math.floor(choice.maxTokens) }
               : {}),
           };
           saved = await mutateSettings(
             appCtx,
-            (latest) => [{ op: 'set', path: ['activeTiers'], value: JSON.stringify({ ...latest.activeTiers, [sessionId]: entry }) }],
+            (latest) => [
+              ...(extraOps ? extraOps(latest) : []),
+              { op: 'set', path: ['activeTiers'], value: JSON.stringify({ ...latest.activeTiers, [sessionId]: entry }) },
+            ],
             state.revision,
           );
-          const catalogModel = findCatalogModel(state.catalog, provider, model);
-          const actualEffort = chooseEffort(catalogModel?.reasoning?.efforts, effort);
-          const result = await appCtx.remote.session.selectModel({
-            sessionId,
-            provider,
-            model,
-            ...(actualEffort === undefined ? {} : { reasoningEffort: actualEffort }),
-          });
-          if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
-          setState((prev) => ({
-            ...prev,
-            busy: null,
-            config: saved.config,
-            revision: saved.revision,
-            error: null,
-          }));
+          const target = findCatalogModel(state.catalog, choice.provider, choice.model);
+          const pinned = choice.wireEffort;
+          const advertised = (target?.reasoning?.efforts ?? []).map((item) => item.id);
+          const wire = pinned && advertised.includes(pinned) ? pinned : chooseEffort(target?.reasoning?.efforts, choice.effort);
+          const request = {
+            provider: choice.provider,
+            model: choice.model,
+            ...(wire === undefined ? {} : { reasoningEffort: wire }),
+          };
+          const result = directory?.select
+            ? await directory.select(request)
+            : await appCtx.remote.session.selectModel({ sessionId, ...request });
+          if (result && result.ok === false) throw new Error(`${result.error.code}: ${result.error.message}`);
+          setState((prev) => ({ ...prev, busy: null, config: saved.config, revision: saved.revision, error: null }));
         } catch (error) {
-          // A failed model switch must not leave a misleading per-Session
-          // override behind; restore the previous map when the write landed.
+          // A failed model switch must not leave a misleading choice behind:
+          // put back only this conversation's earlier entry.
           if (saved) {
             try {
-              // Put back only this Session's previous entry; leave every other Session as it is now.
               const previous = config.activeTiers?.[sessionId];
               await mutateSettings(
                 appCtx,
@@ -3695,92 +4156,153 @@ window.__ModuleLoader__.load({
               // Keep the original failure visible; the next write will reconcile.
             }
           }
-          setDraftEffort(selection?.effort ?? 'medium');
-          setState((prev) => ({
-            ...prev,
-            busy: null,
-            error: error instanceof Error ? error.message : String(error),
-          }));
+          setDraftEffort(null);
+          // Reload first: it clears the error line, and the failure must stay visible.
+          await reload();
+          fail(error);
         }
       };
 
-      const applyTier = (id) => {
-        const tier = config?.tiers?.[id];
-        if (!tier?.provider || !tier?.model) {
-          setState((prev) => ({ ...prev, error: 'Set a provider and model for this tier first.' }));
+      /** What the conversation has now, as a choice to change one part of. */
+      const baseChoice = () =>
+        route
+          ? {
+              tierId: activeTierId,
+              version: selection?.pickedVersionId,
+              provider: route.provider,
+              model: route.model,
+              effort: selection?.effort ?? activeTier?.effort ?? 'medium',
+              temperature: selection?.temperature,
+              maxTokens: selection?.maxTokens,
+              wireEffort: selection?.wireEffort,
+            }
+          : null;
+
+      const pickModel = (provider, model) => {
+        if (route && route.provider === provider && route.model === model && !selection?.versionId) {
           return;
         }
+        // The plain model: default settings, whatever tier is active.
         applySelection({
-          tierId: id,
-          provider: tier.provider,
-          model: tier.model,
-          effort: tier.effort,
-        });
-      };
-
-      const applyRole = (role) => {
-        if (!activeId) return;
-        const tier = config?.tiers?.[activeId];
-        const route = config?.roleModels?.[activeId]?.[role];
-        if (!tier || !route) return;
-        applySelection({
-          tierId: activeId,
-          provider: route.provider,
-          model: route.model,
-          effort: tier.effort,
-        });
-      };
-
-      const applyModel = (value) => {
-        const [provider, model] = value.split('\u0000');
-        if (!provider || !model) return;
-        if (selection && selection.provider === provider && selection.model === model) return;
-        const matched = matchTierId(config, provider, model);
-        const effort = selection?.effort ?? (matched ? config.tiers[matched].effort : 'medium');
-        applySelection({
-          tierId: matched,
+          tierId: selection?.tierId,
           provider,
           model,
-          effort,
+          effort: selection?.effort ?? activeTier?.effort ?? 'medium',
         });
       };
 
-      const commitEffort = (effort) => {
-        if (!selection || effort === selection.effort) return;
+      const pickVersion = (version) => {
         applySelection({
-          tierId: selection.tierId,
-          provider: selection.provider,
-          model: selection.model,
-          effort,
-          temperature: selection.temperature,
-          maxTokens: selection.maxTokens,
+          tierId: selection?.tierId,
+          version: version.id,
+          provider: version.provider,
+          model: version.model,
+          effort: version.effort ?? selection?.effort ?? activeTier?.effort ?? 'medium',
+          wireEffort: version.wireEffort,
         });
+      };
+
+      const pickTier = (id) => {
+        const tier = config?.tiers?.[id];
+        if (!tier) return;
+        // A tier with no model of its own keeps the model the conversation is on.
+        const provider = tier.provider || route?.provider;
+        const model = tier.model || route?.model;
+        if (!provider || !model) {
+          setState((prev) => ({ ...prev, error: 'Pick a model first, or give this tier a model in Settings.' }));
+          return;
+        }
+        const version = tier.versionId ? config.versionsById[tier.versionId] : undefined;
+        applySelection({
+          tierId: id,
+          ...(tier.provider && tier.model && version ? { version: version.id, wireEffort: version.wireEffort } : {}),
+          provider,
+          model,
+          effort: tier.effort,
+        });
+      };
+
+      const pickRole = (role) => {
+        const target = roleRoutes?.[role];
+        if (!activeTier || !target) return;
+        applySelection({ tierId: activeTierId, provider: target.provider, model: target.model, effort: activeTier.effort });
+      };
+
+      const commitEffort = (next) => {
+        const base = baseChoice();
+        if (!base || (selection && next === selection.effort)) return;
+        applySelection({ ...base, effort: next });
       };
 
       const commitTemperature = (temperature) => {
-        if (!selection) return;
-        if (temperature === selection.temperature) return;
-        applySelection({
-          tierId: selection.tierId,
-          provider: selection.provider,
-          model: selection.model,
-          effort: selection.effort,
-          temperature,
-          maxTokens: selection.maxTokens,
-        });
+        const base = baseChoice();
+        if (!base || temperature === selection?.temperature) return;
+        applySelection({ ...base, temperature });
       };
 
       const commitMaxTokens = (maxTokens) => {
-        if (!selection) return;
-        if (maxTokens === selection.maxTokens) return;
-        applySelection({
-          tierId: selection.tierId,
-          provider: selection.provider,
-          model: selection.model,
-          effort: selection.effort,
-          temperature: selection.temperature,
-          maxTokens,
-        });
+        const base = baseChoice();
+        if (!base || maxTokens === selection?.maxTokens) return;
+        applySelection({ ...base, maxTokens });
+      };
+
+      /** Save the settings in use as a new named version of this model, and switch to it. */
+      const saveAsVersion = () => {
+        const name = String(saveName ?? '').trim();
+        const base = baseChoice();
+        if (!base || !name) return;
+        if ((config.modelVersions ?? []).some((version) => version.name.toLowerCase() === name.toLowerCase())) {
+          setState((prev) => ({ ...prev, error: `A version named "${name}" already exists. Pick another name.` }));
+          return;
+        }
+        const id = uniqueVersionId(name, config.modelVersions ?? []);
+        const version = {
+          id,
+          name,
+          provider: base.provider,
+          model: base.model,
+          effort: base.effort,
+          wireEffort: activeVersion?.wireEffort,
+          temperature: selection?.effectiveTemperature,
+          maxTokens: selection?.effectiveMaxTokens,
+        };
+        applySelection(
+          { tierId: base.tierId, version: id, provider: base.provider, model: base.model, effort: base.effort, wireEffort: version.wireEffort },
+          (latest) => [
+            {
+              op: 'set',
+              path: ['modelVersions'],
+              value: JSON.stringify([
+                ...latest.modelVersions.filter((item) => item.id !== id).map(versionForStorage),
+                versionForStorage(version),
+              ]),
+            },
+          ],
+        ).then(() => setSaveName(null));
+      };
+
+      /** Write the settings in use back into the saved version that is active. */
+      const updateVersion = () => {
+        const base = baseChoice();
+        if (!base || !activeVersion) return;
+        const next = {
+          ...activeVersion,
+          effort: base.effort,
+          temperature: selection?.effectiveTemperature,
+          maxTokens: selection?.effectiveMaxTokens,
+        };
+        applySelection(
+          { tierId: base.tierId, version: activeVersion.id, provider: base.provider, model: base.model, effort: base.effort, wireEffort: activeVersion.wireEffort },
+          (latest) => [
+            {
+              op: 'set',
+              path: ['modelVersions'],
+              value: JSON.stringify(
+                latest.modelVersions.map((item) => versionForStorage(item.id === activeVersion.id ? next : item)),
+              ),
+            },
+          ],
+        );
       };
 
       const setProfile = async (profileId) => {
@@ -3797,32 +4319,18 @@ window.__ModuleLoader__.load({
             },
             state.revision,
           );
-          const nextProfile = profileId
-            ? config.projectProfiles.profiles.find((profile) => profile.id === profileId)
-            : config.projectProfiles.profiles.find((profile) => profile.id === projectProfileId);
-          setState((prev) => ({
-            ...prev,
-            busy: null,
-            config: saved.config,
-            revision: saved.revision,
-            error: null,
-          }));
-          if (
-            nextProfile?.defaultTierId &&
-            (!selection || !nextProfile.tierIds.includes(selection.tierId))
-          ) {
-            await applyTier(nextProfile.defaultTierId);
+          const nextProfile = profiles.find((profile) => profile.id === (profileId || projectProfileId));
+          setState((prev) => ({ ...prev, busy: null, config: saved.config, revision: saved.revision, error: null }));
+          if (nextProfile?.defaultTierId && (!selection || !nextProfile.tierIds.includes(selection.tierId))) {
+            pickTier(nextProfile.defaultTierId);
           }
         } catch (error) {
-          setState((prev) => ({
-            ...prev,
-            busy: null,
-            error: error instanceof Error ? error.message : String(error),
-          }));
+          fail(error);
         }
       };
 
-      const clearTier = async () => {
+      /** Forget this conversation's tier and settings; the model it is on stays. */
+      const clearChoice = async () => {
         if (!config) return;
         setState((prev) => ({ ...prev, busy: 'clear', error: null }));
         try {
@@ -3835,354 +4343,357 @@ window.__ModuleLoader__.load({
             },
             state.revision,
           );
+          setDraftEffort(null);
           setState((prev) => ({ ...prev, busy: null, config: saved.config, revision: saved.revision, error: null }));
-          setOpen(false);
         } catch (error) {
-          setState((prev) => ({
-            ...prev,
-            busy: null,
-            error: error instanceof Error ? error.message : String(error),
-          }));
+          fail(error);
         }
       };
 
-      // A new Session in a profiled project inherits the profile's default tier
-      // once. The ref prevents re-applying after a user explicitly clears it.
+      // A new conversation in a project with a tier set starts on that set's default tier, once.
       useEffect(() => {
         if (autoProfileAppliedRef.current) return;
-        if (!config || selection || !projectDefaultTierId) return;
+        if (!config || selection || !projectDefaultTierId || !route) return;
         autoProfileAppliedRef.current = true;
-        applyTier(projectDefaultTierId);
-      }, [config, selection, projectDefaultTierId, applyTier]);
+        pickTier(projectDefaultTierId);
+      }, [config, selection, projectDefaultTierId, route?.provider, route?.model]);
 
-      const label = selection ? (activeMeta ? activeMeta.label : shortModel(selection.model)) : 'Tier';
-      const effortLabel = selection
-        ? EFFORTS.find((entry) => entry.id === selection.effort)?.label ?? selection.effort
-        : undefined;
-      const badge = selection ? (activeMeta ? activeMeta.short : 'C') : 'T';
-      const modelGroups = state.catalog?.groups ?? [];
-      const currentValue = selection ? `${selection.provider}\u0000${selection.model}` : '';
-      const modelFilter = modelQuery.trim().toLowerCase();
-      const filteredGroups = modelFilter
-        ? modelGroups
-            .map((group) => {
-              const groupMatch = `${group.name} ${group.id}`.toLowerCase().includes(modelFilter);
-              return {
-                ...group,
-                models: groupMatch
-                  ? group.models
-                  : group.models.filter((model) =>
-                      `${model.name} ${model.id}`.toLowerCase().includes(modelFilter),
-                    ),
-              };
-            })
-            .filter((group) => group.models.length > 0)
-        : modelGroups;
-      const visibleCurrent =
-        selection !== undefined &&
-        filteredGroups.some(
-          (group) =>
-            group.id === selection.provider && group.models.some((model) => model.id === selection.model),
-        );
-      const draftIndex = Math.max(0, EFFORT_IDS.indexOf(draftEffort));
+      const busy = state.busy !== null;
+      const effortLabel = selection ? EFFORTS.find((entry) => entry.id === (effort ?? selection.effort))?.label : null;
+      const modelName = activeVersion?.name ?? catalogModel?.name ?? (route ? shortModel(route.model) : null);
+      const triggerText = modelName ?? 'Select model';
+      const filter = query.trim().toLowerCase();
+      const versions = (config?.modelVersions ?? []).filter(
+        (version) => !filter || `${version.name} ${version.model} ${version.provider}`.toLowerCase().includes(filter),
+      );
+      const groups = (state.catalog?.groups ?? [])
+        .map((group) => {
+          const groupMatch = !filter || `${group.name} ${group.id}`.toLowerCase().includes(filter);
+          return {
+            ...group,
+            models: groupMatch
+              ? group.models
+              : group.models.filter((model) => `${model.name} ${model.id}`.toLowerCase().includes(filter)),
+          };
+        })
+        .filter((group) => group.models.length > 0);
+      const changedFromVersion =
+        activeVersion !== undefined &&
+        (selection.temperature !== undefined ||
+          selection.maxTokens !== undefined ||
+          (activeVersion.effort !== undefined && activeVersion.effort !== selection.effort));
 
-      return h(
-        'div',
-        { className: 'dsh-mt-wrap', ref: rootRef },
-        h(Styles),
-        h(
-          'button',
-          {
-            type: 'button',
-            className: 'dsh-mt-trigger',
-            ref: triggerRef,
-            'data-open': String(open),
-            'aria-haspopup': 'dialog',
-            'aria-expanded': open,
-            title: selection
-              ? `${label} · ${effortLabel} · ${selection.provider}/${selection.model}`
-              : 'Choose a model, tier, and effort for this Session',
-            onClick: () => {
-              if (open) setOpen(false);
-              else openMenu();
+      const check = h('span', { className: 'dsh-mc-check', 'aria-hidden': true }, '✓');
+
+      const panel = !open
+        ? null
+        : h(
+            'div',
+            {
+              className: 'dsh-mc-pop',
+              role: 'dialog',
+              'aria-label': 'Model, effort and tier for this conversation',
+              ref: popRef,
+              style: {
+                position: 'fixed',
+                left: anchor.left,
+                bottom: anchor.bottom,
+                width: anchor.width ?? POP_WIDTH,
+                maxHeight: anchor.maxHeight,
+              },
             },
-          },
-          h('span', { className: 'dsh-mt-badge' }, badge),
-          h('span', null, selection ? `${label} · ${effortLabel}` : 'Tier'),
-          h('span', { className: 'dsh-mt-chevron', 'aria-hidden': true }, open ? '▾' : '▴'),
-        ),
-        open && typeof document !== 'undefined'
-          ? ReactDOM.createPortal(
+            // ---- model list
+            h('input', {
+              className: 'dsh-mc-search',
+              type: 'search',
+              placeholder: 'Search models and saved versions',
+              value: query,
+              autoFocus: true,
+              'aria-label': 'Search models and saved versions',
+              onChange: (event) => setQuery(event.target.value),
+            }),
+            h(
+              'div',
+              { className: 'dsh-mc-list', role: 'listbox', 'aria-label': 'Models' },
+              versions.length > 0 ? h('div', { className: 'dsh-mc-group' }, 'Saved versions') : null,
+              versions.map((version) => {
+                const active = selection?.versionId === version.id;
+                return h(
+                  'button',
+                  {
+                    key: `v:${version.id}`,
+                    type: 'button',
+                    role: 'option',
+                    'aria-selected': active,
+                    className: 'dsh-mc-item',
+                    'data-active': String(active),
+                    disabled: busy,
+                    title: `${version.provider}/${version.model}`,
+                    onClick: () => pickVersion(version),
+                  },
+                  h(
+                    'span',
+                    { className: 'dsh-mc-itemmain' },
+                    h('span', { className: 'dsh-mc-itemname' }, version.name),
+                    h('span', { className: 'dsh-mc-itemmeta' }, `${shortModel(version.model)} · ${versionSummary(version)}`),
+                  ),
+                  active ? check : null,
+                );
+              }),
+              groups.map((group) =>
+                h(
+                  React.Fragment,
+                  { key: `g:${group.id}` },
+                  h('div', { className: 'dsh-mc-group' }, group.name),
+                  group.models.map((model) => {
+                    const active =
+                      route?.provider === group.id && route?.model === model.id && !selection?.versionId;
+                    return h(
+                      'button',
+                      {
+                        key: `m:${group.id}:${model.id}`,
+                        type: 'button',
+                        role: 'option',
+                        'aria-selected': active,
+                        className: 'dsh-mc-item',
+                        'data-active': String(active),
+                        disabled: busy,
+                        title: `${group.id}/${model.id}`,
+                        onClick: () => pickModel(group.id, model.id),
+                      },
+                      h('span', { className: 'dsh-mc-itemmain' }, h('span', { className: 'dsh-mc-itemname' }, model.name)),
+                      active ? check : null,
+                    );
+                  }),
+                ),
+              ),
+              versions.length === 0 && groups.length === 0
+                ? h(
+                    'div',
+                    { className: 'dsh-mc-empty' },
+                    filter ? 'Nothing matches that search.' : 'No models yet. Add one in Settings → Models.',
+                  )
+                : null,
+            ),
+            // ---- effort
+            h(
+              'div',
+              { className: 'dsh-mc-block' },
               h(
                 'div',
-                {
-                  className: 'dsh-mt-pop',
-                  role: 'dialog',
-                  'aria-label': 'Model tier selector',
-                  ref: popRef,
-                  style: {
-                    position: 'fixed',
-                    left: anchor.left,
-                    bottom: anchor.bottom,
-                    width: 356,
-                    maxHeight: Math.min(520, Math.max(180, window.innerHeight - anchor.bottom - 16)),
-                  },
-                },
+                { className: 'dsh-mc-rowhead' },
+                h('span', { className: 'dsh-mc-label' }, 'Effort'),
+                h('span', { className: 'dsh-mc-value' }, effort ? EFFORTS[effortIndex].label : 'Default'),
+              ),
+              h(
+                'div',
+                { className: 'dsh-mc-slider', 'data-unset': String(!effort), style: { '--dsh-mc-fill': `${(effortIndex / (EFFORTS.length - 1)) * 100}%` } },
+                h('input', {
+                  type: 'range',
+                  min: 0,
+                  max: EFFORTS.length - 1,
+                  step: 1,
+                  value: effortIndex,
+                  disabled: !route || busy,
+                  'aria-label': 'Effort',
+                  'aria-valuetext': effort ? EFFORTS[effortIndex].label : 'Default',
+                  onChange: (event) => setDraftEffort(EFFORT_IDS[Number(event.target.value)]),
+                  onPointerUp: (event) => commitEffort(EFFORT_IDS[Number(event.target.value)]),
+                  onKeyUp: (event) => commitEffort(EFFORT_IDS[Number(event.target.value)]),
+                }),
                 h(
                   'div',
-                  { className: 'dsh-mt-foot', style: { borderTop: 0, marginTop: 0, paddingTop: 2 } },
-                  h('span', null, 'Model and effort for this Session'),
+                  { className: 'dsh-mc-stops', 'aria-hidden': true },
+                  EFFORT_IDS.map((id, index) => h('span', { key: id, 'data-on': String(Boolean(effort) && index <= effortIndex) })),
+                ),
+              ),
+              h(
+                'div',
+                { className: 'dsh-mc-ends', 'aria-hidden': true },
+                h('span', null, 'Off'),
+                h('span', null, 'Ultra Code'),
+              ),
+              route && !hasThinking && state.catalog
+                ? h('div', { className: 'dsh-mc-note' }, 'This model has no thinking control. Effort still changes how carefully it is told to work.')
+                : null,
+            ),
+            // ---- tier
+            h(
+              'div',
+              { className: 'dsh-mc-block' },
+              h(
+                'div',
+                { className: 'dsh-mc-rowhead' },
+                h('span', { className: 'dsh-mc-label' }, 'Tier'),
+                selection
+                  ? h('button', { type: 'button', className: 'dsh-mc-link', disabled: busy, onClick: clearChoice }, 'Reset')
+                  : null,
+              ),
+              h(
+                'div',
+                { className: 'dsh-mc-chips' },
+                visibleDeck.map((tier) =>
                   h(
                     'button',
                     {
+                      key: tier.id,
                       type: 'button',
-                      className: 'dsh-mt-link',
-                      disabled: !selection || state.busy !== null,
-                      onClick: clearTier,
+                      className: 'dsh-mc-chip',
+                      'aria-pressed': tier.id === activeTierId,
+                      'data-active': String(tier.id === activeTierId),
+                      disabled: busy,
+                      title: [
+                        tier.role,
+                        tier.provider && tier.model
+                          ? `Model: ${tier.versionName ?? `${tier.provider}/${tier.model}`}`
+                          : 'Keeps the model you are on',
+                      ]
+                        .filter(Boolean)
+                        .join('\n'),
+                      onClick: () => pickTier(tier.id),
                     },
-                    'Use normal selection',
+                    tierLabel(tier),
                   ),
                 ),
-                h(
-                  'div',
-                  { className: 'dsh-mt-pickerbox' },
-                  h(
+              ),
+              profiles.length > 0
+                ? h(
+                    'select',
+                    {
+                      className: 'dsh-mc-select',
+                      value: sessionProfileId ?? '',
+                      disabled: busy,
+                      'aria-label': 'Project profile',
+                      onChange: (event) => setProfile(event.target.value || undefined),
+                    },
+                    h('option', { value: '' }, projectProfile ? `Project profile · ${projectProfile.name}` : 'All tiers'),
+                    profiles.map((profile) => h('option', { key: profile.id, value: profile.id }, profile.name)),
+                  )
+                : null,
+              roleIds.length > 0
+                ? h(
                     'div',
-                    { className: 'dsh-mt-field' },
-                    h('span', { className: 'dsh-mt-label' }, 'Project profile'),
-                    h(
-                      'select',
-                      {
-                        className: 'dsh-mt-select',
-                        value: sessionProfileId ?? '',
-                        disabled: state.busy !== null,
-                        'aria-label': 'Project profile',
-                        onChange: (event) => setProfile(event.target.value || undefined),
-                      },
+                    { className: 'dsh-mc-chips' },
+                    roleIds.map((role) =>
                       h(
-                        'option',
-                        { value: '' },
-                        projectProfile
-                          ? `Project default · ${projectProfile.name}`
-                          : 'All tiers',
-                      ),
-                      config.projectProfiles.profiles.map((profile) =>
-                        h('option', { key: profile.id, value: profile.id }, profile.name),
-                      ),
-                    ),
-                    h(
-                      'span',
-                      { className: 'dsh-mt-hint' },
-                      workspace?.title
-                        ? `Project: ${workspace.title}`
-                        : 'Project: ungrouped session',
-                    ),
-                    config.projectProfiles.profiles.length === 0
-                      ? h(
-                          'span',
-                          { className: 'dsh-mt-hint' },
-                          'No project profiles yet. Create one in Settings → Project profiles.',
-                        )
-                      : null,
-                  ),
-                  h(
-                    'div',
-                    { className: 'dsh-mt-field' },
-                    h('span', { className: 'dsh-mt-label' }, 'Model'),
-                    h('input', {
-                      className: 'dsh-mt-input',
-                      type: 'search',
-                      placeholder: 'Filter models…',
-                      value: modelQuery,
-                      disabled: state.busy !== null,
-                      'aria-label': 'Filter models',
-                      onChange: (event) => setModelQuery(event.target.value),
-                    }),
-                    h(
-                      'select',
-                      {
-                        className: 'dsh-mt-select',
-                        value: currentValue,
-                        disabled: state.busy !== null,
-                        'aria-label': 'Session model',
-                        onChange: (event) => applyModel(event.target.value),
-                      },
-                      selection
-                        ? null
-                        : h('option', { value: '' }, 'Choose a model…'),
-                      selection && !visibleCurrent
-                        ? h(
-                            'option',
-                            { value: currentValue },
-                            `${selection.provider} / ${selection.model}`,
-                          )
-                        : null,
-                      filteredGroups.map((group) =>
-                        h(
-                          'optgroup',
-                          { key: group.id, label: group.name },
-                          group.models.map((model) =>
-                            h(
-                              'option',
-                              { key: `${group.id}:${model.id}`, value: `${group.id}\u0000${model.id}` },
-                              model.name,
-                            ),
+                        'button',
+                        {
+                          key: role,
+                          type: 'button',
+                          className: 'dsh-mc-chip dsh-mc-chip-quiet',
+                          'data-active': String(
+                            roleRoutes[role].provider === route?.provider && roleRoutes[role].model === route?.model,
                           ),
-                        ),
-                      ),
-                    ),
-                    modelFilter && filteredGroups.length === 0
-                      ? h('span', { className: 'dsh-mt-hint' }, 'No models match that filter.')
-                      : modelGroups.length === 0
-                        ? h(
-                            'span',
-                            { className: 'dsh-mt-hint' },
-                            'No models available. Configure a provider in Settings → Models.',
-                          )
-                        : null,
-                  ),
-                  h(
-                    'div',
-                    { className: 'dsh-mt-field' },
-                    h(
-                      'div',
-                      { className: 'dsh-mt-rangehead' },
-                      h('span', { className: 'dsh-mt-label' }, 'Effort'),
-                      h(
-                        'span',
-                        { className: 'dsh-mt-rangevalue' },
-                        EFFORTS[draftIndex].label,
-                      ),
-                    ),
-                    h('input', {
-                      className: 'dsh-mt-range',
-                      type: 'range',
-                      min: 0,
-                      max: EFFORTS.length - 1,
-                      step: 1,
-                      value: draftIndex,
-                      disabled: !selection || state.busy !== null,
-                      'aria-label': 'Session effort level',
-                      onChange: (event) => setDraftEffort(EFFORT_IDS[Number(event.target.value)]),
-                      onPointerUp: (event) =>
-                        commitEffort(EFFORT_IDS[Number(event.target.value)]),
-                      onKeyUp: (event) => commitEffort(EFFORT_IDS[Number(event.target.value)]),
-                      onBlur: () => commitEffort(draftEffort),
-                    }),
-                    h(
-                      'div',
-                      { className: 'dsh-mt-ticks', 'aria-hidden': true },
-                      EFFORT_IDS.map((id) => h('span', { key: id }, SHORT_EFFORTS[id])),
-                    ),
-                    selection?.wireEffort
-                      ? h(
-                          'span',
-                          { className: 'dsh-mt-hint' },
-                          `Model pins wire effort: ${selection.wireEffort}`,
-                        )
-                      : null,
-                  ),
-                  h(
-                    'details',
-                    { className: 'dsh-mt-sampling' },
-                    h(
-                      'summary',
-                      { className: 'dsh-mt-samplinghead' },
-                      h('span', { className: 'dsh-mt-label' }, 'Sampling'),
-                      h('span', { className: 'dsh-mt-hint' }, 'Temperature and max tokens'),
-                    ),
-                    h(
-                      'div',
-                      { className: 'dsh-mt-samplingbody' },
-                    h(
-                      'div',
-                      { className: 'dsh-mt-field' },
-                      h(
-                        'div',
-                        { className: 'dsh-mt-rangehead' },
-                        h('span', { className: 'dsh-mt-label' }, 'Temperature'),
-                      h(
-                        'span',
-                        { className: 'dsh-mt-rangevalue' },
-                        autoTemperature
-                          ? selection?.effectiveTemperature !== undefined
-                            ? `Model ${selection.effectiveTemperature.toFixed(2)}`
-                            : 'Auto'
-                          : draftTemperature.toFixed(2),
-                      ),
-                    ),
-                    h(
-                      'label',
-                      { className: 'dsh-mt-check' },
-                      h('input', {
-                        type: 'checkbox',
-                        checked: autoTemperature,
-                        disabled: !selection || state.busy !== null,
-                        onChange: (event) => {
-                          const auto = event.target.checked;
-                          setAutoTemperature(auto);
-                          commitTemperature(auto ? undefined : draftTemperature);
+                          disabled: busy,
+                          title: `Switch to the ${role} model: ${roleRoutes[role].provider}/${roleRoutes[role].model}`,
+                          onClick: () => pickRole(role),
                         },
-                      }),
-                      h('span', null, 'Use model default'),
-                    ),
-                    h('input', {
-                      className: 'dsh-mt-range',
-                      type: 'range',
-                      min: 0,
-                      max: 2,
-                      step: 0.05,
-                      value: draftTemperature,
-                      disabled: autoTemperature || !selection || state.busy !== null,
-                      'aria-label': 'Session temperature',
-                      onChange: (event) => setDraftTemperature(Number(event.target.value)),
-                      onPointerUp: (event) => commitTemperature(Number(event.target.value)),
-                      onKeyUp: (event) => commitTemperature(Number(event.target.value)),
-                      onBlur: () => commitTemperature(draftTemperature),
-                    }),
-                  ),
-                  h(
-                    'div',
-                    { className: 'dsh-mt-field' },
-                    h(
-                      'div',
-                      { className: 'dsh-mt-rangehead' },
-                      h('span', { className: 'dsh-mt-label' }, 'Max output tokens'),
-                      h(
-                        'span',
-                        { className: 'dsh-mt-rangevalue' },
-                        autoMaxTokens
-                          ? selection?.effectiveMaxTokens !== undefined
-                            ? `Model ${selection.effectiveMaxTokens}`
-                            : 'Auto'
-                          : String(draftMaxTokens),
+                        ROLES.find((entry) => entry.id === role)?.label ?? role,
                       ),
                     ),
-                    h(
-                      'label',
-                      { className: 'dsh-mt-check' },
-                      h('input', {
-                        type: 'checkbox',
-                        checked: autoMaxTokens,
-                        disabled: !selection || state.busy !== null,
-                        onChange: (event) => {
-                          const auto = event.target.checked;
-                          setAutoMaxTokens(auto);
-                          commitMaxTokens(auto ? undefined : draftMaxTokens);
-                        },
-                      }),
-                      h('span', null, 'Use model default'),
-                    ),
-                    h('input', {
-                      className: 'dsh-mt-input',
+                  )
+                : null,
+            ),
+            // ---- sampling
+            h(
+              'details',
+              { className: 'dsh-mc-block dsh-mc-details' },
+              h(
+                'summary',
+                { className: 'dsh-mc-rowhead' },
+                h('span', { className: 'dsh-mc-label' }, 'Sampling'),
+                h(
+                  'span',
+                  { className: 'dsh-mc-value' },
+                  selection?.effectiveTemperature === undefined && selection?.effectiveMaxTokens === undefined
+                    ? 'Default'
+                    : [
+                        selection.effectiveTemperature === undefined ? null : `temp ${selection.effectiveTemperature.toFixed(2)}`,
+                        selection.effectiveMaxTokens === undefined ? null : `${selection.effectiveMaxTokens} tokens`,
+                      ]
+                        .filter(Boolean)
+                        .join(' · '),
+                ),
+              ),
+              h(
+                'div',
+                { className: 'dsh-mc-field' },
+                h(
+                  'label',
+                  { className: 'dsh-mc-checkrow' },
+                  h('input', {
+                    type: 'checkbox',
+                    checked: !autoTemperature,
+                    disabled: !route || busy,
+                    onChange: (event) => {
+                      const custom = event.target.checked;
+                      setAutoTemperature(!custom);
+                      commitTemperature(custom ? draftTemperature : undefined);
+                    },
+                  }),
+                  h('span', null, 'Temperature'),
+                  h(
+                    'span',
+                    { className: 'dsh-mc-value' },
+                    autoTemperature
+                      ? selection?.modelTemperature !== undefined
+                        ? `${selection.modelTemperature.toFixed(2)} (saved)`
+                        : 'Default'
+                      : draftTemperature.toFixed(2),
+                  ),
+                ),
+                h('input', {
+                  className: 'dsh-mc-range',
+                  type: 'range',
+                  min: 0,
+                  max: 2,
+                  step: 0.05,
+                  value: draftTemperature,
+                  disabled: autoTemperature || !route || busy,
+                  'aria-label': 'Temperature',
+                  onChange: (event) => setDraftTemperature(Number(event.target.value)),
+                  onPointerUp: (event) => commitTemperature(Number(event.target.value)),
+                  onKeyUp: (event) => commitTemperature(Number(event.target.value)),
+                }),
+              ),
+              h(
+                'div',
+                { className: 'dsh-mc-field' },
+                h(
+                  'label',
+                  { className: 'dsh-mc-checkrow' },
+                  h('input', {
+                    type: 'checkbox',
+                    checked: !autoMaxTokens,
+                    disabled: !route || busy,
+                    onChange: (event) => {
+                      const custom = event.target.checked;
+                      setAutoMaxTokens(!custom);
+                      commitMaxTokens(custom ? draftMaxTokens : undefined);
+                    },
+                  }),
+                  h('span', null, 'Max output tokens'),
+                  h(
+                    'span',
+                    { className: 'dsh-mc-value' },
+                    autoMaxTokens
+                      ? selection?.modelMaxTokens !== undefined
+                        ? `${selection.modelMaxTokens} (saved)`
+                        : 'Default'
+                      : '',
+                  ),
+                ),
+                autoMaxTokens
+                  ? null
+                  : h('input', {
+                      className: 'dsh-mc-input',
                       type: 'number',
                       min: 1,
                       max: 1000000,
                       step: 1,
-                      value: autoMaxTokens ? '' : draftMaxTokens,
-                      placeholder: 'Model default',
-                      disabled: autoMaxTokens || !selection || state.busy !== null,
-                      'aria-label': 'Session max output tokens',
+                      value: draftMaxTokens,
+                      disabled: !route || busy,
+                      'aria-label': 'Max output tokens',
                       onChange: (event) => setDraftMaxTokens(Number(event.target.value)),
                       onBlur: () => {
                         const value = Math.floor(Number(draftMaxTokens));
@@ -4196,121 +4707,91 @@ window.__ModuleLoader__.load({
                         }
                       },
                     }),
-                  ),
-                    ),
-                  ),
-                ),
-                h('div', { className: 'dsh-mt-pophead' }, 'Tier presets'),
-                outsideProfile
-                  ? h(
-                      'div',
-                      { className: 'dsh-mt-hint', style: { padding: '0 8px 6px' } },
-                      `Current tier is outside ${activeProfile.name}. Pick a tier below or use the profile default.`,
-                    )
-                  : null,
-                projectDefaultTier && selection?.tierId !== projectDefaultTierId
-                  ? h(
-                      'div',
-                      { className: 'dsh-mt-foot', style: { borderTop: 0, paddingTop: 0 } },
-                      h('span', null, 'Profile default'),
-                      h(
-                        'button',
-                        {
-                          type: 'button',
-                          className: 'dsh-mt-link',
-                          onClick: () => applyTier(projectDefaultTierId),
-                        },
-                        `Use ${tierLabel(projectDefaultTier)}`,
-                      ),
-                    )
-                  : null,
-                visibleDeck.map((tier) => {
-                  const id = tier.id;
-                  const meta = tierMeta(config, id);
-                  const isActive =
-                    selection !== undefined &&
-                    id === selection.tierId &&
-                    tierHasRoute(tier, selection.provider, selection.model);
-                  const disabled = !tier?.provider || !tier?.model || state.busy !== null;
-                  const fallbackCount = config.fallbackChains?.[tier.id]?.length ?? 0;
-                  const routeLabel = tier
-                    ? `${tier.provider}/${tier.model}${tier.variants?.length ? ` +${tier.variants.length}` : ''}${fallbackCount ? ` · ${fallbackCount} fallback` : ''}`
-                    : 'Not configured';
-                  return h(
-                    'button',
-                    {
-                      key: id,
-                      type: 'button',
-                      'aria-pressed': isActive,
-                      'data-active': String(isActive),
-                      className: 'dsh-mt-row',
-                      disabled,
-                      onClick: () => applyTier(id),
-                    },
-                    h('span', { className: 'dsh-mt-badge' }, meta.short),
-                    h(
-                      'span',
-                      { className: 'dsh-mt-rowmain' },
-                      h('span', { className: 'dsh-mt-rowtitle' }, meta.label),
-                      h(
-                        'span',
-                        { className: 'dsh-mt-rowmeta' },
-                        routeLabel,
-                      ),
-                    ),
-                    h(
-                      'span',
-                      { className: 'dsh-mt-dots', title: 'Web search · Web fetch · Browser' },
-                      h('span', { className: 'dsh-mt-dot', 'data-on': String(tier?.webSearch === true) }),
-                      h('span', { className: 'dsh-mt-dot', 'data-on': String(tier?.webFetch === true) }),
-                      h('span', { className: 'dsh-mt-dot', 'data-on': String(tier?.browser === true) }),
-                    ),
-                    h('span', { className: 'dsh-mt-effort' }, state.busy !== null ? 'Switching…' : tier ? EFFORTS.find((entry) => entry.id === (isActive ? selection.effort : tier.effort))?.label ?? (isActive ? selection.effort : tier.effort) : '—'),
-                  );
-                }),
-                configuredRoleIds.length > 0
-                  ? h(
-                      'div',
-                      { className: 'dsh-mt-rolelanes' },
-                      h('div', { className: 'dsh-mt-pophead' }, 'Role lanes'),
-                      h(
-                        'div',
-                        { className: 'dsh-mt-rolelanebuttons' },
-                        configuredRoleIds.map((role) => {
-                          const route = activeRoleRoutes?.[role];
-                          const meta = ROLES.find((entry) => entry.id === role);
-                          return h(
-                            'button',
-                            {
-                              key: role,
-                              type: 'button',
-                              className: 'dsh-mt-rolelane',
-                              'data-active': String(role === activeRole),
-                              disabled: state.busy !== null,
-                              title: route ? `${route.provider}/${route.model}` : '',
-                              onClick: () => applyRole(role),
-                            },
-                            h('span', null, meta?.label ?? role),
-                            h(
-                              'span',
-                              { className: 'dsh-mt-rolelaneroute' },
-                              route ? shortModel(route.model) : '',
-                            ),
-                          );
-                        }),
-                      ),
-                    )
-                  : null,
-                state.error ? h('div', { className: 'dsh-mt-error' }, state.error) : null,
-                h(
-                  'div',
-                  { className: 'dsh-mt-foot' },
-                  h('span', null, 'Configure models, effort, and access in Settings → Model Tiers.'),
-                ),
               ),
-              document.body,
-            )
-          : null,
+              h('div', { className: 'dsh-mc-note' }, 'The app sends temperature and max tokens only. Other sampling settings stay on your model server.'),
+              saveName === null
+                ? h(
+                    'div',
+                    { className: 'dsh-mc-actions' },
+                    h(
+                      'button',
+                      {
+                        type: 'button',
+                        className: 'dsh-mc-btn',
+                        disabled: !route || busy,
+                        title: 'Keep these settings as a named version of this model. The plain model stays as it is.',
+                        onClick: () => setSaveName(''),
+                      },
+                      'Save as new version…',
+                    ),
+                    changedFromVersion
+                      ? h(
+                          'button',
+                          { type: 'button', className: 'dsh-mc-btn', disabled: busy, onClick: updateVersion },
+                          `Update “${activeVersion.name}”`,
+                        )
+                      : null,
+                  )
+                : h(
+                    'form',
+                    {
+                      className: 'dsh-mc-actions',
+                      onSubmit: (event) => {
+                        event.preventDefault();
+                        saveAsVersion();
+                      },
+                    },
+                    h('input', {
+                      className: 'dsh-mc-input',
+                      type: 'text',
+                      autoFocus: true,
+                      maxLength: 80,
+                      placeholder: 'Name, for example “Writing”',
+                      value: saveName,
+                      'aria-label': 'Name of the new version',
+                      onChange: (event) => setSaveName(event.target.value),
+                    }),
+                    h('button', { type: 'submit', className: 'dsh-mc-btn dsh-mc-btn-primary', disabled: busy || !saveName.trim() }, 'Save'),
+                    h('button', { type: 'button', className: 'dsh-mc-btn', onClick: () => setSaveName(null) }, 'Cancel'),
+                  ),
+            ),
+            state.error ? h('div', { className: 'dsh-mc-error', role: 'alert' }, state.error) : null,
+            h('div', { className: 'dsh-mc-foot' }, 'Tiers and saved versions: Settings → Model Tiers'),
+          );
+
+      return h(
+        'div',
+        { className: 'dsh-mc-wrap', ref: rootRef },
+        h(Styles),
+        h(
+          'button',
+          {
+            type: 'button',
+            className: 'dsh-mc-trigger',
+            ref: triggerRef,
+            'data-open': String(open),
+            'aria-haspopup': 'dialog',
+            'aria-expanded': open,
+            'aria-label': route
+              ? `Model ${triggerText}${activeTier ? `, tier ${tierLabel(activeTier)}` : ''}${effortLabel ? `, effort ${effortLabel}` : ''}`
+              : 'Select model',
+            title: route ? `${route.provider}/${route.model}` : 'Select a model for this conversation',
+            onClick: () => {
+              if (open) setOpen(false);
+              else {
+                place();
+                setQuery('');
+                setSaveName(null);
+                setOpen(true);
+              }
+            },
+          },
+          activeTier ? h('span', { className: 'dsh-mt-badge', title: `Tier: ${tierLabel(activeTier)}` }, activeTier.short) : null,
+          h('span', { className: 'dsh-mc-triggername' }, triggerText),
+          effortLabel ? h('span', { className: 'dsh-mc-triggereffort' }, effortLabel) : null,
+          h('span', { className: 'dsh-mc-chevron', 'aria-hidden': true }, busy ? '…' : '▾'),
+        ),
+        panel && typeof document !== 'undefined' ? ReactDOM.createPortal(panel, document.body) : null,
       );
     }
 
@@ -4335,15 +4816,16 @@ window.__ModuleLoader__.load({
         );
 
         ctx.effect(() =>
-          ctx.slots.inject('conversation.input.left', () =>
+          // Beside the send button, where the app's own model menu sits.
+          ctx.slots.inject('conversation.input.right', () =>
             ctx.slots.register(
               {
-                name: 'conversation.input.left',
+                name: 'conversation.input.right',
                 id: 'model-tier',
-                order: -20,
+                order: 900,
                 label: () => t('composer.tier'),
               },
-              (props) => h(TierControl, { ...props, appCtx: ctx }),
+              (props) => h(ModelControl, { ...props, appCtx: ctx }),
             ),
           ),
         );

@@ -33,7 +33,7 @@ bash scripts/install.sh
 ## First steps
 
 1. **Add your models.** Go to **Settings → Models** in the app. You can paste an API key for a provider there, or add your own server (for example a model server on another computer). No files to edit.
-2. **Look at the new pages.** **Settings** now has **Colours, Model Tiers, Modes, Sampling, Usage, Benchmark, Arena** and **Swarm** pages. The composer (where you type) gets a **mode** selector and, once set up, a model-health dot.
+2. **Look at the new pages.** **Settings** now has **Colours, Model Tiers, Modes, Sampling, Usage, Benchmark, Arena** and **Swarm** pages. The chat box (where you type) gets one **model button** beside the send button, with the model list, an effort slider from Off to Ultra Code, tiers and sampling, and, once set up, a model-health dot.
 3. **Switch on what you want.** Some add-ons work right away. The others do nothing until you give them a little setup, for example which models the arena should compare. [docs/ADD-ONS.md](docs/ADD-ONS.md) says which is which and how to set each one up.
 
 ### What works the moment you install
@@ -41,7 +41,7 @@ bash scripts/install.sh
 - **Cowork sidebar:** Chat, Cowork and Code tabs at the top of the left sidebar. Each tab lists only its own conversations and projects, and has its own sections: Model Arena under Chat, and Automation tasks, Connectors (your MCP servers, with on/off switches) and Skills under Cowork and Code. The start page gets a greeting and suggestion chips. A tab picks the mode of new conversations, so the chat box no longer needs a mode drop-down. To get the normal sidebar back, switch **Cowork sidebar** off on the **Plugins** page.
 - **Colours:** pick a colour scheme in **Settings → Colours**: DeepSeek Harness (the stock colours, the default), MindsHub Cowork, Graphite or Forest, each in light and dark.
 - **Modes:** Chat, Cowork and Code modes, switchable per conversation, plus **Search** and **Deep research** buttons in the chat box.
-- **Model Tiers:** quick tier switching with effort levels.
+- **Model Tiers:** one model button in the chat box: pick any model and drag the effort slider. Five starter tiers (Fast, Balanced, Deep, Creative, Code review) work at once on whatever model you use. No model is preconfigured.
 - **Usage counter:** counts requests and tokens per day and model (never your text).
 - **Deep research** and **Code power:** new tools and skills the assistant can use.
 
@@ -120,7 +120,7 @@ Send them the link to this project. They follow **Install** above. Nothing in he
 
 ## Status
 
-Release 0.9.0 (the version in `VERSION`). Tested so far:
+Release 0.10.0 (the version in `VERSION`). Tested so far:
 
 - **Install, update and uninstall:** run on a fresh setup and on a copy of a real, long-used setup.
 - **Live start:** the app starts with every add-on loaded.

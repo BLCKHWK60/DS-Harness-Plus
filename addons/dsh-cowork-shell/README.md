@@ -25,6 +25,24 @@ The tab you pick decides the mode of every **new** conversation, and the Chat / 
 
 This needs the Modes add-on. Without it, the tabs only switch which sections show. How it works: this add-on provides a small `coworkShell` service, and Modes checks for it. Modes reads a conversation's internal turn counter to tell whether it has started. If a future app version hides that counter, Modes treats every conversation as started, which is the old behaviour.
 
+## Chat tab: no folders
+
+Chat is for a conversation that lives on its own, not for work in a project folder. So on the **Chat** tab:
+
+- **No pickers on the start page.** The "Default workspace" and "Standard mode" buttons above the chat box are hidden. Cowork and Code still show them.
+- **New chat always starts in the app's default workspace** (the folder named `default-workspace`), even if a project conversation is open. The suggestion chips and the Mac's hidden-sidebar "new" button follow the same rule.
+- **One flat list.** Recent chats show as a single list, pinned first, then newest first, with no project folders. Cowork and Code keep their project groups.
+- **Promote.** The `⋯` on a chat offers:
+  - **Promote to Cowork / Promote to Code**: the same conversation moves to that tab, and its mode switches from its next message. It stays in the default workspace, because this app version cannot move a conversation to another folder.
+  - **Continue in a project…**: pick Cowork or Code (Code by default) and one of your projects. A **new** conversation opens in that project, on that tab, with the chat box filled in with a short line that mentions the chat the app's own way (`@[title](dsh-session:…)`). When you send it, the app attaches a read-only copy of the chat for the model, and the message shows "Referenced session". The original chat stays where it is.
+
+Details:
+
+- The pickers are hidden only while the Chat tab is open **and** the open conversation is in the default workspace (or nothing is open). If you start a conversation in another project while on the Chat tab (the app's own New Session shortcut can do this, or `+` under **Show all**), the pickers show, so you can see where you are.
+- If the app has no `default-workspace` project, nothing is hidden and New chat behaves as before.
+- The pickers are hidden with CSS, by the app's seat names (`conversation.hero.workspace`, `conversation.hero.agentPreset`). Switching the add-on off removes it.
+- A conversation now shows in its tab's list right after its first message. Before, it could drop out of the list for up to 10 seconds.
+
 ## Conversations per tab
 
 Each tab lists only its own conversations: **Recent chats** under Chat, **Recent tasks** under Cowork, **Code projects** under Code.
@@ -40,7 +58,7 @@ Each tab lists only its own conversations: **Recent chats** under Chat, **Recent
 | the app's `default-workspace` | Cowork |
 | any other project folder | Code |
 
-**Moving:** the `⋯` button on a conversation moves it to another tab. The `⋯` on a project moves all its conversations. Moving also switches the conversation's mode from its next message, so the tab and the mode always agree. The `+` on a project starts a new conversation in it.
+**Moving:** the `⋯` button on a conversation moves it to another tab (on the Chat tab the same entries read "Promote to …", see above). The `⋯` on a project moves all its conversations. Moving also switches the conversation's mode from its next message, so the tab and the mode always agree. The `+` on a project starts a new conversation in it.
 
 **Show all** switches to the app's full list, with its search, rename, pin and archive menus. **<Tab> only** switches back. Each window remembers the choice.
 
@@ -143,8 +161,25 @@ In the throwaway web profile only, through the app's browser view:
 | Plugins page switch, off and on live, each followed by a page reload | The right sidebar every time, never both, no "Failed to load plugins" |
 | App's own sidebar row forced back on | Cowork sidebar stepped aside, app sidebar shown |
 
+Chat tab changes (throwaway web profile, mock model):
+
+| Check | Result |
+| --- | --- |
+| Chat tab start page | Both pickers hidden. Cowork and Code still show them |
+| New chat while a Code project conversation was open | Opened in the default workspace |
+| Chat list | One flat list, no project folders. Code and Cowork still grouped by project |
+| First message in a new chat | Ran in Chat mode, was recorded as chat, and showed in the list within about 2 seconds |
+| Promote to Cowork | The chat left the Chat list and showed under `default-workspace` on the Cowork tab |
+| Continue in a project… (as Code) | Switched to the Code tab and opened a new conversation in the picked project with the mention filled in. After sending, it ran in Code mode (all tools, workspace-write), was recorded as code, showed "Referenced session", and its saved log held the chat's text as a read-only snapshot |
+| Cowork tab `⋯` | Still reads "Move to Chat / Move to Code" |
+| Browser console | No errors |
+
 **Not checked:**
 
+- "Continue in a project…" as Cowork (only Code was run), and with more than a handful of projects
+- a chat title with unusual characters in the mention (brackets and backslashes are removed from the label)
+- the Chinese wording on screen
+- the app's own New Session keyboard shortcut on the Chat tab (it is the app's, so it still uses the current or most recent project)
 - the Mac desktop app (window buttons, dragging the window by the sidebar, the hidden-sidebar buttons)
 - keyboard-only use beyond the tab arrow keys
 - Windows
