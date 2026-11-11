@@ -14,6 +14,7 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Colour schemes](#colour-schemes) | yes (stock colours until you pick) | Settings → Colours | |
 | [Modes](#modes) | yes | Settings → Modes | `/mode` |
 | [Model Tiers](#model-tiers) | yes | Settings → Model Tiers | |
+| [Privacy](#privacy) | yes | | `/privacy` |
 | [Code map](#code-map) | yes | Settings → Code map | `/codemap` |
 | [Self-improvement](#self-improvement) | after setup, in its page | Settings → Self-improve | `/evolve` |
 | [Usage counter](#usage-counter) | yes | Settings → Usage | `/usage` |
@@ -106,6 +107,17 @@ This replaces the app's own model menu while the add-on is on.
 The app can only send temperature and max output tokens to a model. Top-p, top-k and similar settings stay on your model server.
 
 If you used Tiers before 0.10, your tiers keep their names (Haiku, Sonnet, Opus, Fable, Code) and models.
+
+## Privacy
+
+By default the app reports to its maker in two ways, whichever model you use. This add-on switches both off:
+
+- **Usage events:** on the desktop app, an event for each message you send, with the model name, your device and account ids and details of your Mac. No prompts or answers.
+- **Conversation upload on feedback:** pressing thumbs-up or thumbs-down on an answer uploads the conversation up to that point.
+
+Type `/privacy` in a chat to see that both are off. To switch reporting back on, switch the Privacy add-on off on the Plugins page and restart the app.
+
+Still on, because they are features and not reporting: update checks, your DeepSeek sign-in while you are signed in, the plugin list, web search when a conversation uses it, and any cloud model you pick. With a local model, your prompts and answers go only to your model server. For certainty about every connection, use a firewall app.
 
 ## Code map
 

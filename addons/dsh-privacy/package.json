@@ -1,0 +1,29 @@
+{
+  "name": "@local/dsh-privacy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Switches off the app's two reporting channels to its maker: usage events, and the upload of a conversation when you rate an answer. /privacy shows the state.",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "README.md",
+    "locale/*.json",
+    "icon.svg",
+    "node_modules/@deepseek-ai/schemastery/**",
+    "node_modules/@deepseek-ai/cosmokit/**"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

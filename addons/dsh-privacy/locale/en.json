@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Privacy",
+    "description": "Switches off the app's two reporting channels to its maker: usage events, and the upload of a conversation when you rate an answer. /privacy shows the state."
+  }
+}

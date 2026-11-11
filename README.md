@@ -43,6 +43,7 @@ bash scripts/install.sh
 - **Modes:** Chat, Cowork and Code modes, switchable per conversation, plus **Search** and **Deep research** buttons in the chat box.
 - **Model Tiers:** one model button in the chat box: pick any model and drag the effort slider. Five starter tiers (Fast, Balanced, Deep, Creative, Code review) work at once on whatever model you use. No model is preconfigured.
 - **Code map:** a compact map of the project a conversation works in, so the assistant looks things up instead of reading whole files. Plus four "reverse engineer" skills. Nothing to install.
+- **Privacy:** switches off the app's usage reporting and the upload of a conversation when you rate an answer. `/privacy` shows the state.
 - **Usage counter:** counts requests and tokens per day and model (never your text).
 - **Deep research** and **Code power:** new tools and skills the assistant can use.
 
@@ -65,7 +66,7 @@ Download the newer version and double-click **`Install.command`** again. It repl
 
 ## Removing
 
-Double-click **`Uninstall.command`**. It removes all twenty-one add-ons and their files. Your conversations and your models are not touched. Any settings you wrote for the add-ons stay in the settings file and do nothing; if you install again, they come back into effect.
+Double-click **`Uninstall.command`**. It removes all twenty-two add-ons and their files. Your conversations and your models are not touched. Any settings you wrote for the add-ons stay in the settings file and do nothing; if you install again, they come back into effect.
 
 ## Using it on a second Mac
 
@@ -111,7 +112,7 @@ Send them the link to this project. They follow **Install** above. Nothing in he
 | Folder or file | What it is |
 | --- | --- |
 | `Install.command`, `Uninstall.command` | Double-click to install or remove. |
-| `addons/` | The twenty-one add-ons. Each has a `README.md` with its full technical notes. |
+| `addons/` | The twenty-two add-ons. Each has a `README.md` with its full technical notes. |
 | `docs/ADD-ONS.md` | What each add-on does and how to set it up. |
 | `docs/HOW-IT-WORKS.md` | For technical readers: how the install works, how to test, how to change an add-on. |
 | `templates/` | Optional ready-to-fill examples: model servers, memory, MCP tool servers, backups. |
@@ -121,7 +122,7 @@ Send them the link to this project. They follow **Install** above. Nothing in he
 
 ## Status
 
-Release 0.13.0 (the version in `VERSION`). Tested so far:
+Release 0.14.0 (the version in `VERSION`). Tested so far:
 
 - **Install, update and uninstall:** run on a fresh setup and on a copy of a real, long-used setup.
 - **Live start:** the app starts with every add-on loaded.

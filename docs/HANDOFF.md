@@ -1,13 +1,13 @@
 # Handoff: DeepSeek Harness Plus
 
-Written 2026-11-11, updated the same day after the 0.10.0 to 0.13.0 work. For the next working session. Read this first. Then read only the files the task touches.
+Written 2026-11-11, updated the same day after the 0.10.0 to 0.14.0 work. For the next working session. Read this first. Then read only the files the task touches.
 
 ## 1. What this is
 
-**DeepSeek Harness Plus** is 21 add-ons for the **DeepSeek Harness** desktop app (Electron, Cordis plugin framework), version **0.2.2-rc.1**, on macOS. The add-ons install into the app's data folder (`~/.dsh/addons/deepseek-harness-plus`) and register with the app's own `dsh plugin add`. The app itself is never modified.
+**DeepSeek Harness Plus** is 22 add-ons for the **DeepSeek Harness** desktop app (Electron, Cordis plugin framework), version **0.2.2-rc.1**, on macOS. The add-ons install into the app's data folder (`~/.dsh/addons/deepseek-harness-plus`) and register with the app's own `dsh plugin add`. The app itself is never modified.
 
-- **Repo:** `deepseek-harness-plus/`. It is a git repository, local only, with no remote. The latest commit is Release 0.13.0 (the one after `f6cada7`, Release 0.12.0). `VERSION` reads `0.13.0`.
-- **Installed in the owner's real app:** 0.13.0, 21 add-ons. The backup is `~/.dsh/backups/deepseek-harness-plus/20261111-174913-install`.
+- **Repo:** `deepseek-harness-plus/`. It is a git repository, local only, with no remote. The latest commit is Release 0.14.0 (the one after `25d5586`, Release 0.13.0). `VERSION` reads `0.14.0`.
+- **Installed in the owner's real app:** 0.14.0, 22 add-ons. The backup is `~/.dsh/backups/deepseek-harness-plus/20261111-180357-install`.
 - **Parent folder `DeepSeek_Harness_Custom/`:**
   - `deepseek-harness-master/`: the app's source. It is **newer than the installed app**; read it for docs only.
   - `spike-lab/`: the throwaway lab.
@@ -23,6 +23,7 @@ Written 2026-11-11, updated the same day after the 0.10.0 to 0.13.0 work. For th
 | `dsh-model-tiers` | Reworked in 0.10. **Tiers** (five generic starters with no model, plus your own): effort, access, sub-agent floor and cap, own instructions, skills, connectors, fallback chains, role models. **Model versions**: named copies of a model with their own effort, temperature and max tokens. **The one model control of the chat box** (model list, effort slider, tier chips, sampling, Save as new version); it hides the app's own model menu. Settings → Model Tiers. The largest add-on: `index.js` about 2650 lines, `client.js` about 4850. |
 | `dsh-code-map` | New in 0.11. A compact map of a project (files, symbols, imports, what uses what) built with Node only, kept under `$DSH_HOME/code-map/`, never in the project. Five look-up tools for the model, a short hint, `/codemap`, Settings → Code map. Also ships four "reverse engineer" skills (code base, website, API or file format, installed app; the last is analysis only and excludes removing protections). 37 tests. |
 | `dsh-evolve` | New in 0.12. A self-improvement loop for the instructions around a model: test tasks with checks in three groups (Learn, Check, Guard), a reviewer model that proposes bounded edits to a playbook and a few instruction sections, four automatic gates, the owner's approval for every change, versions kept for good. Settings → Self-improve, `/evolve`. Built from the owner's research spec; its README lists what was changed and what was left out (reviewer-written tools and plugins, the meta loop, weight training). 24 tests. |
+| `dsh-privacy` | New in 0.14. Its bundle patch disables the app's `session-telemetry-otel` row (conversation upload on feedback) and sets `product-analytics.enabled` to false (desktop usage events). `/privacy` and a start-up log line report the live state. 3 tests. |
 | `dsh-sampling-presets` | Temperature and max-token presets per category, mode or conversation. |
 | `dsh-model-router` | Routes each turn to one of 2–5 models, chosen by a small routing model. |
 | `dsh-route-health` | Probes routes and moves a conversation to its fallback route when its route is down. Shows a dot in the composer. |
@@ -98,7 +99,7 @@ Each add-on has a `README.md` with technical notes, plus what was and was not ve
 ## 4. How to test
 
 - **Unit tests** for one add-on: `cd addons/<name> && ELECTRON_RUN_AS_NODE=1 "/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness" --test test/*.test.mjs`.
-  - Suites exist for swarm (13), benchmark (12), code-map (37), evolve (24), media (15), arena (31), model-tiers (12), notify (13), shared-settings (13) and sync (25).
+  - Suites exist for swarm (13), benchmark (12), code-map (37), evolve (24), media (15), arena (31), model-tiers (14), notify (13), privacy (3), shared-settings (13) and sync (25).
   - Other add-ons have none yet; adding them is a reasonable improvement.
 - **Release check:** `bash scripts/check.sh` runs all tests, then install, re-install, `--settings`/`--no-settings` and uninstall in a throwaway `DSH_HOME`. It must end with "All checks passed".
 - **Live lab (app web version, throwaway data):**
@@ -148,6 +149,12 @@ Each add-on has a `README.md` with technical notes, plus what was and was not ve
   - `dsh-evolve`: setting `target` (a version id); one store per version under `versions/<id>/`.
   - Facts learned: `ctx.get('agentPresets').presetForSession(session)` gives a conversation's preset (ids `standard`, `ptc`, `minimal`, `cordis` = Creator; the shipped ones have no name of their own). In the browser the list is `remote.agentPresets.list()` → `{presets: [{id, name?, isDefault}]}`, and it is only reachable after injecting `remote.agentPresets` (done optionally with `ctx.inject` inside `apply`).
   - Not verified: PTC, Minimal, Creator and custom presets; the mode prompt and role prompts being left out (same switch, but neither had text in the lab); two versions improved side by side.
+- **0.14.0 is committed (local only) and installed in the owner's app.** The owner was asked to confirm with `/privacy`; no answer recorded yet. The installer stops if the app does not quit when asked: have the owner quit it first, never force it. It adds `dsh-privacy` after a privacy audit the owner asked for. What the audit found in the installed app (0.2.2-rc.1):
+  - **Usage events** (desktop only, on by default, no control in Settings): row `product-analytics` (`@deepseek-ai/dsh-client-product-analytics`, in the `dsh-web-app` bundle), exported by row `desktop-product-telemetry`. Per message: model name, effort, mode, session id, device and account ids, app version, hardware. Off value: `enabled: false` (volatile).
+  - **Conversation upload on feedback**: row `session-telemetry-otel` in `dsh-base`, mode `FEEDBACK_ONLY`, endpoint `dsh-otel-collector.deepseeksvc.com/v1/logs`, no redaction rules mounted. Off: disable the row (what `DSH_TELEMETRY_DISABLED` does) or mode `DISABLED`.
+  - **Also contacts the internet, by design:** the updater (`download.deepseek.com`), the DeepSeek account and balance while signed in, the plugin-market index (the owner's points at `dshopen.org`), web search and fetch providers. Conversation titles use the conversation's own model.
+  - The CLI has no `desktop` default profile, so the desktop composition cannot be dumped; the two rows were checked in a web-based throwaway profile (`--dump-config` before and after).
+  - Not verified: the traffic itself (no capture); the usage-events switch on a running desktop app. Re-audit after any app update.
 - **Proposed, waiting for the owner's pick** (listed in the session report of 2026-11-11):
   - a small local relay so top-p, top-k, min-p and repeat penalty can be set per model version (local models only);
   - the Modes page's "default tier" box as a drop-down of tier names (it suggests the internal ids `haiku … code`);
