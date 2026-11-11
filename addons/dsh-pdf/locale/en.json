@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "PDF reader",
+    "description": "Lets a model read PDFs properly: page-numbered text, search, tables kept in columns, page pictures and text recognition for scans, using what comes with macOS. Nothing to install."
+  }
+}

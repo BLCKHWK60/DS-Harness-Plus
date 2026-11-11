@@ -16,6 +16,7 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Model Tiers](#model-tiers) | yes | Settings → Model Tiers | |
 | [Privacy](#privacy) | yes | | `/privacy` |
 | [Activity indicator](#activity-indicator) | yes | Settings → Activity | `/activity` |
+| [PDF reader](#pdf-reader) | yes | Settings → PDF reader | `/pdf` |
 | [Code map](#code-map) | yes | Settings → Code map | `/codemap` |
 | [Self-improvement](#self-improvement) | after setup, in its page | Settings → Self-improve | `/evolve` |
 | [Usage counter](#usage-counter) | yes | Settings → Usage | `/usage` |
@@ -178,6 +179,17 @@ A thin bar that shows what the model and its helpers are doing right now, so you
 - It keeps no text of your conversations and sends nothing anywhere.
 
 The speeds for thinking and writing are estimates from the live stream that correct themselves after each answer. The prompt-processing speed is known once the first token arrives, so while a prompt is being read you see the seconds so far and the last measured speed. Details: `addons/dsh-activity/README.md`.
+
+## PDF reader
+
+Lets the model read PDF files properly. It uses what comes with macOS, so nothing is installed and nothing leaves your Mac.
+
+- Put a PDF in the conversation's folder and ask about it by name, for example "Summarise report.pdf with page numbers". Type `/pdf report.pdf` to see its page count, contents list and which pages are scans.
+- The model can read page ranges, search for a phrase, re-read a page with columns kept apart (for tables), turn a page into a picture, and recognise the text on a scanned page.
+- A built-in skill makes it give a page for every claim, like `(p. 12)`, quote only what it has actually read, and list any pages it could not read.
+- **Where it may read:** the conversation's folder, plus folders you add in **Settings → PDF reader**. "Allow any PDF on this Mac" is off unless you switch it on.
+
+Complex tables and maths formulas can still come out wrong as text; for those the model can look at the page as a picture if it is a model that can see images. Password-protected PDFs cannot be read. Details: `addons/dsh-pdf/README.md`.
 
 ## Code power
 

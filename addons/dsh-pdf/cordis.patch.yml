@@ -1,0 +1,9 @@
+- insert:
+    - id: pdf
+      name: '@local/dsh-pdf'
+      config:
+        # Works with nothing set: PDFs in the conversation's folder can be read.
+        # More folders and the other switches are on Settings > PDF reader. Optional:
+        #   commandName: pdf   # empty registers no slash command
+        #   skills: true       # the read-pdf skill
+        enabled: true
