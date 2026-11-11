@@ -18,6 +18,7 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Activity indicator](#activity-indicator) | yes | Settings → Activity | `/activity` |
 | [PDF reader](#pdf-reader) | yes | Settings → PDF reader | `/pdf` |
 | [Diagram builder](#diagram-builder) | yes | Settings → Diagrams | |
+| [Learning](#learning) | yes | Settings → Learning | `/learn` |
 | [Code map](#code-map) | yes | Settings → Code map | `/codemap` |
 | [Self-improvement](#self-improvement) | after setup, in its page | Settings → Self-improve | `/evolve` |
 | [Usage counter](#usage-counter) | yes | Settings → Usage | `/usage` |
@@ -202,6 +203,18 @@ Lets the model draw accurate diagrams. The model only describes what is in the d
 - **The check:** if boxes overlap, a label does not fit, or too many arrows cross, the model is told and usually draws it again. A small note on the picture says if something was left unfixed.
 
 The drawing is exact, but what goes into it is still the model's. Read a diagram with the same care as the answer it belongs to. Details: `addons/dsh-diagram/README.md`.
+
+## Learning
+
+A tutor that makes you do the thinking, because trying first is what makes things stick. It asks a question before it teaches, helps in small steps, gives the answer last, asks you to explain it back, and brings each idea back days later.
+
+- **Start:** in any conversation type `/learn` and a topic, a file or some code, for example `/learn chapter3.pdf`. A study bar appears above the chat box; press **Start**.
+- **While studying:** try the question, even with a guess. **Hint** asks for a small step. **Show answer** unlocks when the level allows it. **End** stops and keeps what you finished.
+- **Three levels,** switchable from the bar: Gentle (the answer whenever you ask), Firm (an attempt first; the answer after three hints or when you give up after trying), Strict (also say where you are stuck before each hint; no giving up early). Firm is the default.
+- **Reviews:** each idea comes back after 1, 3, 7, 16 and 35 days, sooner if you needed the answer. `/learn review` goes through what is due. **Settings → Learning** shows what is due and how each topic is going.
+- **What is kept:** the questions and how each try went, on your Mac. Not what you wrote.
+
+Use a strong model as the tutor, and prefer studying from your own PDF or notes: a tutor that teaches something wrong is worse than none. The rules are enforced by the add-on's tools and buttons, but a weak model can still give an answer away in its text. Details: `addons/dsh-learn/README.md`.
 
 ## Code power
 

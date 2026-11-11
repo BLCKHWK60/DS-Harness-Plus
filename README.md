@@ -1,6 +1,6 @@
 # DeepSeek Harness Plus
 
-Extra features for the **DeepSeek Harness** desktop app on the Mac: a MindsHub-style sidebar with Chat, Cowork and Code tabs, colour schemes (including MindsHub's navy and teal), work modes, model tiers, a blind model arena, agent swarms, deep research, a usage counter, benchmarks, syncing between Macs and more. Twenty-five add-ons in all, listed in [docs/ADD-ONS.md](docs/ADD-ONS.md).
+Extra features for the **DeepSeek Harness** desktop app on the Mac: a MindsHub-style sidebar with Chat, Cowork and Code tabs, colour schemes (including MindsHub's navy and teal), work modes, model tiers, a blind model arena, agent swarms, deep research, a usage counter, benchmarks, syncing between Macs and more. Twenty-six add-ons in all, listed in [docs/ADD-ONS.md](docs/ADD-ONS.md).
 
 The add-ons plug into the normal app. Nothing in the app itself is changed, so app updates do not wipe them, and you can remove them at any time.
 
@@ -123,7 +123,7 @@ Send them the link to this project, https://github.com/BLCKHWK60/DS-Harness-Plus
 
 ## Status
 
-Release 0.18.0 (the version in `VERSION`). Tested so far:
+Release 0.19.0 (the version in `VERSION`). Tested so far:
 
 - **Install, update and uninstall:** run on a fresh setup and on a copy of a real, long-used setup.
 - **Live start:** the app starts with every add-on loaded.

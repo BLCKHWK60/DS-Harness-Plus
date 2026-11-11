@@ -1,0 +1,10 @@
+- insert:
+    - id: learn
+      name: '@local/dsh-learn'
+      config:
+        # Works with nothing set. Start a study session with /learn <topic or file>.
+        # The level and the record are on Settings > Learning. Optional:
+        #   dataDir: <ABSOLUTE_DIR>   # where the record is kept; default is a folder in the dsh home
+        #   commandName: learn        # empty registers no slash command
+        #   skills: true              # the study-tutor skill
+        enabled: true
