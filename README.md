@@ -1,6 +1,6 @@
 # DeepSeek Harness Plus
 
-Extra features for the **DeepSeek Harness** desktop app on the Mac: a MindsHub-style sidebar with Chat, Cowork and Code tabs, colour schemes (including MindsHub's navy and teal), work modes, model tiers, a blind model arena, agent swarms, deep research, a usage counter, benchmarks, syncing between Macs and more. Nineteen add-ons in all, listed in [docs/ADD-ONS.md](docs/ADD-ONS.md).
+Extra features for the **DeepSeek Harness** desktop app on the Mac: a MindsHub-style sidebar with Chat, Cowork and Code tabs, colour schemes (including MindsHub's navy and teal), work modes, model tiers, a blind model arena, agent swarms, deep research, a usage counter, benchmarks, syncing between Macs and more. Twenty-two add-ons in all, listed in [docs/ADD-ONS.md](docs/ADD-ONS.md).
 
 The add-ons plug into the normal app. Nothing in the app itself is changed, so app updates do not wipe them, and you can remove them at any time.
 
@@ -15,12 +15,12 @@ You do not need to know how to code to install or use this.
 
 ## Install
 
-1. Download this folder: on the project page click **Code → Download ZIP**, then double-click the ZIP to unpack it. If you use git, clone it instead.
-2. In the unpacked folder, double-click **`Install.command`**.
+1. Download the newest **`DS-Harness-Plus-<version>.dmg`** from the [Releases page](https://github.com/BLCKHWK60/DS-Harness-Plus/releases/latest) and double-click it. A window opens with everything in it: all the add-ons, the installer and this guide. (If you use git, clone the project instead; it is the same folder.)
+2. In that window, double-click **`Install.command`**.
    - The first time, macOS may say it "cannot be opened because it is from an unidentified developer". If it does, **right-click** the file, choose **Open**, then **Open** again. You only do this once.
 3. A Terminal window opens and walks you through it. If the app is open, it asks to quit it. When it says **Done**, open DeepSeek Harness.
 
-Installing copies the add-ons into the app's own data folder (`~/.dsh/addons`), so you can delete the downloaded folder afterwards.
+Installing copies the add-ons into the app's own data folder (`~/.dsh/addons`), so you can eject the disk image and delete the download afterwards. To remove the add-ons later, open the disk image again and double-click **`Uninstall.command`**.
 
 Before it changes anything, the installer saves your current setup under `~/.dsh/backups/deepseek-harness-plus/`. If any step fails, it puts everything back by itself.
 
@@ -96,7 +96,7 @@ To use another folder, or from Terminal: `bash scripts/install.sh --settings "<f
 
 ## Giving it to someone else
 
-Send them the link to this project. They follow **Install** above. Nothing in here contains your addresses, keys or personal settings; every add-on starts empty.
+Send them the link to this project, https://github.com/BLCKHWK60/DS-Harness-Plus. They follow **Install** above. Nothing in here contains your addresses, keys or personal settings; every add-on starts empty.
 
 ## If something goes wrong
 
@@ -119,6 +119,7 @@ Send them the link to this project. They follow **Install** above. Nothing in he
 | `extras/dsh-intel-mcp/` | Optional Python tools (code map, reverse engineering, context store). Needs Python; not installed automatically. |
 | `scripts/` | What the `.command` files run. |
 | `VERSION` | This release's version number. |
+| `LICENSE` | The MIT licence: anyone may use, change and share this. |
 
 ## Status
 

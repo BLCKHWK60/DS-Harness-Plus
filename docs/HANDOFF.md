@@ -6,7 +6,7 @@ Written 2026-11-11, updated the same day after the 0.10.0 to 0.15.0 work. For th
 
 **DeepSeek Harness Plus** is 22 add-ons for the **DeepSeek Harness** desktop app (Electron, Cordis plugin framework), version **0.2.2-rc.1**, on macOS. The add-ons install into the app's data folder (`~/.dsh/addons/deepseek-harness-plus`) and register with the app's own `dsh plugin add`. The app itself is never modified.
 
-- **Repo:** `deepseek-harness-plus/`. It is a git repository, local only, with no remote. The latest commit is Release 0.15.0 (the one after `e7a7185`, Release 0.14.0). `VERSION` reads `0.15.0`.
+- **Repo:** `deepseek-harness-plus/`. It is a git repository, published since 2026-11-11 at `https://github.com/BLCKHWK60/DS-Harness-Plus` (public, remote `origin`, branch `main`). Push only when the owner asks. Before the first push every commit was rewritten to the owner's GitHub no-reply address, so hashes written down before that day no longer exist; the repo's `user.email` is set to that address. The download is a DMG attached to a GitHub release, built with `bash scripts/build-dmg.sh` (needs a clean tree; writes `dist/`, which git ignores). The DMG holds the committed files only: add-ons, installer, docs. It does not hold the app, and it is not signed or notarised, so macOS asks for right-click → Open on `Install.command`. The latest commit is Release 0.15.0 (the one after `cc1cd77`, Release 0.14.0). `VERSION` reads `0.15.0`.
 - **Installed in the owner's real app:** 0.15.0, 22 add-ons. The backup is `~/.dsh/backups/deepseek-harness-plus/20261111-183443-install`.
 - **Parent folder `DeepSeek_Harness_Custom/`:**
   - `deepseek-harness-master/`: the app's source. It is **newer than the installed app**; read it for docs only.
@@ -53,7 +53,7 @@ Each add-on has a `README.md` with technical notes, plus what was and was not ve
 3. **No secret values in any file.** Refer to keys by name only.
 4. **Stop processes only by verified PID or task id**, never by a broad name such as `pkill node`.
 5. **Commit only when the owner asks; never push** without explicit confirmation. Commit messages end with the Co-Authored-By line from the session's instructions.
-6. **Licence:** "Decide later". Do not add one.
+6. **Licence:** MIT, chosen by the owner on 2026-11-11 when the project went public (`LICENSE`).
 7. **Behaviour changes need the owner's OK.** Fix clear bugs freely. Propose anything that changes how a feature behaves.
 8. **Writing for the owner:** plain words, short sentences, no jargon. The owner is not a programmer.
 
