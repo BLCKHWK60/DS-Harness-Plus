@@ -31,6 +31,11 @@ window.__ModuleLoader__.load({
         'new.other': 'New conversation',
         'pages.label': '{tab} sections',
         'more': 'More',
+        'look.logos.hide': 'Hide DeepSeek logos',
+        'look.logos.show': 'Show DeepSeek logos',
+        'look.title.date': 'Show the date as the title',
+        'look.title.greeting': 'Show the greeting as the title',
+        'look.failed': 'Could not save that setting.',
         'toggle.open': 'Open sidebar',
         'toggle.collapse': 'Collapse sidebar',
         'brand': 'DeepSeek Harness',
@@ -131,6 +136,11 @@ window.__ModuleLoader__.load({
         'new.other': '新会话',
         'pages.label': '{tab} 分区',
         'more': '更多',
+        'look.logos.hide': '隐藏 DeepSeek 标志',
+        'look.logos.show': '显示 DeepSeek 标志',
+        'look.title.date': '用日期作标题',
+        'look.title.greeting': '用问候语作标题',
+        'look.failed': '无法保存该设置。',
         'toggle.open': '打开侧边栏',
         'toggle.collapse': '收起侧边栏',
         'brand': 'DeepSeek Harness',
@@ -501,7 +511,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
      * tab layout. One store for the whole page, refreshed on demand and every 10 seconds.
      */
     function createModel(ctx) {
-      let state = { modes: FALLBACK_MODES, selected: readLocal(), tabs: DEFAULT_TABS, maxTabs: 3, modesOn: false, error: '', sessionModes: {} };
+      let state = { modes: FALLBACK_MODES, selected: readLocal(), tabs: DEFAULT_TABS, maxTabs: 3, hideLogos: false, dateTitle: false, modesOn: false, error: '', sessionModes: {} };
       const listeners = new Set();
       const emit = () => { for (const l of listeners) l(); };
       const set = (patch) => { state = { ...state, ...patch }; emit(); };
@@ -532,6 +542,8 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             const tabs = readObject(mine.value?.tabs);
             if (Object.keys(tabs).length > 0) patch.tabs = tabs;
             if (Number.isFinite(mine.value?.maxTabs)) patch.maxTabs = mine.value.maxTabs;
+            patch.hideLogos = mine.value?.hideLogos === true;
+            patch.dateTitle = mine.value?.dateTitle === true;
           }
           if (modesNs) {
             const defined = Object.entries(readObject(modesNs.value?.modes)).map(([id, value]) => ({
@@ -610,12 +622,31 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         }
       }
 
+      /** Switch one of this add-on's own on/off settings (`hideLogos`, `dateTitle`). */
+      async function setOption(key, value) {
+        const before = state[key];
+        set({ [key]: value, error: '' });
+        try {
+          const op = [{ op: 'set', path: [key], value }];
+          let entry = (await describe()).find((item) => item.ns === SETTINGS_NS);
+          let result = await ctx.remote.settings.mutate(SETTINGS_NS, op, entry.revision);
+          if (!result.ok && result.error.code === 'settings/conflict') {
+            entry = (await describe()).find((item) => item.ns === SETTINGS_NS);
+            result = await ctx.remote.settings.mutate(SETTINGS_NS, op, entry.revision);
+          }
+          if (!result.ok) throw new Error(result.error.code);
+        } catch {
+          set({ [key]: before, error: ctx.locale.bind(NS)('look.failed') });
+        }
+      }
+
       return {
         subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
         get: () => state,
         refresh,
         select,
         move,
+        setOption,
         fail: (message) => set({ error: String(message) }),
       };
     }
@@ -645,7 +676,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     /** The More launcher: the rows other plugins register (`sidebar.panellist.actions`). */
-    function MoreMenu({ wide, label, entries, onOpen, renderSlot }) {
+    function MoreMenu({ wide, label, entries, onOpen, renderSlot, extra }) {
       const [open, setOpen] = useState(false);
       const onDismiss = () => setOpen(false);
       const button = h('button', {
@@ -653,7 +684,13 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         onClick: () => setOpen((v) => !v),
       }, h('span', { className: 'cws-glyph', 'aria-hidden': true }, h(Glyph, { name: 'grid', size: wide ? 16 : 18 })),
       wide ? h('span', { className: 'cws-label' }, label) : null);
-      const rows = renderSlot('sidebar.panellist.actions', { entries, onOpen: (id) => { onDismiss(); onOpen(id); }, onPinnedChange: () => {}, onDismiss });
+      const rows = h(React.Fragment, null,
+        renderSlot('sidebar.panellist.actions', { entries, onOpen: (id) => { onDismiss(); onOpen(id); }, onPinnedChange: () => {}, onDismiss }),
+        (extra ?? []).length > 0 ? h('div', { className: 'cws-movesep', role: 'separator' }) : null,
+        (extra ?? []).map((item) => h('button', {
+          key: item.key, type: 'button', role: 'menuitem', className: 'cws-moveitem',
+          onClick: () => { onDismiss(); item.run(); },
+        }, item.label)));
       if (UI.Menu) {
         return h(UI.Menu, { open, onClose: onDismiss, portal: true, autoFocus: true, anchor: h(Tooltip, { label, show: !wide }, button) }, rows);
       }
@@ -1156,6 +1193,10 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           wide, label: t('more'), renderSlot,
           entries: allPages.filter((p) => p.id !== 'plugins').map((p) => ({ id: p.id, label: p.label, pinned: true, active: p.id === active })),
           onOpen: (id) => appCtx.layout.selectPanel(id),
+          extra: [
+            { key: 'logos', label: t(state.hideLogos ? 'look.logos.show' : 'look.logos.hide'), run: () => void model.setOption('hideLogos', !state.hideLogos) },
+            { key: 'title', label: t(state.dateTitle ? 'look.title.greeting' : 'look.title.date'), run: () => void model.setOption('dateTitle', !state.dateTitle) },
+          ],
         })
         : null;
 
@@ -1171,7 +1212,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
 
       return h('div', { className: 'cws-root', 'data-cowork-shell': 'wide', style: { width } },
         h('div', { className: 'cws-strip', 'data-window-drag': darwin ? '' : undefined }, toggle),
-        h('div', { className: 'cws-brand', 'data-window-drag': darwin ? '' : undefined },
+        state.hideLogos ? null : h('div', { className: 'cws-brand', 'data-window-drag': darwin ? '' : undefined },
           renderSlot('sidebar.brand.mark', { size: 20 }, { fallback: UI.FishLogo ? h(UI.FishLogo, { size: 20 }) : null }),
           renderSlot('sidebar.brand.name', {}, { fallback: h('span', null, t('brand')) })),
         tabList,
@@ -1408,6 +1449,18 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           : h('p', { className: 'cws-note', style: { margin: '12px 0' } }, t('skills.empty'))) : null);
     }
 
+    /** Today's date as a title: "11 November, 2026" in English, the language's own long date otherwise. */
+    function todayTitle(appCtx, now = new Date()) {
+      let lang = 'en';
+      try { lang = String(appCtx.locale?.current ?? appCtx.locale?.language ?? document.documentElement.lang ?? 'en') || 'en'; } catch { lang = 'en'; }
+      try {
+        if (/^en\b/i.test(lang)) return `${now.getDate()} ${now.toLocaleDateString('en', { month: 'long' })}, ${now.getFullYear()}`;
+        return now.toLocaleDateString(lang, { dateStyle: 'long' });
+      } catch {
+        return now.toDateString();
+      }
+    }
+
     /** The tab's layout entry with defaults filled in field by field. */
     function tabEntry(state, id) {
       const own = state.tabs?.[id] ?? {};
@@ -1426,8 +1479,15 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const state = useSyncExternalStore(model.subscribe, model.get);
       const tabs = state.modes.slice(0, state.maxTabs);
       const selected = tabs.find((m) => m.id === state.selected) ?? tabs[0];
-      const greeting = String(tabEntry(state, selected.id).greeting || '').slice(0, 120);
-      const mark = UI.FishLogo ? h(UI.FishLogo, { size: size ?? 34 }) : null;
+      // The date changes at midnight; look again once a minute while it is the title.
+      const [, tick] = useState(0);
+      useEffect(() => {
+        if (!state.dateTitle) return undefined;
+        const timer = setInterval(() => tick((n) => n + 1), 60000);
+        return () => clearInterval(timer);
+      }, [state.dateTitle]);
+      const greeting = state.dateTitle ? todayTitle(appCtx) : String(tabEntry(state, selected.id).greeting || '').slice(0, 120);
+      const mark = !state.hideLogos && UI.FishLogo ? h(UI.FishLogo, { size: size ?? 34 }) : null;
       if (!greeting) return mark;
       return h('span', { className: 'cws-hero', 'data-cws-hero': '' }, mark, h('span', { className: 'cws-hero-text' }, greeting));
     }

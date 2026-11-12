@@ -180,6 +180,10 @@ export const Config = z.object({
   tabs: z.string().default(JSON.stringify(DEFAULT_TABS)).volatile(),
   /** At most this many tabs (the first modes in order). */
   maxTabs: z.natural().min(1).max(5).default(3).volatile(),
+  /** Hide the DeepSeek logo and name at the top of the sidebar and the logo on the start page. */
+  hideLogos: z.boolean().default(false).volatile(),
+  /** Show today's date as the start page title instead of the tab's greeting. */
+  dateTitle: z.boolean().default(false).volatile(),
 });
 
 /**

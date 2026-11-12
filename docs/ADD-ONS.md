@@ -58,6 +58,8 @@ Replaces the left sidebar with a MindsHub-style one:
   **Connectors** lists your MCP servers. Each shows whether it is connected and how many tools it brings, with an on/off switch. A short form writes out the settings lines for a new one. **Skills** lists the skills the assistant can use, with search.
 - **Your projects and Settings**, as before.
 
+The **More** menu in the sidebar ends with two switches: **Hide DeepSeek logos** (the logo and name at the top of the sidebar and the logo on the start page) and **Show the date as the title** (the start page shows today's date, like "11 November, 2026", instead of the greeting).
+
 To get the normal sidebar back, switch **Cowork sidebar** off on the **Plugins** page. It takes effect at once. Use that main switch, not the switch for its inner row on the details page: that one would leave you with no sidebar at all. To choose which pages each tab shows, see `addons/dsh-cowork-shell/README.md`.
 
 ## Colour schemes

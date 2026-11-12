@@ -88,6 +88,13 @@ The list reads the app's own project and conversation data in the browser. If th
 - In narrow windows the greeting wraps, and the chat-box Search and Deep research buttons shrink to icons.
 - The **Search** and **Deep research** buttons in the chat box come from the Modes add-on.
 
+**Logos and date.** The sidebar's **More** menu ends with two switches, saved with your settings:
+
+- **Hide DeepSeek logos / Show DeepSeek logos** (`hideLogos`): removes the logo and name at the top of the sidebar and the logo on the start page.
+- **Show the date as the title / Show the greeting as the title** (`dateTitle`): the start page title becomes today's date, written like "11 November, 2026" in English and as the language's own long date otherwise. It replaces the greeting on every tab.
+
+Both are off by default. They do not change the app's icon, its window title or logos drawn by other parts of the app.
+
 Change greetings and chips per tab with `greeting` and `chips` in the tab layout:
 
 ```yaml
