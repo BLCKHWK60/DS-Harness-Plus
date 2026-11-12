@@ -21,6 +21,7 @@ Built in (until you supply your own `modes`): **chat** (no tools, read-only, a s
   config:
     modes: '{"<id>": {"label": "...", "tools": "all", "sandbox": "inherit", "defaultTier": "", "prompt": ""}}'   # JSON; replaces the built-in three
     defaultMode: cowork       # mode of a session that has not chosen one
+    scheduledMode: cowork     # mode of a conversation an Automation task opens (unknown id: the first mode with all tools)
     pruneStaleSessions: true  # drop choices of Sessions that no longer exist
     pinOnFirstTurn: true      # record the mode a Session starts in, so a later defaultMode change (e.g. a Cowork sidebar tab) only affects new Sessions
     sessionWeb: '{}'          # per-Session Search switch (the chat-box button writes it)
@@ -51,6 +52,7 @@ Tested in a throwaway web profile: add a mode, validation messages, save (writte
 - The lists in the Tools panel show what the app registered for the conversation. A tool the app only offers under a condition can be listed as callable and still be left out of a request: `web_search` is offered only while a search backend is ready for the model in use.
 
 - The default tier applies when you switch modes, not when a session is first created (a new session keeps whatever tier it has).
+- A conversation opened by an Automation task starts in `scheduledMode`, not in the tab last looked at (which, in Chat, gave it no tools). It is recognised by its first inbox message (`agent/inbox/spliced` with `source.kind: 'schedule'`). There is no Settings control for it yet; a task delivering to an existing conversation keeps that conversation's mode.
 - Sub-agents (children) start in `defaultMode`, not in the parent's mode. A chat session cannot spawn them anyway (no tools).
 - After a restart, leaving a mode that set the sandbox (for example Chat) does not restore the earlier sandbox mode, because that earlier value is kept in memory only; set the access mode in the composer if needed.
 - Changing tools invalidates the model's prompt cache from the first changed tool schema.

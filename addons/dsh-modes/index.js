@@ -12,6 +12,7 @@
  */
 import z from '@deepseek-ai/schemastery';
 import { maskFor, parentIdOf, rootOf, webDefault } from './lib/mask.js';
+import { fromScheduler, scheduledModeId } from './lib/scheduled.js';
 import { PROGRAM_TOOL, programNote, programOnly, SLOW_TOOLS } from './lib/ptc.js';
 
 export const name = 'modes';
@@ -53,6 +54,11 @@ export const Config = z.object({
   modes: z.string().default(JSON.stringify(BUILTIN_MODES)).volatile(),
   /** Mode of a session that has not chosen one. */
   defaultMode: z.string().default('cowork').volatile(),
+  /**
+   * Mode of a conversation that an Automation task opens. Nobody picked a tab for it, so the tab last
+   * looked at must not decide. An unknown id falls back to the first mode with all tools.
+   */
+  scheduledMode: z.string().default('cowork'),
   /** Per-session choice as JSON: `{ sessionId: modeId }`. Written by the composer selector. */
   sessionModes: z.string().default('{}').volatile(),
   /** Drop per-session entries whose Session is no longer stored, once per start. */
@@ -189,13 +195,20 @@ export function apply(ctx, config) {
     const modes = readModes(config);
     const fallback = plain(config.defaultMode);
     // With the Cowork sidebar, the selected tab (defaultMode) decides until the first message.
-    if (fresh.has(sessionId) && tabsDecide()) return modes[fallback] ?? Object.values(modes)[0];
     const chosen = overlay.get(sessionId) ?? readObject(config.sessionModes)[sessionId];
+    if (fresh.has(sessionId)) {
+      // Opened by an Automation task: its own starting mode, unless the conversation already has one.
+      const own = scheduled.has(sessionId) ? scheduledModeId(modes, plain(config.scheduledMode)) : undefined;
+      if (own && (tabsDecide() || chosen === undefined)) return modes[own];
+      if (tabsDecide()) return modes[fallback] ?? Object.values(modes)[0];
+    }
     return modes[chosen] ?? modes[fallback] ?? Object.values(modes)[0];
   }
 
   /** Sessions that have not run a turn yet. */
   const fresh = new Set();
+  /** Fresh sessions whose first message came from the app's scheduler. */
+  const scheduled = new Set();
   /**
    * @param {object} agent - live Agent.
    * @returns {boolean} true when the Agent has never run a turn. Unknown counts as "has run".
@@ -474,6 +487,21 @@ export function apply(ctx, config) {
     void applyMode(agent, modeOf(agent.id), false).catch(report);
   }
 
+  // An Automation task puts its instruction into the inbox of the conversation it opened, before the first turn.
+  ctx.on('session/event', (session, event) => {
+    try {
+      if (event?.type !== 'agent/inbox/spliced' || !fromScheduler(event.data?.inserted)) return;
+      const id = session?.id;
+      if (!id || !fresh.has(id) || scheduled.has(id)) return;
+      scheduled.add(id);
+      const agent = ctx.get('agents')?.get?.(id);
+      const mode = modeOf(id);
+      if (agent && applied.get(id)?.modeId !== mode.id) void applyMode(agent, mode, false).catch(report);
+    } catch (error) {
+      report(error);
+    }
+  });
+
   // A choice written through Settings (the composer selector) arrives here.
   ctx.on('loader/volatile-update', () => {
     for (const agent of ctx.get('agents')?.list() ?? []) reconcile(agent);
@@ -537,6 +565,7 @@ export function apply(ctx, config) {
     applied.get(agent.id)?.unrestrict?.();
     applied.delete(agent.id);
     fresh.delete(agent.id);
+    scheduled.delete(agent.id);
     overlay.delete(agent.id);
     pendingIdle.delete(agent.id);
     promptDisposers.delete(agent.id);

@@ -78,3 +78,18 @@ test('a conversation that reaches tools through programs is told so', async () =
   assert.match(slow, /timeoutMs: 600000/);
   assert.doesNotMatch(programNote({ slow: ['deep_research'] }), /timeoutMs/, 'no numbers are made up when the app gives none');
 });
+
+test('a conversation opened by an Automation task gets its own starting mode', async () => {
+  const { fromScheduler, scheduledModeId } = await import('../lib/scheduled.js');
+  assert.equal(fromScheduler([{ role: 'user', source: { kind: 'schedule' } }]), true);
+  assert.equal(fromScheduler([{ message: { source: { kind: 'schedule' } } }]), true);
+  assert.equal(fromScheduler([{ role: 'user', source: { kind: 'human' } }, { role: 'user' }]), false);
+  assert.equal(fromScheduler(undefined), false);
+  assert.equal(fromScheduler([]), false);
+
+  const modes = { chat: { tools: 'none' }, cowork: { tools: 'all' }, code: { tools: 'all' } };
+  assert.equal(scheduledModeId(modes, 'code'), 'code');
+  assert.equal(scheduledModeId(modes, 'gone'), 'cowork', 'an unknown id falls back to the first mode with all tools');
+  assert.equal(scheduledModeId(modes, ''), 'cowork');
+  assert.equal(scheduledModeId({ chat: { tools: 'none' } }, 'gone'), undefined, 'nothing suitable leaves the usual rule in charge');
+});
