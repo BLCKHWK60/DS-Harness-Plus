@@ -90,12 +90,13 @@ The list reads the app's own project and conversation data in the browser. If th
 - In narrow windows the greeting wraps, and the chat-box Search and Deep research buttons shrink to icons.
 - The **Search** and **Deep research** buttons in the chat box come from the Modes add-on.
 
-**Logos and date.** The sidebar's **More** menu ends with two switches, saved with your settings:
+**Logos, date and width.** The sidebar's **More** menu ends with three switches, saved with your settings:
 
 - **Hide DeepSeek logos / Show DeepSeek logos** (`hideLogos`): removes the logo and name at the top of the sidebar and the logo on the start page.
 - **Show the date as the title / Show the greeting as the title** (`dateTitle`): the start page title becomes today's date, written like "11 November, 2026" in English and as the language's own long date otherwise. It replaces the greeting on every tab.
+- **Wide chat area / Normal chat area** (`wideChat`): the app keeps the conversation and the message box in a centred column about 800 pixels wide. This lets both use the width of the window (with a margin). The start page keeps its own size. It works through two CSS rules on the app's own class names (`_scrollBody` › `_column`, `_composerStack` › `_card`), so a later app version may need them adjusted.
 
-Both are off by default. They do not change the app's icon, its window title or logos drawn by other parts of the app.
+All three are off by default. They do not change the app's icon, its window title or logos drawn by other parts of the app.
 
 Change greetings and chips per tab with `greeting` and `chips` in the tab layout:
 
@@ -140,7 +141,7 @@ The app reads `ui-sidebar` before this row, so rule 2 always sees its current st
   config:
     # Which pages each tab lists, by page id, and the New button's label. JSON text.
     tabs: '{"chat":{"newLabel":"New chat","pages":["model-arena"]},"cowork":{"newLabel":"New task","pages":["schedules","automations","connectors","skills"]},"code":{"newLabel":"New code task","pages":["connectors","skills"]}}'
-    maxTabs: 3        # 1 to 5; the first modes in order
+    maxTabs: 3        # 1 to 5; the first modes in order. A mode another add-on adds (Finance) gets a tab after these, whatever the limit
 ```
 
 Page ids: `schedules` (Automation tasks), `automations` (Automation runs, from the Automations add-on), `plugins`, `model-arena` (from the Model arena add-on), `connectors` and `skills`. Pages that no tab lists show under every tab. A page whose add-on is not installed is simply left out.

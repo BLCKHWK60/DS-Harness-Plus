@@ -113,6 +113,48 @@ export const DEFAULT_TABS = {
         "prompt": "Create a small game: "
       }
     ]
+  },
+  "finance": {
+    "newLabel": "New research",
+    "pages": [],
+    "greeting": "What do you want to look into?",
+    "chips": [
+      {
+        "label": "Deep dive",
+        "icon": "research",
+        "prompt": "Do a full deep dive on the selected subject."
+      },
+      {
+        "label": "Earnings review",
+        "icon": "spreadsheet",
+        "prompt": "Review the latest earnings of the selected company."
+      },
+      {
+        "label": "News and mood",
+        "icon": "spark",
+        "prompt": "What are the news and social media saying about the selected subject right now?"
+      },
+      {
+        "label": "Compare",
+        "icon": "chart",
+        "prompt": "Compare the selected company with its closest competitors."
+      },
+      {
+        "label": "Sector scan",
+        "icon": "research",
+        "prompt": "Scan the sector of the selected subject: who is gaining, who is losing, and why?"
+      },
+      {
+        "label": "Economy brief",
+        "icon": "chart",
+        "prompt": "Give me an economy brief for the selected market."
+      },
+      {
+        "label": "What changed",
+        "icon": "spark",
+        "prompt": "What has changed for the selected subject in the last month?"
+      }
+    ]
   }
 };
 
@@ -185,6 +227,8 @@ export const Config = z.object({
   hideLogos: z.boolean().default(false).volatile(),
   /** Show today's date as the start page title instead of the tab's greeting. */
   dateTitle: z.boolean().default(false).volatile(),
+  /** Let the conversation and the message box use the whole width of the window instead of a centred column. */
+  wideChat: z.boolean().default(false).volatile(),
 });
 
 /**

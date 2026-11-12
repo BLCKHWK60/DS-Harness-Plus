@@ -20,6 +20,7 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Automations](#automations) | yes (phone alerts after setup) | Settings → Alerts, and the Automation runs page | |
 | [Library](#library) | after you add a folder | Settings → Library | |
 | [Mac bridge](#mac-bridge) | after you allow something | Settings → Mac | |
+| [Finance](#finance) | after you switch it on | Settings → Finance, and the Finance tab | |
 | [Activity indicator](#activity-indicator) | yes | Settings → Activity | `/activity` |
 | [PDF reader](#pdf-reader) | yes | Settings → PDF reader | `/pdf` |
 | [Diagram builder](#diagram-builder) | yes | Settings → Diagrams | |
@@ -65,7 +66,7 @@ Replaces the left sidebar with a MindsHub-style one:
 
 When a conversation waits for you (an approval, a plan review or a question), a **Needs you** block appears at the top of the list on every tab; click it to open the conversation at the question.
 
-The **More** menu in the sidebar ends with two switches: **Hide DeepSeek logos** (the logo and name at the top of the sidebar and the logo on the start page) and **Show the date as the title** (the start page shows today's date, like "11 November, 2026", instead of the greeting).
+The **More** menu in the sidebar ends with three switches: **Wide chat area** (the conversation and the message box use the width of the window instead of a centred column), **Hide DeepSeek logos** (the logo and name at the top of the sidebar and the logo on the start page) and **Show the date as the title** (the start page shows today's date, like "11 November, 2026", instead of the greeting).
 
 To get the normal sidebar back, switch **Cowork sidebar** off on the **Plugins** page. It takes effect at once. Use that main switch, not the switch for its inner row on the details page: that one would leave you with no sidebar at all. To choose which pages each tab shows, see `addons/dsh-cowork-shell/README.md`.
 
@@ -191,6 +192,18 @@ Lets the assistant find your files and run your Apple Shortcuts. Nothing is allo
 
 Details: `addons/dsh-mac/README.md`.
 
+## Finance
+
+A fourth tab, beside Chat, Cowork and Code, for researching companies, markets and economies. It is research, not advice.
+
+- **Settings → Finance → Show the Finance tab** switches it on. Off takes the tab and everything with it away again.
+- On the tab's start page, choose the **kind** (company, sector, economy, whole market), type the **subject**, and choose the **market** (Global unless you change it), the **focus** and the **period**. Then ask, or press one of the buttons: Deep dive, Earnings review, News and mood, Compare, Sector scan, Economy brief, What changed.
+- The assistant is given a method: figures only from sources it fetched, each with its date; facts, claims, opinions and its own reading kept apart; a look ahead; both sides; what it could not find; no buy or sell advice.
+- It has no data feed of its own yet. It works with web search, Deep research, your Library and the Diagram builder, so figures can be delayed. Check them against the source it names.
+- The watchlist and your own markets are on **Settings → Finance**.
+
+Details: `addons/dsh-finance/README.md`.
+
 ## Code map
 
 Makes a compact map of the project a conversation works in: its files, the functions and classes in them, and what uses what. The assistant looks things up in the map and reads one function at a time instead of whole files, which uses far fewer tokens on a large project. Nothing is installed, and nothing is written into your project; the map is kept in the app's own data folder.
@@ -243,6 +256,7 @@ Gives the assistant a `deep_research` tool: it splits a question into sub-questi
 A thin bar that shows what the model and its helpers are doing right now, so you can see at a glance that work is still going on. It works the moment it is installed.
 
 - **What it shows:** prompt processing, thinking, writing, tool calls, web search, scripts, sub-agents, other conversations, waiting for your approval (everything pulses in one colour) and errors (everything pulses red). A short text beside it adds figures such as `TG 42 t/s · Tool read_file 2s · BG 2`.
+- **It is part of the message box:** the line above the message box sits in the top of the box, in the same colour and width, with no space between. Switch **Fit the message box** off in **Settings → Activity** to let it span the whole chat area. For a wider chat and box, use **Wide chat area** in the sidebar's More menu; the line follows.
 - **Seven designs** in **Settings → Activity**: a line or a lane of threads above the chat box, lanes or a history tape on the lower window edge, small spinning rings beside the model button, or two of them together. The page has a preview.
 - **You choose what is tracked:** each kind of work has its own switch and colour. You can also turn the text or its figures off, use words in place of short codes, hide the bar while nothing runs, or switch off all movement.
 - **Sounds:** it can play a short sound when the app starts waiting for you and when a turn fails. Pick from nine sounds, set the volume, and choose whether the waiting sound repeats until you answer.

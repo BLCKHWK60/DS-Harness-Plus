@@ -57,7 +57,8 @@ The indicator can play a short sound when the app starts waiting for your approv
 
 Everything is on **Settings → Activity**, with a preview you can switch through sample states.
 
-- **Look:** on or off, design, thickness, hide when nothing is running, no movement (colour only).
+- **Look:** on or off, design, thickness, fit the message box, hide when nothing is running, no movement (colour only).
+  - **Fit the message box** (`fit`, on by default) makes the line the top part of the message box: the same width, colour, rounded corners and shadow, with no space between them. All of that is read from the box itself, so it follows the window and the colour scheme. While it is joined, the box's own top corners are squared; they are put back when the line is hidden or Fit is off. Off lets the line span the whole chat area, as before 0.27.1.
 - **What to track:** a switch and a colour per kind of work. A kind that is switched off disappears from the bar, the rings, the tape and the text.
 - **Sounds:** on or off, volume, the sound for waiting, the sound for errors, repeat.
 - **Text:** show it or not, figures, words in place of short codes, last prompt speed, conversation size.
@@ -74,6 +75,10 @@ Everything is on **Settings → Activity**, with a preview you can switch throug
 - Client (`client.js`): slots `conversation.input.dock` (above the chat box), `conversation.input.right` (rings), `shell.overlay` (window edge), `settings.section`. It asks for the status every 0.35 s while something runs and every 0.7 s otherwise (3 s while the window is hidden).
 
 ## Checked
+
+- **0.27.2, live in the web profile:** with Fit on, the line sat inside the top of the message box in the box's colour, with the box's corner radius on top, one pixel of overlap and no visible seam, at rest and while a task ran (wave and "Thinking 90.8 t/s"). Switching Fit off gave the box its own corners back and the full-width line; on again rejoined them. Not checked: a light colour scheme, the box while it has the cursor in a scheme that draws a focus ring. In the Mac desktop app the owner confirmed that it looks right.
+
+- **0.27.1, live in the web profile at a 1,500-pixel window:** the line above the message box was 1,213 pixels wide over an 813-pixel box before; with Fit on it has the box's width and place (813 at the same left edge), also on the start page (781) and with the sidebar's Wide chat area on (1,149). Not checked: Fit switched off after the change, a running task at the new width, the Mac app.
 
 - **Unit tests:** 7 (`test/`): a request from prompt to thinking to writing with rates and the prompt speed; tools sorted into tool, web and script; sub-agents and other conversations; waiting, errors and retries; nothing of the conversation's text is kept; the text in every form; settings and where a session sits in the tree.
 - **Live, in the throwaway web profile with a slow test model server:**

@@ -198,7 +198,11 @@ window.__ModuleLoader__.load({
         id,
         label: value && typeof value.label === 'string' && value.label.trim() ? value.label.trim() : id,
       }));
-      const modes = defined.length > 0 ? defined : FALLBACK_MODES;
+      const modes = defined.length > 0 ? defined : [...FALLBACK_MODES];
+      // Modes that other add-ons add come after these and never replace one.
+      for (const [id, value] of Object.entries(readObject(view?.extraModes))) {
+        if (!modes.some((mode) => mode.id === id)) modes.push({ id, label: value && typeof value.label === 'string' && value.label.trim() ? value.label.trim() : id });
+      }
       const chosen = readObject(view?.sessionModes)[sessionId];
       const fallback = view?.defaultMode;
       const current = [chosen, fallback].find((id) => modes.some((mode) => mode.id === id)) ?? modes[0].id;
@@ -338,7 +342,7 @@ window.__ModuleLoader__.load({
       // Older host halves have no switches; show nothing then.
       if (state.status !== 'ready' || !sessionId || !state.view || state.view.sessionWeb === undefined) return null;
       const { current } = describeModes(state.view, sessionId);
-      const modeDef = readObject(state.view.modes)[current] ?? BUILTIN[current] ?? {};
+      const modeDef = readObject(state.view.modes)[current] ?? readObject(state.view.extraModes)[current] ?? BUILTIN[current] ?? {};
       const tools = modeDef.tools ?? 'all';
       const chosenWeb = readObject(state.view.sessionWeb)[sessionId];
       const web = typeof chosenWeb === 'boolean'

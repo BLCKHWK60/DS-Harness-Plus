@@ -1,0 +1,8 @@
+- insert:
+    - id: finance
+      name: '@local/dsh-finance'
+      config:
+        # Off until you switch it on at Settings > Finance. Needs the Modes add-on and the Cowork sidebar. Optional:
+        #   watchlist: [<COMPANY OR TOPIC>, ...]   # offered in the subject box
+        #   moreMarkets: [<MARKET>, ...]           # offered after the built-in markets
+        enabled: false

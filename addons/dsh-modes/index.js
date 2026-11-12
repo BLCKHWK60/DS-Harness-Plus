@@ -52,6 +52,11 @@ const SANDBOX_VALUES = ['inherit', 'read-only', 'workspace-write'];
 export const Config = z.object({
   /** Mode definitions as a JSON object: `{ id: { label, tools, sandbox, defaultTier, prompt } }`. */
   modes: z.string().default(JSON.stringify(BUILTIN_MODES)).volatile(),
+  /**
+   * Modes that other add-ons add, in the same JSON shape. They come after the modes above and never
+   * replace one of them. An add-on writes its own entry here and removes it when it is switched off.
+   */
+  extraModes: z.string().default('{}').volatile(),
   /** Mode of a session that has not chosen one. */
   defaultMode: z.string().default('cowork').volatile(),
   /**
@@ -149,8 +154,11 @@ function readModes(config) {
     const mode = normalizeMode(id, value);
     if (mode) result[id] = mode;
   }
-  if (Object.keys(result).length > 0) return result;
-  for (const [id, value] of Object.entries(BUILTIN_MODES)) result[id] = normalizeMode(id, value);
+  if (Object.keys(result).length === 0) for (const [id, value] of Object.entries(BUILTIN_MODES)) result[id] = normalizeMode(id, value);
+  for (const [id, value] of Object.entries(readObject(config.extraModes))) {
+    const mode = result[id] ? undefined : normalizeMode(id, value);
+    if (mode) result[id] = mode;
+  }
   return result;
 }
 

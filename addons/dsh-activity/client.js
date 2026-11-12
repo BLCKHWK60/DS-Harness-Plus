@@ -64,6 +64,10 @@ window.__ModuleLoader__.load({
     const CSS = `
 .dsh-ac-dock { display: flex; flex-direction: column; gap: 3px; padding: 0 12px 6px; min-width: 0; }
 .dsh-ac-preview .dsh-ac-dock { padding: 0 0 8px; }
+/* Fitted to the message box: it becomes the box's top part. Width, colour, corners and shadow are taken from the box itself. */
+.dsh-ac-fit { box-sizing: border-box; max-width: 100%; }
+.dsh-ac-fit[data-joined="true"] { position: relative; z-index: 1; clip-path: inset(-40px -40px 0 -40px); }
+.dsh-ac-fit[data-joined="true"] .dsh-ac-dock { padding: 12px 24px 2px; }
 .dsh-ac-edge { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; pointer-events: none; display: flex; flex-direction: column; gap: 2px; }
 .dsh-ac-inline { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .dsh-ac-canvas { display: block; width: 100%; color: var(--dsw-alias-label-secondary); }
@@ -667,9 +671,63 @@ input.dsh-ac-field { width: 260px; }
       return h('div', { className: fixed ? 'dsh-ac-edge' : 'dsh-ac-fakeedge' }, text ? h(Text, { snap }) : null, h(Piece, { piece: pieces.edge, snap, hist }));
     }
 
+    /**
+     * The line above the message box. Fitted, it is exactly as wide as the box and sits on it, so the
+     * two read as one. The width is taken from the box itself, so it follows the window and the app.
+     */
     function LiveDock({ sessionId }) {
       const snap = useLive(sessionId);
-      return h(React.Fragment, null, h('style', null, CSS), snap ? h(Dock, { snap, hist: store.hist }) : null);
+      const wrap = useRef(null);
+      const fit = snap?.settings?.fit !== false;
+      useEffect(() => {
+        const node = wrap.current;
+        if (!node) return undefined;
+        let card = null;
+        const clear = () => {
+          for (const key of ['width', 'marginLeft', 'marginBottom', 'background', 'boxShadow', 'borderRadius']) node.style[key] = '';
+          node.removeAttribute('data-joined');
+          if (card) { card.style.borderTopLeftRadius = ''; card.style.borderTopRightRadius = ''; }
+        };
+        if (!fit || typeof ResizeObserver !== 'function') { clear(); return undefined; }
+        const stack = node.closest('[class*="_composerStack"]') ?? node.parentElement?.parentElement;
+        card = stack?.querySelector('[class*="_card"]') ?? null;
+        if (!stack || !card) { clear(); return undefined; }
+        const place = () => {
+          const box = card.getBoundingClientRect();
+          const area = stack.getBoundingClientRect();
+          // Nothing to show (hidden while idle), or no box to sit on: leave the box as the app draws it.
+          if (box.width < 50 || !node.firstElementChild) { clear(); return; }
+          // The box's own look, read with its top corners as the app has them.
+          card.style.borderTopLeftRadius = '';
+          card.style.borderTopRightRadius = '';
+          const look = getComputedStyle(card);
+          const radius = look.borderTopLeftRadius;
+          node.style.width = `${Math.round(box.width)}px`;
+          node.style.marginLeft = `${Math.max(0, Math.round(box.left - area.left))}px`;
+          node.style.background = look.backgroundColor;
+          node.style.boxShadow = look.boxShadow;
+          node.style.borderRadius = `${radius} ${radius} 0 0`;
+          node.setAttribute('data-joined', 'true');
+          // Close the space between the two, and cover the box's top edge by one pixel so no seam shows.
+          const now = parseFloat(node.style.marginBottom) || 0;
+          const space = box.top - node.getBoundingClientRect().bottom - now;
+          node.style.marginBottom = `${-(Math.max(0, Math.round(space)) + 1)}px`;
+          card.style.borderTopLeftRadius = '0';
+          card.style.borderTopRightRadius = '0';
+        };
+        const watch = new ResizeObserver(place);
+        watch.observe(card);
+        watch.observe(stack);
+        watch.observe(node);
+        // The box changes its look when it gets the cursor, and with the colour scheme.
+        card.addEventListener('focusin', place);
+        card.addEventListener('focusout', place);
+        const theme = new MutationObserver(place);
+        theme.observe(document.documentElement, { attributes: true });
+        place();
+        return () => { watch.disconnect(); theme.disconnect(); card.removeEventListener('focusin', place); card.removeEventListener('focusout', place); clear(); };
+      }, [fit, Boolean(snap)]);
+      return h(React.Fragment, null, h('style', null, CSS), h('div', { ref: wrap, className: 'dsh-ac-fit', 'data-fit': String(fit) }, snap ? h(Dock, { snap, hist: store.hist }) : null));
     }
     function LiveInline({ sessionId }) {
       const snap = useLive(sessionId);
@@ -859,6 +917,7 @@ input.dsh-ac-field { width: 260px; }
           { title: 'Thickness', hint: 'How heavy the lines are.' },
           h('select', { className: 'dsh-ac-field', value: String(value.weight ?? 2), 'aria-label': 'Thickness', onChange: (event) => set('weight', Number(event.target.value)) }, h('option', { value: '1' }, 'Thin'), h('option', { value: '2' }, 'Normal'), h('option', { value: '3' }, 'Bold')),
         ),
+        toggle('fit', 'Fit the message box', 'On keeps the line above the message box exactly as wide as the box, so the two look like one. Off lets it span the whole chat area.', true),
         toggle('hideIdle', 'Hide when nothing is running', 'Off keeps a faint resting line, so the chat box does not jump.', false),
         toggle('still', 'No movement', 'Colour only: nothing flows, spins or pulses.', false),
 

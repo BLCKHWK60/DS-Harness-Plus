@@ -22,6 +22,7 @@ Built in (until you supply your own `modes`): **chat** (no tools, read-only, a s
     modes: '{"<id>": {"label": "...", "tools": "all", "sandbox": "inherit", "defaultTier": "", "prompt": ""}}'   # JSON; replaces the built-in three
     defaultMode: cowork       # mode of a session that has not chosen one
     scheduledMode: cowork     # mode of a conversation an Automation task opens (unknown id: the first mode with all tools)
+    extraModes: '{}'          # modes other add-ons add (same JSON shape as modes); they come after yours and never replace one
     pruneStaleSessions: true  # drop choices of Sessions that no longer exist
     pinOnFirstTurn: true      # record the mode a Session starts in, so a later defaultMode change (e.g. a Cowork sidebar tab) only affects new Sessions
     sessionWeb: '{}'          # per-Session Search switch (the chat-box button writes it)

@@ -35,6 +35,8 @@ window.__ModuleLoader__.load({
         'look.logos.show': 'Show DeepSeek logos',
         'look.title.date': 'Show the date as the title',
         'look.title.greeting': 'Show the greeting as the title',
+        'look.chat.wide': 'Wide chat area',
+        'look.chat.normal': 'Normal chat area',
         'look.failed': 'Could not save that setting.',
         'toggle.open': 'Open sidebar',
         'toggle.collapse': 'Collapse sidebar',
@@ -144,6 +146,8 @@ window.__ModuleLoader__.load({
         'look.logos.show': '显示 DeepSeek 标志',
         'look.title.date': '用日期作标题',
         'look.title.greeting': '用问候语作标题',
+        'look.chat.wide': '加宽对话区域',
+        'look.chat.normal': '恢复对话区域宽度',
         'look.failed': '无法保存该设置。',
         'toggle.open': '打开侧边栏',
         'toggle.collapse': '收起侧边栏',
@@ -242,6 +246,9 @@ window.__ModuleLoader__.load({
         'ago.d': '{n} 天',
       },
     };
+
+    /** The tabs: the first modes up to the limit, then the modes other add-ons added. */
+    const tabsOf = (state) => [...state.modes.slice(0, state.maxTabs), ...(state.extra ?? [])];
 
     const FALLBACK_MODES = [
       { id: 'chat', label: 'Chat' },
@@ -348,6 +355,48 @@ window.__ModuleLoader__.load({
             "prompt": "Create a small game: "
           }
         ]
+      },
+      "finance": {
+        "newLabel": "New research",
+        "pages": [],
+        "greeting": "What do you want to look into?",
+        "chips": [
+          {
+            "label": "Deep dive",
+            "icon": "research",
+            "prompt": "Do a full deep dive on the selected subject."
+          },
+          {
+            "label": "Earnings review",
+            "icon": "spreadsheet",
+            "prompt": "Review the latest earnings of the selected company."
+          },
+          {
+            "label": "News and mood",
+            "icon": "spark",
+            "prompt": "What are the news and social media saying about the selected subject right now?"
+          },
+          {
+            "label": "Compare",
+            "icon": "chart",
+            "prompt": "Compare the selected company with its closest competitors."
+          },
+          {
+            "label": "Sector scan",
+            "icon": "research",
+            "prompt": "Scan the sector of the selected subject: who is gaining, who is losing, and why?"
+          },
+          {
+            "label": "Economy brief",
+            "icon": "chart",
+            "prompt": "Give me an economy brief for the selected market."
+          },
+          {
+            "label": "What changed",
+            "icon": "spark",
+            "prompt": "What has changed for the selected subject in the last month?"
+          }
+        ]
       }
     };
 
@@ -362,6 +411,12 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
 .cws-tabs{display:flex;gap:2px;padding:3px;margin:0 0 10px;border:1px solid var(--dsw-alias-border-l3);border-radius:var(--dsw-radius-md)}
 .cws-tab{flex:1 1 0;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;padding:0 6px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:13px;white-space:nowrap}
 .cws-tab > span{overflow:hidden;text-overflow:ellipsis}
+/* Wide chat: the app keeps messages and the message box in a centred column; this lets both use the window's width. The start page keeps its own size. */
+html[data-cws-wide] [class*='_scrollBody'] [class*='_column']{max-width:calc(100% - 64px) !important}
+html[data-cws-wide] [class*='_composerStack']:not([class*='_composerHero'] *) [class*='_card']{max-width:calc(100% - 32px) !important}
+/* More than three tabs do not fit with icons: names only. */
+.cws-tabs[data-many='true'] .cws-tab{gap:0;padding:0 3px;font-size:12.5px}
+.cws-tabs[data-many='true'] .cws-tab > :not(span){display:none}
 .cws-tab[aria-selected='true']{background:var(--dsw-alias-button-elevated-fill);color:var(--dsw-alias-label-primary);font-weight:500}
 .cws-new{display:flex;align-items:center;gap:8px;width:100%;min-height:36px;margin:0 0 8px;padding:0 8px 0 12px;box-sizing:border-box;border:1px solid color-mix(in srgb,var(--dsw-alias-state-business-primary) 45%,transparent);border-radius:var(--dsw-radius-md);background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 10%,transparent);color:var(--dsw-alias-state-business-primary);cursor:pointer;font:inherit;font-weight:500;text-align:left}
 .cws-new .cws-glyph{color:inherit}
@@ -479,6 +534,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       chat: 'M4 5h16v10H9l-5 4z',
       cowork: 'M4 7h16v12H4zM9 7V5h6v2',
       code: 'M9 8l-4 4 4 4M15 8l4 4-4 4',
+      finance: 'M4 18l5-6 4 3 7-9M15 6h5v5',
       plus: 'M12 5v14M5 12h14',
       panel: 'M4 5h16v14H4zM9 5v14',
       grid: 'M5 5h5v5H5zM14 5h5v5h-5zM5 14h5v5H5zM14 14h5v5h-5z',
@@ -519,7 +575,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     function glyphFor(modeId) {
-      return modeId === 'chat' || modeId === 'code' || modeId === 'cowork' ? modeId : 'dot';
+      return modeId === 'chat' || modeId === 'code' || modeId === 'cowork' || modeId === 'finance' ? modeId : 'dot';
     }
 
     /**
@@ -527,7 +583,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
      * tab layout. One store for the whole page, refreshed on demand and every 10 seconds.
      */
     function createModel(ctx) {
-      let state = { modes: FALLBACK_MODES, selected: readLocal(), tabs: DEFAULT_TABS, maxTabs: 3, hideLogos: false, dateTitle: false, modesOn: false, error: '', sessionModes: {} };
+      let state = { modes: FALLBACK_MODES, extra: [], selected: readLocal(), tabs: DEFAULT_TABS, maxTabs: 3, hideLogos: false, dateTitle: false, wideChat: false, modesOn: false, error: '', sessionModes: {} };
       const listeners = new Set();
       const emit = () => { for (const l of listeners) l(); };
       const set = (patch) => { state = { ...state, ...patch }; emit(); };
@@ -560,6 +616,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             if (Number.isFinite(mine.value?.maxTabs)) patch.maxTabs = mine.value.maxTabs;
             patch.hideLogos = mine.value?.hideLogos === true;
             patch.dateTitle = mine.value?.dateTitle === true;
+            patch.wideChat = mine.value?.wideChat === true;
           }
           if (modesNs) {
             const defined = Object.entries(readObject(modesNs.value?.modes)).map(([id, value]) => ({
@@ -567,10 +624,14 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
               label: value && typeof value.label === 'string' && value.label.trim() ? value.label.trim() : id,
             }));
             patch.modes = defined.length > 0 ? defined : FALLBACK_MODES;
+            // Modes that other add-ons add: each gets a tab after the usual ones, whatever the tab limit.
+            patch.extra = Object.entries(readObject(modesNs.value?.extraModes))
+              .filter(([id]) => !patch.modes.some((m) => m.id === id))
+              .map(([id, value]) => ({ id, label: value && typeof value.label === 'string' && value.label.trim() ? value.label.trim() : id }));
             patch.modesOn = true;
             if (started === clicks) patch.sessionModes = readObject(modesNs.value?.sessionModes);
             const current = modesNs.value?.defaultMode;
-            if (started === clicks && typeof current === 'string' && patch.modes.some((m) => m.id === current)) {
+            if (started === clicks && typeof current === 'string' && [...patch.modes, ...patch.extra].some((m) => m.id === current)) {
               patch.selected = current;
               writeLocal(current);
             }
@@ -638,7 +699,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         }
       }
 
-      /** Switch one of this add-on's own on/off settings (`hideLogos`, `dateTitle`). */
+      /** Switch one of this add-on's own on/off settings (`hideLogos`, `dateTitle`, `wideChat`). */
       async function setOption(key, value) {
         const before = state[key];
         set({ [key]: value, error: '' });
@@ -1183,7 +1244,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
 
       const wide = drawer || !collapsed;
       const darwin = document.documentElement.getAttribute('data-platform') === 'darwin';
-      const tabs = state.modes.slice(0, state.maxTabs);
+      const tabs = tabsOf(state);
       const selected = tabs.find((m) => m.id === state.selected) ?? tabs[0];
       const layout = state.tabs;
       const claimed = new Set(Object.values(layout).flatMap((tab) => (Array.isArray(tab?.pages) ? tab.pages : [])));
@@ -1208,6 +1269,19 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         else root.removeAttribute('data-cws-plain-chat');
         return () => root.removeAttribute('data-cws-plain-chat');
       }, [plainChat]);
+      // Wide chat: the conversation and the message box use the window's width.
+      useEffect(() => {
+        const root = document.documentElement;
+        if (state.wideChat) root.setAttribute('data-cws-wide', '');
+        else root.removeAttribute('data-cws-wide');
+        return () => root.removeAttribute('data-cws-wide');
+      }, [state.wideChat]);
+      // Other add-ons show or hide their start-page parts by the selected tab.
+      useEffect(() => {
+        const root = document.documentElement;
+        root.setAttribute('data-cws-tab', selected.id);
+        return () => root.removeAttribute('data-cws-tab');
+      }, [selected.id]);
       const onTabKey = (event) => {
         const index = tabs.findIndex((m) => m.id === selected.id);
         let next = -1;
@@ -1233,7 +1307,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         h('span', { className: 'cws-glyph', 'aria-hidden': true }, renderFactorySlot('sidebar.panel.icon', { id: p.id, size: wide ? 16 : 18, active: active === p.id })),
         wide ? h('span', { className: 'cws-label' }, p.label) : null));
 
-      const tabList = h('div', { ref: tabsRef, className: 'cws-tabs', role: 'tablist', 'aria-label': t('tabs.label'), 'aria-orientation': wide ? 'horizontal' : 'vertical', onKeyDown: onTabKey },
+      const tabList = h('div', { ref: tabsRef, className: 'cws-tabs', 'data-many': wide && tabs.length > 3 ? 'true' : undefined, role: 'tablist', 'aria-label': t('tabs.label'), 'aria-orientation': wide ? 'horizontal' : 'vertical', onKeyDown: onTabKey },
         tabs.map((m) => h(Tooltip, { key: m.id, label: m.label, show: !wide },
           h('button', {
             type: 'button', role: 'tab', className: 'cws-tab', 'aria-selected': m.id === selected.id,
@@ -1249,6 +1323,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           extra: [
             { key: 'logos', label: t(state.hideLogos ? 'look.logos.show' : 'look.logos.hide'), run: () => void model.setOption('hideLogos', !state.hideLogos) },
             { key: 'title', label: t(state.dateTitle ? 'look.title.greeting' : 'look.title.date'), run: () => void model.setOption('dateTitle', !state.dateTitle) },
+            { key: 'wide', label: t(state.wideChat ? 'look.chat.normal' : 'look.chat.wide'), run: () => void model.setOption('wideChat', !state.wideChat) },
           ],
         })
         : null;
@@ -1530,7 +1605,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
      */
     function HeroGreeting({ size, appCtx, model }) {
       const state = useSyncExternalStore(model.subscribe, model.get);
-      const tabs = state.modes.slice(0, state.maxTabs);
+      const tabs = tabsOf(state);
       const selected = tabs.find((m) => m.id === state.selected) ?? tabs[0];
       // The date changes at midnight; look again once a minute while it is the title.
       const [, tick] = useState(0);
@@ -1548,7 +1623,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     /** Suggestion chips: each fills the chat box with a starter prompt. */
     function HeroChips({ appCtx, model, library }) {
       const state = useSyncExternalStore(model.subscribe, model.get);
-      const tabs = state.modes.slice(0, state.maxTabs);
+      const tabs = tabsOf(state);
       const selected = tabs.find((m) => m.id === state.selected) ?? tabs[0];
       const chips = tabEntry(state, selected.id).chips
         .filter((chip) => chip && typeof chip.label === 'string' && chip.label.trim())
