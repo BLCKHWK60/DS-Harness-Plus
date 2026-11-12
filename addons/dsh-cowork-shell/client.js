@@ -79,6 +79,23 @@ window.__ModuleLoader__.load({
         'move.to': 'Move to {tab}',
         'move.label': 'Move "{title}" to another tab',
         'move.failed': 'Could not move the conversation.',
+        'archive': 'Archive',
+        'archive.failed': 'Could not archive the conversation.',
+        'archive.running': 'This conversation is still working. Stop it and archive it?',
+        'archived.title': 'Archived ({n})',
+        'archived.restore': 'Restore',
+        'archived.restore.label': 'Restore "{title}"',
+        'archived.restore.failed': 'Could not restore the conversation.',
+        'delete': 'Delete',
+        'delete.label': 'Delete "{title}"',
+        'delete.confirm': 'Delete "{title}"?\n\nIt goes to the trash. You can put it back for 30 days. After that it is gone for good.',
+        'delete.running': 'This conversation is still working. Stop it and delete it?',
+        'delete.failed': 'Could not delete the conversation.',
+        'trash.title': 'Trash ({n})',
+        'trash.left': '{n}d left',
+        'trash.back': 'Put back',
+        'trash.back.label': 'Put "{title}" back',
+        'trash.back.failed': 'Could not put the conversation back.',
         'promote.to': 'Promote to {tab}',
         'promote.label': 'Promote or continue "{title}"',
         'continue.open': 'Continue in a project…',
@@ -162,6 +179,23 @@ window.__ModuleLoader__.load({
         'move.to': '移到 {tab}',
         'move.label': '把“{title}”移到其他标签页',
         'move.failed': '无法移动该对话。',
+        'archive': '归档',
+        'archive.failed': '无法归档该对话。',
+        'archive.running': '该对话仍在运行。要停止并归档吗？',
+        'archived.title': '已归档（{n}）',
+        'archived.restore': '恢复',
+        'archived.restore.label': '恢复“{title}”',
+        'archived.restore.failed': '无法恢复该对话。',
+        'delete': '删除',
+        'delete.label': '删除“{title}”',
+        'delete.confirm': '删除“{title}”？\n\n它会进入废纸篓，30 天内可以放回，之后将永久删除。',
+        'delete.running': '该对话仍在运行。要停止并删除吗？',
+        'delete.failed': '无法删除该对话。',
+        'trash.title': '废纸篓（{n}）',
+        'trash.left': '剩 {n} 天',
+        'trash.back': '放回',
+        'trash.back.label': '放回“{title}”',
+        'trash.back.failed': '无法放回该对话。',
         'promote.to': '升级为 {tab}',
         'promote.label': '升级或继续“{title}”',
         'continue.open': '在项目中继续…',
@@ -402,6 +436,9 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
 .cws-moveas button[aria-pressed='true']{background:color-mix(in srgb,var(--dsw-alias-brand-primary) 12%,transparent);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
 .cws-movelist{max-height:220px;overflow-y:auto;max-width:230px}
 .cws-movelist .cws-moveitem{overflow:hidden;text-overflow:ellipsis}
+.cws-archived .cws-label{color:var(--dsw-alias-label-secondary)}
+.cws-trashed{cursor:default}
+.cws-archived-head{display:block;width:100%;margin-top:8px}
 .cws-movesep{height:0.5px;margin:4px 6px;background:var(--dsw-alias-border-l2)}
 html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='menu'],html[data-cws-plain-chat] [data-slot='conversation.hero.workspace']{display:none !important}
 .cws-more-btn{border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:12px;padding:4px 12px;text-align:left}
@@ -682,6 +719,35 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       };
     }
 
+    /** The trash of deleted conversations, read from and changed through this add-on's host route. */
+    function createTrash() {
+      const url = () => new URL('dsh-cowork-shell/trash', document.baseURI);
+      let snapshot = { items: [], keepMs: 0 };
+      const listeners = new Set();
+      const install = (data) => {
+        snapshot = { items: Array.isArray(data?.items) ? data.items : [], keepMs: Number(data?.keepMs) || 0 };
+        for (const listener of listeners) listener();
+      };
+      const call = async (init) => {
+        const response = await fetch(url(), { headers: { accept: 'application/json', ...(init ? { 'content-type': 'application/json' } : {}) }, ...init });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(String(data?.error ?? response.status));
+        install(data);
+      };
+      const post = (action, sessionId, title) => call({ method: 'POST', body: JSON.stringify({ action, sessionId, title }) });
+      let timer;
+      return {
+        get: () => snapshot,
+        subscribe: (listener) => {
+          listeners.add(listener);
+          if (listeners.size === 1) { void call().catch(() => {}); timer = setInterval(() => void call().catch(() => {}), 60000); }
+          return () => { listeners.delete(listener); if (listeners.size === 0) clearInterval(timer); };
+        },
+        remove: (id, title) => post('delete', id, title),
+        restore: (id) => post('restore', id),
+      };
+    }
+
     const LIST_KEY = 'dsh-cowork-shell.listAll';
 
     function ago(t, ms) {
@@ -731,7 +797,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
      * entries read "Promote to …", and `onContinue` adds "Continue in a project…", a second pane that
      * lists the projects and starts a new conversation there.
      */
-    function MoveMenu({ t, tabs, current, onMove, label, promote, projects, onContinue }) {
+    function MoveMenu({ t, tabs, current, onMove, label, promote, projects, onContinue, extra }) {
       const [open, setOpen] = useState(false);
       const [pane, setPane] = useState('root');
       const targets = tabs.filter((m) => m.id !== current);
@@ -752,7 +818,13 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         }, t(promote ? 'promote.to' : 'move.to', { tab: m.label }))),
         onContinue && asMode ? h(React.Fragment, null,
           h('div', { className: 'cws-movesep', role: 'separator' }),
-          h('button', { type: 'button', role: 'menuitem', className: 'cws-moveitem', 'aria-haspopup': 'menu', onClick: (e) => { e.stopPropagation(); setPane('projects'); } }, t('continue.open'))) : null);
+          h('button', { type: 'button', role: 'menuitem', className: 'cws-moveitem', 'aria-haspopup': 'menu', onClick: (e) => { e.stopPropagation(); setPane('projects'); } }, t('continue.open'))) : null,
+        (extra ?? []).length > 0 ? h(React.Fragment, null,
+          h('div', { className: 'cws-movesep', role: 'separator' }),
+          extra.map((item) => h('button', {
+            key: item.key, type: 'button', role: 'menuitem', className: 'cws-moveitem',
+            onClick: (e) => { e.stopPropagation(); setOpen(false); item.run(); },
+          }, item.label))) : null);
       const projectPane = () => h(React.Fragment, null,
         h('div', { className: 'cws-movehead' },
           h('button', { type: 'button', className: 'cws-link', onClick: (e) => { e.stopPropagation(); setPane('root'); } }, '‹ ' + t('continue.back')),
@@ -775,10 +847,13 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     /** The open tab's conversations: one flat list on the Chat tab, grouped under their projects elsewhere. */
-    function TabLibrary({ appCtx, model, library, tabs, selected, onShowAll }) {
+    function TabLibrary({ appCtx, model, library, trash, tabs, selected, onShowAll }) {
       const t = appCtx.locale.bind(NS);
       const state = useSyncExternalStore(model.subscribe, model.get);
       const lib = useSyncExternalStore(library.subscribe, library.get);
+      const bin = useSyncExternalStore(trash.subscribe, trash.get);
+      // A deleted conversation is hidden at once, also while its files have not moved yet.
+      const deleted = new Set(bin.items.map((item) => item.id));
       const [open, setOpen] = useState({});
       const [more, setMore] = useState({});
       const tabIds = tabs.map((m) => m.id);
@@ -789,7 +864,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const placed = new Set();
       // An empty new conversation shows only while it is the open one.
       const sortRows = (ids) => ids
-        .filter((id) => lib.byId[id] && lib.byId[id].origin !== 'subagent' && !archived.has(id) && (!lib.byId[id].blank || id === lib.currentId))
+        .filter((id) => lib.byId[id] && lib.byId[id].origin !== 'subagent' && !archived.has(id) && !deleted.has(id) && (!lib.byId[id].blank || id === lib.currentId))
         .sort((a, b) => (pinned.has(b) - pinned.has(a)) || ((lib.byId[b].updatedAt ?? 0) - (lib.byId[a].updatedAt ?? 0)));
 
       const projects = [];
@@ -835,6 +910,95 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         }
       };
 
+      /** Archive a conversation the app's own way. One that is still working asks first. */
+      const archiveQuietly = async (id, question) => {
+        const service = (() => { try { return appCtx.get('workspaces'); } catch { return null; } })();
+        try {
+          await service.archiveSession(id);
+        } catch (error) {
+          if (error?.rpcError?.code !== 'workspace/session-active') throw error;
+          if (!window.confirm(question)) return false;
+          await service.archiveSession(id, { stopActivity: true });
+        }
+        if (id === lib.currentId) startNew(appCtx, library, selected.id);
+        return true;
+      };
+      const archive = async (id) => {
+        try {
+          await archiveQuietly(id, t('archive.running'));
+        } catch {
+          model.fail(t('archive.failed'));
+        }
+      };
+      /** Delete: archive it (the app then stops using it), then move its files to the trash. */
+      const remove = async (id, title) => {
+        if (!window.confirm(t('delete.confirm', { title }))) return;
+        try {
+          if (archived.has(id)) {
+            if (id === lib.currentId) startNew(appCtx, library, selected.id);
+          } else if (!(await archiveQuietly(id, t('delete.running')))) return;
+          await trash.remove(id, title);
+        } catch {
+          model.fail(t('delete.failed'));
+        }
+      };
+      const putBack = async (id) => {
+        try {
+          await trash.restore(id);
+        } catch {
+          model.fail(t('trash.back.failed'));
+        }
+      };
+      const restore = async (id) => {
+        try {
+          await appCtx.get('workspaces').unarchiveSession(id);
+        } catch {
+          model.fail(t('archived.restore.failed'));
+        }
+      };
+
+      // Archived conversations of this tab, newest first.
+      const wsById = {};
+      for (const ws of lib.workspaces) for (const id of ws.sessionIds ?? []) wsById[id] = ws;
+      const archivedIds = lib.archived
+        .filter((id) => lib.byId[id] && lib.byId[id].origin !== 'subagent' && !lib.byId[id].blank && !deleted.has(id)
+          && tabOfSession(id, lib.byId[id], wsById[id] ?? null, state, tabIds) === selected.id)
+        .sort((a, b) => (lib.byId[b].updatedAt ?? 0) - (lib.byId[a].updatedAt ?? 0));
+      const trashSection = () => {
+        if (bin.items.length === 0) return null;
+        const shown = !!open.__trash;
+        return h(React.Fragment, null,
+          h('button', { type: 'button', className: 'cws-more-btn cws-archived-head', 'aria-expanded': shown, onClick: () => setOpen((o) => ({ ...o, __trash: !shown })) },
+            (shown ? '▾ ' : '▸ ') + t('trash.title', { n: bin.items.length })),
+          shown ? bin.items.map((item) => {
+            const title = item.title || t('untitled');
+            const left = Math.max(0, Math.ceil((item.deletedAt + bin.keepMs - Date.now()) / 86400000));
+            return h('div', { key: item.id, className: 'cws-conv cws-archived' },
+              h('span', { className: 'cws-conv-main cws-trashed', title },
+                h('span', { className: 'cws-label' }, title),
+                h('span', { className: 'cws-time' }, t('trash.left', { n: left }))),
+              h('button', { type: 'button', className: 'cws-link', 'aria-label': t('trash.back.label', { title }), onClick: () => void putBack(item.id) }, t('trash.back')));
+          }) : null);
+      };
+      const archivedSection = () => {
+        if (archivedIds.length === 0) return trashSection();
+        const shown = !!open.__archived;
+        return h(React.Fragment, null,
+          h('button', { type: 'button', className: 'cws-more-btn cws-archived-head', 'aria-expanded': shown, onClick: () => setOpen((o) => ({ ...o, __archived: !shown })) },
+            (shown ? '▾ ' : '▸ ') + t('archived.title', { n: archivedIds.length })),
+          shown ? archivedIds.map((id) => {
+            const sess = lib.byId[id];
+            const title = (sess.displayTitle && String(sess.displayTitle).trim()) || t('untitled');
+            return h('div', { key: id, className: 'cws-conv cws-archived', 'aria-current': lib.currentId === id ? 'page' : undefined },
+              h('button', { type: 'button', className: 'cws-conv-main', onClick: () => openSession(id), title },
+                h('span', { className: 'cws-label' }, title),
+                h('span', { className: 'cws-time' }, ago(t, sess.updatedAt))),
+              h('button', { type: 'button', className: 'cws-link', 'aria-label': t('archived.restore.label', { title }), onClick: () => void restore(id) }, t('archived.restore')),
+              h('button', { type: 'button', className: 'cws-link', 'aria-label': t('delete.label', { title }), onClick: () => void remove(id, title) }, t('delete')));
+          }) : null,
+          trashSection());
+      };
+
       const row = (id, ws) => {
         const sess = lib.byId[id];
         const title = (!sess.blank && sess.displayTitle && String(sess.displayTitle).trim()) || t('untitled');
@@ -852,6 +1016,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             promote: flat,
             projects: flat ? lib.workspaces : undefined,
             onContinue: flat && typeof uw?.startSession === 'function' ? (target, mode) => void continueIn(id, title, target, mode) : undefined,
+            extra: [{ key: 'archive', label: t('archive'), run: () => void archive(id) }, { key: 'delete', label: t('delete'), run: () => void remove(id, title) }],
           }));
       };
 
@@ -869,7 +1034,8 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             h('button', { type: 'button', className: 'cws-link', onClick: onShowAll, title: t('lib.all.hint') }, t('lib.all'))),
           empty ? h('p', { className: 'cws-lib-empty' }, t('lib.empty', { tab: selected.label })) : null,
           h(React.Fragment, null, flatIds.slice(0, more.__flat ? flatIds.length : 30).map((id) => row(id, wsOf[id] ?? null)),
-            flatIds.length > 30 && !more.__flat ? h('button', { type: 'button', className: 'cws-more-btn', onClick: () => setMore((m) => ({ ...m, __flat: true })) }, t('show.more', { n: flatIds.length - 30 })) : null));
+            flatIds.length > 30 && !more.__flat ? h('button', { type: 'button', className: 'cws-more-btn', onClick: () => setMore((m) => ({ ...m, __flat: true })) }, t('show.more', { n: flatIds.length - 30 })) : null),
+          archivedSection());
       }
       return h('div', { className: 'cws-lib' },
         h('div', { className: 'cws-lib-head' },
@@ -890,7 +1056,8 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         }),
         loose.length ? h(React.Fragment, null,
           h('div', { className: 'cws-lib-head' }, h('span', null, t('lib.loose'))),
-          list(loose, '__loose', null)) : null);
+          list(loose, '__loose', null)) : null,
+        archivedSection());
     }
 
     /** The New button: on the Chat tab it always starts in the app's default workspace, when there is one. */
@@ -902,7 +1069,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     function CoworkSidebar(props) {
-      const { collapsed, width, drawer, renderSlot, renderFactorySlot, usePanelInfo, appCtx, model, pages, library } = props;
+      const { collapsed, width, drawer, renderSlot, renderFactorySlot, usePanelInfo, appCtx, model, pages, library, trash } = props;
       const libSnap = useSyncExternalStore(library.subscribe, library.get);
       const libReady = libSnap.ok && model.get().modesOn;
       const [showAll, setShowAllState] = useState(() => { try { return window.localStorage.getItem(LIST_KEY) === '1'; } catch { return false; } });
@@ -1015,7 +1182,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         h('div', { className: 'cws-scroll', 'data-sidebar-scrollport': '' },
           rows.length > 0 || more ? h('nav', { className: 'cws-pages', 'aria-label': t('pages.label', { tab: selected.label }) }, rows.map(pageRow), more) : null,
           libReady && !showAll
-            ? h(TabLibrary, { appCtx, model, library, tabs, selected, onShowAll: () => setShowAll(true) })
+            ? h(TabLibrary, { appCtx, model, library, trash, tabs, selected, onShowAll: () => setShowAll(true) })
             : h(React.Fragment, null,
               libReady ? h('div', { className: 'cws-lib-head cws-lib-allbar' },
                 h('span', null, t('lib.showingAll')),
@@ -1307,7 +1474,8 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         const model = createModel(ctx);
         const pages = createPages(ctx);
         const library = createLibrary(ctx);
-        const shared = () => ({ appCtx: ctx, model, pages, library });
+        const trash = createTrash();
+        const shared = () => ({ appCtx: ctx, model, pages, library, trash });
 
         ctx.effect(() => ctx.slots.inject('sidebar', function* () {
           yield ctx.slots.registerFactory({

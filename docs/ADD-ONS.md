@@ -49,7 +49,7 @@ Replaces the left sidebar with a MindsHub-style one:
   - **Cowork:** Automation tasks, **Connectors** and **Skills**.
   - **Code:** Connectors and Skills.
 
-  **Each tab lists only its own conversations.** Code shows your coding projects, Chat your chats, Cowork your tasks. Use the `⋯` on a conversation or a project to move it to another tab; **Show all** gives the app's full list with search.
+  **Each tab lists only its own conversations.** Code shows your coding projects, Chat your chats, Cowork your tasks. Use the `⋯` on a conversation or a project to move it to another tab, or on a conversation to **Archive** it (the tab ends with an **Archived** list where each one has **Restore**), or to **Delete** it. Delete moves the conversation to a **Trash** list at the end of the tab; **Put back** returns it within 30 days, and after that it is removed for good. A conversation you used since the app started leaves the list at once and its files move at the next start; **Show all** gives the app's full list with search.
 
   **The Chat tab has no folders.** A chat lives on its own, so the Chat tab hides the workspace picker, always starts a new chat in the app's default workspace, and shows your chats as one flat list. The `⋯` on a chat can **Promote to Cowork** or **Promote to Code** (the same conversation, in the new mode) or **Continue in a project…** (a new conversation in a project you pick, with the chat attached for the assistant to read).
 

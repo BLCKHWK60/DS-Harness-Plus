@@ -61,6 +61,17 @@ Each tab lists only its own conversations: **Recent chats** under Chat, **Recent
 
 **Moving:** the `⋯` button on a conversation moves it to another tab (on the Chat tab the same entries read "Promote to …", see above). The `⋯` on a project moves all its conversations. Moving also switches the conversation's mode from its next message, so the tab and the mode always agree. The `+` on a project starts a new conversation in it.
 
+**Archiving:** the same `⋯` on a conversation has **Archive**. It uses the app's own archive: the conversation leaves the list and nothing is deleted. One that is still working asks before it is stopped and archived. Archiving the open conversation starts a new one. Each tab ends with **Archived (n)**; open it to see that tab's archived conversations, each with **Restore**.
+
+**Deleting:** the app has no way to delete a conversation, so this add-on adds one. **Delete** is in the same `⋯` menu and next to **Restore** in the Archived list. It asks first, archives the conversation, then moves its files (and those of its helper conversations) out of the app into `<app data folder>/trash/conversations`. Each tab ends with **Trash (n)**: every deleted conversation, the days it has left, and **Put back**, which returns it to the Archived list. After 30 days a deleted conversation is removed for good; the add-on checks at start and a few times a day.
+
+- A conversation the app still holds in memory (one you used since the app started) leaves the lists at once, but its files move only at the next start of the app. Until then **Put back** simply shows it again.
+- Only a folder that holds a stored conversation is ever moved, and only folders inside the trash are ever removed.
+- Files the conversation created in your project folders are not touched. The app's search index and its record of which project the conversation belonged to are left to the app.
+- Switching this add-on off, or uninstalling Plus, leaves the trash folder where it is; nothing in it is removed while the add-on is off.
+
+Code: `lib/trash.js` (file moves, tested in `test/trash.test.mjs`), the `/dsh-cowork-shell/trash` route in `index.js` (GET lists, POST `{action: 'delete' | 'restore', sessionId, title}`).
+
 **Show all** switches to the app's full list, with its search, rename, pin and archive menus. **<Tab> only** switches back. Each window remembers the choice.
 
 The list reads the app's own project and conversation data in the browser. If that data is not available (a different app version), the sidebar falls back to the app's full list.

@@ -6,7 +6,9 @@
  * The bundle patch switches the app's own sidebar (`ui-sidebar`) off, and this row turns itself on only
  * while that sidebar is off: both at once would stop the app from loading.
  */
+import { dirname } from 'node:path';
 import z from '@deepseek-ai/schemastery';
+import { KEEP_MS, openTrash, safeId } from './lib/trash.js';
 
 export const name = 'cowork-shell';
 
@@ -116,6 +118,7 @@ export const DEFAULT_TABS = {
 /** Read-only routes the Skills and Connectors pages read. */
 export const SKILLS_PATH = '/dsh-cowork-shell/skills';
 export const CONNECTORS_PATH = '/dsh-cowork-shell/connectors';
+export const TRASH_PATH = '/dsh-cowork-shell/trash';
 const MCP_CLIENT = '@deepseek-ai/dsh-mcp-client';
 
 /**
@@ -187,17 +190,17 @@ export function apply(ctx) {
   // sent a message yet (and that its chat-box selector should stay hidden).
   ctx.effect(() => ctx.provide('coworkShell', Object.freeze({ apiVersion: 1, tabsDecideMode: true })), 'cowork-shell service');
 
-  /** Common guard for the read-only routes: login and Host/Origin fence, GET only, no caching. */
-  const guard = (inner, req, res) => {
+  /** Common guard for the routes: login and Host/Origin fence, one method (GET unless named), no caching. */
+  const guard = (inner, req, res, methods = ['GET']) => {
     const refused = inner.connection.requestRejection(req);
     if (refused !== undefined) {
       res.statusCode = refused;
       res.end();
       return false;
     }
-    if (req.method !== 'GET') {
+    if (!methods.includes(req.method)) {
       res.statusCode = 405;
-      res.setHeader('allow', 'GET');
+      res.setHeader('allow', methods.join(', '));
       res.end();
       return false;
     }
@@ -287,5 +290,117 @@ export function apply(ctx) {
         }
       },
     }), 'cowork-shell skills route');
+  });
+
+  // Trash: the app cannot delete a conversation, so Delete moves an archived conversation's files
+  // into <home>/trash/conversations for 30 days (see lib/trash.js). One the app still holds in
+  // memory is only remembered; its files move at the next start.
+  ctx.inject(['sessionPersistence', 'sessions', 'workspaceRegistry', 'webServer', 'connection'], (inner) => {
+    const dir = ctx.get('dshHomePath')?.('trash', 'conversations');
+    if (!dir) {
+      ctx.logger?.warn?.('cowork-shell: no data folder is available; Delete is off');
+      return;
+    }
+    const trash = openTrash(dir);
+    const cacheOf = (id) => ctx.get('dshHomePath')('storages', 'session_projcache', 'sessions', `${id}.json`);
+    const inMemory = (id) => {
+      try {
+        return inner.sessions.get(id) !== undefined;
+      } catch {
+        return true;
+      }
+    };
+
+    /** The conversation and its helper conversations, each with its folder; undefined when one is in memory. */
+    const partsOf = async (id) => {
+      const stored = await inner.sessionPersistence.list();
+      const parentOf = new Map(stored.map((snap) => [snap.header?.id, snap.header?.origin === 'subagent' ? snap.header?.parentSession : undefined]));
+      const under = (sid) => {
+        const seen = new Set();
+        for (let at = parentOf.get(sid); at !== undefined && !seen.has(at); at = parentOf.get(at)) {
+          if (at === id) return true;
+          seen.add(at);
+        }
+        return false;
+      };
+      const parts = [];
+      for (const snap of stored) {
+        const sid = snap.header?.id;
+        if (sid !== id && !under(sid)) continue;
+        if (!safeId(sid) || snap.location?.kind !== 'jsonl' || typeof snap.location.path !== 'string') {
+          if (sid === id) throw new Error('this conversation is not stored as files');
+          continue;
+        }
+        if (inMemory(sid)) return undefined;
+        const part = { id: sid, folder: dirname(snap.location.path), cache: cacheOf(sid) };
+        if (sid === id) parts.unshift(part);
+        else parts.push(part);
+      }
+      if (parts[0]?.id !== id) throw new Error('conversation not found');
+      return parts;
+    };
+
+    const remove = async (id, title, deletedAt) => {
+      if (!inner.workspaceRegistry.archivedSessionIds.includes(id)) throw new Error('archive the conversation first');
+      const parts = inMemory(id) ? undefined : await partsOf(id);
+      if (parts === undefined) {
+        trash.addPending({ id, title, deletedAt });
+        return 'pending';
+      }
+      trash.add({ id, title, parts, deletedAt });
+      return 'moved';
+    };
+
+    // At start: move what was waiting, then drop what is older than 30 days. Repeated a few times a day.
+    const tidy = async () => {
+      for (const item of trash.pending()) {
+        try {
+          if (!inner.workspaceRegistry.archivedSessionIds.includes(item.id)) trash.restore(item.id);
+          else await remove(item.id, item.title, item.deletedAt);
+        } catch (error) {
+          ctx.logger?.warn?.(`cowork-shell: could not move "${item.id}" to the trash: ${String(error?.message ?? error)}`);
+        }
+      }
+      try {
+        trash.purge();
+      } catch (error) {
+        ctx.logger?.warn?.(`cowork-shell: could not empty old trash: ${String(error?.message ?? error)}`);
+      }
+    };
+    void tidy();
+    inner.effect(() => {
+      const timer = setInterval(() => void tidy(), 6 * 60 * 60 * 1000);
+      timer.unref?.();
+      return () => clearInterval(timer);
+    }, 'cowork-shell trash tidy');
+
+    inner.effect(() => inner.webServer.register({
+      kind: 'exact',
+      path: TRASH_PATH,
+      handler: async (req, res) => {
+        if (!guard(inner, req, res, ['GET', 'POST'])) return;
+        try {
+          if (req.method === 'POST') {
+            const chunks = [];
+            let size = 0;
+            for await (const chunk of req) {
+              size += chunk.length;
+              if (size > 4096) throw new Error('request too large');
+              chunks.push(chunk);
+            }
+            const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+            const id = body?.sessionId;
+            if (!safeId(id)) throw new Error('not a conversation id');
+            if (body.action === 'delete') await remove(id, body.title);
+            else if (body.action === 'restore') trash.restore(id);
+            else throw new Error('unknown action');
+          }
+          res.end(JSON.stringify({ at: Date.now(), keepMs: KEEP_MS, items: trash.list() }));
+        } catch (error) {
+          res.statusCode = req.method === 'POST' ? 400 : 500;
+          res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 300) }));
+        }
+      },
+    }), 'cowork-shell trash route');
   });
 }
