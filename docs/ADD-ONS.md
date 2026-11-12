@@ -21,6 +21,7 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Library](#library) | after you add a folder | Settings → Library | |
 | [Mac bridge](#mac-bridge) | after you allow something | Settings → Mac | |
 | [Finance](#finance) | after you switch it on | Settings → Finance, and the Finance tab | |
+| [Balance](#balance) | yes | The foot of the sidebar | |
 | [Activity indicator](#activity-indicator) | yes | Settings → Activity | `/activity` |
 | [PDF reader](#pdf-reader) | yes | Settings → PDF reader | `/pdf` |
 | [Diagram builder](#diagram-builder) | yes | Settings → Diagrams | |
@@ -191,6 +192,17 @@ Lets the assistant find your files and run your Apple Shortcuts. Nothing is allo
 - Mail, Calendar and Reminders are not part of it yet.
 
 Details: `addons/dsh-mac/README.md`.
+
+## Balance
+
+Shows your DeepSeek balance in one line at the foot of the sidebar, above More.
+
+- It reads from the DeepSeek account you are signed in to and, if the app has a DeepSeek API key saved, from that key. The account is shown first.
+- Press the line to read again. Point at it to see every balance and when it was read.
+- A dash means there is nothing to show; point at it for the reason.
+- It has no settings page. Switch it off under Plugins.
+
+Details: `addons/dsh-balance/README.md`.
 
 ## Finance
 

@@ -1,0 +1,6 @@
+- insert:
+    - id: balance
+      name: '@local/dsh-balance'
+      config:
+        # Shows your DeepSeek balance at the bottom of the sidebar.
+        enabled: true

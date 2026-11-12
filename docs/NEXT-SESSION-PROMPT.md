@@ -4,7 +4,7 @@ Paste everything below the line into the new session. Replace the list under "My
 
 You are continuing work on **DeepSeek Harness Plus**, in this folder (`deepseek-harness-plus/`).
 
-**Start by reading `docs/HANDOFF.md`.** It is the full context: what the 32 add-ons are, my standing rules, facts about the app learned the hard way, how to test, and what is open. Do not read the whole codebase. Open only the add-ons and files that a task touches. Each add-on's `README.md` has its technical notes.
+**Start by reading `docs/HANDOFF.md`.** It is the full context: what the 33 add-ons are, my standing rules, facts about the app learned the hard way, how to test, and what is open. Do not read the whole codebase. Open only the add-ons and files that a task touches. Each add-on's `README.md` has its technical notes.
 
 **Your job, in this order:**
 
