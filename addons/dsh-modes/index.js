@@ -12,6 +12,7 @@
  */
 import z from '@deepseek-ai/schemastery';
 import { maskFor, parentIdOf, rootOf, webDefault } from './lib/mask.js';
+import { PROGRAM_TOOL, programNote, programOnly, SLOW_TOOLS } from './lib/ptc.js';
 
 export const name = 'modes';
 /** The chat box asks here which tools the model can call in a conversation (header `x-dsh-session`). */
@@ -35,6 +36,8 @@ const BUILTIN_MODES = {
 /** Added while the conversation's tools are switched off. */
 const TOOLS_OFF_PROMPT =
   'Tools are switched off for this conversation. Answer from what you know and do not try to call a tool. If the task cannot be done without tools, say so in one sentence.';
+/** The answer to a program started in a conversation that has no tools (the app's PTC preset keeps `run_code` on offer). */
+const NO_PROGRAMS = 'no tools are available in this conversation, so programs are not run. Answer directly.';
 /** Added in a restricted mode (for example Chat) while the Search switch is on. */
 const WEB_PROMPT =
   'Search is switched on for this conversation: you may use web_search and web_fetch to look things up, even though other tools are unavailable in this mode.';
@@ -368,6 +371,42 @@ export function apply(ctx, config) {
     });
   }
 
+  // The app's PTC preset offers `run_code` whatever the mask says. With nothing to call, a program is refused,
+  // so "Tools off" and a mode without tools mean the same in every preset.
+  ctx.effect(
+    () =>
+      ctx.tools.guard((exec) => {
+        try {
+          const id = exec?.agent?.id;
+          if (exec?.name !== PROGRAM_TOOL || !id) return undefined;
+          const mask = toolMask(id, modeOf(id));
+          return Array.isArray(mask?.allow) && mask.allow.length === 0 ? NO_PROGRAMS : undefined;
+        } catch {
+          return undefined;
+        }
+      }),
+    'modes: no programs without tools',
+  );
+
+  /**
+   * The note for an agent that reaches its tools through programs (the app's PTC preset).
+   * @param {object} agent - live Agent.
+   * @returns {string} the note, or '' when the agent calls tools directly or has none.
+   */
+  function viaPrograms(agent) {
+    if (!programOnly(ctx.tools, agent)) return '';
+    let reachable = [];
+    let timeout;
+    try {
+      reachable = ctx.tools.definitions(agent).map((definition) => definition.name);
+      timeout = ctx.get('ptcRuntime')?.timeout;
+    } catch {
+      // Without the list the note still says where tools are called from.
+    }
+    if (reachable.length === 0) return '';
+    return programNote({ timeout, slow: SLOW_TOOLS.filter((tool) => reachable.includes(tool)) });
+  }
+
   /**
    * Install the prompt section on one Agent.
    * @param {object} agent - live Agent.
@@ -382,7 +421,7 @@ export function apply(ctx, config) {
           interpolate: false,
           text: () => {
             // A helper gets no mode wording: "answer in one reply, no tools" would stop a searcher from searching.
-            if (topOf(agent.id) !== agent.id) return '';
+            if (topOf(agent.id) !== agent.id) return viaPrograms(agent);
             const mode = modeOf(agent.id);
             if (toolsOff(agent.id)) return [mode.tools === 'none' ? mode.prompt : '', TOOLS_OFF_PROMPT].filter(Boolean).join('\n\n');
             const webGranted = mode.tools !== 'all' && webOn(agent.id, mode);
@@ -393,7 +432,7 @@ export function apply(ctx, config) {
             } catch {
               alone = false;
             }
-            return [alone ? '' : mode.prompt, webGranted ? WEB_PROMPT : '', researchOn(agent.id) ? RESEARCH_PROMPT : ''].filter(Boolean).join('\n\n');
+            return [alone ? '' : mode.prompt, webGranted ? WEB_PROMPT : '', researchOn(agent.id) ? RESEARCH_PROMPT : '', viaPrograms(agent)].filter(Boolean).join('\n\n');
           },
         }),
       'modes prompt section',
@@ -586,7 +625,7 @@ export function apply(ctx, config) {
   /**
    * What the model can and cannot call in a conversation right now, for the Tools list in the chat box.
    * @param {string} sessionId - the conversation.
-   * @returns {object} `{known, mode, off, can, cannot}`; `known` is false when the conversation is not loaded.
+   * @returns {object} `{known, mode, off, viaCode, can, cannot}`; `known` is false when the conversation is not loaded.
    */
   function toolsView(sessionId) {
     const agent = ctx.get('agents')?.get?.(sessionId) ?? (ctx.get('agents')?.list() ?? []).find((item) => item.id === sessionId);
@@ -602,7 +641,7 @@ export function apply(ctx, config) {
       // An older app: show what is known.
     }
     const allowed = new Set(can);
-    return { known: true, mode: mode.label, off: toolsOff(sessionId), can: can.sort(), cannot: all.filter((name) => !allowed.has(name)).sort() };
+    return { known: true, mode: mode.label, off: toolsOff(sessionId), viaCode: programOnly(ctx.tools, agent), can: can.sort(), cannot: all.filter((name) => !allowed.has(name)).sort() };
   }
 
   ctx.inject(['webServer', 'connection'], (inner) => {

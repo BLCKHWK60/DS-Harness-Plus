@@ -29,6 +29,7 @@ window.__ModuleLoader__.load({
         'tools.switch': 'Tools for this conversation',
         'tools.switch.hint': 'Off: the model is offered no tool at all, so it cannot try to call one. Search and Deep research are off too.',
         'tools.chat': 'In Chat, tools means searching and reading the web. For files and commands, use Cowork or Code.',
+        'tools.viaCode': 'This conversation is in PTC mode: the model reaches these tools from inside small programs it writes. The app stops such a program after a few minutes, so long jobs like Deep research suit Standard mode better.',
         'tools.can': 'Can call',
         'tools.cannot': 'Cannot call',
         'tools.none': 'Nothing',
@@ -83,6 +84,7 @@ window.__ModuleLoader__.load({
         'tools.switch': '此对话的工具',
         'tools.switch.hint': '关闭后，模型得不到任何工具，也就不会尝试调用。搜索和深度研究也会关闭。',
         'tools.chat': '在聊天中，工具指搜索和阅读网页。处理文件和命令请使用 Cowork 或 Code。',
+        'tools.viaCode': '此对话处于 PTC 模式：模型在它编写的小程序中调用这些工具。应用会在几分钟后停止这样的程序，因此深度研究等耗时任务更适合标准模式。',
         'tools.can': '可以调用',
         'tools.cannot': '不能调用',
         'tools.none': '无',
@@ -447,6 +449,7 @@ window.__ModuleLoader__.load({
                 chat ? h('p', { className: 'hint' }, t('tools.chat')) : null,
                 list?.known
                   ? h(React.Fragment, null,
+                      list.viaCode ? h('p', { className: 'hint' }, t('tools.viaCode')) : null,
                       h('div', { className: 'head' }, `${t('tools.can')} (${list.can.length})`),
                       names(list.can, false),
                       h('div', { className: 'head' }, `${t('tools.cannot')} (${list.cannot.length})`),

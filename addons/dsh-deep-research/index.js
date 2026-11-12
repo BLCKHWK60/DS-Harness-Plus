@@ -13,6 +13,7 @@
  * Writing files is left to the model's own tools, so the sandbox applies.
  */
 import z from '@deepseek-ai/schemastery';
+import { insideProgram, researchMinutes } from './lib/budget.js';
 
 
 /**
@@ -312,7 +313,14 @@ export function apply(ctx, config) {
       if (!parent?.id) throw new Error('deep_research needs a live parent Session.');
       if (childIds.has(parent.id)) throw new Error('deep_research cannot be called from one of its own research agents.');
       const startedAt = Date.now();
-      const minutes = Math.min(Number(plain(config.maxMinutes)) || 20, Number(args?.maxMinutes) || Infinity);
+      // Inside a program (the app's PTC preset) the app stops everything after a fixed time: finish before that.
+      let programMaxMs;
+      try {
+        programMaxMs = ctx.get('ptcRuntime')?.timeout?.maxMs;
+      } catch {
+        programMaxMs = undefined;
+      }
+      const minutes = researchMinutes({ configured: plain(config.maxMinutes), asked: args?.maxMinutes, inProgram: insideProgram(exec.callId), programMaxMs });
       const deadline = startedAt + minutes * 60 * 1000;
       const maxSources = Math.min(Number(plain(config.maxSources)) || 40, Number(args?.maxSources) || Infinity);
       const parallel = Math.min(Number(plain(config.maxParallel)) || 4, ctx.get('modelTiers')?.resolveTier?.(parent.id)?.maxSubagents ?? 8);

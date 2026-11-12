@@ -77,7 +77,7 @@ Chat, Cowork and Code modes, chosen per conversation with the selector in the ch
 
 The chat box also gets three buttons for the open conversation:
 - **Search** switches the web tools on or off. It starts off in Chat and on in Cowork and Code.
-- **Tools** says whether the assistant has any tools ("Tools on" or "Tools off"). Click it for one switch that turns every tool off or back on for this conversation, and for the list of what the assistant can and cannot call. With tools off, the assistant is offered nothing, so it does not try and you see no failed attempts.
+- **Tools** says whether the assistant has any tools ("Tools on" or "Tools off"). Click it for one switch that turns every tool off or back on for this conversation, and for the list of what the assistant can and cannot call. With tools off, the assistant is offered nothing, so it does not try and you see no failed attempts. In a conversation started in the app's PTC mode, the panel says so: there the assistant reaches tools from inside small programs it writes, and "Tools off" stops those programs too.
 - **Deep research** has the assistant research questions thoroughly and answer with a cited report. With the Cowork sidebar on, the sidebar tabs choose instead, and the chat-box selector is hidden. A mode decides which tools the assistant may use, how its sandbox is set, a default tier, and a short instruction. The default mode, Cowork, allows every tool, so nothing is restricted until you choose otherwise. Edit or add modes on **Settings → Modes**.
 
 ## Model Tiers
@@ -169,7 +169,7 @@ Counts requests and tokens per day, provider and model. It never stores what you
 
 ## Deep research
 
-Gives the assistant a `deep_research` tool: it splits a question into sub-questions, researches them in parallel and writes a report whose sources are checked. Ask for it in plain words ("do deep research on ..."). It uses your web search, so it costs tokens; nothing to set up.
+Gives the assistant a `deep_research` tool: it splits a question into sub-questions, researches them in parallel and writes a report whose sources are checked. Ask for it in plain words ("do deep research on ..."). It uses your web search, so it costs tokens; nothing to set up. In PTC mode the app stops any one program after 10 minutes at most, so research there is shorter (it stops searching after about 7 minutes and writes up what it has). For long research, start the conversation in Standard mode.
 
 ## Activity indicator
 

@@ -58,3 +58,23 @@ test('defaults and family ties', () => {
   const loop = new Map([['x', 'y'], ['y', 'x']]);
   assert.ok(['x', 'y'].includes(rootOf('x', loop)), 'a loop does not hang');
 });
+
+test('a conversation that reaches tools through programs is told so', async () => {
+  const { programNote, programOnly, PROGRAM_TOOL } = await import('../lib/ptc.js');
+  const ptc = { selectExecutor: () => ({ describe: () => ({ knownNames: [PROGRAM_TOOL] }) }) };
+  const direct = { selectExecutor: () => ({ describe: () => ({ schemas: [] }) }) };
+  const broken = { selectExecutor: () => { throw new Error('no executor'); } };
+  assert.equal(programOnly(ptc, {}), true);
+  assert.equal(programOnly(direct, {}), false);
+  assert.equal(programOnly(broken, {}), false, 'not knowing reads as calling tools directly');
+  assert.equal(programOnly(undefined, {}), false);
+
+  const plain = programNote();
+  assert.match(plain, /inside a `run_code` program/);
+  assert.doesNotMatch(plain, /timeoutMs/, 'no time advice without a slow tool');
+  const slow = programNote({ timeout: { defaultMs: 120000, maxMs: 600000 }, slow: ['deep_research'] });
+  assert.match(slow, /stopped after 120 seconds/);
+  assert.match(slow, /deep_research can take minutes/);
+  assert.match(slow, /timeoutMs: 600000/);
+  assert.doesNotMatch(programNote({ slow: ['deep_research'] }), /timeoutMs/, 'no numbers are made up when the app gives none');
+});
