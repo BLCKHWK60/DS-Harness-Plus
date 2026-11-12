@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Budget guard">
+  <rect x="6" y="6" width="52" height="52" rx="14" fill="#4c9a6a"/>
+  <path d="M32 15l14 5v11c0 9-6 15-14 18-8-3-14-9-14-18V20z" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M26 32l5 5 8-9" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

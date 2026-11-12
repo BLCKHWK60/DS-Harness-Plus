@@ -1,0 +1,8 @@
+- insert:
+    - id: memory
+      name: '@local/dsh-memory'
+      config:
+        # Works with nothing set and starts empty. Add what should be remembered on
+        # Settings > Memory. Optional:
+        #   suggest: false   # the assistant may not suggest entries
+        enabled: true

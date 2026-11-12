@@ -1,0 +1,12 @@
+- insert:
+    - id: budget
+      name: '@local/dsh-budget'
+      config:
+        # Works with nothing set: generous limits that only a runaway task reaches.
+        # Change them on Settings > Budget guard. 0 means no limit. Optional:
+        #   maxSteps: 300        # requests to a model in one task, helpers included
+        #   maxTokens: 20000000   # tokens in one task, helpers included
+        #   maxMinutes: 0        # minutes one task may run
+        #   maxRepeats: 8        # the same tool call in a row
+        #   dayTokens: 0         # tokens per day, all conversations
+        enabled: true

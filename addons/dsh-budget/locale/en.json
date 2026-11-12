@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Budget guard",
+    "description": "Hard limits that stop a task that is running away: steps, tokens and minutes per task, a loop check, and an optional daily limit."
+  }
+}

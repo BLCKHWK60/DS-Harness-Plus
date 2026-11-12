@@ -15,6 +15,8 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Modes](#modes) | yes | Settings → Modes | `/mode` |
 | [Model Tiers](#model-tiers) | yes | Settings → Model Tiers | |
 | [Privacy](#privacy) | yes | | `/privacy` |
+| [Memory](#memory) | yes (starts empty) | Settings → Memory | |
+| [Budget guard](#budget-guard) | yes | Settings → Budget guard | |
 | [Activity indicator](#activity-indicator) | yes | Settings → Activity | `/activity` |
 | [PDF reader](#pdf-reader) | yes | Settings → PDF reader | `/pdf` |
 | [Diagram builder](#diagram-builder) | yes | Settings → Diagrams | |
@@ -57,6 +59,8 @@ Replaces the left sidebar with a MindsHub-style one:
 
   **Connectors** lists your MCP servers. Each shows whether it is connected and how many tools it brings, with an on/off switch. A short form writes out the settings lines for a new one. **Skills** lists the skills the assistant can use, with search.
 - **Your projects and Settings**, as before.
+
+When a conversation waits for you (an approval, a plan review or a question), a **Needs you** block appears at the top of the list on every tab; click it to open the conversation at the question.
 
 The **More** menu in the sidebar ends with two switches: **Hide DeepSeek logos** (the logo and name at the top of the sidebar and the logo on the start page) and **Show the date as the title** (the start page shows today's date, like "11 November, 2026", instead of the greeting).
 
@@ -125,6 +129,28 @@ By default the app reports to its maker in two ways, whichever model you use. Th
 Type `/privacy` in a chat to see that both are off. To switch reporting back on, switch the Privacy add-on off on the Plugins page and restart the app.
 
 Still on, because they are features and not reporting: update checks, your DeepSeek sign-in while you are signed in, the plugin list, web search when a conversation uses it, and any cloud model you pick. With a local model, your prompts and answers go only to your model server. For certainty about every connection, use a firewall app.
+
+## Memory
+
+A short list of lasting things the assistant should know about you: who you are, how you like answers, long projects. It is given to every new conversation.
+
+- Open **Settings → Memory**, type an entry and press **Remember**. Every entry can be edited and deleted.
+- When you tell the assistant to remember something, it **suggests** an entry. A card under the answer asks **Remember this?** with **Save** and **No**. Nothing is saved without your yes.
+- The list is kept short on purpose (about a page). Entries older than four months are marked "Is this still true?".
+- A change applies to conversations you start afterwards. Never put passwords here: the list is sent to the model.
+
+Details: `addons/dsh-memory/README.md`.
+
+## Budget guard
+
+Stops a task that is running away. A task is everything the assistant does after one message of yours, with its helper agents counted in.
+
+- It works as installed, with generous limits: 300 steps and 20,000,000 tokens per task, and a check for the same action repeated 8 times in a row.
+- At a limit the task stops and a card under it says why. Your next message lets it go on with a fresh allowance.
+- **Settings → Budget guard** changes the limits, adds a limit on minutes or on tokens per day, and shows your biggest recent task so you can set limits that fit.
+- The limits are enforced by the app itself. It counts tokens, not money.
+
+Details: `addons/dsh-budget/README.md`.
 
 ## Code map
 

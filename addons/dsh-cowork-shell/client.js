@@ -81,6 +81,10 @@ window.__ModuleLoader__.load({
         'chips.label': 'Suggestions',
         'untitled': 'New conversation',
         'running': 'Running',
+        'needs.title': 'Needs you ({n})',
+        'needs.approval': 'Waiting for your approval',
+        'needs.plan-review': 'Plan waiting for your review',
+        'needs.question': 'Waiting for your answer',
         'move.to': 'Move to {tab}',
         'move.label': 'Move "{title}" to another tab',
         'move.failed': 'Could not move the conversation.',
@@ -186,6 +190,10 @@ window.__ModuleLoader__.load({
         'chips.label': '建议',
         'untitled': '新对话',
         'running': '运行中',
+        'needs.title': '等你处理（{n}）',
+        'needs.approval': '等待你的批准',
+        'needs.plan-review': '计划等待你审阅',
+        'needs.question': '等待你的回答',
         'move.to': '移到 {tab}',
         'move.label': '把“{title}”移到其他标签页',
         'move.failed': '无法移动该对话。',
@@ -448,6 +456,13 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
 .cws-movelist .cws-moveitem{overflow:hidden;text-overflow:ellipsis}
 .cws-archived .cws-label{color:var(--dsw-alias-label-secondary)}
 .cws-trashed{cursor:default}
+.cws-dot-wait{background:var(--dsw-alias-state-warn-primary,#d9822b) !important;animation:none !important}
+.cws-needs{margin-bottom:6px;border-radius:var(--dsw-radius-sm);background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#d9822b) 9%,transparent)}
+.cws-needs-head{color:var(--dsw-alias-label-primary);padding-top:8px}
+.cws-needs-row{align-items:flex-start}
+.cws-needs-row .cws-dot{margin-top:6px}
+.cws-needs-text{display:flex;flex-direction:column;min-width:0;flex:1;text-align:left}
+.cws-needs-why{color:var(--dsw-alias-label-secondary);font-size:11px}
 .cws-archived-head{display:block;width:100%;margin-top:8px}
 .cws-movesep{height:0.5px;margin:4px 6px;background:var(--dsw-alias-border-l2)}
 html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='menu'],html[data-cws-plain-chat] [data-slot='conversation.hero.workspace']{display:none !important}
@@ -722,7 +737,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
      */
     function createLibrary(ctx) {
       const get = (name) => { try { return ctx.get(name) ?? null; } catch { return null; } };
-      let snapshot = { ok: false, workspaces: [], byId: {}, pinned: [], archived: [], currentId: null };
+      let snapshot = { ok: false, workspaces: [], byId: {}, pinned: [], archived: [], currentId: null, waiting: {} };
       let version = 0;
       const read = () => {
         const ws = get('workspaces')?.list?.getSnapshot?.();
@@ -730,6 +745,17 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         if (!ws || !ss || ws.phase !== 'ready' || ss.phase !== 'ready') return { ...snapshot, ok: false };
         let currentId = null;
         try { currentId = get('uiWorkspace')?.selection?.getSnapshot?.()?.sessionId ?? null; } catch { currentId = null; }
+        // Which conversations wait for the user, and for what: the app's own status, as its sidebar reads it.
+        const waiting = {};
+        try {
+          const statuses = get('uiSession')?.sessionStatus?.getSnapshot?.();
+          if (statuses && typeof statuses.forEach === 'function') {
+            statuses.forEach((status, id) => {
+              const kind = status?.pendingInteraction?.kind;
+              if (kind === 'approval' || kind === 'plan-review' || kind === 'question') waiting[id] = kind;
+            });
+          }
+        } catch { /* no status service: nothing is shown as waiting */ }
         return {
           ok: true,
           workspaces: Array.isArray(ws.items) ? ws.items : [],
@@ -737,6 +763,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           pinned: Array.isArray(ws.pinnedSessionIds) ? ws.pinnedSessionIds : [],
           archived: Array.isArray(ws.archivedSessionIds) ? ws.archivedSessionIds : [],
           currentId,
+          waiting,
         };
       };
       return {
@@ -748,6 +775,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             get('workspaces')?.list?.subscribe?.(update),
             get('sessions')?.list?.subscribe?.(update),
             get('uiWorkspace')?.selection?.subscribe?.(update),
+            get('uiSession')?.sessionStatus?.subscribe?.(update),
           ];
           // Titles and times change without always notifying; refresh gently.
           const timer = setInterval(update, 5000);
@@ -1001,6 +1029,26 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         .filter((id) => lib.byId[id] && lib.byId[id].origin !== 'subagent' && !lib.byId[id].blank && !deleted.has(id)
           && tabOfSession(id, lib.byId[id], wsById[id] ?? null, state, tabIds) === selected.id)
         .sort((a, b) => (lib.byId[b].updatedAt ?? 0) - (lib.byId[a].updatedAt ?? 0));
+      // Every conversation that waits for the user, from all tabs: an approval, a plan review or a question.
+      const needsIds = Object.keys(lib.waiting)
+        .filter((id) => lib.byId[id] && !archived.has(id) && !deleted.has(id))
+        .sort((a, b) => (lib.byId[b].updatedAt ?? 0) - (lib.byId[a].updatedAt ?? 0));
+      const needsSection = () => {
+        if (needsIds.length === 0) return null;
+        return h('div', { className: 'cws-needs', role: 'region', 'aria-label': t('needs.title', { n: needsIds.length }) },
+          h('div', { className: 'cws-lib-head cws-needs-head' }, h('span', null, t('needs.title', { n: needsIds.length }))),
+          needsIds.map((id) => {
+            const sess = lib.byId[id];
+            const title = (sess.displayTitle && String(sess.displayTitle).trim()) || t('untitled');
+            const why = t('needs.' + lib.waiting[id]);
+            return h('div', { key: id, className: 'cws-conv', 'aria-current': lib.currentId === id ? 'page' : undefined },
+              h('button', { type: 'button', className: 'cws-conv-main cws-needs-row', onClick: () => openSession(id), title: title + ' · ' + why },
+                h('span', { className: 'cws-dot cws-dot-wait', 'aria-hidden': true }),
+                h('span', { className: 'cws-needs-text' },
+                  h('span', { className: 'cws-label' }, title),
+                  h('span', { className: 'cws-needs-why' }, why))));
+          }));
+      };
       const trashSection = () => {
         if (bin.items.length === 0) return null;
         const shown = !!open.__trash;
@@ -1042,7 +1090,9 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         const current = lib.currentId === id;
         return h('div', { key: id, className: 'cws-conv', 'aria-current': current ? 'page' : undefined },
           h('button', { type: 'button', className: 'cws-conv-main', onClick: () => openSession(id), title },
-            sess.running ? h('span', { className: 'cws-dot', role: 'img', 'aria-label': t('running'), title: t('running') }) : null,
+            lib.waiting[id]
+              ? h('span', { className: 'cws-dot cws-dot-wait', role: 'img', 'aria-label': t('needs.' + lib.waiting[id]), title: t('needs.' + lib.waiting[id]) })
+              : sess.running ? h('span', { className: 'cws-dot', role: 'img', 'aria-label': t('running'), title: t('running') }) : null,
             pinned.has(id) ? h('span', { className: 'cws-pin', 'aria-hidden': true }, '•') : null,
             h('span', { className: 'cws-label' }, title),
             h('span', { className: 'cws-time' }, ago(t, sess.updatedAt))),
@@ -1066,6 +1116,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const empty = projects.length === 0 && loose.length === 0;
       if (flat) {
         return h('div', { className: 'cws-lib' },
+          needsSection(),
           h('div', { className: 'cws-lib-head' },
             h('span', null, t('lib.title.chat', { tab: selected.label })),
             h('button', { type: 'button', className: 'cws-link', onClick: onShowAll, title: t('lib.all.hint') }, t('lib.all'))),
@@ -1075,6 +1126,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           archivedSection());
       }
       return h('div', { className: 'cws-lib' },
+        needsSection(),
         h('div', { className: 'cws-lib-head' },
           h('span', null, t('lib.title.' + (['chat', 'cowork', 'code'].includes(selected.id) ? selected.id : 'other'), { tab: selected.label })),
           h('button', { type: 'button', className: 'cws-link', onClick: onShowAll, title: t('lib.all.hint') }, t('lib.all'))),
