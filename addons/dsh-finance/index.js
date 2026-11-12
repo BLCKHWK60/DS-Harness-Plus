@@ -9,14 +9,17 @@
  *   - seven skills, one for each common research task.
  * Switched off, it takes all of that away again.
  *
- * It has no data tools of its own yet: the assistant uses the app's web search, the Deep research
- * add-on, the Library and the chart tools. It is research, not advice.
+ * It also adds three data tools that need no key: a company's reported figures and its filings
+ * from the US securities regulator, and yearly readings for economies from the World Bank. For
+ * everything else the assistant uses the app's web search, the Deep research add-on, the Library
+ * and the chart tools. It is research, not advice.
  *
  * Route: `GET /dsh-finance/data`.
  */
 import z from '@deepseek-ai/schemastery';
 import { join } from 'node:path';
 import { FOCUSES, KINDS, MARKETS, MODE_ID, PERIODS, WATCHLIST_MAX, cleanList, openPins, readSelection, selectionNote, withFinance } from './lib/finance.js';
+import { buildTools } from './lib/tools.js';
 import { SKILLS } from './skills.js';
 
 export const name = 'dsh-finance';
@@ -192,6 +195,25 @@ export function apply(ctx, config) {
     }
   });
 
+  // ---- the data tools -------------------------------------------------------------------------
+
+  let toolsOff;
+  const syncTools = () => {
+    const on = settings().enabled;
+    if (on && !toolsOff) {
+      const tools = ctx.get('tools');
+      if (!tools?.register) return;
+      toolsOff = buildTools(() => settings().enabled).map((tool) => tools.register(tool));
+    } else if (!on && toolsOff) {
+      for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
+      toolsOff = undefined;
+    }
+  };
+  ctx.effect(() => () => {
+    for (const dispose of toolsOff ?? []) if (typeof dispose === 'function') dispose();
+    toolsOff = undefined;
+  }, 'finance: data tools');
+
   // ---- the skills -----------------------------------------------------------------------------
 
   let skillsOff;
@@ -208,6 +230,7 @@ export function apply(ctx, config) {
   };
   const skillTimer = setInterval(() => {
     try {
+      syncTools();
       syncSkills();
     } catch (error) {
       warn(`could not update the skills: ${String(error?.message ?? error)}`);
@@ -215,9 +238,10 @@ export function apply(ctx, config) {
   }, 3000);
   skillTimer.unref?.();
   try {
+    syncTools();
     syncSkills();
   } catch (error) {
-    warn(`could not add the skills: ${String(error?.message ?? error)}`);
+    warn(`could not add the tools and skills: ${String(error?.message ?? error)}`);
   }
   ctx.effect(() => () => {
     clearInterval(skillTimer);
@@ -259,6 +283,7 @@ export function apply(ctx, config) {
               periods: PERIODS.map(({ id, label }) => ({ id, label })),
               skills: SKILLS.map((skill) => ({ name: skill.name, description: skill.description })),
               skillsOn: Boolean(skillsOff),
+              toolsOn: Boolean(toolsOff),
             }));
             // The switch on the page should take effect at once, not at the next tick.
             void syncMode();

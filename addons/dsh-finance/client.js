@@ -240,12 +240,14 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
         h('ul', { className: 'dsh-fn-list' },
           h('li', null, 'A method: figures only from sources it fetched, each with its date; facts, claims, opinions and its own reading kept apart; always a look ahead; always both sides; what it could not find; no buy or sell advice.'),
           h('li', null, 'Your selection from the drop-downs, as it was when the conversation started.'),
+          h('li', null, 'Three data tools that need no key or account: a company\'s reported figures and its filings, from the US securities regulator (US-listed companies and many foreign ones), and yearly readings for economies from the World Bank.'),
           h('li', null, `${(data.skills ?? []).length} skills, one for each common task: ${(data.skills ?? []).map((skill) => skill.name.replace(/^finance-/, '').replace(/-/g, ' ')).join(', ')}.`)),
 
         h('div', { className: 'dsh-fn-group' }, 'Good to know'),
         h('ul', { className: 'dsh-fn-list' },
           h('li', null, 'It is research, not advice. The assistant is not a licensed financial adviser, and it is told not to say buy, sell or hold. Decisions are yours.'),
-          h('li', null, 'It has no data feed of its own yet. Figures come from what the assistant finds with web search and Deep research, so they can be delayed, and it can misread a source. Each figure should come with its source and date so you can check it.'),
+          h('li', null, 'Its own data covers reported company figures and yearly economy readings. It has no share prices, no estimates and no forecasts: those, and anything about companies that do not file in the United States, come from what the assistant finds with web search and Deep research, which can be delayed or misread. Each figure should come with its source and date so you can check it.'),
+          h('li', null, 'When the assistant uses the data tools, the company or country you asked about is sent to the regulator\'s or the World Bank\'s public service. Nothing else is sent, and no account is involved.'),
           h('li', null, 'What people say online is a signal, not a fact, and can be manipulated.'),
           h('li', null, 'Charts come from the Diagram builder, and your own reports can be searched if they are in the Library.'),
           h('li', null, 'A better data source, such as a connector or a paid service, can be added later without changing the tab.')));
