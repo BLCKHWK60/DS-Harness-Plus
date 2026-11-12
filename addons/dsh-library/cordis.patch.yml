@@ -1,0 +1,7 @@
+- insert:
+    - id: library
+      name: '@local/dsh-library'
+      config:
+        # Does nothing until you add a folder on Settings > Library. Optional:
+        #   rescanMinutes: 10   # how often the folders are checked for new and changed files; 0 = only when you press Check now
+        enabled: true

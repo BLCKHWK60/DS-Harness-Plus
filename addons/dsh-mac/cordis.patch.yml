@@ -1,0 +1,9 @@
+- insert:
+    - id: mac
+      name: '@local/dsh-mac'
+      config:
+        # Does nothing until you allow something on Settings > Mac. Example shape:
+        #   folders: [<FOLDER>, ...]          # where the assistant may search for files
+        #   shortcuts: [<SHORTCUT NAME>, ...] # Shortcuts it may run; it asks you each time
+        #   trusted: [<SHORTCUT NAME>, ...]   # ...except these, which run without asking
+        enabled: true

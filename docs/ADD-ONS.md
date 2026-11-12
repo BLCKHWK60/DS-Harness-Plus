@@ -18,6 +18,8 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Memory](#memory) | yes (starts empty) | Settings → Memory | |
 | [Budget guard](#budget-guard) | yes | Settings → Budget guard | |
 | [Automations](#automations) | yes (phone alerts after setup) | Settings → Alerts, and the Automation runs page | |
+| [Library](#library) | after you add a folder | Settings → Library | |
+| [Mac bridge](#mac-bridge) | after you allow something | Settings → Mac | |
 | [Activity indicator](#activity-indicator) | yes | Settings → Activity | `/activity` |
 | [PDF reader](#pdf-reader) | yes | Settings → PDF reader | `/pdf` |
 | [Diagram builder](#diagram-builder) | yes | Settings → Diagrams | |
@@ -165,6 +167,29 @@ Shows how every run of your scheduled tasks ended, and alerts you when one fails
 - Tasks run only while the app is running. Nothing runs while the Mac sleeps.
 
 Details: `addons/dsh-automations/README.md`.
+
+## Library
+
+Lets the assistant search your own documents and quote them with the file and the page.
+
+- **Settings → Library**: add folders of readings, papers, notes or slides. Their documents are read into an index on this Mac. New and changed files are picked up by themselves.
+- It reads plain text, Markdown, PDF, Word and similar, and PowerPoint, using what macOS ships. Nothing is installed and nothing is sent anywhere to build the index.
+- Ask in a tab where tools are on, for example "What did the week 4 reading say about elasticity?". The answer should name the file and the page.
+- **Try a search** on the page shows what the assistant would find for a few words.
+- Search goes by words, not meaning. A scanned PDF with no text layer cannot be searched.
+
+Details: `addons/dsh-library/README.md`.
+
+## Mac bridge
+
+Lets the assistant find your files and run your Apple Shortcuts. Nothing is allowed until you allow it.
+
+- **Settings → Mac → Finding files**: add the folders in which it may search. It uses Spotlight, and gets a file's place and date, not its contents.
+- **Settings → Mac → Shortcuts**: switch on the Shortcuts it may run. It asks you each time with a card, unless you also switch on **Without asking** for that Shortcut.
+- A Shortcut can do anything you built it to do, so keep **Without asking** for harmless ones. The assistant sees only the name: name your Shortcuts for what they do.
+- Mail, Calendar and Reminders are not part of it yet.
+
+Details: `addons/dsh-mac/README.md`.
 
 ## Code map
 
