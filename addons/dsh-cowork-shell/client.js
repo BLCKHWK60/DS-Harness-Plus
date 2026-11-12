@@ -261,6 +261,7 @@ window.__ModuleLoader__.load({
         "newLabel": "New task",
         "pages": [
           "schedules",
+          "automations",
           "connectors",
           "skills"
         ],

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Automations">
+  <rect x="6" y="6" width="52" height="52" rx="14" fill="#3f7fc4"/>
+  <circle cx="32" cy="33" r="14" fill="none" stroke="#ffffff" stroke-width="3.5"/>
+  <path d="M32 25v9l6 4" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M25 13h14" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+</svg>

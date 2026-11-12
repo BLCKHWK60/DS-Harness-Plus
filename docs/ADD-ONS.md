@@ -17,6 +17,7 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Privacy](#privacy) | yes | | `/privacy` |
 | [Memory](#memory) | yes (starts empty) | Settings → Memory | |
 | [Budget guard](#budget-guard) | yes | Settings → Budget guard | |
+| [Automations](#automations) | yes (phone alerts after setup) | Settings → Alerts, and the Automation runs page | |
 | [Activity indicator](#activity-indicator) | yes | Settings → Activity | `/activity` |
 | [PDF reader](#pdf-reader) | yes | Settings → PDF reader | `/pdf` |
 | [Diagram builder](#diagram-builder) | yes | Settings → Diagrams | |
@@ -151,6 +152,19 @@ Stops a task that is running away. A task is everything the assistant does after
 - The limits are enforced by the app itself. It counts tokens, not money.
 
 Details: `addons/dsh-budget/README.md`.
+
+## Automations
+
+Shows how every run of your scheduled tasks ended, and alerts you when one fails or needs you.
+
+- **Automation runs**, in the Cowork sidebar under Automation tasks. It lists what needs you, each task with its next run and how its last run ended, and the last runs: finished, failed, stopped or cancelled, with the time it took and the end of the answer. A failed run has **Run again**.
+- **Settings → Alerts** chooses what you are told about and where. As installed, you get a notification on this Mac when a scheduled task fails, is stopped or waits for you.
+- **Phone alerts** go through the free ntfy app. The Alerts page has the four setup steps and a **Send a test alert** button.
+- An alert is one short line with the task's name and what happened, for example "Morning brief failed". It never contains your instruction or the answer.
+- You create and change tasks on the app's own Automation tasks page, as before. Runs are recorded from the moment this add-on is installed.
+- Tasks run only while the app is running. Nothing runs while the Mac sleeps.
+
+Details: `addons/dsh-automations/README.md`.
 
 ## Code map
 
@@ -312,6 +326,8 @@ Runs a command when the assistant finishes or is waiting for your approval, for 
         on: turnEnd
         command: [osascript, -e, 'display notification "Finished" with title "DeepSeek Harness"']
 ```
+
+For alerts without writing a command, on this Mac and on your phone, use [Automations](#automations) instead.
 
 ## Media tools
 

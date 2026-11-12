@@ -139,11 +139,11 @@ The app reads `ui-sidebar` before this row, so rule 2 always sees its current st
 - id: cowork-shell
   config:
     # Which pages each tab lists, by page id, and the New button's label. JSON text.
-    tabs: '{"chat":{"newLabel":"New chat","pages":["model-arena"]},"cowork":{"newLabel":"New task","pages":["schedules","connectors","skills"]},"code":{"newLabel":"New code task","pages":["connectors","skills"]}}'
+    tabs: '{"chat":{"newLabel":"New chat","pages":["model-arena"]},"cowork":{"newLabel":"New task","pages":["schedules","automations","connectors","skills"]},"code":{"newLabel":"New code task","pages":["connectors","skills"]}}'
     maxTabs: 3        # 1 to 5; the first modes in order
 ```
 
-Page ids: `schedules` (Automation tasks), `plugins`, `model-arena` (from the Model arena add-on), `connectors` and `skills`. Pages that no tab lists show under every tab. A page whose add-on is not installed is simply left out.
+Page ids: `schedules` (Automation tasks), `automations` (Automation runs, from the Automations add-on), `plugins`, `model-arena` (from the Model arena add-on), `connectors` and `skills`. Pages that no tab lists show under every tab. A page whose add-on is not installed is simply left out.
 
 ## How it works
 

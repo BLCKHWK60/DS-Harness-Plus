@@ -26,6 +26,7 @@ export const DEFAULT_TABS = {
     "newLabel": "New task",
     "pages": [
       "schedules",
+      "automations",
       "connectors",
       "skills"
     ],

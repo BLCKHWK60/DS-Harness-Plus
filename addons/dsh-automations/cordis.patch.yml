@@ -1,0 +1,16 @@
+- insert:
+    - id: automations
+      name: '@local/dsh-automations'
+      config:
+        # Works with nothing set: it records how scheduled runs end and shows a notification on
+        # this Mac when one fails or waits for you. Change it on Settings > Alerts. Optional:
+        #   alertFailed: true      # alert when a task fails or is stopped
+        #   alertNeeds: true       # alert when a task waits for you
+        #   alertFinished: false   # alert when a task finishes
+        #   alertOthers: false     # also for conversations you started yourself
+        #   othersMinutes: 2       # ...only when the task has run at least this long
+        #   mac: true              # notifications on this Mac
+        #   phone: false           # alerts to your phone through ntfy
+        #   ntfyServer: https://ntfy.sh
+        #   ntfyTopic: <YOUR-TOPIC>   # the name your phone is subscribed to; treat it like a password
+        enabled: true
