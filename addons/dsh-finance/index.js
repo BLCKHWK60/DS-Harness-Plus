@@ -19,7 +19,7 @@
 import z from '@deepseek-ai/schemastery';
 import { join } from 'node:path';
 import { FOCUSES, KINDS, MARKETS, MODE_ID, PERIODS, WATCHLIST_MAX, cleanList, openPins, readSelection, selectionNote, withFinance } from './lib/finance.js';
-import { BRIEF_PREFIX, RHYTHMS, briefPrompt, briefRule, briefTitle, briefsOf, scheduledIn } from './lib/briefs.js';
+import { BRIEF_PREFIX, OWN_MAX, RHYTHMS, briefPrompt, briefRule, briefTitle, briefsOf, ownTasksOf, scheduledIn } from './lib/briefs.js';
 import { PRESETS, addressProblem, keyRef, readSources, sourceGet, sourcesNote } from './lib/sources.js';
 import { buildSourceTool, buildTools } from './lib/tools.js';
 import { SKILLS } from './skills.js';
@@ -51,6 +51,8 @@ export const Config = z.object({
    * Keys are never here: each is kept in the app's secret store.
    */
   sources: z.string().default('[]').volatile(),
+  /** Ids of scheduled tasks of your own that run in Finance instead of Cowork. */
+  financeTasks: z.array(z.string()).default([]).volatile(),
 });
 
 function plain(value) {
@@ -79,6 +81,7 @@ export function readSettings(config) {
     watchlist: cleanList(plain(config?.watchlist), WATCHLIST_MAX),
     moreMarkets,
     sources: readSources(plain(config?.sources)),
+    financeTasks: [...new Set((Array.isArray(plain(config?.financeTasks)) ? plain(config.financeTasks) : []).map((id) => String(id).slice(0, 100)).filter(Boolean))].slice(0, OWN_MAX),
   };
 }
 
@@ -333,14 +336,25 @@ export function apply(ctx, config) {
     if (result?.code) throw new Error(`The scheduler refused: ${result.message ?? result.code}`);
   };
 
+  const listOwn = async () => {
+    try {
+      return ownTasksOf(await scheduler().catalog(), settings().financeTasks);
+    } catch {
+      return [];
+    }
+  };
+
   // A conversation that a Finance brief opens belongs in Finance: it gets the Finance mode (and so
-  // the Finance tab) instead of the mode the app gives scheduled conversations.
+  // the Finance tab) instead of the mode the app gives scheduled conversations. The same goes for
+  // a task of the owner's own that they marked on the Finance page.
   const adopt = async (sessionId, found) => {
-    if (!settings().enabled) return;
+    const now = settings();
+    if (!now.enabled) return;
     const catalog = await scheduler().catalog();
-    const task = catalog.find((entry) => found.ids.includes(String(entry.id)) && String(entry.title ?? '').startsWith(BRIEF_PREFIX));
+    const task = catalog.find((entry) => found.ids.includes(String(entry.id)) && (String(entry.title ?? '').startsWith(BRIEF_PREFIX) || now.financeTasks.includes(String(entry.id))));
     if (!task) return;
-    pins.pin(sessionId, { kind: 'brief', subject: String(task.title).slice(BRIEF_PREFIX.length), market: found.market || 'Global' });
+    const title = String(task.title ?? '');
+    pins.pin(sessionId, { kind: 'brief', subject: title.startsWith(BRIEF_PREFIX) ? title.slice(BRIEF_PREFIX.length) : title || 'Scheduled task', market: found.market || 'Global' });
     const modes = ctx.get('modes');
     if (modes?.set && modes.get?.(sessionId) !== MODE_ID) await modes.set(sessionId, MODE_ID);
   };
@@ -365,6 +379,7 @@ export function apply(ctx, config) {
       sources: now.sources.map((source) => ({ ...source, keySet: keys[source.id]?.set === true, keyShown: keys[source.id]?.masked ?? '' })),
       presets: PRESETS,
       briefs: await listBriefs(),
+      ownTasks: await listOwn(),
       rhythms: RHYTHMS.map(({ id, label }) => ({ id, label })),
       problem,
       kinds: KINDS,

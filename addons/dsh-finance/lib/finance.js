@@ -130,7 +130,7 @@ export function selectionNote(selection) {
   const period = PERIODS.find((item) => item.id === sel.period);
   const kind = KINDS.find((item) => item.id === sel.kind);
   let subject;
-  if (sel.kind === 'brief') subject = `"${sel.subject}" (this conversation was opened by a scheduled brief; its instruction says what to do)`;
+  if (sel.kind === 'brief') subject = `"${sel.subject}" (this conversation was opened by a scheduled task; its instruction says what to do)`;
   else if (sel.kind === 'market') subject = sel.subject ? `the whole market (the user added: "${sel.subject}")` : 'the whole market, not one company';
   else if (sel.subject) subject = `${kind.label.toLowerCase()} "${sel.subject}"`;
   else subject = `not chosen yet (a ${kind.label.toLowerCase()}): take it from the user's message, and ask if it is unclear`;

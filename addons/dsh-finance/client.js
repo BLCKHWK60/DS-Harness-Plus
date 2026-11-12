@@ -369,6 +369,14 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
         return next?.tested ?? '';
       };
       const briefs = Array.isArray(data.briefs) ? data.briefs : [];
+      const ownTasks = Array.isArray(data.ownTasks) ? data.ownTasks : [];
+      // Marks of tasks that no longer exist are dropped whenever the list is saved.
+      const markTask = async (task, on) => {
+        const next = ownTasks.map((other) => (other.id === task.id ? { ...other, finance: on } : other));
+        await saveMarks(next, task, on);
+        if (alive.current) setData((d) => ({ ...d, ownTasks: next }));
+      };
+      const saveMarks = (next, task, on) => save({ financeTasks: next.filter((other) => other.finance).map((other) => other.id) }, on ? `"${task.title}" will run in Finance from its next run.` : `"${task.title}" will run in Cowork again from its next run.`);
 
       return h('div', { className: 'dsh-fn-page' },
         h('style', null, CSS),
@@ -413,6 +421,15 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
             h('div', { className: 'dsh-fn-rowdesc' }, brief.status === 'paused' ? 'Paused in Automation tasks' : brief.nextAt ? `Next: ${new Date(brief.nextAt).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '')),
           h('button', { type: 'button', className: 'dsh-fn-btn', disabled: busy, onClick: () => { if (window.confirm(`Stop the brief on "${brief.subject}"?`)) void act({ action: 'unbrief', id: brief.id }, 'Brief removed.'); } }, 'Remove'))),
         h(AddBrief, { watchlist: data.watchlist ?? [], rhythms: data.rhythms ?? [], busy, onAdd: (subject, rhythm, hour) => act({ action: 'brief', subject, rhythm, hour }, 'Scheduled. You can change or pause it on the Automation tasks page.').then(Boolean) }),
+
+        h('div', { className: 'dsh-fn-group' }, 'Your own scheduled tasks'),
+        h('p', { className: 'dsh-fn-desc' }, 'Tasks you made yourself on the Automation tasks page start in Cowork. Switch one on here and its conversations open in Finance instead: they appear under the Finance tab and the assistant follows the Finance method.'),
+        ownTasks.length === 0 ? h('p', { className: 'dsh-fn-desc' }, 'You have no scheduled tasks of your own.') : null,
+        ownTasks.map((task) => h('div', { key: task.id, className: 'dsh-fn-row' },
+          h('div', { className: 'dsh-fn-rowtext' },
+            h('div', { className: 'dsh-fn-rowtitle' }, task.title),
+            h('div', { className: 'dsh-fn-rowdesc' }, `${task.finance ? 'Runs in Finance' : 'Runs in Cowork'}${task.status === 'paused' ? ' · paused' : ''}`)),
+          h(Switch, { on: task.finance, label: `Run "${task.title}" in Finance`, onChange: (on) => markTask(task, on) }))),
 
         h('div', { className: 'dsh-fn-group' }, 'What the assistant is given'),
         h('ul', { className: 'dsh-fn-list' },

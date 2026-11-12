@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
-import { BRIEF_PREFIX, RHYTHMS, briefPrompt, briefRule, briefTitle, briefsOf, scheduledIn } from '../lib/briefs.js';
+import { BRIEF_PREFIX, RHYTHMS, briefPrompt, briefRule, briefTitle, briefsOf, ownTasksOf, scheduledIn } from '../lib/briefs.js';
 import { readSelection, selectionNote } from '../lib/finance.js';
 import { ANSWER_MAX, PRESETS, addressProblem, hide, hooks, keyRef, readSources, request, slug, sourceGet, sourcesNote } from '../lib/sources.js';
 import { buildSourceTool } from '../lib/tools.js';
@@ -178,8 +178,19 @@ test('a conversation opened by a brief is recognised and gets a note of its own'
   const pinned = readSelection({ kind: 'brief', subject: 'NVIDIA', market: 'United States' });
   assert.equal(pinned.kind, 'brief');
   const note = selectionNote(pinned);
-  assert.match(note, /- Subject: "NVIDIA" \(this conversation was opened by a scheduled brief; its instruction says what to do\)/);
+  assert.match(note, /- Subject: "NVIDIA" \(this conversation was opened by a scheduled task; its instruction says what to do\)/);
   assert.match(note, /- Market: United States only/);
   // The drop-down never offers "brief".
   assert.equal(readSelection({ kind: 'nonsense' }).kind, 'company');
+});
+
+test('your own scheduled tasks: listed without the briefs, with the Finance mark', () => {
+  const tasks = ownTasksOf([
+    { id: 'a', title: 'Finance brief: NVIDIA', status: 'active' },
+    { id: 'b', title: 'Morning\nmarkets', status: 'active' },
+    { id: 'c', title: 'Old one', status: 'ended' },
+    { id: 7, title: '', status: 'paused' },
+  ], ['7', 'gone']);
+  assert.deepEqual(tasks, [{ id: 'b', title: 'Morning markets', status: 'active', finance: false }, { id: '7', title: 'Untitled task', status: 'paused', finance: true }]);
+  assert.deepEqual(ownTasksOf(undefined, undefined), []);
 });

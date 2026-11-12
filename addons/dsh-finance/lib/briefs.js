@@ -94,6 +94,22 @@ export function scheduledIn(inserted) {
   return { ids: [...new Set(ids)], market };
 }
 
+/** Most tasks of your own that can be marked to run in Finance. */
+export const OWN_MAX = 100;
+
+/**
+ * The scheduler's tasks that are not briefs, with whether each is marked to run in Finance.
+ * @param {object[]} catalog - the scheduler's tasks.
+ * @param {string[]} marked - ids of the tasks marked for Finance.
+ * @returns {{id: string, title: string, status: string, finance: boolean}[]} the tasks that have not ended.
+ */
+export function ownTasksOf(catalog, marked) {
+  const ids = new Set((Array.isArray(marked) ? marked : []).map(String));
+  return (Array.isArray(catalog) ? catalog : [])
+    .filter((task) => task?.id !== undefined && !String(task?.title ?? '').startsWith(BRIEF_PREFIX) && task?.status !== 'ended')
+    .map((task) => ({ id: String(task.id), title: cleanName(task.title) || 'Untitled task', status: String(task.status ?? 'active'), finance: ids.has(String(task.id)) }));
+}
+
 /**
  * The briefs among the scheduler's tasks.
  * @param {object[]} catalog - the scheduler's tasks.

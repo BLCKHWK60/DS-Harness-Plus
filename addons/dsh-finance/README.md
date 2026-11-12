@@ -71,6 +71,8 @@ Beyond its three data tools, the assistant works with what the app and the other
     period: year         # quarter | year | five
     watchlist: []
     moreMarkets: []
+    sources: '[]'
+    financeTasks: []     # ids of your own scheduled tasks that run in Finance
 ```
 
 ## How it works
@@ -110,8 +112,17 @@ A connector (MCP) needs none of this to work: any connector you add on the Conne
 - The brief shows on the Automation runs page, and Alerts can tell you when it is ready or failed.
 - Change, pause or delete it on the Automation tasks page, or remove it here.
 - **A brief runs in Finance** (since 0.29.1). The app starts every scheduled conversation in Cowork; when the conversation a brief opens receives its instruction, this add-on moves it to Finance mode. It then has the Finance method, appears under the Finance tab, and its selection note names the brief's subject. The brief's instruction still carries the main rules itself, in case Finance is switched off when it runs.
-- This applies to briefs made here (tasks named "Finance brief: …"). A scheduled task you write yourself in Automation tasks still starts in Cowork.
+- This applies to briefs made here (tasks named "Finance brief: …"). A scheduled task you write yourself in Automation tasks starts in Cowork unless you switch it on under **Your own scheduled tasks** (below).
 - It runs only while the app is running, uses your models, and counts against the Budget guard.
+
+## Your own scheduled tasks (since 0.29.2)
+
+**Settings → Finance → Your own scheduled tasks** lists the tasks you made yourself on the Automation tasks page, each with a switch. Switch one on and its conversations open in Finance from its next run: they appear under the Finance tab and the assistant follows the Finance method. Switch it off and it runs in Cowork again.
+
+- The task itself is not changed. Its name, instruction and timing stay as you wrote them; only where its conversation opens changes.
+- The selection note names the task's title as the subject and says that its instruction says what to do.
+- The marks are kept in the setting `financeTasks` (a list of task ids). A mark for a task you later delete is dropped the next time you change a switch.
+- It needs the Finance tab switched on. While Finance is off, every task starts in Cowork.
 
 ## What the data tools cover and do not
 
@@ -134,7 +145,7 @@ A connector (MCP) needs none of this to work: any connector you add on the Conne
 
 - Built-in share prices, estimates, forecasts and monthly economy data. No free source for them answered automated requests when this was built (the IMF and one price service refused; an open aggregator was more than a year out of date). They come through a data source of your own instead.
 - Sources that need a sign-in in the browser, or anything but reading.
-- One brief for the whole watchlist, and a way to make your own scheduled tasks run in Finance.
+- One brief for the whole watchlist.
 
 ## Code
 
@@ -147,5 +158,7 @@ In the lab (web version, stand-in model): the switch added a fourth tab, with fo
 **0.28.0, the data tools.** Against the live services from the lab on 2026-11-12: `finance_company_figures` returned NVIDIA's revenue and net income for three financial years from its 10-K, and a Dutch company's in euros from its 20-F; `finance_company_filings` returned Apple's three latest filings with dates and links; both were also called by the model through the app. A company the regulator does not list was answered in plain words. `finance_economy` returned Japan's and the United States' growth for three years in one direct run, but **the World Bank's service was unstable that day** (errors and timeouts on most tries), and the call through the app got no answer and said so. In the Mac desktop app with a real model, a question about Apple's revenue and net income for three years made the model call `finance_company_figures`; every figure, date, margin and growth rate in its answer matched the regulator's data when fetched again, and it cited the annual report and its filing date. Not tested: a chart drawn from these figures, quarterly balance figures against a filing, companies with unusual report names.
 
 **0.29.0, sources and briefs.** In the lab on 2026-11-12, with the public demo keys two services publish: Alpha Vantage and EODHD were added from the list and their keys saved; the keys were found in the app's credentials file (mode 0600) and nowhere in the settings; **Try** returned a live IBM quote and a live Apple quote; a path naming another site was refused; a message in a Finance conversation reached the model with the note about both sources and with `finance_source_get` on offer, and the model's call returned the live quote; the key appeared nowhere in what the model was sent. A weekly brief was scheduled (next run the following Monday at the chosen hour in the Mac's time zone), a second one for the same subject was refused, and Remove deleted it. **0.29.1:** a brief was run with Run now: it finished, the model's request carried the Finance method and a selection note naming the brief's subject and market, the conversation was recorded as Finance and listed under the Finance tab and not under Cowork, and the run showed on the Automation runs page. Not tested: a brief started by its schedule instead of Run now, Finnhub and Financial Modeling Prep (no demo key; only their addresses and key names were confirmed by their refusals), a source with its key in a header or as a bearer token against a real service (unit tests only), a connector note, the Mac desktop app.
+
+**0.29.2, your own tasks in Finance.** In the lab on 2026-11-12: the page's data listed the three hand-made tasks and no briefs; with one task's id in `financeTasks`, that task was run with Run now: it finished, the model's request carried the Finance method and a selection note naming the task's title, and the conversation was recorded as Finance. Not tested: **pressing the switch on the page** (the test browser could not be clicked that day; the mark was written into the lab's settings by hand), a task started by its schedule, the Mac desktop app.
 
 Not tested: **the quality of the answers**, which needs a real model with web search; a helper agent getting the selection; a wide window (the test window was narrow). In the Mac desktop app the owner said it "seems to be working well"; nothing more detailed was checked there.
