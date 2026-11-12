@@ -17,6 +17,15 @@
 import z from '@deepseek-ai/schemastery';
 
 /**
+ * Start a helper agent. App 0.2.2-rc.2 takes the task's fields (prompt, parent, agentOptions) at
+ * the top level of the spec; rc.1 took them under `request`. Both are given, so either works.
+ * @param {object} subagents - the app's sub-agent service.
+ * @param {object} spec - provider, label, delivery, signal, and the task under `request`.
+ * @returns {Promise<object>} the activation receipt.
+ */
+const startChild = (subagents, spec) => subagents.startActivation({ ...spec.request, ...spec });
+
+/**
  * Starter tier ids, in deck order. The ids are historical (they are stored in
  * settings and in per-Session choices); the names people see are STARTER_LABELS.
  */
@@ -1594,7 +1603,7 @@ export function apply(ctx, config) {
         typeof args?.description === 'string' && args.description.trim()
           ? args.description.trim().slice(0, 200)
           : `${ROLE_META[role].label} · ${tierLabel(tier)}`;
-      const started = await subagents.startActivation({
+      const started = await startChild(subagents, {
         provider: 'spawn',
         label,
         request: {
@@ -1734,7 +1743,7 @@ export function apply(ctx, config) {
         selected.map(async (angle) => {
           const label = `${REVIEW_ANGLES[angle].label} · ${tierLabel(tier)}`;
           try {
-            const started = await subagents.startActivation({
+            const started = await startChild(subagents, {
               provider: 'spawn',
               label,
               request: {
@@ -1877,7 +1886,7 @@ export function apply(ctx, config) {
       }
 
       const runStage = async (role, route, prompt) => {
-        const started = await subagents.startActivation({
+        const started = await startChild(subagents, {
           provider: 'spawn',
           label: `${ROLE_META[role].label} · ${tierLabel(tier)}`,
           request: {

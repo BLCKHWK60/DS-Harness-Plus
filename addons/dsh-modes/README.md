@@ -28,6 +28,9 @@ Built in (until you supply your own `modes`): **chat** (no tools, read-only, a s
     sessionWeb: '{}'          # per-Session Search switch (the chat-box button writes it)
     sessionResearch: '{}'     # per-Session Deep research switch (the chat-box button writes it)
     sessionTools: '{}'        # per-Session Tools switch: { sessionId: false } means no tools at all
+    searchDepth: standard     # the Search slider: quick | standard | thorough (all conversations)
+    researchDepth: standard   # the Deep research slider: quick | standard | thorough (all conversations)
+    researchModel: same       # Deep research's helpers: same (the conversation's model) | roles (Model Tiers role models)
     # With the Cowork sidebar on: a Session that has not sent a message follows defaultMode (the tab), its first
     # message fixes that mode (replacing any earlier choice), and the chat-box selector is hidden.
     commandName: mode
@@ -69,6 +72,11 @@ Three buttons in the chat box switch tools for **this conversation only**. They 
   - Default: on in modes with all tools (Cowork, Code), off in a no-tools mode (Chat).
   - In Chat mode with Search on, the model gets only the web tools, and a note that it may use them.
 - **Deep research** makes `deep_research` available, and tells the model to use it for questions that need looking things up. The helper agents it starts do the searching and get the web tools for that, whether or not Search is on.
+- **The small arrow beside Search and beside Deep research** opens a slider with three steps: Quick, Standard, Thorough. Unlike the buttons, the step is **one setting for all conversations** (`searchDepth`, `researchDepth`), and the button shows it when it is not Standard ("Search · Thorough").
+  - **Search depth** changes what the model is told about searching. Quick: one search and a short answer. Standard: nothing is added, the model decides, as before. Thorough: several searches with different wording, at least five pages opened and read, facts cross-checked between sources, disagreements named, each source cited with its date. It is an instruction, not a guarantee: a model may still do less.
+  - **Model for the helpers** (in the Deep research panel) chooses what Deep research's helpers run on: **Same as this conversation** (default) or **Role models** from Settings → Model Tiers (`researchModel`: `same` | `roles`).
+  - **Deep research depth** sets how a research run works: Quick is 1 round with up to 4 helpers at once, Standard 2 rounds with up to 6, Thorough 3 rounds with up to 8. See the Deep research add-on.
+- **The buttons shrink to keep the chat box's bottom row on one line** (since 0.31.1). They measure the row, which also holds the app's own buttons and the model's name, and give way in steps: first the step's name and some padding, then "Tools" becomes an icon, then "Deep research", then "Search". If the row cannot fit on one line whatever they do, it takes two lines and the names come back as far as the first line holds them.
 - **Tools** shows at a glance whether the model has any tools ("Tools on" / "Tools off") and opens a small panel with:
   - one switch for all tools of the conversation. Off means the model is offered no tool at all, so it cannot try to call one and there are no failed attempts to look at; Search and Deep research are greyed out, and the model is told to answer from what it knows. On puts back what the mode allows (in Chat, where the mode has no tools of its own, On switches Search on);
   - the list of tools the model can call and the list it cannot, read from the app for that conversation.

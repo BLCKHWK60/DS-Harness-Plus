@@ -26,6 +26,15 @@ import { fingerprint, openStore } from './lib/store.js';
 import { PACKS, packList } from './lib/packs.js';
 import { CHECK_HELP, CHECK_TYPES } from './lib/verify.js';
 
+/**
+ * Start a helper agent. App 0.2.2-rc.2 takes the task's fields (prompt, parent, agentOptions) at
+ * the top level of the spec; rc.1 took them under `request`. Both are given, so either works.
+ * @param {object} subagents - the app's sub-agent service.
+ * @param {object} spec - provider, label, delivery, signal, and the task under `request`.
+ * @returns {Promise<object>} the activation receipt.
+ */
+const startChild = (subagents, spec) => subagents.startActivation({ ...spec.request, ...spec });
+
 export const STATUS_PATH = '/dsh-evolve/status';
 export const ACTION_PATH = '/dsh-evolve/action';
 export const ACTION_HEADER = 'x-dsh-evolve';
@@ -387,7 +396,7 @@ export function apply(ctx, config) {
     const claim = { notes, agentId: undefined };
     pendingNotes = claim;
     try {
-      const started = await subagents.startActivation({
+      const started = await startChild(subagents, {
         provider: 'spawn',
         label: `Self-improvement test: ${task.id}`,
         request: {

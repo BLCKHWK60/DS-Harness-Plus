@@ -22,6 +22,7 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Mac bridge](#mac-bridge) | after you allow something | Settings → Mac | |
 | [Finance](#finance) | after you switch it on | Settings → Finance, and the Finance tab | |
 | [Balance](#balance) | yes | The foot of the sidebar | |
+| [Data](#data) | after you switch it on | Settings → Data, and the Data tab | |
 | [Activity indicator](#activity-indicator) | yes | Settings → Activity | `/activity` |
 | [PDF reader](#pdf-reader) | yes | Settings → PDF reader | `/pdf` |
 | [Diagram builder](#diagram-builder) | yes | Settings → Diagrams | |
@@ -89,6 +90,7 @@ Chat, Cowork and Code modes, chosen per conversation with the selector in the ch
 The chat box also gets three buttons for the open conversation:
 - **Search** switches the web tools on or off. It starts off in Chat and on in Cowork and Code.
 - **Tools** says whether the assistant has any tools ("Tools on" or "Tools off"). Click it for one switch that turns every tool off or back on for this conversation, and for the list of what the assistant can and cannot call. With tools off, the assistant is offered nothing, so it does not try and you see no failed attempts. In a conversation started in the app's PTC mode, the panel says so: there the assistant reaches tools from inside small programs it writes, and "Tools off" stops those programs too.
+- **The small arrow beside Search and beside Deep research** opens a slider with three steps: Quick, Standard, Thorough. The step applies to all conversations. For Search it tells the assistant how hard to search (one search; as it sees fit; or several searches with at least five pages read and facts cross-checked). For Deep research it sets the rounds and helpers (see Deep research).
 - **Deep research** has the assistant research questions thoroughly and answer with a cited report. With the Cowork sidebar on, the sidebar tabs choose instead, and the chat-box selector is hidden. A mode decides which tools the assistant may use, how its sandbox is set, a default tier, and a short instruction. The default mode, Cowork, allows every tool, so nothing is restricted until you choose otherwise. Edit or add modes on **Settings → Modes**.
 
 ## Model Tiers
@@ -189,7 +191,7 @@ Lets the assistant find your files and run your Apple Shortcuts. Nothing is allo
 - **Settings → Mac → Finding files**: add the folders in which it may search. It uses Spotlight, and gets a file's place and date, not its contents.
 - **Settings → Mac → Shortcuts**: switch on the Shortcuts it may run. It asks you each time with a card, unless you also switch on **Without asking** for that Shortcut.
 - A Shortcut can do anything you built it to do, so keep **Without asking** for harmless ones. The assistant sees only the name: name your Shortcuts for what they do.
-- Mail, Calendar and Reminders are not part of it yet.
+- Mail, Calendar and Reminders are not part of it, and are not planned.
 
 Details: `addons/dsh-mac/README.md`.
 
@@ -203,6 +205,20 @@ Shows your DeepSeek balance in one line at the foot of the sidebar, above More.
 - It has no settings page. Switch it off under Plugins.
 
 Details: `addons/dsh-balance/README.md`.
+
+## Data
+
+A tab for analysing the data files in a folder. Switch it on in **Settings → Data**, open the Data tab, and pick the folder that holds your files.
+
+- **It reads** CSV, TSV, JSON and Excel files as tables, Word and text files as documents, and PDFs through the PDF reader.
+- **It does not load your data into the conversation.** The assistant first looks at what each file holds (columns, types, gaps, ranges), then runs queries against the real files.
+- **Every number has its query.** A mark like [Q7] after a number is the query that produced it; open that step in the conversation to see it.
+- **Saved analyses.** Say "save this analysis as …". Later say "run … again" and it reports what moved since the last run. Settings → Data lists them.
+- Your files are never changed, and only files inside the conversation's folder are read.
+- An AGENTS.md or CLAUDE.md file in the folder is read by the app, as in every tab: use it to explain your data.
+- It runs SQL, not Python. Reruns happen when you ask, not by themselves.
+
+Details: `addons/dsh-data/README.md`.
 
 ## Finance
 
@@ -264,7 +280,24 @@ Counts requests and tokens per day, provider and model. It never stores what you
 
 ## Deep research
 
-Gives the assistant a `deep_research` tool: it splits a question into sub-questions, researches them in parallel and writes a report whose sources are checked. Ask for it in plain words ("do deep research on ..."). It uses your web search, so it costs tokens; nothing to set up. In PTC mode the app stops any one program after 10 minutes at most, so research there is shorter (it stops searching after about 7 minutes and writes up what it has). For long research, start the conversation in Standard mode.
+Gives the assistant a `deep_research` tool. Switch on the **Deep research** button in the chat box, or ask for it in plain words ("do deep research on ...").
+
+- **How it works:** it plans sub-questions with search queries, sends out helpers that search and read pages at the same time, then **reviews what was found**: what is still missing, where sources contradict each other, what needs the original document. It writes sharper queries from that and sends helpers out again. At the end it writes a report in which every claim is cited, and it checks the citations and whether each cited page was really opened.
+- **Three depths**, with the slider behind the small arrow beside the button:
+
+  | Depth | Rounds | Helpers at once | Time limit |
+  | --- | --- | --- | --- |
+  | Quick | 1 | up to 4 | 10 minutes |
+  | Standard | 2 | up to 6 | 25 minutes |
+  | Thorough | 3 | up to 8 | 45 minutes |
+
+- **Which model the helpers use** is chosen in the same panel: **Same as this conversation** (the default) or **Role models**, which are set in Settings → Model Tiers → Role models (the planner, reviewer and writer use "Plan", the searchers use "Fast").
+- **To really get 8 helpers at once**, the sub-agent limit in **Settings → Model Tiers** must be 8. The lower of the two numbers wins.
+- Deeper runs take longer and use many more tokens.
+- Use Standard mode, not PTC mode, for research.
+- **How good is it?** The method is the one the well-known research products use, but they have their own search engines and tuned models. Here the result depends on your model and on the app's web search. A small local model gives thin results at any depth. Quality has not been measured against those products.
+
+Details: `addons/dsh-deep-research/README.md`.
 
 ## Activity indicator
 

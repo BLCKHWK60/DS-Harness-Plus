@@ -21,6 +21,15 @@
  */
 import z from '@deepseek-ai/schemastery';
 
+/**
+ * Start a helper agent. App 0.2.2-rc.2 takes the task's fields (prompt, parent, agentOptions) at
+ * the top level of the spec; rc.1 took them under `request`. Both are given, so either works.
+ * @param {object} subagents - the app's sub-agent service.
+ * @param {object} spec - provider, label, delivery, signal, and the task under `request`.
+ * @returns {Promise<object>} the activation receipt.
+ */
+const startChild = (subagents, spec) => subagents.startActivation({ ...spec.request, ...spec });
+
 
 /**
  * Wait for a started child agent, stopping it when the signal aborts.
@@ -354,7 +363,7 @@ export function apply(ctx, config) {
   async function runChild({ parent, route, prompt, label, signal, run, onChild }) {
     const subagents = ctx.get('subagents');
     if (!subagents) throw new Error('The sub-agent service is unavailable.');
-    const started = await subagents.startActivation({
+    const started = await startChild(subagents, {
       provider: 'spawn',
       label,
       request: { prompt: [{ type: 'text', text: prompt }], parent, signal, agentOptions: { provider: route.provider, model: route.model } },

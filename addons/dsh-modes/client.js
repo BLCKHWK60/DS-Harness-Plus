@@ -4,7 +4,7 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const ReactDOM = require('react-dom');
     const h = React.createElement;
-    const { useCallback, useEffect, useRef, useState } = React;
+    const { useCallback, useEffect, useRef, useState, useLayoutEffect } = React;
 
     const NS = 'modes';
     const FALLBACK_MODES = [
@@ -36,6 +36,26 @@ window.__ModuleLoader__.load({
         'tools.next': 'A change applies from your next message.',
         'tools.unknown': 'The list appears once this conversation has started.',
         'tools.blocked': 'Tools are off for this conversation.',
+        'depth.quick': 'Quick',
+        'depth.standard': 'Standard',
+        'depth.thorough': 'Thorough',
+        'depth.search.title': 'Search depth',
+        'depth.search.open': 'Search depth: {0}. Click to change.',
+        'depth.search.quick': 'One search and a short answer. Fastest.',
+        'depth.search.standard': 'The model decides how much to search, as before.',
+        'depth.search.thorough': 'Several searches, at least five pages read, facts cross-checked between sources. Slower.',
+        'depth.research.title': 'Deep research depth',
+        'depth.research.open': 'Deep research depth: {0}. Click to change.',
+        'depth.research.quick': '1 round of searching, up to 4 helpers at once. At most about 10 minutes.',
+        'depth.research.standard': '2 rounds, up to 6 helpers at once. After the first round the findings are reviewed, and the second round searches for what is missing with sharper queries. At most about 25 minutes.',
+        'depth.research.thorough': '3 rounds, up to 8 helpers at once. Each round is reviewed and the next digs deeper. At most about 45 minutes, and the most tokens.',
+        'depth.note': 'Applies to all conversations, from your next message.',
+        'depth.research.cap': 'Helpers at once are also held to the sub-agent limit in Settings → Model Tiers.',
+        'research.model.title': 'Model for the helpers',
+        'research.model.same': 'Same as this conversation',
+        'research.model.roles': 'Role models',
+        'research.model.same.hint': 'Every helper runs on the model the conversation is on when the research starts.',
+        'research.model.roles.hint': 'Helpers run on the role models set in Settings → Model Tiers → Role models: the planner, the reviewer and the writer on "Plan", the searchers on "Fast". A role without a model uses the conversation\'s model.',
         'section.title': 'Modes',
         'head.hint': 'A mode narrows the tools the model sees, can set the file sandbox, can move the conversation to a tier and adds a short prompt. A conversation picks a mode in the chat box or with /mode. Changes apply from the next message.',
         'default.label': 'Mode for conversations that have not chosen one',
@@ -91,6 +111,26 @@ window.__ModuleLoader__.load({
         'tools.next': '更改从你的下一条消息开始生效。',
         'tools.unknown': '此对话开始后会显示列表。',
         'tools.blocked': '此对话的工具已关闭。',
+        'depth.quick': '快速',
+        'depth.standard': '标准',
+        'depth.thorough': '深入',
+        'depth.search.title': '搜索深度',
+        'depth.search.open': '搜索深度：{0}。点击更改。',
+        'depth.search.quick': '搜索一次，简短回答。最快。',
+        'depth.search.standard': '由模型决定搜索多少，与以前相同。',
+        'depth.search.thorough': '多次搜索，至少阅读五个页面，并在来源之间核对事实。较慢。',
+        'depth.research.title': '深度研究的深度',
+        'depth.research.open': '深度研究的深度：{0}。点击更改。',
+        'depth.research.quick': '搜索 1 轮，最多 4 个助手同时工作。最多约 10 分钟。',
+        'depth.research.standard': '2 轮，最多 6 个助手同时工作。第一轮后审阅结果，第二轮用更准确的查询补充缺失内容。最多约 25 分钟。',
+        'depth.research.thorough': '3 轮，最多 8 个助手同时工作。每轮都会审阅，下一轮更深入。最多约 45 分钟，消耗最多。',
+        'depth.note': '适用于所有对话，从下一条消息开始。',
+        'depth.research.cap': '同时工作的助手数量还受“设置 → 模型档位”中子代理上限的限制。',
+        'research.model.title': '助手使用的模型',
+        'research.model.same': '与此对话相同',
+        'research.model.roles': '角色模型',
+        'research.model.same.hint': '每个助手都使用研究开始时此对话所用的模型。',
+        'research.model.roles.hint': '助手使用“设置 → 模型档位 → 角色模型”中设置的模型：规划、审阅和撰写使用“规划”，搜索使用“快速”。未设置模型的角色使用对话的模型。',
         'section.title': '模式',
         'head.hint': '模式会限制模型可见的工具，可设置文件沙箱、切换档位并附加一小段提示词。会话在输入框或用 /mode 选择模式，修改在下一轮开始时生效。',
         'default.label': '尚未选择模式的会话使用',
@@ -297,6 +337,28 @@ window.__ModuleLoader__.load({
 @media (hover:hover){.dsh-mt button:hover:not([aria-pressed='true']){background:var(--dsw-alias-interactive-bg-hover)}}
 @media (max-width:760px){.dsh-mt button{padding:0 8px}.dsh-mt button .lbl{display:none}}
 .dsh-mt svg{flex:none}
+.dsh-mt .pair{display:inline-flex;align-items:center}
+.dsh-mt .pair > button:first-child{border-top-right-radius:0;border-bottom-right-radius:0}
+.dsh-mt .pair > button.more{width:20px;padding:0;justify-content:center;margin-left:-1px;border-top-left-radius:0;border-bottom-left-radius:0}
+.dsh-mt{flex:none;white-space:nowrap}
+.dsh-mt[data-f1]{gap:4px}
+.dsh-mt[data-f1] .lvl{display:none}
+.dsh-mt[data-f1] button:not(.more){padding:0 8px}
+.dsh-mt[data-f1] .pair > button.more{width:18px}
+.dsh-mt[data-f2] button[data-tools] .lbl{display:none}
+.dsh-mt[data-f3] .pair[data-kind='research'] .lbl{display:none}
+.dsh-mt[data-f4] .pair[data-kind='search'] .lbl{display:none}
+.dsh-mt[data-f5] button:not(.more){padding:0 6px}
+.dsh-mt[data-f5] .pair > button.more{width:16px}
+.dsh-mt .pair .lvl{opacity:.8}
+.dsh-mt-pop .title{font-size:14px;line-height:22px;font-weight:500}
+.dsh-mt-pop input[type=range]{display:block;width:100%;margin:12px 0 2px;accent-color:var(--dsw-alias-brand-primary);cursor:pointer}
+.dsh-mt-pop .steps{display:flex;justify-content:space-between}
+.dsh-mt-pop .steps button{border:0;padding:2px 0;background:transparent;font:inherit;font-size:12px;cursor:pointer;color:var(--dsw-alias-label-secondary)}
+.dsh-mt-pop .steps button[aria-current='true']{color:var(--dsw-alias-label-primary);font-weight:600}
+.dsh-mt-pop .seg{display:flex;gap:6px;margin-top:6px}
+.dsh-mt-pop .seg button{flex:1;height:28px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:transparent;font:inherit;font-size:12px;cursor:pointer;color:var(--dsw-alias-label-secondary);white-space:nowrap}
+.dsh-mt-pop .seg button[aria-pressed='true']{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary);background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent)}
 .dsh-mt button[data-tools='off']{border-color:var(--dsw-alias-state-warn-primary);color:var(--dsw-alias-state-warn-primary)}
 .dsh-mt-pop{position:fixed;z-index:1000;box-sizing:border-box;width:320px;max-width:calc(100vw - 24px);overflow:auto;padding:14px 16px;border-radius:16px;border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-base));color:var(--dsw-alias-label-primary);font-size:12px;line-height:18px;box-shadow:0 8px 28px rgba(0,0,0,.28)}
 .dsh-mt-pop .row{display:flex;align-items:center;gap:12px}
@@ -339,6 +401,63 @@ window.__ModuleLoader__.load({
         return () => clearInterval(timer);
       }, [refresh, sessionId]);
 
+      // The buttons shrink to keep the chat box's bottom row on one line: first the step's name goes,
+      // then the buttons' names (icons stay), then the padding. It is measured, not guessed from the
+      // window's width, because the row also holds the app's own buttons and the model's name.
+      const root = useRef(null);
+      const shown = state.status === 'ready' && Boolean(sessionId) && state.view?.sessionWeb !== undefined;
+      const marks = shown ? `${state.view.searchDepth}|${state.view.researchDepth}|${state.view.sessionTools}` : '';
+      useLayoutEffect(() => {
+        const el = root.current;
+        if (!el) return undefined;
+        // The row that wraps is the nearest ancestor laid out as a wrapping flex row.
+        let row = el.parentElement;
+        for (let i = 0; i < 6 && row && getComputedStyle(row).flexWrap !== 'wrap'; i += 1) row = row.parentElement;
+        if (!row || getComputedStyle(row).flexWrap !== 'wrap') return undefined;
+        const wrapped = () => {
+          const first = row.firstElementChild;
+          const last = row.lastElementChild;
+          if (!first || !last) return false;
+          if (first !== last && last.getBoundingClientRect().top > first.getBoundingClientRect().top + 8) return true;
+          return first.scrollWidth > first.clientWidth + 1;
+        };
+        // Steps: 1 tighter and no step name, 2 "Tools" as an icon, 3 "Deep research" as an icon,
+        // 4 "Search" as an icon, 5 tightest.
+        const LEVELS = 5;
+        const set = (level) => {
+          for (let step = 1; step <= LEVELS; step += 1) el.toggleAttribute(`data-f${step}`, step <= level);
+          el.dataset.fit = String(level);
+        };
+        const fit = () => {
+          for (let level = 0; level <= LEVELS; level += 1) {
+            set(level);
+            if (!wrapped()) return;
+          }
+          // Nothing fits on one line (the app's own buttons take the room): two lines it is, so give
+          // the names back as far as the first line holds them.
+          for (let level = 0; level <= LEVELS; level += 1) {
+            set(level);
+            const first = row.firstElementChild;
+            if (first && first.scrollWidth <= first.clientWidth + 1) return;
+          }
+        };
+        fit();
+        if (typeof ResizeObserver !== 'function') return undefined;
+        let frame = 0;
+        const observer = new ResizeObserver(() => {
+          cancelAnimationFrame(frame);
+          frame = requestAnimationFrame(fit);
+        });
+        observer.observe(row);
+        if (row.lastElementChild) observer.observe(row.lastElementChild);
+        // The app's own buttons on the left change width when their text does (a mode, a model version).
+        for (const child of row.firstElementChild?.children ?? []) if (!child.contains(el)) observer.observe(child);
+        return () => {
+          cancelAnimationFrame(frame);
+          observer.disconnect();
+        };
+      }, [shown, marks, sessionId]);
+
       // Older host halves have no switches; show nothing then.
       if (state.status !== 'ready' || !sessionId || !state.view || state.view.sessionWeb === undefined) return null;
       const { current } = describeModes(state.view, sessionId);
@@ -379,24 +498,112 @@ window.__ModuleLoader__.load({
         }
       };
 
+      // The sliders' steps are one setting for all conversations, not one per conversation.
+      const setDepth = async (field, value) => {
+        if (state.busy) return;
+        setState((prev) => ({ ...prev, busy: true, view: { ...prev.view, [field]: value } }));
+        try {
+          const ops = [{ op: 'set', path: [field], value }];
+          let fresh = await load(appCtx);
+          let result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
+          if (!result.ok && result.error.code === 'settings/conflict') {
+            fresh = await load(appCtx);
+            result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
+          }
+          if (!result.ok) throw new Error(result.error.code);
+          setState({ status: 'ready', view: result.value.value, busy: false });
+        } catch {
+          setState((prev) => ({ ...prev, busy: false }));
+          void refresh();
+        }
+      };
+      const searchDepth = depthOf(state.view.searchDepth);
+      const researchDepth = depthOf(state.view.researchDepth);
+      // The step is named on the button only when it is not the usual one.
+      const level = (depth) => (depth === 'standard' ? null : h('span', { className: 'lbl lvl' }, `· ${t(`depth.${depth}`)}`));
+
       return h(React.Fragment, null,
         h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
-        h('span', { className: 'dsh-mt' },
-          h('button', {
-            type: 'button', 'aria-pressed': searching, disabled: state.busy || off, title: off ? t('tools.blocked') : t(web ? 'toggle.search.on' : 'toggle.search.off'),
-            onClick: () => void flip('sessionWeb', !web),
-            'aria-label': t('toggle.search'),
-          }, icon('search'), h('span', { className: 'lbl' }, t('toggle.search'))),
-          h('button', {
-            type: 'button', 'aria-pressed': research, disabled: state.busy || off, title: off ? t('tools.blocked') : t(research ? 'toggle.research.on' : 'toggle.research.off'),
-            onClick: () => void flip('sessionResearch', research ? undefined : true),
-            'aria-label': t('toggle.research'),
-          }, icon('research'), h('span', { className: 'lbl' }, t('toggle.research'))),
+        h('span', { className: 'dsh-mt', ref: root },
+          h('span', { className: 'pair', 'data-kind': 'search' },
+            h('button', {
+              type: 'button', 'aria-pressed': searching, disabled: state.busy || off, title: off ? t('tools.blocked') : t(web ? 'toggle.search.on' : 'toggle.search.off'),
+              onClick: () => void flip('sessionWeb', !web),
+              'aria-label': t('toggle.search'),
+            }, icon('search'), h('span', { className: 'lbl' }, t('toggle.search')), level(searchDepth)),
+            h(DepthButton, { t, kind: 'search', depth: searchDepth, pressed: searching, disabled: off, busy: state.busy, onPick: (depth) => void setDepth('searchDepth', depth) })),
+          h('span', { className: 'pair', 'data-kind': 'research' },
+            h('button', {
+              type: 'button', 'aria-pressed': research, disabled: state.busy || off, title: off ? t('tools.blocked') : t(research ? 'toggle.research.on' : 'toggle.research.off'),
+              onClick: () => void flip('sessionResearch', research ? undefined : true),
+              'aria-label': t('toggle.research'),
+            }, icon('research'), h('span', { className: 'lbl' }, t('toggle.research')), level(researchDepth)),
+            h(DepthButton, { t, kind: 'research', depth: researchDepth, pressed: research, disabled: off, busy: state.busy, onPick: (depth) => void setDepth('researchDepth', depth), model: state.view.researchModel === 'roles' ? 'roles' : 'same', onModel: (id) => void setDepth('researchModel', id) })),
           h(ToolsButton, {
             t, sessionId, none, off, chat: tools === 'none', busy: state.busy,
             // Off: nothing at all. On: back to what the mode allows; in a mode without tools of its own, that is the web.
             onSwitch: (on) => void (on ? flip('sessionTools', undefined, tools === 'none' && !web && !research ? [['sessionWeb', true]] : []) : flip('sessionTools', false)),
           })));
+    }
+
+    const DEPTHS = ['quick', 'standard', 'thorough'];
+    const depthOf = (value) => (DEPTHS.includes(value) ? value : 'standard');
+
+    /**
+     * The small arrow beside the Search and the Deep research button, and its panel: a slider with
+     * three steps (Quick, Standard, Thorough) and one line saying what the chosen step does.
+     */
+    function DepthButton({ t, kind, depth, pressed, disabled, busy, onPick, model, onModel }) {
+      const [open, setOpen] = useState(false);
+      const [place, setPlace] = useState({ left: 12, bottom: 80 });
+      const button = useRef(null);
+      const panel = useRef(null);
+      useEffect(() => {
+        if (!open) return undefined;
+        const rect = button.current?.getBoundingClientRect();
+        if (rect) setPlace({ left: Math.max(12, Math.min(rect.left - 120, window.innerWidth - 332)), bottom: window.innerHeight - rect.top + 8 });
+        const away = (event) => {
+          if (panel.current?.contains(event.target) || button.current?.contains(event.target)) return;
+          setOpen(false);
+        };
+        const key = (event) => event.key === 'Escape' && setOpen(false);
+        document.addEventListener('pointerdown', away, true);
+        document.addEventListener('keydown', key, true);
+        return () => {
+          document.removeEventListener('pointerdown', away, true);
+          document.removeEventListener('keydown', key, true);
+        };
+      }, [open]);
+      const title = t(`depth.${kind}.title`);
+      return h(React.Fragment, null,
+        h('button', {
+          ref: button, type: 'button', className: 'more', 'aria-pressed': pressed, 'aria-expanded': open, 'aria-haspopup': 'dialog', disabled,
+          title: t(`depth.${kind}.open`).replace('{0}', t(`depth.${depth}`)), 'aria-label': t(`depth.${kind}.open`).replace('{0}', t(`depth.${depth}`)),
+          onClick: () => setOpen(!open),
+        }, h('svg', { width: 10, height: 10, viewBox: '0 0 10 10', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }, h('path', { d: 'M2 6.5 5 3.5 8 6.5' }))),
+        open
+          ? ReactDOM.createPortal(
+              h('div', { ref: panel, className: 'dsh-mt-pop', role: 'dialog', 'aria-label': title, 'data-depth-kind': kind, style: { left: place.left, bottom: place.bottom } },
+                h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
+                h('div', { className: 'title' }, title),
+                h('input', {
+                  type: 'range', min: 0, max: 2, step: 1, value: DEPTHS.indexOf(depth), disabled: busy, 'aria-label': title, 'aria-valuetext': t(`depth.${depth}`),
+                  onChange: (event) => onPick(DEPTHS[Number(event.target.value)] ?? 'standard'),
+                }),
+                h('div', { className: 'steps' }, DEPTHS.map((id) => h('button', { key: id, type: 'button', 'aria-current': String(id === depth), disabled: busy, onClick: () => onPick(id) }, t(`depth.${id}`)))),
+                h('p', { className: 'hint' }, t(`depth.${kind}.${depth}`)),
+                kind === 'research' ? h('p', { className: 'hint' }, t('depth.research.cap')) : null,
+                kind === 'research' && onModel
+                  ? h(React.Fragment, null,
+                      h('div', { className: 'head' }, t('research.model.title')),
+                      h('div', { className: 'seg', role: 'group', 'aria-label': t('research.model.title') },
+                        ['same', 'roles'].map((id) => h('button', { key: id, type: 'button', 'aria-pressed': model === id, disabled: busy, onClick: () => onModel(id) }, t(`research.model.${id}`)))),
+                      h('p', { className: 'hint' }, t(`research.model.${model}.hint`)))
+                  : null,
+                h('p', { className: 'hint' }, t('depth.note'))),
+              document.body,
+            )
+          : null);
     }
 
     /**

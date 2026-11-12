@@ -1,0 +1,6 @@
+- insert:
+    - id: data
+      name: '@local/dsh-data'
+      config:
+        # Off until you switch it on in Settings > Data. It then adds a Data tab beside Chat, Cowork and Code.
+        enabled: false

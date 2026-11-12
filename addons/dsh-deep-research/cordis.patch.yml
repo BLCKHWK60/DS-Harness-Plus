@@ -2,11 +2,15 @@
     - id: deep-research
       name: '@local/dsh-deep-research'
       config:
-        # Defaults apply; nothing user-specific is preset. Optional settings:
+        # Defaults apply; nothing user-specific is preset. How deep a run goes is chosen with the
+        # slider beside the Deep research button (Quick, Standard, Thorough). Optional settings:
+        #   depth: standard                   # used only when the Modes add-on is not installed
         #   roles: { planner: plan, searcher: fast, writer: plan }   # Tier role names
-        #   maxSources: 40
-        #   maxMinutes: 20
+        #   maxParallel: 8                    # upper bounds; the depth is held to them
+        #   maxSubquestions: 8
+        #   maxSources: 120
+        #   maxMinutes: 60
         #   searchToolNames: [web_search]     # other tool names if you use another search backend
         #   fetchToolNames: [web_fetch]
         #   requireFetched: false             # true drops findings whose page was not fetched
-        maxMinutes: 20
+        enabled: true

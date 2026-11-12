@@ -46,6 +46,28 @@ const WEB_PROMPT =
 const RESEARCH_PROMPT =
   'Deep research is switched on for this conversation: for questions that need looking things up, use the deep_research tool to research them thoroughly and answer with a cited report. For small talk or follow-ups about an earlier report, answer directly.';
 
+/** The three steps of the sliders beside the Search and Deep research buttons. */
+export const DEPTH_IDS = ['quick', 'standard', 'thorough'];
+/**
+ * What the model is told about how hard to search, per step. Standard is how it searches without
+ * being told anything, so it adds no words.
+ */
+export const SEARCH_DEPTH_PROMPTS = {
+  quick: 'Search depth is set to Quick: when you look something up on the web, one search is usually enough. Answer from the results, and open a page only when the results do not answer the question. Keep it short and name the source.',
+  standard: '',
+  thorough: 'Search depth is set to Thorough: when you look something up on the web, run several searches with different wording, open at least five pages from different sites and read them (a search result\'s snippet is not a source), prefer primary sources, cross-check figures and dates between sources, say where sources disagree, and cite each source you used with its date.',
+};
+
+/**
+ * A slider step, checked.
+ * @param {unknown} value - quick, standard or thorough.
+ * @returns {string} the step; standard when unknown.
+ */
+export function depthId(value) {
+  const id = String(plain(value) ?? '').toLowerCase();
+  return DEPTH_IDS.includes(id) ? id : 'standard';
+}
+
 /** Sandbox values a mode may set. `danger-full-access` is deliberately not allowed here. */
 const SANDBOX_VALUES = ['inherit', 'read-only', 'workspace-write'];
 
@@ -79,6 +101,15 @@ export const Config = z.object({
   sessionResearch: z.string().default('{}').volatile(),
   /** Per-session tools switch as JSON: `{ sessionId: false }`. While off, the model is offered no tool at all. */
   sessionTools: z.string().default('{}').volatile(),
+  /** The slider beside the Search button: how hard the model searches. One setting for all conversations. */
+  searchDepth: z.string().default('standard').volatile(),
+  /** The slider beside the Deep research button: how many rounds and helpers a research run uses. */
+  researchDepth: z.string().default('standard').volatile(),
+  /**
+   * Which model Deep research's helpers run on: `same` (the model of the conversation that started
+   * the research) or `roles` (the role models set in Settings → Model Tiers). All conversations.
+   */
+  researchModel: z.string().default('same').volatile(),
   /** Name of the slash command that switches modes. */
   commandName: z.string().default('mode'),
 });
@@ -453,7 +484,8 @@ export function apply(ctx, config) {
             } catch {
               alone = false;
             }
-            return [alone ? '' : mode.prompt, webGranted ? WEB_PROMPT : '', researchOn(agent.id) ? RESEARCH_PROMPT : '', viaPrograms(agent)].filter(Boolean).join('\n\n');
+            const depthNote = webOn(agent.id, mode) ? SEARCH_DEPTH_PROMPTS[depthId(config.searchDepth)] : '';
+            return [alone ? '' : mode.prompt, webGranted ? WEB_PROMPT : '', depthNote, researchOn(agent.id) ? RESEARCH_PROMPT : '', viaPrograms(agent)].filter(Boolean).join('\n\n');
           },
         }),
       'modes prompt section',
@@ -625,6 +657,18 @@ export function apply(ctx, config) {
     /** @returns {Array<{id: string, label: string}>} the available modes. */
     list() {
       return Object.values(readModes(config)).map((mode) => Object.freeze({ id: mode.id, label: mode.label }));
+    },
+    /** @returns {string} the Search slider's step: quick, standard or thorough. */
+    searchDepth() {
+      return depthId(config.searchDepth);
+    },
+    /** @returns {'same' | 'roles'} which model Deep research's helpers run on. */
+    researchModel() {
+      return String(plain(config.researchModel) ?? '') === 'roles' ? 'roles' : 'same';
+    },
+    /** @returns {string} the Deep research slider's step: quick, standard or thorough. */
+    researchDepth() {
+      return depthId(config.researchDepth);
     },
     /**
      * @param {string} sessionId - Agent id.

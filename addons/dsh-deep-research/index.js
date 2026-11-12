@@ -2,18 +2,36 @@
  * Host half of Deep research.
  *
  * Registers one tool, `deep_research`. A run is: a planner child splits the
- * question into sub-questions; searcher children research them in parallel with
- * the web tools and return findings with source URLs; the host merges and
- * de-duplicates the sources; a writer child writes a report that cites them by
- * number; the host then checks every citation against the numbered sources and
- * against what each searcher actually fetched.
+ * question into sub-questions with search queries; searcher children research
+ * them in parallel with the web tools and return findings with source URLs;
+ * between rounds an analyst child reads the findings, names what is missing or
+ * contradictory and writes sharper follow-up questions and queries for the next
+ * round; the host merges and de-duplicates the sources; a writer child writes a
+ * report that cites them by number; the host then checks every citation against
+ * the numbered sources and against what each searcher actually fetched.
  *
- * Children run on the Tier plugin's role routes when it is loaded (planner and
- * writer: `plan`, searchers: `fast` by default), otherwise on the parent's route.
+ * How deep a run goes (rounds, helpers at once, sub-questions, time) comes from
+ * the depth chosen with the slider beside the Deep research button (kept by the
+ * Modes add-on): Quick, Standard or Thorough. See `lib/rounds.js`.
+ *
+ * Helpers at once are also held to the Tier plugin's sub-agent limit (Settings → Model Tiers).
+ * Children run on the model of the conversation that started the research, or, when the
+ * owner chose "role models" beside the Deep research button, on the Tier plugin's role
+ * routes (planner, analyst and writer: `plan`, searchers: `fast` by default).
  * Writing files is left to the model's own tools, so the sandbox applies.
  */
 import z from '@deepseek-ai/schemastery';
 import { insideProgram, researchMinutes } from './lib/budget.js';
+import { analysisOf, analyzePrompt, capped, depthOf, planPrompt, roundLeft, searchAnswer, searchPrompt, tasksOf, writePrompt } from './lib/rounds.js';
+
+/**
+ * Start a helper agent. App 0.2.2-rc.2 takes the task's fields (prompt, parent, agentOptions) at
+ * the top level of the spec; rc.1 took them under `request`. Both are given, so either works.
+ * @param {object} subagents - the app's sub-agent service.
+ * @param {object} spec - provider, label, delivery, signal, and the task under `request`.
+ * @returns {Promise<object>} the activation receipt.
+ */
+const startChild = (subagents, spec) => subagents.startActivation({ ...spec.request, ...spec });
 
 
 /**
@@ -55,10 +73,18 @@ export const Config = z.object({
       writer: z.union([z.const('plan'), z.const('implement'), z.const('review'), z.const('fast')]).default('plan'),
     })
     .default({ planner: 'plan', searcher: 'fast', writer: 'plan' }),
-  maxSubquestions: z.number().min(1).max(12).default(6),
-  maxParallel: z.number().min(1).max(8).default(4),
-  maxSources: z.number().min(1).max(200).default(40),
-  maxMinutes: z.number().min(1).max(240).default(20),
+  /**
+   * Which model the helpers run on when the Modes add-on is not there to say: `same` (the model of
+   * the conversation that started the research) or `roles` (the Tier add-on's role models).
+   */
+  helperModel: z.union([z.const('same'), z.const('roles')]).default('same'),
+  /** Used when the Modes add-on is not there to say which depth the slider is on. */
+  depth: z.union([z.const('quick'), z.const('standard'), z.const('thorough')]).default('standard'),
+  /** Upper bounds. The chosen depth decides the actual numbers and is held to these. */
+  maxSubquestions: z.number().min(1).max(12).default(8),
+  maxParallel: z.number().min(1).max(8).default(8),
+  maxSources: z.number().min(1).max(200).default(120),
+  maxMinutes: z.number().min(1).max(240).default(60),
   searchToolNames: z.array(z.string()).default(['web_search']),
   fetchToolNames: z.array(z.string()).default(['web_fetch']),
   requireFetched: z.boolean().default(false),
@@ -165,9 +191,23 @@ export function apply(ctx, config) {
   /** Agents this plugin started, which may not start research themselves. */
   const childIds = new Set();
 
-  /** Role route for a child: Tier's route for the parent's tier, else the parent's own route. */
+  /** @returns {'same' | 'roles'} which model the helpers run on: the choice beside the Deep research button, else the setting. */
+  function helperModel() {
+    let chosen;
+    try {
+      chosen = ctx.get('modes')?.researchModel?.();
+    } catch {
+      chosen = undefined;
+    }
+    return (chosen ?? plain(config.helperModel)) === 'roles' ? 'roles' : 'same';
+  }
+
+  /**
+   * Route for a child. `same`: the model the parent conversation is on. `roles`: Tier's role route
+   * for the parent's tier, and the parent's own model when that role has none.
+   */
   function routeFor(parent, role) {
-    const tiers = ctx.get('modelTiers');
+    const tiers = helperModel() === 'roles' ? ctx.get('modelTiers') : undefined;
     const tier = tiers?.resolveTier?.(parent.id);
     const route = tier ? tiers.roleRoute(tier.id, role) : null;
     if (route) return { provider: route.provider, model: route.model };
@@ -184,11 +224,12 @@ export function apply(ctx, config) {
     const subagents = ctx.get('subagents');
     if (!subagents) throw new Error('The sub-agent service is unavailable.');
     const route = routeFor(parent, role);
-    const started = await subagents.startActivation({
+    const started = await startChild(subagents, {
       provider: 'spawn',
       label,
       request: {
-        prompt: [{ type: 'text', text: prompt }],
+        // The app adds a note of its own right after the text: end ours with a blank line.
+        prompt: [{ type: 'text', text: `${prompt}\n\n` }],
         parent,
         signal,
         ...(route ? { agentOptions: { provider: route.provider, model: route.model } } : {}),
@@ -281,7 +322,7 @@ export function apply(ctx, config) {
   const deepResearchTool = {
     name: plain(config.toolName),
     description:
-      'Research a question in depth: plan sub-questions, search and read the web in parallel with child agents, and return a cited report. ' +
+      'Research a question in depth: plan sub-questions, search and read the web in parallel with child agents, review what was found and search again for what is missing, and return a cited report. ' +
       'Every citation is checked against the numbered sources and against the pages the children fetched. ' +
       'mode "wide" researches one row per item and returns a CSV text with a Sources column; save it with your own file tools. ' +
       'Use it for questions that need several sources; answer simple questions directly.',
@@ -320,124 +361,157 @@ export function apply(ctx, config) {
       } catch {
         programMaxMs = undefined;
       }
-      const minutes = researchMinutes({ configured: plain(config.maxMinutes), asked: args?.maxMinutes, inProgram: insideProgram(exec.callId), programMaxMs });
+      // How deep to go: the slider beside the Deep research button, held to the settings' and the model version's limits.
+      let chosen;
+      try {
+        chosen = ctx.get('modes')?.researchDepth?.();
+      } catch {
+        chosen = undefined;
+      }
+      const depth = capped(depthOf(chosen ?? plain(config.depth)), {
+        maxParallel: plain(config.maxParallel),
+        maxSubquestions: plain(config.maxSubquestions),
+        maxSources: plain(config.maxSources),
+        tierCap: ctx.get('modelTiers')?.resolveTier?.(parent.id)?.maxSubagents,
+        askedSources: args?.maxSources,
+      });
+      const minutes = researchMinutes({ configured: Math.min(Number(plain(config.maxMinutes)) || depth.minutes, depth.minutes), asked: args?.maxMinutes, inProgram: insideProgram(exec.callId), programMaxMs });
       const deadline = startedAt + minutes * 60 * 1000;
-      const maxSources = Math.min(Number(plain(config.maxSources)) || 40, Number(args?.maxSources) || Infinity);
-      const parallel = Math.min(Number(plain(config.maxParallel)) || 4, ctx.get('modelTiers')?.resolveTier?.(parent.id)?.maxSubagents ?? 8);
+      const maxSources = depth.sources;
+      const parallel = depth.runners;
       const roles = plain(config.roles);
       const question = String(args.question).trim();
       const signalFor = () => limitedSignal(exec.signal, deadline);
       const wide = args.mode === 'wide';
+      const today = new Date().toISOString().slice(0, 10);
+      const searchTools = plain(config.searchToolNames);
+      const fetchTools = plain(config.fetchToolNames);
 
       if (wide) return runWide({ args, exec, parent, question, deadline, parallel, roles, startedAt, signalFor });
 
-      // 1. Plan.
-      const maxSub = Number(plain(config.maxSubquestions)) || 6;
-      const planned = await runChild({
-        role: roles.planner,
-        label: 'Research plan',
-        parent,
-        signal: signalFor(),
-        prompt:
-          `RESEARCH_PLAN\nSplit this research question into 2 to ${maxSub} independent sub-questions that together answer it.\n` +
-          `Answer with ONLY JSON: {"subquestions": ["...", "..."]}\n\nQuestion: ${question}`,
-      });
-      const plan = extractJson(planned.text);
-      const subquestions = (Array.isArray(plan?.subquestions) ? plan.subquestions : [])
-        .map((entry) => String(entry).trim())
-        .filter(Boolean)
-        .slice(0, maxSub);
-      if (subquestions.length === 0) subquestions.push(question);
+      // 1. Plan: sub-questions, each with search queries.
+      const planned = await runChild({ role: roles.planner, label: 'Research plan', parent, signal: signalFor(), prompt: planPrompt(question, depth, today) });
+      let tasks = tasksOf(extractJson(planned.text)?.subquestions, depth.subquestions);
+      if (tasks.length === 0) tasks = [{ question, queries: [], why: '' }];
 
-      // 2. Search and read, in parallel.
       const failures = [];
-      const outcomes = await mapLimit(subquestions, parallel, async (subquestion, index) => {
-        if (Date.now() >= deadline) return null;
-        try {
-          const answer = await runChild({
-            role: roles.searcher,
-            label: `Research ${index + 1}/${subquestions.length}`,
-            parent,
-            signal: signalFor(),
-            prompt:
-              `RESEARCH_SEARCH\nResearch ONE sub-question on the web with ${plain(config.searchToolNames).join(', ')} and ${plain(config.fetchToolNames).join(', ')}. ` +
-              'Fetch every page you cite. Do not cite a page you did not fetch.\n' +
-              'Answer with ONLY JSON: {"findings": [{"claim": "...", "url": "https://...", "quote": "short verbatim quote"}]} with at most 8 findings.\n\n' +
-              `Overall question: ${question}\nSub-question: ${subquestion}`,
-          });
-          const parsed = extractJson(answer.text);
-          return { subquestion, findings: Array.isArray(parsed?.findings) ? parsed.findings : [], log: fetchLog(answer.childId) };
-        } catch (error) {
-          failures.push(`${subquestion}: ${error?.message ?? error}`);
-          return null;
-        }
-      });
-
-      // 3. Merge and de-duplicate sources.
       const sources = [];
       const sourceIndex = new Map();
       const findings = [];
+      const asked = [];
+      const tried = [];
+      const gaps = [];
+      const conflicts = [];
       let dropped = 0;
-      for (const outcome of outcomes) {
-        if (!outcome) continue;
-        for (const finding of outcome.findings) {
-          const url = normalizeUrl(finding?.url);
-          const claim = String(finding?.claim ?? '').trim();
-          if (!url || !claim) {
-            dropped += 1;
-            continue;
+      let round = 0;
+      let stoppedEarly = '';
+
+      while (tasks.length > 0) {
+        round += 1;
+        const known = findings.map((finding) => finding.claim.slice(0, 160));
+        const triedBefore = [...tried];
+        // 2. Search and read, in parallel.
+        const outcomes = await mapLimit(tasks, parallel, async (task, index) => {
+          if (Date.now() >= deadline) return null;
+          try {
+            const answer = await runChild({
+              role: roles.searcher,
+              label: `Research ${depth.rounds > 1 ? `round ${round}, ` : ''}${index + 1}/${tasks.length}`,
+              parent,
+              signal: signalFor(),
+              prompt: searchPrompt({ question, task, round, depth, searchTools, fetchTools, tried: triedBefore, known, today }),
+            });
+            return { task, ...searchAnswer(extractJson(answer.text), depth.findings), log: fetchLog(answer.childId) };
+          } catch (error) {
+            failures.push(`${task.question}: ${error?.message ?? error}`);
+            return null;
           }
-          const status = outcome.log.fetched.has(url) ? 'fetched' : outcome.log.seen.has(url) ? 'search result only' : 'not fetched';
-          if (plain(config.requireFetched) === true && status !== 'fetched') {
-            dropped += 1;
-            continue;
-          }
-          let entry = sourceIndex.get(url);
-          if (!entry) {
-            if (sources.length >= maxSources) {
+        });
+        for (const task of tasks) asked.push(task.question);
+
+        // 3. Merge and de-duplicate sources.
+        for (const outcome of outcomes) {
+          if (!outcome) continue;
+          for (const query of outcome.queries) if (!tried.includes(query)) tried.push(query);
+          for (const gap of outcome.gaps) if (!gaps.includes(gap)) gaps.push(gap);
+          for (const finding of outcome.findings) {
+            const url = normalizeUrl(finding?.url);
+            const claim = String(finding?.claim ?? '').trim();
+            if (!url || !claim) {
               dropped += 1;
               continue;
             }
-            entry = { n: sources.length + 1, url, status };
-            sources.push(entry);
-            sourceIndex.set(url, entry);
-          } else if (status === 'fetched') {
-            entry.status = 'fetched';
+            const status = outcome.log.fetched.has(url) ? 'fetched' : outcome.log.seen.has(url) ? 'search result only' : 'not fetched';
+            if (plain(config.requireFetched) === true && status !== 'fetched') {
+              dropped += 1;
+              continue;
+            }
+            let entry = sourceIndex.get(url);
+            if (!entry) {
+              if (sources.length >= maxSources) {
+                dropped += 1;
+                continue;
+              }
+              entry = { n: sources.length + 1, url, status, host: new URL(url).hostname.replace(/^www\./, '') };
+              sources.push(entry);
+              sourceIndex.set(url, entry);
+            } else if (status === 'fetched') {
+              entry.status = 'fetched';
+            }
+            // The same claim from the same page, reported by two helpers, is kept once.
+            if (findings.some((other) => other.n === entry.n && other.claim.toLowerCase() === claim.toLowerCase())) continue;
+            findings.push({ n: entry.n, host: entry.host, claim, quote: String(finding?.quote ?? '').trim().slice(0, 300), date: String(finding?.date ?? '').trim().slice(0, 40) });
           }
-          findings.push({ n: entry.n, claim, quote: String(finding?.quote ?? '').trim().slice(0, 300) });
+        }
+
+        // 4. Between rounds: what is missing, what contradicts, and better queries for the next round.
+        tasks = [];
+        if (!roundLeft({ round, depth, startedAt, deadline, now: Date.now() })) {
+          if (round < depth.rounds) stoppedEarly = 'time';
+          break;
+        }
+        try {
+          const reviewed = await runChild({
+            role: roles.planner,
+            label: `Research review, round ${round}`,
+            parent,
+            signal: signalFor(),
+            prompt: analyzePrompt({ question, findings, gaps, tried, asked, round, depth, today }),
+          });
+          const verdict = analysisOf(extractJson(reviewed.text), depth, asked);
+          for (const conflict of verdict.conflicts) if (!conflicts.includes(conflict)) conflicts.push(conflict);
+          if (verdict.enough) stoppedEarly = 'enough';
+          else tasks = verdict.followups;
+        } catch (error) {
+          failures.push(`review of round ${round}: ${error?.message ?? error}`);
+          stoppedEarly = 'review failed';
         }
       }
+
       if (findings.length === 0) {
         throw new Error(
           `deep_research found no usable sources${failures.length ? ` (${failures.length} searcher(s) failed: ${failures[0]})` : ''}.`,
         );
       }
 
-      // 4. Write the report.
+      // 5. Write the report.
       const partial = Date.now() >= deadline;
-      const written = await runChild({
-        role: roles.writer,
-        label: 'Research report',
-        parent,
-        signal: exec.signal,
-        prompt:
-          'RESEARCH_WRITE\nWrite a clear report that answers the question using ONLY the numbered findings below. ' +
-          'Cite each claim inline as [n]. Do not cite any number that is not listed and do not add facts of your own. ' +
-          'Say where the evidence is thin or conflicting. Do not add a source list; it is added for you.\n\n' +
-          `Question: ${question}\n\nFindings:\n` +
-          findings.map((f) => `[${f.n}] ${f.claim}${f.quote ? ` — "${f.quote}"` : ''}`).join('\n'),
-      });
+      const written = await runChild({ role: roles.writer, label: 'Research report', parent, signal: exec.signal, prompt: writePrompt({ question, findings, conflicts, gaps, today }) });
 
-      // 5. Check the citations.
+      // 6. Check the citations.
       const cited = new Set([...written.text.matchAll(/\[(\d+)\]/g)].map((match) => Number(match[1])));
       const unknown = [...cited].filter((n) => !sources.some((source) => source.n === n));
       const usedSources = sources.filter((source) => cited.has(source.n));
       const notes = [];
+      notes.push(`Depth: ${depth.label}. ${round} round${round === 1 ? '' : 's'} of searching with up to ${parallel} helper${parallel === 1 ? '' : 's'} at once, ${asked.length} sub-question${asked.length === 1 ? '' : 's'}, ${sources.length} source${sources.length === 1 ? '' : 's'}.`);
+      if (stoppedEarly === 'enough') notes.push('The review after the last round found the question answered, so no further round was run.');
+      if (stoppedEarly === 'time') notes.push('Not enough time was left for another round.');
+      if (stoppedEarly === 'review failed') notes.push('The review between rounds failed, so no further round was run.');
       if (unknown.length) notes.push(`The report cites [${unknown.join('], [')}], which are not in the source list.`);
       const unverified = usedSources.filter((source) => source.status !== 'fetched');
       if (unverified.length) notes.push(`${unverified.length} cited source(s) were not fetched by a researcher; treat them with care.`);
       if (partial) notes.push('The time budget ran out; the report covers only the sub-questions finished in time.');
-      if (failures.length) notes.push(`${failures.length} sub-question(s) failed.`);
+      if (failures.length) notes.push(`${failures.length} step(s) failed.`);
       if (dropped) notes.push(`${dropped} finding(s) were dropped (no usable URL, over the source limit, or not fetched).`);
 
       const list = (usedSources.length ? usedSources : sources).map((source) => `[${source.n}] ${source.url} (${source.status})`).join('\n');
@@ -445,7 +519,9 @@ export function apply(ctx, config) {
       return {
         text,
         stats: {
-          subquestions: subquestions.length,
+          depth: depth.id,
+          rounds: round,
+          subquestions: asked.length,
           findings: findings.length,
           sources: sources.length,
           cited: usedSources.length,

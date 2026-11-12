@@ -93,3 +93,14 @@ test('a conversation opened by an Automation task gets its own starting mode', a
   assert.equal(scheduledModeId(modes, ''), 'cowork');
   assert.equal(scheduledModeId({ chat: { tools: 'none' } }, 'gone'), undefined, 'nothing suitable leaves the usual rule in charge');
 });
+
+test('the sliders: a step is checked, and only Quick and Thorough add words about searching', async () => {
+  const { DEPTH_IDS, SEARCH_DEPTH_PROMPTS, depthId } = await import('../index.js');
+  assert.deepEqual(DEPTH_IDS, ['quick', 'standard', 'thorough']);
+  assert.equal(depthId('Thorough'), 'thorough');
+  assert.equal(depthId('deepest'), 'standard');
+  assert.equal(depthId(undefined), 'standard');
+  assert.equal(SEARCH_DEPTH_PROMPTS.standard, '');
+  assert.match(SEARCH_DEPTH_PROMPTS.quick, /one search is usually enough/);
+  assert.match(SEARCH_DEPTH_PROMPTS.thorough, /at least five pages/);
+});

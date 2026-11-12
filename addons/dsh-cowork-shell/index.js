@@ -114,6 +114,43 @@ export const DEFAULT_TABS = {
       }
     ]
   },
+  "data": {
+    "newLabel": "New analysis",
+    "pages": [],
+    "greeting": "What do you want to find out from your data?",
+    "chips": [
+      {
+        "label": "What is here",
+        "icon": "folder",
+        "prompt": "List the data files in this folder and profile the tables: what each holds, how many rows, and anything that looks wrong."
+      },
+      {
+        "label": "Summarise",
+        "icon": "spreadsheet",
+        "prompt": "Summarise the main table in this folder: the key figures, how they are spread, and what stands out."
+      },
+      {
+        "label": "Trends",
+        "icon": "chart",
+        "prompt": "Show how the main figures in this data change over time, with a chart."
+      },
+      {
+        "label": "Compare groups",
+        "icon": "chart",
+        "prompt": "Compare the main groups in this data with each other and say which differences matter."
+      },
+      {
+        "label": "Check quality",
+        "icon": "spark",
+        "prompt": "Check this data for problems: empty cells, duplicates, outliers, odd formats and values that cannot be right."
+      },
+      {
+        "label": "Run saved",
+        "icon": "research",
+        "prompt": "Run my saved analyses for this folder again and tell me what moved."
+      }
+    ]
+  },
   "finance": {
     "newLabel": "New research",
     "pages": [],

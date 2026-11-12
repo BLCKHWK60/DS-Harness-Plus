@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Data",
+    "description": "A Data mode and tab: the assistant profiles your data files, runs queries against the real files, ties every number to the query that produced it, and can rerun saved analyses to report what moved."
+  }
+}

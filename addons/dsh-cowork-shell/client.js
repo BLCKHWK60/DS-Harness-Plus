@@ -356,6 +356,43 @@ window.__ModuleLoader__.load({
           }
         ]
       },
+      "data": {
+        "newLabel": "New analysis",
+        "pages": [],
+        "greeting": "What do you want to find out from your data?",
+        "chips": [
+          {
+            "label": "What is here",
+            "icon": "folder",
+            "prompt": "List the data files in this folder and profile the tables: what each holds, how many rows, and anything that looks wrong."
+          },
+          {
+            "label": "Summarise",
+            "icon": "spreadsheet",
+            "prompt": "Summarise the main table in this folder: the key figures, how they are spread, and what stands out."
+          },
+          {
+            "label": "Trends",
+            "icon": "chart",
+            "prompt": "Show how the main figures in this data change over time, with a chart."
+          },
+          {
+            "label": "Compare groups",
+            "icon": "chart",
+            "prompt": "Compare the main groups in this data with each other and say which differences matter."
+          },
+          {
+            "label": "Check quality",
+            "icon": "spark",
+            "prompt": "Check this data for problems: empty cells, duplicates, outliers, odd formats and values that cannot be right."
+          },
+          {
+            "label": "Run saved",
+            "icon": "research",
+            "prompt": "Run my saved analyses for this folder again and tell me what moved."
+          }
+        ]
+      },
       "finance": {
         "newLabel": "New research",
         "pages": [],
@@ -535,6 +572,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       cowork: 'M4 7h16v12H4zM9 7V5h6v2',
       code: 'M9 8l-4 4 4 4M15 8l4 4-4 4',
       finance: 'M4 18l5-6 4 3 7-9M15 6h5v5',
+      data: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
       plus: 'M12 5v14M5 12h14',
       panel: 'M4 5h16v14H4zM9 5v14',
       grid: 'M5 5h5v5H5zM14 5h5v5h-5zM5 14h5v5H5zM14 14h5v5h-5z',
@@ -575,7 +613,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     function glyphFor(modeId) {
-      return modeId === 'chat' || modeId === 'code' || modeId === 'cowork' || modeId === 'finance' ? modeId : 'dot';
+      return modeId === 'chat' || modeId === 'code' || modeId === 'cowork' || modeId === 'finance' || modeId === 'data' ? modeId : 'dot';
     }
 
     /**
