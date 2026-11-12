@@ -19,7 +19,9 @@
 import z from '@deepseek-ai/schemastery';
 import { join } from 'node:path';
 import { FOCUSES, KINDS, MARKETS, MODE_ID, PERIODS, WATCHLIST_MAX, cleanList, openPins, readSelection, selectionNote, withFinance } from './lib/finance.js';
-import { buildTools } from './lib/tools.js';
+import { BRIEF_PREFIX, RHYTHMS, briefPrompt, briefRule, briefTitle, briefsOf, scheduledIn } from './lib/briefs.js';
+import { PRESETS, addressProblem, keyRef, readSources, sourceGet, sourcesNote } from './lib/sources.js';
+import { buildSourceTool, buildTools } from './lib/tools.js';
 import { SKILLS } from './skills.js';
 
 export const name = 'dsh-finance';
@@ -44,6 +46,11 @@ export const Config = z.object({
   watchlist: z.array(z.string()).default([]).volatile(),
   /** Markets of your own, offered after the built-in ones. */
   moreMarkets: z.array(z.string()).default([]).volatile(),
+  /**
+   * Extra data sources as JSON: `[{ id, kind: 'api' | 'connector', name, baseUrl, keyIn, keyName, about, docs, on }]`.
+   * Keys are never here: each is kept in the app's secret store.
+   */
+  sources: z.string().default('[]').volatile(),
 });
 
 function plain(value) {
@@ -71,6 +78,7 @@ export function readSettings(config) {
     selection: readSelection({ kind: plain(config?.kind), subject: plain(config?.subject), market: plain(config?.market), focus: plain(config?.focus), period: plain(config?.period) }),
     watchlist: cleanList(plain(config?.watchlist), WATCHLIST_MAX),
     moreMarkets,
+    sources: readSources(plain(config?.sources)),
   };
 }
 
@@ -83,6 +91,31 @@ export function apply(ctx, config) {
   const warn = (text) => ctx.logger?.warn?.(`finance: ${text}`);
   const home = ctx.get('dshHomePath');
   const pins = openPins(typeof home === 'function' ? join(home('finance'), 'conversations.json') : '');
+
+  // ---- the keys of extra sources: in the app's secret store, never in the settings ----------
+
+  /** Source id -> whether a key is saved (and a masked preview when the store gives one). */
+  let keys = {};
+  const store = () => {
+    const service = ctx.get('credentials');
+    if (!service?.resolve) throw new Error('The app\'s secret store is not available, so a key cannot be kept safely.');
+    return service;
+  };
+  const keyOf = async (id) => String((await store().resolve(keyRef(id)))?.value ?? '');
+  const refreshKeys = async () => {
+    const next = {};
+    for (const source of settings().sources) {
+      if (source.kind !== 'api' || source.keyIn === 'none') continue;
+      try {
+        const info = await store().describe(keyRef(source.id));
+        next[source.id] = { set: info?.configured === true, masked: typeof info?.masked === 'string' ? info.masked : '' };
+      } catch {
+        next[source.id] = { set: false, masked: '' };
+      }
+    }
+    keys = next;
+  };
+  void refreshKeys().catch(() => {});
 
   // ---- the mode: kept in step with the switch ------------------------------------------------
 
@@ -151,7 +184,9 @@ export function apply(ctx, config) {
                 if (!now.enabled || modeOf(agent.id) !== MODE_ID) return '';
                 // A helper agent works for a conversation; it gets that conversation's selection when known.
                 const root = agent.header?.parentSession ?? agent.session?.header?.parentSession;
-                return selectionNote(pins.get(agent.id) ?? (root ? pins.get(root) : undefined) ?? now.selection);
+                const note = selectionNote(pins.get(agent.id) ?? (root ? pins.get(root) : undefined) ?? now.selection);
+                const extra = sourcesNote(now.sources, (id) => keys[id]?.set === true);
+                return extra ? `${note}\n\n${extra}` : note;
               } catch {
                 return '';
               }
@@ -198,8 +233,18 @@ export function apply(ctx, config) {
   // ---- the data tools -------------------------------------------------------------------------
 
   let toolsOff;
+  let sourceToolOff;
   const syncTools = () => {
     const on = settings().enabled;
+    // The tool for extra sources exists only while there is a source it can read.
+    const wantSource = on && settings().sources.some((source) => source.kind === 'api' && source.on && (source.keyIn === 'none' || keys[source.id]?.set));
+    if (wantSource && !sourceToolOff) {
+      const tools = ctx.get('tools');
+      if (tools?.register) sourceToolOff = tools.register(buildSourceTool({ enabled: () => settings().enabled, sources: () => settings().sources, keyOf, get: sourceGet }));
+    } else if (!wantSource && sourceToolOff) {
+      if (typeof sourceToolOff === 'function') sourceToolOff();
+      sourceToolOff = undefined;
+    }
     if (on && !toolsOff) {
       const tools = ctx.get('tools');
       if (!tools?.register) return;
@@ -212,6 +257,8 @@ export function apply(ctx, config) {
   ctx.effect(() => () => {
     for (const dispose of toolsOff ?? []) if (typeof dispose === 'function') dispose();
     toolsOff = undefined;
+    if (typeof sourceToolOff === 'function') sourceToolOff();
+    sourceToolOff = undefined;
   }, 'finance: data tools');
 
   // ---- the skills -----------------------------------------------------------------------------
@@ -229,6 +276,7 @@ export function apply(ctx, config) {
     }
   };
   const skillTimer = setInterval(() => {
+    void refreshKeys().catch(() => {});
     try {
       syncTools();
       syncSkills();
@@ -251,42 +299,160 @@ export function apply(ctx, config) {
 
   // ---- the pages' data -------------------------------------------------------------------------
 
+  // ---- scheduled briefs: tasks in the app's own scheduler ------------------------------------
+
+  const scheduler = () => {
+    const service = ctx.get('schedule');
+    if (!service?.create) throw new Error('The app\'s scheduler is not running, so a brief cannot be scheduled.');
+    return service;
+  };
+  const listBriefs = async () => {
+    try {
+      return briefsOf(await scheduler().catalog());
+    } catch {
+      return [];
+    }
+  };
+  const addBrief = async (subject, rhythm, hour) => {
+    const title = briefTitle(subject);
+    if (title === BRIEF_PREFIX) throw new Error('Name what the brief is about.');
+    if ((await listBriefs()).some((brief) => brief.subject.toLowerCase() === title.slice(BRIEF_PREFIX.length).toLowerCase())) throw new Error('There is already a brief for that.');
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const result = await scheduler().create({
+      title,
+      prompt: briefPrompt(subject, settings().selection.market, rhythm),
+      timing: { kind: 'rrule', rrule: briefRule(rhythm, hour, zone) },
+      target: { kind: 'new' },
+    });
+    if (result?.code) throw new Error(`The scheduler refused: ${result.message ?? result.code}`);
+  };
+  const removeBrief = async (id) => {
+    const brief = (await listBriefs()).find((item) => item.id === id);
+    if (!brief) throw new Error('That brief is gone.');
+    const result = await scheduler().edit({ id, action: 'delete' });
+    if (result?.code) throw new Error(`The scheduler refused: ${result.message ?? result.code}`);
+  };
+
+  // A conversation that a Finance brief opens belongs in Finance: it gets the Finance mode (and so
+  // the Finance tab) instead of the mode the app gives scheduled conversations.
+  const adopt = async (sessionId, found) => {
+    if (!settings().enabled) return;
+    const catalog = await scheduler().catalog();
+    const task = catalog.find((entry) => found.ids.includes(String(entry.id)) && String(entry.title ?? '').startsWith(BRIEF_PREFIX));
+    if (!task) return;
+    pins.pin(sessionId, { kind: 'brief', subject: String(task.title).slice(BRIEF_PREFIX.length), market: found.market || 'Global' });
+    const modes = ctx.get('modes');
+    if (modes?.set && modes.get?.(sessionId) !== MODE_ID) await modes.set(sessionId, MODE_ID);
+  };
+  ctx.on('session/event', (session, event) => {
+    try {
+      if (event?.type !== 'agent/inbox/spliced' || isHelper(session) || !session?.id) return;
+      const found = scheduledIn(event.data?.inserted);
+      if (found.ids.length === 0) return;
+      void adopt(session.id, found).catch((error) => warn(`could not move a brief to Finance: ${String(error?.message ?? error)}`));
+    } catch (error) {
+      warn(`could not look at a scheduled message: ${String(error?.message ?? error)}`);
+    }
+  });
+
+  // ---- the pages' data -------------------------------------------------------------------------
+
+  const view = async () => {
+    const now = settings();
+    return {
+      at: Date.now(),
+      ...now,
+      sources: now.sources.map((source) => ({ ...source, keySet: keys[source.id]?.set === true, keyShown: keys[source.id]?.masked ?? '' })),
+      presets: PRESETS,
+      briefs: await listBriefs(),
+      rhythms: RHYTHMS.map(({ id, label }) => ({ id, label })),
+      problem,
+      kinds: KINDS,
+      markets: [...MARKETS, ...now.moreMarkets],
+      focuses: FOCUSES.map(({ id, label }) => ({ id, label })),
+      periods: PERIODS.map(({ id, label }) => ({ id, label })),
+      skills: SKILLS.map((skill) => ({ name: skill.name, description: skill.description })),
+      skillsOn: Boolean(skillsOff),
+      toolsOn: Boolean(toolsOff),
+    };
+  };
+
   ctx.inject(['webServer', 'connection'], (inner) => {
     inner.effect(
       () =>
         inner.webServer.register({
           kind: 'exact',
           path: DATA_PATH,
-          handler: (req, res) => {
+          handler: async (req, res) => {
             const refused = inner.connection.requestRejection(req);
             if (refused !== undefined) {
               res.statusCode = refused;
               res.end();
               return;
             }
-            if (req.method !== 'GET') {
+            if (req.method !== 'GET' && req.method !== 'POST') {
               res.statusCode = 405;
-              res.setHeader('allow', 'GET');
+              res.setHeader('allow', 'GET, POST');
               res.end();
               return;
             }
             res.setHeader('content-type', 'application/json; charset=utf-8');
             res.setHeader('cache-control', 'no-store');
-            const now = settings();
-            res.end(JSON.stringify({
-              at: Date.now(),
-              ...now,
-              problem,
-              kinds: KINDS,
-              markets: [...MARKETS, ...now.moreMarkets],
-              focuses: FOCUSES.map(({ id, label }) => ({ id, label })),
-              periods: PERIODS.map(({ id, label }) => ({ id, label })),
-              skills: SKILLS.map((skill) => ({ name: skill.name, description: skill.description })),
-              skillsOn: Boolean(skillsOff),
-              toolsOn: Boolean(toolsOff),
-            }));
-            // The switch on the page should take effect at once, not at the next tick.
-            void syncMode();
+            try {
+              let extra = {};
+              if (req.method === 'POST') {
+                const chunks = [];
+                let size = 0;
+                for await (const chunk of req) {
+                  size += chunk.length;
+                  if (size > 16384) throw new Error('request too large');
+                  chunks.push(chunk);
+                }
+                const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+                const source = settings().sources.find((item) => item.id === String(body?.id ?? ''));
+                switch (body?.action) {
+                  case 'check': {
+                    const reason = addressProblem(body.baseUrl);
+                    if (reason) throw new Error(reason);
+                    break;
+                  }
+                  case 'key': {
+                    if (!source || source.kind !== 'api') throw new Error('Save the source first, then its key.');
+                    const value = String(body.value ?? '').trim();
+                    if (value.length < 4 || value.length > 500 || /\s/.test(value)) throw new Error('That does not look like a key.');
+                    await store().set(keyRef(source.id), value);
+                    await refreshKeys();
+                    break;
+                  }
+                  case 'forget':
+                    // Works for a source that was just removed too, so no key is left behind.
+                    if (!/^[a-z0-9-]{1,30}$/.test(String(body.id ?? ''))) throw new Error('unknown source');
+                    await store().unset(keyRef(String(body.id)));
+                    await refreshKeys();
+                    break;
+                  case 'test': {
+                    if (!source || source.kind !== 'api') throw new Error('unknown source');
+                    extra = { tested: (await sourceGet(source, source.keyIn === 'none' ? '' : await keyOf(source.id), body.path, body.query)).slice(0, 1500) };
+                    break;
+                  }
+                  case 'brief':
+                    await addBrief(body.subject, String(body.rhythm ?? 'weekdays'), Number(body.hour ?? 8));
+                    break;
+                  case 'unbrief':
+                    await removeBrief(String(body.id ?? ''));
+                    break;
+                  default:
+                    throw new Error('unknown action');
+                }
+                syncTools();
+              }
+              res.end(JSON.stringify({ ...(await view()), ...extra }));
+              // The switch on the page should take effect at once, not at the next tick.
+              void syncMode();
+            } catch (error) {
+              res.statusCode = req.method === 'POST' ? 400 : 500;
+              res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 300) }));
+            }
           },
         }),
       'finance: data route',

@@ -82,6 +82,37 @@ Beyond its three data tools, the assistant works with what the app and the other
 - A conversation's selection is recorded at its first turn in `<app data folder>/finance/conversations.json` (the last 500 conversations).
 - The skills are registered with the app's skills service while the switch is on.
 
+## Your own data sources (since 0.29.0)
+
+**Settings → Finance → Data sources.** This is how share prices, estimates, news with sentiment or anything else a data service offers come in.
+
+- **Add a source:** choose Finnhub, Financial Modeling Prep, Alpha Vantage or EODHD and the address and key handling are filled in. Or choose **Another web service** and give its name, its `https` address, where its key goes (in the address, in a header, as a bearer token, or none) and one line on what it is good for. Or choose **A connector I added** to write a note about a connector.
+- **Paste its key** and press **Save key**. The key goes into the app's own secret store (its credentials file in the app data folder, readable only by your Mac user). It is never written into the settings, and the page shows it only as dots.
+- **Try** fetches a path you type and shows the answer.
+- A source can be switched off, and removed; removing forgets its key.
+
+The assistant then gets one more tool, `finance_source_get`, and a note in every Finance conversation listing the usable sources with what each is good for and where its documentation is. The tool exists only while at least one source has its key.
+
+What the tool can and cannot do:
+
+- It can only fetch (an HTTP GET). It cannot send data or change anything.
+- It can only reach the source's own address: a path that names another site, climbs out with `..`, or carries its own `?` is refused.
+- The key is added by the add-on, never by the model, and is cut out of everything the assistant is shown, including error messages.
+- The address must be `https` and on the internet, not on your own network.
+- An answer is cut at 12,000 characters. A refused key, a reached limit and an error are each said in plain words.
+
+A connector (MCP) needs none of this to work: any connector you add on the Connectors page is already usable in the Finance tab. The note only tells the assistant what it is for.
+
+## Scheduled briefs (since 0.29.0)
+
+**Settings → Finance → Scheduled briefs.** Name a subject, choose every weekday, every Monday or the 1st of each month, and an hour. This creates a task in the app's own scheduler named "Finance brief: <subject>", which opens a new conversation each time and writes a short update: what changed, what to watch next, the sources.
+
+- The brief shows on the Automation runs page, and Alerts can tell you when it is ready or failed.
+- Change, pause or delete it on the Automation tasks page, or remove it here.
+- **A brief runs in Finance** (since 0.29.1). The app starts every scheduled conversation in Cowork; when the conversation a brief opens receives its instruction, this add-on moves it to Finance mode. It then has the Finance method, appears under the Finance tab, and its selection note names the brief's subject. The brief's instruction still carries the main rules itself, in case Finance is switched off when it runs.
+- This applies to briefs made here (tasks named "Finance brief: …"). A scheduled task you write yourself in Automation tasks still starts in Cowork.
+- It runs only while the app is running, uses your models, and counts against the Budget guard.
+
 ## What the data tools cover and do not
 
 - **Companies:** those that file with the US regulator. That is every US-listed company and many foreign ones (a Dutch or Taiwanese company listed in New York is there, in its own currency). A company listed only elsewhere is not; the tool says so and the assistant falls back to web search.
@@ -101,18 +132,20 @@ Beyond its three data tools, the assistant works with what the app and the other
 
 ## Not built yet
 
-- Share prices, estimates and forecasts, and monthly economy data. No free source for them answered automated requests when this was built (the IMF and one price service refused; an open aggregator was more than a year out of date).
-- A Sources page for adding any connector or web service with a key.
-- Scheduled briefs for the watchlist.
+- Built-in share prices, estimates, forecasts and monthly economy data. No free source for them answered automated requests when this was built (the IMF and one price service refused; an open aggregator was more than a year out of date). They come through a data source of your own instead.
+- Sources that need a sign-in in the browser, or anything but reading.
+- One brief for the whole watchlist, and a way to make your own scheduled tasks run in Finance.
 
 ## Code
 
-`lib/finance.js` (the lists, the method, the selection note, adding and removing the mode, the record of selections), `lib/data.js` (the two data sources), `lib/tools.js` (the three tools), `skills.js` (the seven skills), `index.js` (the switch, the note, the skills, the `GET /dsh-finance/data` route), `client.js` (the drop-downs and the settings page). Tests: `test/finance.test.mjs`, `test/data.test.mjs`.
+`lib/finance.js` (the lists, the method, the selection note, adding and removing the mode, the record of selections), `lib/data.js` (the two built-in data sources), `lib/sources.js` (your own sources and their keys), `lib/briefs.js` (scheduled briefs), `lib/tools.js` (the four tools), `skills.js` (the seven skills), `index.js` (the switch, the note, the skills, the `GET /dsh-finance/data` route), `client.js` (the drop-downs and the settings page). Tests: `test/finance.test.mjs`, `test/data.test.mjs`, `test/sources.test.mjs`.
 
 ## Tested
 
 In the lab (web version, stand-in model): the switch added a fourth tab, with four tab names fitting in the sidebar; the start page showed the drop-downs, the hint and the seven buttons without overlapping, also when the row wraps; choosing NVIDIA, United States and Outlook was saved; a message in that conversation reached the model with the method, the selection note, the seven skills listed and the usual tools; after the subject was changed to another company, a follow-up in the first conversation still carried NVIDIA; a Cowork conversation carried none of it; switching off removed the tab, selected Cowork, removed the skills and kept the watchlist.
 
 **0.28.0, the data tools.** Against the live services from the lab on 2026-11-12: `finance_company_figures` returned NVIDIA's revenue and net income for three financial years from its 10-K, and a Dutch company's in euros from its 20-F; `finance_company_filings` returned Apple's three latest filings with dates and links; both were also called by the model through the app. A company the regulator does not list was answered in plain words. `finance_economy` returned Japan's and the United States' growth for three years in one direct run, but **the World Bank's service was unstable that day** (errors and timeouts on most tries), and the call through the app got no answer and said so. In the Mac desktop app with a real model, a question about Apple's revenue and net income for three years made the model call `finance_company_figures`; every figure, date, margin and growth rate in its answer matched the regulator's data when fetched again, and it cited the annual report and its filing date. Not tested: a chart drawn from these figures, quarterly balance figures against a filing, companies with unusual report names.
+
+**0.29.0, sources and briefs.** In the lab on 2026-11-12, with the public demo keys two services publish: Alpha Vantage and EODHD were added from the list and their keys saved; the keys were found in the app's credentials file (mode 0600) and nowhere in the settings; **Try** returned a live IBM quote and a live Apple quote; a path naming another site was refused; a message in a Finance conversation reached the model with the note about both sources and with `finance_source_get` on offer, and the model's call returned the live quote; the key appeared nowhere in what the model was sent. A weekly brief was scheduled (next run the following Monday at the chosen hour in the Mac's time zone), a second one for the same subject was refused, and Remove deleted it. **0.29.1:** a brief was run with Run now: it finished, the model's request carried the Finance method and a selection note naming the brief's subject and market, the conversation was recorded as Finance and listed under the Finance tab and not under Cowork, and the run showed on the Automation runs page. Not tested: a brief started by its schedule instead of Run now, Finnhub and Financial Modeling Prep (no demo key; only their addresses and key names were confirmed by their refusals), a source with its key in a header or as a bearer token against a real service (unit tests only), a connector note, the Mac desktop app.
 
 Not tested: **the quality of the answers**, which needs a real model with web search; a helper agent getting the selection; a wide window (the test window was narrow). In the Mac desktop app the owner said it "seems to be working well"; nothing more detailed was checked there.

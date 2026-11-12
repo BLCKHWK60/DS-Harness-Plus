@@ -200,7 +200,9 @@ A fourth tab, beside Chat, Cowork and Code, for researching companies, markets a
 - On the tab's start page, choose the **kind** (company, sector, economy, whole market), type the **subject**, and choose the **market** (Global unless you change it), the **focus** and the **period**. Then ask, or press one of the buttons: Deep dive, Earnings review, News and mood, Compare, Sector scan, Economy brief, What changed.
 - The assistant is given a method: figures only from sources it fetched, each with its date; facts, claims, opinions and its own reading kept apart; a look ahead; both sides; what it could not find; no buy or sell advice.
 - **Built-in data, no key needed:** a company's reported figures and its filings from the US securities regulator (US-listed companies and many foreign ones), and yearly readings for economies from the World Bank. Each number comes with its period, source and date.
-- It has no share prices, estimates or forecasts. For those, and for companies listed only outside the US, it works with web search and Deep research, so figures can be delayed. Check them against the source it names.
+- **Your own data sources:** on **Settings → Finance → Data sources**, add a data service (Finnhub, Financial Modeling Prep, Alpha Vantage, EODHD, or any other with an `https` address) and paste its key. This is how share prices, estimates and forecasts come in. The key is kept in the app's secret store, not in the settings, and the assistant can only read from that service.
+- **Scheduled briefs:** on the same page, schedule a short recurring update on something you follow. It runs as a task in the app's scheduler, its conversation appears under the Finance tab, and the run shows on the Automation runs page.
+- Without a source of your own it has no share prices, estimates or forecasts. For those, and for companies listed only outside the US, it works with web search and Deep research, so figures can be delayed. Check them against the source it names.
 - The watchlist and your own markets are on **Settings → Finance**.
 
 Details: `addons/dsh-finance/README.md`.

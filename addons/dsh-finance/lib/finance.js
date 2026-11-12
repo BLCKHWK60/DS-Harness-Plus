@@ -110,7 +110,8 @@ export function cleanList(value, max) {
 export function readSelection(raw = {}) {
   const pick = (list, id, fallback) => (list.some((item) => item.id === id) ? id : fallback);
   return {
-    kind: pick(KINDS, raw.kind, 'company'),
+    // 'brief' is not in the drop-down: it marks a conversation that a scheduled brief opened.
+    kind: raw.kind === 'brief' ? 'brief' : pick(KINDS, raw.kind, 'company'),
     subject: cleanName(raw.subject),
     market: cleanName(raw.market) || MARKETS[0],
     focus: pick(FOCUSES, raw.focus, 'full'),
@@ -129,7 +130,8 @@ export function selectionNote(selection) {
   const period = PERIODS.find((item) => item.id === sel.period);
   const kind = KINDS.find((item) => item.id === sel.kind);
   let subject;
-  if (sel.kind === 'market') subject = sel.subject ? `the whole market (the user added: "${sel.subject}")` : 'the whole market, not one company';
+  if (sel.kind === 'brief') subject = `"${sel.subject}" (this conversation was opened by a scheduled brief; its instruction says what to do)`;
+  else if (sel.kind === 'market') subject = sel.subject ? `the whole market (the user added: "${sel.subject}")` : 'the whole market, not one company';
   else if (sel.subject) subject = `${kind.label.toLowerCase()} "${sel.subject}"`;
   else subject = `not chosen yet (a ${kind.label.toLowerCase()}): take it from the user's message, and ask if it is unclear`;
   const market = sel.market === MARKETS[0] ? 'Global (all markets; no single country)' : `${sel.market} only`;

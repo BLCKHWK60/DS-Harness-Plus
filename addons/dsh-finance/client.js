@@ -44,6 +44,13 @@ window.__ModuleLoader__.load({
   content: ''; display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--dsw-alias-switch-thumb, var(--dsw-alias-label-primary)); transition: transform .12s ease;
 }
 .dsh-fn-switch[aria-checked="true"]::after { transform: translateX(16px); background: var(--dsw-alias-bg-base); }
+.dsh-fn-field[data-small="true"] { flex: none; width: 150px; }
+select.dsh-fn-field { cursor: pointer; flex: none; width: auto; max-width: 240px; }
+.dsh-fn-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 14px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
+.dsh-fn-form .dsh-fn-field { flex: 1 1 200px; }
+.dsh-fn-form select.dsh-fn-field, .dsh-fn-form .dsh-fn-field[data-small="true"] { flex: 0 0 auto; }
+.dsh-fn-out { margin: 6px 0 0; padding: 8px 10px; border-radius: 10px; font-size: 11px; line-height: 16px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; color: var(--dsw-alias-label-secondary); background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent); }
+.dsh-fn-side { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: 60%; }
 .dsh-fn-list { margin: 6px 0 0; padding-left: 18px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 
 /* The drop-downs on the start page: only while the Finance tab is selected. */
@@ -74,6 +81,15 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
       const response = await fetch(new URL('dsh-finance/data', document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
       if (!response.ok) throw new Error(`error ${response.status}`);
       return response.json();
+    }
+
+    async function post(body) {
+      const response = await fetch(new URL('dsh-finance/data', document.baseURI), {
+        method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `error ${response.status}`);
+      return data;
     }
 
     async function revision(ctx) {
@@ -189,6 +205,86 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
           h('button', { type: 'button', className: 'dsh-fn-btn', disabled: busy || !text.trim(), onClick: add }, 'Add')));
     }
 
+    const KEY_PLACES = [
+      { id: 'query', label: 'Key goes in the address' },
+      { id: 'header', label: 'Key goes in a header' },
+      { id: 'bearer', label: 'Key is a bearer token' },
+      { id: 'none', label: 'No key needed' },
+    ];
+
+    /** One data source: its key, a try-out, on and off, remove. */
+    function SourceRow({ source, busy, onKey, onForget, onToggle, onRemove, onTry }) {
+      const [key, setKey] = useState('');
+      const [path, setPath] = useState('');
+      const [out, setOut] = useState('');
+      const api = source.kind === 'api';
+      const needsKey = api && source.keyIn !== 'none';
+      const status = !api ? 'A connector: its tools are already available to the assistant. This note tells it what they are good for.'
+        : !needsKey ? source.baseUrl
+          : source.keySet ? `${source.baseUrl} · key saved${source.keyShown ? ` (${source.keyShown})` : ''}` : `${source.baseUrl} · no key yet, so the assistant cannot use it`;
+      return h('div', { style: { borderBottom: '0.5px solid var(--dsw-alias-border-l1)', padding: '14px 0' } },
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: 16 } },
+          h('div', { className: 'dsh-fn-rowtext' },
+            h('div', { className: 'dsh-fn-rowtitle' }, source.name),
+            h('div', { className: 'dsh-fn-rowdesc' }, status),
+            source.about ? h('div', { className: 'dsh-fn-rowdesc' }, source.about) : null),
+          h('div', { className: 'dsh-fn-side' },
+            h('button', { type: 'button', className: 'dsh-fn-btn', disabled: busy, onClick: onRemove }, 'Remove'),
+            h(Switch, { on: source.on, label: `Use ${source.name}`, onChange: onToggle }))),
+        needsKey ? h('div', { className: 'dsh-fn-form', style: { borderBottom: 0, paddingBottom: 0 } },
+          h('input', { className: 'dsh-fn-field', type: 'password', value: key, placeholder: source.keySet ? 'Paste a new key to replace the saved one' : 'Paste your key', 'aria-label': `Key for ${source.name}`, autoComplete: 'off', spellCheck: false, onChange: (event) => setKey(event.target.value) }),
+          h('button', { type: 'button', className: 'dsh-fn-btn', disabled: busy || !key.trim(), onClick: async () => { if (await onKey(key.trim())) setKey(''); } }, 'Save key'),
+          source.keySet ? h('button', { type: 'button', className: 'dsh-fn-btn', disabled: busy, onClick: onForget }, 'Forget key') : null) : null,
+        api && (!needsKey || source.keySet) ? h('div', { className: 'dsh-fn-form', style: { borderBottom: 0, paddingBottom: 0 } },
+          h('input', { className: 'dsh-fn-field', value: path, placeholder: 'A path to try, for example quote?symbol=AAPL', 'aria-label': `Path to try on ${source.name}`, spellCheck: false, onChange: (event) => setPath(event.target.value), onKeyDown: (event) => { if (event.key === 'Enter' && path.trim()) void onTry(path.trim()).then(setOut); } }),
+          h('button', { type: 'button', className: 'dsh-fn-btn', disabled: busy || !path.trim(), onClick: () => void onTry(path.trim()).then(setOut) }, 'Try')) : null,
+        out ? h('div', { className: 'dsh-fn-out' }, out) : null);
+    }
+
+    /** Add a source: a known service, any other web service, or a note about a connector. */
+    function AddSource({ presets, taken, busy, onAdd }) {
+      const [kind, setKind] = useState('');
+      const [form, setForm] = useState({ name: '', baseUrl: '', keyIn: 'query', keyName: '', about: '', docs: '' });
+      const set = (key) => (event) => setForm((value) => ({ ...value, [key]: event.target.value }));
+      const free = presets.filter((preset) => !taken.includes(preset.id));
+      const field = (key, placeholder, small) => h('input', { className: 'dsh-fn-field', 'data-small': String(small === true), value: form[key], placeholder, 'aria-label': placeholder, spellCheck: false, autoCapitalize: 'off', onChange: set(key) });
+      const add = async () => {
+        const preset = presets.find((item) => item.id === kind);
+        const source = preset ? { ...preset, kind: 'api', on: true }
+          : kind === 'connector' ? { kind: 'connector', name: form.name.trim(), about: form.about.trim(), on: true }
+            : { kind: 'api', name: form.name.trim(), baseUrl: form.baseUrl.trim(), keyIn: form.keyIn, keyName: form.keyName.trim(), about: form.about.trim(), docs: form.docs.trim(), on: true };
+        if (await onAdd(source)) { setKind(''); setForm({ name: '', baseUrl: '', keyIn: 'query', keyName: '', about: '', docs: '' }); }
+      };
+      const custom = kind === 'other';
+      const ready = kind && (presets.some((item) => item.id === kind) || (form.name.trim() && (kind === 'connector' || form.baseUrl.trim())));
+      return h('div', { className: 'dsh-fn-form' },
+        h('select', { className: 'dsh-fn-field', value: kind, 'aria-label': 'Kind of source to add', onChange: (event) => setKind(event.target.value) },
+          h('option', { value: '' }, 'Add a source…'),
+          free.map((preset) => h('option', { key: preset.id, value: preset.id }, preset.name)),
+          h('option', { value: 'other' }, 'Another web service'),
+          h('option', { value: 'connector' }, 'A connector I added')),
+        custom || kind === 'connector' ? field('name', kind === 'connector' ? 'The connector\'s name' : 'Name') : null,
+        custom ? field('baseUrl', 'Address, for example https://api.example.com/v1') : null,
+        custom ? h('select', { className: 'dsh-fn-field', value: form.keyIn, 'aria-label': 'Where the key goes', onChange: set('keyIn') }, KEY_PLACES.map((place) => h('option', { key: place.id, value: place.id }, place.label))) : null,
+        custom && (form.keyIn === 'query' || form.keyIn === 'header') ? field('keyName', form.keyIn === 'query' ? 'The key\'s name, for example apikey' : 'The header\'s name, for example X-API-Key', true) : null,
+        custom || kind === 'connector' ? field('about', 'What it is good for, in one line (the assistant reads this)') : null,
+        custom ? field('docs', 'Address of its documentation (optional)') : null,
+        kind ? h('button', { type: 'button', className: 'dsh-fn-btn', disabled: busy || !ready, onClick: add }, 'Add') : null);
+    }
+
+    /** Schedule a brief: what about, how often, at what hour. */
+    function AddBrief({ watchlist, rhythms, busy, onAdd }) {
+      const [subject, setSubject] = useState('');
+      const [rhythm, setRhythm] = useState('weekdays');
+      const [hour, setHour] = useState('8');
+      return h('div', { className: 'dsh-fn-form' },
+        h('input', { className: 'dsh-fn-field', list: 'dsh-fn-brief-list', value: subject, placeholder: 'What about, for example NVIDIA', 'aria-label': 'Subject of the brief', spellCheck: false, onChange: (event) => setSubject(event.target.value) }),
+        h('datalist', { id: 'dsh-fn-brief-list' }, watchlist.map((name) => h('option', { key: name, value: name }))),
+        h('select', { className: 'dsh-fn-field', value: rhythm, 'aria-label': 'How often', onChange: (event) => setRhythm(event.target.value) }, rhythms.map((item) => h('option', { key: item.id, value: item.id }, item.label))),
+        h('select', { className: 'dsh-fn-field', value: hour, 'aria-label': 'At what hour', onChange: (event) => setHour(event.target.value) }, Array.from({ length: 24 }, (_, value) => h('option', { key: value, value: String(value) }, `at ${String(value).padStart(2, '0')}:00`))),
+        h('button', { type: 'button', className: 'dsh-fn-btn', disabled: busy || !subject.trim(), onClick: async () => { if (await onAdd(subject.trim(), rhythm, Number(hour))) setSubject(''); } }, 'Schedule'));
+    }
+
     function FinancePage({ appCtx }) {
       const { data, setData, error, alive, load } = useData();
       const [note, setNote] = useState({ text: '', error: false });
@@ -214,6 +310,66 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
         }
       };
 
+      const sources = Array.isArray(data.sources) ? data.sources : [];
+      // What is saved: the description only. Whether a key is saved is the server's to say.
+      const stored = (list) => list.map(({ keySet, keyShown, ...source }) => source);
+      const act = async (body, done) => {
+        setBusy(true);
+        try {
+          const next = await post(body);
+          if (!alive.current) return undefined;
+          setData(next);
+          if (done) setNote({ text: done, error: false });
+          tell();
+          return next;
+        } catch (problem) {
+          if (alive.current) setNote({ text: problem.message, error: true });
+          return undefined;
+        } finally {
+          if (alive.current) setBusy(false);
+        }
+      };
+      const saveSources = async (list, done) => {
+        setBusy(true);
+        try {
+          await setSettings(appCtx, { sources: JSON.stringify(stored(list)) });
+          if (!alive.current) return false;
+          setNote({ text: done, error: false });
+          await load();
+          tell();
+          return true;
+        } catch (problem) {
+          if (alive.current) setNote({ text: `Could not save: ${problem.message}`, error: true });
+          return false;
+        } finally {
+          if (alive.current) setBusy(false);
+        }
+      };
+      const addSource = async (source) => {
+        const id = String(source.id ?? source.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
+        if (!id) { setNote({ text: 'Give the source a name.', error: true }); return false; }
+        if (sources.some((other) => other.id === id)) { setNote({ text: 'There is already a source with that name.', error: true }); return false; }
+        if (source.kind === 'api') {
+          try {
+            await post({ action: 'check', baseUrl: source.baseUrl });
+          } catch (problem) {
+            setNote({ text: problem.message, error: true });
+            return false;
+          }
+        }
+        return saveSources([...sources, { ...source, id }], source.kind === 'api' && source.keyIn !== 'none' ? 'Added. Now paste its key.' : 'Added.');
+      };
+      const removeSource = async (source) => {
+        if (!window.confirm(`Remove "${source.name}" from Finance?${source.keySet ? '\n\nIts saved key is forgotten too.' : ''}`)) return;
+        if (await saveSources(sources.filter((other) => other.id !== source.id), 'Removed.') && source.kind === 'api') await act({ action: 'forget', id: source.id });
+      };
+      const trySource = async (source, typed) => {
+        const [path, search = ''] = typed.split('?');
+        const next = await act({ action: 'test', id: source.id, path, query: Object.fromEntries(new URLSearchParams(search)) });
+        return next?.tested ?? '';
+      };
+      const briefs = Array.isArray(data.briefs) ? data.briefs : [];
+
       return h('div', { className: 'dsh-fn-page' },
         h('style', null, CSS),
         h('h2', { className: 'dsh-fn-title' }, 'Finance'),
@@ -236,6 +392,28 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
         h('p', { className: 'dsh-fn-desc' }, `The Market drop-down offers: ${(data.markets ?? []).filter((market) => !(data.moreMarkets ?? []).includes(market)).join(', ')}. Add others here.`),
         h(NameList, { items: data.moreMarkets ?? [], placeholder: 'A market, for example Mexico', label: 'Add a market', empty: 'No market of your own yet.', busy, onChange: (moreMarkets) => save({ moreMarkets }) }),
 
+        h('div', { className: 'dsh-fn-group' }, 'Data sources'),
+        h('p', { className: 'dsh-fn-desc' }, 'Built in, with no key: reported company figures and filings from the US securities regulator, and yearly economy readings from the World Bank. Add your own below, for share prices, estimates, news with sentiment or anything else a data service offers. The assistant can only read from a source, never send or change anything, and only at that source\'s own address.'),
+        sources.map((source) => h(SourceRow, {
+          key: source.id, source, busy,
+          onKey: (value) => act({ action: 'key', id: source.id, value }, 'Key saved in the app\'s secret store.').then(Boolean),
+          onForget: () => act({ action: 'forget', id: source.id }, 'Key forgotten.'),
+          onToggle: (on) => saveSources(sources.map((other) => (other.id === source.id ? { ...other, on } : other)), on ? 'Switched on.' : 'Switched off.'),
+          onRemove: () => removeSource(source),
+          onTry: (typed) => trySource(source, typed),
+        })),
+        h(AddSource, { presets: data.presets ?? [], taken: sources.map((source) => source.id), busy, onAdd: addSource }),
+
+        h('div', { className: 'dsh-fn-group' }, 'Scheduled briefs'),
+        h('p', { className: 'dsh-fn-desc' }, 'A short update on something you follow, written by itself on a schedule: what changed, what to watch next, with sources. It runs as a task in the app\'s own scheduler, in a new conversation each time. The conversation appears under the Finance tab, and the run shows on the Automation runs page.'),
+        briefs.length === 0 ? h('p', { className: 'dsh-fn-desc' }, 'No brief is scheduled.') : null,
+        briefs.map((brief) => h('div', { key: brief.id, className: 'dsh-fn-row' },
+          h('div', { className: 'dsh-fn-rowtext' },
+            h('div', { className: 'dsh-fn-rowtitle' }, brief.subject),
+            h('div', { className: 'dsh-fn-rowdesc' }, brief.status === 'paused' ? 'Paused in Automation tasks' : brief.nextAt ? `Next: ${new Date(brief.nextAt).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '')),
+          h('button', { type: 'button', className: 'dsh-fn-btn', disabled: busy, onClick: () => { if (window.confirm(`Stop the brief on "${brief.subject}"?`)) void act({ action: 'unbrief', id: brief.id }, 'Brief removed.'); } }, 'Remove'))),
+        h(AddBrief, { watchlist: data.watchlist ?? [], rhythms: data.rhythms ?? [], busy, onAdd: (subject, rhythm, hour) => act({ action: 'brief', subject, rhythm, hour }, 'Scheduled. You can change or pause it on the Automation tasks page.').then(Boolean) }),
+
         h('div', { className: 'dsh-fn-group' }, 'What the assistant is given'),
         h('ul', { className: 'dsh-fn-list' },
           h('li', null, 'A method: figures only from sources it fetched, each with its date; facts, claims, opinions and its own reading kept apart; always a look ahead; always both sides; what it could not find; no buy or sell advice.'),
@@ -250,7 +428,8 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
           h('li', null, 'When the assistant uses the data tools, the company or country you asked about is sent to the regulator\'s or the World Bank\'s public service. Nothing else is sent, and no account is involved.'),
           h('li', null, 'What people say online is a signal, not a fact, and can be manipulated.'),
           h('li', null, 'Charts come from the Diagram builder, and your own reports can be searched if they are in the Library.'),
-          h('li', null, 'A better data source, such as a connector or a paid service, can be added later without changing the tab.')));
+          h('li', null, 'A key you paste is kept in the app\'s own secret store on this Mac, not in a settings file. It is sent only to that service, and it is removed from anything the assistant is shown.'),
+          h('li', null, 'A scheduled brief runs only while the app is running. It uses your models and counts against the Budget guard like any task.')));
     }
 
     return {

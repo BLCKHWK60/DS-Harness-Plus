@@ -83,3 +83,51 @@ export function buildTools(enabled) {
     },
   ];
 }
+
+/**
+ * The tool that reads from the extra sources the owner added.
+ * @param {object} options - what it needs.
+ * @param {() => boolean} options.enabled - whether Finance is switched on.
+ * @param {() => object[]} options.sources - the sources (`readSources`).
+ * @param {(id: string) => Promise<string>} options.keyOf - a source's secret from the app's store; '' when none.
+ * @param {(source: object, key: string, path: unknown, query: unknown) => Promise<string>} options.get - reads from a source.
+ * @returns {object} the tool definition.
+ */
+export function buildSourceTool({ enabled, sources, keyOf, get }) {
+  return {
+    name: 'finance_source_get',
+    description: [
+      'Read data from one of the extra Finance data sources the user added (a data service with their own key), for example share prices, estimates or news with sentiment.',
+      'Give the source\'s id, the path after its address, and the parameters. Only reading is possible, and only from that source. The key is added for you: never put a key in the path or the parameters.',
+      'Which sources exist and what each is good for is in your instructions. If you do not know a source\'s paths, read its documentation with the web fetch tool first.',
+    ].join(' '),
+    parameters: {
+      type: 'object',
+      properties: {
+        source: { type: 'string', maxLength: 30, description: 'The source\'s id, as given in your instructions.' },
+        path: { type: 'string', maxLength: 300, description: 'The part after the source\'s address, for example "quote" or "real-time/AAPL.US".' },
+        query: { type: 'object', additionalProperties: { type: ['string', 'number', 'boolean'] }, description: 'Parameters, for example {"symbol": "AAPL"}. Leave the key out.' },
+      },
+      required: ['source', 'path'],
+      additionalProperties: false,
+    },
+    output: {
+      schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+      render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }],
+    },
+    isConcurrencySafe: () => true,
+    timeoutMs: 60_000,
+    execute: async (args) => {
+      if (!enabled()) return { text: 'Finance is switched off in Settings → Finance.' };
+      const usable = sources().filter((source) => source.kind === 'api' && source.on);
+      const source = usable.find((item) => item.id === String(args?.source ?? '').trim().toLowerCase());
+      if (!source) return { text: usable.length === 0 ? 'No extra data source is set up. The user adds them in Settings → Finance.' : `There is no source "${String(args?.source ?? '')}". The sources are: ${usable.map((item) => item.id).join(', ')}.` };
+      try {
+        const key = source.keyIn === 'none' ? '' : await keyOf(source.id);
+        return { text: await get(source, key, args?.path, args?.query) };
+      } catch (error) {
+        return { text: String(error?.message ?? error).slice(0, 400) };
+      }
+    },
+  };
+}
