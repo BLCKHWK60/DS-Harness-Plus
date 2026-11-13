@@ -32,7 +32,7 @@ export function canonical(path) {
  * @returns {object} the record.
  */
 export function openProjects(file) {
-  /** @type {Record<string, {tab: string, instructions: string}>} */
+  /** @type {Record<string, {tab: string, instructions: string, preset: string}>} */
   let table = {};
   if (file) {
     try {
@@ -52,6 +52,8 @@ export function openProjects(file) {
   const clean = (entry) => ({
     tab: typeof entry?.tab === 'string' ? entry.tab.slice(0, 40) : '',
     instructions: typeof entry?.instructions === 'string' ? entry.instructions.slice(0, INSTRUCTIONS_MAX) : '',
+    // The project's type. '' means no type was ever chosen; 'blank' means Blank was chosen.
+    preset: typeof entry?.preset === 'string' && /^[a-z0-9-]{1,50}$/.test(entry.preset) ? entry.preset : '',
   });
   return {
     /** @returns {Record<string, {tab: string, instructions: string}>} every record, by folder. */
@@ -69,6 +71,7 @@ export function openProjects(file) {
       const next = clean({
         tab: typeof patch?.tab === 'string' ? patch.tab : before.tab,
         instructions: typeof patch?.instructions === 'string' ? patch.instructions : before.instructions,
+        preset: typeof patch?.preset === 'string' ? patch.preset : before.preset,
       });
       table = { ...table, [key]: next };
       write();
@@ -89,16 +92,28 @@ export function openProjects(file) {
  * The project's instructions as a note for the assistant.
  * @param {string} title - the project's name.
  * @param {string} instructions - the owner's text.
- * @returns {string} the note; '' when there are no instructions.
+ * @param {string[]} [shared] - the shared tools ('data', 'finance') to point the assistant at.
+ * @returns {string} the note; '' when there is nothing to say.
  */
-export function noteOf(title, instructions) {
+export function noteOf(title, instructions, shared = []) {
   const text = String(instructions ?? '').trim();
-  if (!text) return '';
-  return [
-    `This conversation belongs to the project "${String(title || 'Untitled').slice(0, 80)}". The user wrote these instructions for every conversation in this project. Follow them:`,
-    '',
-    text,
-  ].join('\n');
+  const tools = sharedNote(shared);
+  const parts = [];
+  if (text) parts.push(`This conversation belongs to the project "${String(title || 'Untitled').slice(0, 80)}". The user wrote these instructions for every conversation in this project. Follow them:\n\n${text}`);
+  if (tools) parts.push(tools);
+  return parts.join('\n\n');
+}
+
+/**
+ * What a project is told about the tools it shares with the Data and Finance tabs.
+ * @param {string[]} shared - which of them this project's type uses and which are switched on: 'data', 'finance'.
+ * @returns {string} the note; '' when there is nothing to say.
+ */
+export function sharedNote(shared) {
+  const lines = [];
+  if (shared.includes('data')) lines.push('For tables in this folder (CSV, TSV, JSON, Excel) use the data tools instead of reading a file into the conversation: data_files lists them, data_profile describes a table, data_query runs read-only SQL on it and gives each result an id such as [Q3] to cite, data_chart draws a chart from a query, and data_python does statistics. They read only this folder and never change a file.');
+  if (shared.includes('finance')) lines.push('For figures about companies and economies use the finance tools rather than memory: finance_company_figures and finance_company_filings (reported figures and filings), finance_economy (yearly readings), finance_prices, finance_news and finance_social. Give each figure with its source and date.');
+  return lines.join('\n');
 }
 
 /**

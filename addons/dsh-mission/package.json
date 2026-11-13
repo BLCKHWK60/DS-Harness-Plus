@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Mission: three permission modes that keep the assistant inside the conversation's folder (Restricted, Ask-Auto, Full Auto), with checkpoints you can go back to. The base for the /mission command.",
+  "description": "Mission: give a goal to several models at once. A planner writes a checklist, workers do it, real commands prove it, a reviewer checks it. Three permission modes keep the work inside the conversation's folder, with checkpoints you can go back to.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -13,6 +13,7 @@
   "files": [
     "index.js",
     "client.js",
+    "runner.js",
     "lib/*.js",
     "cordis.patch.yml",
     "README.md",

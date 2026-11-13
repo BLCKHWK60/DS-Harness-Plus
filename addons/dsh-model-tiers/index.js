@@ -1270,6 +1270,27 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
  * @param {object} config - live plugin Config.
  */
 export function apply(ctx, config) {
+  /**
+   * The role models a conversation's helpers use. With "one model for everything" (the Modes
+   * add-on's choice for the conversation) every role is the conversation's own model, so no
+   * second model has to be loaded; otherwise the tier's role models as set.
+   * @param {object} agent - the conversation's agent.
+   * @param {{id: string}} tier - the conversation's tier.
+   * @returns {Record<string, {provider: string, model: string}>} role -> model.
+   */
+  const roleModelsFor = (agent, tier) => {
+    const set = readRoleModels(config)?.[tier.id] ?? {};
+    try {
+      const modes = ctx.get('modes');
+      if (!modes?.helperModels || modes.helperModels(agent?.id) !== 'same') return set;
+      const current = agent?.model?.current?.();
+      if (!current?.provider || !current?.model) return set;
+      const own = { provider: current.provider, model: current.model };
+      return Object.fromEntries(ROLE_IDS.map((role) => [role, own]));
+    } catch {
+      return set;
+    }
+  };
   /** Last request route seen per Session, used to reject stale tier entries. */
   const lastRoute = new Map();
   /** Adapter effort ids, cached per exact route. */
@@ -1587,7 +1608,7 @@ export function apply(ctx, config) {
       if (!ROLE_IDS.includes(role)) {
         throw new Error(`Unknown role "${role}". Use one of: ${ROLE_IDS.join(', ')}.`);
       }
-      const route = readRoleModels(config)?.[tier.id]?.[role];
+      const route = roleModelsFor(exec.agent, tier)[role];
       if (!route) {
         throw new Error(
           `No ${ROLE_META[role].label} role model is configured for the ${tierLabel(tier)} tier. ` +
@@ -1704,7 +1725,7 @@ export function apply(ctx, config) {
       if (!tier.subagents) {
         throw new Error(`The ${tierLabel(tier)} tier has sub-agent delegation disabled.`);
       }
-      const route = readRoleModels(config)?.[tier.id]?.review;
+      const route = roleModelsFor(exec.agent, tier).review;
       if (!route) {
         throw new Error(
           `No Review role model is configured for the ${tierLabel(tier)} tier. ` +
@@ -1857,7 +1878,7 @@ export function apply(ctx, config) {
       const task = typeof args?.task === 'string' ? args.task.trim() : '';
       if (!task) throw new Error('run_pipeline task must not be empty.');
       const context = typeof args?.context === 'string' ? args.context.trim() : '';
-      const roles = readRoleModels(config)?.[tier.id] ?? {};
+      const roles = roleModelsFor(exec.agent, tier);
       if (!roles.plan || !roles.implement) {
         const missing = [!roles.plan ? 'Plan' : null, !roles.implement ? 'Implement' : null]
           .filter(Boolean)

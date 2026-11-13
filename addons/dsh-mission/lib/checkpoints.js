@@ -137,6 +137,43 @@ export function openCheckpoints(root, hooks = {}) {
       await run(['checkout', id, '--pathspec-from-file=-', '--pathspec-file-nul'], { input: files.join('\0') });
     }),
     /**
+     * The files a checkpoint would hold now, as paths relative to the folder.
+     * @param {number} [max] - most returned.
+     * @returns {Promise<{files: string[], more: boolean}>} the list.
+     */
+    files: (max = 300) => serial(async () => {
+      await ensure();
+      await run(['add', '-A', '--', '.']);
+      const all = (await run(['ls-files', '-z'])).out.split('\0').filter(Boolean);
+      return { files: all.slice(0, max), more: all.length > max };
+    }),
+    /**
+     * What changed in the folder since a checkpoint, as a reader would want it: the list of files
+     * with line counts, then the changes themselves, cut to a length.
+     * @param {string} id - the checkpoint.
+     * @param {number} [maxChars] - most characters of changes.
+     * @returns {Promise<string>} the text; '' when nothing changed.
+     */
+    changes: (id, maxChars = 40000) => serial(async () => {
+      await ensure();
+      await run(['add', '-A', '--', '.']);
+      const stat = (await run(['diff', '--cached', '--stat=120', '--no-renames', id])).out.trim();
+      if (!stat) return '';
+      const patch = (await run(['diff', '--cached', '--no-renames', '--no-color', '-U2', id])).out;
+      return `${stat}\n\n${patch.length > maxChars ? `${patch.slice(0, maxChars)}\n… (the rest of the changes is cut; read the files)` : patch}`;
+    }),
+    /**
+     * The id of a checkpoint by its number.
+     * @param {number} number - as `list` gives it.
+     * @returns {Promise<string>} the id; '' when there is none.
+     */
+    idOf: (number) => serial(async () => {
+      await ensure();
+      const total = await count();
+      if (!Number.isInteger(number) || number < 1 || number > total) return '';
+      return (await run(['rev-parse', `HEAD~${total - number}`])).out.trim();
+    }),
+    /**
      * The checkpoints, newest first.
      * @param {number} [max] - most returned.
      * @returns {Promise<{number: number, id: string, at: number, label: string}[]>} the list.

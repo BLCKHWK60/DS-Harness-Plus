@@ -216,3 +216,61 @@ An earlier version of the on/off rule failed the live switch-on test: both sideb
 - **Each tab remembers its conversation.** `localStorage['dsh-cowork-shell.lastOpen']` is `{tabId: sessionId}`, written when the open conversation changes. A tab click opens that conversation, or the tab's start page when it is gone, archived or in the trash. A click's save (`defaultMode`) now runs one at a time and in order, and a background refresh that started before the save finished no longer sets the tab back.
 - **Projects.** `lib/projects.js` keeps `{folder: {tab, instructions}}` in `<home>/cowork-shell/projects.json`. Route `GET/POST /dsh-cowork-shell/projects` (`?files=<folder>` lists files; `?upload=1&path=&name=` with the bytes as body copies a file in; JSON `{action: 'save' | 'forget'}`). Only folders the app lists as projects are accepted. The instructions reach a conversation as the prompt section `cowork-shell:project` (order 58) when its folder is the project's folder; helper agents do not get it. The page is the main-area page `project`, opened from the gear on a project's row; it has no row in the page list. A project is made with the app's own `workspaces.create({path})`.
 - **Tested in the lab (0.33.0):** five tabs in two rows; switching Chat, Cowork, Finance, Data and Code each came back to its own conversation; a new project from a typed path (the web version has no folder chooser of its own: it opens the Mac's folder dialog, and a typed path is the fallback when that gives nothing); instructions saved and found in the next request; two files added, a taken name saved as "readme (2).txt". **Not verified:** the folder chooser in the desktop app, dropping files onto the page, renaming a project, the narrow rail, the Mac app.
+
+## Since 0.38.0: project types (presets)
+
+A Cowork project can have a **type**: ready-made instructions for a kind of work. The idea behind it: a use case gets a tab of its own only when it needs its own interface or tools (Finance, Data, Code). When it needs only different instructions, it is a project type in Cowork.
+
+- **Shipped types:** Blank (nothing added; Cowork as before), Research, Learn, Paperwork, Plan, Write. Each is a text file in `presets/` with a small header (`id`, `name`, `description`, `tools`) and the instructions. They are written for anyone, in plain words, and tell the assistant which files to keep in the folder (for example `deadlines.md` in Paperwork, `progress.md` in Learn).
+- **A type is a starting point.** Choosing one copies its instructions into the project's own instructions, which the user edits freely. The project remembers the type (`preset` in `projects.json`); the instructions that reach the assistant are still the project's own, through the same prompt section as before.
+- **The project page** has a Type card for projects under the Cowork tab. For a project without a type and without instructions it is headed "What kind of project is this?", with Blank selected, so a new project behaves as before unless a type is picked. Picking a type when nothing of the user's would be lost applies it at once; otherwise the type's instructions are shown first, with "Replace mine with these", "Keep mine, only change the type" and "Cancel".
+- **The user's own types:** "Save as my preset…" under the instructions keeps the current text as a type of their own (`<home>/cowork-shell/presets/my-<name>.md`, at most 40). They are listed after the shipped ones, marked "yours", and can be removed; a project that used one keeps its instructions. A file in the user's folder cannot replace a shipped type.
+- `tools` names the shared tools a type can use (`data`, `finance`); `search: off` makes new conversations start with Search off. Both act since 0.39.0, see below.
+- **Route:** `GET /dsh-cowork-shell/projects` also returns `presets`; POST actions `preset-save { name, description, tools, instructions }` and `preset-remove { id }`; `save` takes `preset`.
+- Not planned in this build: interfaces of their own for Learn and Plan.
+- **Tested (0.38.0):** 4 unit tests (13 in the add-on): the shipped files are complete, in order and free of anything personal; strict reading of a preset file; own presets saved, replaced, listed last, removed, and unable to shadow a shipped one; the project record keeps its type. In the test setup: a new project showed the card with Blank selected; Research and then Paperwork applied at once; after an edit, Plan showed the preview and "Keep mine" left the text; "Save as my preset" listed it as "yours" and set the project to it; removing it left the project's instructions; an older project with instructions showed the preview and Cancel changed nothing. Not tested: the folder chooser of "+ New" in the Mac app; a real model working under any of the five instructions.
+
+## Since 0.39.0: instructions written by a model, versions, shared tools
+
+### Generating instructions
+
+On the project page, **Generate with a model…** opens a panel:
+
+1. The user picks any model the app has.
+2. They choose what the model may see: file names and the start of text files, or file names only.
+3. The panel shows what would be sent before anything is sent: how many files, which files text is taken from, how many characters, which files were left out as secrets, and whether the folder has an `AGENTS.md` or `CLAUDE.md`.
+4. It says where the model runs: on this computer, in the user's own network (with the host), or on the internet. For the internet, and when it cannot be told, a warning is shown and a box must be ticked; the server refuses the request without that tick.
+5. The result is shown beside the current instructions, line by line (`+` new, `−` gone), with a separate list of ideas for the project. "Use these instructions" only puts the text into the box; nothing is saved until Save.
+
+How it is kept safe:
+
+- **The model gets no tools.** `lib/digest.js` reads the folder (reading only) and builds a text: the file list, then the start of text files, to fixed limits (36,000 characters in all, 2,500 per file, 40 files quoted). `ctx.get('llm').stream` is called with that one message and nothing else, so the model cannot open, change or delete anything. A test checks that building the digest changes no file.
+- **Never included:** files whose names look like secrets (`.env*`, keys and certificates, names with "password", "secret", "token", "credential", database files), hidden folders, `node_modules` and build folders, and anything that is not text (by extension, and by a zero byte in the content).
+- **`AGENTS.md` / `CLAUDE.md`** are sent even for "names only", marked as existing instruction files: the app already gives them to the assistant, and the model is told not to repeat or contradict them, and that the file wins where it disagrees with the type.
+- The model is told that text inside the files is material to describe, not orders to follow.
+- **Local or cloud** (`whereOf` in `lib/generate.js`) is read from the provider's address in the app's settings (`llm-pi-ai`, `providers[id].baseURL`): loopback is this computer; private ranges, `.local` and bare host names are the user's network; anything else is the internet. A provider without an address of its own, and the app's DeepSeek providers, count as the internet; an unknown provider as unknown, which is treated as the internet.
+- Only folders the app lists as projects can be read through the route.
+
+A model's answer is read by markers (`===INSTRUCTIONS===`, `===IDEAS===`, `===END===`); an answer that ignores them is taken whole. Thinking in `<think>` tags is dropped.
+
+### Versions
+
+Every saved change of a project's instructions is kept: the last 10 per project, in `<home>/cowork-shell/versions/` (one small file per project, mode 600), each with its time and where it came from (you, a type, a model with its name). **Earlier versions** lists them; "Put back" puts one into the box, and Save makes it current. The text from before versions existed is kept on the first change, so that change can be undone too.
+
+When instructions written by a model are saved, a mark of the folder (file names and sizes) is kept. If the folder later differs by at least five files or a fifth of its files, the page says so and suggests generating again. Nothing regenerates by itself.
+
+### Shared tools and Search
+
+- A project whose type names `data` or `finance` gets a short pointer to those tools in its prompt section, while the Data or Finance add-on is switched on. The Type card says whether they are available and where to switch them on. The tools themselves are the same ones the Data and Finance tabs use; nothing is duplicated.
+- A type with `search: off` (Paperwork) makes a **new** conversation in the project start with Search off: on `agent/created`, for a conversation that has never run and whose switch was never set, `sessionWeb[id] = false` is written to the Modes settings. Deep research is off unless switched on, as everywhere. The user can switch both on in the chat box.
+
+### Route
+
+`GET ?digest=<folder>&contents=0|1[&provider=<id>]` returns the digest's summary (never its text), the versions, the drift and where the provider runs. POST `generate { path, provider, model, contents, agreed, current }` returns `generated { instructions, ideas, model, where, sent, mark }` and saves nothing. `save` takes `by` (`you`, `type`, `model`), `note` and `mark`. Every answer carries `shared { data, finance }`.
+
+### Tested (0.39.0)
+
+- **Unit tests (8 more, 21 in the add-on):** the digest (quotes text, leaves secrets, hidden folders, dependencies and non-text out, changes nothing, empty folder, cut to its limit, names only); secret-looking names; how far a folder moved; the request text for a typed, an untyped and an empty project; reading tidy and untidy answers; local, network, cloud and unknown addresses; versions; the shared-tools note.
+- **In the test setup**, with a stand-in model, on a folder with a README, an `AGENTS.md`, a CSV, a letter and a `.env`: the panel listed 4 files and named `.env` as left out; the request the model received held the type, the file list, the quoted files and the `AGENTS.md` rule, **no** line of `.env`, and it was offered no tools; the result showed as marked lines with three ideas; Use, Save, Earlier versions (Model, Type, You) and Put back worked; a request for an unknown provider without the tick was refused, as was one for a folder that is not a project; a new conversation in the Paperwork project started with no web tools on offer and carried the Data pointer, while one in another project was untouched; the folder's files were unchanged.
+- **Not tested:** a real model writing instructions (quality, and whether it keeps to the answer shape); the warning and tick with a real internet provider on the page (the server's refusal was tested, the lab has only local providers); a very large folder; the Mac app.
+

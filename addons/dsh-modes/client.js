@@ -51,6 +51,29 @@ window.__ModuleLoader__.load({
         'depth.research.thorough': '3 rounds, up to 8 helpers at once. Each round is reviewed and the next digs deeper. At most about 45 minutes, and the most tokens.',
         'depth.note': 'Applies to all conversations, from your next message.',
         'depth.research.cap': 'Helpers at once are also held to the sub-agent limit in Settings → Model Tiers.',
+        'helpers.one': 'One model',
+        'helpers.many': '{n} models',
+        'helpers.title.same': 'Helpers use this conversation\'s model. Only one model is loaded.',
+        'helpers.title.roles': 'Helpers may use other models: up to {n} models at once.',
+        'helpers.head': 'Models for helper agents',
+        'helpers.same': 'One model for everything',
+        'helpers.roles': 'Different models',
+        'helpers.same.hint': 'Every helper agent runs on the model this conversation is on{model}. Nothing else has to be loaded, so this needs the least memory. This covers a /mission run, Deep research, Agent swarm, the Tier tools and Code power.',
+        'helpers.roles.hint': 'Helpers run on the models set for their roles. Each different model may be loaded at the same time as the others.',
+        'helpers.list': 'Models this conversation may use:',
+        'helpers.list.own': 'this conversation',
+        'helpers.list.none': 'No other model is set for any role, so everything still runs on this conversation\'s model. Set role models in Settings → Model Tiers, or for runs in Settings → Mission.',
+        'helpers.from.tiers': 'Model Tiers, {role}',
+        'helpers.from.mission': 'Mission, {role}',
+        'helpers.from.project': 'Mission, this project, {role}',
+        'helpers.role.plan': 'planner',
+        'helpers.role.implement': 'workers',
+        'helpers.role.review': 'reviewer',
+        'helpers.role.fast': 'fast helpers',
+        'helpers.scope': 'This choice is for this conversation.',
+        'helpers.usual': 'New conversations start with: {name}.',
+        'helpers.usual.set': 'Use this for new conversations too',
+        'helpers.next': 'It applies to helpers started from now on.',
         'research.model.title': 'Model for the helpers',
         'research.model.same': 'Same as this conversation',
         'research.model.roles': 'Role models',
@@ -137,6 +160,29 @@ window.__ModuleLoader__.load({
         'depth.research.thorough': '3 轮，最多 8 个助手同时工作。每轮都会审阅，下一轮更深入。最多约 45 分钟，消耗最多。',
         'depth.note': '适用于所有对话，从下一条消息开始。',
         'depth.research.cap': '同时工作的助手数量还受“设置 → 模型档位”中子代理上限的限制。',
+        'helpers.one': '单一模型',
+        'helpers.many': '{n} 个模型',
+        'helpers.title.same': '助手使用此对话的模型。只需加载一个模型。',
+        'helpers.title.roles': '助手可能使用其他模型：最多同时 {n} 个模型。',
+        'helpers.head': '助手代理所用模型',
+        'helpers.same': '全部使用同一模型',
+        'helpers.roles': '使用不同模型',
+        'helpers.same.hint': '每个助手代理都在此对话所用的模型上运行{model}。无需加载其他模型，占用内存最少。适用于 /mission 运行、深度研究、代理群、层级工具和代码增强。',
+        'helpers.roles.hint': '助手在为其角色设置的模型上运行。每个不同的模型都可能与其他模型同时加载。',
+        'helpers.list': '此对话可能使用的模型：',
+        'helpers.list.own': '此对话',
+        'helpers.list.none': '没有为任何角色设置其他模型，因此一切仍在此对话的模型上运行。可在 设置 → 模型层级 中设置角色模型，或在 设置 → Mission 中为运行设置。',
+        'helpers.from.tiers': '模型层级，{role}',
+        'helpers.from.mission': 'Mission，{role}',
+        'helpers.from.project': 'Mission，此项目，{role}',
+        'helpers.role.plan': '规划者',
+        'helpers.role.implement': '执行者',
+        'helpers.role.review': '审阅者',
+        'helpers.role.fast': '快速助手',
+        'helpers.scope': '此选择仅用于此对话。',
+        'helpers.usual': '新对话默认：{name}。',
+        'helpers.usual.set': '新对话也使用此设置',
+        'helpers.next': '对此后启动的助手生效。',
         'research.model.title': '助手使用的模型',
         'research.model.same': '与此对话相同',
         'research.model.roles': '角色模型',
@@ -523,6 +569,8 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
 .dsh-mt[data-f1] .lvl{display:none}
 .dsh-mt[data-f1] button:not(.more){padding:0 8px}
 .dsh-mt[data-f1] .pair > button.more{width:18px}
+.dsh-mt[data-f1] button[data-helpers] .lbl{display:none}
+.dsh-mt button[data-helpers='many']{border-color:var(--dsw-alias-state-warning-primary,#d98a00);color:var(--dsw-alias-state-warning-primary,#d98a00)}
 .dsh-mt[data-f2] button[data-tools] .lbl{display:none}
 .dsh-mt[data-f3] .pair[data-kind='research'] .lbl{display:none}
 .dsh-mt[data-f4] .pair[data-kind='search'] .lbl{display:none}
@@ -555,6 +603,9 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       search: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3.5 12h17M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z',
       research: 'M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.3 15.3 20 20M8 10.5h5M10.5 8v5',
       tools: 'M14.5 6.5a4 4 0 0 0-5.4 5L4 16.6V20h3.4l5.1-5.1a4 4 0 0 0 5-5.4l-2.6 2.6-2.4-.6-.6-2.4 2.6-2.6z',
+      // One chip (a model); two stacked chips (several models).
+      one: 'M7 7h10v10H7zM10 4v3M14 4v3M10 17v3M14 17v3M4 10h3M4 14h3M17 10h3M17 14h3',
+      many: 'M9 9h10v10H9zM5 15V5h10M12 19v2M16 19v2M19 12h2M19 16h2',
     };
     const icon = (name) => h('svg', { width: 15, height: 15, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }, h('path', { d: ICON[name] }));
 
@@ -716,7 +767,14 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
               onClick: () => void flip('sessionResearch', research ? undefined : true),
               'aria-label': t('toggle.research'),
             }, icon('research'), h('span', { className: 'lbl' }, t('toggle.research')), level(researchDepth)),
-            h(DepthButton, { t, kind: 'research', depth: researchDepth, pressed: research, disabled: off, busy: state.busy, onPick: (depth) => void setDepth('researchDepth', depth), model: state.view.researchModel === 'roles' ? 'roles' : 'same', onModel: (id) => void setDepth('researchModel', id) })),
+            h(DepthButton, { t, kind: 'research', depth: researchDepth, pressed: research, disabled: off, busy: state.busy, onPick: (depth) => void setDepth('researchDepth', depth) })),
+          h(HelpersButton, {
+            t, sessionId, busy: state.busy,
+            chosen: readObject(state.view.sessionHelpers)[sessionId],
+            usual: state.view.researchModel === 'roles' ? 'roles' : 'same',
+            onPick: (id) => void flip('sessionHelpers', id),
+            onUsual: (id) => void setDepth('researchModel', id),
+          }),
           h(ToolsButton, {
             t, sessionId, none, off, chat: tools === 'none', busy: state.busy,
             // Off: nothing at all. On: back to what the mode allows; in a mode without tools of its own, that is the web.
@@ -788,6 +846,79 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
      * The Tools button and its small panel: one switch for all tools of the conversation, and the
      * list of what the model can and cannot call.
      */
+    /**
+     * The models chip: at a glance, whether this conversation's helper agents run on its own model
+     * (one model loaded) or on other models as well, and the switch between the two.
+     */
+    function HelpersButton({ t, sessionId, busy, chosen, usual, onPick, onUsual }) {
+      const [open, setOpen] = useState(false);
+      const [view, setView] = useState(null);
+      const [place, setPlace] = useState({ left: 12, bottom: 80, maxHeight: 360 });
+      const button = useRef(null);
+      const panel = useRef(null);
+      const policy = chosen === 'same' || chosen === 'roles' ? chosen : usual;
+      // The count comes from the server, which knows the models set for the roles.
+      useEffect(() => {
+        if (!sessionId) return undefined;
+        let alive = true;
+        const load = () =>
+          fetch(new URL('dsh-modes/tools', document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: { 'x-dsh-session': sessionId } })
+            .then((response) => (response.ok ? response.json() : null))
+            .then((data) => alive && setView(data?.helpers ?? null))
+            .catch(() => {});
+        load();
+        const timer = setInterval(() => { if (!document.hidden) load(); }, open ? 3000 : 15000);
+        return () => { alive = false; clearInterval(timer); };
+      }, [sessionId, open, policy]);
+      useEffect(() => {
+        if (!open) return undefined;
+        const rect = button.current?.getBoundingClientRect();
+        if (rect) setPlace({ left: Math.max(12, Math.min(rect.left, window.innerWidth - 332)), bottom: window.innerHeight - rect.top + 8, maxHeight: Math.max(160, rect.top - 24) });
+        const away = (event) => {
+          if (panel.current?.contains(event.target) || button.current?.contains(event.target)) return;
+          setOpen(false);
+        };
+        const key = (event) => event.key === 'Escape' && setOpen(false);
+        document.addEventListener('pointerdown', away, true);
+        document.addEventListener('keydown', key, true);
+        return () => {
+          document.removeEventListener('pointerdown', away, true);
+          document.removeEventListener('keydown', key, true);
+        };
+      }, [open]);
+
+      // Until the server has answered, "different models" shows as two.
+      const count = policy === 'same' ? 1 : view && view.policy === 'roles' ? view.count : 2;
+      const many = policy === 'roles' && count > 1;
+      const label = many ? t('helpers.many', { n: count }) : t('helpers.one');
+      const others = (view?.sources ?? []).filter((source) => source.model !== view?.own);
+      return h(React.Fragment, null,
+        h('button', {
+          ref: button, type: 'button', 'data-helpers': many ? 'many' : 'one', 'aria-expanded': open,
+          title: many ? t('helpers.title.roles', { n: count }) : t('helpers.title.same'), 'aria-label': `${t('helpers.head')}: ${label}`, onClick: () => setOpen(!open),
+        }, icon(many ? 'many' : 'one'), h('span', { className: 'lbl' }, label)),
+        open
+          ? ReactDOM.createPortal(
+              h('div', { ref: panel, className: 'dsh-mt-pop', role: 'dialog', 'aria-label': t('helpers.head'), style: { left: place.left, bottom: place.bottom, maxHeight: place.maxHeight } },
+                h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
+                h('div', { className: 'title' }, t('helpers.head')),
+                h('div', { className: 'seg', role: 'group', 'aria-label': t('helpers.head') },
+                  ['same', 'roles'].map((id) => h('button', { key: id, type: 'button', 'aria-pressed': policy === id, disabled: busy, onClick: () => onPick(id) }, t(`helpers.${id}`)))),
+                h('p', { className: 'hint' }, policy === 'same' ? t('helpers.same.hint', { model: view?.own ? ` (${view.own})` : '' }) : t('helpers.roles.hint')),
+                policy === 'roles' ? h(React.Fragment, null,
+                  h('div', { className: 'head' }, t('helpers.list')),
+                  h('div', { className: 'names' },
+                    view?.own ? h('span', null, `${view.own} · ${t('helpers.list.own')}`) : null,
+                    others.map((source, index) => h('span', { key: index }, `${source.model} · ${t(`helpers.from.${source.from}`, { role: t(`helpers.role.${source.role}`) })}`))),
+                  others.length === 0 ? h('p', { className: 'hint' }, t('helpers.list.none')) : null) : null,
+                h('p', { className: 'hint' }, `${t('helpers.scope')} ${t('helpers.usual', { name: t(`helpers.${usual}`) })}`),
+                usual !== policy ? h('div', { className: 'seg' }, h('button', { type: 'button', disabled: busy, onClick: () => onUsual(policy) }, t('helpers.usual.set'))) : null,
+                h('p', { className: 'hint' }, t('helpers.next'))),
+              document.body,
+            )
+          : null);
+    }
+
     function ToolsButton({ t, sessionId, none, off, chat, busy, onSwitch }) {
       const [open, setOpen] = useState(false);
       const [list, setList] = useState(null);

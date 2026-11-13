@@ -10,7 +10,8 @@
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
-  "files": ["index.js", "client.js", "lib/*.js", "cordis.patch.yml", "README.md", "locale/*.json", "icon.svg", "node_modules/@deepseek-ai/schemastery/**", "node_modules/@deepseek-ai/cosmokit/**"],
+  "files": ["index.js", "client.js", "lib/*.js",
+    "presets/*.md", "cordis.patch.yml", "README.md", "locale/*.json", "icon.svg", "node_modules/@deepseek-ai/schemastery/**", "node_modules/@deepseek-ai/cosmokit/**"],
   "engines": { "dsh": ">=0.2.2-rc.1 <0.3.0" },
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },

@@ -338,7 +338,17 @@ export function apply(ctx, config) {
     const tier = tiers?.resolveTier?.(parent.id);
     const tierId = member.tier ?? tier?.id;
     let route = null;
-    if (member.provider && member.model) route = { provider: member.provider, model: member.model };
+    // "One model for everything" (the Modes add-on's choice for this conversation) overrides a
+    // member's own model and its role model: every member then runs on the conversation's model.
+    let helpers = 'roles';
+    try {
+      const modes = ctx.get('modes');
+      if (modes?.helperModels) helpers = modes.helperModels(parent.id);
+    } catch {
+      helpers = 'roles';
+    }
+    if (helpers === 'same') route = null;
+    else if (member.provider && member.model) route = { provider: member.provider, model: member.model };
     else if (member.role && tierId) route = tiers?.roleRoute?.(tierId, member.role) ?? null;
     if (!route) {
       const current = parent.model?.current?.();

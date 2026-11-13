@@ -239,8 +239,290 @@ test('the record keeps approvals across a restart and a mode change', async () =
 
 test('settings fall back to Restricted', async () => {
   const { readSettings, HELP } = await import('../index.js');
-  assert.deepEqual(readSettings({}), { enabled: true, defaultMode: 'restricted' });
-  assert.deepEqual(readSettings({ enabled: false, defaultMode: 'auto' }), { enabled: false, defaultMode: 'auto' });
+  const limits = { maxItems: 12, maxTries: 3, maxReviews: 2, maxSteps: 60, waitMinutes: 3 };
+  assert.deepEqual(readSettings({}), { enabled: true, defaultMode: 'restricted', limits, roles: {}, projects: {} });
+  const set = readSettings({ enabled: false, defaultMode: 'auto', maxTries: 99, maxSteps: 'x', waitMinutes: 0, roles: '{"plan":{"provider":"p","model":"big"},"review":{"provider":"","model":"x"},"other":{"provider":"p","model":"m"}}', projects: '{"/w":{"implement":{"provider":"p","model":"coder"}},"/empty":{}}' });
+  assert.equal(set.enabled, false);
+  assert.equal(set.defaultMode, 'auto');
+  assert.deepEqual(set.limits, { ...limits, maxTries: 8, waitMinutes: 0 });
+  // Only whole choices count, and only for the three roles.
+  assert.deepEqual(set.roles, { plan: { provider: 'p', model: 'big' } });
+  assert.deepEqual(set.projects, { '/w': { implement: { provider: 'p', model: 'coder' } } });
+  assert.deepEqual(readSettings({ roles: 'not json', projects: '[1]' }).roles, {});
   assert.equal(readSettings({ defaultMode: 'anything' }).defaultMode, 'restricted');
-  for (const word of ['/mission restricted', '/mission ask', '/mission auto', '/mission off', '/mission back 12']) assert.ok(HELP.includes(word), word);
+  for (const word of ['/mission restricted', '/mission ask', '/mission auto', '/mission off', '/mission back 12', '/mission <your goal>', '/mission stop', '/mission end']) assert.ok(HELP.includes(word), word);
+});
+
+test('a role\'s model: the project\'s choice, then Mission\'s, then Model Tiers, then the conversation', async () => {
+  const { pickRoute } = await import('../runner.js');
+  const a = { provider: 'p', model: 'a' };
+  const b = { provider: 'p', model: 'b' };
+  const c = { provider: 'p', model: 'c' };
+  const d = { provider: 'p', model: 'd' };
+  assert.deepEqual(pickRoute({ project: { plan: a }, defaults: { plan: b }, tierRoute: c, current: d }, 'plan'), { ...a, from: 'project' });
+  assert.deepEqual(pickRoute({ project: { review: a }, defaults: { plan: b }, tierRoute: c, current: d }, 'plan'), { ...b, from: 'mission' });
+  assert.deepEqual(pickRoute({ project: undefined, defaults: {}, tierRoute: c, current: d }, 'implement'), { ...c, from: 'tiers' });
+  assert.deepEqual(pickRoute({ defaults: {}, tierRoute: null, current: d }, 'review'), { ...d, from: 'conversation' });
+  assert.equal(pickRoute({ defaults: {}, tierRoute: { provider: 'p' } }, 'review'), undefined);
+});
+
+test('answers are read for their JSON, whatever is written around it', async () => {
+  const { jsonOf, planPrompt, workPrompt, reviewPrompt, conductorNote } = await import('../lib/prompts.js');
+  assert.deepEqual(jsonOf('Here you go:\n```json\n{"items":[{"title":"a {brace} \\" quote"}]}\n```\nDone.'), { items: [{ title: 'a {brace} " quote' }] });
+  assert.deepEqual(jsonOf('{broken} then {"ok":true}'), { ok: true });
+  assert.equal(jsonOf('no json here'), undefined);
+  assert.equal(jsonOf('[1,2]'), undefined);
+  assert.match(planPrompt({ goal: 'g', root: '/w', files: 'a.js', maxItems: 5 }), /^MISSION_PLAN\n[\s\S]*At most 5 items/);
+  const item = { id: '2', title: 'Add flag', detail: 'd', doneWhen: 'w', check: 'npm test', tries: 2, note: 'Its command did not pass.', evidence: 'npm test\nfail', report: 'tried' };
+  const work = workPrompt({ goal: 'g', summary: 's', item, others: '1. x', senior: true });
+  assert.match(work, /^MISSION_WORK\nYou are the senior worker/);
+  assert.match(work, /ITEM 2: Add flag[\s\S]*It will be proved by running: npm test[\s\S]*Earlier attempts: 2[\s\S]*Never weaken or delete a test/);
+  assert.match(workPrompt({ goal: 'g', item: { ...item, check: '', tries: 0 }, senior: false }), /No command proves this item/);
+  assert.match(reviewPrompt({ goal: 'g', list: 'l', checks: '', changes: '', last: true }), /^MISSION_REVIEW[\s\S]*\(nothing changed\)[\s\S]*This is the last review/);
+  assert.match(conductorNote({ goal: 'g' }), /call mission_step once/);
+});
+
+test('a run goes plan, work, checks, review, finish, and commands decide what passed', async () => {
+  const { newRun, nextStep, applyPlan, applyWork, applyChecks, applyReview, finish, report, tally, checklist, readLimits } = await import('../lib/run.js');
+  const run = newRun({ id: 'r1', goal: 'Ship it', mode: 'Full Auto', root: '/w', limits: { maxTries: 3 }, checkpoint: 4, at: 0 });
+  assert.equal(nextStep(run).kind, 'plan');
+  applyPlan(run, { summary: 'Do three things.', items: [{ title: 'Tests', done_when: 'tests exist', check: 'test -f t.js' }, { title: 'Docs', detail: 'write' }, { title: '' }, { title: 'Code', check: 'npm test' }], checks: ['npm test', 'npm test', 'npm run build'] });
+  assert.deepEqual(run.items.map((item) => item.title), ['Tests', 'Docs', 'Code']);
+  assert.deepEqual(run.checks, ['npm test', 'npm run build']);
+
+  // Item 1: its command fails twice, then passes on the third (senior) try.
+  assert.equal(nextStep(run).item.id, '1');
+  applyWork(run, '1', { report: 'done!', check: { ok: false, output: 'no file' } });
+  assert.equal(run.items[0].status, 'open');
+  assert.equal(nextStep(run).item.id, '1');
+  applyWork(run, '1', { report: 'done again', check: { ok: false, output: 'no file' } });
+  applyWork(run, '1', { report: 'really', check: { ok: true, output: '' } });
+  assert.equal(run.items[0].status, 'verified');
+  assert.match(run.items[0].evidence, /passed, no output/);
+
+  // Item 2 has no command: the worker's word is not enough.
+  applyWork(run, '2', { report: 'wrote docs' });
+  assert.equal(run.items[1].status, 'unverified');
+  // Item 3: the user's yes did not come.
+  applyWork(run, '3', { report: 'BLOCKED', check: { ok: false, output: 'x' }, aside: 'change src/a.js?' });
+  assert.equal(run.items[2].status, 'aside');
+
+  assert.equal(nextStep(run).kind, 'checks');
+  applyChecks(run, [{ command: 'npm test', ok: true, output: 'ok' }, { command: 'npm run build', ok: false, output: 'TS2304' }]);
+  // A failing overall command becomes work.
+  assert.equal(run.items.at(-1).title, 'Make "npm run build" pass');
+  assert.equal(nextStep(run).item.id, '4');
+  applyWork(run, '4', { report: 'fixed', check: { ok: true, output: 'built' } });
+  assert.equal(nextStep(run).kind, 'checks');
+  applyChecks(run, [{ command: 'npm test', ok: true, output: 'ok' }, { command: 'npm run build', ok: true, output: 'ok' }]);
+  assert.equal(nextStep(run).kind, 'review');
+
+  // The reviewer accepts item 2, cannot overrule a set-aside item, and sends item 1 back.
+  applyReview(run, { verdict: 'changes', note: 'Close.', items: [{ id: '2', ok: true, note: 'docs fine' }, { id: '3', ok: true }, { id: '1', ok: false, note: 'test asserts nothing' }], new_items: [] });
+  assert.equal(run.items[1].status, 'reviewed');
+  assert.equal(run.items[2].status, 'aside');
+  // Item 1 had used all its tries, so it is not reopened; its command passed, so it stays passed.
+  assert.equal(run.items[0].status, 'verified');
+  assert.match(run.items[0].note, /Reviewer: test asserts nothing/);
+  assert.equal(nextStep(run).kind, 'finish');
+
+  finish(run, '', 20 * 60000);
+  assert.equal(run.status, 'incomplete');
+  assert.deepEqual(tally(run), { verified: 2, reviewed: 1, unverified: 0, stuck: 0, aside: 1, open: 0, total: 4 });
+  const text = report(run);
+  assert.match(text, /^Mission not complete: 3 of 4 items done\. 1 needs your yes\./);
+  assert.match(text, /Waiting for your yes:\n- Item 3: change src\/a\.js\?/);
+  assert.match(text, /To undo everything this run changed: \/mission back 4/);
+  assert.match(text, /PASSED = its command was run and passed\. REVIEWED = no command could prove it/);
+  assert.match(checklist(run), /^1\. \[PASSED\] Tests {2}\(proved by: test -f t\.js\)/);
+  assert.equal(nextStep(run).kind, 'done');
+  assert.deepEqual(readLimits({ maxItems: 500, maxSteps: 1 }), { maxItems: 30, maxTries: 3, maxReviews: 2, maxSteps: 5, waitMinutes: 3 });
+});
+
+test('a run ends complete only when every item is proved or reviewed and the commands pass', async () => {
+  const { newRun, nextStep, applyPlan, applyWork, applyReview, finish, report } = await import('../lib/run.js');
+  const good = newRun({ id: 'r2', goal: 'Small', mode: 'Restricted', root: '/w', checkpoint: 1, at: 0 });
+  applyPlan(good, { items: [{ title: 'One', check: 'true' }, { title: 'Two' }] });
+  applyWork(good, '1', { check: { ok: true, output: 'ok' } });
+  applyWork(good, '2', { report: 'did it' });
+  // No overall commands: straight to the review.
+  assert.equal(nextStep(good).kind, 'review');
+  applyReview(good, { verdict: 'approve', items: [{ id: '2', ok: true }] });
+  finish(good, '', 60000);
+  assert.equal(good.status, 'complete');
+  assert.match(report(good), /^Mission complete: all 2 items done and checked\./);
+
+  // A reviewer who says nothing usable approves nothing.
+  const silent = newRun({ id: 'r3', goal: 'Small', mode: 'Restricted', root: '/w', at: 0 });
+  applyPlan(silent, undefined);
+  assert.equal(silent.items.length, 1);
+  applyWork(silent, '1', { report: 'did it' });
+  applyReview(silent, undefined);
+  finish(silent);
+  assert.equal(silent.status, 'incomplete');
+  assert.match(report(silent), /1 could not be verified/);
+
+  // A worker that never gets its command to pass is stuck after its tries; the step limit ends a run.
+  const stuck = newRun({ id: 'r4', goal: 'Hard', mode: 'Full Auto', root: '/w', limits: { maxTries: 2, maxSteps: 5 }, at: 0 });
+  applyPlan(stuck, { items: [{ title: 'A', check: 'false' }, { title: 'B', check: 'false' }, { title: 'C' }] });
+  applyWork(stuck, '1', { check: { ok: false, output: 'no' } });
+  applyWork(stuck, '1', { check: { ok: false, output: 'no' } });
+  assert.equal(stuck.items[0].status, 'stuck');
+  applyWork(stuck, '2', { failed: 'the worker stopped' });
+  applyWork(stuck, '2', { check: { ok: false, output: 'no' } });
+  assert.equal(stuck.steps, 5);
+  assert.equal(nextStep(stuck).kind, 'finish');
+  finish(stuck);
+  assert.match(report(stuck), /^Mission not complete: 0 of 3 items done\. It reached its limit of 5 steps\./);
+
+  const stopped = newRun({ id: 'r5', goal: 'x y z', mode: 'Ask-Auto', root: '/w', at: 0 });
+  applyPlan(stopped, { items: [{ title: 'A' }] });
+  finish(stopped, 'You ended it.');
+  assert.match(report(stopped), /^Mission stopped: 0 of 1 items done\. You ended it\./);
+});
+
+test('an ended run is taken up again for what waited for the user', async () => {
+  const { newRun, nextStep, applyPlan, applyWork, applyReview, finish, reopen, report } = await import('../lib/run.js');
+  const run = newRun({ id: 'r6', goal: 'x y z', mode: 'Restricted', root: '/w', limits: { maxSteps: 5, maxReviews: 1 }, at: 0 });
+  applyPlan(run, { items: [{ title: 'A', check: 'true' }, { title: 'B', check: 'true' }] });
+  applyWork(run, '1', { check: { ok: true, output: '' } });
+  applyWork(run, '2', { check: { ok: false, output: 'no' }, aside: 'change b.js?' });
+  applyReview(run, { verdict: 'approve', items: [] });
+  finish(run);
+  assert.equal(run.status, 'incomplete');
+  assert.match(report(run), /Type \/mission resume while you are here/);
+  assert.equal(reopen(run), 1);
+  assert.equal(run.status, 'running');
+  assert.equal(run.items[1].tries, 0);
+  // There is room to finish, and one more review.
+  assert.ok(run.limits.maxSteps > run.steps + 3);
+  assert.deepEqual(nextStep(run), { kind: 'work', item: run.items[1] });
+  applyWork(run, '2', { check: { ok: true, output: '' } });
+  assert.equal(nextStep(run).kind, 'review');
+  applyReview(run, { verdict: 'approve', items: [] });
+  finish(run);
+  assert.equal(run.status, 'complete');
+  // A finished run has nothing to take up.
+  assert.equal(reopen(run), 0);
+  assert.equal(run.status, 'complete');
+});
+
+test('a step runs on its own: a short call waits, is told to come back, and the next call gets the result', async () => {
+  const { createRunner, WAIT_MS, IDLE_ROUNDS, PROGRAM_TOOL } = await import('../runner.js');
+  const { conductorNote } = await import('../lib/prompts.js');
+  assert.equal(PROGRAM_TOOL, 'run_code');
+  // Under PTC the app stops a program after two minutes by default: the wait must end before that.
+  assert.ok(WAIT_MS.program < 120_000);
+  assert.match(conductorNote({ goal: 'g' }, true), /return await tools\.mission_step\(\{\}\)/);
+  assert.match(conductorNote({ goal: 'g' }, true), /still working, that is not an error/);
+  assert.ok(!/run_code/.test(conductorNote({ goal: 'g' }, false)));
+
+  const root = fresh();
+  try {
+    const goal = { id: 'g1', revision: 1, phase: 'active' };
+    let made = false;
+    const calls = [];
+    const goals = {
+      create: (_agent, request) => { calls.push(['create', request.maxGoalRounds]); goal.phase = 'active'; made = true; return goal; },
+      get: () => (made ? goal : undefined),
+      pause: () => { calls.push(['pause']); goal.phase = 'paused'; },
+      resume: () => { calls.push(['resume']); goal.phase = 'active'; },
+      complete: () => { calls.push(['complete']); goal.phase = 'complete'; },
+    };
+    let delay = 250;
+    const answers = ['{"summary":"s","items":[{"title":"Only item","check":"true"}],"checks":[]}', 'Report: did it.'];
+    const subagents = { startActivation: async () => ({ childId: 'c', result: new Promise((resolve) => setTimeout(() => resolve({ output: [{ type: 'text', text: answers.shift() ?? 'ok' }], stopReason: 'end' }), delay)) }) };
+    const ctx = { get: (name) => ({ goals, subagents })[name] };
+    const points = { take: async () => ({ id: 'p', number: 3, fresh: true }), files: async () => ({ files: ['a.js'], more: false }), idOf: async () => 'p', changes: async () => '' };
+    const runner = createRunner(ctx, { settings: () => ({ limits: { maxItems: 12, maxTries: 3, maxReviews: 0, maxSteps: 60, waitMinutes: 3 }, roles: {}, projects: {} }), pointsOf: () => points, afterCommand: async () => [], warn: () => {}, home: undefined });
+    const agent = { id: 'conv', model: { current: () => ({ provider: 'p', model: 'm' }) } };
+    const started = await runner.start(agent, 'do one small thing', { mode: 'auto', root });
+    assert.match(started, /^Mission started \(Full Auto\)/);
+    // The app's own cap on rounds is far above the run's step limit: waiting rounds must not end a run.
+    assert.ok(calls[0][1] >= 1000);
+    assert.equal(runner.isOn('conv'), true);
+
+    // The planner needs 250 ms; this call waits 40 ms and is told to come back.
+    const first = await runner.step(agent, new AbortController().signal, 40);
+    assert.match(first, /^Still working on this step: the plan \(1 minute so far\)[\s\S]*Call mission_step again/);
+    assert.equal(runner.runOf('conv').steps, 0);
+    // The next call finds the same step and gets its result.
+    const second = await runner.step(agent, new AbortController().signal, 5000);
+    assert.match(second, /^Step 1: plan \(planner on m\)\. 1 item\./);
+    assert.equal(runner.runOf('conv').steps, 1);
+
+    // A call that is cut off (a program's time ran out) does not stop the step while the goal is active.
+    delay = 2200;
+    const cut = new AbortController();
+    setTimeout(() => cut.abort(), 30);
+    assert.match(await runner.step(agent, cut.signal, 5000), /cut off/);
+    const third = await runner.step(agent, new AbortController().signal, 5000);
+    assert.match(third, /Step 2: item 1 of 1[\s\S]*PASSED[\s\S]*Mission complete: all 1 item done and checked\./);
+    assert.equal(runner.isOn('conv'), false);
+    assert.deepEqual(calls.at(-1), ['complete']);
+
+    // Rounds without a step pause a run instead of using rounds up.
+    const stalled = { id: 'conv2', model: agent.model };
+    goal.phase = 'complete';
+    answers.push('{"items":[{"title":"x"}]}');
+    await runner.start(stalled, 'another small thing', { mode: 'auto', root });
+    let paused = false;
+    for (let round = 0; round <= IDLE_ROUNDS && !paused; round += 1) paused = runner.round(stalled);
+    assert.equal(paused, true);
+    assert.equal(goal.phase, 'paused');
+    assert.match(runner.status(stalled), /did not call mission_step for 5 rounds/);
+    // A step in between resets the count.
+    assert.equal(runner.round(stalled), false);
+
+    // A goal that used up its rounds cannot be resumed; the run gets a new one and carries on.
+    goals.resume = () => { throw new Error('round cap reached'); };
+    goals.clear = () => { calls.push(['clear']); made = false; };
+    assert.match(runner.resume(stalled), /^Mission carries on from step 1/);
+    assert.deepEqual(calls.slice(-2).map((call) => call[0]), ['clear', 'create']);
+    assert.equal(goal.phase, 'active');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('one model for everything is the default; the roles\' models need the conversation to say so', async () => {
+  const { createRunner } = await import('../runner.js');
+  const root = fresh();
+  try {
+    let policy;
+    let made = false;
+    const goal = { id: 'g', revision: 1, phase: 'active' };
+    const goals = { create: () => { made = true; goal.phase = 'active'; return goal; }, get: () => (made ? goal : undefined), pause: () => {}, resume: () => {}, complete: () => { goal.phase = 'complete'; }, clear: () => { made = false; } };
+    const used = [];
+    const subagents = { startActivation: async (spec) => { used.push(spec.agentOptions?.model); return { childId: 'c', result: Promise.resolve({ output: [{ type: 'text', text: '{"items":[{"title":"x","check":"true"}]}' }], stopReason: 'end' }) }; } };
+    const modelTiers = { resolveTier: () => ({ id: 't' }), roleRoute: (_tier, role) => ({ provider: 'p', model: `tier-${role}` }) };
+    const services = { goals, subagents, modelTiers };
+    const ctx = { get: (name) => (name === 'modes' ? (policy === undefined ? undefined : { helperModels: () => policy }) : services[name]) };
+    const points = { take: async () => ({ id: 'p', number: 1, fresh: true }), files: async () => ({ files: [], more: false }), idOf: async () => 'p', changes: async () => '' };
+    const settings = () => ({ limits: { maxItems: 12, maxTries: 3, maxReviews: 0, maxSteps: 60, waitMinutes: 3 }, roles: { review: { provider: 'p', model: 'mission-review' } }, projects: {} });
+    const runner = createRunner(ctx, { settings, pointsOf: () => points, afterCommand: async () => [], warn: () => {}, home: undefined });
+    const agent = (id) => ({ id, model: { current: () => ({ provider: 'p', model: 'big-one' }) } });
+
+    // No Modes add-on, and Modes saying "same": the conversation's model for every role.
+    for (const [index, say] of [undefined, 'same'].entries()) {
+      policy = say;
+      made = false;
+      const text = await runner.start(agent(`a${index}`), 'do one small thing', { mode: 'auto', root });
+      assert.match(text, /^Mission started \(Full Auto\), one model\./);
+      assert.match(text, /Models: one model for everything \(big-one\)\. To use different models/);
+      await runner.step(agent(`a${index}`), new AbortController().signal, 5000);
+      assert.equal(used.at(-1), 'big-one');
+    }
+
+    // "Different models": Mission's own pick for the reviewer, Model Tiers for the others.
+    policy = 'roles';
+    made = false;
+    const text = await runner.start(agent('b'), 'do one small thing', { mode: 'auto', root });
+    assert.match(text, /^Mission started \(Full Auto\), 3 models\./);
+    assert.match(text, /Models: 3 different models: planner tier-plan, worker tier-implement, reviewer mission-review\. They may be loaded at the same time\./);
+    await runner.step(agent('b'), new AbortController().signal, 5000);
+    assert.equal(used.at(-1), 'tier-plan');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

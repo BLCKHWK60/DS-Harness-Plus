@@ -192,10 +192,12 @@ export function apply(ctx, config) {
   const childIds = new Set();
 
   /** @returns {'same' | 'roles'} which model the helpers run on: the choice beside the Deep research button, else the setting. */
-  function helperModel() {
+  function helperModel(parent) {
     let chosen;
     try {
-      chosen = ctx.get('modes')?.researchModel?.();
+      const modes = ctx.get('modes');
+      // The conversation's own choice when Modes knows one, else the default for all.
+      chosen = modes?.helperModels ? modes.helperModels(parent?.id) : modes?.researchModel?.();
     } catch {
       chosen = undefined;
     }
@@ -207,7 +209,7 @@ export function apply(ctx, config) {
    * for the parent's tier, and the parent's own model when that role has none.
    */
   function routeFor(parent, role) {
-    const tiers = helperModel() === 'roles' ? ctx.get('modelTiers') : undefined;
+    const tiers = helperModel(parent) === 'roles' ? ctx.get('modelTiers') : undefined;
     const tier = tiers?.resolveTier?.(parent.id);
     const route = tier ? tiers.roleRoute(tier.id, role) : null;
     if (route) return { provider: route.provider, model: route.model };

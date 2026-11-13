@@ -286,7 +286,15 @@ export function apply(ctx, config) {
     const role = plain(config.bestOfN)?.judgeRole ?? 'review';
     const tiers = ctx.get('modelTiers');
     const tier = tiers?.resolveTier?.(parent.id);
-    const route = tier ? tiers.roleRoute(tier.id, role) : null;
+    // With "one model for everything" (Modes, per conversation) the judge runs on the conversation's model.
+    let same = false;
+    try {
+      const modes = ctx.get('modes');
+      same = modes?.helperModels ? modes.helperModels(parent.id) === 'same' : false;
+    } catch {
+      same = false;
+    }
+    const route = tier && !same ? tiers.roleRoute(tier.id, role) : null;
     const current = parent.model?.current?.();
     const target = routeOverride ?? route ?? (current ? { provider: current.provider, model: current.model } : undefined);
     const started = await startChild(subagents, {

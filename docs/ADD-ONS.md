@@ -82,7 +82,45 @@ To get the normal sidebar back, switch **Cowork sidebar** off on the **Plugins**
   - **Files**: what is in the folder. **Add files** (or dropping files onto the box) copies them into the folder. A file is never replaced: a name that is taken gets " (2)".
   - **Conversations** of the project, and **New conversation**.
 
-## Colour schemes
+### Since 0.38: project types
+
+A Cowork project can have a type: ready-made instructions for a kind of work. Open a project's page (the gear on its row) to choose one. A new project shows the choice at the top, with **Blank** selected: Blank adds nothing, so Cowork works as before.
+
+| Type | What it is for |
+|---|---|
+| **Research** | Deep research from many sources, written up as reports with every claim cited. |
+| **Learn** | A tutor that teaches from your own materials: explanations, quizzes, flashcards, progress over time. |
+| **Paperwork** | Letters, bills, contracts, deadlines and drafted replies. It is told to keep your papers private. |
+| **Plan** | Plan and track any project: tasks, owners, dates, status and risks. |
+| **Write** | Long-form writing: outline, style guide or story bible, and revision passes across the manuscript. |
+
+- A type is a starting point. Its instructions are copied into the project, and you can change them as you like.
+- If the project already has instructions of yours, picking a type shows the new ones first. You then choose: replace yours, keep yours and only change the type, or cancel.
+- **Your own types:** under the instructions, **Save as my preset…** keeps the current text as a type of your own. It is then offered for every project. This is the way to add a method of your own.
+- Types are for projects under the Cowork tab. Finance, Data and Code keep their own tabs because they have their own tools.
+
+### Since 0.39: instructions written by a model
+
+On a project's page, under the instructions, **Generate with a model…** lets a model write the instructions for you.
+
+1. Pick any model you have.
+2. Choose what it may see: file names and the start of text files, or file names only.
+3. Read **what would be sent**: how many files, which ones text is taken from, and which were left out because they look like secrets.
+4. Read **where the model runs**. On this computer: nothing leaves it. On the internet: a warning appears and you must tick a box before anything is sent.
+5. The result is shown beside what you have now, with new lines marked + and removed lines marked −, plus a list of ideas for the project. **Use these instructions** puts them in the box. Nothing is saved until you press **Save**, and you can edit before and after.
+
+- The model gets no tools. It cannot open, change or delete anything; it only sees the summary Plus builds.
+- Keys, passwords and `.env` files are never included.
+- If the folder has an AGENTS.md or CLAUDE.md, the new instructions are written to fit beside it.
+- An empty folder works too: the instructions are then written from the project's type.
+- **Earlier versions** keeps the last 10 saved versions of a project's instructions. "Put back" restores one.
+- If the folder changes a lot after instructions were generated, the page says so and suggests generating again. It never does so by itself.
+
+### Since 0.39: Data and Finance tools in Cowork projects
+
+- A project of a type that uses them (Research, Paperwork, Plan) is pointed at the Data tools for tables and, for Research, the Finance tools. The Type card says whether they are available and where to switch them on.
+- **Paperwork** conversations start with Search and Deep research off, so your papers do not turn into web queries. You can switch them on in the chat box.
+
 
 Pick the colours of the whole app in **Settings → Colours**:
 - **DeepSeek Harness** (the stock colours, the default)
@@ -108,6 +146,17 @@ The chat box also gets three buttons for the open conversation:
 While the Code mode has no instructions of its own (Settings → Modes), Plus gives it a working method: read before changing, keep a step list, make small exact changes, run the tests and read the output, ask before anything that cannot be undone, and report plainly what changed, what was run and what was not verified. Writing your own text into the Code mode's instructions replaces it; the setting `codeMethod` switches it off.
 
 What the app itself already shows for code work: each file change as a card (click it for a before-and-after view in the right panel), the step list above the message box, and each command with its output. They are folded away once a turn is done. To keep them open, set **Settings → General → Work details** to **Verbose**.
+
+### Since 0.40: one model or several for helper agents
+
+Some tools start helper agents: a `/mission` run, Deep research, Agent swarm, the Tier tools, Code power. Helpers can run on the conversation's own model or on other models. Each different model has to be loaded at the same time, which matters when your models are large and your memory is not.
+
+- **The models chip** in the chat box, beside Tools, shows it at a glance: **One model** means everything runs on the conversation's model. An amber **3 models** means up to three may be loaded at once.
+- Click it to switch between **One model for everything** and **Different models**, for this conversation. Under "Different models" it lists every model the conversation may use and where each is set.
+- **One model is the default.** "Use this for new conversations too" changes the default.
+- A `/mission` run also says it in its first line: "one model" or "3 models", with their names.
+- Where the other models are set: Settings → Model Tiers → Role models, and Settings → Mission → Models for a run.
+- Not covered: the Self-improvement, Arena and Benchmark pages run the models you pick there.
 
 ### Since 0.34: Rerun, and hiding the thumbs
 
@@ -292,7 +341,36 @@ Details: `addons/dsh-finance/README.md`.
 
 ## Mission
 
-Keeps the assistant inside a conversation's folder, in one of three permission modes, and takes checkpoints of the folder that you can go back to. You switch it on per conversation by typing a command in the chat box. It works in Code, Cowork and Data.
+Gives a goal to several models at once, and keeps the work inside a conversation's folder. You use it by typing a command in the chat box of a conversation that has a folder. It works in Code, Cowork and Data.
+
+### A run: several models on one goal (since 0.37)
+
+Type `/mission` and the goal, for example `/mission make every test pass and add a --json option`. To choose the permission mode for the run, name it first: `/mission auto …`.
+
+1. A **planner** model reads the project and writes a checklist. Each item says when it is done and, where it can, a command that proves it.
+2. **Worker** models do the items one at a time. After each, Plus runs the item's command itself. Passed means the command really passed. Failed means the item is tried again, and the last try goes to the planner's model.
+3. Plus runs the overall commands (tests, build). One that fails becomes a new item.
+4. A **reviewer** model reads everything that changed against your goal. It judges what no command could prove, and may send items back.
+5. You get a report: every item marked PASSED (a command proved it), REVIEWED (the reviewer judged it), or not done, and the checkpoint number that undoes the whole run.
+
+| You type | What it does |
+|---|---|
+| `/mission <goal>` | Starts a run. It then goes on by itself. |
+| `/mission stop` | Pauses the run. |
+| `/mission resume` | Carries on. Also takes up items that waited for your yes. |
+| `/mission end` | Closes the run now, with a report. |
+| `/mission report` | How the run stands, or its final report. |
+
+- **If you are away** and a worker needs your yes for a file (Restricted and Ask-Auto), the card waits 3 minutes. Then the item is set aside as NEEDS YOU and the run carries on. `/mission resume` takes it up again when you are back.
+- **Which models:** Settings → Mission → **Models for a run**. Leave a role on "Follow Model Tiers" to use your plan, implement and review role models. Under **Per project** a project can have its own three models.
+- **Limits:** Settings → Mission → **How far a run may go** (12 items, 3 tries per item, 2 reviews, 60 steps unless you change them).
+- While a run is on, the conversation's own model only keeps it moving. Pause the run to work with it yourself.
+- A run works in every permission preset of the app, PTC included (since 0.37.1).
+- A long step shows as several rounds that say it is still working. That is normal.
+- If the conversation's model does not keep the run moving for five rounds in a row, the run pauses itself and `/mission` says why.
+- Each run keeps its log and every model's answer in `.dsh-mission/runs` inside the folder.
+
+### Permission modes and checkpoints (since 0.36)
 
 | You type | What it does |
 |---|---|
@@ -319,7 +397,8 @@ The app shows a command's answer as one line. Click the line to open the rest.
 - Files your project ignores (`.gitignore`), and `node_modules`, are not in a checkpoint: they are neither protected nor put back.
 - Reading outside the folder is checked from the text of a command. A script could still read a file elsewhere without naming it. It cannot change one.
 - The approval button says "Allow once". For a file inside the folder, the yes is remembered all the same.
-- **Not built yet:** giving `/mission` a goal that several models work on together. This is the base for it.
+- In a run, nothing counts as done on a worker's word alone. But a run is only as good as its plan: a command that proves little lets weak work pass.
+- A run does one item at a time, and it has no browser checks of its own.
 
 Details: `addons/dsh-mission/README.md`.
 

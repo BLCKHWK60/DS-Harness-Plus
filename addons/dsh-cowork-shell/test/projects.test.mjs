@@ -13,9 +13,9 @@ test('a project record keeps its tab and instructions, field by field', () => {
   const store = openProjects(file);
   store.save(dir, { tab: 'cowork' });
   store.save(dir, { instructions: 'Write in British English.' });
-  assert.deepEqual(store.get(dir), { tab: 'cowork', instructions: 'Write in British English.' });
+  assert.deepEqual(store.get(dir), { tab: 'cowork', instructions: 'Write in British English.', preset: '' });
   // A second reader sees the same, under the folder's real path.
-  assert.deepEqual(openProjects(file).all()[canonical(dir)], { tab: 'cowork', instructions: 'Write in British English.' });
+  assert.deepEqual(openProjects(file).all()[canonical(dir)], { tab: 'cowork', instructions: 'Write in British English.', preset: '' });
   assert.equal(store.forget(dir), true);
   assert.equal(store.get(dir), undefined);
 });

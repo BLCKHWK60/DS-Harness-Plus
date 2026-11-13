@@ -144,6 +144,68 @@ window.__ModuleLoader__.load({
         'proj.page.files.busy': 'Copying…',
         'proj.page.convs': 'Conversations',
         'proj.page.convs.none': 'No conversations in this project yet.',
+        'type.title': 'Type',
+        'type.title.new': 'What kind of project is this?',
+        'type.hint': 'A type gives the project ready-made instructions for that kind of work. They are a starting point: change them as you like. Blank adds nothing.',
+        'type.applied': '{name}: its instructions are in place. Change them below as you like.',
+        'type.blank': 'Blank: no instructions from a type.',
+        'type.only': 'The type is now {name}. Your instructions were left as they are.',
+        'type.preview': 'The instructions of "{name}". You already have instructions of your own:',
+        'type.replace': 'Replace mine with these',
+        'type.keep': 'Keep mine, only change the type',
+        'type.cancel': 'Cancel',
+        'type.own': 'yours',
+        'type.remove': 'Remove this preset',
+        'type.remove.sure': 'Remove your preset "{name}"?\n\nProjects that use it keep their instructions.',
+        'type.removed': 'Preset removed.',
+        'type.keepas': 'Save as my preset…',
+        'type.keepas.name': 'A name for the preset',
+        'type.keepas.save': 'Save preset',
+        'type.keepas.done': 'Saved as your preset "{name}". It is offered for every new project.',
+        'type.keepas.hint': 'Keeps these instructions as a type of your own, for other projects.',
+        'type.tool.data.on': 'This type uses the Data tools for tables (CSV, Excel). They are available.',
+        'type.tool.data.off': 'This type can use the Data tools for tables (CSV, Excel). They are switched off: Settings → Data → Show the Data tab.',
+        'type.tool.finance.on': 'This type uses the Finance tools for company and economy figures. They are available.',
+        'type.tool.finance.off': 'This type can use the Finance tools for company and economy figures. They are switched off: Settings → Finance → Show the Finance tab.',
+        'type.search.off': 'New conversations in this project start with Search and Deep research off, so your papers do not turn into web queries. You can switch them on in the chat box.',
+        'gen.open': 'Generate with a model…',
+        'gen.title': 'Write the instructions with a model',
+        'gen.hint': 'A model reads a summary of this folder and the project\'s type, and writes instructions for this project. It gets no tools: it cannot open, change or delete anything. You see the result before anything is saved.',
+        'gen.model': 'Model',
+        'gen.model.none': 'Pick a model…',
+        'gen.what.full': 'File names and the start of text files',
+        'gen.what.names': 'File names only',
+        'gen.sent': 'What would be sent: the names of {files} files{more}, and the start of {included} text files. About {chars} characters in all.',
+        'gen.sent.names': 'What would be sent: the names of {files} files{more}. No contents. About {chars} characters in all.',
+        'gen.sent.empty': 'The folder is empty. The instructions will be written from the project\'s type alone.',
+        'gen.sent.more': ' (and more)',
+        'gen.sent.files': 'Text taken from: {names}',
+        'gen.secrets': 'Left out because they look like secrets: {names}',
+        'gen.guides': '{names} is in the folder. The app already gives it to the assistant; it is sent along so the new instructions fit beside it.',
+        'gen.where.local': 'This model runs on this computer. Nothing leaves it.',
+        'gen.where.network': 'This model runs at {host}, in your own network.',
+        'gen.where.cloud': 'This model runs on the internet ({host}). Everything listed above will be sent to it.',
+        'gen.where.unknown': 'Plus cannot tell where this model runs. Treat it as a service on the internet: everything listed above may leave this computer.',
+        'gen.agree': 'Yes, send this to {name}',
+        'gen.run': 'Generate',
+        'gen.running': 'The model is writing… this can take a minute.',
+        'gen.close': 'Close',
+        'gen.result': 'What {model} wrote. Lines marked + are new, lines marked − would go. Nothing is saved yet.',
+        'gen.result.first': 'What {model} wrote. Nothing is saved yet.',
+        'gen.same': 'The model wrote the same instructions you already have.',
+        'gen.ideas': 'Ideas for this project',
+        'gen.use': 'Use these instructions',
+        'gen.used': 'The new instructions are in the box. Change them if you like, then press Save.',
+        'gen.discard': 'Discard',
+        'gen.drift': 'The folder has changed since these instructions were generated ({added} files new, {removed} gone). You may want to generate them again.',
+        'ver.open': 'Earlier versions ({n})',
+        'ver.title': 'Earlier versions',
+        'ver.by.you': 'You',
+        'ver.by.type': 'Type',
+        'ver.by.model': 'Model',
+        'ver.current': 'in use',
+        'ver.back': 'Put back',
+        'ver.backed': 'That version is in the box. Press Save to use it.',
         'proj.title': 'Project',
         'show.more': 'Show {n} more',
         'lib.title.chat': 'Recent chats',
@@ -282,6 +344,68 @@ window.__ModuleLoader__.load({
         'proj.page.files.busy': '正在复制…',
         'proj.page.convs': '对话',
         'proj.page.convs.none': '此项目中还没有对话。',
+        'type.title': '类型',
+        'type.title.new': '这是什么类型的项目？',
+        'type.hint': '类型为项目提供适合该类工作的现成指令。它们只是起点，可以随意修改。“空白”不添加任何内容。',
+        'type.applied': '{name}：其指令已就位，可在下方随意修改。',
+        'type.blank': '空白：不使用类型指令。',
+        'type.only': '类型已改为 {name}。你的指令保持不变。',
+        'type.preview': '“{name}”的指令。你已有自己的指令：',
+        'type.replace': '用这些替换我的指令',
+        'type.keep': '保留我的指令，只更改类型',
+        'type.cancel': '取消',
+        'type.own': '我的',
+        'type.remove': '删除此预设',
+        'type.remove.sure': '删除你的预设“{name}”？\n\n使用它的项目会保留其指令。',
+        'type.removed': '预设已删除。',
+        'type.keepas': '保存为我的预设…',
+        'type.keepas.name': '预设名称',
+        'type.keepas.save': '保存预设',
+        'type.keepas.done': '已保存为你的预设“{name}”。新建项目时可选用。',
+        'type.keepas.hint': '把这些指令保存为你自己的类型，供其他项目使用。',
+        'type.tool.data.on': '此类型使用数据工具处理表格（CSV、Excel）。工具可用。',
+        'type.tool.data.off': '此类型可使用数据工具处理表格（CSV、Excel）。工具已关闭：设置 → 数据 → 显示数据标签页。',
+        'type.tool.finance.on': '此类型使用财经工具获取公司和经济数据。工具可用。',
+        'type.tool.finance.off': '此类型可使用财经工具获取公司和经济数据。工具已关闭：设置 → 财经 → 显示财经标签页。',
+        'type.search.off': '此项目中的新对话默认关闭搜索和深度研究，以免你的文件内容变成网络查询。可在聊天框中开启。',
+        'gen.open': '用模型生成…',
+        'gen.title': '用模型撰写指令',
+        'gen.hint': '模型会阅读此文件夹的摘要和项目类型，为该项目撰写指令。它没有任何工具，无法打开、修改或删除任何内容。保存前你会先看到结果。',
+        'gen.model': '模型',
+        'gen.model.none': '选择模型…',
+        'gen.what.full': '文件名和文本文件的开头',
+        'gen.what.names': '仅文件名',
+        'gen.sent': '将发送：{files} 个文件的名称{more}，以及 {included} 个文本文件的开头。共约 {chars} 个字符。',
+        'gen.sent.names': '将发送：{files} 个文件的名称{more}。不含内容。共约 {chars} 个字符。',
+        'gen.sent.empty': '文件夹为空。将仅根据项目类型撰写指令。',
+        'gen.sent.more': '（及更多）',
+        'gen.sent.files': '文本取自：{names}',
+        'gen.secrets': '因看起来像机密而排除：{names}',
+        'gen.guides': '文件夹中有 {names}。应用已把它交给助手；一并发送是为了让新指令与之配合。',
+        'gen.where.local': '此模型在本机运行。不会有任何内容离开本机。',
+        'gen.where.network': '此模型运行于 {host}，在你自己的网络中。',
+        'gen.where.cloud': '此模型在互联网上运行（{host}）。上面列出的所有内容都会发送给它。',
+        'gen.where.unknown': 'Plus 无法判断此模型在哪里运行。请把它当作互联网服务：上面列出的内容可能离开本机。',
+        'gen.agree': '是的，发送给 {name}',
+        'gen.run': '生成',
+        'gen.running': '模型正在撰写…可能需要一分钟。',
+        'gen.close': '关闭',
+        'gen.result': '{model} 撰写的内容。带 + 的行是新增的，带 − 的行将被删除。尚未保存。',
+        'gen.result.first': '{model} 撰写的内容。尚未保存。',
+        'gen.same': '模型撰写的指令与现有的相同。',
+        'gen.ideas': '此项目的点子',
+        'gen.use': '使用这些指令',
+        'gen.used': '新指令已放入输入框。可随意修改，然后按“保存”。',
+        'gen.discard': '放弃',
+        'gen.drift': '自这些指令生成以来，文件夹已有变化（新增 {added} 个文件，减少 {removed} 个）。可以考虑重新生成。',
+        'ver.open': '历史版本（{n}）',
+        'ver.title': '历史版本',
+        'ver.by.you': '你',
+        'ver.by.type': '类型',
+        'ver.by.model': '模型',
+        'ver.current': '使用中',
+        'ver.back': '恢复',
+        'ver.backed': '该版本已放入输入框。按“保存”即可使用。',
         'proj.title': '项目',
         'show.more': '再显示 {n} 个',
         'lib.title.chat': '最近的聊天',
@@ -576,6 +700,27 @@ html[data-cws-wide] [class*='_composerStack']:not([class*='_composerHero'] *) [c
 .cws-drop[data-over='true']{outline:1px dashed var(--dsw-alias-brand-primary);outline-offset:2px}
 .cws-lib-links{display:inline-flex;gap:2px;align-items:center;flex:none;white-space:nowrap}
 .cws-note{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px}
+.cws-types{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.cws-type{display:flex;flex-direction:column;gap:2px;align-items:flex-start;text-align:left;padding:10px 12px;border:0.5px solid var(--dsw-alias-border-l2);border-radius:12px;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;font:inherit;min-width:0}
+.cws-type:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.cws-type:focus-visible{outline:1px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.cws-type[aria-pressed=true]{border-color:var(--dsw-alias-brand-primary);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 9%,transparent)}
+.cws-type b{font-size:13px;line-height:20px;font-weight:500}
+.cws-type b i{font-style:normal;font-weight:400;font-size:11px;color:var(--dsw-alias-label-secondary);margin-left:6px}
+.cws-type span{font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}
+.cws-preview{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 5%,transparent)}
+.cws-warn{padding:8px 10px;border-radius:10px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-primary);background:color-mix(in srgb,var(--dsw-alias-state-warning-primary,#d98a00) 16%,transparent)}
+.cws-check{display:flex;gap:8px;align-items:center;font-size:12px;line-height:18px;cursor:pointer}
+.cws-diff{margin:0;max-height:320px;overflow:auto;font:inherit;font-size:12px;line-height:18px}
+.cws-diff div{white-space:pre-wrap;overflow-wrap:anywhere;padding:0 6px;border-radius:4px}
+.cws-diff div[data-k="+"]{background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#2e9e5b) 18%,transparent)}
+.cws-diff div[data-k="-"]{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#d9534f) 16%,transparent);text-decoration:line-through;color:var(--dsw-alias-label-secondary)}
+.cws-diff div[data-k=" "]{color:var(--dsw-alias-label-secondary)}
+.cws-ideas{margin:0;padding-left:18px;font-size:12px;line-height:19px;color:var(--dsw-alias-label-primary)}
+.cws-ver{display:flex;gap:10px;align-items:center;font-size:12px;line-height:18px;padding:4px 0}
+.cws-ver span:first-child{flex:none;color:var(--dsw-alias-label-secondary);width:150px}
+.cws-ver span:nth-child(2){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cws-preview pre{margin:0;max-height:220px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}
 .cws-msg{font-size:12px;color:var(--dsw-alias-label-secondary)}
 .cws-msg[data-tone=bad]{color:var(--dsw-alias-state-error-primary,inherit)}
 @media (max-width:640px){.cws-form{grid-template-columns:1fr}.cws-item{flex-wrap:wrap}}
@@ -976,14 +1121,14 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         for (const [key, value] of Object.entries(query ?? {})) u.searchParams.set(key, String(value));
         return u;
       };
-      let snapshot = { projects: [], focus: null };
+      let snapshot = { projects: [], presets: [], shared: {}, focus: null };
       const listeners = new Set();
       const emit = () => { for (const listener of listeners) listener(); };
       const call = async (query, init) => {
         const response = await fetch(url(query), { headers: { accept: 'application/json' }, ...init });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(String(data?.error ?? response.status));
-        if (Array.isArray(data?.projects)) { snapshot = { ...snapshot, projects: data.projects }; emit(); }
+        if (Array.isArray(data?.projects)) { snapshot = { ...snapshot, projects: data.projects, presets: Array.isArray(data.presets) ? data.presets : snapshot.presets, shared: data.shared && typeof data.shared === 'object' ? data.shared : snapshot.shared }; emit(); }
         return data;
       };
       let timer;
@@ -997,6 +1142,10 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         refresh: () => call(),
         save: (path, patch) => call(null, { method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify({ action: 'save', path, ...patch }) }),
         files: async (path) => (await call({ files: path })).files ?? { files: [], more: false },
+        digest: (path, contents, provider) => call({ digest: path, contents: contents ? '1' : '0', ...(provider ? { provider } : {}) }),
+        generate: (body) => call(null, { method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify({ action: 'generate', ...body }) }),
+        presetSave: (preset) => call(null, { method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify({ action: 'preset-save', ...preset }) }),
+        presetRemove: (id) => call(null, { method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify({ action: 'preset-remove', id }) }),
         upload: (path, file) => call({ upload: '1', path, name: file.name }, { method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/octet-stream' }, body: file }),
         focus: (workspaceId) => { snapshot = { ...snapshot, focus: workspaceId }; emit(); },
       };
@@ -1007,6 +1156,86 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       if (bytes < 1024) return bytes + ' B';
       if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(bytes < 10240 ? 1 : 0) + ' KB';
       return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+    }
+
+    /**
+     * The lines of two texts side by side: kept (' '), gone ('-') and new ('+').
+     * @param {string} before - the text now.
+     * @param {string} after - the new text.
+     * @returns {{k: string, text: string}[] | null} the lines; null when the texts are too long to compare line by line.
+     */
+    function lineDiff(before, after) {
+      const a = String(before ?? '').split('\n');
+      const b = String(after ?? '').split('\n');
+      if (a.length > 700 || b.length > 700) return null;
+      const width = b.length + 1;
+      const table = new Uint16Array((a.length + 1) * width);
+      for (let i = a.length - 1; i >= 0; i -= 1) for (let j = b.length - 1; j >= 0; j -= 1) table[i * width + j] = a[i] === b[j] ? table[(i + 1) * width + j + 1] + 1 : Math.max(table[(i + 1) * width + j], table[i * width + j + 1]);
+      const out = [];
+      let i = 0;
+      let j = 0;
+      while (i < a.length && j < b.length) {
+        if (a[i] === b[j]) { out.push({ k: ' ', text: a[i] }); i += 1; j += 1; }
+        else if (table[(i + 1) * width + j] >= table[i * width + j + 1]) { out.push({ k: '-', text: a[i] }); i += 1; }
+        else { out.push({ k: '+', text: b[j] }); j += 1; }
+      }
+      for (; i < a.length; i += 1) out.push({ k: '-', text: a[i] });
+      for (; j < b.length; j += 1) out.push({ k: '+', text: b[j] });
+      return out;
+    }
+
+    /** The panel that writes a project's instructions with a model: choose, see what would be sent, agree, read the result. */
+    function GeneratePanel({ t, gen, setGen, catalog, current, onRun, onUse }) {
+      const groups = catalog?.groups ?? [];
+      const value = gen.provider && gen.model ? `${gen.provider}\u0000${gen.model}` : '';
+      const digest = gen.digest;
+      const where = gen.where?.where;
+      const outside = where === 'cloud' || where === 'unknown';
+      const made = gen.result;
+      const set = (patch) => setGen((now) => (now ? { ...now, ...patch } : now));
+      if (made) {
+        const diff = current.trim() ? lineDiff(current.trim(), made.instructions) : null;
+        const same = current.trim() === made.instructions.trim();
+        return h('div', { className: 'cws-preview' },
+          h('div', { className: 'cws-note' }, same ? t('gen.same') : t(diff ? 'gen.result' : 'gen.result.first', { model: made.model })),
+          same ? null : diff
+            ? h('div', { className: 'cws-diff' }, diff.map((line, index) => h('div', { key: index, 'data-k': line.k }, `${line.k === ' ' ? ' ' : line.k === '+' ? '+' : '−'} ${line.text}`)))
+            : h('pre', null, made.instructions),
+          made.ideas.length > 0 ? h('div', { className: 'cws-note' }, t('gen.ideas')) : null,
+          made.ideas.length > 0 ? h('ul', { className: 'cws-ideas' }, made.ideas.map((idea, index) => h('li', { key: index }, idea))) : null,
+          h('div', { className: 'cws-inline' },
+            same ? null : h('button', { type: 'button', className: 'cws-btn', onClick: onUse }, t('gen.use')),
+            h('button', { type: 'button', className: 'cws-btn', onClick: () => setGen(null) }, t(same ? 'gen.close' : 'gen.discard'))));
+      }
+      return h('div', { className: 'cws-preview' },
+        h('div', { className: 'cws-sec-head' }, h('h2', null, t('gen.title'))),
+        h('div', { className: 'cws-note' }, t('gen.hint')),
+        h('div', { className: 'cws-inline' },
+          h('select', {
+            value, 'aria-label': t('gen.model'), disabled: gen.busy,
+            onChange: (event) => { const [provider, model] = event.target.value.split('\u0000'); set({ provider: provider || '', model: model || '', agreed: false, where: null, error: '' }); },
+          },
+          h('option', { value: '' }, t('gen.model.none')),
+          groups.map((group) => h('optgroup', { key: group.id, label: group.name }, group.models.map((item) => h('option', { key: `${group.id}:${item.id}`, value: `${group.id}\u0000${item.id}` }, item.name))))),
+          h('select', { value: gen.contents ? '1' : '0', 'aria-label': t('gen.what.full'), disabled: gen.busy, onChange: (event) => set({ contents: event.target.value === '1', agreed: false, digest: null }) },
+            h('option', { value: '1' }, t('gen.what.full')),
+            h('option', { value: '0' }, t('gen.what.names')))),
+        digest ? h('div', { className: 'cws-note' }, digest.files === 0 ? t('gen.sent.empty')
+          : t(digest.contents ? 'gen.sent' : 'gen.sent.names', { files: digest.files, more: digest.more ? t('gen.sent.more') : '', included: digest.included.length, chars: digest.chars.toLocaleString() })) : null,
+        digest && digest.included.length > 0 ? h('div', { className: 'cws-note' }, t('gen.sent.files', { names: digest.included.map((file) => file.name).join(', ') })) : null,
+        digest && digest.guides.length > 0 ? h('div', { className: 'cws-note' }, t('gen.guides', { names: digest.guides.join(', ') })) : null,
+        digest && digest.secrets.length > 0 ? h('div', { className: 'cws-note' }, t('gen.secrets', { names: digest.secrets.join(', ') })) : null,
+        gen.provider && where === 'local' ? h('div', { className: 'cws-note' }, t('gen.where.local')) : null,
+        gen.provider && where === 'network' ? h('div', { className: 'cws-note' }, t('gen.where.network', { host: gen.where.host })) : null,
+        gen.provider && outside ? h('div', { className: 'cws-warn', role: 'alert' }, where === 'cloud' ? t('gen.where.cloud', { host: gen.where.host || gen.where.name }) : t('gen.where.unknown')) : null,
+        gen.provider && outside ? h('label', { className: 'cws-check' },
+          h('input', { type: 'checkbox', checked: gen.agreed, disabled: gen.busy, onChange: (event) => set({ agreed: event.target.checked }) }),
+          t('gen.agree', { name: gen.where.name || gen.model })) : null,
+        gen.error ? h('div', { className: 'cws-msg', 'data-tone': 'bad', role: 'status' }, gen.error) : null,
+        gen.busy ? h('div', { className: 'cws-note', role: 'status' }, t('gen.running')) : null,
+        h('div', { className: 'cws-inline' },
+          h('button', { type: 'button', className: 'cws-btn', disabled: gen.busy || !gen.provider || !gen.model || !gen.where || !digest || (outside && !gen.agreed), onClick: onRun }, t('gen.run')),
+          h('button', { type: 'button', className: 'cws-btn', disabled: gen.busy, onClick: () => setGen(null) }, t('gen.close'))));
     }
 
     /** A project's page: its name, the tab it shows under, its instructions, its files, its conversations. */
@@ -1023,6 +1252,17 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const [files, setFiles] = useState({ files: [], more: false });
       const [busy, setBusy] = useState(false);
       const [over, setOver] = useState(false);
+      // A type that was picked while the project already has instructions of its own: shown first, applied on a yes.
+      const [pending, setPending] = useState(null);
+      const [keepName, setKeepName] = useState(null);
+      // The generate panel: closed (null), or what is chosen in it and what came back.
+      const [gen, setGen] = useState(null);
+      const [catalog, setCatalog] = useState(null);
+      const [versions, setVersions] = useState([]);
+      const [showVersions, setShowVersions] = useState(false);
+      const [drifted, setDrifted] = useState(null);
+      // Where the text in the box came from, so a save can say so: the model, a type, or the user.
+      const origin = useRef({ by: 'you', note: '', text: '', mark: undefined });
       const picker = useRef(null);
       const path = ws?.path ?? '';
       const loadedFor = useRef('');
@@ -1033,7 +1273,44 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         setText(record.instructions ?? '');
         setName(ws.title ?? '');
         setNote({ text: '', tone: '' });
+        setPending(null);
+        setKeepName(null);
+        setGen(null);
+        setShowVersions(false);
+        origin.current = { by: 'you', note: '', text: '', mark: undefined };
       }, [ws?.workspaceId, record !== null]);
+      // The versions kept for this project, and whether the folder moved since instructions were last generated.
+      useEffect(() => {
+        setVersions([]);
+        setDrifted(null);
+        if (!path) return undefined;
+        let live = true;
+        projects.digest(path, false).then((data) => {
+          if (!live) return;
+          if (Array.isArray(data?.versions)) setVersions(data.versions);
+          if (data?.digest?.generatedBefore && data.digest.drift?.much) setDrifted(data.digest.drift);
+        }).catch(() => {});
+        return () => { live = false; };
+      }, [path, projects]);
+      // The look at "what would be sent" follows the choices in the panel.
+      const genKey = gen ? `${gen.provider}\u0000${gen.contents}` : '';
+      useEffect(() => {
+        if (!gen || !path) return undefined;
+        let live = true;
+        projects.digest(path, gen.contents, gen.provider).then((data) => {
+          if (live) setGen((now) => (now ? { ...now, digest: data?.digest ?? null, where: data?.where ?? null } : now));
+        }).catch((error) => { if (live) setGen((now) => (now ? { ...now, error: String(error?.message ?? error) } : now)); });
+        return () => { live = false; };
+      }, [genKey, path, projects]);
+      useEffect(() => {
+        if (!gen || catalog) return;
+        (async () => {
+          try {
+            const result = await appCtx.get('remote.session')?.modelCatalog?.();
+            if (result?.ok) setCatalog(result.value);
+          } catch { /* the picker stays empty */ }
+        })();
+      }, [gen !== null, catalog, appCtx]);
       const loadFiles = useCallback(async () => {
         if (!path) return;
         try { setFiles(await projects.files(path)); } catch { setFiles({ files: [], more: false }); }
@@ -1044,7 +1321,44 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
 
       const fail = (error) => setNote({ text: t('proj.page.failed', { message: String(error?.message ?? error) }), tone: 'bad' });
       const saveText = async () => {
-        try { await projects.save(path, { instructions: text }); setNote({ text: t('proj.page.saved'), tone: '' }); } catch (error) { fail(error); }
+        try {
+          // Text that came from the model or a type and was not changed since is recorded as theirs.
+          const from = origin.current.text && origin.current.text === text ? origin.current : { by: 'you', note: '' };
+          const data = await projects.save(path, { instructions: text, by: from.by, note: from.note, ...(from.by === 'model' ? { mark: from.mark } : {}) });
+          if (Array.isArray(data?.versions)) setVersions(data.versions);
+          if (from.by === 'model') setDrifted(null);
+          origin.current = { by: 'you', note: '', text: '', mark: undefined };
+          setNote({ text: t('proj.page.saved'), tone: '' });
+        } catch (error) { fail(error); }
+      };
+      const openGen = () => {
+        // The conversation's usual model is not known here; the user picks one.
+        setGen({ provider: '', model: '', contents: true, agreed: false, busy: false, digest: null, where: null, result: null, error: '' });
+        setShowVersions(false);
+      };
+      const runGen = async () => {
+        if (!gen?.provider || !gen.model || gen.busy) return;
+        setGen((now) => ({ ...now, busy: true, error: '', result: null }));
+        try {
+          const data = await projects.generate({ path, provider: gen.provider, model: gen.model, contents: gen.contents, agreed: gen.agreed, current: text });
+          setGen((now) => (now ? { ...now, busy: false, result: data?.generated ?? null } : now));
+        } catch (error) {
+          setGen((now) => (now ? { ...now, busy: false, error: String(error?.message ?? error) } : now));
+        }
+      };
+      const useGen = () => {
+        const made = gen?.result;
+        if (!made) return;
+        setText(made.instructions);
+        origin.current = { by: 'model', note: made.model, text: made.instructions, mark: made.mark };
+        setGen(null);
+        setNote({ text: t('gen.used'), tone: '' });
+      };
+      const putBack = (version) => {
+        setText(version.text);
+        origin.current = { by: version.by, note: version.note, text: version.text, mark: undefined };
+        setShowVersions(false);
+        setNote({ text: t('ver.backed'), tone: '' });
       };
       const rename = async () => {
         const next = name.trim();
@@ -1088,6 +1402,44 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         .sort((a, b) => (lib.byId[b].updatedAt ?? 0) - (lib.byId[a].updatedAt ?? 0));
       const tabChoices = tabsOf(state).filter((m) => m.id !== 'chat');
 
+      // Types are Cowork's: the other tabs have their own instructions and tools.
+      const presets = Array.isArray(meta.presets) ? meta.presets : [];
+      const typed = (record?.tab || state.selected) === 'cowork' && presets.length > 0;
+      const currentType = presets.find((preset) => preset.id === (record?.preset || 'blank')) ?? presets[0];
+      const fresh = !record?.preset && !(record?.instructions ?? '').trim();
+      const applyType = async (preset, withText) => {
+        try {
+          const data = await projects.save(path, withText ? { preset: preset.id, instructions: preset.instructions, by: 'type', note: preset.name } : { preset: preset.id });
+          if (Array.isArray(data?.versions)) setVersions(data.versions);
+          if (withText) setText(preset.instructions);
+          setPending(null);
+          setNote({ text: withText ? (preset.instructions ? t('type.applied', { name: preset.name }) : t('type.blank')) : t('type.only', { name: preset.name }), tone: '' });
+        } catch (error) { fail(error); }
+      };
+      const pickType = (preset) => {
+        if (preset.id === currentType?.id && record?.preset) { setPending(null); return; }
+        // Nothing of the user's own would be lost: no instructions yet, or the current type's, untouched.
+        const mine = text.trim();
+        const untouched = mine === '' || (mine === (currentType?.instructions ?? '').trim() && mine === (record?.instructions ?? '').trim());
+        if (untouched) void applyType(preset, true);
+        else setPending(preset);
+      };
+      const removeType = async (preset) => {
+        if (!window.confirm(t('type.remove.sure', { name: preset.name }))) return;
+        try { await projects.presetRemove(preset.id); setPending(null); setNote({ text: t('type.removed'), tone: '' }); } catch (error) { fail(error); }
+      };
+      const keepAs = async () => {
+        const label = (keepName ?? '').trim();
+        if (!label || !text.trim()) return;
+        try {
+          const data = await projects.presetSave({ name: label, description: '', tools: currentType?.tools ?? [], searchOff: currentType?.searchOff === true, instructions: text });
+          // The project is of that type from now on, and its instructions are saved with it.
+          await projects.save(path, { preset: data?.saved, instructions: text });
+          setKeepName(null);
+          setNote({ text: t('type.keepas.done', { name: label }), tone: '' });
+        } catch (error) { fail(error); }
+      };
+
       return h(PageFrame, {
         title: ws.title || t('untitled'), hint: path,
         actions: h('button', { type: 'button', className: 'cws-btn', onClick: () => start('') }, t('proj.page.newconv')),
@@ -1101,12 +1453,47 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             h('span', { className: 'cws-note' }, t('proj.page.tab')),
             h('select', { value: record?.tab || state.selected, 'aria-label': t('proj.page.tab'), onChange: (e) => void setTab(e.target.value) },
               tabChoices.map((m) => h('option', { key: m.id, value: m.id }, m.label)))))),
+      typed ? h('div', { className: 'cws-card' },
+        h('div', { className: 'cws-sec' },
+          h('div', { className: 'cws-sec-head' }, h('h2', null, fresh ? t('type.title.new') : t('type.title')),
+            currentType?.own && !pending ? h('button', { type: 'button', className: 'cws-btn', onClick: () => void removeType(currentType) }, t('type.remove')) : null),
+          h('p', { className: 'cws-note', style: { margin: 0 } }, t('type.hint')),
+          h('div', { className: 'cws-types', role: 'group', 'aria-label': t('type.title') }, presets.map((preset) => h('button', {
+            key: preset.id, type: 'button', className: 'cws-type', 'aria-pressed': (pending ? pending.id : currentType?.id) === preset.id, onClick: () => pickType(preset),
+          }, h('b', null, preset.name, preset.own ? h('i', null, t('type.own')) : null), preset.description ? h('span', null, preset.description) : null))),
+          pending ? h('div', { className: 'cws-preview' },
+            h('div', { className: 'cws-note' }, t('type.preview', { name: pending.name })),
+            pending.instructions ? h('pre', null, pending.instructions) : null,
+            h('div', { className: 'cws-inline' },
+              h('button', { type: 'button', className: 'cws-btn', onClick: () => void applyType(pending, true) }, t('type.replace')),
+              h('button', { type: 'button', className: 'cws-btn', onClick: () => void applyType(pending, false) }, t('type.keep')),
+              h('button', { type: 'button', className: 'cws-btn', onClick: () => setPending(null) }, t('type.cancel')))) : null,
+          !pending ? (currentType?.tools ?? []).map((tool) => h('p', { key: tool, className: 'cws-note', style: { margin: 0 } }, t(`type.tool.${tool}.${meta.shared?.[tool] ? 'on' : 'off'}`))) : null,
+          !pending && currentType?.searchOff ? h('p', { className: 'cws-note', style: { margin: 0 } }, t('type.search.off')) : null)) : null,
       h('div', { className: 'cws-card' },
         h('div', { className: 'cws-sec' },
           h('div', { className: 'cws-sec-head' }, h('h2', null, t('proj.page.instr')),
             h('button', { type: 'button', className: 'cws-btn', onClick: () => void saveText(), disabled: text === (record?.instructions ?? '') }, t('proj.page.save'))),
           h('p', { className: 'cws-note', style: { margin: 0 } }, t('proj.page.instr.hint')),
-          h('textarea', { className: 'cws-area', value: text, maxLength: 12000, placeholder: t('proj.page.instr.place'), 'aria-label': t('proj.page.instr'), onChange: (e) => setText(e.target.value) }))),
+          h('textarea', { className: 'cws-area', value: text, maxLength: 12000, placeholder: t('proj.page.instr.place'), 'aria-label': t('proj.page.instr'), onChange: (e) => setText(e.target.value) }),
+          drifted && !gen ? h('p', { className: 'cws-note', style: { margin: 0 } }, t('gen.drift', { added: drifted.added, removed: drifted.removed })) : null,
+          keepName === null ? h('div', { className: 'cws-inline' },
+            typed && !gen ? h('button', { type: 'button', className: 'cws-btn', onClick: openGen }, t('gen.open')) : null,
+            typed && text.trim() ? h('button', { type: 'button', className: 'cws-btn', title: t('type.keepas.hint'), onClick: () => setKeepName('') }, t('type.keepas')) : null,
+            versions.length > 1 ? h('button', { type: 'button', className: 'cws-btn', 'aria-expanded': showVersions, onClick: () => setShowVersions(!showVersions) }, t('ver.open', { n: versions.length - 1 })) : null) : null,
+          showVersions ? h('div', { className: 'cws-preview' },
+            h('div', { className: 'cws-note' }, t('ver.title')),
+            versions.map((version, index) => h('div', { key: version.at, className: 'cws-ver' },
+              h('span', null, new Date(version.at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), ' · ', t(`ver.by.${version.by}`), version.note ? ` (${version.note})` : ''),
+              h('span', { title: version.text.slice(0, 600) }, version.text.replace(/\s+/g, ' ').slice(0, 140)),
+              index === 0 && version.text === (record?.instructions ?? '').trim() ? h('span', { className: 'cws-note' }, t('ver.current'))
+                : h('button', { type: 'button', className: 'cws-btn', onClick: () => putBack(version) }, t('ver.back'))))) : null,
+          gen ? h(GeneratePanel, { t, gen, setGen, catalog, current: text, onRun: () => void runGen(), onUse: useGen }) : null,
+          typed && text.trim() && keepName !== null ? (
+            h('div', { className: 'cws-inline' },
+              h('input', { value: keepName, maxLength: 40, placeholder: t('type.keepas.name'), 'aria-label': t('type.keepas.name'), autoFocus: true, onChange: (e) => setKeepName(e.target.value), onKeyDown: (e) => { if (e.key === 'Enter') void keepAs(); if (e.key === 'Escape') setKeepName(null); } }),
+              h('button', { type: 'button', className: 'cws-btn', disabled: !keepName.trim(), onClick: () => void keepAs() }, t('type.keepas.save')),
+              h('button', { type: 'button', className: 'cws-btn', onClick: () => setKeepName(null) }, t('type.cancel')))) : null)),
       h('div', {
         className: 'cws-card cws-drop', 'data-over': over ? 'true' : undefined,
         onDragOver: (e) => { e.preventDefault(); setOver(true); },

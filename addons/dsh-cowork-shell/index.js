@@ -10,6 +10,10 @@ import { dirname } from 'node:path';
 import z from '@deepseek-ai/schemastery';
 import { KEEP_MS, openTrash, safeId } from './lib/trash.js';
 import { UPLOAD_MAX, addFile, canonical, listFiles, noteOf, openProjects } from './lib/projects.js';
+import { openPresets } from './lib/presets.js';
+import { buildDigest, drift } from './lib/digest.js';
+import { generatePrompt, openVersions, parseGenerated, versionsDir, whereOf } from './lib/generate.js';
+import { fileURLToPath } from 'node:url';
 
 export const name = 'cowork-shell';
 
@@ -384,6 +388,50 @@ export function apply(ctx) {
   // shows under and its own instructions, in <home>/cowork-shell/projects.json). The instructions
   // reach every conversation whose folder is the project's folder as a system-prompt section.
   const projects = openProjects(ctx.get('dshHomePath')?.('cowork-shell', 'projects.json') ?? '');
+  const versions = openVersions(versionsDir(ctx.get('dshHomePath')?.('cowork-shell', 'projects.json') ?? ''));
+
+  /** The settings of another part of the app, by its namespace; undefined when it is not there. */
+  const settingsOf = (ns) => {
+    try {
+      return ctx.get('settings')?.describe?.().find((entry) => entry.ns === ns)?.value;
+    } catch {
+      return undefined;
+    }
+  };
+  /**
+   * Where a provider's models run. Providers the user added carry their address; the app's own
+   * DeepSeek providers and catalogue providers without an address of their own are services on
+   * the internet. What cannot be told is reported as unknown, and the page treats that as cloud.
+   */
+  const whereIs = (provider) => {
+    const id = String(provider ?? '');
+    const own = settingsOf('llm-pi-ai')?.providers?.[id];
+    if (own && typeof own === 'object') {
+      const address = own.baseURL ?? own.baseUrl;
+      return address ? { ...whereOf(address), name: String(own.displayName ?? id) } : { where: 'cloud', host: '', name: String(own.displayName ?? id) };
+    }
+    if (/^deepseek/i.test(id)) return { where: 'cloud', host: 'DeepSeek', name: 'DeepSeek' };
+    return { where: 'unknown', host: '', name: id };
+  };
+  /** Whether the shared tools of another tab are there for a Cowork project to use. */
+  const sharedTools = () => ({ data: settingsOf('data')?.enabled === true, finance: settingsOf('finance')?.enabled === true });
+
+  /** Ask a model for text. It is given no tools: it can only answer. */
+  const askModel = async (provider, model, text, signal) => {
+    const llm = ctx.get('llm');
+    if (!llm?.stream) throw new Error('The app\'s model service is not available.');
+    let answer = '';
+    for await (const chunk of llm.stream({ provider, model, messages: [{ role: 'user', content: [{ type: 'text', text }] }], signal })) {
+      if (chunk.type === 'text-delta') answer += chunk.text;
+      else if (chunk.type === 'finish' && chunk.reason?.kind === 'error') throw new Error(chunk.reason.failure?.message ?? 'The model reported an error.');
+      else if (chunk.type === 'finish' && chunk.reason?.kind === 'aborted') throw new Error('The model took too long and was stopped.');
+    }
+    if (signal?.aborted) throw new Error('The model took too long and was stopped.');
+    return answer;
+  };
+
+  // Project types: the ones that ship are files beside this one; the user's own are in the data folder.
+  const presets = openPresets(fileURLToPath(new URL('./presets', import.meta.url)), ctx.get('dshHomePath')?.('cowork-shell', 'presets') ?? '');
   const registryList = () => {
     try {
       return ctx.get('workspaceRegistry')?.list?.() ?? [];
@@ -396,10 +444,15 @@ export function apply(ctx) {
     // A helper agent works for its conversation and has its own task text: no project note.
     if (typeof header?.cwd !== 'string' || !header.cwd || header.origin === 'subagent') return '';
     const record = projects.get(header.cwd);
-    if (!record?.instructions) return '';
+    if (!record) return '';
+    // A typed project is pointed at the Data and Finance tools its type uses, while they are switched on.
+    const wants = presets.get(record.preset)?.tools ?? [];
+    const on = sharedTools();
+    const shared = wants.filter((tool) => on[tool]);
+    if (!record.instructions && shared.length === 0) return '';
     const key = canonical(header.cwd);
     const workspace = registryList().find((item) => canonical(item.path) === key);
-    return noteOf(workspace?.title ?? '', record.instructions);
+    return noteOf(workspace?.title ?? '', record.instructions, shared);
   };
   const projectSections = new Map();
   const installProjectNote = (agent) => {
@@ -421,7 +474,38 @@ export function apply(ctx) {
       ctx.logger?.warn?.(`cowork-shell: could not add the project instructions: ${String(error?.message ?? error)}`);
     }
   };
-  ctx.on('agent/created', ({ agent }) => installProjectNote(agent));
+  /**
+   * A new conversation in a project whose type says so starts with Search switched off (Paperwork:
+   * private papers should not turn into web queries by default). The user can switch it on in the
+   * chat box as always; a conversation that has run, or whose switch was set, is left alone.
+   */
+  const startSearchOff = async (agent) => {
+    try {
+      const header = agent?.header ?? agent?.session?.header;
+      if (!agent?.id || typeof header?.cwd !== 'string' || !header.cwd || header.origin === 'subagent') return;
+      const phase = agent.phase;
+      if (!phase || phase.kind === 'running' || phase.lastTurn !== 0) return;
+      const record = projects.get(header.cwd);
+      if (!record || !presets.get(record.preset)?.searchOff) return;
+      const service = ctx.get('settings');
+      const modes = service?.describe?.().find((entry) => entry.ns === 'modes')?.value;
+      if (!modes || typeof modes.sessionWeb !== 'string') return;
+      let table;
+      try {
+        table = JSON.parse(modes.sessionWeb || '{}');
+      } catch {
+        return;
+      }
+      if (!table || typeof table !== 'object' || Array.isArray(table) || typeof table[agent.id] === 'boolean') return;
+      await service.mutate('modes', [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify({ ...table, [agent.id]: false }) }]);
+    } catch (error) {
+      ctx.logger?.warn?.(`cowork-shell: could not start a conversation with Search off: ${String(error?.message ?? error)}`);
+    }
+  };
+  ctx.on('agent/created', ({ agent }) => {
+    installProjectNote(agent);
+    void startSearchOff(agent);
+  });
   ctx.on('agent/disposed', ({ agent }) => projectSections.delete(agent?.id));
   try {
     for (const agent of ctx.get('agents')?.list?.() ?? []) installProjectNote(agent);
@@ -475,14 +559,52 @@ export function apply(ctx) {
               chunks.push(chunk);
             }
             const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-            if (body?.action === 'save') projects.save(projectFolder(body.path), { tab: body.tab, instructions: body.instructions });
+            if (body?.action === 'save') {
+              // A type must be one that exists; an unknown one is left out rather than stored.
+              const preset = typeof body.preset === 'string' && presets.get(body.preset) ? body.preset : undefined;
+              const folder = projectFolder(body.path);
+              const before = projects.get(folder)?.instructions ?? '';
+              const saved = projects.save(folder, { tab: body.tab, instructions: body.instructions, preset });
+              if (typeof body.instructions === 'string' && saved.instructions !== before) {
+                // What was there before this add-on kept versions is kept too, so the first change can be undone.
+                if (versions.list(folder).length === 0) versions.add(folder, { text: before, by: 'you', at: Date.now() - 1 });
+                versions.add(folder, { text: saved.instructions, by: body.by, note: body.note });
+                if (body.by === 'model' && body.mark && typeof body.mark === 'object') versions.setMark(folder, body.mark);
+              }
+              out.versions = versions.list(folder);
+            } else if (body?.action === 'generate') {
+              const folder = projectFolder(body.path);
+              const provider = String(body.provider ?? '');
+              const model = String(body.model ?? '');
+              if (!provider || !model) throw new Error('Pick a model first.');
+              const place = whereIs(provider);
+              // Nothing of the folder leaves this computer without the user having said yes to exactly that.
+              if ((place.where === 'cloud' || place.where === 'unknown') && body.agreed !== true) throw new Error('This model runs on the internet, or Plus cannot tell where it runs. Confirm that the folder may be sent to it.');
+              const digest = buildDigest(folder, { contents: body.contents !== false });
+              const record = projects.get(folder);
+              const preset = presets.get(record?.preset || 'blank');
+              const title = registryList().find((item) => canonical(item.path) === folder)?.title ?? '';
+              const limit = AbortSignal.timeout(5 * 60_000);
+              const answer = await askModel(provider, model, generatePrompt({ title, preset, current: typeof body.current === 'string' ? body.current : record?.instructions ?? '', digest: digest.text, guides: digest.summary.guides }), limit);
+              const parsed = parseGenerated(answer);
+              if (!parsed.instructions) throw new Error('The model gave no instructions. Try again, or try another model.');
+              out.generated = { ...parsed, model, provider, where: place.where, sent: { files: digest.summary.files, included: digest.summary.included.length, chars: digest.summary.chars, contents: digest.summary.contents }, mark: digest.mark };
+            } else if (body?.action === 'preset-save') out.saved = presets.save({ name: body.name, description: body.description, tools: body.tools, searchOff: body.searchOff === true, instructions: body.instructions }).id;
+            else if (body?.action === 'preset-remove') presets.remove(body.id);
             else if (body?.action === 'forget') projects.forget(body.path);
             else throw new Error('unknown action');
           } else if (url.searchParams.get('files')) {
             out.files = listFiles(projectFolder(url.searchParams.get('files')));
+          } else if (url.searchParams.get('digest')) {
+            // What would be sent, for the user to see before anything is sent. The text itself stays here.
+            const folder = projectFolder(url.searchParams.get('digest'));
+            const digest = buildDigest(folder, { contents: url.searchParams.get('contents') !== '0' });
+            out.digest = { ...digest.summary, drift: drift(versions.mark(folder), digest.mark), generatedBefore: versions.mark(folder) !== undefined };
+            out.versions = versions.list(folder);
+            if (url.searchParams.get('provider')) out.where = whereIs(url.searchParams.get('provider'));
           }
-          const list = registryList().map((item) => ({ workspaceId: String(item.id), path: item.path, title: item.title, tab: '', instructions: '', ...(projects.get(item.path) ?? {}) }));
-          res.end(JSON.stringify({ at: Date.now(), projects: list, ...out }));
+          const list = registryList().map((item) => ({ workspaceId: String(item.id), path: item.path, title: item.title, tab: '', instructions: '', preset: '', ...(projects.get(item.path) ?? {}) }));
+          res.end(JSON.stringify({ at: Date.now(), projects: list, presets: presets.list(), shared: sharedTools(), ...out }));
         } catch (error) {
           res.statusCode = req.method === 'POST' ? 400 : 500;
           res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 300) }));

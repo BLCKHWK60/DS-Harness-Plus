@@ -133,6 +133,12 @@ export const Config = z.object({
    * the research) or `roles` (the role models set in Settings → Model Tiers). All conversations.
    */
   researchModel: z.string().default('same').volatile(),
+  /**
+   * The same choice for one conversation, as JSON: `{ sessionId: 'same' | 'roles' }`. It decides for
+   * every tool that starts helper agents (Mission, Deep research, Agent swarm, the Tier tools, Code
+   * power). A conversation without an entry follows `researchModel`, which is the default for all.
+   */
+  sessionHelpers: z.string().default('{}').volatile(),
   /** A Rerun button under every answer: asks the same question again, with the model now selected, in a fresh copy of the conversation. */
   rerunButton: z.boolean().default(true).volatile(),
   /** Hide the app's thumbs-up and thumbs-down buttons under answers. */
@@ -653,7 +659,7 @@ export function apply(ctx, config) {
     if (!persistence || !settings) return;
     try {
       const live = new Set((ctx.get('agents')?.list() ?? []).map((agent) => agent.id));
-      const fields = ['sessionModes', 'sessionWeb', 'sessionResearch', 'sessionTools'];
+      const fields = ['sessionModes', 'sessionWeb', 'sessionResearch', 'sessionTools', 'sessionHelpers'];
       const ids = new Set(fields.flatMap((field) => Object.keys(readObject(config[field]))));
       const gone = new Set();
       for (const sessionId of ids) {
@@ -690,8 +696,20 @@ export function apply(ctx, config) {
     searchDepth() {
       return depthId(config.searchDepth);
     },
-    /** @returns {'same' | 'roles'} which model Deep research's helpers run on. */
+    /** @returns {'same' | 'roles'} the default for all conversations: helpers on the conversation's model, or on other models. */
     researchModel() {
+      return String(plain(config.researchModel) ?? '') === 'roles' ? 'roles' : 'same';
+    },
+    /**
+     * Which models a conversation's helper agents run on. `same`: the conversation's own model, so
+     * only one model is loaded. `roles`: the models set for the roles (Model Tiers, Mission).
+     * A helper asking gets its conversation's answer.
+     * @param {string} [sessionId] - the conversation; without it, the default for all.
+     * @returns {'same' | 'roles'} the choice in force.
+     */
+    helperModels(sessionId) {
+      const chosen = sessionId ? readObject(config.sessionHelpers)[topOf(sessionId)] : undefined;
+      if (chosen === 'same' || chosen === 'roles') return chosen;
       return String(plain(config.researchModel) ?? '') === 'roles' ? 'roles' : 'same';
     },
     /** @returns {string} the Deep research slider's step: quick, standard or thorough. */
@@ -732,6 +750,66 @@ export function apply(ctx, config) {
   ctx.effect(() => ctx.provide('modes', Object.freeze(modes)), 'modes service');
 
   /**
+   * Which models a conversation and its helpers would use, for the chip in the chat box.
+   * @param {object} agent - the conversation's agent.
+   * @returns {object} the choice in force, the default, and the models by where they are set.
+   */
+  function helpersView(agent) {
+    const pick = (value) => (value && typeof value.provider === 'string' && typeof value.model === 'string' && value.provider && value.model ? { provider: value.provider, model: value.model } : undefined);
+    let own;
+    try {
+      own = pick(agent.model?.current?.());
+    } catch {
+      own = undefined;
+    }
+    const sources = [];
+    try {
+      const tiers = ctx.get('modelTiers');
+      const tier = tiers?.resolveTier?.(agent.id);
+      if (tier) for (const role of ['plan', 'implement', 'review', 'fast']) {
+        const route = pick(tiers.roleRoute(tier.id, role));
+        if (route) sources.push({ from: 'tiers', role, ...route });
+      }
+    } catch {
+      /* Model Tiers is not there: no role models */
+    }
+    try {
+      // Mission's own choices, and those of this conversation's folder.
+      const mission = ctx.get('settings')?.describe?.().find((entry) => entry.ns === 'mission')?.value;
+      const parse = (value) => {
+        try {
+          const read = JSON.parse(String(value ?? '') || '{}');
+          return read && typeof read === 'object' && !Array.isArray(read) ? read : {};
+        } catch {
+          return {};
+        }
+      };
+      const folder = (agent.header ?? agent.session?.header)?.cwd;
+      const sets = [['mission', parse(mission?.roles)], ['project', folder ? parse(mission?.projects)[folder] ?? {} : {}]];
+      for (const [from, roles] of sets) for (const role of ['plan', 'implement', 'review']) {
+        const route = pick(roles?.[role]);
+        if (route) sources.push({ from, role, ...route });
+      }
+    } catch {
+      /* Mission is not there */
+    }
+    const policy = modes.helperModels(agent.id);
+    const key = (route) => `${route.provider}\u0000${route.model}`;
+    const others = new Map();
+    for (const source of sources) if (!own || key(source) !== key(own)) others.set(key(source), source.model);
+    return {
+      policy,
+      explicit: ['same', 'roles'].includes(readObject(config.sessionHelpers)[topOf(agent.id)]),
+      usual: modes.researchModel(),
+      own: own?.model ?? '',
+      sources: sources.map(({ from, role, model }) => ({ from, role, model })),
+      // How many models may be loaded at once: one, or the conversation's plus each other one named for a role.
+      count: policy === 'same' ? 1 : 1 + others.size,
+      names: policy === 'same' ? (own ? [own.model] : []) : [...(own ? [own.model] : []), ...others.values()],
+    };
+  }
+
+  /**
    * What the model can and cannot call in a conversation right now, for the Tools list in the chat box.
    * @param {string} sessionId - the conversation.
    * @returns {object} `{known, mode, off, viaCode, can, cannot}`; `known` is false when the conversation is not loaded.
@@ -750,7 +828,7 @@ export function apply(ctx, config) {
       // An older app: show what is known.
     }
     const allowed = new Set(can);
-    return { known: true, mode: mode.label, off: toolsOff(sessionId), viaCode: programOnly(ctx.tools, agent), can: can.sort(), cannot: all.filter((name) => !allowed.has(name)).sort() };
+    return { known: true, mode: mode.label, off: toolsOff(sessionId), viaCode: programOnly(ctx.tools, agent), can: can.sort(), cannot: all.filter((name) => !allowed.has(name)).sort(), helpers: helpersView(agent) };
   }
 
   ctx.inject(['webServer', 'connection'], (inner) => {
@@ -785,6 +863,28 @@ export function apply(ctx, config) {
         }),
       'modes: GET tools route',
     );
+  });
+
+  // The app's own sub-agent tool lets the model name a model for a helper. With "one model for
+  // everything" that would load a second model behind the user's back, so such a call is refused
+  // with a plain reason; without a model named, the helper runs on the conversation's model.
+  ctx.on('tools/pre-execute', async (exec, next) => {
+    const decision = await next();
+    if (decision?.kind && decision.kind !== 'allow') return decision;
+    try {
+      if (!exec?.agent?.id || !['subagent', 'subagent_fork'].includes(exec.name)) return decision;
+      const args = exec.arguments ?? {};
+      const wantModel = typeof args.model === 'string' ? args.model.trim() : '';
+      const wantProvider = typeof args.provider === 'string' ? args.provider.trim() : '';
+      if (!wantModel && !wantProvider) return decision;
+      if (modes.helperModels(exec.agent.id) !== 'same') return decision;
+      const own = exec.agent.model?.current?.();
+      if (own && (!wantModel || wantModel === own.model) && (!wantProvider || wantProvider === own.provider)) return decision;
+      return { kind: 'deny', reason: `This conversation is set to one model for everything${own?.model ? ` (${own.model})` : ''}, so a helper may not be started on another model. Call the tool again without "provider" and "model": the helper then runs on this conversation's model. The user can allow different models with the models chip in the chat box.` };
+    } catch (error) {
+      report(error);
+      return decision;
+    }
   });
 
   const commandName = plain(config.commandName);

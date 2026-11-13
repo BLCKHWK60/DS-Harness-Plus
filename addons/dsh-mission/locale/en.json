@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Mission",
-    "description": "Three permission modes that keep the assistant inside the conversation's folder, with checkpoints you can go back to. Type /mission in a conversation."
+    "description": "Give a goal to several models: a planner, workers and a reviewer, with real commands as the proof. Three permission modes keep the work inside the conversation's folder, with checkpoints you can go back to. Type /mission in a conversation."
   }
 }
