@@ -24,6 +24,14 @@ for dir in "$HERE"/addons/*/; do
 done
 rm -f /tmp/plus-check-$$.log
 
+step "Pages"
+# A hook after an early return takes a whole page down (the blank Data settings page of 0.33.0).
+if app_node "$HERE/scripts/dev-hook-scan.mjs" "$HERE"/addons/*/client.js; then
+  say "ok    no page calls a hook after an early return"
+else
+  say "FAIL  a page calls a hook after an early return (see the lines above)"; failed=1
+fi
+
 step "Install rehearsal in a throwaway folder"
 home=$(mktemp -d)
 trap 'rm -rf "$home"' EXIT

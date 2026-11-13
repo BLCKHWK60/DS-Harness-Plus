@@ -112,3 +112,7 @@ Beyond these it uses what the app and the other add-ons give: the Diagram builde
 - A Python run gets an id like a query (`Q7`), so its numbers can be cited. It cannot be part of a saved analysis.
 - **Finance conversations** get a short note about these tools too (`FOLDER_MODES`).
 - **Tested (0.33.0):** unit tests (18). Outside the app: set-up in 25 seconds on Python 3.14 (about 450 MB); a statistics-and-chart program; the network, the home folder and writing outside `data-output` were each refused; a program that never ends was stopped. In the lab app with a scripted model: `data_chart` and `data_python` each showed their picture under the turn, and the Python run wrote a CSV into `data-output`. **Not verified:** any real model writing its own program; a Mac without Homebrew's Python; large files; the Settings page by clicking; the Mac app.
+
+## Fixed in 0.34.2: the settings page was blank
+
+From 0.33.0 the page under Settings → Data showed nothing. The hook that looks again every few seconds while Python is being set up was placed after the page's "still loading" return, so the page had one more hook on its second draw than on its first, and React took it down. The hook now sits before that return. `scripts/dev-hook-scan.mjs` looks for this mistake in every add-on, and the release check runs it. Checked in the test setup: the page shows the switch, the Python card, the guide and the saved analyses.

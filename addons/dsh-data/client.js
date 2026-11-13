@@ -90,6 +90,16 @@ window.__ModuleLoader__.load({
         return () => { alive.current = false; clearInterval(timer); };
       }, [load]);
 
+      // While Python is downloading, look again every few seconds. This sits before the first
+      // return: a hook that only runs once the data is there changes the hook order and React
+      // takes the whole page down.
+      const pyState = data?.python?.state;
+      useEffect(() => {
+        if (pyState !== 'installing') return undefined;
+        const timer = setInterval(() => void load(), 4000);
+        return () => clearInterval(timer);
+      }, [pyState, load]);
+
       if (!data) {
         return h('div', { className: 'dsh-dt-page' }, h('style', null, CSS), h('h2', { className: 'dsh-dt-title' }, 'Data'), h('p', { className: 'dsh-dt-desc', 'data-error': String(Boolean(error)) }, error ? `Could not load: ${error}` : 'Loading…'));
       }
@@ -131,12 +141,6 @@ window.__ModuleLoader__.load({
         }
       };
       const py = data.python ?? { state: 'missing', detail: '', packages: [] };
-      // While it is downloading, look again every few seconds.
-      useEffect(() => {
-        if (py.state !== 'installing') return undefined;
-        const timer = setInterval(() => void load(), 4000);
-        return () => clearInterval(timer);
-      }, [py.state]);
       const pyText = py.state === 'ready' ? `Ready (${py.detail}). Packages: ${(py.packages ?? []).join(', ')}.${(py.missing ?? []).length > 0 ? ` Not available: ${py.missing.join(', ')}.` : ''}`
         : py.state === 'installing' ? `Setting up… ${py.detail}`
           : py.state === 'failed' ? `The set-up did not work: ${py.detail}`
