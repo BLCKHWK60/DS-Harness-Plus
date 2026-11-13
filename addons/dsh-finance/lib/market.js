@@ -112,7 +112,7 @@ export function buildMarketTools({ enabled, show }) {
         lines.push('');
         if (got.length === 1) lines.push(draw(exec, `${got[0].name} (${got[0].symbol}), ${range}`, { chart: 'line', yLabel: got[0].currency, series: [{ name: `${got[0].symbol} close`, points: got[0].points.map((point) => [point.date, point.close]) }] }));
         else lines.push(draw(exec, `${got.map((item) => item.symbol).join(' vs ')}, ${range} (start = 100)`, { chart: 'line', yLabel: 'Start = 100', series: got.map((item) => ({ name: item.symbol, points: item.points.map((point) => [point.date, Math.round((point.close / item.points[0].close) * 10000) / 100]) })) }));
-        lines.push('', 'Cite these as "Yahoo Finance, closing prices" with the dates above. Past prices say nothing certain about future ones. This is data, not advice.');
+        lines.push('', 'Cite these as "Yahoo Finance, closing prices" with the dates above. Past prices say nothing certain about future ones.');
         return lines.join('\n');
       }, 'Use web search for the price instead, and name the source and its date.'),
     },

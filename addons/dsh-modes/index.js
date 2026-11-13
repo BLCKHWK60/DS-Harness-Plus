@@ -133,6 +133,10 @@ export const Config = z.object({
    * the research) or `roles` (the role models set in Settings → Model Tiers). All conversations.
    */
   researchModel: z.string().default('same').volatile(),
+  /** A Rerun button under every answer: asks the same question again, with the model now selected, in a fresh copy of the conversation. */
+  rerunButton: z.boolean().default(true).volatile(),
+  /** Hide the app's thumbs-up and thumbs-down buttons under answers. */
+  hideFeedback: z.boolean().default(false).volatile(),
   /** Name of the slash command that switches modes. */
   commandName: z.string().default('mode'),
 });

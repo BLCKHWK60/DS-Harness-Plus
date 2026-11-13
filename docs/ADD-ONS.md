@@ -109,6 +109,14 @@ While the Code mode has no instructions of its own (Settings → Modes), Plus gi
 
 What the app itself already shows for code work: each file change as a card (click it for a before-and-after view in the right panel), the step list above the message box, and each command with its output. They are folded away once a turn is done. To keep them open, set **Settings → General → Work details** to **Verbose**.
 
+### Since 0.34: Rerun, and hiding the thumbs
+
+Under every answer there is a **Rerun** button (a round arrow, between the thumbs and Branch). Pick another model in the chat box, then press it: Plus makes a copy of the conversation up to your question and asks the question again with the model that is selected now. The new model does not see the old answer. The old answer stays in the original conversation, so you can compare the two. The copy opens by itself, in the same tab and the same folder.
+
+- The app cannot erase an answer inside a conversation, which is why a rerun is a copy.
+- Pictures and files that were attached to the question are not sent again; the button says so when that applies.
+- **Settings → Modes → Buttons under an answer** has two switches: **Rerun button** (on by default) and **Hide thumbs up and thumbs down** (off by default). Feedback from the chat box menu still works when the thumbs are hidden.
+
 ## Model Tiers
 
 **In the chat box:** one button beside the send button shows the model and the effort. It opens a panel where you:
@@ -267,6 +275,17 @@ Details: `addons/dsh-finance/README.md`.
 - **It follows the question.** Asked only for the financials, it gives figures and charts. Asked about sentiment, it brings in news and social media. Asked for the full picture, all of it.
 - **Charts.** A full answer is expected to have several: prices, figures by year, coverage and mood over time, comparisons.
 
+### Since 0.34: the adviser
+
+**Settings → Finance → Adviser → Act as my financial adviser** (off by default). On, the assistant works the way an adviser would: it gets to know you from your profile, does the research, judges how an idea fits what you hold, and ends with one clear call (buy, add, hold, trim, sell, avoid or wait), with its reasons, the main risk and what would change its mind. It adds no disclaimer: no "I am not a licensed adviser", no "this is not financial advice", no "consult a professional". It applies from your next message, also in conversations that already exist.
+
+- **Your profile** appears under the switch: goals, time frame, the loss you can bear, what you hold, limits. You write it, and the assistant adds a dated line when you tell it something lasting (tool `finance_profile_save`). It is one file on your Mac (`finance/profile.md` in the app's data folder) and is sent to your model with each Finance message. Leave out account numbers; the tool refuses them.
+- It answers first. It does not reply with a question in place of the answer, and it does not put up a question card to learn about you. Where your profile is silent it says what it assumed. At most one short question comes at the very end, after its call (since 0.34.1).
+- Figures still come only from sources fetched in the conversation, with dates. That rule does not change.
+- The assistant does not claim a named licence, firm or registration. It is an AI model working from what it could fetch, and it can be wrong. Decisions are yours.
+- Off, Finance is as before: research only, and it does not say buy, sell or hold.
+- The Finance instructions cannot be edited in Settings → Modes: Plus writes them back within seconds. The switch is the way to change them.
+
 ## Code map
 
 Makes a compact map of the project a conversation works in: its files, the functions and classes in them, and what uses what. The assistant looks things up in the map and reads one function at a time instead of whole files, which uses far fewer tokens on a large project. Nothing is installed, and nothing is written into your project; the map is kept in the app's own data folder.
@@ -343,6 +362,10 @@ A thin bar that shows what the model and its helpers are doing right now, so you
 - It keeps no text of your conversations and sends nothing anywhere.
 
 The speeds for thinking and writing are estimates from the live stream that correct themselves after each answer. The prompt-processing speed is known once the first token arrives, so while a prompt is being read you see the seconds so far and the last measured speed. Details: `addons/dsh-activity/README.md`.
+
+### Since 0.34: fold the message box away
+
+The line above the message box has a small arrow at its right end. A click folds the message box down, so only the line and the row of figures under it are left and more of the conversation shows. The arrow then points up; another click brings the box back. It stays folded in every conversation and tab, and after a restart, until you click. While it is folded you cannot type or press Stop; unfold first. **Settings → Activity → Arrow to fold the message box away** takes the arrow out.
 
 ## PDF reader
 

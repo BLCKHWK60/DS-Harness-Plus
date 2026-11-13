@@ -12,7 +12,7 @@
  * It also adds three data tools that need no key: a company's reported figures and its filings
  * from the US securities regulator, and yearly readings for economies from the World Bank. For
  * everything else the assistant uses the app's web search, the Deep research add-on, the Library
- * and the chart tools. It is research, not advice.
+ * and the chart tools. It is research, not advice, unless the adviser is switched on (lib/adviser.js).
  *
  * Route: `GET /dsh-finance/data`.
  */
@@ -24,6 +24,7 @@ import { PRESETS, addressProblem, keyRef, readSources, sourceGet, sourcesNote } 
 import { buildSourceTool, buildTools } from './lib/tools.js';
 import { buildMarketTools } from './lib/market.js';
 import { SKILLS } from './skills.js';
+import { adviserNote, adviserSkills, buildProfileTool, openProfile } from './lib/adviser.js';
 
 export const name = 'dsh-finance';
 
@@ -54,6 +55,8 @@ export const Config = z.object({
   sources: z.string().default('[]').volatile(),
   /** Ids of scheduled tasks of your own that run in Finance instead of Cowork. */
   financeTasks: z.array(z.string()).default([]).volatile(),
+  /** The assistant speaks as the user's financial adviser: it recommends and adds no disclaimer. */
+  adviser: z.boolean().default(false).volatile(),
 });
 
 function plain(value) {
@@ -78,6 +81,7 @@ export function readSettings(config) {
   const moreMarkets = cleanList(plain(config?.moreMarkets), 30).filter((market) => !MARKETS.some((other) => other.toLowerCase() === market.toLowerCase()));
   return {
     enabled: plain(config?.enabled) === true,
+    adviser: plain(config?.adviser) === true,
     selection: readSelection({ kind: plain(config?.kind), subject: plain(config?.subject), market: plain(config?.market), focus: plain(config?.focus), period: plain(config?.period) }),
     watchlist: cleanList(plain(config?.watchlist), WATCHLIST_MAX),
     moreMarkets,
@@ -95,6 +99,7 @@ export function apply(ctx, config) {
   const warn = (text) => ctx.logger?.warn?.(`finance: ${text}`);
   const home = ctx.get('dshHomePath');
   const pins = openPins(typeof home === 'function' ? join(home('finance'), 'conversations.json') : '');
+  const profile = openProfile(typeof home === 'function' ? join(home('finance'), 'profile.md') : '');
 
   // ---- the keys of extra sources: in the app's secret store, never in the settings ----------
 
@@ -142,7 +147,7 @@ export function apply(ctx, config) {
       }
       const on = settings().enabled;
       const ops = [];
-      const next = withFinance(row.value.extraModes, on);
+      const next = withFinance(row.value.extraModes, on, settings().adviser);
       if (next !== undefined) ops.push({ op: 'set', path: ['extraModes'], value: next });
       // A tab that no longer exists must not stay selected.
       if (!on && row.value.defaultMode === MODE_ID) ops.push({ op: 'set', path: ['defaultMode'], value: 'cowork' });
@@ -190,7 +195,8 @@ export function apply(ctx, config) {
                 const root = agent.header?.parentSession ?? agent.session?.header?.parentSession;
                 const note = selectionNote(pins.get(agent.id) ?? (root ? pins.get(root) : undefined) ?? now.selection);
                 const extra = sourcesNote(now.sources, (id) => keys[id]?.set === true);
-                return extra ? `${note}\n\n${extra}` : note;
+                const advice = now.adviser ? adviserNote(profile.read(), Boolean(profileToolOff)) : '';
+                return [note, extra, advice].filter(Boolean).join('\n\n');
               } catch {
                 return '';
               }
@@ -238,8 +244,18 @@ export function apply(ctx, config) {
 
   let toolsOff;
   let sourceToolOff;
+  let profileToolOff;
   const syncTools = () => {
     const on = settings().enabled;
+    // The tool that adds to the profile exists only while the adviser is on.
+    const wantProfile = on && settings().adviser;
+    if (wantProfile && !profileToolOff) {
+      const tools = ctx.get('tools');
+      if (tools?.register) profileToolOff = tools.register(buildProfileTool({ enabled: () => settings().enabled && settings().adviser, profile }));
+    } else if (!wantProfile && profileToolOff) {
+      if (typeof profileToolOff === 'function') profileToolOff();
+      profileToolOff = undefined;
+    }
     // The tool for extra sources exists only while there is a source it can read.
     const wantSource = on && settings().sources.some((source) => source.kind === 'api' && source.on && (source.keyIn === 'none' || keys[source.id]?.set));
     if (wantSource && !sourceToolOff) {
@@ -273,17 +289,27 @@ export function apply(ctx, config) {
     toolsOff = undefined;
     if (typeof sourceToolOff === 'function') sourceToolOff();
     sourceToolOff = undefined;
+    if (typeof profileToolOff === 'function') profileToolOff();
+    profileToolOff = undefined;
   }, 'finance: data tools');
 
   // ---- the skills -----------------------------------------------------------------------------
 
   let skillsOff;
+  let skillsAdviser = false;
   const syncSkills = () => {
     const on = settings().enabled;
+    const adviser = settings().adviser;
+    // The skills are worded for one way of working; a flip of the adviser switch replaces them.
+    if (skillsOff && adviser !== skillsAdviser) {
+      for (const dispose of skillsOff) if (typeof dispose === 'function') dispose();
+      skillsOff = undefined;
+    }
     if (on && !skillsOff) {
       const skills = ctx.get('skills');
       if (!skills?.register) return;
-      skillsOff = SKILLS.map((skill) => skills.register({ ...skill, source: 'custom', invocation: { modelInvocable: true, userInvocable: true } }));
+      skillsAdviser = adviser;
+      skillsOff = (adviser ? adviserSkills(SKILLS) : SKILLS).map((skill) => skills.register({ ...skill, source: 'custom', invocation: { modelInvocable: true, userInvocable: true } }));
     } else if (!on && skillsOff) {
       for (const dispose of skillsOff) if (typeof dispose === 'function') dispose();
       skillsOff = undefined;
@@ -334,7 +360,7 @@ export function apply(ctx, config) {
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     const result = await scheduler().create({
       title,
-      prompt: briefPrompt(subject, settings().selection.market, rhythm),
+      prompt: briefPrompt(subject, settings().selection.market, rhythm, settings().adviser),
       timing: { kind: 'rrule', rrule: briefRule(rhythm, hour, zone) },
       target: { kind: 'new' },
     });
@@ -387,6 +413,7 @@ export function apply(ctx, config) {
     return {
       at: Date.now(),
       ...now,
+      profile: profile.read(),
       sources: now.sources.map((source) => ({ ...source, keySet: keys[source.id]?.set === true, keyShown: keys[source.id]?.masked ?? '' })),
       presets: PRESETS,
       briefs: await listBriefs(),
@@ -463,6 +490,9 @@ export function apply(ctx, config) {
                   }
                   case 'brief':
                     await addBrief(body.subject, String(body.rhythm ?? 'weekdays'), Number(body.hour ?? 8));
+                    break;
+                  case 'profile':
+                    profile.save(body.text);
                     break;
                   case 'unbrief':
                     await removeBrief(String(body.id ?? ''));

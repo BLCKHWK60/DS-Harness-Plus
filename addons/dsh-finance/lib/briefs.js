@@ -45,15 +45,16 @@ export function briefRule(rhythm, hour, zone, now = new Date()) {
  * @param {unknown} subject - what the brief is about.
  * @param {unknown} market - the market to stay in.
  * @param {string} rhythm - an id of `RHYTHMS`.
+ * @param {boolean} [adviser] - whether the adviser is switched on; the brief then ends with a recommendation.
  * @returns {string} the instruction.
  */
-export function briefPrompt(subject, market, rhythm) {
+export function briefPrompt(subject, market, rhythm, adviser = false) {
   const found = RHYTHMS.find((item) => item.id === rhythm) ?? RHYTHMS[0];
   const where = cleanName(market) && cleanName(market) !== 'Global' ? ` Market: ${cleanName(market)} only.` : ' Market: global.';
   return [
     `Write a short Finance brief on "${cleanName(subject)}": what has changed ${found.window}.${where}`,
     'Use the finance-what-changed skill. If the finance_company_figures, finance_company_filings or finance_source_get tools are available, use them before web search for what they cover.',
-    'Rules: every figure must come from a source you fetched now, with its source and date, never from memory. Keep reported facts, management\'s claims, other people\'s opinions and your own reading apart. Say what you could not find. This is research, not advice: do not say buy, sell or hold.',
+    `Rules: every figure must come from a source you fetched now, with its source and date, never from memory. Keep reported facts, management's claims, other people's opinions and your own reading apart. Say what you could not find. ${adviser ? "End with your recommendation as the user's adviser, and add no disclaimer." : 'This is research, not advice: do not say buy, sell or hold.'}`,
     'Keep it short: the three to six things that changed, most important first, then what to watch next with dates, then the sources. If nothing of note changed, say so in one line.',
   ].join('\n');
 }

@@ -79,6 +79,16 @@ window.__ModuleLoader__.load({
         'f.sandbox.workspace-write': 'Write in the workspace',
         'f.tier': 'Tier to switch to with this mode (optional)',
         'f.prompt': 'Prompt added while this mode is active',
+        'rerun': 'Rerun with the selected model',
+        'rerun.busy': 'Starting the rerun…',
+        'rerun.none': 'This answer cannot be rerun: its question was not found.',
+        'rerun.failed': 'The rerun could not be started',
+        'rerun.files': 'Rerun started. Pictures and files attached to the question were not sent again; add them if they are needed.',
+        'answer.group': 'Buttons under an answer',
+        'answer.rerun': 'Rerun button',
+        'answer.rerun.hint': 'Asks the same question again in a fresh copy of the conversation, with the model selected in the chat box. The new model does not see the old answer. The old answer stays in the original conversation.',
+        'answer.thumbs': 'Hide thumbs up and thumbs down',
+        'answer.thumbs.hint': 'Takes the two feedback buttons away. Feedback in the chat box menu still works.',
         'f.prompt.code': 'Empty: Plus uses its own working method for code (read first, small changes, run the tests, report plainly). Write here to use your own instead.',
         'f.count': '{n} of 4000',
         'e.id': 'Ids use lower-case letters, digits and dashes, and must be unique.',
@@ -155,6 +165,16 @@ window.__ModuleLoader__.load({
         'f.sandbox.workspace-write': '可写工作区',
         'f.tier': '切换到此模式时的默认档位（需要 Tier 插件，留空为不切换）',
         'f.prompt': '此模式启用时附加的提示词',
+        'rerun': '用当前所选模型重新运行',
+        'rerun.busy': '正在开始重新运行…',
+        'rerun.none': '无法重新运行此回答：找不到对应的问题。',
+        'rerun.failed': '无法开始重新运行',
+        'rerun.files': '已开始重新运行。问题中附带的图片和文件未再次发送，如有需要请重新添加。',
+        'answer.group': '回答下方的按钮',
+        'answer.rerun': '重新运行按钮',
+        'answer.rerun.hint': '在对话的新副本中用聊天框所选的模型再问一次同样的问题。新模型看不到旧回答，旧回答保留在原对话中。',
+        'answer.thumbs': '隐藏点赞和点踩',
+        'answer.thumbs.hint': '移除这两个反馈按钮。聊天框菜单中的反馈仍可使用。',
         'f.prompt.code': '留空：Plus 使用自带的编码工作方法（先阅读、小步修改、运行测试、如实报告）。在此填写则使用你自己的。',
         'f.count': '{n} / 4000',
         'e.id': '标识只能用小写字母、数字和连字符，且不能重复。',
@@ -210,6 +230,15 @@ window.__ModuleLoader__.load({
 .dsh-me-count { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); align-self: flex-end; }
 .dsh-me-title { display: flex; align-items: center; gap: 8px; }
 .dsh-me-title b { font-size: 14px; line-height: 22px; font-weight: 500; color: var(--dsw-alias-label-primary); }
+.dsh-me-toggle { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
+.dsh-me-toggle > div { flex: 1; min-width: 0; }
+.dsh-me-toggle b { display: block; font-size: 14px; line-height: 22px; font-weight: 400; color: var(--dsw-alias-label-primary); }
+.dsh-me-toggle span { display: block; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.dsh-me-sw { flex: none; position: relative; width: 36px; height: 20px; padding: 2px; border: 0; border-radius: 999px; cursor: pointer; background: var(--dsw-alias-border-l3, var(--dsw-alias-border-l2)); transition: background .12s ease; }
+.dsh-me-sw[aria-checked="true"] { background: var(--dsw-alias-brand-primary); }
+.dsh-me-sw::after { content: ''; display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--dsw-alias-switch-thumb, var(--dsw-alias-label-primary)); transition: transform .12s ease; }
+.dsh-me-sw[aria-checked="true"]::after { transform: translateX(16px); background: var(--dsw-alias-bg-base); }
+.dsh-me-group { margin: 8px 0 0; font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--dsw-alias-label-secondary); }
 .dsh-me-title code { font-size: 12px; color: var(--dsw-alias-label-secondary); }
 `;
 
@@ -259,6 +288,153 @@ window.__ModuleLoader__.load({
       // While the Cowork sidebar is on, its tabs choose the mode, so the chat-box selector hides.
       const shell = result.value.namespaces.some((item) => item.ns === 'cowork-shell');
       return { value: entry.value, revision: entry.revision, shell };
+    }
+
+    // ---- Rerun: the same question again, with the model now selected, in a fresh copy -----------
+
+    const RERUN_CSS = `
+.dsh-rr { width: calc(28px + var(--dsh-content-font-delta,0px)); height: calc(28px + var(--dsh-content-font-delta,0px)); padding: 6px; border: 0; border-radius: var(--dsw-radius-sm, 8px); display: flex; align-items: center; justify-content: center; cursor: pointer; background: transparent; color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary)); }
+.dsh-rr:hover:not([disabled]) { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+.dsh-rr:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); }
+.dsh-rr[disabled] { cursor: default; opacity: .4; }
+.dsh-rr svg { width: calc(17px + var(--dsh-content-font-delta,0px)); height: calc(17px + var(--dsh-content-font-delta,0px)); }
+.dsh-rr[data-busy="true"] svg { animation: dsh-rr-spin .9s linear infinite; }
+@keyframes dsh-rr-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .dsh-rr[data-busy="true"] svg { animation: none; } }
+.dsh-rr-note { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); max-width: 360px; }
+.dsh-rr-note[data-bad="true"] { color: var(--dsw-alias-state-error-primary); }
+html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"] > button[aria-pressed] { display: none; }
+`;
+
+    /** The two switches from Settings → Modes, shared by every answer on screen. */
+    const answerFlags = { rerun: true, thumbs: false, users: 0, timer: 0, listeners: new Set() };
+    async function refreshAnswerFlags(ctx) {
+      try {
+        const { value } = await load(ctx);
+        const rerun = value?.rerunButton !== false;
+        const thumbs = value?.hideFeedback === true;
+        document.documentElement.setAttribute('data-dsh-nothumbs', String(thumbs));
+        if (rerun === answerFlags.rerun && thumbs === answerFlags.thumbs) return;
+        answerFlags.rerun = rerun;
+        answerFlags.thumbs = thumbs;
+        for (const listener of answerFlags.listeners) listener();
+      } catch {
+        /* the settings are read again at the next tick */
+      }
+    }
+
+    /**
+     * Where an answer's question is: the question's own text, and the last event of the turn before it.
+     * @param {object[]} events - the conversation's events, oldest first.
+     * @param {string} messageId - the answer's closing message.
+     * @returns {{text: string, cut: number | undefined, more: boolean} | undefined} the plan; undefined when the answer is not in these events.
+     */
+    function rerunPlan(events, messageId) {
+      const answer = events.find((event) => event?.type === 'assistant/message' && event.data?.message?.id === messageId);
+      if (!answer) return undefined;
+      const turn = answer.data.turn;
+      const start = events.find((event) => event?.type === 'turn/start' && event.data?.turn === turn);
+      if (!start) return undefined;
+      const asked = events.filter((event) => event?.type === 'user/message' && event.seq > start.seq && event.seq < answer.seq && event.data?.source?.kind === 'user');
+      const parts = asked.flatMap((event) => (Array.isArray(event.data?.content) ? event.data.content : []));
+      const text = parts.filter((part) => part?.type === 'text' && typeof part.text === 'string').map((part) => part.text).join('\n\n').trim();
+      // The copy ends where the turn before this one ended. A first turn has nothing before it.
+      const before = events.filter((event) => event?.type === 'turn/end' && event.seq < start.seq).at(-1);
+      return { text, cut: before?.seq, more: parts.some((part) => part?.type !== 'text') };
+    }
+
+    async function readEvents(remote, sessionId, messageId) {
+      let events = [];
+      let beforeSeq;
+      // Newest first, a window at a time, until the answer and the turn before it are both in hand.
+      for (let round = 0; round < 12; round += 1) {
+        const result = await remote.page({ address: { kind: 'session', sessionId }, maxMessages: 200, ...(beforeSeq === undefined ? {} : { beforeSeq }) }, new AbortController().signal);
+        if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message ?? ''}`);
+        const page = (result.value.records ?? []).map((record) => record.event).filter(Boolean);
+        events = [...page, ...events];
+        const plan = rerunPlan(events, messageId);
+        if (plan && (plan.cut !== undefined || !result.value.hasMore)) return plan;
+        if (!result.value.hasMore || page.length === 0) return plan;
+        beforeSeq = page[0].seq;
+      }
+      return rerunPlan(events, messageId);
+    }
+
+    async function startRerun(appCtx, sessionId, messageId) {
+      const remote = appCtx.get('remote.session');
+      const sessions = appCtx.get('sessions');
+      const workspace = appCtx.get('uiWorkspace');
+      if (!remote?.page || !sessions?.fork || !workspace?.openSession) throw new Error('this version of the app does not offer what a rerun needs');
+      const plan = await readEvents(remote, sessionId, messageId);
+      if (!plan || !plan.text) return { ok: false, reason: 'none' };
+      // What the copy must carry over: the model selected now, the folder, and the tab.
+      const read = await remote.projections({ sessionId });
+      const values = read.ok ? read.value?.values ?? read.value ?? {} : {};
+      const model = values.modelSelection?.next;
+      let child;
+      if (plan.cut !== undefined) {
+        child = await sessions.fork({ sessionId, atSeq: plan.cut, increaseTitle: true });
+      } else {
+        const cwd = typeof values.workingDirectory === 'string' ? values.workingDirectory : values.workingDirectory?.cwd ?? values.workingDirectory?.path;
+        child = await sessions.create(cwd ? { cwd } : {});
+      }
+      const fresh = await load(appCtx);
+      const mode = readObject(fresh.value.sessionModes)[sessionId];
+      if (mode) {
+        const build = (value) => [{ op: 'set', path: ['sessionModes'], value: JSON.stringify({ ...readObject(value.sessionModes), [child]: mode }) }];
+        let saved = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
+        if (!saved.ok && saved.error.code === 'settings/conflict') {
+          const again = await load(appCtx);
+          saved = await appCtx.remote.settings.mutate(NS, build(again.value), again.revision);
+        }
+      }
+      if (model?.provider && model?.model) {
+        await remote.selectModel({ sessionId: child, provider: model.provider, model: model.model, ...(model.reasoningEffort === undefined ? {} : { reasoningEffort: model.reasoningEffort }) });
+      }
+      let zone;
+      try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { zone = undefined; }
+      const sent = await remote.prompt({
+        requestId: globalThis.crypto?.randomUUID?.() ?? `rerun-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        sessionId: child, mode: 'queue', content: [{ type: 'text', text: plan.text }], ...(zone ? { clientTimeZone: zone } : {}),
+      });
+      workspace.openSession(child);
+      if (!sent.ok) throw new Error(`${sent.error.code}: ${sent.error.message ?? ''}`);
+      return { ok: true, more: plan.more };
+    }
+
+    function RerunAction({ appCtx, sessionId, messageId }) {
+      const t = appCtx.locale.bind('modes');
+      const [, bump] = useState(0);
+      const [state, setState] = useState({ busy: false, note: '', bad: false });
+      useEffect(() => {
+        const listener = () => bump((n) => n + 1);
+        answerFlags.listeners.add(listener);
+        answerFlags.users += 1;
+        if (answerFlags.users === 1) answerFlags.timer = setInterval(() => { if (!document.hidden) void refreshAnswerFlags(appCtx); }, 8000);
+        void refreshAnswerFlags(appCtx);
+        return () => {
+          answerFlags.listeners.delete(listener);
+          answerFlags.users -= 1;
+          if (answerFlags.users === 0) clearInterval(answerFlags.timer);
+        };
+      }, [appCtx]);
+      if (!answerFlags.rerun || !sessionId || !messageId) return h('style', null, RERUN_CSS);
+      const run = async () => {
+        if (state.busy) return;
+        setState({ busy: true, note: '', bad: false });
+        try {
+          const done = await startRerun(appCtx, sessionId, messageId);
+          setState({ busy: false, note: done.ok ? (done.more ? t('rerun.files') : '') : t('rerun.none'), bad: !done.ok });
+        } catch (error) {
+          setState({ busy: false, note: `${t('rerun.failed')}: ${String(error?.message ?? error).slice(0, 160)}`, bad: true });
+        }
+      };
+      return h(React.Fragment, null,
+        h('style', null, RERUN_CSS),
+        h('button', { type: 'button', className: 'dsh-rr', 'aria-label': t('rerun'), title: state.busy ? t('rerun.busy') : t('rerun'), disabled: state.busy, 'data-busy': String(state.busy), onClick: () => void run() },
+          h('svg', { viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.3, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' },
+            h('path', { d: 'M13.2 8a5.2 5.2 0 1 1-1.6-3.75' }), h('path', { d: 'M13.4 2.6v2.9h-2.9' }))),
+        state.note ? h('span', { className: 'dsh-rr-note', 'data-bad': String(state.bad), role: 'status' }, state.note) : null);
     }
 
     function ModeControl({ appCtx, sessionId }) {
@@ -800,6 +976,7 @@ window.__ModuleLoader__.load({
       const [dirty, setDirty] = useState(false);
       const [busy, setBusy] = useState(false);
       const [message, setMessage] = useState(null);
+      const [answer, setAnswer] = useState({ rerun: true, thumbs: false });
       const nextKey = React.useRef(1);
 
       const adopt = useCallback((view) => {
@@ -809,6 +986,7 @@ window.__ModuleLoader__.load({
         setRows(toRows(base));
         setBroken(invalid);
         setDefaultMode(typeof view.defaultMode === 'string' ? view.defaultMode : 'cowork');
+        setAnswer({ rerun: view.rerunButton !== false, thumbs: view.hideFeedback === true });
         setDirty(false);
       }, []);
 
@@ -883,6 +1061,29 @@ window.__ModuleLoader__.load({
         }
       };
 
+      // The two switches save at once; they do not wait for the Save button and leave unsaved mode edits alone.
+      const flipAnswer = async (field, key, on) => {
+        setAnswer((prev) => ({ ...prev, [key]: on }));
+        try {
+          const ops = [{ op: 'set', path: [field], value: on }];
+          let fresh = await loadEditor(appCtx);
+          let result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
+          if (!result.ok && result.error.code === 'settings/conflict') {
+            fresh = await loadEditor(appCtx);
+            result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
+          }
+          if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+          setLoaded((prev) => ({ ...prev, revision: result.value.revision }));
+          void refreshAnswerFlags(appCtx);
+        } catch (error) {
+          setAnswer((prev) => ({ ...prev, [key]: !on }));
+          setMessage({ text: `${t('save.failed')}: ${error?.message ?? error}`, bad: true });
+        }
+      };
+      const Toggle = (title, hint, on, onChange) =>
+        h('div', { className: 'dsh-me-toggle' }, h('div', null, h('b', null, title), h('span', null, hint)),
+          h('button', { type: 'button', role: 'switch', className: 'dsh-me-sw', 'aria-checked': on, 'aria-label': title, onClick: () => onChange(!on) }));
+
       if (loaded.status === 'loading') return h('div', { className: 'dsh-me-note' }, h('style', null, CSS), t('loading'));
       if (loaded.status === 'error') {
         return h('div', { className: 'dsh-me-note', 'data-bad': 'true' }, h('style', { dangerouslySetInnerHTML: { __html: CSS } }), t('failed'));
@@ -915,6 +1116,10 @@ window.__ModuleLoader__.load({
             rows.map((row) => h('option', { key: row.key, value: row.id }, row.label.trim() || row.id)),
           ),
         ),
+        h('div', { className: 'dsh-me-group' }, t('answer.group')),
+        h('div', null,
+          Toggle(t('answer.rerun'), t('answer.rerun.hint'), answer.rerun, (on) => void flipAnswer('rerunButton', 'rerun', on)),
+          Toggle(t('answer.thumbs'), t('answer.thumbs.hint'), answer.thumbs, (on) => void flipAnswer('hideFeedback', 'thumbs', on))),
         rows.map((row) => {
           const bad = problems.rows[row.key];
           return h(
@@ -1056,6 +1261,16 @@ window.__ModuleLoader__.load({
             ),
           ),
         );
+        // After the app's own feedback pair (order 10), before Branch.
+        ctx.effect(() =>
+          ctx.slots.inject('conversation.chat.assistant-actions', () =>
+            ctx.slots.register(
+              { name: 'conversation.chat.assistant-actions', id: 'modes-rerun', order: 20, inject: (sessionId) => ({ sessionId }) },
+              (props) => h(RerunAction, { ...props, appCtx: ctx }),
+            ),
+          ),
+        );
+        void refreshAnswerFlags(ctx);
       },
     };
   },

@@ -106,7 +106,7 @@ test('a conversation keeps the selection it started with', () => {
 });
 
 test('settings: off until switched on, lists cleaned', () => {
-  assert.deepEqual(readSettings({}), { enabled: false, selection: { kind: 'company', subject: '', market: 'Global', focus: 'full', period: 'year' }, watchlist: [], moreMarkets: [], sources: [], financeTasks: [] });
+  assert.deepEqual(readSettings({}), { enabled: false, adviser: false, selection: { kind: 'company', subject: '', market: 'Global', focus: 'full', period: 'year' }, watchlist: [], moreMarkets: [], sources: [], financeTasks: [] });
   const set = readSettings({ enabled: true, kind: 'sector', subject: 'Banks', market: 'Europe', focus: 'news', period: 'quarter', watchlist: ['NVIDIA', 'nvidia', 'ASML'], moreMarkets: ['Mexico', 'japan', 'Mexico'] });
   assert.equal(set.enabled, true);
   assert.deepEqual(set.selection, { kind: 'sector', subject: 'Banks', market: 'Europe', focus: 'news', period: 'quarter' });

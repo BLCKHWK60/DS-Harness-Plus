@@ -50,6 +50,9 @@ select.dsh-fn-field { cursor: pointer; flex: none; width: auto; max-width: 240px
 .dsh-fn-form .dsh-fn-field { flex: 1 1 200px; }
 .dsh-fn-form select.dsh-fn-field, .dsh-fn-form .dsh-fn-field[data-small="true"] { flex: 0 0 auto; }
 .dsh-fn-out { margin: 6px 0 0; padding: 8px 10px; border-radius: 10px; font-size: 11px; line-height: 16px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; color: var(--dsw-alias-label-secondary); background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent); }
+.dsh-fn-area { box-sizing: border-box; width: 100%; min-height: 150px; margin-top: 10px; padding: 10px 14px; border: 0; border-radius: 12px; resize: vertical; font: inherit; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); }
+.dsh-fn-area:focus { outline: 1px solid var(--dsw-alias-brand-primary); }
+.dsh-fn-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
 .dsh-fn-side { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: 60%; }
 .dsh-fn-list { margin: 6px 0 0; padding-left: 18px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 
@@ -179,7 +182,7 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
         select('Market', selection.market, markets.map((market) => ({ id: market, label: market })), (market) => save({ market })),
         select('Focus', selection.focus, data.focuses ?? [], (focus) => save({ focus })),
         select('Period', selection.period, data.periods ?? [], (period) => save({ period })),
-        h('div', { className: 'dsh-fn-hint', 'data-error': String(Boolean(failed)) }, failed || `${summary}. Research, not advice.`));
+        h('div', { className: 'dsh-fn-hint', 'data-error': String(Boolean(failed)) }, failed || (data.adviser === true ? `${summary}. Adviser on.` : `${summary}. Research, not advice.`)));
     }
 
     function Switch({ on, label, onChange }) {
@@ -285,6 +288,26 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
         h('button', { type: 'button', className: 'dsh-fn-btn', disabled: busy || !subject.trim(), onClick: async () => { if (await onAdd(subject.trim(), rhythm, Number(hour))) setSubject(''); } }, 'Schedule'));
     }
 
+    const PROFILE_MAX = 8000;
+    const PROFILE_HINT = 'For example:\nGoals: retire at 60; a house deposit in 4 years.\nTime frame: most money 15+ years; the deposit 4 years.\nRisk: can sit through a 30% fall on the long-term part; none on the deposit.\nHoldings: 60% world index fund, 15% NVDA, 10% cash…\nLimits: no tobacco; no single share above 10%.\nTax and accounts: …';
+
+    /** The profile the adviser reads. The user writes it; the assistant may add dated lines. */
+    function Profile({ text, busy, onSave }) {
+      const [draft, setDraft] = useState(text);
+      const [seen, setSeen] = useState(text);
+      // A line the assistant added shows up, unless the user is in the middle of typing.
+      if (text !== seen) {
+        if (draft === seen) setDraft(text);
+        setSeen(text);
+      }
+      const dirty = draft.trim() !== text.trim();
+      return h('div', null,
+        h('textarea', { className: 'dsh-fn-area', value: draft, maxLength: PROFILE_MAX, placeholder: PROFILE_HINT, 'aria-label': 'Your profile', spellCheck: true, onChange: (event) => setDraft(event.target.value) }),
+        h('div', { className: 'dsh-fn-foot' },
+          h('span', null, `${draft.length} of ${PROFILE_MAX} characters${dirty ? ' · not saved' : ''}`),
+          h('button', { type: 'button', className: 'dsh-fn-btn', disabled: busy || !dirty, onClick: () => onSave(draft) }, 'Save profile')));
+    }
+
     function FinancePage({ appCtx }) {
       const { data, setData, error, alive, load } = useData();
       const [note, setNote] = useState({ text: '', error: false });
@@ -381,7 +404,7 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
       return h('div', { className: 'dsh-fn-page' },
         h('style', null, CSS),
         h('h2', { className: 'dsh-fn-title' }, 'Finance'),
-        h('p', { className: 'dsh-fn-desc' }, 'A fourth tab, beside Chat, Cowork and Code, for researching companies, markets and economies. The assistant puts the reported figures next to what the news says and what people are saying, looks ahead, and gives both sides. It is research, not advice.'),
+        h('p', { className: 'dsh-fn-desc' }, `A fourth tab, beside Chat, Cowork and Code, for researching companies, markets and economies. The assistant puts the reported figures next to what the news says and what people are saying, looks ahead, and gives both sides. ${data.adviser === true ? 'The adviser is on: it ends with a recommendation.' : 'It is research, not advice.'}`),
         note.text ? h('p', { className: 'dsh-fn-desc', 'data-error': String(note.error), role: 'status' }, note.text) : null,
         data.problem ? h('p', { className: 'dsh-fn-desc', 'data-error': 'true' }, data.problem) : null,
 
@@ -391,6 +414,16 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
             h('div', { className: 'dsh-fn-rowtitle' }, 'Show the Finance tab'),
             h('div', { className: 'dsh-fn-rowdesc' }, 'On adds the tab, its drop-downs, its instructions and its skills. Off takes all of them away; your watchlist is kept.')),
           h(Switch, { on: data.enabled === true, label: 'Show the Finance tab', onChange: (on) => save({ enabled: on }, on ? 'Switched on. The Finance tab appears in the sidebar in a moment.' : 'Switched off. The Finance tab is taken away in a moment.') })),
+
+        h('div', { className: 'dsh-fn-group' }, 'Adviser'),
+        h('div', { className: 'dsh-fn-row' },
+          h('div', { className: 'dsh-fn-rowtext' },
+            h('div', { className: 'dsh-fn-rowtitle' }, 'Act as my financial adviser'),
+            h('div', { className: 'dsh-fn-rowdesc' }, 'On: the assistant researches as an adviser would, ends with a clear call (buy, add, hold, trim, sell, avoid or wait) fitted to your profile, and adds no disclaimer. Off: research only, and it does not say buy, sell or hold. Applies from your next message.')),
+          h(Switch, { on: data.adviser === true, label: 'Act as my financial adviser', onChange: (on) => save({ adviser: on }, on ? 'Adviser on. It applies from your next message in a Finance conversation.' : 'Adviser off. Finance is research only again.') })),
+        data.adviser === true ? h('div', null,
+          h('p', { className: 'dsh-fn-desc' }, 'Your profile: what an adviser needs to know about you. It is read in every Finance conversation. You can write it here, and the assistant adds a dated line when you tell it something lasting. It is kept in one file on this Mac and is sent to your model with each Finance message. Leave out account numbers.'),
+          h(Profile, { text: typeof data.profile === 'string' ? data.profile : '', busy, onSave: (text) => act({ action: 'profile', text }, 'Profile saved.') })) : null,
 
         h('div', { className: 'dsh-fn-group' }, 'Watchlist'),
         h('p', { className: 'dsh-fn-desc' }, 'Companies, sectors or economies you follow. They are offered when you type in the subject box on the Finance tab.'),
@@ -433,14 +466,16 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
 
         h('div', { className: 'dsh-fn-group' }, 'What the assistant is given'),
         h('ul', { className: 'dsh-fn-list' },
-          h('li', null, 'A method: figures only from sources it fetched, each with its date; facts, claims, opinions and its own reading kept apart; always a look ahead; always both sides; what it could not find; no buy or sell advice.'),
+          h('li', null, `A method: figures only from sources it fetched, each with its date; facts, claims, opinions and its own reading kept apart; always a look ahead; always both sides; what it could not find; ${data.adviser === true ? 'then a clear recommendation, with no disclaimer' : 'no buy or sell advice'}.`),
           h('li', null, 'Your selection from the drop-downs, as it was when the conversation started.'),
           h('li', null, 'Three data tools that need no key or account: a company\'s reported figures and its filings, from the US securities regulator (US-listed companies and many foreign ones), and yearly readings for economies from the World Bank.'),
           h('li', null, `${(data.skills ?? []).length} skills, one for each common task: ${(data.skills ?? []).map((skill) => skill.name.replace(/^finance-/, '').replace(/-/g, ' ')).join(', ')}.`)),
 
         h('div', { className: 'dsh-fn-group' }, 'Good to know'),
         h('ul', { className: 'dsh-fn-list' },
-          h('li', null, 'It is research, not advice. The assistant is not a licensed financial adviser, and it is told not to say buy, sell or hold. Decisions are yours.'),
+          h('li', null, data.adviser === true
+            ? 'The adviser is on, so the assistant recommends and adds no disclaimer. It is still an AI model working from what it could fetch: it is not a licensed financial adviser and it can be wrong. Decisions are yours.'
+            : 'It is research, not advice. The assistant is not a licensed financial adviser, and it is told not to say buy, sell or hold. Decisions are yours. The Adviser switch above changes this.'),
           h('li', null, 'Its own data covers reported company figures and yearly economy readings. It has no share prices, no estimates and no forecasts: those, and anything about companies that do not file in the United States, come from what the assistant finds with web search and Deep research, which can be delayed or misread. Each figure should come with its source and date so you can check it.'),
           h('li', null, 'When the assistant uses the data tools, the company or country you asked about is sent to the regulator\'s or the World Bank\'s public service. Nothing else is sent, and no account is involved.'),
           h('li', null, 'What people say online is a signal, not a fact, and can be manipulated.'),

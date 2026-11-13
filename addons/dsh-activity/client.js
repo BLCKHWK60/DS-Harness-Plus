@@ -68,6 +68,25 @@ window.__ModuleLoader__.load({
 .dsh-ac-fit { box-sizing: border-box; max-width: 100%; }
 .dsh-ac-fit[data-joined="true"] { position: relative; z-index: 1; clip-path: inset(-40px -40px 0 -40px); }
 .dsh-ac-fit[data-joined="true"] .dsh-ac-dock { padding: 12px 24px 2px; }
+/* The arrow that folds the message box away. Folded, the line is all that is left of the box. */
+.dsh-ac-fit[data-arrow="true"] { position: relative; }
+.dsh-ac-fit[data-arrow="true"] .dsh-ac-dock { padding-right: 44px; }
+.dsh-ac-fit[data-joined="true"][data-arrow="true"] .dsh-ac-dock { padding-right: 52px; }
+.dsh-ac-fit[data-folded="true"] { clip-path: none; }
+.dsh-ac-fit[data-folded="true"] .dsh-ac-dock { padding-top: 10px; padding-bottom: 10px; }
+.dsh-ac-fit[data-joined="true"][data-folded="true"] .dsh-ac-dock { padding-top: 10px; padding-bottom: 8px; }
+.dsh-ac-bare { min-height: 24px; }
+.dsh-ac-fold {
+  position: absolute; right: 10px; top: 50%; width: 26px; height: 26px; margin-top: -13px; padding: 0; border: 0; border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; color: var(--dsw-alias-label-secondary); background: transparent; z-index: 2;
+}
+.dsh-ac-fit[data-joined="true"] .dsh-ac-fold { right: 16px; }
+.dsh-ac-fit[data-joined="true"]:not([data-folded="true"]) .dsh-ac-fold { top: 12px; margin-top: 0; }
+.dsh-ac-fold:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+.dsh-ac-fold:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); }
+.dsh-ac-fold svg { display: block; transition: transform .16s ease; }
+.dsh-ac-fit[data-folded="true"] .dsh-ac-fold svg { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .dsh-ac-fold svg { transition: none; } }
 .dsh-ac-edge { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; pointer-events: none; display: flex; flex-direction: column; gap: 2px; }
 .dsh-ac-inline { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .dsh-ac-canvas { display: block; width: 100%; color: var(--dsw-alias-label-secondary); }
@@ -675,39 +694,86 @@ input.dsh-ac-field { width: 260px; }
      * The line above the message box. Fitted, it is exactly as wide as the box and sits on it, so the
      * two read as one. The width is taken from the box itself, so it follows the window and the app.
      */
+    /** Whether the message box is folded away. One answer for the whole app, kept across restarts. */
+    const FOLD_KEY = 'dsh-activity.folded';
+    const fold = {
+      on: (() => { try { return window.localStorage.getItem(FOLD_KEY) === '1'; } catch { return false; } })(),
+      listeners: new Set(),
+      set(on) {
+        fold.on = on === true;
+        try { window.localStorage.setItem(FOLD_KEY, fold.on ? '1' : '0'); } catch { /* private mode: it lasts until the app closes */ }
+        for (const listener of fold.listeners) listener();
+      },
+    };
+    function useFolded() {
+      const [, bump] = useState(0);
+      useEffect(() => {
+        const listener = () => bump((n) => n + 1);
+        fold.listeners.add(listener);
+        return () => { fold.listeners.delete(listener); };
+      }, []);
+      return fold.on;
+    }
+    /** The styles that take the message box out of sight while keeping its width measurable. */
+    const FOLDED_CARD = { height: '0px', minHeight: '0px', paddingTop: '0px', paddingBottom: '0px', marginTop: '0px', marginBottom: '0px', borderWidth: '0px', overflow: 'hidden', visibility: 'hidden', boxShadow: 'none' };
+
     function LiveDock({ sessionId }) {
       const snap = useLive(sessionId);
       const wrap = useRef(null);
       const fit = snap?.settings?.fit !== false;
+      const canFold = snap?.settings?.collapse !== false;
+      const folded = useFolded() && canFold;
       useEffect(() => {
         const node = wrap.current;
         if (!node) return undefined;
         let card = null;
+        const showCard = () => {
+          if (!card) return;
+          for (const key of Object.keys(FOLDED_CARD)) card.style[key] = '';
+          card.removeAttribute('inert');
+          card.removeAttribute('aria-hidden');
+        };
+        const hideCard = () => {
+          if (!card) return;
+          Object.assign(card.style, FOLDED_CARD);
+          // Nothing in a folded box can be reached with the keyboard either.
+          card.setAttribute('inert', '');
+          card.setAttribute('aria-hidden', 'true');
+        };
         const clear = () => {
           for (const key of ['width', 'marginLeft', 'marginBottom', 'background', 'boxShadow', 'borderRadius']) node.style[key] = '';
           node.removeAttribute('data-joined');
           if (card) { card.style.borderTopLeftRadius = ''; card.style.borderTopRightRadius = ''; }
         };
-        if (!fit || typeof ResizeObserver !== 'function') { clear(); return undefined; }
         const stack = node.closest('[class*="_composerStack"]') ?? node.parentElement?.parentElement;
         card = stack?.querySelector('[class*="_card"]') ?? null;
         if (!stack || !card) { clear(); return undefined; }
+        if (typeof ResizeObserver !== 'function') { clear(); if (folded) hideCard(); return () => { showCard(); }; }
         const place = () => {
-          const box = card.getBoundingClientRect();
-          const area = stack.getBoundingClientRect();
-          // Nothing to show (hidden while idle), or no box to sit on: leave the box as the app draws it.
-          if (box.width < 50 || !node.firstElementChild) { clear(); return; }
-          // The box's own look, read with its top corners as the app has them.
+          // Read the box as the app draws it, then fold it again if it is folded. One pass, nothing is painted in between.
+          showCard();
           card.style.borderTopLeftRadius = '';
           card.style.borderTopRightRadius = '';
+          const box = card.getBoundingClientRect();
+          const area = stack.getBoundingClientRect();
           const look = getComputedStyle(card);
           const radius = look.borderTopLeftRadius;
+          const style = { background: look.backgroundColor, shadow: look.boxShadow };
+          if (folded) hideCard();
+          // Nothing to show (hidden while idle), or no box to sit on: leave the box as the app draws it.
+          if (!fit || box.width < 50 || !node.firstElementChild) { clear(); return; }
           node.style.width = `${Math.round(box.width)}px`;
           node.style.marginLeft = `${Math.max(0, Math.round(box.left - area.left))}px`;
-          node.style.background = look.backgroundColor;
-          node.style.boxShadow = look.boxShadow;
-          node.style.borderRadius = `${radius} ${radius} 0 0`;
+          node.style.background = style.background;
+          node.style.boxShadow = style.shadow;
           node.setAttribute('data-joined', 'true');
+          if (folded) {
+            // The line is the whole box now: all four corners, and it keeps the box's place at the bottom.
+            node.style.borderRadius = radius;
+            node.style.marginBottom = '';
+            return;
+          }
+          node.style.borderRadius = `${radius} ${radius} 0 0`;
           // Close the space between the two, and cover the box's top edge by one pixel so no seam shows.
           const now = parseFloat(node.style.marginBottom) || 0;
           const space = box.top - node.getBoundingClientRect().bottom - now;
@@ -725,9 +791,21 @@ input.dsh-ac-field { width: 260px; }
         const theme = new MutationObserver(place);
         theme.observe(document.documentElement, { attributes: true });
         place();
-        return () => { watch.disconnect(); theme.disconnect(); card.removeEventListener('focusin', place); card.removeEventListener('focusout', place); clear(); };
-      }, [fit, Boolean(snap)]);
-      return h(React.Fragment, null, h('style', null, CSS), h('div', { ref: wrap, className: 'dsh-ac-fit', 'data-fit': String(fit) }, snap ? h(Dock, { snap, hist: store.hist }) : null));
+        return () => { watch.disconnect(); theme.disconnect(); card.removeEventListener('focusin', place); card.removeEventListener('focusout', place); showCard(); clear(); };
+      }, [fit, folded, Boolean(snap)]);
+      const line = snap ? h(Dock, { snap, hist: store.hist }) : null;
+      const shown = snap ? !hiddenNow(snap, 'dock') : false;
+      // The arrow rides on the line. Folded with no line to ride on, a bare strip carries it, so the box can always come back.
+      const arrow = canFold && snap && (shown || folded)
+        ? h('button', {
+          type: 'button', className: 'dsh-ac-fold', 'aria-expanded': !folded, title: folded ? 'Show the message box' : 'Fold the message box away', 'aria-label': folded ? 'Show the message box' : 'Fold the message box away',
+          onClick: () => fold.set(!folded),
+        }, h('svg', { width: 14, height: 14, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' }, h('path', { d: 'M4 6.5l4 4 4-4' })))
+        : null;
+      return h(React.Fragment, null, h('style', null, CSS),
+        h('div', { ref: wrap, className: 'dsh-ac-fit', 'data-fit': String(fit), 'data-arrow': String(Boolean(arrow)), 'data-folded': String(folded) },
+          shown ? line : folded ? h('div', { className: 'dsh-ac-dock dsh-ac-bare' }) : null,
+          arrow));
     }
     function LiveInline({ sessionId }) {
       const snap = useLive(sessionId);
@@ -917,6 +995,7 @@ input.dsh-ac-field { width: 260px; }
           { title: 'Thickness', hint: 'How heavy the lines are.' },
           h('select', { className: 'dsh-ac-field', value: String(value.weight ?? 2), 'aria-label': 'Thickness', onChange: (event) => set('weight', Number(event.target.value)) }, h('option', { value: '1' }, 'Thin'), h('option', { value: '2' }, 'Normal'), h('option', { value: '3' }, 'Bold')),
         ),
+        toggle('collapse', 'Arrow to fold the message box away', 'Adds a small arrow at the right end of the line. A click folds the message box down so only the line is left, and more of the conversation shows. Another click brings the box back. It stays folded in every conversation, and after a restart, until you click.', true),
         toggle('fit', 'Fit the message box', 'On keeps the line above the message box exactly as wide as the box, so the two look like one. Off lets it span the whole chat area.', true),
         toggle('hideIdle', 'Hide when nothing is running', 'Off keeps a faint resting line, so the chat box does not jump.', false),
         toggle('still', 'No movement', 'Colour only: nothing flows, spins or pulses.', false),

@@ -53,6 +53,8 @@ export const Config = z.object({
   still: z.boolean().default(false).volatile(),
   /** Keep the line above the message box as wide as the box. Off lets it span the whole chat area. */
   fit: z.boolean().default(true).volatile(),
+  /** An arrow on the line that folds the message box away, leaving only the line. */
+  collapse: z.boolean().default(true).volatile(),
   /** Thickness: 1 thin, 2 normal, 3 bold. */
   weight: z.number().min(1).max(3).default(2).volatile(),
   /** Ticker tape: how many minutes it holds. */
@@ -133,6 +135,7 @@ export function readSettings(config) {
     hideIdle: flag(plain(config.hideIdle), false),
     still: flag(plain(config.still), false),
     fit: flag(plain(config.fit), true),
+    collapse: flag(plain(config.collapse), true),
     weight: Math.round(number(plain(config.weight), 2, 1, 3)),
     tapeMinutes: Math.round(number(plain(config.tapeMinutes), 1, 1, 30)),
     tapeBlocks: flag(plain(config.tapeBlocks), true),

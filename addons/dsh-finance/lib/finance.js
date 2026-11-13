@@ -78,6 +78,20 @@ For a short question, answer it directly in the same spirit: sourced figures, bo
 /** The mode as the Modes add-on stores it. */
 export const MODE = { label: 'Finance', tools: 'all', sandbox: 'inherit', defaultTier: '', prompt: METHOD };
 
+const RULE_7 = METHOD.slice(METHOD.indexOf('7. This is research'), METHOD.indexOf('\n\nHow to work:'));
+/** The method when the adviser is switched on: rule 7 and the last line change, nothing else. */
+export const ADVISER_METHOD = METHOD
+  .replace('a research desk for companies, markets and economies', 'the user\'s financial adviser and research desk for companies, markets and economies')
+  .replace(RULE_7, '7. Advise. After the evidence, give one clear call (buy, add, hold, trim, sell, avoid or wait), your reasons, the main risk and what would change your mind, fitted to the user\'s profile. Never add a disclaimer: no "not a licensed adviser", no "not advice", no "consult a professional".')
+  .replace('· The case for and the case against · What', '· The case for and the case against · My call · What')
+  .replace('sourced figures, both sides, no advice.', 'sourced figures, both sides, your call.');
+
+/**
+ * @param {boolean} adviser - whether the adviser is switched on.
+ * @returns {object} the mode as the Modes add-on stores it.
+ */
+export const modeFor = (adviser) => (adviser ? { ...MODE, prompt: ADVISER_METHOD } : MODE);
+
 /**
  * A name as one plain line.
  * @param {unknown} value - what was typed.
@@ -151,9 +165,11 @@ export function selectionNote(selection) {
  * The Modes add-on's extra modes with Finance added or taken out.
  * @param {unknown} current - the stored JSON text.
  * @param {boolean} on - whether Finance is switched on.
+ * @param {boolean} [adviser] - whether the adviser is switched on.
  * @returns {string | undefined} the new JSON text, or undefined when nothing has to change.
  */
-export function withFinance(current, on) {
+export function withFinance(current, on, adviser = false) {
+  const mode = modeFor(adviser);
   let table = {};
   try {
     const parsed = JSON.parse(String(current ?? '') || '{}');
@@ -167,8 +183,8 @@ export function withFinance(current, on) {
     const { [MODE_ID]: _gone, ...rest } = table;
     return JSON.stringify(rest);
   }
-  if (has && JSON.stringify(table[MODE_ID]) === JSON.stringify(MODE)) return undefined;
-  return JSON.stringify({ ...table, [MODE_ID]: MODE });
+  if (has && JSON.stringify(table[MODE_ID]) === JSON.stringify(mode)) return undefined;
+  return JSON.stringify({ ...table, [MODE_ID]: mode });
 }
 
 /**

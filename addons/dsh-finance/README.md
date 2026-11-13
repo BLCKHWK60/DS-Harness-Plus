@@ -2,7 +2,7 @@
 
 Plugin `@local/dsh-finance` (dsh 0.2.2-rc.2). A fourth mode and tab, beside Chat, Cowork and Code, for researching companies, markets and economies from three sides at once: the reported figures, the news, and what people are saying.
 
-It is research, not advice. The assistant is told not to say buy, sell or hold, and it is not a licensed financial adviser.
+By default it is research, not advice: the assistant is told not to say buy, sell or hold. The **Adviser** switch (since 0.34.0, below) changes that.
 
 It is off until you switch it on, and it needs the Modes add-on and the Cowork sidebar.
 
@@ -176,3 +176,16 @@ Three tools in `lib/market.js` (network code in `lib/feeds.js`, the word count i
 - **Not used, and why (checked 2026-11-13):** Reddit, StockTwits and Bluesky answered 403 to a reader without an account; X has no free reading at all. Google News and Bing News feeds answer, but their terms allow only a personal feed reader, so they are not used. The assistant reaches these through the app's web search.
 - **The method** (3,942 of 4,000 characters) now says: use these tools, chart freely, and match the question (financials only, sentiment, or the full picture).
 - **Tested (0.33.0):** unit tests with stand-in services (37 in all). Live on 2026-11-13: prices for NVDA, AMD and ^GSPC with the comparison chart; 173 posts about one company from the three networks with the per-day chart; the news list once (five articles). In the lab app with a scripted model: `finance_prices` and `finance_social` each showed their chart under the turn. **Not verified:** GDELT's per-day coverage and tone against the live service (it answered "too many requests" on every later try from this network; the reading code follows its documented shape and is covered by a stand-in test only); any real model; the Mac app.
+
+## Since 0.34.0: the adviser
+
+Setting `adviser` (default off; Settings → Finance → Adviser). On:
+
+- **The mode's instructions** become `ADVISER_METHOD` (`lib/finance.js`, 3,993 of 4,000 characters): rule 7 changes from "research, not advice" to "advise, and never add a disclaimer", and a full answer gets a "My call" part. `withFinance(current, on, adviser)` writes it into the Modes add-on; the 3-second sync picks a flip up, so it applies from the next message.
+- **A note** (`adviserNote` in `lib/adviser.js`) joins the selection note in every Finance conversation (prompt section `finance:selection`): speak as an adviser, no disclaimer at the start or the end, what an adviser does before recommending (know the client, research, judge fit, recommend, be straight when the evidence is thin), and the profile. It says it replaces any "research, not advice" line in a skill, a scheduled task or a tool result, so briefs scheduled earlier follow it too.
+- **The skills** are registered again with that sentence replaced (`adviserSkills`); new briefs are worded for the adviser (`briefPrompt(…, adviser)`).
+- **The profile** is one text file, `<home>/finance/profile.md` (mode 600, at most 8,000 characters). The page saves it with POST `{ action: 'profile', text }`; the tool `finance_profile_save { note }` adds one dated line, exists only while the adviser is on, refuses anything that looks like an account or card number, and refuses when the file is full instead of pushing older lines out.
+- **Answer first (0.34.1).** In 0.34.0 the note told the assistant to ask for a missing fact, and with an empty profile to ask "early in the conversation". In the owner's app a real model answered a question with an `ask_user_question` card ("How much loss can you comfortably withstand?") and no answer. The note now says: every reply is the full answer; assume the usual case where a fact is missing and say so; never use `ask_user_question` to collect facts about the user; at most one question, as the last line after the call. An empty profile means "advise anyway on stated assumptions".
+- The assistant is told not to claim a named licence, firm or registration. That limit was the builder's choice, not asked for.
+- The Finance mode's prompt cannot be edited in Settings → Modes: `withFinance` writes it back whenever it differs.
+- **Tested (0.34.0):** 6 unit tests (43 in the add-on). In the test setup with a stand-in model: the switch changed the stored mode within seconds; a Finance request carried rule 7 as "Advise", the note and the profile, and no "research, not advice"; the tool wrote the dated line into the file; the page showed the switch and the profile. Not tested: any real model, so whether a given model really leaves the disclaimer out is not known.

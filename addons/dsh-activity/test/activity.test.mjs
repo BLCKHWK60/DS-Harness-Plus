@@ -198,6 +198,8 @@ test('settings are read with safe defaults, and sessions are placed in the tree'
   assert.equal(defaults.text, true);
   assert.equal(defaults.fit, true);
   assert.equal(readSettings({ fit: false }).fit, false);
+  assert.equal(defaults.collapse, true);
+  assert.equal(readSettings({ collapse: false }).collapse, false);
   assert.equal(defaults.tapeMinutes, 1);
   assert.deepEqual(defaults.colors, {});
   assert.deepEqual(defaults.webTools, [], 'no tool names are preconfigured in the settings');
