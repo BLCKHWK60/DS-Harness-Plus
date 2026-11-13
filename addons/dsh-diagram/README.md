@@ -66,3 +66,8 @@ After layout, the add-on looks for: boxes that overlap; text that does not fit i
 - Flowchart layout aims for few crossings but does not guarantee the fewest. Dense graphs with many arrows will cross; the check says so.
 - Labels on arrows that leave or reach the same box can sit close together.
 - No pie charts, no stacked bars, no two vertical axes, no free-form drawings (anatomy, circuits, maps).
+
+## Since 0.33.0
+
+- **Dates along the bottom.** A point's x may be `"2026-03-31"` or `"2026-03"` (`dateDays` in `lib/spec.js`); every point of a chart must then be dated. `dateAxis` in `lib/chart.js` puts marks at days, Mondays, months, quarters or years. A line of more than 45 points has no dots, and its outline gives the start, the end, the lowest and the highest instead of every point.
+- **Service `diagrams`, apiVersion 2:** `show(agent, {title, description})` draws a description and files it under the agent's turn; `show(agent, {title, file})` does the same for a PNG, JPEG or SVG file another add-on made (up to 12 MB; served as it is through the picture route, and shown as an image, so nothing in it can run).

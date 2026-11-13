@@ -20,17 +20,25 @@ import { join } from 'node:path';
 import { createEngine } from './lib/engine.js';
 import { READS } from './lib/files.js';
 import { MODE_ID, withData } from './lib/method.js';
+import { createPython } from './lib/python.js';
 import { openStore } from './lib/store.js';
-import { buildTools, changedFiles } from './lib/tools.js';
+import { OUTPUT_FOLDER, buildTools, changedFiles } from './lib/tools.js';
 
 export const name = 'dsh-data';
 
 export const DATA_PATH = '/dsh-data/data';
 const MODES_NS = 'modes';
+/** Modes whose conversations get the note about their data folder: Data itself, and Finance, which works on the user's own files the same way. */
+const FOLDER_MODES = [MODE_ID, 'finance'];
 
 export const Config = z.object({
   /** The Data mode and tab. Off leaves nothing of it in the app; saved analyses are kept. */
   enabled: z.boolean().default(false).volatile(),
+  /**
+   * Python for statistics and charts: set up Plus's own private Python folder the first time Data
+   * is switched on (a download of about 450 MB). Off leaves the data_python tool saying it is not set up.
+   */
+  pythonSetup: z.boolean().default(true).volatile(),
 });
 
 function plain(value) {
@@ -56,6 +64,28 @@ export function apply(ctx, config) {
   const store = openStore(dir ? join(dir, 'queries.json') : '', dir ? join(dir, 'analyses.json') : '');
   const engine = createEngine();
   ctx.effect(() => () => engine.stop(), 'data: engine');
+  const python = dir ? createPython(join(dir, 'python')) : undefined;
+  /** Pictures go into the chat through the Diagrams add-on. */
+  const show = (exec, picture) => {
+    try {
+      const diagrams = ctx.get('diagrams');
+      if (typeof diagrams?.show !== 'function') return { ok: false, errors: ['The Diagrams add-on is not running, so the picture cannot be shown in the chat.'] };
+      return diagrams.show(exec?.agent, picture);
+    } catch (error) {
+      return { ok: false, errors: [String(error?.message ?? error).slice(0, 200)] };
+    }
+  };
+  // Set Python up once, in the background, the first time Data is on. A failed set-up is not retried by itself.
+  let pythonAsked = false;
+  const preparePython = () => {
+    if (!python || pythonAsked || !enabled() || plain(config?.pythonSetup) === false) return;
+    pythonAsked = true;
+    if (python.status().state !== 'missing') return;
+    python.setup().then(
+      (state) => ctx.logger?.info?.(`data: Python set-up: ${state.state} (${state.detail})`),
+      (error) => warn(`Python set-up failed: ${String(error?.message ?? error)}`),
+    );
+  };
 
   /** The folder a conversation works in, from its header. */
   const folderOf = (agent) => {
@@ -107,7 +137,7 @@ export function apply(ctx, config) {
     if (on && !toolsOff) {
       const tools = ctx.get('tools');
       if (!tools?.register) return;
-      toolsOff = buildTools({ enabled, rootOf: (exec) => folderOf(exec?.agent), conversationOf: (exec) => conversationOf(exec?.agent), engine, store }).map((tool) => tools.register(tool));
+      toolsOff = buildTools({ enabled, rootOf: (exec) => folderOf(exec?.agent), conversationOf: (exec) => conversationOf(exec?.agent), engine, store, python, show }).map((tool) => tools.register(tool));
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
       toolsOff = undefined;
@@ -117,6 +147,7 @@ export function apply(ctx, config) {
   const follow = () => {
     void syncMode();
     try {
+      preparePython();
       syncTools();
     } catch (error) {
       warn(`could not update the tools: ${String(error?.message ?? error)}`);
@@ -140,10 +171,21 @@ export function apply(ctx, config) {
       return undefined;
     }
   };
-  const note = (agent) => {
+  const pythonLine = () => {
+    const state = python?.status().state;
+    if (state === 'ready') return 'data_python is ready (pandas, numpy, scipy, matplotlib and more).';
+    if (state === 'installing') return 'Python is still being set up; data_python will work in a minute or two. Until then use data_query and data_chart.';
+    return 'Python is not set up, so data_python will not run. The user can set it up in Settings → Data. Until then use data_query and data_chart.';
+  };
+  const note = (agent, mode) => {
     const folder = folderOf(agent);
+    if (mode !== MODE_ID) {
+      // Finance: the same tools work on the user's own files, next to the market data.
+      if (!folder) return '';
+      return [`The folder of this conversation is ${folder}. When the user's own files matter (a portfolio, exported statements, a spreadsheet of figures), work on them with the data tools: data_files, data_profile, data_query, data_chart (a chart straight from a query), data_python (statistics and special charts) and data_text. Cite each run's id, like [Q7]. New files go into ${OUTPUT_FOLDER}; never change the user's files.`, pythonLine()].join('\n');
+    }
     if (!folder) return 'This Data conversation has no folder, so there are no files to analyse. Tell the user to start a conversation in the folder that holds their data (the folder is picked on the start page).';
-    const lines = [`The data folder of this conversation is ${folder}. Paths you give the data tools are relative to it.`];
+    const lines = [`The data folder of this conversation is ${folder}. Paths you give the data tools are relative to it. Files you make go into ${OUTPUT_FOLDER} inside it.`, pythonLine()];
     const mine = store.analyses().filter((analysis) => analysis.folder === folder).slice(0, 12);
     if (mine.length > 0) {
       lines.push('Saved analyses for this folder:');
@@ -167,7 +209,8 @@ export function apply(ctx, config) {
             interpolate: false,
             text: () => {
               try {
-                return enabled() && modeOf(agent.id) === MODE_ID ? note(agent) : '';
+                const mode = modeOf(agent.id);
+                return enabled() && FOLDER_MODES.includes(mode) ? note(agent, mode) : '';
               } catch {
                 return '';
               }
@@ -206,6 +249,7 @@ export function apply(ctx, config) {
     problem,
     toolsOn: Boolean(toolsOff),
     reads: READS,
+    python: python ? python.status() : { state: 'missing', detail: 'No data folder is available.', packages: [] },
     analyses: store.analyses().map((analysis) => {
       let changed = [];
       try {
@@ -248,8 +292,13 @@ export function apply(ctx, config) {
                   chunks.push(chunk);
                 }
                 const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-                if (body?.action !== 'remove') throw new Error('unknown action');
-                if (!store.remove(body.name)) throw new Error('That analysis is gone.');
+                if (body?.action === 'python') {
+                  if (!python) throw new Error('No data folder is available.');
+                  // Runs in the background; the page asks again to see how far it is.
+                  python.setup().catch((error) => warn(`Python set-up failed: ${String(error?.message ?? error)}`));
+                } else if (body?.action === 'remove') {
+                  if (!store.remove(body.name)) throw new Error('That analysis is gone.');
+                } else throw new Error('unknown action');
               }
               res.end(JSON.stringify(view()));
               // The switch on the page should take effect at once, not at the next tick.

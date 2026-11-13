@@ -34,6 +34,27 @@ const BUILTIN_MODES = {
   code: { label: 'Code', tools: 'all', sandbox: 'workspace-write', defaultTier: '', prompt: '' },
 };
 
+/**
+ * How to work in Code mode. Used while the Code mode has no instructions of its own
+ * (Settings → Modes), and the `codeMethod` setting is on.
+ */
+export const CODE_METHOD = `You are in Code mode: a software engineer working in this project's folder, with the user following your work.
+
+How to work:
+1. Understand before you change. Read the files a task touches, and the project's own instructions (AGENTS.md, CLAUDE.md, README), before editing. Follow the conventions, libraries and style the project already uses. Do not bring in a new dependency without saying why.
+2. Plan in the open. For anything with more than two steps, keep a step list with todo_write: one step in progress at a time, tick each off when it is done, and change the list when the plan changes.
+3. Make small, exact changes. Prefer editing an existing file to writing a new one. Change only what the task needs: do not reformat, rename or tidy code nobody asked about. Never write secrets into files.
+4. Prove it works. After a change, run what shows it is right: the tests, the build, the linter, or the program itself. Read the output. If something fails, find the cause and fix it. Never hide a failure, skip a test or weaken a check to get a pass. If you could not run something, say so.
+5. Be careful with what cannot be undone. Ask before deleting files, rewriting history, force-pushing, changing shared settings or touching anything outside the project. Commit or push only when the user asks.
+6. Search widely, read narrowly. Use the search tools (grep, glob, the code map when it is there) to find where things are, then read only the parts you need.
+7. When you are stuck after two real attempts at the same problem, stop and say what you tried, what you saw and what you think is going on.
+
+How to report:
+- Before each group of steps, say in one short line what you are about to do, so the user can follow.
+- Refer to code as path:line, so the user can open it.
+- At the end: what changed and in which files, what you ran and what it showed, and anything not done or not verified. Say it plainly, without praise for your own work.
+- Answer a question about the code with the answer first, then where in the code it comes from. Do not change files when the user only asked a question.`;
+
 /** Added while the conversation's tools are switched off. */
 const TOOLS_OFF_PROMPT =
   'Tools are switched off for this conversation. Answer from what you know and do not try to call a tool. If the task cannot be done without tools, say so in one sentence.';
@@ -103,6 +124,8 @@ export const Config = z.object({
   sessionTools: z.string().default('{}').volatile(),
   /** The slider beside the Search button: how hard the model searches. One setting for all conversations. */
   searchDepth: z.string().default('standard').volatile(),
+  /** Give the Code mode a working method (read first, small changes, run the tests, report plainly) while it has no instructions of its own. */
+  codeMethod: z.boolean().default(true).volatile(),
   /** The slider beside the Deep research button: how many rounds and helpers a research run uses. */
   researchDepth: z.string().default('standard').volatile(),
   /**
@@ -485,7 +508,8 @@ export function apply(ctx, config) {
               alone = false;
             }
             const depthNote = webOn(agent.id, mode) ? SEARCH_DEPTH_PROMPTS[depthId(config.searchDepth)] : '';
-            return [alone ? '' : mode.prompt, webGranted ? WEB_PROMPT : '', depthNote, researchOn(agent.id) ? RESEARCH_PROMPT : '', viaPrograms(agent)].filter(Boolean).join('\n\n');
+            const own = mode.prompt || (mode.id === 'code' && plain(config.codeMethod) !== false ? CODE_METHOD : '');
+            return [alone ? '' : own, webGranted ? WEB_PROMPT : '', depthNote, researchOn(agent.id) ? RESEARCH_PROMPT : '', viaPrograms(agent)].filter(Boolean).join('\n\n');
           },
         }),
       'modes prompt section',

@@ -85,7 +85,8 @@ window.__ModuleLoader__.load({
           .then((response) => (response.ok ? response.blob() : Promise.reject(new Error('gone'))))
           .then((blob) => {
             if (!alive) return;
-            url = URL.createObjectURL(new Blob([blob], { type: 'image/svg+xml' }));
+            // Shown as an image, so nothing inside it can run. Charts from other add-ons may be PNG or JPEG.
+            url = URL.createObjectURL(new Blob([blob], { type: /^image\/(png|jpeg)/.test(blob.type) ? blob.type : 'image/svg+xml' }));
             setState({ url, failed: false });
           })
           .catch(() => alive && setState({ url: '', failed: true }));

@@ -22,6 +22,7 @@ import { FOCUSES, KINDS, MARKETS, MODE_ID, PERIODS, WATCHLIST_MAX, cleanList, op
 import { BRIEF_PREFIX, OWN_MAX, RHYTHMS, briefPrompt, briefRule, briefTitle, briefsOf, ownTasksOf, scheduledIn } from './lib/briefs.js';
 import { PRESETS, addressProblem, keyRef, readSources, sourceGet, sourcesNote } from './lib/sources.js';
 import { buildSourceTool, buildTools } from './lib/tools.js';
+import { buildMarketTools } from './lib/market.js';
 import { SKILLS } from './skills.js';
 
 export const name = 'dsh-finance';
@@ -251,7 +252,17 @@ export function apply(ctx, config) {
     if (on && !toolsOff) {
       const tools = ctx.get('tools');
       if (!tools?.register) return;
-      toolsOff = buildTools(() => settings().enabled).map((tool) => tools.register(tool));
+      // Charts go into the chat through the Diagrams add-on.
+      const show = (exec, picture) => {
+        try {
+          const diagrams = ctx.get('diagrams');
+          if (typeof diagrams?.show !== 'function') return { ok: false, errors: ['the Diagrams add-on is not running'] };
+          return diagrams.show(exec?.agent, picture);
+        } catch (error) {
+          return { ok: false, errors: [String(error?.message ?? error).slice(0, 160)] };
+        }
+      };
+      toolsOff = [...buildTools(() => settings().enabled), ...buildMarketTools({ enabled: () => settings().enabled, show })].map((tool) => tools.register(tool));
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
       toolsOff = undefined;

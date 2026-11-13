@@ -118,9 +118,36 @@ window.__ModuleLoader__.load({
         'continue.failed': 'Could not start the new conversation.',
         'proj.move': 'Move all conversations of "{title}" to another tab',
         'proj.new': 'New conversation in this project',
+        'proj.add': 'New',
+        'proj.add.path': 'The full path of the project\'s folder:',
+        'proj.add.hint': 'Pick a folder. It becomes a project with its own files, instructions and conversations.',
+        'proj.add.failed': 'The project could not be added: {message}',
+        'proj.open': 'Project page: files and instructions',
+        'proj.page.none': 'Pick a project in the sidebar, or add one with + New.',
+        'proj.page.folder': 'Folder',
+        'proj.page.newconv': 'New conversation',
+        'proj.page.name': 'Name',
+        'proj.page.rename': 'Rename',
+        'proj.page.tab': 'Shows under',
+        'proj.page.instr': 'Instructions',
+        'proj.page.instr.hint': 'What the assistant should know and do in every conversation of this project. A file named AGENTS.md or CLAUDE.md in the folder is read as well.',
+        'proj.page.instr.place': 'For example: who this work is for, the tone to write in, what to check before finishing.',
+        'proj.page.save': 'Save',
+        'proj.page.saved': 'Saved. New messages in this project use it.',
+        'proj.page.failed': 'That did not work: {message}',
+        'proj.page.files': 'Files',
+        'proj.page.files.hint': 'The files in the project folder. Files you add are copied into that folder; your originals stay where they are.',
+        'proj.page.files.add': 'Add files',
+        'proj.page.files.none': 'The folder has no files yet.',
+        'proj.page.files.more': 'Only the newest {n} files are listed.',
+        'proj.page.files.added': 'Added: {names}',
+        'proj.page.files.busy': 'Copying…',
+        'proj.page.convs': 'Conversations',
+        'proj.page.convs.none': 'No conversations in this project yet.',
+        'proj.title': 'Project',
         'show.more': 'Show {n} more',
         'lib.title.chat': 'Recent chats',
-        'lib.title.cowork': 'Recent tasks',
+        'lib.title.cowork': 'Projects',
         'lib.title.code': 'Code projects',
         'lib.title.other': '{tab}',
         'lib.all': 'Show all',
@@ -229,9 +256,36 @@ window.__ModuleLoader__.load({
         'continue.failed': '无法开始新对话。',
         'proj.move': '把“{title}”的所有对话移到其他标签页',
         'proj.new': '在此项目中新建对话',
+        'proj.add': '新建',
+        'proj.add.path': '项目文件夹的完整路径：',
+        'proj.add.hint': '选择一个文件夹。它会成为一个项目，拥有自己的文件、指令和对话。',
+        'proj.add.failed': '无法添加项目：{message}',
+        'proj.open': '项目页面：文件和指令',
+        'proj.page.none': '在侧边栏选择一个项目，或用“新建项目”添加。',
+        'proj.page.folder': '文件夹',
+        'proj.page.newconv': '新对话',
+        'proj.page.name': '名称',
+        'proj.page.rename': '重命名',
+        'proj.page.tab': '显示在',
+        'proj.page.instr': '指令',
+        'proj.page.instr.hint': '助手在此项目的每个对话中应了解和遵守的内容。文件夹中名为 AGENTS.md 或 CLAUDE.md 的文件也会被读取。',
+        'proj.page.instr.place': '例如：这项工作为谁而做、写作语气、完成前要检查什么。',
+        'proj.page.save': '保存',
+        'proj.page.saved': '已保存。此项目中的新消息会使用它。',
+        'proj.page.failed': '操作失败：{message}',
+        'proj.page.files': '文件',
+        'proj.page.files.hint': '项目文件夹中的文件。添加的文件会复制到该文件夹；原文件保持不变。',
+        'proj.page.files.add': '添加文件',
+        'proj.page.files.none': '文件夹中还没有文件。',
+        'proj.page.files.more': '仅列出最新的 {n} 个文件。',
+        'proj.page.files.added': '已添加：{names}',
+        'proj.page.files.busy': '正在复制…',
+        'proj.page.convs': '对话',
+        'proj.page.convs.none': '此项目中还没有对话。',
+        'proj.title': '项目',
         'show.more': '再显示 {n} 个',
         'lib.title.chat': '最近的聊天',
-        'lib.title.cowork': '最近的任务',
+        'lib.title.cowork': '项目',
         'lib.title.code': '代码项目',
         'lib.title.other': '{tab}',
         'lib.all': '显示全部',
@@ -451,9 +505,9 @@ html[data-fullscreen] .cws-strip{justify-content:flex-start}
 /* Wide chat: the app keeps messages and the message box in a centred column; this lets both use the window's width. The start page keeps its own size. */
 html[data-cws-wide] [class*='_scrollBody'] [class*='_column']{max-width:calc(100% - 64px) !important}
 html[data-cws-wide] [class*='_composerStack']:not([class*='_composerHero'] *) [class*='_card']{max-width:calc(100% - 32px) !important}
-/* More than three tabs do not fit with icons: names only. */
-.cws-tabs[data-many='true'] .cws-tab{gap:0;padding:0 3px;font-size:12.5px}
-.cws-tabs[data-many='true'] .cws-tab > :not(span){display:none}
+/* More than three tabs: rows of three, so every name has room. */
+.cws-tabs[data-many='true']{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.cws-tabs[data-many='true'] .cws-tab{gap:5px;padding:0 4px}
 .cws-tab[aria-selected='true']{background:var(--dsw-alias-button-elevated-fill);color:var(--dsw-alias-label-primary);font-weight:500}
 .cws-new{display:flex;align-items:center;gap:8px;width:100%;min-height:36px;margin:0 0 8px;padding:0 8px 0 12px;box-sizing:border-box;border:1px solid color-mix(in srgb,var(--dsw-alias-state-business-primary) 45%,transparent);border-radius:var(--dsw-radius-md);background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 10%,transparent);color:var(--dsw-alias-state-business-primary);cursor:pointer;font:inherit;font-weight:500;text-align:left}
 .cws-new .cws-glyph{color:inherit}
@@ -505,6 +559,22 @@ html[data-cws-wide] [class*='_composerStack']:not([class*='_composerHero'] *) [c
 .cws-form textarea{height:auto;min-height:72px;padding:8px 14px;resize:vertical;font-family:var(--ds-font-family-code,monospace);font-size:12px;line-height:18px}
 .cws-yaml{margin:0;padding:10px 14px;border:0;border-radius:12px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 7%,transparent);font-family:var(--ds-font-family-code,monospace);font-size:12px;line-height:18px;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text}
 .cws-clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.cws-area{width:100%;box-sizing:border-box;min-height:140px;padding:10px 14px;border:0;border-radius:12px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 7%,transparent);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:20px;resize:vertical}
+.cws-area:focus-visible{outline:1px solid var(--dsw-alias-brand-primary);outline-offset:0}
+.cws-sec{display:flex;flex-direction:column;gap:8px;padding:12px 0}
+.cws-sec-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.cws-sec-head h2{margin:0;font-size:14px;line-height:20px;font-weight:500}
+.cws-inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cws-inline input,.cws-inline select{height:32px;padding:0 12px;border:0;border-radius:10px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 7%,transparent);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;min-width:0}
+.cws-inline input{flex:1 1 220px}
+.cws-filelist{display:flex;flex-direction:column;max-height:320px;overflow-y:auto}
+.cws-file{display:flex;gap:12px;align-items:baseline;padding:5px 0;border-top:0.5px solid var(--dsw-alias-border-l1);font-size:13px}
+.cws-file:first-child{border-top:0}
+.cws-file > :first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cws-file > span + span{flex:none;color:var(--dsw-alias-label-secondary);font-size:12px}
+.cws-file button{flex:1;min-width:0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;padding:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cws-drop[data-over='true']{outline:1px dashed var(--dsw-alias-brand-primary);outline-offset:2px}
+.cws-lib-links{display:inline-flex;gap:2px;align-items:center;flex:none;white-space:nowrap}
 .cws-note{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px}
 .cws-msg{font-size:12px;color:var(--dsw-alias-label-secondary)}
 .cws-msg[data-tone=bad]{color:var(--dsw-alias-state-error-primary,inherit)}
@@ -641,6 +711,9 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
 
       // Bumped by every tab click: a refresh that started before a click must not undo it.
       let clicks = 0;
+      // While a tab click is being saved, the stored tab is still the old one: a refresh must not read it.
+      let selecting = 0;
+      let saving = Promise.resolve();
       async function refresh() {
         const started = clicks;
         try {
@@ -669,7 +742,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             patch.modesOn = true;
             if (started === clicks) patch.sessionModes = readObject(modesNs.value?.sessionModes);
             const current = modesNs.value?.defaultMode;
-            if (started === clicks && typeof current === 'string' && [...patch.modes, ...patch.extra].some((m) => m.id === current)) {
+            if (started === clicks && selecting === 0 && typeof current === 'string' && [...patch.modes, ...patch.extra].some((m) => m.id === current)) {
               patch.selected = current;
               writeLocal(current);
             }
@@ -687,7 +760,14 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         writeLocal(id);
         set({ selected: id, error: '' });
         if (!state.modesOn) return;
+        selecting += 1;
+        // One save at a time and in click order, so the stored tab ends as the last one clicked.
+        const turn = saving;
+        let done;
+        saving = new Promise((resolve) => { done = resolve; });
+        await turn;
         try {
+          if (state.selected !== id) return;
           const op = [{ op: 'set', path: ['defaultMode'], value: id }];
           let spaces = await describe();
           let entry = spaces.find((item) => item.ns === MODES_NS);
@@ -701,6 +781,11 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         } catch {
           writeLocal(before);
           set({ selected: before, error: ctx.locale.bind(NS)('tab.failed', { tab: label }) });
+        } finally {
+          done();
+          selecting -= 1;
+          // Refreshes that began before the save finished carry the old tab.
+          clicks += 1;
         }
       }
 
@@ -773,7 +858,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         id: options.id,
         order: options.order ?? 0,
         label: typeof options.label === 'function' ? String(options.label()) : String(options.label ?? options.id),
-      })).sort((a, b) => a.order - b.order);
+      })).filter((page) => page.id !== 'project').sort((a, b) => a.order - b.order);
       return {
         get: () => snapshot,
         subscribe: (listener) => {
@@ -884,6 +969,171 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       };
     }
 
+    /** What Plus keeps about projects (tab, instructions), and the project page's file calls. */
+    function createProjects() {
+      const url = (query) => {
+        const u = new URL('dsh-cowork-shell/projects', document.baseURI);
+        for (const [key, value] of Object.entries(query ?? {})) u.searchParams.set(key, String(value));
+        return u;
+      };
+      let snapshot = { projects: [], focus: null };
+      const listeners = new Set();
+      const emit = () => { for (const listener of listeners) listener(); };
+      const call = async (query, init) => {
+        const response = await fetch(url(query), { headers: { accept: 'application/json' }, ...init });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(String(data?.error ?? response.status));
+        if (Array.isArray(data?.projects)) { snapshot = { ...snapshot, projects: data.projects }; emit(); }
+        return data;
+      };
+      let timer;
+      return {
+        get: () => snapshot,
+        subscribe: (listener) => {
+          listeners.add(listener);
+          if (listeners.size === 1) { void call().catch(() => {}); timer = setInterval(() => void call().catch(() => {}), 20000); }
+          return () => { listeners.delete(listener); if (listeners.size === 0) clearInterval(timer); };
+        },
+        refresh: () => call(),
+        save: (path, patch) => call(null, { method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify({ action: 'save', path, ...patch }) }),
+        files: async (path) => (await call({ files: path })).files ?? { files: [], more: false },
+        upload: (path, file) => call({ upload: '1', path, name: file.name }, { method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/octet-stream' }, body: file }),
+        focus: (workspaceId) => { snapshot = { ...snapshot, focus: workspaceId }; emit(); },
+      };
+    }
+
+    function sizeText(bytes) {
+      if (!Number.isFinite(bytes)) return '';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(bytes < 10240 ? 1 : 0) + ' KB';
+      return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+    }
+
+    /** A project's page: its name, the tab it shows under, its instructions, its files, its conversations. */
+    function ProjectPage({ appCtx, model, library, projects }) {
+      const t = appCtx.locale.bind(NS);
+      const state = useSyncExternalStore(model.subscribe, model.get);
+      const lib = useSyncExternalStore(library.subscribe, library.get);
+      const meta = useSyncExternalStore(projects.subscribe, projects.get);
+      const ws = lib.workspaces.find((item) => item.workspaceId === meta.focus) ?? null;
+      const record = meta.projects.find((item) => item.workspaceId === meta.focus) ?? null;
+      const [text, setText] = useState('');
+      const [name, setName] = useState('');
+      const [note, setNote] = useState({ text: '', tone: '' });
+      const [files, setFiles] = useState({ files: [], more: false });
+      const [busy, setBusy] = useState(false);
+      const [over, setOver] = useState(false);
+      const picker = useRef(null);
+      const path = ws?.path ?? '';
+      const loadedFor = useRef('');
+      useEffect(() => {
+        // Fill the boxes once per project, when its record has arrived; later refreshes must not undo typing.
+        if (!ws || !record || loadedFor.current === ws.workspaceId) return;
+        loadedFor.current = ws.workspaceId;
+        setText(record.instructions ?? '');
+        setName(ws.title ?? '');
+        setNote({ text: '', tone: '' });
+      }, [ws?.workspaceId, record !== null]);
+      const loadFiles = useCallback(async () => {
+        if (!path) return;
+        try { setFiles(await projects.files(path)); } catch { setFiles({ files: [], more: false }); }
+      }, [path, projects]);
+      useEffect(() => { setFiles({ files: [], more: false }); void loadFiles(); }, [loadFiles]);
+      useEffect(() => { if (meta.focus && !record) void projects.refresh().catch(() => {}); }, [meta.focus, record === null]);
+      if (!ws) return h(PageFrame, { title: t('proj.title') }, h('p', { className: 'cws-note' }, t('proj.page.none')));
+
+      const fail = (error) => setNote({ text: t('proj.page.failed', { message: String(error?.message ?? error) }), tone: 'bad' });
+      const saveText = async () => {
+        try { await projects.save(path, { instructions: text }); setNote({ text: t('proj.page.saved'), tone: '' }); } catch (error) { fail(error); }
+      };
+      const rename = async () => {
+        const next = name.trim();
+        if (!next || next === ws.title) return;
+        try { await appCtx.get('workspaces').rename(ws.workspaceId, next); setNote({ text: '', tone: '' }); } catch (error) { fail(error); }
+      };
+      const setTab = async (tab) => {
+        try { await projects.save(path, { tab }); } catch (error) { fail(error); }
+      };
+      const add = async (list) => {
+        const picked = Array.from(list ?? []).filter((file) => file && typeof file.name === 'string');
+        if (picked.length === 0) return;
+        setBusy(true);
+        const done = [];
+        try {
+          for (const file of picked) {
+            const data = await projects.upload(path, file);
+            if (data?.saved) done.push(data.saved);
+            if (data?.files) setFiles(data.files);
+          }
+          setNote({ text: t('proj.page.files.added', { names: done.join(', ') }), tone: '' });
+        } catch (error) {
+          fail(error);
+        } finally {
+          setBusy(false);
+          void loadFiles();
+        }
+      };
+      const start = (prompt) => {
+        try { appCtx.layout.selectPanel(null); } catch { /* already there */ }
+        const tab = record?.tab;
+        if (tab && tab !== state.selected) {
+          const mode = tabsOf(state).find((m) => m.id === tab);
+          if (mode) void model.select(mode.id, mode.label);
+        }
+        appCtx.uiWorkspace.startSession(ws.workspaceId, prompt ? { prompt, whenDraftExists: 'replace' } : undefined);
+      };
+      const archived = new Set(lib.archived);
+      const convs = (ws.sessionIds ?? [])
+        .filter((id) => lib.byId[id] && lib.byId[id].origin !== 'subagent' && !lib.byId[id].blank && !archived.has(id))
+        .sort((a, b) => (lib.byId[b].updatedAt ?? 0) - (lib.byId[a].updatedAt ?? 0));
+      const tabChoices = tabsOf(state).filter((m) => m.id !== 'chat');
+
+      return h(PageFrame, {
+        title: ws.title || t('untitled'), hint: path,
+        actions: h('button', { type: 'button', className: 'cws-btn', onClick: () => start('') }, t('proj.page.newconv')),
+      },
+      note.text ? h('div', { className: 'cws-msg', 'data-tone': note.tone, role: 'status' }, note.text) : null,
+      h('div', { className: 'cws-card' },
+        h('div', { className: 'cws-sec' },
+          h('div', { className: 'cws-inline' },
+            h('input', { value: name, 'aria-label': t('proj.page.name'), onChange: (e) => setName(e.target.value), onKeyDown: (e) => { if (e.key === 'Enter') void rename(); } }),
+            h('button', { type: 'button', className: 'cws-btn', onClick: () => void rename(), disabled: !name.trim() || name.trim() === ws.title }, t('proj.page.rename')),
+            h('span', { className: 'cws-note' }, t('proj.page.tab')),
+            h('select', { value: record?.tab || state.selected, 'aria-label': t('proj.page.tab'), onChange: (e) => void setTab(e.target.value) },
+              tabChoices.map((m) => h('option', { key: m.id, value: m.id }, m.label)))))),
+      h('div', { className: 'cws-card' },
+        h('div', { className: 'cws-sec' },
+          h('div', { className: 'cws-sec-head' }, h('h2', null, t('proj.page.instr')),
+            h('button', { type: 'button', className: 'cws-btn', onClick: () => void saveText(), disabled: text === (record?.instructions ?? '') }, t('proj.page.save'))),
+          h('p', { className: 'cws-note', style: { margin: 0 } }, t('proj.page.instr.hint')),
+          h('textarea', { className: 'cws-area', value: text, maxLength: 12000, placeholder: t('proj.page.instr.place'), 'aria-label': t('proj.page.instr'), onChange: (e) => setText(e.target.value) }))),
+      h('div', {
+        className: 'cws-card cws-drop', 'data-over': over ? 'true' : undefined,
+        onDragOver: (e) => { e.preventDefault(); setOver(true); },
+        onDragLeave: () => setOver(false),
+        onDrop: (e) => { e.preventDefault(); setOver(false); void add(e.dataTransfer?.files); },
+      },
+        h('div', { className: 'cws-sec' },
+          h('div', { className: 'cws-sec-head' }, h('h2', null, t('proj.page.files')),
+            h('button', { type: 'button', className: 'cws-btn', disabled: busy, onClick: () => picker.current?.click() }, busy ? t('proj.page.files.busy') : t('proj.page.files.add'))),
+          h('input', { ref: picker, type: 'file', multiple: true, hidden: true, onChange: (e) => { const list = e.target.files; void add(list).then(() => { e.target.value = ''; }); } }),
+          h('p', { className: 'cws-note', style: { margin: 0 } }, t('proj.page.files.hint')),
+          files.files.length === 0 ? h('p', { className: 'cws-note', style: { margin: 0 } }, t('proj.page.files.none'))
+            : h('div', { className: 'cws-filelist' }, files.files.map((file) => h('div', { key: file.name, className: 'cws-file' },
+              h('span', { title: file.name }, file.name), h('span', null, sizeText(file.size)), h('span', null, ago(t, file.modified))))),
+          files.more ? h('p', { className: 'cws-note', style: { margin: 0 } }, t('proj.page.files.more', { n: files.files.length })) : null)),
+      h('div', { className: 'cws-card' },
+        h('div', { className: 'cws-sec' },
+          h('div', { className: 'cws-sec-head' }, h('h2', null, t('proj.page.convs'))),
+          convs.length === 0 ? h('p', { className: 'cws-note', style: { margin: 0 } }, t('proj.page.convs.none'))
+            : h('div', { className: 'cws-filelist' }, convs.map((id) => {
+              const title = (lib.byId[id].displayTitle && String(lib.byId[id].displayTitle).trim()) || t('untitled');
+              return h('div', { key: id, className: 'cws-file' },
+                h('button', { type: 'button', title, onClick: () => { try { appCtx.layout.selectPanel(null); } catch { /* */ } appCtx.get('uiWorkspace').openSession(id); } }, title),
+                h('span', null, ago(t, lib.byId[id].updatedAt)));
+            })))));
+    }
+
     /** The trash of deleted conversations, read from and changed through this add-on's host route. */
     function createTrash() {
       const url = () => new URL('dsh-cowork-shell/trash', document.baseURI);
@@ -914,6 +1164,21 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     const LIST_KEY = 'dsh-cowork-shell.listAll';
+    const LAST_KEY = 'dsh-cowork-shell.lastOpen';
+    /** Tab id -> the conversation last open in that tab. Kept in this browser only. */
+    function readLast() {
+      try {
+        const value = JSON.parse(window.localStorage.getItem(LAST_KEY) || '{}');
+        return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+      } catch { return {}; }
+    }
+    function writeLast(tab, id) {
+      try {
+        const all = readLast();
+        if (all[tab] === id) return;
+        window.localStorage.setItem(LAST_KEY, JSON.stringify({ ...all, [tab]: id }));
+      } catch { /* private mode: tabs then open their start page */ }
+    }
 
     function ago(t, ms) {
       if (!Number.isFinite(ms)) return '';
@@ -1012,8 +1277,11 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     /** The open tab's conversations: one flat list on the Chat tab, grouped under their projects elsewhere. */
-    function TabLibrary({ appCtx, model, library, trash, tabs, selected, onShowAll }) {
+    function TabLibrary({ appCtx, model, library, trash, projectStore, tabs, selected, onShowAll }) {
       const t = appCtx.locale.bind(NS);
+      const meta = useSyncExternalStore(projectStore.subscribe, projectStore.get);
+      // Projects that were given to this tab show here even before their first conversation.
+      const assigned = new Set(selected.id === 'chat' ? [] : meta.projects.filter((item) => item.tab === selected.id).map((item) => item.workspaceId));
       const state = useSyncExternalStore(model.subscribe, model.get);
       const lib = useSyncExternalStore(library.subscribe, library.get);
       const bin = useSyncExternalStore(trash.subscribe, trash.get);
@@ -1037,7 +1305,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         const ids = sortRows(ws.sessionIds ?? []);
         for (const id of ws.sessionIds ?? []) placed.add(id);
         const mine = ids.filter((id) => tabOfSession(id, lib.byId[id], ws, state, tabIds) === selected.id);
-        if (mine.length > 0) projects.push({ ws, ids: mine, all: ids, latest: Math.max(...mine.map((id) => lib.byId[id].updatedAt ?? 0)) });
+        if (mine.length > 0 || assigned.has(ws.workspaceId)) projects.push({ ws, ids: mine, all: ids, latest: mine.length > 0 ? Math.max(...mine.map((id) => lib.byId[id].updatedAt ?? 0)) : (Date.parse(ws.updatedAt ?? '') || 0) });
       }
       projects.sort((a, b) => b.latest - a.latest);
       const loose = sortRows(Object.keys(lib.byId).filter((id) => !placed.has(id)))
@@ -1062,6 +1330,29 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const openSession = (id) => {
         try { appCtx.layout.selectPanel(null); } catch { /* already there */ }
         uw?.openSession?.(id);
+      };
+
+      const openProject = (workspaceId) => {
+        projectStore.focus(workspaceId);
+        try { appCtx.layout.selectPanel('project'); } catch { /* the page is not there */ }
+      };
+      /** New project: pick a folder; the app lists it as a project and Plus files it under this tab. */
+      const addProject = async () => {
+        try {
+          const desktop = globalThis.__DSH_DIRECTORY_PICKER__;
+          const native = desktop && typeof desktop.pick === 'function';
+          let picked = null;
+          try { picked = native ? await desktop.pick() : await uw.pickDirectory(); } catch (error) { if (native) throw error; }
+          // In a web browser there may be no folder chooser: ask for the path instead.
+          if (!picked && !native) picked = window.prompt(t('proj.add.path'));
+          const path = (typeof picked === 'string' ? picked : picked?.path ?? '').trim();
+          if (!path) return;
+          const ws = await appCtx.get('workspaces').create({ path });
+          await projectStore.save(ws?.path ?? path, { tab: selected.id });
+          if (ws?.workspaceId) openProject(ws.workspaceId);
+        } catch (error) {
+          model.fail(t('proj.add.failed', { message: String(error?.message ?? error) }));
+        }
       };
 
       /** A new conversation in a project, with this chat attached the app's own way (an @ mention). */
@@ -1229,7 +1520,9 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         needsSection(),
         h('div', { className: 'cws-lib-head' },
           h('span', null, t('lib.title.' + (['chat', 'cowork', 'code'].includes(selected.id) ? selected.id : 'other'), { tab: selected.label })),
-          h('button', { type: 'button', className: 'cws-link', onClick: onShowAll, title: t('lib.all.hint') }, t('lib.all'))),
+          h('span', { className: 'cws-lib-links' },
+            h('button', { type: 'button', className: 'cws-link', onClick: () => void addProject(), title: t('proj.add.hint') }, '+ ' + t('proj.add')),
+            h('button', { type: 'button', className: 'cws-link', onClick: onShowAll, title: t('lib.all.hint') }, t('lib.all')))),
         empty ? h('p', { className: 'cws-lib-empty' }, t('lib.empty', { tab: selected.label })) : null,
         projects.map(({ ws, ids, all }) => {
           const isOpen = open[ws.workspaceId] ?? ids.includes(lib.currentId);
@@ -1240,6 +1533,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
                 h('span', { className: 'cws-label' }, ws.title || ws.path || t('untitled')),
                 h('span', { className: 'cws-count' }, String(ids.length))),
               h('button', { type: 'button', className: 'cws-mini', title: t('proj.new'), 'aria-label': t('proj.new'), onClick: () => { try { appCtx.layout.selectPanel(null); } catch { /* */ } uw?.startSession?.(ws.workspaceId); } }, '+'),
+              h('button', { type: 'button', className: 'cws-mini', title: t('proj.open'), 'aria-label': t('proj.open'), onClick: () => openProject(ws.workspaceId) }, '⚙'),
               h(MoveMenu, { t, tabs, current: selected.id, label: t('proj.move', { title: ws.title || '' }), onMove: (modeId) => void model.move(all.filter((id) => !lib.byId[id]?.blank), modeId) })),
             isOpen ? h('div', { className: 'cws-proj-list' }, list(ids, ws.workspaceId, ws)) : null);
         }),
@@ -1258,7 +1552,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     function CoworkSidebar(props) {
-      const { collapsed, width, drawer, renderSlot, renderFactorySlot, usePanelInfo, appCtx, model, pages, library, trash } = props;
+      const { collapsed, width, drawer, renderSlot, renderFactorySlot, usePanelInfo, appCtx, model, pages, library, trash, projects } = props;
       const libSnap = useSyncExternalStore(library.subscribe, library.get);
       const libReady = libSnap.ok && model.get().modesOn;
       const [showAll, setShowAllState] = useState(() => { try { return window.localStorage.getItem(LIST_KEY) === '1'; } catch { return false; } });
@@ -1320,6 +1614,34 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         root.setAttribute('data-cws-tab', selected.id);
         return () => root.removeAttribute('data-cws-tab');
       }, [selected.id]);
+      // Each tab remembers the conversation that was open in it. Coming back to a tab opens that
+      // conversation again; a tab with nothing to come back to opens its start page.
+      const selectedRef = useRef(selected.id);
+      selectedRef.current = selected.id;
+      useEffect(() => {
+        const id = libSnap.currentId;
+        if (!id || !libSnap.ok) return;
+        const sess = libSnap.byId[id];
+        if (!sess || sess.origin === 'subagent') return;
+        const ws = libSnap.workspaces.find((item) => (item.sessionIds ?? []).includes(id)) ?? null;
+        const now = model.get();
+        const tab = tabOfSession(id, sess, ws, now, tabs.map((m) => m.id));
+        // A conversation opened from another tab's list (Needs you, Show all) is remembered for its own tab.
+        writeLast(sess.blank ? selectedRef.current : tab, id);
+      }, [libSnap.currentId, libSnap.ok]);
+      const switchTab = (m) => {
+        void model.select(m.id, m.label);
+        const snap = library.get();
+        if (!snap.ok) return;
+        const last = readLast()[m.id];
+        const sess = last ? snap.byId[last] : null;
+        const gone = !sess || snap.archived.includes(last) || trash.get().items.some((item) => item.id === last);
+        try { appCtx.layout.selectPanel(null); } catch { /* already on the conversation */ }
+        if (!gone && last !== snap.currentId) {
+          try { appCtx.get('uiWorkspace').openSession(last); return; } catch { /* fall through to a new one */ }
+        }
+        if (gone) startNew(appCtx, library, m.id);
+      };
       const onTabKey = (event) => {
         const index = tabs.findIndex((m) => m.id === selected.id);
         let next = -1;
@@ -1329,7 +1651,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         if (event.key === 'End') next = tabs.length - 1;
         if (next < 0) return;
         event.preventDefault();
-        void model.select(tabs[next].id, tabs[next].label);
+        switchTab(tabs[next]);
         tabsRef.current?.querySelectorAll('[role=tab]')[next]?.focus();
       };
 
@@ -1350,7 +1672,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           h('button', {
             type: 'button', role: 'tab', className: 'cws-tab', 'aria-selected': m.id === selected.id,
             tabIndex: m.id === selected.id ? 0 : -1, 'aria-label': wide ? undefined : m.label,
-            onClick: () => { if (m.id !== selected.id) void model.select(m.id, m.label); },
+            onClick: () => { if (m.id !== selected.id) switchTab(m); },
           }, h(Glyph, { name: glyphFor(m.id), size: wide ? 15 : 18 }), wide ? h('span', null, m.label) : null))));
 
       const more = entryActions
@@ -1389,7 +1711,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         h('div', { className: 'cws-scroll', 'data-sidebar-scrollport': '' },
           rows.length > 0 || more ? h('nav', { className: 'cws-pages', 'aria-label': t('pages.label', { tab: selected.label }) }, rows.map(pageRow), more) : null,
           libReady && !showAll
-            ? h(TabLibrary, { appCtx, model, library, trash, tabs, selected, onShowAll: () => setShowAll(true) })
+            ? h(TabLibrary, { appCtx, model, library, trash, projectStore: projects, tabs, selected, onShowAll: () => setShowAll(true) })
             : h(React.Fragment, null,
               libReady ? h('div', { className: 'cws-lib-head cws-lib-allbar' },
                 h('span', null, t('lib.showingAll')),
@@ -1701,7 +2023,8 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         const pages = createPages(ctx);
         const library = createLibrary(ctx);
         const trash = createTrash();
-        const shared = () => ({ appCtx: ctx, model, pages, library, trash });
+        const projects = createProjects();
+        const shared = () => ({ appCtx: ctx, model, pages, library, trash, projects });
 
         ctx.effect(() => ctx.slots.inject('sidebar', function* () {
           yield ctx.slots.registerFactory({
@@ -1741,6 +2064,11 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             name: 'sidebar.panellist', id: page.key, order: page.order, label: page.label,
           }, page.Icon)), `cowork-shell: ${page.key} row`);
         }
+        // The project page: opened from a project's row, so it has no row of its own in the page list.
+        ctx.effect(() => ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'project' }, () => h(ProjectPage, { appCtx: ctx, model, library, projects }))), 'cowork-shell: project page');
+        ctx.effect(() => ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
+          name: 'sidebar.panellist', id: 'project', order: 99, label: () => tPage('proj.title'),
+        }, function ProjectIcon({ size }) { return h(Glyph, { name: 'folder', size }); })), 'cowork-shell: project page entry');
         // Start page: greeting next to the logo and suggestion chips.
         ctx.effect(() => ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({
           name: 'conversation.hero.brand.mark', inject: shared,

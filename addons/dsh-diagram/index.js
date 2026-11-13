@@ -19,7 +19,7 @@
  */
 import z from '@deepseek-ai/schemastery';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { draw } from './lib/draw.js';
 import { CHARTS, KINDS, SHAPES } from './lib/spec.js';
@@ -35,6 +35,8 @@ export const LIST_PATH = '/dsh-diagram/list';
 export const ID_HEADER = 'x-dsh-diagram';
 /** Every file this add-on writes carries this mark, and only such files are ever replaced. */
 export const MARK = '<!-- dsh-diagram -->';
+/** Picture files another add-on may hand over to be shown in the chat. */
+const PICTURE_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml' };
 const THEMES = ['auto', 'light', 'dark'];
 
 export const Config = z.object({
@@ -149,8 +151,8 @@ export const PARAMETERS = {
     categories: { type: 'array', items: { type: 'string' }, description: 'chart: names along the bottom.' },
     series: {
       type: 'array',
-      description: 'chart: each {name, values} with one value per category, or {name, points} with [x, y] pairs.',
-      items: { type: 'object', properties: { name: { type: 'string' }, values: { type: 'array', items: { type: 'number' } }, points: { type: 'array', items: { type: 'array', items: { type: 'number' } } } } },
+      description: 'chart: each {name, values} with one value per category, or {name, points} with [x, y] pairs. For a line over time, x is a date as text: ["2026-03-31", 12.5] or ["2026-03", 12.5]; the axis then shows dates.',
+      items: { type: 'object', properties: { name: { type: 'string' }, values: { type: 'array', items: { type: 'number' } }, points: { type: 'array', items: { type: 'array', items: { type: ['number', 'string'] } } } } },
     },
     functions: { type: 'array', description: 'chart: formulas in x to plot, each {formula, name?}, for example "x^2 - 3".', items: { type: 'object', properties: { formula: { type: 'string' }, name: { type: 'string' } }, required: ['formula'] } },
     xMin: { type: 'number' },
@@ -239,6 +241,7 @@ export function apply(ctx, config) {
   const available = (row) => {
     if (recent.has(row.id)) return true;
     if (!row.file) return false;
+    if (row.picture) return existsSync(row.file);
     try {
       return readFileSync(row.file, 'utf8').slice(0, 600).includes(MARK);
     } catch {
@@ -327,7 +330,41 @@ export function apply(ctx, config) {
     } else ctx.logger?.warn?.('diagram: the skills service is not available; the draw-diagram skill is not registered');
   }
 
-  ctx.effect(() => ctx.provide('diagrams', Object.freeze({ apiVersion: 1, draw: (description) => draw(description) })), 'diagram service');
+  /**
+   * For other add-ons: show a picture in the chat, under the turn it was made in. Either a
+   * description to draw (the same as diagram_draw takes), or a picture file that add-on made.
+   * @param {object} agent - the Agent whose turn it is.
+   * @param {{title?: string, description?: object, file?: string}} picture - what to show.
+   * @returns {{ok: boolean, id?: string, outline?: string, errors?: string[]}} what happened.
+   */
+  const show = (agent, picture) => {
+    if (!settings().enabled) return { ok: false, errors: ['The diagram builder is switched off in Settings → Diagrams.'] };
+    const session = String(agent?.session?.id ?? agent?.sessionId ?? agent?.id ?? '');
+    const id = randomBytes(6).toString('hex');
+    if (picture?.description) {
+      let result;
+      try {
+        result = draw(picture.description);
+      } catch (error) {
+        return { ok: false, errors: [String(error?.message ?? error).slice(0, 200)] };
+      }
+      if (!result.ok) return { ok: false, errors: result.errors };
+      recent.set(id, result);
+      while (recent.size > 80) recent.delete(recent.keys().next().value);
+      remember({ id, session, at: Date.now(), title: String(picture.title || result.title).slice(0, 120), file: '', problems: 0 });
+      return { ok: true, id, outline: result.outline };
+    }
+    const file = String(picture?.file ?? '');
+    const mime = PICTURE_TYPES[file.slice(file.lastIndexOf('.')).toLowerCase()];
+    try {
+      if (!mime || statSync(file).size > 12 * 1024 * 1024) return { ok: false, errors: ['Only PNG, JPEG and SVG pictures up to 12 MB can be shown.'] };
+    } catch {
+      return { ok: false, errors: ['The picture file is not there.'] };
+    }
+    remember({ id, session, at: Date.now(), title: String(picture.title || 'Chart').slice(0, 120), file, problems: 0, picture: mime });
+    return { ok: true, id };
+  };
+  ctx.effect(() => ctx.provide('diagrams', Object.freeze({ apiVersion: 2, draw: (description) => draw(description), show })), 'diagram service');
 
   ctx.inject(['webServer', 'connection'], (inner) => {
     const guard = (req, res) => {
@@ -371,6 +408,20 @@ export function apply(ctx, config) {
             let svg = '';
             if (/^[0-9a-f]{12}$/.test(id)) {
               const kept = recent.get(id);
+              const stored = kept ? undefined : records.find((item) => item.id === id);
+              if (stored?.picture) {
+                // A picture file another add-on made (a chart from Python, for instance): sent as it is.
+                try {
+                  const bytes = readFileSync(stored.file);
+                  res.setHeader('content-type', stored.picture);
+                  res.setHeader('x-content-type-options', 'nosniff');
+                  res.end(bytes);
+                } catch {
+                  res.statusCode = 404;
+                  res.end();
+                }
+                return;
+              }
               if (kept) svg = kept.svg({ theme, background: false });
               else {
                 // After a restart only the saved file is left. It is shown as it was saved, if it is still one of ours.

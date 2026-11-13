@@ -79,6 +79,7 @@ window.__ModuleLoader__.load({
         'f.sandbox.workspace-write': 'Write in the workspace',
         'f.tier': 'Tier to switch to with this mode (optional)',
         'f.prompt': 'Prompt added while this mode is active',
+        'f.prompt.code': 'Empty: Plus uses its own working method for code (read first, small changes, run the tests, report plainly). Write here to use your own instead.',
         'f.count': '{n} of 4000',
         'e.id': 'Ids use lower-case letters, digits and dashes, and must be unique.',
         'e.none': 'Keep at least one mode.',
@@ -154,6 +155,7 @@ window.__ModuleLoader__.load({
         'f.sandbox.workspace-write': '可写工作区',
         'f.tier': '切换到此模式时的默认档位（需要 Tier 插件，留空为不切换）',
         'f.prompt': '此模式启用时附加的提示词',
+        'f.prompt.code': '留空：Plus 使用自带的编码工作方法（先阅读、小步修改、运行测试、如实报告）。在此填写则使用你自己的。',
         'f.count': '{n} / 4000',
         'e.id': '标识只能用小写字母、数字和连字符，且不能重复。',
         'e.none': '至少保留一个模式。',
@@ -996,6 +998,7 @@ window.__ModuleLoader__.load({
               h('textarea', {
                 className: 'dsh-me-ta',
                 value: row.prompt,
+                placeholder: row.id === 'code' ? t('f.prompt.code') : undefined,
                 maxLength: PROMPT_MAX,
                 onChange: (event) => edit(row.key, { prompt: event.target.value }),
               }),

@@ -9,6 +9,7 @@
 import { dirname } from 'node:path';
 import z from '@deepseek-ai/schemastery';
 import { KEEP_MS, openTrash, safeId } from './lib/trash.js';
+import { UPLOAD_MAX, addFile, canonical, listFiles, noteOf, openProjects } from './lib/projects.js';
 
 export const name = 'cowork-shell';
 
@@ -197,6 +198,7 @@ export const DEFAULT_TABS = {
 
 /** Read-only routes the Skills and Connectors pages read. */
 export const SKILLS_PATH = '/dsh-cowork-shell/skills';
+export const PROJECTS_PATH = '/dsh-cowork-shell/projects';
 export const CONNECTORS_PATH = '/dsh-cowork-shell/connectors';
 export const TRASH_PATH = '/dsh-cowork-shell/trash';
 const MCP_CLIENT = '@deepseek-ai/dsh-mcp-client';
@@ -376,6 +378,117 @@ export function apply(ctx) {
         }
       },
     }), 'cowork-shell skills route');
+  });
+
+  // Projects: a project is one of the app's project folders plus what Plus keeps about it (the tab it
+  // shows under and its own instructions, in <home>/cowork-shell/projects.json). The instructions
+  // reach every conversation whose folder is the project's folder as a system-prompt section.
+  const projects = openProjects(ctx.get('dshHomePath')?.('cowork-shell', 'projects.json') ?? '');
+  const registryList = () => {
+    try {
+      return ctx.get('workspaceRegistry')?.list?.() ?? [];
+    } catch {
+      return [];
+    }
+  };
+  const projectNote = (agent) => {
+    const header = agent?.header ?? agent?.session?.header;
+    // A helper agent works for its conversation and has its own task text: no project note.
+    if (typeof header?.cwd !== 'string' || !header.cwd || header.origin === 'subagent') return '';
+    const record = projects.get(header.cwd);
+    if (!record?.instructions) return '';
+    const key = canonical(header.cwd);
+    const workspace = registryList().find((item) => canonical(item.path) === key);
+    return noteOf(workspace?.title ?? '', record.instructions);
+  };
+  const projectSections = new Map();
+  const installProjectNote = (agent) => {
+    if (!agent?.id || projectSections.has(agent.id) || !agent.ctx?.systemPrompt) return;
+    try {
+      projectSections.set(agent.id, agent.ctx.effect(() => agent.ctx.systemPrompt.section({
+        name: 'cowork-shell:project',
+        order: 58,
+        interpolate: false,
+        text: () => {
+          try {
+            return projectNote(agent);
+          } catch {
+            return '';
+          }
+        },
+      }), 'project instructions'));
+    } catch (error) {
+      ctx.logger?.warn?.(`cowork-shell: could not add the project instructions: ${String(error?.message ?? error)}`);
+    }
+  };
+  ctx.on('agent/created', ({ agent }) => installProjectNote(agent));
+  ctx.on('agent/disposed', ({ agent }) => projectSections.delete(agent?.id));
+  try {
+    for (const agent of ctx.get('agents')?.list?.() ?? []) installProjectNote(agent);
+  } catch {
+    /* agents appear later */
+  }
+  ctx.effect(() => () => {
+    for (const dispose of projectSections.values()) {
+      try {
+        dispose?.();
+      } catch {
+        /* the conversation may already be closing */
+      }
+    }
+    projectSections.clear();
+  }, 'cowork-shell project notes');
+
+  ctx.inject(['webServer', 'connection'], (inner) => {
+    /** Only a folder the app lists as a project may be read or written through this route. */
+    const projectFolder = (path) => {
+      const key = canonical(path);
+      const found = key ? registryList().find((item) => canonical(item.path) === key) : undefined;
+      if (!found) throw new Error('That folder is not one of your projects.');
+      return key;
+    };
+    inner.effect(() => inner.webServer.register({
+      kind: 'exact',
+      path: PROJECTS_PATH,
+      handler: async (req, res) => {
+        if (!guard(inner, req, res, ['GET', 'POST'])) return;
+        try {
+          const url = new URL(req.url ?? '', 'http://localhost');
+          const out = {};
+          if (req.method === 'POST' && url.searchParams.get('upload') === '1') {
+            const folder = projectFolder(url.searchParams.get('path'));
+            const chunks = [];
+            let size = 0;
+            for await (const chunk of req) {
+              size += chunk.length;
+              if (size > UPLOAD_MAX) throw new Error('That file is larger than 100 MB. Put it into the folder with the Finder instead.');
+              chunks.push(chunk);
+            }
+            out.saved = addFile(folder, url.searchParams.get('name'), Buffer.concat(chunks));
+            out.files = listFiles(folder);
+          } else if (req.method === 'POST') {
+            const chunks = [];
+            let size = 0;
+            for await (const chunk of req) {
+              size += chunk.length;
+              if (size > 64 * 1024) throw new Error('request too large');
+              chunks.push(chunk);
+            }
+            const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+            if (body?.action === 'save') projects.save(projectFolder(body.path), { tab: body.tab, instructions: body.instructions });
+            else if (body?.action === 'forget') projects.forget(body.path);
+            else throw new Error('unknown action');
+          } else if (url.searchParams.get('files')) {
+            out.files = listFiles(projectFolder(url.searchParams.get('files')));
+          }
+          const list = registryList().map((item) => ({ workspaceId: String(item.id), path: item.path, title: item.title, tab: '', instructions: '', ...(projects.get(item.path) ?? {}) }));
+          res.end(JSON.stringify({ at: Date.now(), projects: list, ...out }));
+        } catch (error) {
+          res.statusCode = req.method === 'POST' ? 400 : 500;
+          res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 300) }));
+        }
+      },
+    }), 'cowork-shell projects route');
   });
 
   // Trash: the app cannot delete a conversation, so Delete moves an archived conversation's files

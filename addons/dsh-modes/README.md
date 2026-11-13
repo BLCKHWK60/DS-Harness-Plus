@@ -101,3 +101,7 @@ Checked in the throwaway web profile by reading the exact request the model rece
 | Cowork with Search off | all 32 other tools, `web_fetch` removed |
 
 Earlier versions filtered a mode's tool list against the tools visible to plugins. That silently dropped preset tools, for example `read` and `grep` in a custom "Review" mode. Now fixed.
+
+## Since 0.33.0: a method for Code
+
+`CODE_METHOD` in `index.js` is used as the Code mode's instructions while that mode's own `prompt` is empty and the setting `codeMethod` (default on) is on. It is applied when the prompt section is built, not stored in the mode table, so the Modes page still shows an empty box (with a line saying what is used). A model version that "stands alone" leaves it out like any mode text.

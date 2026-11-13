@@ -247,8 +247,13 @@ test('the tools, end to end: profile, query with an id, save, change the file, r
     },
   };
   let on = true;
-  const tools = Object.fromEntries(buildTools({ enabled: () => on, rootOf: (exec) => exec.root, conversationOf: () => 'c1', engine, store }).map((tool) => [tool.name, tool]));
-  assert.deepEqual(Object.keys(tools), ['data_files', 'data_profile', 'data_query', 'data_text', 'data_save_analysis', 'data_rerun_analysis', 'data_analyses']);
+  const pictures = [];
+  const show = (_exec, picture) => { pictures.push(picture); return { ok: true, id: 'abc', outline: 'Bar chart over 2 categories.' }; };
+  const python = { execute: async ({ code }) => ({ ok: !code.includes('boom'), output: code.includes('boom') ? 'Traceback: boom' : 'mean 150.0', seconds: 0.2, files: code.includes('savefig') ? [{ name: 'plot.png', path: join(dir, 'data-output', 'plot.png'), size: 1234, picture: true }] : [] }) };
+  const tools = Object.fromEntries(buildTools({ enabled: () => on, rootOf: (exec) => exec.root, conversationOf: () => 'c1', engine, store, python, show }).map((tool) => [tool.name, tool]));
+  assert.deepEqual(Object.keys(tools), ['data_files', 'data_profile', 'data_query', 'data_chart', 'data_python', 'data_text', 'data_save_analysis', 'data_rerun_analysis', 'data_analyses']);
+  // Without Python there is no Python tool.
+  assert.ok(!buildTools({ enabled: () => on, rootOf: (exec) => exec.root, conversationOf: () => 'c1', engine, store }).some((tool) => tool.name === 'data_python'));
   const call = async (name, args, root = dir) => (await tools[name].execute(args, { root })).text;
 
   assert.match(await call('data_files', {}), /- sales\.csv: table \(query it with data_query after data_profile\), 35 B/);
@@ -287,6 +292,64 @@ test('the tools, end to end: profile, query with an id, save, change the file, r
   assert.match(await call('data_rerun_analysis', { name: 'Revenue check' }, other), /belongs to the folder/);
   assert.match(await call('data_rerun_analysis', { name: 'Nope' }), /There is no saved analysis "Nope"/);
 
+  // A chart straight from a query, and a Python run: both get an id, pictures go to the chat.
+  const chart = await call('data_chart', { files: ['sales.csv'], sql: 'SELECT region, revenue FROM sales ORDER BY region', title: 'Revenue by region' });
+  assert.match(chart, /^Chart "Revenue by region" drawn from query (Q\d+) over sales\.csv \(3 rows\)\. It is shown to the user/);
+  assert.equal(pictures[0].description.chart, 'bar');
+  assert.equal(pictures[0].description.categories.length, 3);
+  assert.match(pictures[0].title, /^Revenue by region \[Q\d+\]$/);
+  assert.match(await call('data_chart', { files: ['sales.csv'], sql: 'SELECT region FROM sales', title: 'x' }), /It did not work: A chart needs a result with at least two columns/);
+  const ran = await call('data_python', { code: 'print(1); plt.savefig("x")', purpose: 'Mean revenue' });
+  assert.match(ran, /^Run (Q\d+) \(Python, 0\.2 s\): finished\.\nFiles written:\n- data-output\/plot\.png, 1,234 bytes \(shown to the user in the chat\)\n\nPrinted output:\nmean 150\.0/);
+  assert.equal(pictures[1].file, join(dir, 'data-output', 'plot.png'));
+  const pyId = /^Run (Q\d+)/.exec(ran)[1];
+  assert.match(await call('data_python', { code: 'boom' }), /ended with an error[\s\S]*Traceback: boom/);
+  assert.match(await call('data_save_analysis', { name: 'Py', queries: [pyId] }), /is a Python run\. Only SQL queries/);
+
   on = false;
   assert.equal(await call('data_query', { files: ['sales.csv'], sql: 'SELECT 1' }), 'Data mode is switched off in Settings → Data.');
+});
+
+// ---- charts from a query, and the Python sandbox rules -------------------------------------------
+
+import { chartSpec } from '../lib/charts.js';
+import { sandboxProfile } from '../lib/python.js';
+import { METHOD as METHOD_NOW } from '../lib/method.js';
+
+test('a chart takes its shape from the result: dates give a line, names give bars, numbers give points', () => {
+  const dated = chartSpec({ columns: ['month', 'revenue', 'cost'], rows: [['2026-01', 10, 4], ['2026-02', 12, null], ['2026-03', 9, 5]] }, { title: 'Revenue' });
+  assert.equal(dated.chart, 'line');
+  assert.deepEqual(dated.series.map((s) => [s.name, s.points.length]), [['revenue', 3], ['cost', 2]]);
+  assert.deepEqual(dated.series[0].points[0], ['2026-01', 10]);
+  const named = chartSpec({ columns: ['region', 'units'], rows: [['North', 5], ['South', 7], [null, 1]] }, {});
+  assert.equal(named.chart, 'bar');
+  assert.deepEqual(named.categories, ['North', 'South', '(empty)']);
+  assert.equal(named.yLabel, 'units');
+  const points = chartSpec({ columns: ['price', 'units'], rows: [[1.5, 10], [2, 8]] }, {});
+  assert.equal(points.chart, 'scatter');
+  const chosen = chartSpec({ columns: ['a', 'b', 'c'], rows: [['x', 1, 2]] }, { x: 'A', y: ['c'] });
+  assert.deepEqual(chosen.series.map((s) => s.name), ['c']);
+});
+
+test('a chart that cannot be drawn says what to change', () => {
+  assert.throws(() => chartSpec({ columns: ['a'], rows: [[1]] }, {}), /at least two columns/);
+  assert.throws(() => chartSpec({ columns: ['a', 'b'], rows: [] }, {}), /no rows/);
+  assert.throws(() => chartSpec({ columns: ['a', 'b'], rows: [['x', 'y']] }, {}), /holds numbers/);
+  assert.throws(() => chartSpec({ columns: ['a', 'b'], rows: [['x', 1]] }, { y: ['nope'] }), /no column "nope"/);
+  assert.throws(() => chartSpec({ columns: ['a', 'b'], rows: Array.from({ length: 31 }, (_, i) => [`n${i}`, i]) }, {}), /at most 30/);
+});
+
+test('a Python program gets no network, no home folder and one place to write', () => {
+  const profile = sandboxProfile({ dataDir: '/d/data', outDir: '/d/data/data-output', runDir: '/h/run', envDir: '/h/python', prefix: '/opt/py' });
+  assert.match(profile, /\(deny network\*\)/);
+  assert.match(profile, /\(deny file-read-data \(subpath "[^"]+"\)\)/);
+  assert.match(profile, /\(allow file-read-data \(subpath "\/d\/data"\)/);
+  assert.match(profile, /\(deny file-write\*\)\n\(allow file-write\* \(subpath "\/d\/data\/data-output"\) \(subpath "\/h\/run"\)/);
+  // The deny lines come before the allow lines: the sandbox takes the last rule that matches.
+  assert.ok(profile.indexOf('(deny file-write*)') < profile.indexOf('(allow file-write*'));
+});
+
+test('the method names the chart and Python tools and still fits the Modes limit', () => {
+  assert.ok(METHOD_NOW.length < 4000, String(METHOD_NOW.length));
+  for (const word of ['data_chart', 'data_python', 'data-output', '[Q7]']) assert.ok(METHOD_NOW.includes(word), word);
 });

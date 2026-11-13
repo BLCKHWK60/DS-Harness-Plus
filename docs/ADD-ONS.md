@@ -72,6 +72,16 @@ The **More** menu in the sidebar ends with three switches: **Wide chat area** (t
 
 To get the normal sidebar back, switch **Cowork sidebar** off on the **Plugins** page. It takes effect at once. Use that main switch, not the switch for its inner row on the details page: that one would leave you with no sidebar at all. To choose which pages each tab shows, see `addons/dsh-cowork-shell/README.md`.
 
+### Since 0.33: rows of tabs, coming back to a tab, and projects
+
+- **Tabs in rows of three.** With more than three tabs (Chat, Cowork, Code, Finance, Data) the tabs sit in two rows, each with its icon and full name.
+- **Each tab remembers where you were.** Clicking a tab opens the conversation you last had open in that tab. A tab you have not used yet opens its start page. This is kept in the app window, not in your settings.
+- **Projects.** In every tab except Chat the list is headed by **+ New**. Pick a folder: it becomes a project in that tab. The small gear on a project's row opens its page:
+  - **Name** and the tab it shows under.
+  - **Instructions**: what the assistant should know and do in every conversation of the project. They are kept by Plus, not written into your folder. A file named AGENTS.md or CLAUDE.md in the folder is read by the app as before.
+  - **Files**: what is in the folder. **Add files** (or dropping files onto the box) copies them into the folder. A file is never replaced: a name that is taken gets " (2)".
+  - **Conversations** of the project, and **New conversation**.
+
 ## Colour schemes
 
 Pick the colours of the whole app in **Settings → Colours**:
@@ -92,6 +102,12 @@ The chat box also gets three buttons for the open conversation:
 - **Tools** says whether the assistant has any tools ("Tools on" or "Tools off"). Click it for one switch that turns every tool off or back on for this conversation, and for the list of what the assistant can and cannot call. With tools off, the assistant is offered nothing, so it does not try and you see no failed attempts. In a conversation started in the app's PTC mode, the panel says so: there the assistant reaches tools from inside small programs it writes, and "Tools off" stops those programs too.
 - **The small arrow beside Search and beside Deep research** opens a slider with three steps: Quick, Standard, Thorough. The step applies to all conversations. For Search it tells the assistant how hard to search (one search; as it sees fit; or several searches with at least five pages read and facts cross-checked). For Deep research it sets the rounds and helpers (see Deep research).
 - **Deep research** has the assistant research questions thoroughly and answer with a cited report. With the Cowork sidebar on, the sidebar tabs choose instead, and the chat-box selector is hidden. A mode decides which tools the assistant may use, how its sandbox is set, a default tier, and a short instruction. The default mode, Cowork, allows every tool, so nothing is restricted until you choose otherwise. Edit or add modes on **Settings → Modes**.
+
+### Since 0.33: a working method for Code
+
+While the Code mode has no instructions of its own (Settings → Modes), Plus gives it a working method: read before changing, keep a step list, make small exact changes, run the tests and read the output, ask before anything that cannot be undone, and report plainly what changed, what was run and what was not verified. Writing your own text into the Code mode's instructions replaces it; the setting `codeMethod` switches it off.
+
+What the app itself already shows for code work: each file change as a card (click it for a before-and-after view in the right panel), the step list above the message box, and each command with its output. They are folded away once a turn is done. To keep them open, set **Settings → General → Work details** to **Verbose**.
 
 ## Model Tiers
 
@@ -220,6 +236,13 @@ A tab for analysing the data files in a folder. Switch it on in **Settings → D
 
 Details: `addons/dsh-data/README.md`.
 
+### Since 0.33: charts and Python
+
+- **Charts from the data.** Ask for a chart, or let the assistant decide: it draws one straight from a query (the tool `data_chart`), so no number is copied by hand. The chart shows under the answer and carries its query's id.
+- **Python for statistics.** For what a query cannot do (tests, regression, correlation, forecasts, cleaning, combining files, special charts) the assistant writes a small Python program and runs it (`data_python`). Plus keeps its own private Python folder with pandas, numpy, scipy, matplotlib, openpyxl, statsmodels and scikit-learn. It is set up by itself the first time Data is on (a download of about 450 MB; Settings → Data shows how far it is, and has **Set up again** if it failed). It needs a Python 3 on the Mac (Homebrew's or python.org's).
+- **What a program may do.** It runs inside macOS's own sandbox: no internet, it can read the conversation's folder and nothing else in your home folder, and it can write only into a folder named `data-output` inside the conversation's folder. Your own files are never changed. Charts it saves there are shown in the chat.
+- **Search on or off.** With the Search and Deep research buttons off, the assistant works from your files alone.
+
 ## Finance
 
 A fourth tab, beside Chat, Cowork and Code, for researching companies, markets and economies. It is research, not advice.
@@ -234,6 +257,15 @@ A fourth tab, beside Chat, Cowork and Code, for researching companies, markets a
 - The watchlist and your own markets are on **Settings → Finance**.
 
 Details: `addons/dsh-finance/README.md`.
+
+### Since 0.33: prices, news, social media, your own files, and charts
+
+- **Prices** (`finance_prices`): closing prices over time for up to five shares, indices, currencies or coins, with a chart. Several at once are drawn from a common start of 100. The source is Yahoo Finance's public chart data: closing prices, possibly delayed, not an official feed, and it can stop working.
+- **News** (`finance_news`): recent articles on a company or topic, and how much was written per day and in what tone, with charts. The source is the GDELT project. It allows one request every five seconds and often answers "too many requests"; the assistant then uses web search.
+- **Social media** (`finance_social`): public posts from Hacker News, Mastodon and Lemmy, with a chart of posts per day and a rough count of how many lean positive or negative. **X (Twitter), Reddit and StockTwits refuse readers without an account**; the assistant reaches them through web search only and says so.
+- **Your own files.** A Finance conversation in a folder can use the Data tools on the files there (a portfolio, exported statements), when Data is switched on.
+- **It follows the question.** Asked only for the financials, it gives figures and charts. Asked about sentiment, it brings in news and social media. Asked for the full picture, all of it.
+- **Charts.** A full answer is expected to have several: prices, figures by year, coverage and mood over time, comparisons.
 
 ## Code map
 
@@ -333,6 +365,10 @@ Lets the model draw accurate diagrams. The model only describes what is in the d
 - **The check:** if boxes overlap, a label does not fit, or too many arrows cross, the model is told and usually draws it again. A small note on the picture says if something was left unfixed.
 
 The drawing is exact, but what goes into it is still the model's. Read a diagram with the same care as the answer it belongs to. Details: `addons/dsh-diagram/README.md`.
+
+### Since 0.33: lines over time
+
+A chart point's x may be a date (`["2026-03-31", 12.5]` or `["2026-03", 12.5]`). The bottom axis then shows dates, and a long line is drawn without a dot on every point. Other add-ons (Data, Finance) hand their charts to this add-on to show them under the answer.
 
 ## Learning
 

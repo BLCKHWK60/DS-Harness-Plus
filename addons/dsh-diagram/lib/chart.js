@@ -50,6 +50,50 @@ export function numberText(value) {
   return part ? `${grouped}.${part}` : grouped;
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const dayOf = (year, month, day = 1) => Date.UTC(year, month, day) / 86400000;
+
+/** A day number (days since 1970) as "2026-03-31". */
+export function dayText(days) {
+  return new Date(Math.round(days) * 86400000).toISOString().slice(0, 10);
+}
+
+/**
+ * A date axis: marks at the start of days, weeks, months, quarters or years, whichever gives a
+ * readable number of them.
+ * @param {number} from - first day (days since 1970).
+ * @param {number} to - last day.
+ * @returns {{min: number, max: number, ticks: number[], label: (day: number) => string}} the axis.
+ */
+export function dateAxis(from, to) {
+  if (to - from < 1) [from, to] = [from - 1, to + 1];
+  const span = to - from;
+  const ticks = [];
+  let label;
+  if (span <= 14) {
+    for (let day = Math.ceil(from); day <= to; day += span > 8 ? 2 : 1) ticks.push(day);
+    label = (day) => { const d = new Date(day * 86400000); return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`; };
+  } else if (span <= 75) {
+    for (let day = Math.ceil(from); day <= to; day += 1) if (new Date(day * 86400000).getUTCDay() === 1) ticks.push(day);
+    if (ticks.length > 9) for (let i = ticks.length - 1; i >= 0; i -= 1) if (i % 2 === 1) ticks.splice(i, 1);
+    label = (day) => { const d = new Date(day * 86400000); return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`; };
+  } else {
+    const months = span / 30.44;
+    const step = months <= 9 ? 1 : months <= 26 ? 3 : months <= 54 ? 6 : months <= 110 ? 12 : 12 * Math.ceil(months / 12 / 9);
+    const first = new Date(from * 86400000);
+    let [year, month] = [first.getUTCFullYear(), Math.ceil((first.getUTCMonth() + (first.getUTCDate() > 1 ? 1 : 0)) / step) * step];
+    for (let i = 0; i < 400; i += 1) {
+      const day = dayOf(year, month);
+      if (day > to) break;
+      if (day >= from) ticks.push(day);
+      month += step;
+    }
+    label = (day) => { const d = new Date(day * 86400000); return step >= 12 ? String(d.getUTCFullYear()) : d.getUTCMonth() === 0 || day === ticks[0] ? `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}` : MONTHS[d.getUTCMonth()]; };
+  }
+  const pad = span * 0.02;
+  return { min: from - pad, max: to + pad, ticks, label };
+}
+
 /**
  * @param {object} spec - checked description; see `lib/spec.js`.
  * @returns {{width: number, height: number, body: string, boxes: object[], labels: object[], crossings: number, outline: string, notes: string[]}} the drawing.
@@ -66,8 +110,8 @@ export function layoutChart(spec) {
     const xs = spec.series.flatMap((series) => series.points.map((point) => point[0]));
     const from = spec.xMin ?? (xs.length > 0 ? Math.min(...xs) : -10);
     const to = spec.xMax ?? (xs.length > 0 ? Math.max(...xs) : 10);
-    xAxis = niceAxis(from, to, 8);
-    if (spec.xMin !== undefined) xAxis.min = Math.min(xAxis.min, spec.xMin);
+    xAxis = spec.dates ? dateAxis(from, to) : niceAxis(from, to, 8);
+    if (spec.xMin !== undefined && !spec.dates) xAxis.min = Math.min(xAxis.min, spec.xMin);
     if (spec.functions.length > 0 && (spec.xMin !== undefined || spec.xMax !== undefined)) {
       // A formula is drawn exactly over the range asked for.
       xAxis.min = from;
@@ -168,10 +212,10 @@ export function layoutChart(spec) {
   } else {
     for (const tick of xAxis.ticks) {
       parts.push(`<path class="grid" stroke-width="1" d="M${round(px(tick))} ${round(top)}V${round(top + PLOT_H)}"/>`);
-      parts.push(`<text x="${round(px(tick))}" y="${round(bottom + 7)}" class="sub" font-size="11" text-anchor="middle" dominant-baseline="central">${esc(numberText(tick))}</text>`);
+      parts.push(`<text x="${round(px(tick))}" y="${round(bottom + 7)}" class="sub" font-size="11" text-anchor="middle" dominant-baseline="central">${esc(spec.dates ? xAxis.label(tick) : numberText(tick))}</text>`);
     }
     bottom += 18;
-    if (xAxis.min <= 0 && xAxis.max >= 0) parts.push(`<path class="line" stroke-width="1.2" d="M${round(px(0))} ${round(top)}V${round(top + PLOT_H)}"/>`);
+    if (!spec.dates && xAxis.min <= 0 && xAxis.max >= 0) parts.push(`<path class="line" stroke-width="1.2" d="M${round(px(0))} ${round(top)}V${round(top + PLOT_H)}"/>`);
     const clip = `clip${Math.round(left)}`;
     parts.push(`<clipPath id="${clip}"><rect x="${round(left)}" y="${round(top)}" width="${PLOT_W}" height="${PLOT_H}"/></clipPath>`);
     const drawn = [];
@@ -200,13 +244,21 @@ export function layoutChart(spec) {
     for (const series of spec.series) {
       const points = [...series.points].sort((a, b) => a[0] - b[0]);
       if (spec.chart === 'line') drawn.push(`<path class="s${(color % 6) + 1}" stroke-width="2" stroke-linejoin="round" d="${points.map((point, index) => `${index === 0 ? 'M' : 'L'}${round(px(point[0]))} ${round(py(point[1]))}`).join('')}"/>`);
-      drawn.push(points.map((point) => `<circle class="f${(color % 6) + 1}" cx="${round(px(point[0]))}" cy="${round(py(point[1]))}" r="${spec.chart === 'line' ? 3 : 4}"/>`).join(''));
+      // A long line reads better without a dot on every point.
+      if (!(spec.chart === 'line' && points.length > 45)) drawn.push(points.map((point) => `<circle class="f${(color % 6) + 1}" cx="${round(px(point[0]))}" cy="${round(py(point[1]))}" r="${spec.chart === 'line' ? 3 : 4}"/>`).join(''));
       names.push(series.name);
       color += 1;
-      outline.push(`${series.name || 'Points'} (${points.length}): ${points.slice(0, 24).map((point) => `(${numberText(point[0])}, ${numberText(point[1])})`).join(' ')}${points.length > 24 ? ' …' : ''}`);
+      const xText = (x) => (spec.dates ? dayText(x) : numberText(x));
+      if (spec.dates && points.length > 24) {
+        const ys = points.map((point) => point[1]);
+        const [first, last] = [points[0], points[points.length - 1]];
+        const low = points[ys.indexOf(Math.min(...ys))];
+        const high = points[ys.indexOf(Math.max(...ys))];
+        outline.push(`${series.name || 'Line'} (${points.length} points): starts ${numberText(first[1])} on ${xText(first[0])}, ends ${numberText(last[1])} on ${xText(last[0])}, lowest ${numberText(low[1])} on ${xText(low[0])}, highest ${numberText(high[1])} on ${xText(high[0])}.`);
+      } else outline.push(`${series.name || 'Points'} (${points.length}): ${points.slice(0, 24).map((point) => `(${xText(point[0])}, ${numberText(point[1])})`).join(' ')}${points.length > 24 ? ' …' : ''}`);
     }
     parts.push(`<g clip-path="url(#${clip})">${drawn.join('')}</g>`);
-    outline.unshift(`${spec.functions.length > 0 ? 'Plot' : spec.chart === 'line' ? 'Line chart' : 'Scatter chart'}; horizontal axis from ${numberText(xAxis.min)} to ${numberText(xAxis.max)}, vertical axis from ${numberText(yAxis.min)} to ${numberText(yAxis.max)}.`);
+    outline.unshift(`${spec.functions.length > 0 ? 'Plot' : spec.chart === 'line' ? 'Line chart' : 'Scatter chart'}; horizontal axis from ${spec.dates ? dayText(xAxis.min) : numberText(xAxis.min)} to ${spec.dates ? dayText(xAxis.max) : numberText(xAxis.max)}, vertical axis from ${numberText(yAxis.min)} to ${numberText(yAxis.max)}.`);
   }
   parts.push(`<path class="line" stroke-width="1.2" d="M${round(left)} ${round(zeroY)}H${round(left + PLOT_W)}"/>`);
   parts.push(`<path class="line" stroke-width="1" d="M${round(left)} ${round(top)}V${round(top + PLOT_H)}"/>`);

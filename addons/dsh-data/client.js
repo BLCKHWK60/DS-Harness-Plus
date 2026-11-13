@@ -119,6 +119,28 @@ window.__ModuleLoader__.load({
           if (alive.current) setBusy(false);
         }
       };
+      const setupPython = async () => {
+        setBusy(true);
+        try {
+          const next = await call({ action: 'python' });
+          if (alive.current) { setData(next); setNote({ text: 'Setting Python up. This takes a minute or two and needs the internet.', error: false }); }
+        } catch (problem) {
+          if (alive.current) setNote({ text: problem.message, error: true });
+        } finally {
+          if (alive.current) setBusy(false);
+        }
+      };
+      const py = data.python ?? { state: 'missing', detail: '', packages: [] };
+      // While it is downloading, look again every few seconds.
+      useEffect(() => {
+        if (py.state !== 'installing') return undefined;
+        const timer = setInterval(() => void load(), 4000);
+        return () => clearInterval(timer);
+      }, [py.state]);
+      const pyText = py.state === 'ready' ? `Ready (${py.detail}). Packages: ${(py.packages ?? []).join(', ')}.${(py.missing ?? []).length > 0 ? ` Not available: ${py.missing.join(', ')}.` : ''}`
+        : py.state === 'installing' ? `Setting up… ${py.detail}`
+          : py.state === 'failed' ? `The set-up did not work: ${py.detail}`
+            : 'Not set up yet. It is set up by itself the first time Data is switched on.';
       const analyses = Array.isArray(data.analyses) ? data.analyses : [];
       const when = (at) => (at ? new Date(at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'never');
 
@@ -136,11 +158,22 @@ window.__ModuleLoader__.load({
             h('div', { className: 'dsh-dt-rowdesc' }, 'On adds the tab, its instructions and its tools. Off takes them away; saved analyses are kept.')),
           h('button', { type: 'button', role: 'switch', className: 'dsh-dt-switch', 'aria-checked': data.enabled === true, 'aria-label': 'Show the Data tab', disabled: busy, onClick: () => void flip(data.enabled !== true) })),
 
+        h('div', { className: 'dsh-dt-group' }, 'Python for statistics and charts'),
+        h('div', { className: 'dsh-dt-row' },
+          h('div', { className: 'dsh-dt-rowtext' },
+            h('div', { className: 'dsh-dt-rowtitle' }, 'Private Python folder'),
+            h('div', { className: 'dsh-dt-rowdesc', 'data-error': String(py.state === 'failed') }, pyText),
+            h('div', { className: 'dsh-dt-rowdesc' }, 'Plus keeps its own copy of the analysis packages in the app\'s data folder (about 450 MB, downloaded once). Nothing else on the Mac changes. A program cannot use the internet, can read only the conversation\'s folder, and can write only into its data-output folder.')),
+          py.state === 'ready' || py.state === 'installing' ? null : h('button', { type: 'button', className: 'dsh-dt-btn', disabled: busy, onClick: () => void setupPython() }, py.state === 'failed' ? 'Set up again' : 'Set up now')),
+
         h('div', { className: 'dsh-dt-group' }, 'How to use it'),
         h('ul', { className: 'dsh-dt-list' },
           h('li', null, 'Open the Data tab and pick the folder that holds your files on the start page, as you do in Cowork or Code. The assistant only reads files inside that folder.'),
           h('li', null, `Tables it can query: ${(data.reads?.tables ?? []).join(', ')}. Documents it can read: ${(data.reads?.text ?? []).join(', ')}. PDFs are read with the PDF reader add-on.`),
           h('li', null, 'Ask in plain words. In the answer, a mark like [Q7] after a number is the query that produced it. Open that step in the conversation to see the query itself.'),
+          h('li', null, 'Charts are drawn from the data itself and shown under the answer. Ask for one whenever you want to see something: "chart revenue by month".'),
+          h('li', null, 'For statistics, cleaning or combining files, the assistant writes and runs a small Python program. New files it makes (cleaned tables, charts) go into a data-output folder inside your folder; your own files are never changed.'),
+          h('li', null, 'Search and Deep research are yours to switch on or off in the chat box. With both off, the assistant works from your files alone.'),
           h('li', null, 'Say "save this analysis as …" to keep it. Later, say "run … again" and the assistant reports what moved.'),
           h('li', null, 'An AGENTS.md or CLAUDE.md file in the folder is read by the app, as in every tab. Use it to explain your data: what the columns mean, which rows to leave out.')),
 

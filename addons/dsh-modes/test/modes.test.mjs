@@ -104,3 +104,9 @@ test('the sliders: a step is checked, and only Quick and Thorough add words abou
   assert.match(SEARCH_DEPTH_PROMPTS.quick, /one search is usually enough/);
   assert.match(SEARCH_DEPTH_PROMPTS.thorough, /at least five pages/);
 });
+
+test('the Code method is short enough to sit beside other instructions and names the step list', async () => {
+  const { CODE_METHOD } = await import('../index.js');
+  assert.ok(CODE_METHOD.length > 800 && CODE_METHOD.length < 3000, String(CODE_METHOD.length));
+  for (const word of ['todo_write', 'path:line', 'not verified']) assert.ok(CODE_METHOD.includes(word), word);
+});

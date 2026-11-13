@@ -162,3 +162,17 @@ In the lab (web version, stand-in model): the switch added a fourth tab, with fo
 **0.29.2, your own tasks in Finance.** In the lab on 2026-11-12: the page's data listed the three hand-made tasks and no briefs; with one task's id in `financeTasks`, that task was run with Run now: it finished, the model's request carried the Finance method and a selection note naming the task's title, and the conversation was recorded as Finance. Not tested: **pressing the switch on the page** (the test browser could not be clicked that day; the mark was written into the lab's settings by hand), a task started by its schedule, the Mac desktop app.
 
 Not tested: **the quality of the answers**, which needs a real model with web search; a helper agent getting the selection; a wide window (the test window was narrow). In the Mac desktop app the owner said it "seems to be working well"; nothing more detailed was checked there.
+
+## Since 0.33.0: prices, news, social media, charts
+
+Three tools in `lib/market.js` (network code in `lib/feeds.js`, the word count in `lib/mood.js`). Each draws its own chart through the Diagrams add-on, straight from what it fetched.
+
+| Tool | Source | Notes |
+| --- | --- | --- |
+| `finance_prices` | Yahoo Finance's public chart address (`query1.finance.yahoo.com/v8/finance/chart/<symbol>`) | Daily closes (weekly for 5y and 10y), up to five symbols. Not an official service: it can change or stop. Named as the source in every answer. |
+| `finance_news` | GDELT DOC 2.0 (`api.gdeltproject.org/api/v2/doc/doc`), modes `artlist`, `timelinevolraw`, `timelinetone` | One request every 5.5 seconds, one retry after a dropped connection, none after "too many requests". English-language outlets unless a language or a country is given. |
+| `finance_social` | Hacker News (Algolia search), Mastodon (`mastodon.social` hashtag timeline), Lemmy (`lemmy.world` search) | No key. The lean (positive, negative) is a word count and is called that. |
+
+- **Not used, and why (checked 2026-11-13):** Reddit, StockTwits and Bluesky answered 403 to a reader without an account; X has no free reading at all. Google News and Bing News feeds answer, but their terms allow only a personal feed reader, so they are not used. The assistant reaches these through the app's web search.
+- **The method** (3,942 of 4,000 characters) now says: use these tools, chart freely, and match the question (financials only, sentiment, or the full picture).
+- **Tested (0.33.0):** unit tests with stand-in services (37 in all). Live on 2026-11-13: prices for NVDA, AMD and ^GSPC with the comparison chart; 173 posts about one company from the three networks with the per-day chart; the news list once (five articles). In the lab app with a scripted model: `finance_prices` and `finance_social` each showed their chart under the turn. **Not verified:** GDELT's per-day coverage and tone against the live service (it answered "too many requests" on every later try from this network; the reading code follows its documented shape and is covered by a stand-in test only); any real model; the Mac app.

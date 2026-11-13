@@ -13,6 +13,14 @@ export const CHARTS = ['bar', 'line', 'scatter', 'plot'];
 const text = (value, max = 200) => (typeof value === 'string' || typeof value === 'number' ? String(value).replace(/\s+/g, ' ').trim().slice(0, max) : '');
 const list = (value) => (Array.isArray(value) ? value : []);
 const colour = (value) => (COLORS.includes(value) ? value : undefined);
+/** A date such as "2026-03-31" or "2026-03" as days since 1970, or undefined. Plain numbers are not dates. */
+export const dateDays = (value) => {
+  const found = typeof value === 'string' ? /^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?(?:[T ].*)?$/.exec(value.trim()) : null;
+  if (!found) return undefined;
+  const [month, day] = [Number(found[2]), Number(found[3] ?? 1)];
+  if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
+  return Date.UTC(Number(found[1]), month - 1, day) / 86400000;
+};
 const number = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : undefined);
 
 /**
@@ -157,6 +165,7 @@ export function readSpec(raw) {
       }
     }
     spec.series = [];
+    const datedSeries = [];
     for (const item of list(raw.series)) {
       const name = text(item?.name, 80);
       if (spec.categories.length > 0) {
@@ -164,12 +173,18 @@ export function readSpec(raw) {
         if (values.length !== spec.categories.length) errors.push(`The series "${name || spec.series.length + 1}" has ${values.length} values but there are ${spec.categories.length} categories. Give one value per category.`);
         else spec.series.push({ name, values, points: [] });
       } else {
-        const points = list(item?.points).map((point) => [number(list(point)[0]), number(list(point)[1])]).filter((point) => point[0] !== undefined && point[1] !== undefined);
+        // A point's x may be a date ("2026-03-31" or "2026-03"): the axis then shows dates.
+        const rawPoints = list(item?.points);
+        const dated = rawPoints.length > 0 && rawPoints.every((point) => dateDays(list(point)[0]) !== undefined);
+        if (rawPoints.length > 0) datedSeries.push(dated);
+        const points = rawPoints.map((point) => [dated ? dateDays(list(point)[0]) : number(list(point)[0]), number(list(point)[1])]).filter((point) => point[0] !== undefined && point[1] !== undefined);
         if (points.length === 0) errors.push(`The series "${name || spec.series.length + 1}" has no usable "points". Each point is [x, y], two numbers. (For named categories, give "categories" and "values".)`);
         else spec.series.push({ name, values: [], points });
       }
     }
-    if (!spec.chart) spec.chart = spec.functions.length > 0 ? 'plot' : spec.categories.length > 0 ? 'bar' : 'scatter';
+    spec.dates = datedSeries.length > 0 && datedSeries.every(Boolean) && spec.functions.length === 0;
+    if (!spec.dates && datedSeries.some(Boolean)) errors.push('Do not mix dates and numbers as x in one chart: give every point a date ("2026-03-31"), or every point a number.');
+    if (!spec.chart) spec.chart = spec.functions.length > 0 ? 'plot' : spec.categories.length > 0 ? 'bar' : spec.dates ? 'line' : 'scatter';
     if (spec.categories.length > 0 && spec.functions.length > 0) errors.push('A formula needs a number axis. Leave out "categories" when you give "functions".');
     if (spec.categories.length > 0 && (spec.chart === 'scatter' || spec.chart === 'plot')) spec.chart = 'line';
     if (spec.categories.length === 0 && spec.chart === 'bar') errors.push('A bar chart needs "categories" (the names along the bottom) and, per series, "values".');

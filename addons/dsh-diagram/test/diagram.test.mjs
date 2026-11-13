@@ -292,3 +292,18 @@ test('saving, the answer to the model, settings and the skill', (t) => {
   }
   assert.ok(skill.content.length < 4200, 'the skill stays short');
 });
+
+test('a line over dates: the axis shows dates and the outline gives the ends and extremes', async () => {
+  const { draw } = await import('../lib/draw.js');
+  const points = Array.from({ length: 60 }, (_, i) => [new Date(Date.UTC(2026, 0, 1) + i * 86400000 * 3).toISOString().slice(0, 10), 100 + i]);
+  const result = draw({ kind: 'chart', title: 'Price', series: [{ name: 'Close', points }] });
+  assert.equal(result.ok, true);
+  assert.match(result.outline, /Line chart; horizontal axis from 2025-12-\d\d to 2026-0\d-\d\d/);
+  assert.match(result.outline, /Close \(60 points\): starts 100 on 2026-01-01, ends 159 on 2026-06-27, lowest 100 on 2026-01-01, highest 159 on 2026-06-27\./);
+  assert.match(result.svg({ theme: 'light' }), />Apr</);
+  // Months as dates, and no mixing of dates with numbers across series.
+  assert.equal(draw({ kind: 'chart', series: [{ name: 'a', points: [['2026-01', 1], ['2026-02', 2]] }] }).ok, true);
+  const mixed = draw({ kind: 'chart', series: [{ name: 'a', points: [['2026-01-01', 1], ['2026-01-02', 2]] }, { name: 'b', points: [[1, 1], [2, 2]] }] });
+  assert.equal(mixed.ok, false);
+  assert.match(mixed.errors.join(' '), /Do not mix dates and numbers/);
+});
