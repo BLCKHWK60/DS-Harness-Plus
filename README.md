@@ -112,7 +112,7 @@ Send them the link to this project, https://github.com/BLCKHWK60/DS-Harness-Plus
 | Folder or file | What it is |
 | --- | --- |
 | `Install.command`, `Uninstall.command` | Double-click to install or remove. |
-| `addons/` | The twenty-two add-ons. Each has a `README.md` with its full technical notes. |
+| `addons/` | The add-ons. Each has a `README.md` with its full technical notes. |
 | `docs/ADD-ONS.md` | What each add-on does and how to set it up. |
 | `docs/HOW-IT-WORKS.md` | For technical readers: how the install works, how to test, how to change an add-on. |
 | `templates/` | Optional ready-to-fill examples: model servers, memory, MCP tool servers, backups. |
@@ -123,7 +123,7 @@ Send them the link to this project, https://github.com/BLCKHWK60/DS-Harness-Plus
 
 ## Status
 
-Release 0.34.2 (the version in `VERSION`). Tested so far:
+Release 0.36.0 (the version in `VERSION`). Tested so far:
 
 - **Install, update and uninstall:** run on a fresh setup and on a copy of a real, long-used setup.
 - **Live start:** the app starts with every add-on loaded.

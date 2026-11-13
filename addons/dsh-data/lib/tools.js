@@ -163,6 +163,7 @@ export function buildTools({ enabled, rootOf, conversationOf, engine, store, pyt
         'Run a Python program on the files in this conversation\'s folder, for what SQL cannot do: statistics (tests, regression, correlation, forecasting, clustering), reshaping and cleaning, and charts of any kind.',
         'Available: pandas, numpy, scipy, matplotlib, openpyxl, and usually statsmodels and scikit-learn. The program starts in the data folder, so pd.read_csv("sales.csv") works; DATA_DIR and OUT_DIR are set. It cannot use the internet and can write only into OUT_DIR (the folder data-output).',
         'Print what you need to read: only printed text comes back, at most 16,000 characters, so print summaries, not whole tables. Save charts with plt.savefig(os.path.join(OUT_DIR, "name.png"), dpi=150, bbox_inches="tight"): every picture saved there is shown to the user in the chat. Save cleaned or combined data there too (CSV or Excel). Never change the source files.',
+        'For a plain bar, line, area or pie chart use data_chart, not this tool. In matplotlib, label bars with ax.bar_label(bars, fmt="..."), never with text placed by hand. A saved chart is checked: one with something far outside the plot is not shown and you are told to fix it.',
         'The run gets an id such as Q7: cite the numbers you take from its printed output with it.',
       ].join(' '),
       parameters: {
@@ -188,7 +189,10 @@ export function buildTools({ enabled, rootOf, conversationOf, engine, store, pyt
           lines.push('Files written:');
           for (const file of ran.files) {
             let note = '';
-            if (file.picture && show) {
+            if (file.picture && file.problem) {
+              // A broken chart is kept on disk but not put in front of the user.
+              note = ` (NOT shown to the user: ${file.problem} The usual cause is a label or note placed with the wrong numbers, for example an offset worked out from another column. Label bars with ax.bar_label(bars, fmt="...") instead of placing text by hand, then run the program again)`;
+            } else if (file.picture && show) {
               const shown = show(exec, { title: `${file.name} [${id}]`, file: file.path });
               note = shown.ok ? ' (shown to the user in the chat)' : '';
             }

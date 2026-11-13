@@ -116,3 +116,12 @@ Beyond these it uses what the app and the other add-ons give: the Diagram builde
 ## Fixed in 0.34.2: the settings page was blank
 
 From 0.33.0 the page under Settings → Data showed nothing. The hook that looks again every few seconds while Python is being set up was placed after the page's "still loading" return, so the page had one more hook on its second draw than on its first, and React took it down. The hook now sits before that return. `scripts/dev-hook-scan.mjs` looks for this mistake in every add-on, and the release check runs it. Checked in the test setup: the page shows the switch, the Python card, the guide and the saved analyses.
+
+## Since 0.35.0: broken charts are caught
+
+The owner got a matplotlib chart whose labels sat about 2,000 units above the bars; saved with `bbox_inches="tight"`, the picture became a tall strip of empty space. That was the model's program, not Data mode, but Data mode now catches it:
+
+- **The check.** `CHART_CHECK` (in `lib/python.js`) is put before every program. It wraps matplotlib's `Figure.savefig`: when what is drawn (`get_tightbbox()`) is more than 1.6 times the figure's width or height, it prints a `CHART-PROBLEM <file>: …` line and still saves. `execute` reads that line back and marks the file with `problem`.
+- **The tool** does not show a marked picture. It tells the model why, names the usual cause (a label placed with the wrong numbers), points to `ax.bar_label`, and asks for another run. The file stays in `data-output`.
+- **The instructions** now say: plain bar, line, area and pie charts are always `data_chart`, never Python; a chart that was not shown is fixed before answering.
+- **Tested (0.35.0):** with the real private Python outside the app: a copy of the owner's chart was flagged ("8 x 28 inches but the figure is 10 x 5"); a normal labelled bar chart, one with the legend outside the plot, and a six-panel figure were not. Unit tests for the tool's wording and the check's text. Not tested: a real model reacting to the message.

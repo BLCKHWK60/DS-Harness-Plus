@@ -19,6 +19,31 @@ export const OUTPUT_CHARS = 16000;
 export const RUN_MS = 120_000;
 const SETUP_MS = 20 * 60_000;
 const PICTURES = ['.png', '.jpg', '.jpeg', '.svg'];
+/** The line the chart check prints; `execute` reads it back. */
+export const CHART_PROBLEM = 'CHART-PROBLEM';
+/**
+ * Python lines put before every program. They make matplotlib look at each figure as it is saved:
+ * when what is drawn reaches far outside the figure, something was placed with the wrong numbers
+ * (a label offset in the wrong units is the usual cause) and a "tight" save would stretch the
+ * picture around it. The check prints one line and still saves, so the model can read what went wrong.
+ */
+export const CHART_CHECK = [
+  'try:',
+  '    import matplotlib.figure as _dsh_figure',
+  '    _dsh_savefig = _dsh_figure.Figure.savefig',
+  '    def _dsh_checked_savefig(self, fname, *args, **kwargs):',
+  '        try:',
+  '            _box = self.get_tightbbox()',
+  '            _w, _h = self.get_size_inches()',
+  '            if _box.width > 1.6 * _w or _box.height > 1.6 * _h:',
+  `                print("CHART-PROBLEM %s: the drawing is %.0f x %.0f inches but the figure is %.0f x %.0f, so something sits far outside the plot." % (os.path.basename(str(fname)), _box.width, _box.height, _w, _h))`,
+  '        except Exception:',
+  '            pass',
+  '        return _dsh_savefig(self, fname, *args, **kwargs)',
+  '    _dsh_figure.Figure.savefig = _dsh_checked_savefig',
+  'except Exception:',
+  '    pass',
+];
 
 const run = (file, args, options = {}) =>
   new Promise((resolve) => {
@@ -156,7 +181,7 @@ export function createPython(dir, hooks = {}) {
    * @param {string} job.dataDir - the conversation's folder; the program starts in it.
    * @param {string} job.outDir - where it may write.
    * @param {number} [job.timeoutMs] - stop it after this long.
-   * @returns {Promise<{ok: boolean, output: string, files: {name: string, path: string, size: number, picture: boolean}[], seconds: number}>} what it printed and what it wrote.
+   * @returns {Promise<{ok: boolean, output: string, files: {name: string, path: string, size: number, picture: boolean, problem?: string}[], seconds: number}>} what it printed and what it wrote.
    */
   const execute = async ({ code, dataDir, outDir, timeoutMs = RUN_MS }) => {
     const now = status();
@@ -181,6 +206,7 @@ export function createPython(dir, hooks = {}) {
       'os.environ.setdefault("MPLBACKEND", "Agg")',
       `DATA_DIR = ${JSON.stringify(paths.dataDir)}`,
       `OUT_DIR = ${JSON.stringify(paths.outDir)}`,
+      ...CHART_CHECK,
       '',
     ].join('\n');
     writeFileSync(script, head + String(code));
@@ -232,7 +258,9 @@ export function createPython(dir, hooks = {}) {
       try {
         const info = statSync(join(paths.outDir, name));
         if (!info.isFile() || before.get(name) === info.mtimeMs) continue;
-        files.push({ name, path: join(paths.outDir, name), size: info.size, picture: PICTURES.some((ending) => name.toLowerCase().endsWith(ending)) });
+        // A picture the chart check complained about is marked, so it is not shown as if it were fine.
+        const problem = result.text.split('\n').find((line) => line.startsWith(`${CHART_PROBLEM} ${name}: `));
+        files.push({ name, path: join(paths.outDir, name), size: info.size, picture: PICTURES.some((ending) => name.toLowerCase().endsWith(ending)), ...(problem ? { problem: problem.slice(CHART_PROBLEM.length + name.length + 3) } : {}) });
       } catch {
         /* gone */
       }

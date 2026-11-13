@@ -304,6 +304,14 @@ test('the tools, end to end: profile, query with an id, save, change the file, r
   assert.equal(pictures[1].file, join(dir, 'data-output', 'plot.png'));
   const pyId = /^Run (Q\d+)/.exec(ran)[1];
   assert.match(await call('data_python', { code: 'boom' }), /ended with an error[\s\S]*Traceback: boom/);
+  // A chart the check complained about is kept on disk but not put in front of the user.
+  const before = pictures.length;
+  const real = python.execute;
+  python.execute = async () => ({ ok: true, output: 'CHART-PROBLEM tall.png: the drawing is 8 x 28 inches', seconds: 0.3, files: [{ name: 'tall.png', path: join(dir, 'data-output', 'tall.png'), size: 900, picture: true, problem: 'the drawing is 8 x 28 inches but the figure is 10 x 5, so something sits far outside the plot.' }] });
+  const broken = await call('data_python', { code: 'plt.savefig("tall")' });
+  python.execute = real;
+  assert.match(broken, /tall\.png, 900 bytes \(NOT shown to the user: the drawing is 8 x 28 inches[\s\S]*ax\.bar_label[\s\S]*run the program again\)/);
+  assert.equal(pictures.length, before);
   assert.match(await call('data_save_analysis', { name: 'Py', queries: [pyId] }), /is a Python run\. Only SQL queries/);
 
   on = false;
@@ -352,4 +360,15 @@ test('a Python program gets no network, no home folder and one place to write', 
 test('the method names the chart and Python tools and still fits the Modes limit', () => {
   assert.ok(METHOD_NOW.length < 4000, String(METHOD_NOW.length));
   for (const word of ['data_chart', 'data_python', 'data-output', '[Q7]']) assert.ok(METHOD_NOW.includes(word), word);
+});
+
+test('every Python program gets the chart check in front of it', async () => {
+  const { CHART_CHECK, CHART_PROBLEM } = await import('../lib/python.js');
+  const text = CHART_CHECK.join('\n');
+  assert.match(text, /Figure\.savefig = _dsh_checked_savefig/);
+  assert.match(text, /get_tightbbox/);
+  assert.ok(text.includes(`print("${CHART_PROBLEM} %s: `));
+  // Whatever goes wrong inside the check, the program's own save still runs.
+  assert.match(text, /except Exception:\n\s+pass\n\s+return _dsh_savefig\(self, fname, \*args, \*\*kwargs\)/);
+  assert.match(text, /except Exception:\n {4}pass$/);
 });

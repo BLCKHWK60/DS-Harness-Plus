@@ -251,6 +251,10 @@ Details: `addons/dsh-data/README.md`.
 - **What a program may do.** It runs inside macOS's own sandbox: no internet, it can read the conversation's folder and nothing else in your home folder, and it can write only into a folder named `data-output` inside the conversation's folder. Your own files are never changed. Charts it saves there are shown in the chat.
 - **Search on or off.** With the Search and Deep research buttons off, the assistant works from your files alone.
 
+### Since 0.35: broken charts are caught
+
+Sometimes a model writes a chart program that puts a label far outside the plot, and the picture comes out as a tall strip of empty space. Data now checks every chart a Python program saves. A chart with something far outside the plot is not shown to you; the assistant is told what is wrong and to fix it and run again. The assistant is also told to use the built-in chart tool for plain bar, line, area and pie charts, where this mistake cannot happen.
+
 ## Finance
 
 A fourth tab, beside Chat, Cowork and Code, for researching companies, markets and economies. It is research, not advice.
@@ -285,6 +289,39 @@ Details: `addons/dsh-finance/README.md`.
 - The assistant does not claim a named licence, firm or registration. It is an AI model working from what it could fetch, and it can be wrong. Decisions are yours.
 - Off, Finance is as before: research only, and it does not say buy, sell or hold.
 - The Finance instructions cannot be edited in Settings → Modes: Plus writes them back within seconds. The switch is the way to change them.
+
+## Mission
+
+Keeps the assistant inside a conversation's folder, in one of three permission modes, and takes checkpoints of the folder that you can go back to. You switch it on per conversation by typing a command in the chat box. It works in Code, Cowork and Data.
+
+| You type | What it does |
+|---|---|
+| `/mission restricted` | Nothing outside the folder is read or changed, and you are never asked for it. Inside, new files are free; before changing or deleting an existing file it asks you, once per file. |
+| `/mission ask` | The same inside the folder. For anything outside, it has to ask you first. |
+| `/mission auto` | Inside the folder it works without asking. For anything outside, it has to ask you first. |
+| `/mission on` | Switches on the mode chosen in Settings → Mission (Restricted unless you change it). |
+| `/mission off` | Lifts the mode. |
+| `/mission checkpoints` | Lists the checkpoints, numbered. |
+| `/mission back 12` | Puts the folder back as it was at checkpoint 12. This can be undone: the state before going back is a checkpoint too. |
+| `/mission` | Shows what is on and lists these commands. |
+
+The app shows a command's answer as one line. Click the line to open the rest.
+
+**How it keeps its word**
+
+- A question appears as the app's approval card. A yes to a file holds for that file for the rest of the conversation.
+- While a mode is on, the conversation uses the app's **Workspace Write** permission. The app's own sandbox then stops any change outside the folder, whatever a terminal command tries.
+- A checkpoint is taken at the start of every turn and before every terminal command. In Restricted and Ask-Auto, if a command changes or deletes an existing file you have not approved, the file is put back at once and the assistant has to ask.
+
+**Good to know**
+
+- Checkpoints live in a hidden folder named `.dsh-mission` inside your folder and need git (it comes with Apple's command line tools). Your project's own git history is not touched.
+- Files your project ignores (`.gitignore`), and `node_modules`, are not in a checkpoint: they are neither protected nor put back.
+- Reading outside the folder is checked from the text of a command. A script could still read a file elsewhere without naming it. It cannot change one.
+- The approval button says "Allow once". For a file inside the folder, the yes is remembered all the same.
+- **Not built yet:** giving `/mission` a goal that several models work on together. This is the base for it.
+
+Details: `addons/dsh-mission/README.md`.
 
 ## Code map
 

@@ -1,0 +1,8 @@
+- insert:
+    - id: mission
+      name: '@local/dsh-mission'
+      config:
+        # Does nothing until you type /mission in a conversation.
+        enabled: true
+        # The mode /mission on uses: restricted, ask or auto.
+        defaultMode: restricted
