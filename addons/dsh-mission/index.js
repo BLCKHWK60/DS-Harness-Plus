@@ -162,6 +162,16 @@ export function apply(ctx, config) {
     return entry ? { id, entry } : undefined;
   };
 
+  // Other add-ons ask which permission mode a conversation is in ('' when none is on).
+  ctx.effect(() => ctx.provide('mission', Object.freeze({ apiVersion: 1, mode: (agentId) => {
+    try {
+      const agent = (ctx.get('agents')?.list?.() ?? []).find((other) => other.id === agentId);
+      return String(guardOf(agent)?.entry?.mode ?? '');
+    } catch {
+      return '';
+    }
+  } })), 'mission service');
+
   /** Folder -> its checkpoint store. */
   const stores = new Map();
   const pointsOf = (root) => {

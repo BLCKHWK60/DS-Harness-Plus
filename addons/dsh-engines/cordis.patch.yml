@@ -1,0 +1,10 @@
+- insert:
+    - id: engines
+      name: '@local/dsh-engines'
+      config:
+        # Nothing runs until you pick an engine as a Code conversation's model, or start a comparison on the Engines page. Optional:
+        #   opencodePath: <WHERE THE OPENCODE PROGRAM IS>   # empty looks in the usual places
+        #   maxMinutes: 30                                  # longest an outside engine may work on one task
+        #   opencodeModels: [<PROVIDER/MODEL>, ...]         # OpenCode models to offer in the model menu
+        #   applyWhen: review                               # review | new | auto: when an engine's changes go into the project
+        maxMinutes: 30

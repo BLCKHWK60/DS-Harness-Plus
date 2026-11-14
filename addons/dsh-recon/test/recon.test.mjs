@@ -54,15 +54,18 @@ test('content goes to a cloud model only after the user agreed, for that convers
 });
 
 test('a tool runs only in a Recon conversation and only past the model gate', async () => {
-  const state = { enabled: true, recon: true, gate: { ok: true, why: '' } };
+  const state = { enabled: true, recon: true, room: true, gate: { ok: true, why: '' } };
   const onion = { search: async (id, query) => `searched ${id} ${query}`, read: async () => 'read' };
   const sources = { find: () => undefined, list: () => [], cite: () => '' };
-  const tools = buildTools({ enabled: () => state.enabled, inRecon: () => state.recon, gate: () => state.gate, onion, usenet: { groups: async () => 'g', search: async () => 's', read: async (id, args) => `article ${args.messageId}` }, sources, idOf: () => 'c1' });
+  const tools = buildTools({ enabled: () => state.enabled, inRecon: () => state.recon, inRoom: () => state.room, gate: () => state.gate, onion, usenet: { groups: async () => 'g', search: async () => 's', read: async (id, args) => `article ${args.messageId}` }, sources, idOf: () => 'c1' });
   assert.deepEqual(tools.map((tool) => tool.name), TOOLS);
   const run = async () => (await tools[0].execute({ query: 'x' }, {})).text;
   assert.equal(await run(), 'searched c1 x');
   assert.equal((await tools.find((tool) => tool.name === 'recon_usenet_read').execute({ group: 'a', messageId: '<b>' }, {})).text, 'article <b>');
   assert.match((await tools.find((tool) => tool.name === 'recon_cite').execute({ source: 'S1' }, {})).text, /Nothing was read/);
+  state.room = false;
+  assert.match(await run(), /runs in a folder of the user's, so its tools are off/);
+  state.room = true;
   state.gate = { ok: false, why: 'not agreed' };
   assert.equal(await run(), 'not agreed');
   state.recon = false;

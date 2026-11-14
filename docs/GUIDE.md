@@ -179,6 +179,7 @@ Where a row says "configuration file": that add-on has no settings page. Open **
 | `/arena` | Model arena |
 | `/bench` | Benchmark |
 | `/codemap` | Code map |
+| `/engine` | Engines |
 | `/evolve` | Self-improvement |
 | `/learn` | Learning |
 | `/mission` | Mission |
@@ -850,6 +851,22 @@ Keeps your Plus settings in one file in a folder you choose, such as iCloud Driv
 - **After install:** on
 - **Details:** `addons/dsh-shared-settings/README.md`
 
+### Engines
+
+Engines: use an outside coding engine (OpenCode first) in Code mode instead of dsh, picked like a model, working in a locked copy of the project; and compare an engine with dsh on the same task, side by side.
+
+- **Where:** sidebar; `/engine` in the chat box
+- **After install:** on
+- **Tools the assistant gets:** `engine`
+- **Details:** `addons/dsh-engines/README.md`
+
+| Setting | Starts as | What it does |
+|---|---|---|
+| `opencodePath` | `''` | Where the OpenCode program is. Empty looks in the usual places. Plus does not install it. |
+| `maxMinutes` | `30` | The longest an outside engine may work on one task, in minutes. |
+| `opencodeModels` | `[]` | Models of OpenCode to offer in the model menu, as OpenCode names them (provider/model). Its own default is always offered. |
+| `applyWhen` | `'review'` | When an engine's changes are put into the project, in a conversation where no Mission mode is on. `review`: nothing until you type /engine apply. `new`: new files at once; changed and deleted files wait for /engine apply. `auto`: everything at once, and /engin |
+
 ### Recon
 
 An isolated Recon mode and tab for research on .onion sites and Usenet text newsgroups. This version is the isolation frame; it has no network access yet.
@@ -867,4 +884,5 @@ An isolated Recon mode and tab for research on .onion sites and Usenet text news
 | `engineHost` | `''` | That other engine's .onion name (the 56 characters and ".onion"). Used only while `otherEngine` is on. |
 | `usenetRoute` | `'off'` | How Usenet is reached. `off`: not at all. `direct`: an encrypted connection straight to the news server, which sees your address and knows your account. |
 | `usenetHost` | `''` | The news server's name, as your Usenet provider gives it. The login is not kept here: it is in the macOS Keychain. |
+| `exportFolder` | `''` | Where `/recon export` writes its files. Empty uses the folder `recon/exports` in the app's home. |
 | `usenetPort` | `563` | The news server's port for encrypted connections. |

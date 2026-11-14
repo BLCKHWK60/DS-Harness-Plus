@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Engines",
+    "description": "Engines: use an outside coding engine (OpenCode first) in Code mode instead of dsh, picked like a model, working in a locked copy of the project; and compare an engine with dsh on the same task, side by side."
+  }
+}

@@ -202,6 +202,14 @@ window.__ModuleLoader__.load({
             h('div', { className: 'dsh-rc-rowdesc' }, 'To remove it:'),
             h('div', { className: 'dsh-rc-sql' }, usenet.removeCommand ?? ''))),
 
+        h('div', { className: 'dsh-rc-group' }, 'Export, and End and wipe'),
+        h('ul', { className: 'dsh-rc-list' },
+          item(`/recon export writes one text file with the research log, every source with its citation and text, and the assistant's notes. Everything from sources and from the assistant is quoted and marked as untrusted, so it cannot act as instructions if you give the file to another tab. Exports go to: ${data.exportFolder ?? ''}`),
+          item('/recon end ends a conversation for good: what it read is forgotten, Tor is stopped and its folder deleted, the conversation is closed and its files are deleted. They do not go to the trash. An open conversation is held by the app, so its files go as soon as the app lets go, at the latest at the next start.'),
+          item(data.waitingToWipe > 0 ? `Waiting to be deleted: ${data.waitingToWipe} ended conversation${data.waitingToWipe === 1 ? '' : 's'}.` : 'No ended conversation is waiting to be deleted.'),
+          item('Export first if you want to keep anything: what Recon reads is held in memory only, and is gone when the app is closed.'),
+          item(`Every Recon conversation runs in Recon's own empty folder (${data.room ?? ''}), not in a folder of yours, so the model is told no path of yours. Start one with the New button in the Recon tab. A Recon conversation in another folder has its tools switched off.`)),
+
         h('div', { className: 'dsh-rc-group' }, 'What a Recon conversation has'),
         h('ul', { className: 'dsh-rc-list' },
           item(`Only these tools: ${(data.tools ?? []).join(', ')}.`),
@@ -227,10 +235,10 @@ window.__ModuleLoader__.load({
 
         h('div', { className: 'dsh-rc-group' }, 'Good to know'),
         h('ul', { className: 'dsh-rc-list' },
-          item('The app keeps a Recon conversation on disk like any other, and writes its title with the model set for titles.'),
+          item('Until you end it with /recon end, the app keeps a Recon conversation on disk like any other, and writes its title with the model set for titles.'),
           item('Plugins from other makers are not covered by the isolation. Plus\'s own add-ons are.'),
           item('Usenet: text newsgroups only. Groups that hold files are never listed or opened, file postings are skipped, and an article that carries a file is refused before its text is fetched. Usenet has no full-text search: subject, author and date are matched.'),
-          item('Not built yet: WireGuard, the export, saved searches, and "End and wipe".')));
+          item('Not built yet: WireGuard and saved searches.')));
     }
 
     return {

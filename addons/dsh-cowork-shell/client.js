@@ -1932,8 +1932,32 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     /** The New button: on the Chat tab it always starts in the app's default workspace, when there is one. */
+    /**
+     * A new conversation of an isolated tab that has a folder of its own (Recon): it starts in that
+     * folder, never in one of the user's, so the model is told no path of theirs. The add-on names
+     * its folder at `<tab id>/state` as `room`. Falls back to the usual start when it has none.
+     */
+    async function startInRoom(appCtx, library, tabId) {
+      const response = await fetch(new URL(`dsh-${tabId}/state`, document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
+      const room = response.ok ? String((await response.json()).room ?? '') : '';
+      if (!room) return false;
+      const same = (path) => String(path ?? '').replace(/^\/private(?=\/tmp\/)/, '').replace(/\/+$/, '') === room.replace(/^\/private(?=\/tmp\/)/, '').replace(/\/+$/, '');
+      let ws = (library.get().workspaces ?? []).find((entry) => entry && same(entry.path));
+      if (!ws) {
+        ws = await appCtx.get('workspaces').create({ path: room });
+        try { await appCtx.get('workspaces').rename(ws.workspaceId, 'Recon room'); } catch { /* the folder's own name is fine */ }
+      }
+      if (!ws?.workspaceId) return false;
+      appCtx.uiWorkspace.startSession(ws.workspaceId);
+      return true;
+    }
+
     function startNew(appCtx, library, tabId) {
       try { appCtx.layout.selectPanel(null); } catch { /* already on the conversation */ }
+      if (tabId === 'recon') {
+        startInRoom(appCtx, library, tabId).then((done) => { if (!done) appCtx.uiWorkspace.startSession(undefined); }, () => appCtx.uiWorkspace.startSession(undefined));
+        return;
+      }
       let home = null;
       if (tabId === 'chat') { try { home = defaultWorkspace(library.get().workspaces); } catch { home = null; } }
       appCtx.uiWorkspace.startSession(home ? home.workspaceId : undefined);

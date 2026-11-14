@@ -13,7 +13,7 @@ export function openSources() {
   const all = new Map();
   const of = (id) => {
     const key = String(id);
-    if (!all.has(key)) all.set(key, { sources: [], log: [], dropped: 0, fetches: 0 });
+    if (!all.has(key)) all.set(key, { sources: [], log: [], notes: [], dropped: 0, fetches: 0 });
     return all.get(key);
   };
   const stamp = (at) => new Date(at).toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -73,6 +73,17 @@ export function openSources() {
       if (entry.log.length === 0) return 'Nothing was searched or read in this conversation yet.';
       return [...entry.log.map((line) => `${stamp(line.at)}  ${line.kind}: ${line.detail}`), entry.dropped > 0 ? `Left out by the filters: ${entry.dropped} (not kept, not opened).` : ''].filter(Boolean).join('\n');
     },
+    /** Keep something the assistant wrote in this conversation, for the export. */
+    say(id, text, at = Date.now()) {
+      const entry = of(id);
+      const body = String(text ?? '').trim();
+      if (body && entry.notes.length < 400) entry.notes.push({ at, text: body.slice(0, 60_000) });
+    },
+    notes: (id) => [...of(id).notes],
+    /** @returns {object[]} every source with its text, in the order read. */
+    full: (id) => [...of(id).sources],
+    /** @returns {boolean} whether anything is kept for the conversation. */
+    known: (id) => all.has(String(id)),
     list: (id) => of(id).sources.map((source) => ({ n: source.n, kind: source.kind, url: source.url, title: source.title, retrieved: source.retrieved })),
     forget: (id) => all.delete(String(id)),
   };

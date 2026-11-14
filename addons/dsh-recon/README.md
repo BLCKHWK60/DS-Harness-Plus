@@ -4,9 +4,9 @@ An isolated mode and tab for research on .onion sites and Usenet text newsgroups
 finding and citing sources, open-source intelligence, threat intelligence, and Usenet's text
 archives. It is not a browser.
 
-**This version is steps 1 to 4 of 7.** It searches and reads .onion sites through Tor and Usenet
-text newsgroups through your news server, as text only, behind the filters, with citations and a
-research log. WireGuard, the export, saved searches and "End and wipe" are later steps.
+**This version is steps 1 to 4 and 6 of 7.** It searches and reads .onion sites through Tor and
+Usenet text newsgroups through your news server, as text only, behind the filters, with citations,
+a research log, an export, and "End and wipe". WireGuard and saved searches are later steps.
 
 You need the `tor` program: `brew install tor`. Plus does not install it.
 
@@ -56,6 +56,44 @@ Off until you switch it on at **Settings → Recon**. Needs the Modes add-on and
 - **Research log:** `/recon log` lists every search and every source, in order, with times.
 - **Limits:** 400 requests per conversation; a page's first 1.5 MB; 12,000 characters per part.
 - **`/recon stop`** stops Tor and deletes its temporary folder.
+
+## Recon's own folder
+
+Every Recon conversation runs in one empty folder, `/private/tmp/dsh-recon-room`, not in a folder
+of yours. The app tells a model the path of its conversation's folder; this one is outside your
+home and says nothing about you. It is emptied whenever Recon starts.
+
+- **Start a Recon conversation with the New button in the Recon tab.** It opens in that folder,
+  shown as the project "Recon room".
+- A Recon conversation in any other folder has its tools switched off, and says why.
+
+## Export
+
+`/recon export` writes one text file: the research log, every source with its citation and its
+text, and what the assistant wrote.
+
+- **Made so that it cannot act as instructions.** A notice at the top says what the file is.
+  Everything from a source, and everything the assistant wrote from it, is quoted (each line
+  begins with `> `) between marks, and marks inside the material are taken out so nothing can
+  close a block early. Only the citations and the log, which Recon writes itself, stand outside.
+- **Where:** the folder `recon/exports` in the app's home, or the folder set as `exportFolder`.
+  The command shows the file's path. Files are readable by you alone.
+- **Export before you close the app.** What Recon reads is kept in memory only.
+- The marks protect only as long as they stay in. Another tab or tool that is given the file
+  still has to respect them; Recon cannot make it.
+
+## End and wipe
+
+`/recon end` ends a conversation for good:
+
+- what it read (sources, notes, shown addresses, a cloud agreement) is forgotten;
+- Tor is stopped and its temporary folder deleted;
+- the conversation is closed and taken off the list;
+- its files are deleted. They do not go to the trash.
+
+The app holds an open conversation in memory, so its files are deleted as soon as the app lets go
+of it, at the latest when the app next starts. Until then only its id is kept on a list
+(`recon/wipe.json`). An export made earlier is yours to delete.
 
 ## Usenet
 
@@ -114,24 +152,27 @@ provider.
 | Connect to Usenet (`usenetRoute`) | off | `direct`: an encrypted connection straight to the news server. |
 | News server (`usenetHost`) | empty | The server name your provider gives you. |
 | `usenetPort` | 563 | The server's port for encrypted connections. Only in the configuration file. |
+| `exportFolder` | empty | Where `/recon export` writes. Empty uses `recon/exports` in the app's home. Only in the configuration file. |
 
 ## What it does not do yet
 
-- **No WireGuard, export, saved searches or "End and wipe":** later steps.
-- **What was read stays in memory** until the app is closed, and in the conversation on disk.
-- **The blocklist file** (`recon/blocklist.json` in the app's home, fingerprints only) is the one
-  thing Recon writes to disk.
-- **The app still tells the model three things:** the conversation's folder path, the app's own
-  install path and its local address. Use a folder whose name says nothing.
+- **No WireGuard or saved searches:** later steps.
+- **What was read stays in memory** until the app is closed or the conversation is ended, and in
+  the conversation on disk until it is ended.
+- **What Recon writes to disk:** the blocklist (`recon/blocklist.json`, fingerprints only), the
+  list of ended conversations waiting to be deleted (`recon/wipe.json`, ids only), and the exports
+  you ask for.
+- **The app still tells the model two things:** the app's own install path and its local address.
+  The folder path it is told is Recon's own.
 - **The app's base text** still names tools the conversation does not have (workflows, MCP
   servers). They cannot be called.
-- **The conversation is kept on disk** like any other, and its title is written by the model set
-  for titles.
+- **Until it is ended, the conversation is kept on disk** like any other, and its title is written
+  by the model set for titles.
 - **Plugins from other makers** are not covered by the isolation.
 
 ## Tested
 
-- **Unit tests (9):** the mode, where a model runs, the agreement for cloud models, the tool gate.
+- **Unit tests (9, plus the 3 below):** the mode, where a model runs, the agreement for cloud models, the tool gate.
 - **Lab run with a stand-in model**, reading exactly what the model was sent:
   the tool list is the six tools; project `AGENTS.md` and Memory do not arrive; a shell call is
   refused; a Cowork conversation is not offered the tools; a conversation moved in or out is locked.
@@ -150,8 +191,13 @@ provider.
   article is read, fenced and cited; a zip is refused from its headers with no body asked for; a
   yEnc body is refused; the login reaches the server and appears in no message or log; without a
   route, a server or a login nothing is sent.
+- **Export and wipe tests (3):** nothing from a source or the model stands outside a quoted block,
+  and material cannot close its own block; an export is a new file readable by the user alone; a
+  wipe deletes a conversation's own folder and refuses any other folder.
 - **Lab run in the app with a stand-in model:** search, read, `/recon log`, `/recon`; the Usenet
-  settings and page.
+  settings and page; the New button opens a conversation in Recon's folder and the model is told
+  that path and none of the user's; `/recon export`; `/recon end`, after which a restart left no
+  file of the conversation, in the conversations folder or in the trash.
 - **Run by the owner on the real Tor network (2026-11-14, tor 0.4.9.17, a local model):** Tor
   connected, the blocklist was fetched, a search on Ahmia returned 20 results, and a page was
   read and cited with its source number.

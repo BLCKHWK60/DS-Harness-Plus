@@ -3,7 +3,9 @@
  *
  * Steps 1 to 3 of 7: the isolation frame, the connection layer, and searching and reading
  * .onion sites behind the filters, with citations and a research log; and step 4, Usenet text
- * newsgroups (lib/usenet.js; the login is in the macOS Keychain, lib/keychain.js).
+ * newsgroups (lib/usenet.js; the login is in the macOS Keychain, lib/keychain.js); and step 6: the
+ * export (lib/export.js), the throwaway folder all Recon conversations run in (ROOM), and End and
+ * wipe (lib/wipe.js).
  * The isolation:
  *   - the mode is marked isolated, so the Modes add-on gives its conversations exactly the six
  *     recon tools, no programs, no helpers, no web search, and never lets them change mode;
@@ -18,10 +20,12 @@
  * Route: `GET/POST /dsh-recon/state`.
  */
 import z from '@deepseek-ai/schemastery';
-import { join } from 'node:path';
+import { chmodSync, existsSync, mkdirSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { onionAddressesIn, openTrail } from './lib/address.js';
 import { MODE_ID, TOOLS, withRecon } from './lib/mode.js';
 import { mayReceive, openConsent, providerPlace, staysHome } from './lib/model.js';
+import { exportText, writeExport } from './lib/export.js';
 import { openForward } from './lib/forward.js';
 import { login, loginName, REMOVE_COMMAND, STORE_COMMAND } from './lib/keychain.js';
 import { AHMIA, createOnion } from './lib/onion.js';
@@ -30,6 +34,7 @@ import { openBlocklist } from './lib/screen.js';
 import { openSources } from './lib/sources.js';
 import { buildTools } from './lib/tools.js';
 import { createUsenet } from './lib/usenet.js';
+import { openWipeList, wipeFiles } from './lib/wipe.js';
 import { createTor, findTor, torVersion } from './lib/tor.js';
 
 export const name = 'dsh-recon';
@@ -37,6 +42,11 @@ export const name = 'dsh-recon';
 /** `GET` gives the page its data; `POST {action: 'tor-test'}` starts Tor once to see that it connects, then stops it. */
 export const STATE_PATH = '/dsh-recon/state';
 const MODES_NS = 'modes';
+/**
+ * The folder every Recon conversation runs in. The app tells a model the path of its conversation's
+ * folder, so this one is outside the user's home and says nothing about them. It is kept empty.
+ */
+export const ROOM = '/private/tmp/dsh-recon-room';
 
 export const Config = z.object({
   /** The Recon mode and tab. Off leaves nothing of it in the app. */
@@ -57,6 +67,8 @@ export const Config = z.object({
   usenetRoute: z.union([z.const('off'), z.const('direct')]).default('off').volatile(),
   /** The news server's name, as your Usenet provider gives it. The login is not kept here: it is in the macOS Keychain. */
   usenetHost: z.string().default('').volatile(),
+  /** Where `/recon export` writes its files. Empty uses the folder `recon/exports` in the app's home. */
+  exportFolder: z.string().default('').volatile(),
   /** The news server's port for encrypted connections. */
   usenetPort: z.natural().default(563).volatile(),
 });
@@ -112,6 +124,28 @@ export function apply(ctx, config) {
       if (!wasReady) await tor.stop();
     }
   };
+
+  /** Make sure the room is there, belongs to the user alone, and is empty. */
+  const prepareRoom = () => {
+    try {
+      mkdirSync(ROOM, { recursive: true, mode: 0o700 });
+      chmodSync(ROOM, 0o700);
+      for (const name of readdirSync(ROOM)) rmSync(join(ROOM, name), { recursive: true, force: true });
+    } catch (error) {
+      warn(`could not prepare the Recon folder: ${String(error?.message ?? error)}`);
+    }
+  };
+  prepareRoom();
+  const sameFolder = (path) => {
+    if (!path) return false;
+    try {
+      return realpathSync(String(path)) === realpathSync(ROOM);
+    } catch {
+      return false;
+    }
+  };
+  /** Whether a conversation runs in the room. */
+  const inRoom = (agent) => sameFolder((agent?.header ?? agent?.session?.header)?.cwd);
 
   const settingsOf = (ns) => {
     try {
@@ -189,7 +223,7 @@ export function apply(ctx, config) {
     if (on && !toolsOff) {
       const tools = ctx.get('tools');
       if (!tools?.register) return;
-      toolsOff = buildTools({ enabled, inRecon: (exec) => inRecon(exec?.agent), gate: (exec) => gate(exec?.agent), onion, usenet, sources, idOf: (exec) => String(exec?.agent?.id ?? '') }).map((tool) => tools.register(tool));
+      toolsOff = buildTools({ enabled, inRecon: (exec) => inRecon(exec?.agent), inRoom: (exec) => inRoom(exec?.agent), gate: (exec) => gate(exec?.agent), onion, usenet, sources, idOf: (exec) => String(exec?.agent?.id ?? '') }).map((tool) => tools.register(tool));
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
       toolsOff = undefined;
@@ -199,6 +233,7 @@ export function apply(ctx, config) {
   const follow = () => {
     void syncMode();
     try {
+      if (!existsSync(ROOM)) prepareRoom();
       syncTools();
     } catch (error) {
       warn(`could not update the tools: ${String(error?.message ?? error)}`);
@@ -213,6 +248,17 @@ export function apply(ctx, config) {
     toolsOff = undefined;
   }, 'recon: follow the switch');
   ctx.on('agent/disposed', ({ agent }) => consent.forget(agent?.id));
+  // What the assistant writes in a Recon conversation is kept for the export.
+  ctx.on('session/event', (session, event) => {
+    try {
+      if (event?.type !== 'assistant/message' || !session?.id || !inRecon({ id: session.id })) return;
+      const content = event.data?.message?.content;
+      const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map((block) => (block?.type === 'text' ? block.text : '')).join('\n') : '';
+      if (text.trim()) sources.say(session.id, text);
+    } catch (error) {
+      warn(`could not keep an answer for the export: ${String(error?.message ?? error)}`);
+    }
+  });
   // An address the user writes is one the conversation may open.
   ctx.on('session/event', (session, event) => {
     try {
@@ -237,6 +283,7 @@ export function apply(ctx, config) {
     const allowed = gate(agent);
     return [
       'Recon conversation: isolated.',
+      inRoom(agent) ? 'Folder: Recon\'s own empty folder. The model is told no path of yours.' : 'Folder: a folder of yours, so the tools are OFF in this conversation. Start a new one with the New button in the Recon tab.',
       `Tools: only ${TOOLS.join(', ')}. No programs, files, memory, helpers or other modes.`,
       `Model: ${model}${where ? `, ${where}` : ''}.`,
       allowed.ok ? (staysHome(place) ? 'What Recon finds stays on your own machines.' : 'You agreed that what Recon finds goes to this cloud model, for this conversation.') : 'What Recon finds is NOT sent to this model. Type /recon cloud to agree for this conversation, or pick a local model.',
@@ -245,13 +292,85 @@ export function apply(ctx, config) {
       `Read so far: ${sources.list(agent.id).length} sources. /recon log shows every search and source.`,
     ].join('\n');
   };
+  // ---- export, and End and wipe ------------------------------------------------------------------
+
+  const exportFolder = () => String(plain(config?.exportFolder) ?? '').trim() || (typeof home === 'function' ? home('recon', 'exports') : join(ROOM, '..', 'dsh-recon-exports'));
+  const wipeList = openWipeList(typeof home === 'function' ? join(home('recon'), 'wipe.json') : '');
+  /** Set once the app's conversation services are there. */
+  let wiper;
+  /**
+   * End a Recon conversation: forget what it read, close it, and delete its files. The app holds an
+   * open conversation in memory, so the files go as soon as it lets go, at the latest at the next start.
+   */
+  const endAndWipe = async (agent) => {
+    const id = String(agent.id);
+    sources.forget(id);
+    trail.forget(id);
+    consent.forget(id);
+    await tor.stop();
+    if (!wiper) return 'What this conversation read is forgotten and Tor is stopped. The conversation itself could not be deleted: this version of the app does not offer what that needs. Archive it yourself, then delete it from the list.';
+    wipeList.add(id);
+    let closed = true;
+    try {
+      await wiper.archive(id);
+    } catch (error) {
+      closed = false;
+      warn(`could not archive ${id}: ${String(error?.message ?? error)}`);
+    }
+    const gone = await wiper.sweep().then(() => !wipeList.has(id), () => false);
+    return [
+      'Ended. What this conversation read is forgotten, and Tor is stopped with its temporary folder deleted.',
+      closed ? 'The conversation is closed and taken off the list.' : 'The conversation could not be taken off the list; archive it yourself.',
+      gone ? 'Its files are deleted. They are not in the trash.' : 'Its files are deleted as soon as the app lets go of it, at the latest when the app next starts. They do not go to the trash.',
+      'An export you made before is kept; delete that file yourself if you do not want it.',
+    ].join('\n');
+  };
+  ctx.inject(['sessionPersistence', 'sessions', 'workspaceRegistry'], (inner) => {
+    const inMemory = (id) => {
+      try {
+        return inner.sessions.get(id) !== undefined;
+      } catch {
+        return true;
+      }
+    };
+    const sweep = async () => {
+      const waiting = wipeList.list();
+      if (waiting.length === 0) return;
+      const stored = await inner.sessionPersistence.list();
+      for (const id of waiting) {
+        try {
+          if (inMemory(id)) continue;
+          const snap = stored.find((entry) => entry.header?.id === id);
+          if (!snap) {
+            wipeList.done(id);
+            continue;
+          }
+          if (snap.location?.kind !== 'jsonl' || typeof snap.location.path !== 'string') throw new Error('it is not stored as files');
+          const folder = dirname(snap.location.path);
+          const done = wipeFiles({ id, folder, cache: typeof home === 'function' ? home('storages', 'session_projcache', 'sessions', `${id}.json`) : '' }, dirname(dirname(folder)));
+          if (done) wipeList.done(id);
+        } catch (error) {
+          warn(`could not delete the ended conversation ${id}: ${String(error?.message ?? error)}`);
+        }
+      }
+    };
+    wiper = { archive: (id) => inner.workspaceRegistry.archiveSession(id, { stopActivity: true }), sweep };
+    void sweep().catch((error) => warn(`could not delete ended conversations: ${String(error?.message ?? error)}`));
+    const again = setInterval(() => void sweep().catch(() => {}), 60_000);
+    again.unref?.();
+    inner.effect(() => () => {
+      clearInterval(again);
+      wiper = undefined;
+    }, 'recon: wipe');
+  });
+
   ctx.inject(['commands'], (inner) => {
     inner.effect(
       () =>
         inner.commands.register({
           name: 'recon',
           description: 'Recon conversation: show its isolation and model, or agree to a cloud model',
-          input: { hint: '[status | cloud | log | stop]' },
+          input: { hint: '[status | cloud | log | export | end | stop]' },
           handler: async ({ agent, rawInput }) => {
             try {
               const word = String(rawInput ?? '').trim().toLowerCase();
@@ -265,11 +384,24 @@ export function apply(ctx, config) {
                 return { kind: 'success', text: `Agreed: what Recon finds in this conversation is sent to ${route.model} (${place.name || route.provider}). This holds for this conversation and this model until the app is closed.` };
               }
               if (word === 'log') return enabled() && inRecon(agent) ? { kind: 'success', text: `Research log of this conversation\n\n${sources.log(agent.id)}` } : { kind: 'error', text: status(agent) };
+              if (word === 'export') {
+                if (!enabled() || !inRecon(agent)) return { kind: 'error', text: status(agent) };
+                const found = sources.full(agent.id);
+                const notes = sources.notes(agent.id);
+                if (found.length === 0 && notes.length === 0) return { kind: 'error', text: 'There is nothing to export: nothing was read in this conversation since the app was started. What Recon reads is kept in memory only.' };
+                const file = writeExport(exportFolder(), exportText({ sources: found, cite: (source) => sources.cite(source), log: sources.log(agent.id), notes }));
+                sources.note(agent.id, 'export', `written (${found.length} sources, ${notes.length} notes)`);
+                return { kind: 'success', text: `Exported ${found.length} sources and ${notes.length} notes to:\n${file}\n\nEverything from sources and from the assistant is quoted and marked as untrusted material in that file. If you give the file to another tab or tool, leave the marks in.` };
+              }
+              if (word === 'end' || word === 'wipe') {
+                if (!inRecon(agent)) return { kind: 'error', text: status(agent) };
+                return { kind: 'success', text: await endAndWipe(agent) };
+              }
               if (word === 'stop') {
                 await tor.stop();
                 return { kind: 'success', text: 'Recon\'s Tor is stopped and its temporary folder deleted. It starts again with the next search or page.' };
               }
-              return { kind: 'error', text: `/recon does not know "${word.slice(0, 40)}". Use /recon, /recon cloud, /recon log or /recon stop.` };
+              return { kind: 'error', text: `/recon does not know "${word.slice(0, 40)}". Use /recon, /recon cloud, /recon log, /recon export, /recon end or /recon stop.` };
             } catch (error) {
               return { kind: 'error', text: String(error?.message ?? error).slice(0, 300) };
             }
@@ -288,7 +420,7 @@ export function apply(ctx, config) {
       if (path) void torVersion(path).then((version) => { if (torSeen.path === path) torSeen = { path, version }; });
     }
     lookForLogin();
-    return { usenet: { route: usenetRoute(), ...usenetServer(), hasLogin, storeCommand: STORE_COMMAND, removeCommand: REMOVE_COMMAND }, at: Date.now(), enabled: enabled(), problem, toolsOn: Boolean(toolsOff), tools: TOOLS, network: true, tor: { ...tor.status(), path, version: torSeen.version, test: torTest }, blocklist: blocklist.info(), engine: { builtIn: AHMIA, other: plain(config?.otherEngine) === true, host: String(plain(config?.engineHost) ?? '') } };
+    return { room: ROOM, exportFolder: exportFolder(), waitingToWipe: wipeList.list().length, usenet: { route: usenetRoute(), ...usenetServer(), hasLogin, storeCommand: STORE_COMMAND, removeCommand: REMOVE_COMMAND }, at: Date.now(), enabled: enabled(), problem, toolsOn: Boolean(toolsOff), tools: TOOLS, network: true, tor: { ...tor.status(), path, version: torSeen.version, test: torTest }, blocklist: blocklist.info(), engine: { builtIn: AHMIA, other: plain(config?.otherEngine) === true, host: String(plain(config?.engineHost) ?? '') } };
   };
   ctx.inject(['webServer', 'connection'], (inner) => {
     inner.effect(

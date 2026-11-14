@@ -7,10 +7,10 @@ import { TOOLS } from './mode.js';
 
 /**
  * @param {object} deps - `enabled()`, `inRecon(exec)` (is this an isolated Recon conversation), `gate(exec)` ({ok, why}),
- *   `onion` (lib/onion.js), `usenet` (lib/usenet.js), `sources` (lib/sources.js), `idOf(exec)` (the conversation's id).
+ *   `inRoom(exec)` (does the conversation run in Recon's throwaway folder), `onion` (lib/onion.js), `usenet` (lib/usenet.js), `sources` (lib/sources.js), `idOf(exec)` (the conversation's id).
  * @returns {object[]} the tool definitions.
  */
-export function buildTools({ enabled, inRecon, gate, onion, usenet, sources, idOf }) {
+export function buildTools({ enabled, inRecon, inRoom, gate, onion, usenet, sources, idOf }) {
   const output = {
     schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
     render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }],
@@ -19,6 +19,7 @@ export function buildTools({ enabled, inRecon, gate, onion, usenet, sources, idO
     try {
       if (!enabled()) return { text: 'Recon is switched off in Settings → Recon.' };
       if (!inRecon(exec)) return { text: 'This tool works only in a conversation of the Recon tab. It was not run.' };
+      if (!inRoom(exec)) return { text: 'This Recon conversation runs in a folder of the user\'s, so its tools are off: the model would be told that folder\'s path. Nothing was sent. Tell the user to start a new conversation with the New button in the Recon tab; it then runs in Recon\'s own empty folder.' };
       const allowed = gate(exec);
       if (!allowed.ok) return { text: allowed.why };
       return { text: await work(args ?? {}, exec) };
