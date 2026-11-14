@@ -14,7 +14,7 @@ Host plugin `@local/dsh-deep-research` (dsh 0.2.2-rc.2). It adds one tool, `deep
 
 ## Depth: Quick, Standard, Thorough
 
-Chosen with the slider behind the small arrow beside the **Deep research** button in the chat box. It is one setting for all conversations (kept by the Modes add-on as `researchDepth`).
+Chosen on the Research tab's start page or in Settings → Research (since 0.54.0; before, with a slider beside a Deep research button in the chat box). It is one setting for all conversations (kept by the Modes add-on as `researchDepth`).
 
 | Depth | Rounds | Helpers at once | Sub-questions | Follow-ups per later round | Findings per helper | Time limit | Sources |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -33,7 +33,7 @@ Chosen with the slider behind the small arrow beside the **Deep research** butto
 
 ## Models
 
-Which model the helpers run on is chosen in the same panel as the depth (the small arrow beside the **Deep research** button), under **Model for the helpers**. It is one setting for all conversations (kept by the Modes add-on as `researchModel`).
+Which model the helpers run on is chosen on the Research tab's start page (**Helpers**) or in Settings → Research (**Model for the helpers**). It is one setting for all conversations (kept by the Modes add-on as `researchModel`).
 
 - **Same as this conversation** (the default since 0.31.2): every helper runs on the model the conversation is on when the research starts.
 - **Role models**: helpers run on the Tier add-on's role models for the conversation's tier (Settings → Model Tiers → Role models): the planner, the reviewer and the writer on `plan`, the searchers on `fast` (configurable `roles`). A role that has no model set uses the conversation's model. This lets a strong model plan and write while a fast one searches.

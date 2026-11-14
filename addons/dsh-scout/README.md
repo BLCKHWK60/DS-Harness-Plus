@@ -19,9 +19,9 @@ Work, place, pay target, work type, and the markets as chips (USA, UK, Germany a
 
 ## Your files and your profile
 
-- **Files** stay in the Scout folder (`scout/files` in the app's home unless you set `folder`). They are read only when the conversation's model runs on your own machines (this computer or your own network). A cloud model gets neither their text nor their names.
-- **The profile** is a short summary without your name, contact details or employer names. Write it in Settings → Scout, or ask Scout with a local model to write it from your files. It goes to a local model without asking; a cloud model gets it only after you type `/scout cloud` in that conversation (until the app is closed). A profile with an email address, a phone number or a LinkedIn profile address is refused.
-- `/scout` shows which model the conversation uses and what it may read.
+- **Files** stay in the Scout folder (`scout/files` in the app's home unless you set `folder`). Scout reads them with whichever model the conversation uses, local or cloud (since 0.51.2; only Recon keeps cloud models out).
+- **The profile** is a short summary: titles, years, skills, languages, pay and what you want. Write it in Settings → Scout, or ask Scout to write it from your files.
+- `/scout` shows which model the conversation uses.
 
 ## Sources
 

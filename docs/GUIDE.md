@@ -246,6 +246,8 @@ Chat, Cowork and Code modes you can switch for each session.
 | `rerunButton` | `true` | A Rerun button under every answer: asks the same question again, with the model now selected, in a fresh copy of the conversation. |
 | `hideFeedback` | `false` | Hide the app's thumbs-up and thumbs-down buttons under answers. |
 | `commandName` | `'mode'` | Name of the slash command that switches modes. |
+| `trimModes` | `['cowork', 'code']` | Modes with all tools that load them as needed: a core set and `tools_find` at first, other families when the model asks for them or the user's message mentions them. |
+| `sessionToolSets` | `'{}'` | Tool families a conversation added, as JSON: `{ sessionId: ['pdf', 'data'] }`. |
 
 ### Mission
 
@@ -895,6 +897,20 @@ An isolated Recon mode and tab for research on .onion sites and Usenet text news
 | `usenetHost` | `''` | The one news server of older versions. Read only, to turn it into the first account. |
 | `exportFolder` | `''` | Where `/recon export` writes its files. Empty uses the folder `recon/exports` in the app's home. |
 | `usenetPort` | `563` | That older server's port. Read only, for the same reason. |
+
+### Research
+
+A Research mode and tab: in-depth research with live progress, cited reports, follow-up questions and saved reports.
+
+- **Where:** Settings → Research; start page of a new conversation; above the chat box
+- **After install:** off until you switch it on
+- **Details:** `addons/dsh-research/README.md`
+
+| Setting | Starts as | What it does |
+|---|---|---|
+| `enabled` | `false` | The Research mode and tab. Off leaves nothing of it in the app. |
+| `focus` | `'web'` | Where a run looks first: web, news or academic. |
+| `folder` | `''` | Where reports are saved. Empty: `research/reports` in the app's home. |
 
 ### Scout
 

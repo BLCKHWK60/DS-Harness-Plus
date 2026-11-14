@@ -9,9 +9,9 @@
  *   - six tools that only Scout conversations get: the source registry, search, posting text,
  *     the user's files, the anonymous profile, and saving the report;
  *   - a guard that stops web_fetch on sources whose terms allow search engine results only;
- *   - `/scout` (status) and `/scout cloud` (agree that the profile may go to a cloud model).
+ *   - `/scout`: which model the conversation uses.
  *
- * The user's files are read for a model on their own machines only. Route: `/dsh-scout/data`.
+ * Scout works with any model, local or cloud (unlike Recon). Route: `/dsh-scout/data`.
  */
 import z from '@deepseek-ai/schemastery';
 import { execFile } from 'node:child_process';
@@ -21,7 +21,7 @@ import { DEFAULT_MARKETS, KINDS, MARKETS, WORK_TYPES, addressProblem, cleanExtra
 import { openPins, readSelection, selectionNote } from './lib/selection.js';
 import { openStore } from './lib/store.js';
 import { openFolder, openProfile } from './lib/private.js';
-import { mayReceive, openConsent, providerPlace, staysHome } from './lib/model.js';
+import { providerPlace, staysHome } from './lib/model.js';
 import { buildTools } from './lib/tools.js';
 
 export const name = 'dsh-scout';
@@ -90,7 +90,6 @@ export function apply(ctx, config) {
   const pins = openPins(scoutHome ? join(scoutHome, 'conversations.json') : '');
   const profile = openProfile(scoutHome ? join(scoutHome, 'profile.md') : '');
   const store = openStore();
-  const consent = openConsent();
   const pdf = async (path, root) => {
     const reader = ctx.get('pdfReader');
     if (typeof reader?.read !== 'function') throw new Error('reading PDFs needs the PDF reader add-on: switch it on in Settings → PDF reader');
@@ -203,15 +202,8 @@ export function apply(ctx, config) {
     }
     return { route, place: providerPlace(settingsOf('llm-pi-ai')?.providers, route?.provider) };
   };
-  const filesRefusal = 'The user\'s files are read only for a model on their own machines (this computer or their own network), and this conversation\'s model is not one. Nothing was read. Work from what the user typed and from the profile; to use the files, the user picks a local model.';
-  const gate = (exec) => {
-    const agent = exec?.agent;
-    const { route, place } = modelOf(agent);
-    return {
-      files: route && staysHome(place) ? { ok: true, why: '' } : { ok: false, why: filesRefusal },
-      profile: mayReceive({ place, route, id: rootOf(agent), consent }),
-    };
-  };
+  // Scout works with any model, local or cloud: the user's files and profile are open to it.
+  const gate = () => ({ files: { ok: true, why: '' }, profile: { ok: true, why: '' } });
   const placeText = (agent) => {
     const { route, place } = modelOf(agent);
     if (!route) return 'not known';
@@ -234,11 +226,9 @@ export function apply(ctx, config) {
               const now = settings();
               if (!now.enabled || !inScout(agent)) return '';
               const root = rootOf(agent);
-              const allowed = gate({ agent });
               const count = currentFolder().list().length;
-              const files = allowed.files.ok ? `${count} file${count === 1 ? '' : 's'} in the Scout folder (scout_files)` : 'not available to this model (it is not on the user\'s own machines)';
-              const kept = profile.read().trim();
-              const profileText = !kept ? 'none yet' : allowed.profile.ok ? 'saved (scout_profile)' : 'saved, but not available to this model until the user types /scout cloud';
+              const files = `${count} file${count === 1 ? '' : 's'} in the Scout folder (scout_files)`;
+              const profileText = profile.read().trim() ? 'saved (scout_profile)' : 'none yet';
               return selectionNote(pins.get(root) ?? now.selection, { files, profile: profileText, model: placeText(agent) });
             } catch {
               return '';
@@ -255,7 +245,6 @@ export function apply(ctx, config) {
   ctx.on('agent/created', ({ agent }) => install(agent));
   ctx.on('agent/disposed', ({ agent }) => {
     sections.delete(agent?.id);
-    consent.forget(agent?.id);
     store.forget(agent?.id);
   });
   try {
@@ -343,11 +332,10 @@ export function apply(ctx, config) {
   const status = (agent) => {
     if (!settings().enabled) return 'Scout is switched off (Settings → Scout).';
     if (!inScout(agent)) return 'This is not a Scout conversation. Start one from the Scout tab.';
-    const allowed = gate({ agent });
     return [
       `Model: ${placeText(agent)}.`,
-      `Your files: ${allowed.files.ok ? 'readable by this model' : 'not readable by this model (only models on your own machines read them)'}.`,
-      `Your profile: ${profile.read().trim() ? (allowed.profile.ok ? 'available to this model' : 'kept from this model; type /scout cloud to agree that it may be sent to it') : 'none yet'}.`,
+      `Your files: ${currentFolder().list().length} in the Scout folder, readable by this model.`,
+      `Your profile: ${profile.read().trim() ? 'saved, available to this model' : 'none yet'}.`,
       `Folder: ${folderPath()}`,
     ].join('\n');
   };
@@ -355,21 +343,14 @@ export function apply(ctx, config) {
     inner.effect(
       () => inner.commands.register({
         name: 'scout',
-        description: 'Scout conversation: show which model reads what, or agree that the profile may go to a cloud model',
-        input: { hint: '[status | cloud]' },
+        description: 'Scout conversation: show which model it uses and what it can read',
+        input: { hint: '[status]' },
         handler: async ({ agent, rawInput }) => {
           try {
             const word = String(rawInput ?? '').trim().toLowerCase();
             if (!word || word === 'status') return { kind: 'success', text: status(agent) };
-            if (word === 'cloud') {
-              if (!settings().enabled || !inScout(agent)) return { kind: 'error', text: status(agent) };
-              const { route, place } = modelOf(agent);
-              if (!route) return { kind: 'error', text: 'Pick a model in the chat box first.' };
-              if (staysHome(place)) return { kind: 'success', text: 'This conversation\'s model runs on your own machines. Nothing to agree to.' };
-              consent.agree(rootOf(agent), route);
-              return { kind: 'success', text: `Agreed: your anonymous profile may be sent to ${route.model} (${place.name || route.provider}) in this conversation, until the app is closed. Your files stay unread by it.` };
-            }
-            return { kind: 'error', text: 'Use /scout or /scout cloud.' };
+            if (word === 'cloud') return { kind: 'success', text: 'Scout works with any model, local or cloud. There is nothing to agree to.' };
+            return { kind: 'error', text: 'Use /scout.' };
           } catch (error) {
             return { kind: 'error', text: String(error?.message ?? error).slice(0, 300) };
           }

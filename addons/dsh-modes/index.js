@@ -11,10 +11,11 @@
  * middle of a turn.
  */
 import z from '@deepseek-ai/schemastery';
-import { maskFor, parentIdOf, rootOf, webDefault } from './lib/mask.js';
+import { RESEARCH_TOOL, goesOnline, maskFor, parentIdOf, rootOf, webDefault, webReaching } from './lib/mask.js';
 import { fromScheduler, scheduledModeId } from './lib/scheduled.js';
 import { PROGRAM_TOOL, programNote, programOnly, SLOW_TOOLS } from './lib/ptc.js';
 import { helpersBelow, onlyStopNotes, stoppedByUser } from './lib/stop.js';
+import { FIND_TOOL, allowed as trimAllowed, catalog as trimCatalog, mentioned, resolveRequest } from './lib/trim.js';
 
 export const name = 'modes';
 /** The chat box asks here which tools the model can call in a conversation (header `x-dsh-session`). */
@@ -68,8 +69,43 @@ const WEB_PROMPT =
 const RESEARCH_PROMPT =
   'Deep research is switched on for this conversation: for questions that need looking things up, use the deep_research tool to research them thoroughly and answer with a cited report. For small talk or follow-ups about an earlier report, answer directly.';
 
+/** Added while a conversation loads its tools as needed. */
+const TRIM_PROMPT =
+  'Tools load as needed in this conversation: only the core tools are offered at first. If a task needs others (PDF, data and charts, finance, diagrams, scheduling, helpers, goals, Library, memory, Mac, code map, learning, missions, connectors, plugins), call tools_find first. Never tell the user a tool is missing before checking with tools_find.';
+
+/** The text of one message, whatever its shape. */
+function textOf(message) {
+  const content = message?.content ?? message?.message?.content;
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) return content.map((part) => (typeof part === 'string' ? part : part?.text ?? '')).join(' ');
+  return '';
+}
+
 /** The three steps of the sliders beside the Search and Deep research buttons. */
 export const DEPTH_IDS = ['quick', 'standard', 'thorough'];
+/**
+ * The Web levels in an isolated mode (Recon), which searches with its own tools: the same levels,
+ * in words that fit any search tool.
+ */
+export const ISOLATED_LEVEL_PROMPTS = {
+  quick: 'Search effort is Quick: one or two searches with your search tools; read only the sources needed to answer; keep it short.',
+  standard: '',
+  thorough: 'Search effort is Thorough: several searches with different wording across the sources you have; read at least five sources; cross-check names, figures and dates between them; cite each source.',
+  deep: 'Search effort is Deep: at least ten searches with different wording across every source you have; read at least ten sources in full; check every key fact in at least two independent sources; say where they disagree; cite each source. Take the time this needs.',
+};
+export const ISOLATED_OFF_PROMPT = 'Searching is switched off for this conversation (Web · Off): your search and reading tools are not available. Work only with what is already in this conversation, and tell the user to switch Web on in the chat box to search.';
+/** The levels of the Web button in the chat box, below Off. */
+export const SEARCH_LEVELS = ['quick', 'standard', 'thorough', 'deep'];
+
+/**
+ * A Web level, checked.
+ * @param {unknown} value - quick, standard, thorough or deep.
+ * @returns {string} the level; standard when unknown.
+ */
+export function searchLevel(value) {
+  const id = String(plain(value) ?? '').toLowerCase();
+  return SEARCH_LEVELS.includes(id) ? id : 'standard';
+}
 /**
  * What the model is told about how hard to search, per step. Standard is how it searches without
  * being told anything, so it adds no words.
@@ -77,6 +113,7 @@ export const DEPTH_IDS = ['quick', 'standard', 'thorough'];
 export const SEARCH_DEPTH_PROMPTS = {
   quick: 'Search depth is set to Quick: when you look something up on the web, one search is usually enough. Answer from the results, and open a page only when the results do not answer the question. Keep it short and name the source.',
   standard: '',
+  deep: 'Web level is Deep: for anything you look up, run at least ten searches with different wording, open and read at least ten pages from different sites with web_fetch (a search result\'s snippet is not a source), cross-check every key fact, figure and date in at least two independent sources, say plainly where sources disagree, and cite each source with its date. Take the time this needs.',
   thorough: 'Search depth is set to Thorough: when you look something up on the web, run several searches with different wording, open at least five pages from different sites and read them (a search result\'s snippet is not a source), prefer primary sources, cross-check figures and dates between sources, say where sources disagree, and cite each source you used with its date.',
 };
 
@@ -123,6 +160,8 @@ export const Config = z.object({
   sessionWeb: z.string().default('{}').volatile(),
   /** Per-session deep-research switch as JSON: `{ sessionId: true }`. While on, the model is told to use `deep_research`. */
   sessionResearch: z.string().default('{}').volatile(),
+  /** Per-session Web level as JSON: `{ sessionId: 'quick' | 'standard' | 'thorough' | 'deep' }`. Missing = `searchDepth`. */
+  sessionSearchDepth: z.string().default('{}').volatile(),
   /** Per-session tools switch as JSON: `{ sessionId: false }`. While off, the model is offered no tool at all. */
   sessionTools: z.string().default('{}').volatile(),
   /** The slider beside the Search button: how hard the model searches. One setting for all conversations. */
@@ -148,6 +187,15 @@ export const Config = z.object({
   hideFeedback: z.boolean().default(false).volatile(),
   /** Name of the slash command that switches modes. */
   commandName: z.string().default('mode'),
+  /**
+   * Modes with all tools that load them as needed: a core set and `tools_find` at first, other
+   * families when the model asks for them or the user's message mentions them.
+   */
+  trimModes: z.array(z.string()).default(['cowork', 'code']).volatile(),
+  /** Tool families a conversation added, as JSON: `{ sessionId: ['pdf', 'data'] }`. */
+  sessionToolSets: z.string().default('{}').volatile(),
+  /** Done once (0.55.1): old "Search off" marks cleared where Web Off would now block a tab's own search tools. */
+  webMarksCleared: z.boolean().default(false).volatile(),
 });
 
 /**
@@ -439,18 +487,99 @@ export function apply(ctx, config) {
    * @returns {{allow?: string[], deny?: string[]} | null} mask, or null for no restriction.
    */
   function toolMask(sessionId, mode) {
+    if (trimmed(sessionId, mode)) {
+      const listed = trimAllowed(knownTools(sessionId), addedOf(sessionId));
+      const trimmedMask = maskFor({ tools: listed, web: webOn(sessionId, mode), research: researchOn(sessionId), off: false, child: topOf(sessionId) !== sessionId, offline: webReaching(knownTools(sessionId)) });
+      const fencedOut = isolatedTools();
+      return { allow: trimmedMask.allow.filter((name) => !fencedOut.includes(name)) };
+    }
     // Names are not filtered against a visible list: in this dsh version many tools (web_fetch,
     // read, grep...) come from the Agent's preset and are not listed to plugins, yet a restriction
     // can name them. Names the app refuses are dropped when the mask is applied (applyTools).
     // An isolated mode: its own list, to the letter. No web search, no Deep research, nothing for helpers.
-    if (mode.isolated) return { allow: toolsOff(sessionId) || topOf(sessionId) !== sessionId || !Array.isArray(mode.tools) ? [] : [...mode.tools] };
-    const mask = maskFor({ tools: mode.tools, web: webOn(sessionId, mode), research: researchOn(sessionId), off: toolsOff(sessionId), child: topOf(sessionId) !== sessionId });
+    if (mode.isolated) {
+      if (toolsOff(sessionId) || topOf(sessionId) !== sessionId || !Array.isArray(mode.tools)) return { allow: [] };
+      // Web Off in an isolated mode: its own tools that go online are not offered.
+      const online = isolatedWebOff(sessionId) ? webReaching(mode.tools) : [];
+      return { allow: mode.tools.filter((name) => !online.includes(name)) };
+    }
+    const mask = maskFor({ tools: mode.tools, web: webOn(sessionId, mode), research: researchOn(sessionId), off: toolsOff(sessionId), child: topOf(sessionId) !== sessionId, offline: webReaching(knownTools(sessionId)) });
     // The tools of an isolated mode belong to that mode alone: no other conversation is offered them.
     const fenced = isolatedTools();
     if (fenced.length === 0) return mask;
     if (!mask) return { deny: fenced };
     if (mask.deny) return { deny: [...new Set([...mask.deny, ...fenced])] };
     return { allow: mask.allow.filter((name) => !fenced.includes(name)) };
+  }
+
+  /** @returns {boolean} whether a conversation loads its tools as needed. A helper follows its conversation. */
+  function trimmed(sessionId, mode) {
+    if (!mode || mode.isolated || mode.tools !== 'all' || toolsOff(sessionId)) return false;
+    const list = plain(config.trimModes);
+    return Array.isArray(list) && list.includes(mode.id);
+  }
+  /** Families and single tools added per conversation, before Settings has stored them. */
+  const addedSeen = new Map();
+  /** @returns {string[]} what a conversation added. */
+  function addedOf(sessionId) {
+    const top = topOf(sessionId);
+    const stored = readObject(config.sessionToolSets)[top];
+    return [...new Set([...(Array.isArray(stored) ? stored : []), ...(addedSeen.get(top) ?? [])])];
+  }
+  let addChain = Promise.resolve();
+  /** Add families or tools to a conversation, for good. @returns {string[]} what was new. */
+  function addTools(sessionId, entries) {
+    const top = topOf(sessionId);
+    const have = addedOf(top);
+    const fresh = entries.filter((entry) => entry && !have.includes(entry));
+    if (fresh.length === 0) return [];
+    addedSeen.set(top, [...(addedSeen.get(top) ?? []), ...fresh]);
+    addChain = addChain.then(async () => {
+      try {
+        const settings = ctx.get('settings');
+        if (!settings) return;
+        const next = { ...readObject(config.sessionToolSets), [top]: addedOf(top) };
+        await settings.mutate('modes', [{ op: 'set', path: ['sessionToolSets'], value: JSON.stringify(next) }]);
+      } catch (error) {
+        ctx.logger.warn(`modes: tools added to ${top} not stored (${error?.message ?? error}); kept in memory`);
+      }
+    });
+    return fresh;
+  }
+  /** @returns {string[]} every tool the app knows for an agent, before restrictions. */
+  function knownTools(sessionId) {
+    try {
+      const agent = ctx.get('agents')?.get?.(sessionId);
+      const names = ctx.tools.view(agent).knownNames;
+      if (names && names.size > 0) return [...names];
+    } catch {
+      // fall back to the tools plugins can see
+    }
+    return globalToolNames();
+  }
+  /** Put the tool mask on again now, when it no longer matches (a family was added). */
+  function refreshTools(agent) {
+    const state = applied.get(agent?.id);
+    if (!state) return;
+    const mode = modeOf(agent.id);
+    if (state.maskKey === JSON.stringify(toolMask(agent.id, mode))) return;
+    applyTools(agent, state, mode);
+  }
+
+  /**
+   * Before a turn's first step: families the user's waiting message names are added, so the model
+   * has them from its first step.
+   * @param {object} agent - live Agent.
+   */
+  function wordsAddTools(agent) {
+    try {
+      if (!agent?.id || topOf(agent.id) !== agent.id || !trimmed(agent.id, modeOf(agent.id))) return;
+      const waiting = [...(agent.inbox?.nextTurn ?? []), ...(agent.inbox?.nextStep ?? [])];
+      const said = waiting.filter((message) => message?.role === 'user' && message?.source?.kind !== 'runtime-context').map((message) => textOf(message)).join('\n');
+      if (addTools(agent.id, mentioned(said)).length > 0) refreshTools(agent);
+    } catch (error) {
+      ctx.logger.warn(`modes: could not read which tools a message needs: ${error?.message ?? error}`);
+    }
   }
 
   /** @returns {string[]} every tool that an isolated mode lists. */
@@ -466,13 +595,28 @@ export function apply(ctx, config) {
   /** @returns {boolean} whether web tools are on for the Session (explicit switch, else the mode's default). */
   function webOn(sessionId, mode) {
     if (toolsOff(sessionId) || mode?.isolated) return false;
+    // The Research tab always researches with the web; it has no Web button to change it with.
+    if (Array.isArray(mode?.tools) && mode.tools.includes(RESEARCH_TOOL)) return true;
     const chosen = readObject(config.sessionWeb)[topOf(sessionId)];
     return typeof chosen === 'boolean' ? chosen : webDefault(mode.tools);
   }
 
-  /** @returns {boolean} whether the Deep research switch is on for the Session. */
+  /** @returns {boolean} whether an isolated conversation's Web button is on Off (its own searching is then off). */
+  function isolatedWebOff(sessionId) {
+    return readObject(config.sessionWeb)[topOf(sessionId)] === false;
+  }
+
+  /** @returns {string} a conversation's Web level (below Off): its own, else the one new conversations start with. */
+  function levelOf(sessionId) {
+    return searchLevel(readObject(config.sessionSearchDepth)[topOf(sessionId)] ?? config.searchDepth);
+  }
+
+  /** @returns {boolean} whether the conversation is a research one (the Research tab): its helpers search. */
   function researchOn(sessionId) {
-    return !toolsOff(sessionId) && !isIsolated(sessionId) && readObject(config.sessionResearch)[topOf(sessionId)] === true;
+    // A research conversation is one whose mode lists the research tool (the Research tab). The old
+    // per-conversation Deep research switch (`sessionResearch`) is no longer offered or read.
+    const mode = modeOf(topOf(sessionId));
+    return !toolsOff(sessionId) && !mode?.isolated && Array.isArray(mode?.tools) && mode.tools.includes(RESEARCH_TOOL);
   }
 
   /**
@@ -568,6 +712,27 @@ export function apply(ctx, config) {
       }),
     'modes: no programs without tools',
   );
+  // Web off: the app's shell sandbox limits file writing only, not the network, so a shell command
+  // that goes online (curl, a web address, fetching code, an install) is stopped here.
+  const SHELL_TOOLS = new Set(['bash', 'shell', 'pwsh', 'powershell']);
+  ctx.effect(
+    () =>
+      ctx.tools.guard((exec) => {
+        try {
+          const id = exec?.agent?.id;
+          if (!id || !SHELL_TOOLS.has(exec?.name)) return undefined;
+          const mode = modeOf(id);
+          if (mode?.isolated || webOn(id, mode)) return undefined;
+          const args = exec.arguments ?? {};
+          const command = typeof args === 'string' ? args : args.command ?? args.cmd ?? args.script ?? '';
+          if (!goesOnline(command)) return undefined;
+          return 'web access is Off in this conversation, so commands that go online (curl, wget, web addresses, downloads, installs, code that fetches) are not run. Answer without the web, or ask the user to switch Web on in the chat box.';
+        } catch {
+          return undefined;
+        }
+      }),
+    'modes: no network from the shell while the web is off',
+  );
   // An isolated conversation runs a tool only when its mode lists it, whatever else is on offer:
   // no programs, no helpers, nothing of another add-on. A second lock behind the tool mask.
   ctx.effect(
@@ -578,7 +743,7 @@ export function apply(ctx, config) {
           if (!id) return undefined;
           const mode = modeOf(id);
           if (!mode?.isolated) return undefined;
-          if (topOf(id) === id && Array.isArray(mode.tools) && mode.tools.includes(exec.name) && !toolsOff(id)) return undefined;
+          if (topOf(id) === id && Array.isArray(mode.tools) && mode.tools.includes(exec.name) && !toolsOff(id) && !(isolatedWebOff(id) && webReaching([exec.name]).length > 0)) return undefined;
           return `the tool ${exec?.name} is not part of this isolated conversation and was not run.`;
         } catch {
           return 'this isolated conversation could not be checked, so the tool was not run.';
@@ -631,9 +796,12 @@ export function apply(ctx, config) {
             } catch {
               alone = false;
             }
-            const depthNote = webOn(agent.id, mode) ? SEARCH_DEPTH_PROMPTS[depthId(config.searchDepth)] : '';
+            const depthNote = mode.isolated
+              ? (isolatedWebOff(agent.id) ? ISOLATED_OFF_PROMPT : ISOLATED_LEVEL_PROMPTS[levelOf(agent.id)])
+              : webOn(agent.id, mode) ? SEARCH_DEPTH_PROMPTS[levelOf(agent.id)] : '';
             const own = mode.prompt || (mode.id === 'code' && plain(config.codeMethod) !== false ? CODE_METHOD : '');
-            return [alone ? '' : own, webGranted ? WEB_PROMPT : '', depthNote, researchOn(agent.id) ? RESEARCH_PROMPT : '', viaPrograms(agent)].filter(Boolean).join('\n\n');
+            const trimNote = trimmed(agent.id, mode) ? TRIM_PROMPT : '';
+            return [alone ? '' : own, webGranted ? WEB_PROMPT : '', depthNote, trimNote, viaPrograms(agent)].filter(Boolean).join('\n\n');
           },
         }),
       'modes prompt section',
@@ -667,6 +835,7 @@ export function apply(ctx, config) {
       report(error);
     }
     void pruneStale().catch(report);
+    void clearOldWebMarks().catch(report);
   });
   for (const agent of ctx.get('agents')?.list() ?? []) {
     noteParent(agent);
@@ -744,6 +913,7 @@ export function apply(ctx, config) {
     if (status === 'running') {
       // Before the turn's tools are put together.
       refit(agent);
+      wordsAddTools(agent);
       // Only a conversation that begins in an isolated mode is marked; the mark is for good.
       const begins = fresh.has(agent.id) && isTopLevel(agent) && isIsolated(agent.id);
       if (begins) markIsolated(agent.id);
@@ -816,6 +986,67 @@ export function apply(ctx, config) {
       return { kind: 'reject' };
     }
   });
+  // Loading tools as needed: a family the model added with tools_find is there from its next step
+  // on. (The tools of the step are already chosen when this runs; the user's own words are read
+  // earlier, when the turn starts: see wordsAddTools.)
+  ctx.on('agent/pre-step', ({ agent }, next) => {
+    try {
+      if (agent?.id && trimmed(agent.id, modeOf(agent.id))) refreshTools(agent);
+    } catch (error) {
+      ctx.logger.warn(`modes: could not load the tools a conversation needs: ${error?.message ?? error}`);
+    }
+    return next();
+  });
+  // The tool that lists and adds tool families, offered only where tools load as needed.
+  ctx.effect(
+    () => ctx.tools.register(buildFindTool(), { when: ({ agent }) => Boolean(agent?.id) && trimmed(agent.id, modeOf(agent.id)) }),
+    'modes: tools_find',
+  );
+  function buildFindTool() {
+    return {
+      name: FIND_TOOL,
+      description: 'Only the core tools (files, shell, step list, questions, skills, web when Search is on) are loaded in this conversation, to keep it fast. Call this to see the other tool families and add the ones you need: give a family (pdf, data, finance, visual, schedule, helpers, goals, library, memory, mac, code, learn, mission, connectors, app), a tool name, or what you want to do. Added tools are there from your next step on, for the rest of the conversation. Without arguments it lists the families.',
+      parameters: {
+        type: 'object',
+        properties: { need: { type: 'string', maxLength: 200, description: 'A family, a tool name, or what you need to do (for example "read a PDF", "make a chart").' } },
+        additionalProperties: false,
+      },
+      output: {
+        schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+        render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }],
+      },
+      isConcurrencySafe: () => false,
+      timeoutMs: 15_000,
+      execute: async (args, exec) => {
+        try {
+          const agent = exec?.agent;
+          if (!agent?.id || !trimmed(agent.id, modeOf(agent.id))) return { text: 'All tools are already loaded in this conversation.' };
+          const known = knownTools(agent.id);
+          const need = String(args?.need ?? '').trim();
+          if (!need) return { text: `Tool families you can add (call ${FIND_TOOL} with one of them):\n${trimCatalog(known, addedOf(agent.id))}` };
+          let definitions = [];
+          try {
+            definitions = [...ctx.tools.view(agent).visible.values()].map((definition) => ({ name: definition.name, description: definition.description }));
+          } catch {
+            definitions = known.map((name) => ({ name }));
+          }
+          const wanted = resolveRequest(need, definitions.length > 0 ? definitions : known.map((name) => ({ name })));
+          if (wanted.length === 0) return { text: `Nothing matches "${need}". The families:\n${trimCatalog(known, addedOf(agent.id))}` };
+          const fresh = addTools(agent.id, wanted);
+          refreshTools(agent);
+          const top = ctx.get('agents')?.get?.(topOf(agent.id));
+          if (top && top !== agent) refreshTools(top);
+          const before = new Set(trimAllowed(known, addedOf(agent.id).filter((entry) => !fresh.includes(entry))));
+          const now = trimAllowed(known, addedOf(agent.id)).filter((name) => known.includes(name) && !before.has(name));
+          const already = wanted.filter((entry) => !fresh.includes(entry));
+          if (fresh.length === 0) return { text: `${wanted.join(', ')} ${wanted.length === 1 ? 'is' : 'are'} already added and can be called now.` };
+          return { text: `Added ${fresh.join(', ')}${now.length ? `: ${now.join(', ')}` : ''}. They can be called from your next step.${already.length ? ` Already there: ${already.join(', ')}.` : ''}` };
+        } catch (error) {
+          return { text: `Tools could not be added: ${String(error?.message ?? error).slice(0, 200)}` };
+        }
+      },
+    };
+  }
   // A turn that would start only because stopped helpers reported back ends at once, unasked.
   // The first step of a turn is step 1.
   ctx.on('agent/pre-step', ({ messages, step }, next) => {
@@ -834,6 +1065,31 @@ export function apply(ctx, config) {
     parents.delete(agent.id);
   });
 
+  /**
+   * Before 0.54.0 a conversation's Search switch only took away `web_search` and `web_fetch`. The
+   * Web button's Off now also takes away the tools that go online in Scout and Recon, and the
+   * Research tab always has the web. So an old "Search off" mark in a conversation of such a tab is
+   * cleared once, and the conversation gets its tab's search back.
+   */
+  let marksDone = false;
+  async function clearOldWebMarks() {
+    if (marksDone || plain(config.webMarksCleared) === true) return;
+    marksDone = true;
+    const settings = ctx.get('settings');
+    if (!settings) return;
+    const modes = readModes(config);
+    const chosen = readObject(config.sessionModes);
+    const webs = readObject(config.sessionWeb);
+    const ownSearch = (mode) => Boolean(mode) && (mode.isolated || (Array.isArray(mode.tools) && (mode.tools.includes(RESEARCH_TOOL) || webReaching(mode.tools).length > 0)));
+    const cleared = Object.keys(webs).filter((id) => webs[id] === false && ownSearch(modes[chosen[id]]));
+    const next = { ...webs };
+    for (const id of cleared) delete next[id];
+    const ops = [{ op: 'set', path: ['webMarksCleared'], value: true }];
+    if (cleared.length > 0) ops.push({ op: 'set', path: ['sessionWeb'], value: JSON.stringify(next) });
+    await settings.mutate('modes', ops);
+    if (cleared.length > 0) ctx.logger.info(`modes: cleared ${cleared.length} old "Search off" mark(s) in tabs with their own search`);
+  }
+
   let pruned = false;
   /**
    * Remove choices for Sessions that are no longer stored; runs once.
@@ -847,7 +1103,7 @@ export function apply(ctx, config) {
     if (!persistence || !settings) return;
     try {
       const live = new Set((ctx.get('agents')?.list() ?? []).map((agent) => agent.id));
-      const fields = ['sessionModes', 'sessionWeb', 'sessionResearch', 'sessionTools', 'sessionHelpers', 'sessionIsolated'];
+      const fields = ['sessionModes', 'sessionWeb', 'sessionResearch', 'sessionSearchDepth', 'sessionTools', 'sessionHelpers', 'sessionIsolated', 'sessionToolSets'];
       const ids = new Set(fields.flatMap((field) => Object.keys(readObject(config[field]))));
       const gone = new Set();
       for (const sessionId of ids) {
@@ -880,9 +1136,9 @@ export function apply(ctx, config) {
     list() {
       return Object.values(readModes(config)).map((mode) => Object.freeze({ id: mode.id, label: mode.label }));
     },
-    /** @returns {string} the Search slider's step: quick, standard or thorough. */
+    /** @returns {string} the Web level new conversations start with: quick, standard, thorough or deep. */
     searchDepth() {
-      return depthId(config.searchDepth);
+      return searchLevel(config.searchDepth);
     },
     /** @returns {'same' | 'roles'} the default for all conversations: helpers on the conversation's model, or on other models. */
     researchModel() {

@@ -655,6 +655,33 @@ window.__ModuleLoader__.load({
           }
         ]
       },
+      "research": {
+        "newLabel": "New research",
+        "pages": [],
+        "greeting": "What do you want to find out?",
+        "chips": [
+          {
+            "label": "Explain a topic",
+            "icon": "research",
+            "prompt": "Research and explain, with sources: "
+          },
+          {
+            "label": "Compare options",
+            "icon": "chart",
+            "prompt": "Research and compare these options, with the evidence for each: "
+          },
+          {
+            "label": "Latest developments",
+            "icon": "spark",
+            "prompt": "What are the latest developments on: "
+          },
+          {
+            "label": "Check a claim",
+            "icon": "research",
+            "prompt": "Check this claim against the evidence and tell me how well it holds up: "
+          }
+        ]
+      },
       "scout": {
         "newLabel": "New search",
         "pages": [],
@@ -870,6 +897,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       finance: 'M4 18l5-6 4 3 7-9M15 6h5v5',
       recon: 'M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14zM16 16l4.5 4.5',
       scout: 'M12 4a8 8 0 1 0 0 16a8 8 0 0 0 0-16zM15.5 8.5l-2 5-5 2 2-5z',
+      research: 'M10 4a6 6 0 1 0 0 12a6 6 0 0 0 0-12zM14.5 14.5L20 20M7 10h6M10 7v6',
       data: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
       plus: 'M12 5v14M5 12h14',
       search: 'M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14zM16 16l4.5 4.5',
@@ -912,7 +940,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     function glyphFor(modeId) {
-      return modeId === 'chat' || modeId === 'code' || modeId === 'cowork' || modeId === 'finance' || modeId === 'data' || modeId === 'recon' || modeId === 'scout' ? modeId : 'dot';
+      return modeId === 'chat' || modeId === 'code' || modeId === 'cowork' || modeId === 'finance' || modeId === 'data' || modeId === 'recon' || modeId === 'scout' || modeId === 'research' ? modeId : 'dot';
     }
 
     /**

@@ -16,7 +16,7 @@ import { fileName, openFolder, openProfile, profileProblem } from '../lib/privat
 import { csv, writeReport } from '../lib/report.js';
 import { readSelection, selectionNote } from '../lib/selection.js';
 import { buildTools } from '../lib/tools.js';
-import { openConsent, mayReceive, providerPlace } from '../lib/model.js';
+import { providerPlace, staysHome } from '../lib/model.js';
 
 const here = (name) => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
 const fixture = (name) => readFileSync(here(name), 'utf8');
@@ -184,11 +184,10 @@ test('the private folder and the profile', async () => {
     const noPdf = openFolder(join(dir, 'files'));
     await assert.rejects(noPdf.read('cv.pdf'), /PDF reader/);
 
-    for (const leak of ['Reach me at someone@example.org', 'Call +49 170 1234567', 'linkedin.com/in/someone']) assert.ok(profileProblem(leak), leak);
     assert.equal(profileProblem('Titles: data engineer\nYears: 9\nPay: 95k EUR'), undefined);
+    assert.match(profileProblem('x'.repeat(6001)), /longer than 6000/);
     const profile = openProfile(join(dir, 'profile.md'));
     assert.equal(profile.read(), '');
-    assert.throws(() => profile.save('mail: someone@example.org'), /email/);
     profile.save('Titles: data engineer');
     assert.equal(profile.read().trim(), 'Titles: data engineer');
   } finally {
@@ -221,7 +220,7 @@ test('the selection note', () => {
   assert.match(note, /Work type: freelance/);
 });
 
-test('the tools: private material only for the right model, terms held, a run saved', async () => {
+test('the tools: files and profile for any model, terms held, a run saved', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'scout-tools-'));
   try {
     network([[/pc\/v6\/jobs/, { status: 200, text: fixture('ba-search.json') }], [/pc\/v4\/jobdetails/, { status: 200, text: fixture('ba-detail.json') }]]);
@@ -229,13 +228,11 @@ test('the tools: private material only for the right model, terms held, a run sa
     folder.save('cv.txt', Buffer.from('Jane Example, data engineer').toString('base64'));
     const profile = openProfile(join(dir, 'profile.md'));
     profile.save('Titles: data engineer\nYears: 9');
-    const consent = openConsent();
     const providers = { home: { baseURL: 'http://127.0.0.1:8080/v1', displayName: 'Home server' } };
-    const gate = (exec) => {
-      const route = exec.agent.route;
-      const place = providerPlace(providers, route?.provider);
-      return { files: place.where === 'local' ? { ok: true, why: '' } : { ok: false, why: 'files are for local models only' }, profile: mayReceive({ place, route, id: 'c1', consent }) };
-    };
+    assert.equal(staysHome(providerPlace(providers, 'home')), true);
+    assert.equal(staysHome(providerPlace(providers, 'deepseek')), false);
+    // Scout works with any model: the gate lets both through.
+    const gate = () => ({ files: { ok: true, why: '' }, profile: { ok: true, why: '' } });
     const registry = readRegistry('{}', '[]');
     const tools = Object.fromEntries(buildTools({
       enabled: () => true, registry: () => registry, selection: () => readSelection({ markets: ['Germany'] }),
@@ -245,14 +242,10 @@ test('the tools: private material only for the right model, terms held, a run sa
     const cloud = { agent: { route: { provider: 'deepseek', model: 'deepseek-chat' } } };
     const run = async (name, args, exec = local) => (await tools[name].execute(args, exec)).text;
 
-    assert.match(await run('scout_files', {}, cloud), /local models only/);
-    assert.doesNotMatch(await run('scout_files', {}, cloud), /cv\.txt/, 'not even the names');
-    assert.match(await run('scout_files', {}), /cv\.txt/);
-    assert.match(await run('scout_files', { name: 'cv.txt' }), /Jane Example/);
-    assert.match(await run('scout_profile', {}, cloud), /\/scout cloud/);
-    consent.agree('c1', cloud.agent.route);
+    assert.match(await run('scout_files', {}, cloud), /cv\.txt/);
+    assert.match(await run('scout_files', { name: 'cv.txt' }, cloud), /Jane Example/);
     assert.match(await run('scout_profile', {}, cloud), /Years: 9/);
-    assert.match(await run('scout_profile', { save: 'Mail me: jane@example.org' }, cloud), /email/);
+    assert.match(await run('scout_profile', { save: 'Titles: data engineer\nYears: 10' }, cloud), /saved/);
 
     const sources = await run('scout_sources', {});
     assert.match(sources, /Bundesagentur/);

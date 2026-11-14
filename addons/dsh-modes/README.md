@@ -154,3 +154,38 @@ for good; one that began elsewhere can never become isolated. Other add-ons ask
 
 - **Tested (0.41.0):** lab runs with a stand-in model, reading what the model was sent.
 - **Not verified:** with real models.
+
+## Since 0.52.0: load tools as needed
+
+Every request carries the description of every tool the model may call. In a mode with all tools that was 82 tools, about 18,700 tokens, before the user's message was read. Local models are slow to read that much.
+
+With **Load tools as needed** (Settings → Modes, one switch per mode with all tools; on for Cowork and Code), a conversation starts with:
+
+- **The core tools:** `read`, `write`, `edit`, `glob`, `grep`, `bash` and its jobs, `todo_write`, `ask_user_question`, `skill`, `read_image`, `working_directory`, and the web tools when Search is on.
+- **`tools_find`:** lists the other families and adds the ones asked for, by family (`pdf`, `data`, `finance`, `visual`, `schedule`, `helpers`, `goals`, `library`, `memory`, `mac`, `code`, `learn`, `mission`, `connectors`, `app`), by tool name, or by what is to be done ("read a PDF"). Added tools are there from the model's next step on.
+
+The user's message adds families too, before the first step: "read this PDF" brings the PDF tools, "make a chart from this spreadsheet" the data tools. Added families stay for the rest of the conversation (setting `sessionToolSets`), and helpers get their conversation's tools.
+
+Modes with their own tool list (Chat, Finance, Data, Recon, Scout, or a Code mode set to a list) keep that list. Isolated modes are never trimmed.
+
+**Measured in the lab:** "hello" in Cowork went from 82 tools (about 18,700 tokens) to 16 (about 3,000); the whole request to about 6,400 tokens. A family added with `tools_find` was in the very next step. Switched off, the next message carried all 82 again.
+
+**Costs:** the step after a family is added cannot reuse the model's cache of the conversation. A model may now and then not think of `tools_find`; its note says to check there before telling the user a tool is missing.
+
+## Since 0.54.0: one Web button
+
+The **Search** and **Deep research** buttons in the chat box are replaced by one **Web** button with five levels:
+
+| Level | What the model is told |
+|---|---|
+| Off | No web access: no `web_search`, no `web_fetch`, no `deep_research`, and none of the other tools known to reach the internet (since 0.54.1: the Free Search plugin's own tools such as `weather` and `multi_search`, the Finance data tools, Scout's search tools; list in `lib/mask.js`, `WEB_REACHING`). Since 0.54.2 a shell command that goes online is stopped too (`goesOnline` in `lib/mask.js`: curl, wget, ssh and similar programs, web addresses, code that fetches, installs, git remotes), because the app's shell sandbox limits file writing only, not the network. That is a barrier, not a wall: a command written to hide its purpose could get past it. Connectors (MCP) are not touched. |
+| Quick | One search; answer from the results. |
+| Standard | A few searches; open the pages that matter (no extra words). |
+| Thorough | Several searches, at least five pages from different sites, cross-checked and cited. |
+| Deep | At least ten searches, at least ten pages read, every key fact checked in two independent sources, disagreements stated, each source cited with its date. |
+
+The level is kept per conversation (`sessionWeb`, `sessionSearchDepth`); picking a level also sets where new conversations start (`searchDepth`). Off applies only to the conversation it is set in. The button is not shown in the Research tab (it researches with the web always; Depth and Focus are its own dropdowns in the chat box). In an isolated mode such as Recon (since 0.55.0) it sets how hard the mode searches with its own tools, in words that fit any search tool (`ISOLATED_LEVEL_PROMPTS`); Off there takes away the mode's tools that go online (Recon keeps only `recon_cite`) and says so (`ISOLATED_OFF_PROMPT`).
+
+In-depth research with helpers lives in the Research tab. A conversation is a research one when its mode lists `deep_research`; its helpers get the web tools. The old per-conversation Deep research switch (`sessionResearch`) is no longer offered or read. In Cowork and Code `deep_research` stays available as a tool while the web is not Off.
+
+**Since 0.55.1:** the Research tab always has the web, whatever a conversation's stored Web setting says (it has no Web button). Old "Search off" marks from before 0.54.0 are cleared once (`webMarksCleared`) in conversations of tabs with their own search tools (Scout, Recon, Research), where Off would now take those tools away; in Chat, Cowork, Code and Data they stay as Web · Off.

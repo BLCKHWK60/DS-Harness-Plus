@@ -1,7 +1,5 @@
 /**
- * Where a conversation's model runs, and whether the user's private material may be sent to it. A model on
- * this computer or in the user's own network gets it without a question. Any other model gets it
- * only after the user agreed, for that conversation, since the app was started.
+ * Where a conversation's model runs, for /scout and the note in each Scout conversation.
  */
 
 /**
@@ -48,35 +46,5 @@ export function providerPlace(providers, provider) {
   return { where: 'unknown', host: '', name: id };
 }
 
-/** @returns {boolean} whether content may go to a model at that place without asking. */
+/** @returns {boolean} whether the model runs on the user's own machines. */
 export const staysHome = (place) => place?.where === 'local' || place?.where === 'network';
-
-/**
- * Who agreed to what. Held in memory only: closing the app forgets every agreement.
- * @returns {object} the record.
- */
-export function openConsent() {
-  /** conversation id -> the provider and model the user agreed to. */
-  const agreed = new Map();
-  const key = (route) => `${route?.provider ?? ''}\u0000${route?.model ?? ''}`;
-  return {
-    /** The user agrees that this conversation's content goes to this model. */
-    agree: (id, route) => agreed.set(String(id), key(route)),
-    /** @returns {boolean} whether the user agreed for this conversation and this very model. */
-    has: (id, route) => agreed.get(String(id)) === key(route),
-    forget: (id) => agreed.delete(String(id)),
-  };
-}
-
-/**
- * May research content go to this conversation's model?
- * @param {object} input - `place` (from providerPlace), `route` ({provider, model} or undefined), `id` (conversation), `consent`.
- * @returns {{ok: boolean, why: string}} `why` is for the user, in plain words.
- */
-export function mayReceive({ place, route, id, consent }) {
-  if (!route) return { ok: false, why: 'The model of this conversation could not be told, so nothing is sent to it. Pick a model in the chat box.' };
-  if (staysHome(place)) return { ok: true, why: '' };
-  if (consent.has(id, route)) return { ok: true, why: '' };
-  const who = place?.where === 'cloud' ? `a cloud model (${place.name || route.provider}${place.host ? `, ${place.host}` : ''})` : `a model whose location is unknown (${place?.name || route.provider})`;
-  return { ok: false, why: `This conversation uses ${who}. The user's profile would be sent to it. Nothing has been sent. To agree for this conversation, the user types /scout cloud. To avoid it, the user picks a model on this computer or in their own network.` };
-}

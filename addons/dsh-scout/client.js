@@ -203,7 +203,7 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
       const markets = Array.isArray(selection.markets) ? selection.markets : [];
       const others = (data.knownMarkets ?? []).filter((market) => !markets.includes(market));
       const files = Array.isArray(data.files) ? data.files : [];
-      const summary = `${markets.length === 0 ? 'No market chosen' : `Searching ${markets.join(', ')}`}. ${files.length === 0 ? 'Add a resume or LinkedIn export (PDF) if you like.' : `${files.length} file${files.length === 1 ? '' : 's'} in the Scout folder.`} Files are read only by a model on your own machines. Nothing is sent or applied for.`;
+      const summary = `${markets.length === 0 ? 'No market chosen' : `Searching ${markets.join(', ')}`}. ${files.length === 0 ? 'Add a resume or LinkedIn export (PDF) if you like.' : `${files.length} file${files.length === 1 ? '' : 's'} in the Scout folder.`} Nothing is sent or applied for.`;
 
       return h('div', { ref: bar, className: 'dsh-sc-bar', role: 'group', 'aria-label': 'What work to look for' },
         h('style', null, CSS),
@@ -228,7 +228,7 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
     }
 
     const PROFILE_MAX = 6000;
-    const PROFILE_HINT = 'For example:\nTitles: data engineer, analytics engineer (senior)\nYears: 9, of which 4 leading a small team\nSkills: Python, SQL, dbt, Airflow, Snowflake, AWS; data modelling; stakeholder work\nIndustries: logistics, retail\nLanguages: English (fluent), German (B2), Spanish (basic)\nPay: currently about 85k EUR; looking for 95k+ or 700 EUR/day freelance\nWants: remote or hybrid, product companies, no on-call\n\nNo name, email, phone, address or employer names: this may go to a cloud model if you allow it.';
+    const PROFILE_HINT = 'For example:\nTitles: data engineer, analytics engineer (senior)\nYears: 9, of which 4 leading a small team\nSkills: Python, SQL, dbt, Airflow, Snowflake, AWS; data modelling; stakeholder work\nIndustries: logistics, retail\nLanguages: English (fluent), German (B2), Spanish (basic)\nPay: currently about 85k EUR; looking for 95k+ or 700 EUR/day freelance\nWants: remote or hybrid, product companies, no on-call';
 
     function Profile({ text, busy, onSave }) {
       const [draft, setDraft] = useState(text);
@@ -368,7 +368,7 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
           h(Switch, { on: data.enabled === true, label: 'Show the Scout tab', onChange: (on) => save({ enabled: on }, on ? 'Switched on. The Scout tab appears in the sidebar in a moment.' : 'Switched off. The Scout tab is taken away in a moment.') })),
 
         h('div', { className: 'dsh-sc-group' }, 'Your files'),
-        h('p', { className: 'dsh-sc-desc' }, `Your resume, a LinkedIn export (PDF) or notes. They stay in this folder on this Mac and are read only when the conversation's model runs on your own machines (this computer or your own network), never by a cloud model. PDFs need the PDF reader add-on. Folder: ${data.folder}`),
+        h('p', { className: 'dsh-sc-desc' }, `Your resume, a LinkedIn export (PDF) or notes. They stay in this folder on this Mac; Scout reads them with whichever model the conversation uses. PDFs need the PDF reader add-on. Folder: ${data.folder}`),
         files.map((file) => h('div', { key: file.name, className: 'dsh-sc-row' },
           h('div', { className: 'dsh-sc-rowtext' },
             h('div', { className: 'dsh-sc-rowtitle' }, file.name),
@@ -379,7 +379,7 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
           upload.element),
 
         h('div', { className: 'dsh-sc-group' }, 'Your profile'),
-        h('p', { className: 'dsh-sc-desc' }, 'A short summary without your name, contact details or employer names: titles, years, skills, languages, pay, what you want. Write it here, or ask Scout with a local model to write it from your files. It goes to a model on your own machines without asking; a cloud model gets it only after you type /scout cloud in that conversation.'),
+        h('p', { className: 'dsh-sc-desc' }, 'A short summary: titles, years, skills, languages, pay, what you want. Write it here, or ask Scout to write it from your files. It is read in every Scout conversation.'),
         h(Profile, { text: typeof data.profile === 'string' ? data.profile : '', busy, onSave: (text) => act({ action: 'profile', text }, 'Profile saved.') }),
 
         h('div', { className: 'dsh-sc-group' }, 'Markets'),

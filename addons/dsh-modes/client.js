@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
         'toggle.tools.off': 'Tools off',
         'toggle.tools.title': 'What the model can call in this conversation',
         'tools.switch': 'Tools for this conversation',
-        'tools.switch.hint': 'Off: the model is offered no tool at all, so it cannot try to call one. Search and Deep research are off too.',
+        'tools.switch.hint': 'Off: the model is offered no tool at all, so it cannot try to call one. The web is off too.',
         'tools.chat': 'In Chat, tools means searching and reading the web. For files and commands, use Cowork or Code.',
         'tools.viaCode': 'This conversation is in PTC mode: the model reaches these tools from inside small programs it writes. The app stops such a program after a few minutes, so long jobs like Deep research suit Standard mode better.',
         'tools.can': 'Can call',
@@ -108,6 +108,24 @@ window.__ModuleLoader__.load({
         'rerun.failed': 'The rerun could not be started',
         'rerun.files': 'Rerun started. Pictures and files attached to the question were not sent again; add them if they are needed.',
         'answer.group': 'Buttons under an answer',
+        'web.label': 'Web',
+        'web.title': 'Web access',
+        'web.open': 'Web access: {0}. Click to change.',
+        'web.off': 'Off',
+        'web.quick': 'Quick',
+        'web.standard': 'Standard',
+        'web.thorough': 'Thorough',
+        'web.deep': 'Deep',
+        'web.off.hint': 'No web access. The model answers from what it knows and from your files.',
+        'web.quick.hint': 'One search, answer from the results. Fastest.',
+        'web.standard.hint': 'A few searches; opens the pages that matter.',
+        'web.thorough.hint': 'Several searches; reads at least 5 pages from different sites and cites each.',
+        'web.deep.hint': '10+ searches, at least 10 pages read, facts cross-checked between sources. Slower.',
+        'web.note': 'For this conversation. The level you pick is also where new conversations start; Off applies only here. In-depth research with many helpers is in the Research tab.',
+        'trim.group': 'Load tools as needed',
+        'trim.hint': 'A mode with all tools starts each conversation with the core tools only (files, shell, step list, questions, skills, web) and a tool that adds the others when needed: PDF, data, finance, diagrams, scheduling, helpers and more. Your message adds them too when it names them ("read this PDF"). Requests are far smaller, so local models answer sooner. Added tools stay for the rest of the conversation.',
+        'trim.mode': '{mode}: load tools as needed',
+        'trim.none': 'No mode has all tools; modes with their own tool list keep that list.',
         'answer.rerun': 'Rerun button',
         'answer.rerun.hint': 'Asks the same question again in a fresh copy of the conversation, with the model selected in the chat box. The new model does not see the old answer. The old answer stays in the original conversation.',
         'answer.thumbs': 'Hide thumbs up and thumbs down',
@@ -217,6 +235,24 @@ window.__ModuleLoader__.load({
         'rerun.failed': '无法开始重新运行',
         'rerun.files': '已开始重新运行。问题中附带的图片和文件未再次发送，如有需要请重新添加。',
         'answer.group': '回答下方的按钮',
+        'web.label': '联网',
+        'web.title': '联网访问',
+        'web.open': '联网访问：{0}。点击更改。',
+        'web.off': '关闭',
+        'web.quick': '快速',
+        'web.standard': '标准',
+        'web.thorough': '深入',
+        'web.deep': '深度',
+        'web.off.hint': '不联网。模型根据已有知识和你的文件回答。',
+        'web.quick.hint': '一次搜索，根据结果回答。最快。',
+        'web.standard.hint': '几次搜索；打开关键页面。',
+        'web.thorough.hint': '多次搜索；阅读至少 5 个不同网站的页面并逐一注明出处。',
+        'web.deep.hint': '10 次以上搜索，至少阅读 10 个页面，在不同来源间交叉核实事实。较慢。',
+        'web.note': '仅对本对话生效。你选择的级别也是新对话的起始级别；"关闭"只对本对话生效。多助手的深入研究请使用"研究"标签页。',
+        'trim.group': '按需加载工具',
+        'trim.hint': '拥有全部工具的模式在每次对话开始时只加载核心工具（文件、终端、步骤列表、提问、技能、网页），并提供一个按需添加其他工具的工具：PDF、数据、财经、图表、日程、助手等。消息中提到时也会自动添加。请求小得多，本地模型响应更快。添加的工具在对话剩余部分保留。',
+        'trim.mode': '{mode}：按需加载工具',
+        'trim.none': '没有拥有全部工具的模式；有自己工具列表的模式保留其列表。',
         'answer.rerun': '重新运行按钮',
         'answer.rerun.hint': '在对话的新副本中用聊天框所选的模型再问一次同样的问题。新模型看不到旧回答，旧回答保留在原对话中。',
         'answer.thumbs': '隐藏点赞和点踩',
@@ -563,6 +599,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
 .dsh-mt svg{flex:none}
 .dsh-mt .pair{display:inline-flex;align-items:center}
 .dsh-mt .pair > button:first-child{border-top-right-radius:0;border-bottom-right-radius:0}
+.dsh-mt .pair > button:only-child{border-radius:14px}
 .dsh-mt .pair > button.more{width:20px;padding:0;justify-content:center;margin-left:-1px;border-top-left-radius:0;border-bottom-left-radius:0}
 .dsh-mt{flex:none;white-space:nowrap}
 .dsh-mt[data-f1]{gap:4px}
@@ -578,6 +615,12 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
 .dsh-mt[data-f5] .pair > button.more{width:16px}
 .dsh-mt .pair .lvl{opacity:.8}
 .dsh-mt-pop .title{font-size:14px;line-height:22px;font-weight:500}
+.dsh-mt-pop .opts{display:flex;flex-direction:column;gap:2px;margin:8px -6px 0}
+.dsh-mt-pop .opts button{display:block;width:100%;text-align:left;border:0;border-radius:10px;padding:7px 10px;background:transparent;font:inherit;cursor:pointer;color:var(--dsw-alias-label-primary)}
+.dsh-mt-pop .opts button:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dsh-mt-pop .opts button[aria-current='true']{background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 14%, transparent)}
+.dsh-mt-pop .opts b{display:block;font-size:13px;line-height:18px;font-weight:600}
+.dsh-mt-pop .opts small{display:block;font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary)}
 .dsh-mt-pop input[type=range]{display:block;width:100%;margin:12px 0 2px;accent-color:var(--dsw-alias-brand-primary);cursor:pointer}
 .dsh-mt-pop .steps{display:flex;justify-content:space-between}
 .dsh-mt-pop .steps button{border:0;padding:2px 0;background:transparent;font:inherit;font-size:12px;cursor:pointer;color:var(--dsw-alias-label-secondary)}
@@ -635,7 +678,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       // window's width, because the row also holds the app's own buttons and the model's name.
       const root = useRef(null);
       const shown = state.status === 'ready' && Boolean(sessionId) && state.view?.sessionWeb !== undefined;
-      const marks = shown ? `${state.view.searchDepth}|${state.view.researchDepth}|${state.view.sessionTools}` : '';
+      const marks = shown ? `${state.view.searchDepth}|${state.view.sessionSearchDepth}|${state.view.sessionWeb}|${state.view.sessionTools}` : '';
       useLayoutEffect(() => {
         const el = root.current;
         if (!el) return undefined;
@@ -695,9 +738,10 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       const chosenWeb = readObject(state.view.sessionWeb)[sessionId];
       const web = typeof chosenWeb === 'boolean'
         ? chosenWeb
+        : modeDef.isolated === true ? true
         : tools === 'none' ? false : Array.isArray(tools) ? tools.some((tool) => tool === 'web_search' || tool === 'web_fetch') : true;
       const off = readObject(state.view.sessionTools)[sessionId] === false;
-      const research = !off && readObject(state.view.sessionResearch)[sessionId] === true;
+      const research = false;
       const searching = !off && web;
       // No tools at all: switched off here, or a mode without tools and neither switch on.
       const none = off || (tools === 'none' && !searching && !research);
@@ -746,28 +790,41 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           void refresh();
         }
       };
-      const searchDepth = depthOf(state.view.searchDepth);
-      const researchDepth = depthOf(state.view.researchDepth);
-      // The step is named on the button only when it is not the usual one.
-      const level = (depth) => (depth === 'standard' ? null : h('span', { className: 'lbl lvl' }, `· ${t(`depth.${depth}`)}`));
+      // The Research tab searches in its own way (its start page sets the depth): no Web button there.
+      const researchTab = Array.isArray(tools) && tools.includes('deep_research');
+      const sessionLevel = levelOf(readObject(state.view.sessionSearchDepth)[sessionId] ?? state.view.searchDepth);
+      /** Off: this conversation only. A level: this conversation, and where new conversations start. */
+      const pickLevel = async (picked) => {
+        if (state.busy) return;
+        setState((prev) => ({ ...prev, busy: true }));
+        try {
+          const build = (current) => {
+            const webs = { ...readObject(current.sessionWeb), [sessionId]: picked !== 'off' };
+            const ops = [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify(webs) }];
+            if (picked !== 'off') {
+              const levels = { ...readObject(current.sessionSearchDepth), [sessionId]: picked };
+              ops.push({ op: 'set', path: ['sessionSearchDepth'], value: JSON.stringify(levels) }, { op: 'set', path: ['searchDepth'], value: picked });
+            }
+            return ops;
+          };
+          let fresh = await load(appCtx);
+          let result = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
+          if (!result.ok && result.error.code === 'settings/conflict') {
+            fresh = await load(appCtx);
+            result = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
+          }
+          if (!result.ok) throw new Error(result.error.code);
+          setState({ status: 'ready', view: result.value.value, busy: false });
+        } catch {
+          setState((prev) => ({ ...prev, busy: false }));
+          void refresh();
+        }
+      };
 
       return h(React.Fragment, null,
         h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
         h('span', { className: 'dsh-mt', ref: root },
-          h('span', { className: 'pair', 'data-kind': 'search' },
-            h('button', {
-              type: 'button', 'aria-pressed': searching, disabled: state.busy || off, title: off ? t('tools.blocked') : t(web ? 'toggle.search.on' : 'toggle.search.off'),
-              onClick: () => void flip('sessionWeb', !web),
-              'aria-label': t('toggle.search'),
-            }, icon('search'), h('span', { className: 'lbl' }, t('toggle.search')), level(searchDepth)),
-            h(DepthButton, { t, kind: 'search', depth: searchDepth, pressed: searching, disabled: off, busy: state.busy, onPick: (depth) => void setDepth('searchDepth', depth) })),
-          h('span', { className: 'pair', 'data-kind': 'research' },
-            h('button', {
-              type: 'button', 'aria-pressed': research, disabled: state.busy || off, title: off ? t('tools.blocked') : t(research ? 'toggle.research.on' : 'toggle.research.off'),
-              onClick: () => void flip('sessionResearch', research ? undefined : true),
-              'aria-label': t('toggle.research'),
-            }, icon('research'), h('span', { className: 'lbl' }, t('toggle.research')), level(researchDepth)),
-            h(DepthButton, { t, kind: 'research', depth: researchDepth, pressed: research, disabled: off, busy: state.busy, onPick: (depth) => void setDepth('researchDepth', depth) })),
+          researchTab ? null : h(WebButton, { t, level: off ? 'off' : web ? sessionLevel : 'off', disabled: off, busy: state.busy, onPick: (picked) => void pickLevel(picked) }),
           h(HelpersButton, {
             t, sessionId, busy: state.busy,
             chosen: readObject(state.view.sessionHelpers)[sessionId],
@@ -784,12 +841,11 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
 
     const DEPTHS = ['quick', 'standard', 'thorough'];
     const depthOf = (value) => (DEPTHS.includes(value) ? value : 'standard');
+    const LEVELS = ['off', 'quick', 'standard', 'thorough', 'deep'];
+    const levelOf = (value) => (LEVELS.includes(value) && value !== 'off' ? value : 'standard');
 
-    /**
-     * The small arrow beside the Search and the Deep research button, and its panel: a slider with
-     * three steps (Quick, Standard, Thorough) and one line saying what the chosen step does.
-     */
-    function DepthButton({ t, kind, depth, pressed, disabled, busy, onPick, model, onModel }) {
+    /** The Web button in the chat box, and its list: Off, Quick, Standard, Thorough, Deep. */
+    function WebButton({ t, level, disabled, busy, onPick }) {
       const [open, setOpen] = useState(false);
       const [place, setPlace] = useState({ left: 12, bottom: 80 });
       const button = useRef(null);
@@ -797,7 +853,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       useEffect(() => {
         if (!open) return undefined;
         const rect = button.current?.getBoundingClientRect();
-        if (rect) setPlace({ left: Math.max(12, Math.min(rect.left - 120, window.innerWidth - 332)), bottom: window.innerHeight - rect.top + 8 });
+        if (rect) setPlace({ left: Math.max(12, Math.min(rect.left - 20, window.innerWidth - 332)), bottom: window.innerHeight - rect.top + 8 });
         const away = (event) => {
           if (panel.current?.contains(event.target) || button.current?.contains(event.target)) return;
           setOpen(false);
@@ -810,33 +866,22 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           document.removeEventListener('keydown', key, true);
         };
       }, [open]);
-      const title = t(`depth.${kind}.title`);
-      return h(React.Fragment, null,
+      const name = t(`web.${level}`);
+      return h('span', { className: 'pair', 'data-kind': 'search' },
         h('button', {
-          ref: button, type: 'button', className: 'more', 'aria-pressed': pressed, 'aria-expanded': open, 'aria-haspopup': 'dialog', disabled,
-          title: t(`depth.${kind}.open`).replace('{0}', t(`depth.${depth}`)), 'aria-label': t(`depth.${kind}.open`).replace('{0}', t(`depth.${depth}`)),
+          ref: button, type: 'button', 'aria-pressed': level !== 'off', 'aria-expanded': open, 'aria-haspopup': 'dialog', disabled: disabled || busy,
+          title: disabled ? t('tools.blocked') : t('web.open').replace('{0}', name), 'aria-label': t('web.open').replace('{0}', name),
           onClick: () => setOpen(!open),
-        }, h('svg', { width: 10, height: 10, viewBox: '0 0 10 10', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }, h('path', { d: 'M2 6.5 5 3.5 8 6.5' }))),
+        }, icon('search'), h('span', { className: 'lbl' }, t('web.label')), h('span', { className: 'lbl lvl' }, `· ${name}`)),
         open
           ? ReactDOM.createPortal(
-              h('div', { ref: panel, className: 'dsh-mt-pop', role: 'dialog', 'aria-label': title, 'data-depth-kind': kind, style: { left: place.left, bottom: place.bottom } },
+              h('div', { ref: panel, className: 'dsh-mt-pop', role: 'dialog', 'aria-label': t('web.title'), style: { left: place.left, bottom: place.bottom } },
                 h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
-                h('div', { className: 'title' }, title),
-                h('input', {
-                  type: 'range', min: 0, max: 2, step: 1, value: DEPTHS.indexOf(depth), disabled: busy, 'aria-label': title, 'aria-valuetext': t(`depth.${depth}`),
-                  onChange: (event) => onPick(DEPTHS[Number(event.target.value)] ?? 'standard'),
-                }),
-                h('div', { className: 'steps' }, DEPTHS.map((id) => h('button', { key: id, type: 'button', 'aria-current': String(id === depth), disabled: busy, onClick: () => onPick(id) }, t(`depth.${id}`)))),
-                h('p', { className: 'hint' }, t(`depth.${kind}.${depth}`)),
-                kind === 'research' ? h('p', { className: 'hint' }, t('depth.research.cap')) : null,
-                kind === 'research' && onModel
-                  ? h(React.Fragment, null,
-                      h('div', { className: 'head' }, t('research.model.title')),
-                      h('div', { className: 'seg', role: 'group', 'aria-label': t('research.model.title') },
-                        ['same', 'roles'].map((id) => h('button', { key: id, type: 'button', 'aria-pressed': model === id, disabled: busy, onClick: () => onModel(id) }, t(`research.model.${id}`)))),
-                      h('p', { className: 'hint' }, t(`research.model.${model}.hint`)))
-                  : null,
-                h('p', { className: 'hint' }, t('depth.note'))),
+                h('div', { className: 'title' }, t('web.title')),
+                h('div', { className: 'opts', role: 'listbox', 'aria-label': t('web.title') },
+                  LEVELS.map((id) => h('button', { key: id, type: 'button', role: 'option', 'aria-selected': id === level, 'aria-current': String(id === level), disabled: busy, onClick: () => { setOpen(false); onPick(id); } },
+                    h('b', null, t(`web.${id}`)), h('small', null, t(`web.${id}.hint`))))),
+                h('p', { className: 'hint' }, t('web.note'))),
               document.body,
             )
           : null);
@@ -1108,6 +1153,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       const [busy, setBusy] = useState(false);
       const [message, setMessage] = useState(null);
       const [answer, setAnswer] = useState({ rerun: true, thumbs: false });
+      const [trim, setTrim] = useState(['cowork', 'code']);
       const nextKey = React.useRef(1);
 
       const adopt = useCallback((view) => {
@@ -1118,6 +1164,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         setBroken(invalid);
         setDefaultMode(typeof view.defaultMode === 'string' ? view.defaultMode : 'cowork');
         setAnswer({ rerun: view.rerunButton !== false, thumbs: view.hideFeedback === true });
+        setTrim(Array.isArray(view.trimModes) ? view.trimModes : ['cowork', 'code']);
         setDirty(false);
       }, []);
 
@@ -1193,6 +1240,25 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       };
 
       // The two switches save at once; they do not wait for the Save button and leave unsaved mode edits alone.
+      const flipTrim = async (modeId, on) => {
+        const before = trim;
+        const next = on ? [...new Set([...trim, modeId])] : trim.filter((id) => id !== modeId);
+        setTrim(next);
+        try {
+          const ops = [{ op: 'set', path: ['trimModes'], value: next }];
+          let fresh = await loadEditor(appCtx);
+          let result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
+          if (!result.ok && result.error.code === 'settings/conflict') {
+            fresh = await loadEditor(appCtx);
+            result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
+          }
+          if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+          setLoaded((prev) => ({ ...prev, revision: result.value.revision }));
+        } catch (error) {
+          setTrim(before);
+          setMessage({ text: `${t('save.failed')}: ${error?.message ?? error}`, bad: true });
+        }
+      };
       const flipAnswer = async (field, key, on) => {
         setAnswer((prev) => ({ ...prev, [key]: on }));
         try {
@@ -1251,6 +1317,13 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         h('div', null,
           Toggle(t('answer.rerun'), t('answer.rerun.hint'), answer.rerun, (on) => void flipAnswer('rerunButton', 'rerun', on)),
           Toggle(t('answer.thumbs'), t('answer.thumbs.hint'), answer.thumbs, (on) => void flipAnswer('hideFeedback', 'thumbs', on))),
+        h('div', { className: 'dsh-me-group' }, t('trim.group')),
+        h('div', { className: 'dsh-me-note' }, t('trim.hint')),
+        h('div', null,
+          rows.filter((row) => row.toolsKind === 'all').length === 0
+            ? h('div', { className: 'dsh-me-note' }, t('trim.none'))
+            : rows.filter((row) => row.toolsKind === 'all').map((row) => h(React.Fragment, { key: `trim-${row.key}` },
+              Toggle(t('trim.mode', { mode: row.label.trim() || row.id }), '', trim.includes(row.id), (on) => void flipTrim(row.id, on))))),
         rows.map((row) => {
           const bad = problems.rows[row.key];
           return h(

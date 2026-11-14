@@ -1,10 +1,8 @@
 /**
  * The user's private material: the Scout folder (resume, LinkedIn export, notes) and the profile.
  *
- * The folder's files are read for a model on the user's own machines only, never for a cloud
- * model. The profile is a short anonymous summary (titles, skills, seniority, pay level; no name,
- * no contact details, no employer names). It may go to a cloud model once the user agreed for
- * that conversation (/scout cloud).
+ * Scout works with any model, local or cloud, so both are open to the conversation's model. The
+ * profile is a short summary: titles, skills, seniority, pay level and what the user wants.
  */
 import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
@@ -87,13 +85,9 @@ export function openFolder(root, deps = {}) {
   };
 }
 
-/** Things a profile must not hold, since it may go to a cloud model. */
+/** Why a profile cannot be saved, if it cannot. */
 export function profileProblem(text) {
-  const value = String(text ?? '');
-  if (value.length > PROFILE_MAX) return `The profile is longer than ${PROFILE_MAX} characters. Keep it to a short summary.`;
-  if (/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/.test(value)) return 'The profile holds an email address. Leave contact details out: the profile may go to a cloud model.';
-  if (/(?:\+|\b00)\d[\d\s().-]{7,}\d|\b\d{3}[\s.-]\d{3}[\s.-]\d{4}\b/.test(value)) return 'The profile holds what looks like a phone number. Leave contact details out: the profile may go to a cloud model.';
-  if (/linkedin\.com\/in\//i.test(value)) return 'The profile holds a LinkedIn profile address. Leave it out: the profile may go to a cloud model.';
+  if (String(text ?? '').length > PROFILE_MAX) return `The profile is longer than ${PROFILE_MAX} characters. Keep it to a short summary.`;
   return undefined;
 }
 

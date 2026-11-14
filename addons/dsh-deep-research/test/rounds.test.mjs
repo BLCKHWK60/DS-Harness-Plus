@@ -91,3 +91,20 @@ test('the writer gets the findings, the contradictions and the gaps', () => {
   assert.match(prompt, /Looked for and not found:\n- no figure/);
   assert.doesNotMatch(writePrompt({ question: 'Q', findings: [], conflicts: [], gaps: [], today: 't' }), /Contradictions/);
 });
+
+test('focus, follow-up questions', async () => {
+  const { FOCUS, focusNote, followupsOf, planPrompt, searchPrompt, writePrompt, depthOf } = await import('../lib/rounds.js');
+  const depth = depthOf('standard');
+  assert.deepEqual(Object.keys(FOCUS), ['web', 'news', 'academic']);
+  assert.equal(focusNote('web'), '');
+  assert.equal(focusNote('nonsense'), '');
+  assert.match(planPrompt('q', depth, '2026-11-14', 'news'), /Focus: NEWS/);
+  assert.doesNotMatch(planPrompt('q', depth, '2026-11-14'), /Focus:/);
+  const search = searchPrompt({ question: 'q', task: { question: 'sq', queries: [], why: '' }, round: 1, depth, searchTools: ['web_search'], fetchTools: ['web_fetch'], today: '2026-11-14', focus: 'academic' });
+  assert.match(search, /Focus: ACADEMIC/);
+  assert.match(writePrompt({ question: 'q', findings: [], conflicts: [], gaps: [], today: 't', followups: true }), /## Follow-up questions/);
+  assert.doesNotMatch(writePrompt({ question: 'q', findings: [], conflicts: [], gaps: [], today: 't' }), /Follow-up/);
+  const report = 'Answer [1].\n\n## What could not be established\n- x\n\n## Follow-up questions\n- How did prices change in 2025?\n2. Which regions grew fastest?\n* What do regulators plan?\n- A fourth one\n\n## Sources\n[1] https://a';
+  assert.deepEqual(followupsOf(report), ['How did prices change in 2025?', 'Which regions grew fastest?', 'What do regulators plan?']);
+  assert.deepEqual(followupsOf('No such section'), []);
+});

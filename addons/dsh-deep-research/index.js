@@ -22,7 +22,7 @@
  */
 import z from '@deepseek-ai/schemastery';
 import { insideProgram, researchMinutes } from './lib/budget.js';
-import { analysisOf, analyzePrompt, capped, depthOf, planPrompt, roundLeft, searchAnswer, searchPrompt, tasksOf, writePrompt } from './lib/rounds.js';
+import { FOCUS, analysisOf, analyzePrompt, capped, depthOf, followupsOf, planPrompt, roundLeft, searchAnswer, searchPrompt, tasksOf, writePrompt } from './lib/rounds.js';
 
 /**
  * Start a helper agent. App 0.2.2-rc.2 takes the task's fields (prompt, parent, agentOptions) at
@@ -191,6 +191,26 @@ export function apply(ctx, config) {
   /** Agents this plugin started, which may not start research themselves. */
   const childIds = new Set();
 
+  // ---- live progress, for the screen: one record per conversation, the latest run ------------
+  /** Conversation id -> its latest run. */
+  const runs = new Map();
+  /** Helper id -> the run it works for. */
+  const childRun = new Map();
+  /** A new run's record. */
+  function startRun(parentId, fields) {
+    if (runs.size >= 50 && !runs.has(parentId)) runs.delete(runs.keys().next().value);
+    const run = { stage: 'planning', round: 0, helpers: 0, searches: 0, pages: 0, sources: 0, queries: [], hosts: [], followups: [], file: '', error: '', startedAt: Date.now(), endedAt: 0, ...fields };
+    runs.delete(parentId);
+    runs.set(parentId, run);
+    return run;
+  }
+  /** What the screen is shown of a run: no page text, no findings. */
+  function runView(run) {
+    if (!run) return null;
+    const { question, depth, focus, stage, round, rounds, helpers, searches, pages, sources, queries, hosts, followups, file, error, startedAt, endedAt, minutes } = run;
+    return { question, depth, focus, stage, round, rounds, helpers, searches, pages, sources, queries: queries.slice(-6), hosts: hosts.slice(-6), followups, file, error, startedAt, endedAt, minutes, now: Date.now() };
+  }
+
   /** @returns {'same' | 'roles'} which model the helpers run on: the choice beside the Deep research button, else the setting. */
   function helperModel(parent) {
     let chosen;
@@ -222,7 +242,7 @@ export function apply(ctx, config) {
    * @param {{role: string, prompt: string, label: string, parent: object, signal: AbortSignal}} spec - child spec.
    * @returns {Promise<{childId: string, text: string, stopReason: string}>} the child's answer.
    */
-  async function runChild({ role, prompt, label, parent, signal }) {
+  async function runChild({ role, prompt, label, parent, signal, run }) {
     const subagents = ctx.get('subagents');
     if (!subagents) throw new Error('The sub-agent service is unavailable.');
     const route = routeFor(parent, role);
@@ -240,7 +260,16 @@ export function apply(ctx, config) {
       signal,
     });
     childIds.add(started.childId);
-    const result = await awaitChild(started, signal);
+    if (run) {
+      childRun.set(started.childId, run);
+      run.helpers += 1;
+    }
+    let result;
+    try {
+      result = await awaitChild(started, signal);
+    } finally {
+      if (run) run.helpers = Math.max(0, run.helpers - 1);
+    }
     const text = (result.output ?? [])
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
@@ -284,9 +313,30 @@ export function apply(ctx, config) {
         const names = calls.get(id) ?? new Map();
         names.set(event.data.callId, event.data.name);
         calls.set(id, names);
+        const run = childRun.get(id);
         if (fetchNames.has(event.data.name)) {
           const url = normalizeUrl(JSON.parse(event.data.arguments)?.url);
           if (url) logOf(id).fetched.add(url);
+          if (url && run) {
+            run.pages += 1;
+            const host = new URL(url).hostname.replace(/^www\./, '');
+            if (!run.hosts.includes(host)) run.hosts.push(host);
+            if (run.hosts.length > 30) run.hosts.shift();
+          }
+        }
+        if (run && searchNames.has(event.data.name)) {
+          run.searches += 1;
+          let args = {};
+          try {
+            args = JSON.parse(event.data.arguments) ?? {};
+          } catch {
+            args = {};
+          }
+          const query = String(args.query ?? args.q ?? (Array.isArray(args.queries) ? args.queries[0] : '') ?? '').replace(/\s+/g, ' ').trim().slice(0, 140);
+          if (query) {
+            run.queries.push(query);
+            if (run.queries.length > 30) run.queries.shift();
+          }
         }
       } else {
         const callId = event.data.message?.toolCallId ?? event.data.callId;
@@ -336,6 +386,7 @@ export function apply(ctx, config) {
         items: { type: 'array', items: { type: 'string' }, maxItems: 5000, description: 'Wide mode only: the entities to research, one row each.' },
         columns: { type: 'array', items: { type: 'string' }, maxItems: 30, description: 'Wide mode only: the columns to fill for each item.' },
         maxSources: { type: 'integer', minimum: 1, description: 'Upper bound on distinct sources (capped by configuration).' },
+        focus: { type: 'string', enum: Object.keys(FOCUS), description: 'web (default), news (recent dated reporting) or academic (papers and research). In the Research tab the tab\'s own choice is used.' },
         maxMinutes: { type: 'number', minimum: 1, description: 'Time budget in minutes (capped by configuration).' },
       },
       required: ['question'],
@@ -391,8 +442,18 @@ export function apply(ctx, config) {
 
       if (wide) return runWide({ args, exec, parent, question, deadline, parallel, roles, startedAt, signalFor });
 
+      // The Research tab, when the conversation is one of its own: its focus, follow-up questions, and the saved report.
+      let tab = {};
+      try {
+        tab = ctx.get('research')?.runOptions?.(parent.id) ?? {};
+      } catch {
+        tab = {};
+      }
+      const focus = Object.hasOwn(FOCUS, tab.focus) ? tab.focus : Object.hasOwn(FOCUS, args.focus) ? args.focus : 'web';
+      const run = startRun(parent.id, { question: question.slice(0, 300), depth: depth.label, focus, rounds: depth.rounds, minutes });
+      try {
       // 1. Plan: sub-questions, each with search queries.
-      const planned = await runChild({ role: roles.planner, label: 'Research plan', parent, signal: signalFor(), prompt: planPrompt(question, depth, today) });
+      const planned = await runChild({ role: roles.planner, label: 'Research plan', parent, run, signal: signalFor(), prompt: planPrompt(question, depth, today, focus) });
       let tasks = tasksOf(extractJson(planned.text)?.subquestions, depth.subquestions);
       if (tasks.length === 0) tasks = [{ question, queries: [], why: '' }];
 
@@ -410,6 +471,8 @@ export function apply(ctx, config) {
 
       while (tasks.length > 0) {
         round += 1;
+        run.stage = 'searching';
+        run.round = round;
         const known = findings.map((finding) => finding.claim.slice(0, 160));
         const triedBefore = [...tried];
         // 2. Search and read, in parallel.
@@ -420,8 +483,9 @@ export function apply(ctx, config) {
               role: roles.searcher,
               label: `Research ${depth.rounds > 1 ? `round ${round}, ` : ''}${index + 1}/${tasks.length}`,
               parent,
+              run,
               signal: signalFor(),
-              prompt: searchPrompt({ question, task, round, depth, searchTools, fetchTools, tried: triedBefore, known, today }),
+              prompt: searchPrompt({ question, task, round, depth, searchTools, fetchTools, tried: triedBefore, known, today, focus }),
             });
             return { task, ...searchAnswer(extractJson(answer.text), depth.findings), log: fetchLog(answer.childId) };
           } catch (error) {
@@ -466,6 +530,7 @@ export function apply(ctx, config) {
           }
         }
 
+        run.sources = sources.length;
         // 4. Between rounds: what is missing, what contradicts, and better queries for the next round.
         tasks = [];
         if (!roundLeft({ round, depth, startedAt, deadline, now: Date.now() })) {
@@ -473,10 +538,12 @@ export function apply(ctx, config) {
           break;
         }
         try {
+          run.stage = 'reviewing';
           const reviewed = await runChild({
             role: roles.planner,
             label: `Research review, round ${round}`,
             parent,
+            run,
             signal: signalFor(),
             prompt: analyzePrompt({ question, findings, gaps, tried, asked, round, depth, today }),
           });
@@ -498,7 +565,8 @@ export function apply(ctx, config) {
 
       // 5. Write the report.
       const partial = Date.now() >= deadline;
-      const written = await runChild({ role: roles.writer, label: 'Research report', parent, signal: exec.signal, prompt: writePrompt({ question, findings, conflicts, gaps, today }) });
+      run.stage = 'writing';
+      const written = await runChild({ role: roles.writer, label: 'Research report', parent, run, signal: exec.signal, prompt: writePrompt({ question, findings, conflicts, gaps, today, followups: tab.followups === true }) });
 
       // 6. Check the citations.
       const cited = new Set([...written.text.matchAll(/\[(\d+)\]/g)].map((match) => Number(match[1])));
@@ -517,7 +585,18 @@ export function apply(ctx, config) {
       if (dropped) notes.push(`${dropped} finding(s) were dropped (no usable URL, over the source limit, or not fetched).`);
 
       const list = (usedSources.length ? usedSources : sources).map((source) => `[${source.n}] ${source.url} (${source.status})`).join('\n');
-      const text = `${written.text}\n\n## Sources\n${list}${notes.length ? `\n\n## Checks\n${notes.map((note) => `- ${note}`).join('\n')}` : ''}`;
+      let text = `${written.text}\n\n## Sources\n${list}${notes.length ? `\n\n## Checks\n${notes.map((note) => `- ${note}`).join('\n')}` : ''}`;
+      run.followups = followupsOf(written.text);
+      if (tab.save === true) {
+        try {
+          run.file = String((await ctx.get('research')?.saveReport?.(parent.id, { question, text, focus, depth: depth.label })) ?? '');
+          if (run.file) text += `\n\nSaved as ${run.file}`;
+        } catch (error) {
+          ctx.logger?.warn?.(`deep-research: the report could not be saved: ${error?.message ?? error}`);
+        }
+      }
+      run.stage = 'done';
+      run.endedAt = Date.now();
       return {
         text,
         stats: {
@@ -532,6 +611,12 @@ export function apply(ctx, config) {
           minutes: Math.round(((Date.now() - startedAt) / 60000) * 10) / 10,
         },
       };
+      } catch (error) {
+        run.stage = exec.signal?.aborted ? 'stopped' : 'failed';
+        run.error = String(error?.message ?? error).slice(0, 300);
+        run.endedAt = Date.now();
+        throw error;
+      }
     },
   };
 
@@ -588,6 +673,30 @@ export function apply(ctx, config) {
   }
 
   ctx.effect(() => ctx.tools.register(deepResearchTool));
+
+  // The latest run of a conversation, for the progress strip above the message box.
+  ctx.effect(() => ctx.provide('deepResearch', Object.freeze({ progress: (sessionId) => runView(runs.get(String(sessionId))) })), 'deep-research: progress service');
+  ctx.inject(['webServer', 'connection'], (inner) => {
+    inner.effect(
+      () => inner.webServer.register({
+        kind: 'exact',
+        path: '/dsh-deep-research/progress',
+        handler: async (req, res) => {
+          const refused = inner.connection.requestRejection(req);
+          if (refused !== undefined) {
+            res.statusCode = refused;
+            res.end();
+            return;
+          }
+          res.setHeader('content-type', 'application/json; charset=utf-8');
+          res.setHeader('cache-control', 'no-store');
+          const id = new URL(req.url ?? '/', 'http://local').searchParams.get('session') ?? '';
+          res.end(JSON.stringify({ run: runView(runs.get(id)) }));
+        },
+      }),
+      'deep-research: progress route',
+    );
+  });
 
   // The tool starts child agents, so the tier's sub-agent access and cap apply to it.
   // Tier may load after this plugin, so register once its service exists.

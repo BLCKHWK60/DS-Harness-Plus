@@ -1,0 +1,248 @@
+/**
+ * Research: a mode and tab for researching a question in depth, built on the Deep research
+ * add-on's engine. Switched on, it adds:
+ *   - the Research mode (through the Modes add-on) with its method and tool list;
+ *   - the Research tab, with depth and focus on the start page;
+ *   - for Deep research runs in its conversations: the tab's focus, three follow-up questions at
+ *     the end of the report, and the report saved as Markdown in the Research folder;
+ *   - the live progress of a run, with the follow-up questions as buttons (browser half).
+ * Route: `/dsh-research/data`.
+ */
+import z from '@deepseek-ai/schemastery';
+import { execFile } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { DEPTHS, FOCUSES, HELPER_MODELS, MODE_ID, listReports, saveReport, selectionNote, withResearch } from './lib/mode.js';
+
+export const name = 'dsh-research';
+export const DATA_PATH = '/dsh-research/data';
+const MODES_NS = 'modes';
+
+export const Config = z.object({
+  /** The Research mode and tab. Off leaves nothing of it in the app. */
+  enabled: z.boolean().default(false).volatile(),
+  /** Where a run looks first: web, news or academic. */
+  focus: z.string().default('web').volatile(),
+  /** Where reports are saved. Empty: `research/reports` in the app's home. */
+  folder: z.string().default('').volatile(),
+});
+
+function plain(value) {
+  if (value === null || typeof value !== 'object') return value;
+  if (typeof value.get === 'function' && Object.isFrozen(value)) {
+    try {
+      return plain(value.get());
+    } catch {
+      return undefined;
+    }
+  }
+  return value;
+}
+const focusOf = (value) => (FOCUSES.some((item) => item.id === value) ? value : 'web');
+
+export function apply(ctx, config) {
+  const warn = (text) => ctx.logger?.warn?.(`research: ${text}`);
+  const enabled = () => plain(config?.enabled) === true;
+  const home = ctx.get('dshHomePath');
+  const researchHome = typeof home === 'function' ? home('research') : '';
+  const folder = () => String(plain(config?.folder) ?? '').trim() || (researchHome ? join(researchHome, 'reports') : '');
+  const settingsOf = (ns) => {
+    try {
+      return ctx.get('settings')?.describe?.().find((entry) => entry.ns === ns)?.value;
+    } catch {
+      return undefined;
+    }
+  };
+  const depthNow = () => {
+    const value = String(plain(settingsOf(MODES_NS)?.researchDepth) ?? 'standard');
+    return DEPTHS.some((item) => item.id === value) ? value : 'standard';
+  };
+
+  // ---- which focus each conversation started with -------------------------------------------
+  const pinFile = researchHome ? join(researchHome, 'conversations.json') : '';
+  let pins = {};
+  try {
+    if (pinFile && existsSync(pinFile)) pins = JSON.parse(readFileSync(pinFile, 'utf8')) ?? {};
+  } catch {
+    pins = {};
+  }
+  const pin = (id, focus) => {
+    pins[id] = focus;
+    const ids = Object.keys(pins);
+    if (ids.length > 500) for (const old of ids.slice(0, ids.length - 500)) delete pins[old];
+    try {
+      if (!pinFile) return;
+      mkdirSync(dirname(pinFile), { recursive: true, mode: 0o700 });
+      writeFileSync(pinFile, JSON.stringify(pins), { mode: 0o600 });
+    } catch {
+      /* the pins are a convenience */
+    }
+  };
+
+  // ---- the mode: kept in step with the switch ------------------------------------------------
+  let problem = '';
+  let syncing = false;
+  const syncMode = async () => {
+    if (syncing) return;
+    syncing = true;
+    try {
+      const service = ctx.get('settings');
+      const row = service?.describe?.().find((entry) => entry.ns === MODES_NS);
+      if (!row) {
+        problem = 'The Modes add-on is not running, so there is no Research tab.';
+        return;
+      }
+      if (row.value?.extraModes === undefined) {
+        problem = 'The Modes add-on is an older version that cannot take a new mode. Update Plus.';
+        return;
+      }
+      const ops = [];
+      const next = withResearch(row.value.extraModes, enabled());
+      if (next !== undefined) ops.push({ op: 'set', path: ['extraModes'], value: next });
+      if (!enabled() && row.value.defaultMode === MODE_ID) ops.push({ op: 'set', path: ['defaultMode'], value: 'cowork' });
+      if (ops.length > 0) await service.mutate(MODES_NS, ops);
+      problem = ctx.get('deepResearch') ? '' : 'The Deep research add-on is not running, so research runs cannot start. Switch it on under Plugins.';
+    } catch (error) {
+      problem = `The Research tab could not be ${enabled() ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
+      warn(problem);
+    } finally {
+      syncing = false;
+    }
+  };
+  void syncMode();
+  const timer = setInterval(() => void syncMode(), 3000);
+  timer.unref?.();
+  ctx.effect(() => () => clearInterval(timer), 'research: follow the switch');
+
+  // ---- conversations of the tab --------------------------------------------------------------
+  const inResearch = (id) => {
+    try {
+      return Boolean(id) && ctx.get('modes')?.get?.(id) === MODE_ID;
+    } catch {
+      return false;
+    }
+  };
+  const rootOf = (agent) => String(agent?.header?.parentSession ?? agent?.session?.header?.parentSession ?? agent?.id ?? '');
+  const focusFor = (id) => focusOf(pins[id] ?? plain(config?.focus));
+
+  ctx.on('session/event', (session, event) => {
+    try {
+      if (event?.type !== 'turn/start' || session?.header?.origin === 'subagent') return;
+      const id = session?.id;
+      if (!id || !enabled() || pins[id] || !inResearch(id)) return;
+      pin(id, focusOf(plain(config?.focus)));
+    } catch (error) {
+      warn(`could not remember a conversation's focus: ${String(error?.message ?? error)}`);
+    }
+  });
+
+  const sections = new Map();
+  const install = (agent) => {
+    if (!agent?.id || sections.has(agent.id) || !agent.ctx?.systemPrompt) return;
+    try {
+      const dispose = agent.ctx.effect(
+        () => agent.ctx.systemPrompt.section({
+          name: 'research:selection',
+          order: 59,
+          interpolate: false,
+          text: () => {
+            try {
+              if (!enabled() || rootOf(agent) !== agent.id || !inResearch(agent.id)) return '';
+              return selectionNote({ focus: focusFor(agent.id), depth: depthNow() });
+            } catch {
+              return '';
+            }
+          },
+        }),
+        'research selection note',
+      );
+      sections.set(agent.id, dispose);
+    } catch (error) {
+      warn(`could not add the selection note: ${String(error?.message ?? error)}`);
+    }
+  };
+  ctx.on('agent/created', ({ agent }) => install(agent));
+  ctx.on('agent/disposed', ({ agent }) => sections.delete(agent?.id));
+  try {
+    for (const agent of ctx.get('agents')?.list?.() ?? []) install(agent);
+  } catch {
+    /* agents appear later */
+  }
+
+  // ---- what Deep research asks of the tab ----------------------------------------------------
+  ctx.effect(
+    () => ctx.provide('research', Object.freeze({
+      /** For a run in a Research conversation: the focus, follow-up questions, and saving the report. */
+      runOptions(sessionId) {
+        const id = String(sessionId ?? '');
+        if (!enabled() || !inResearch(id)) return {};
+        return { focus: focusFor(id), followups: true, save: Boolean(folder()) };
+      },
+      /** Save a finished report; returns the file. */
+      saveReport(sessionId, report) {
+        if (!enabled() || !folder()) return '';
+        return saveReport(folder(), report);
+      },
+    })),
+    'research: service',
+  );
+
+  // ---- the pages' data -----------------------------------------------------------------------
+  const view = () => ({
+    at: Date.now(),
+    enabled: enabled(),
+    focus: focusOf(plain(config?.focus)),
+    depth: depthNow(),
+    focuses: FOCUSES,
+    depths: DEPTHS,
+    helperModel: String(plain(settingsOf(MODES_NS)?.researchModel) ?? '') === 'roles' ? 'roles' : 'same',
+    helperModels: HELPER_MODELS,
+    folder: folder(),
+    reports: listReports(folder()),
+    engine: Boolean(ctx.get('deepResearch')),
+    problem,
+  });
+  ctx.inject(['webServer', 'connection'], (inner) => {
+    inner.effect(
+      () => inner.webServer.register({
+        kind: 'exact',
+        path: DATA_PATH,
+        handler: async (req, res) => {
+          const refused = inner.connection.requestRejection(req);
+          if (refused !== undefined) {
+            res.statusCode = refused;
+            res.end();
+            return;
+          }
+          res.setHeader('content-type', 'application/json; charset=utf-8');
+          res.setHeader('cache-control', 'no-store');
+          try {
+            const session = new URL(req.url ?? '/', 'http://local').searchParams.get('session') ?? '';
+            if (req.method === 'POST') {
+              const chunks = [];
+              for await (const chunk of req) chunks.push(chunk);
+              const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+              if (body.action === 'reveal') {
+                const path = folder();
+                mkdirSync(path, { recursive: true, mode: 0o700 });
+                if (process.platform === 'darwin') await new Promise((done) => execFile('/usr/bin/open', [path], () => done()));
+              } else if (body.action === 'focus') {
+                // The chat box's Focus: this conversation's own, and where new ones start.
+                const focus = focusOf(body.focus);
+                const id = String(body.sessionId ?? '').slice(0, 200);
+                if (id) pin(id, focus);
+                await ctx.get('settings')?.mutate?.('research', [{ op: 'set', path: ['focus'], value: focus }]);
+              } else throw new Error('unknown action');
+            }
+            res.end(JSON.stringify({ ...view(), ...(session ? { session: { inResearch: enabled() && inResearch(session), focus: focusFor(session) } } : {}) }));
+            void syncMode();
+          } catch (error) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 300) }));
+          }
+        },
+      }),
+      'research: data route',
+    );
+  });
+}

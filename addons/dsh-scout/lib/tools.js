@@ -209,7 +209,7 @@ export function buildTools({ enabled, registry, selection, keyOf, hasKey, store,
     },
     {
       name: 'scout_files',
-      description: 'The user\'s files in the Scout folder (resume, LinkedIn export, notes). Without a name: the list. With a name: that file\'s text. Only a model on the user\'s own machines may read them.',
+      description: 'The user\'s files in the Scout folder (resume, LinkedIn export, notes). Without a name: the list. With a name: that file\'s text.',
       parameters: { type: 'object', properties: { name: text(160, 'The file\'s name, as the list shows it.') }, additionalProperties: false },
       ...common,
       execute: safely(async (args, exec) => {
@@ -225,8 +225,8 @@ export function buildTools({ enabled, registry, selection, keyOf, hasKey, store,
     },
     {
       name: 'scout_profile',
-      description: 'The user\'s anonymous profile: titles, skills, seniority, years, pay level and preferences, with no name, contact details or employer names. Without arguments: read it. With text: replace it (write it from the user\'s files or words, then show it to them).',
-      parameters: { type: 'object', properties: { save: text(6000, 'The new profile, in full. No name, email, phone, address or employer names.') }, additionalProperties: false },
+      description: 'The user\'s profile: titles, skills, seniority, years, pay level and preferences. Without arguments: read it. With text: replace it (write it from the user\'s files or words, then show it to them).',
+      parameters: { type: 'object', properties: { save: text(6000, 'The new profile, in full.') }, additionalProperties: false },
       ...common,
       execute: safely(async (args, exec) => {
         if (typeof args.save === 'string' && args.save.trim()) {
@@ -236,7 +236,7 @@ export function buildTools({ enabled, registry, selection, keyOf, hasKey, store,
         const allowed = gate(exec).profile;
         if (!allowed.ok) return allowed.why;
         const value = profile.read().trim();
-        return value ? `The user's profile:\n${value}` : 'There is no profile yet. With a model on the user\'s own machines, read their files with scout_files and write one with scout_profile save; or work from what the user typed.';
+        return value ? `The user's profile:\n${value}` : 'There is no profile yet. Read the user\'s files with scout_files and write one with scout_profile save, or work from what the user typed.';
       }),
     },
     {

@@ -58,16 +58,29 @@ const lines = (value, max, most) => (Array.isArray(value) ? value : []).map((ite
  * @param {string} today - today's date, YYYY-MM-DD.
  * @returns {string} the instruction.
  */
-export function planPrompt(question, depth, today) {
+/**
+ * What a focus asks of the planner and the searchers. `web` asks nothing extra.
+ * (A focus on the user's own documents comes with the Library in a later step.)
+ */
+export const FOCUS = {
+  web: '',
+  news: 'Focus: NEWS. Prefer recent reporting from established news organisations and wire services, each with its publication date; prefer the newest reports and the original report over copies. Say how recent each finding is. Include at least one query with the current year or month.',
+  academic: 'Focus: ACADEMIC. Prefer peer-reviewed papers, preprints (arXiv, SSRN, bioRxiv, medRxiv), systematic reviews, university and research institute pages, and official statistics. Give authors and year for each paper and say whether it is peer-reviewed or a preprint. Use queries such as the topic with "study", "paper", "meta-analysis", "site:arxiv.org", "site:nih.gov", "filetype:pdf".',
+};
+/** @returns {string} the focus's instruction, or '' for none or an unknown one. */
+export const focusNote = (focus) => FOCUS[focus] ?? '';
+
+export function planPrompt(question, depth, today, focus = 'web') {
   return [
     'RESEARCH_PLAN',
     `Plan the research for the question below. Today is ${today}.`,
+    focusNote(focus),
     `Split it into 3 to ${depth.subquestions} sub-questions that together answer it and overlap as little as possible. Cover different angles where they apply: the basic facts and definitions; the numbers; the most recent developments; the primary sources (official documents, filings, papers, statistics); and the strongest criticism or contrary evidence.`,
     'For each sub-question give 2 or 3 search queries as you would type them into a search engine: short, specific, with the names, dates and terms a good source would use. Vary the wording between them.',
     'Answer with ONLY JSON: {"subquestions": [{"question": "...", "queries": ["...", "..."]}]}',
     '',
     `Question: ${question}`,
-  ].join('\n');
+  ].filter((part) => part !== '').join('\n');
 }
 
 /**
@@ -101,10 +114,11 @@ export function tasksOf(list, most) {
  * @param {string} spec.today - today's date.
  * @returns {string} the instruction.
  */
-export function searchPrompt({ question, task, round, depth, searchTools, fetchTools, tried = [], known = [], today }) {
+export function searchPrompt({ question, task, round, depth, searchTools, fetchTools, tried = [], known = [], today, focus = 'web' }) {
   const parts = [
     'RESEARCH_SEARCH',
     `Research ONE sub-question on the web with ${searchTools.join(', ')} and ${fetchTools.join(', ')}. Today is ${today}.`,
+    ...(focusNote(focus) ? [focusNote(focus)] : []),
     'How to work:',
     '- Run several searches, not one. Start with the suggested queries, then write better ones from what the results show: the exact names, terms, dates and document titles that good sources use.',
     '- Open the pages. A search result\'s snippet is not a source: fetch every page you cite, and do not cite a page you did not fetch.',
@@ -217,7 +231,7 @@ export function roundLeft({ round, depth, startedAt, deadline, now }) {
  * @param {string} spec.today - today's date.
  * @returns {string} the instruction.
  */
-export function writePrompt({ question, findings, conflicts, gaps, today }) {
+export function writePrompt({ question, findings, conflicts, gaps, today, followups = false }) {
   return [
     'RESEARCH_WRITE',
     `Write the report that answers the question, using ONLY the numbered findings below. Today is ${today}.`,
@@ -226,6 +240,7 @@ export function writePrompt({ question, findings, conflicts, gaps, today }) {
     '- Give figures and dates exactly as the findings give them. Where a finding has a date, prefer the newer one and say when it is from.',
     '- Where sources disagree, say so and set out both sides. Do not pick one silently.',
     '- End with a short section on what could not be established.',
+    followups ? '- After that, a last section headed exactly "## Follow-up questions" with three short questions the user might ask next, each on its own line starting with "- ". Make them specific to what was found.' : '',
     '- Do not add a source list; it is added for you.',
     '',
     `Question: ${question}`,
@@ -234,4 +249,23 @@ export function writePrompt({ question, findings, conflicts, gaps, today }) {
     '',
     `Findings:\n${findings.slice(0, WRITER_FINDINGS_MAX).map((finding) => `[${finding.n}] ${finding.claim}${finding.date ? ` (${finding.date})` : ''}${finding.quote ? ` — "${finding.quote}"` : ''}`).join('\n')}`,
   ].filter((part) => part !== '').join('\n');
+}
+
+/**
+ * The follow-up questions at the end of a report, if the writer gave them.
+ * @param {string} text - the report.
+ * @returns {string[]} up to three questions.
+ */
+export function followupsOf(text) {
+  const at = String(text ?? '').search(/^##\s*Follow-up questions\s*$/im);
+  if (at < 0) return [];
+  const block = text.slice(at).split('\n').slice(1);
+  const out = [];
+  for (const row of block) {
+    if (/^##\s/.test(row)) break;
+    const item = row.replace(/^\s*(?:[-*]|\d+[.)])\s+/, '').trim();
+    if (item && item !== row.trim() && item.length <= 300) out.push(item);
+    if (out.length === 3) break;
+  }
+  return out;
 }
