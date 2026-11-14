@@ -1,0 +1,583 @@
+{
+  "ergebnisliste" : [ {
+    "stellenangebotsart" : "SELBSTAENDIGKEIT",
+    "stellenangebotsTitel" : "Data Engineer",
+    "arbeitszeitVollzeit" : true,
+    "eintrittszeitraum" : {
+      "von" : "2026-11-23"
+    },
+    "verguetungsangabe" : "KEINE_ANGABEN",
+    "vertragsdauer" : "KEINE_ANGABE",
+    "stellenlokationen" : [ {
+      "adresse" : {
+        "strasse" : "Frankfurter Allee",
+        "hausnummer" : "73",
+        "plz" : "10247",
+        "ort" : "Berlin",
+        "region" : "BERLIN",
+        "land" : "DEUTSCHLAND"
+      },
+      "breite" : 52.51442479700006,
+      "laenge" : 13.46545199500008
+    } ],
+    "homeofficemoeglich" : true,
+    "homeofficetyp" : "NACH_VEREINBARUNG",
+    "veroeffentlichungszeitraum" : {
+      "von" : "2026-11-02"
+    },
+    "datumErsteVeroeffentlichung" : "2025-02-10",
+    "aenderungsdatum" : "2026-11-02T08:37:59.246",
+    "hauptberuf" : "Data Engineer",
+    "alternativBeruf1" : "Informatiker/in",
+    "firma" : "alfatraining Bildungszentrum GmbH",
+    "arbeitgeberKundennummerHash" : "B1uI-VVbWW1P5U3F8Dc8FWLNlcfpehFSi__pNJ8EbIo=",
+    "referenznummer" : "10000-1183204759-S",
+    "entfernung" : 3,
+    "alleBerufe" : [ "Data Engineer", "Informatiker/in" ]
+  }, {
+    "stellenangebotsart" : "ARBEIT",
+    "stellenangebotsTitel" : "Data & Analytics Engineer (m/w/d)",
+    "quereinstiegGeeignet" : false,
+    "arbeitszeitSchichtNachtWochenende" : false,
+    "arbeitszeitTeilzeitAbend" : false,
+    "arbeitszeitTeilzeitNachmittag" : false,
+    "arbeitszeitTeilzeitVormittag" : false,
+    "arbeitszeitTeilzeitFlexibel" : false,
+    "arbeitszeitVollzeit" : true,
+    "eintrittszeitraum" : {
+      "von" : "2026-11-11"
+    },
+    "verguetungsangabe" : "KEINE_ANGABEN",
+    "vertragsdauer" : "UNBEFRISTET",
+    "istGeringfuegigeBeschaeftigung" : false,
+    "stellenlokationen" : [ {
+      "adresse" : {
+        "plz" : "10969",
+        "ort" : "Berlin",
+        "region" : "BERLIN",
+        "land" : "DEUTSCHLAND"
+      },
+      "breite" : 52.5020486,
+      "laenge" : 13.4014463
+    } ],
+    "homeofficemoeglich" : false,
+    "chiffrenummer" : "2871316",
+    "veroeffentlichungszeitraum" : {
+      "von" : "2026-11-11"
+    },
+    "datumErsteVeroeffentlichung" : "2026-11-11",
+    "aenderungsdatum" : "2026-11-11T09:55:52.786",
+    "externeURL" : "https://www.jobexport.de/job/5294378.html?exp=81&cid=e4cc7e9d-1ddc-4605-8158-d13c9db00f2e",
+    "hauptberuf" : "Data Engineer",
+    "firma" : "dpa",
+    "referenznummer" : "13635-e4cc7e9d_JB5294378-S",
+    "entfernung" : 2,
+    "alleBerufe" : [ "Data Engineer" ]
+  }, {
+    "stellenangebotsart" : "ARBEIT",
+    "stellenangebotsTitel" : "Senior Data Engineer (m/w/d)",
+    "quereinstiegGeeignet" : false,
+    "arbeitszeitVollzeit" : true,
+    "eintrittszeitraum" : {
+      "von" : "2027-01-26"
+    },
+    "verguetungsangabe" : "KEINE_ANGABEN",
+    "vertragsdauer" : "KEINE_ANGABE",
+    "istGeringfuegigeBeschaeftigung" : false,
+    "stellenlokationen" : [ {
+      "adresse" : {
+        "strasse" : "Marktstraße 8",
+        "plz" : "10317",
+        "ort" : "Berlin",
+        "region" : "BERLIN",
+        "land" : "DEUTSCHLAND"
+      },
+      "breite" : 52.504956000001,
+      "laenge" : 13.471821
+    } ],
+    "veroeffentlichungszeitraum" : {
+      "von" : "2026-10-26"
+    },
+    "datumErsteVeroeffentlichung" : "2026-10-26",
+    "aenderungsdatum" : "2026-10-26T07:22:34.948",
+    "hauptberuf" : "Data Engineer",
+    "firma" : "Tesla Germany GmbH",
+    "arbeitgeberKundennummerHash" : "qdFfuuNlrbBFKbij6tfQR2DThkirdgpniVRkoL3o8Tk=",
+    "referenznummer" : "15158-2026287051-S",
+    "entfernung" : 3,
+    "alleBerufe" : [ "Data Engineer" ]
+  } ],
+  "maxErgebnisse" : 123,
+  "page" : 1,
+  "size" : 3,
+  "woOutput" : {
+    "bereinigterOrt" : "Berlin",
+    "suchmodus" : "UMKREISSUCHE",
+    "koordinaten" : [ {
+      "lat" : 52.5112613,
+      "lon" : 13.4255145
+    } ]
+  },
+  "facetten" : {
+    "verguetung" : {
+      "counts" : {
+        "jahr" : 18
+      },
+      "maxCount" : 123
+    },
+    "befristung" : {
+      "counts" : {
+        "1" : 9,
+        "2" : 53,
+        "3" : 61
+      },
+      "maxCount" : 123
+    },
+    "externestellenboersen" : {
+      "counts" : {
+        "false" : 111,
+        "true" : 12
+      },
+      "maxCount" : 123
+    },
+    "behinderung" : {
+      "counts" : {
+        "false" : 86,
+        "true" : 17
+      },
+      "maxCount" : 123
+    },
+    "pav" : {
+      "counts" : {
+        "false" : 119,
+        "true" : 4
+      },
+      "maxCount" : 123
+    },
+    "berufsfeld" : {
+      "counts" : {
+        "Bauplanung und -überwachung, Architektur" : 1,
+        "Biologie" : 1,
+        "Chemie" : 2,
+        "Einkauf und Vertrieb" : 1,
+        "Elektrotechnik" : 7,
+        "Energietechnik" : 1,
+        "Fahrzeug-, Luft-, Raumfahrt- und Schiffbautechnik" : 1,
+        "Handel" : 2,
+        "IT-Netzwerktechnik, -Administration, -Organisation" : 15,
+        "IT-Systemanalyse, -Anwendungsberatung und -Vertrieb" : 3,
+        "Informatik" : 48,
+        "Maschinenbau- und Betriebstechnik" : 2,
+        "Softwareentwicklung und Programmierung" : 22,
+        "Technische Forschung und Entwicklung" : 2,
+        "Technische Produktionsplanung und -steuerung" : 9,
+        "Unternehmensorganisation und -strategie" : 5,
+        "Verkauf Bekleidung, Elektro, KFZ, Hartwaren" : 1
+      },
+      "maxCount" : 123
+    },
+    "topberuf" : {
+      "counts" : {
+        "Data Engineer" : 25,
+        "Machine Learning Engineer" : 11,
+        "KI-Engineer" : 17,
+        "Cloud-Architect" : 7,
+        "Leiter/in - Informations-/Cybersicherheit" : 3,
+        "Datenbankentwickler/in" : 4,
+        "IT-Fachwirt/in" : 3,
+        "Software-Architect" : 7,
+        "Softwareentwickler/in" : 15,
+        "Cyber-Security-Consultant" : 5,
+        "Produktionsingenieur/in" : 4,
+        "Data Scientist" : 3,
+        "Ingenieur/in - Chemietechnik" : 3,
+        "Ingenieur/in - Systems Engineering" : 3,
+        "Informatiker/in" : 7,
+        "Techniker/in - Elektrotechnik (ohne Schwerpunkt)/Bachelor Professional in Technik" : 4,
+        "IT-Berater/in" : 3,
+        "Fachinformatiker/in - Anwendungsentwicklung" : 3,
+        "Ingenieur/in - Elektrotechnik" : 3
+      },
+      "scores" : {
+        "Data Engineer" : 1501065,
+        "Machine Learning Engineer" : 1299786,
+        "KI-Engineer" : 1204703,
+        "Cloud-Architect" : 135226,
+        "Leiter/in - Informations-/Cybersicherheit" : 130065,
+        "Datenbankentwickler/in" : 108823,
+        "IT-Fachwirt/in" : 86042,
+        "Software-Architect" : 67729,
+        "Softwareentwickler/in" : 56016,
+        "Cyber-Security-Consultant" : 46269,
+        "Produktionsingenieur/in" : 39365,
+        "Data Scientist" : 24698,
+        "Ingenieur/in - Chemietechnik" : 20156,
+        "Ingenieur/in - Systems Engineering" : 12655,
+        "Informatiker/in" : 10118,
+        "Techniker/in - Elektrotechnik (ohne Schwerpunkt)/Bachelor Professional in Technik" : 4740,
+        "IT-Berater/in" : 4571,
+        "Fachinformatiker/in - Anwendungsentwicklung" : 3253,
+        "Ingenieur/in - Elektrotechnik" : 801
+      },
+      "maxCount" : 123
+    },
+    "arbeitsort" : {
+      "counts" : {
+        "Berlin" : 122
+      },
+      "maxCount" : 123
+    },
+    "veroeffentlichtseit" : {
+      "counts" : {
+        "1" : 3,
+        "14" : 34,
+        "28" : 57,
+        "7" : 17,
+        "alle" : 123
+      },
+      "maxCount" : 123
+    },
+    "schulbildung" : {
+      "counts" : {
+        "0" : 123,
+        "1" : 123,
+        "11" : 123,
+        "12" : 123,
+        "2" : 123,
+        "3" : 123,
+        "4" : 123,
+        "5" : 123,
+        "6" : 123
+      },
+      "maxCount" : 123
+    },
+    "arbeitsort_plz" : {
+      "counts" : {
+        "01109" : 1,
+        "01129" : 1,
+        "03044" : 1,
+        "04109" : 1,
+        "04179" : 1,
+        "04288" : 1,
+        "04317" : 4,
+        "07743" : 1,
+        "07745" : 1,
+        "10115" : 4,
+        "10117" : 26,
+        "10119" : 1,
+        "10178" : 7,
+        "10179" : 1,
+        "10243" : 8,
+        "10245" : 4,
+        "10247" : 2,
+        "10317" : 9,
+        "10551" : 1,
+        "10553" : 2,
+        "10557" : 1,
+        "10587" : 5,
+        "10707" : 1,
+        "10719" : 4,
+        "10781" : 2,
+        "10789" : 4,
+        "10969" : 2,
+        "10997" : 1,
+        "12099" : 1,
+        "12105" : 1,
+        "12277" : 1,
+        "12555" : 13,
+        "13053" : 1,
+        "13347" : 1,
+        "13407" : 2,
+        "13629" : 1,
+        "14480" : 1,
+        "14770" : 1,
+        "18057" : 1,
+        "20097" : 2,
+        "20148" : 4,
+        "20251" : 1,
+        "20354" : 1,
+        "20457" : 14,
+        "22083" : 1,
+        "22085" : 2,
+        "22297" : 1,
+        "22587" : 1,
+        "24837" : 1,
+        "26655" : 1,
+        "28195" : 1,
+        "28307" : 1,
+        "30173" : 2,
+        "31553" : 1,
+        "31618" : 1,
+        "36043" : 1,
+        "38440" : 13,
+        "38835" : 1,
+        "40210" : 2,
+        "40213" : 4,
+        "40468" : 1,
+        "40549" : 2,
+        "44787" : 2,
+        "46325" : 1,
+        "48268" : 1,
+        "50667" : 5,
+        "51103" : 13,
+        "51145" : 1,
+        "53119" : 1,
+        "53175" : 1,
+        "53227" : 1,
+        "60311" : 2,
+        "60322" : 2,
+        "60486" : 1,
+        "60487" : 13,
+        "60528" : 1,
+        "64295" : 1,
+        "65760" : 6,
+        "68159" : 3,
+        "68165" : 1,
+        "68219" : 1,
+        "70174" : 2,
+        "70499" : 1,
+        "70567" : 13,
+        "70629" : 4,
+        "70771" : 1,
+        "76131" : 3,
+        "76133" : 4,
+        "76275" : 13,
+        "80331" : 2,
+        "80335" : 2,
+        "80636" : 5,
+        "80637" : 2,
+        "80639" : 1,
+        "80807" : 14,
+        "81249" : 1,
+        "81673" : 1,
+        "83026" : 13,
+        "85774" : 2,
+        "89075" : 1,
+        "90402" : 1,
+        "90431" : 1,
+        "90489" : 2,
+        "91623" : 1,
+        "99091" : 13
+      },
+      "maxCount" : 123
+    },
+    "arbeitgeber" : {
+      "counts" : {
+        "ALDB GmbH" : 1,
+        "AMADEUS FIRE AG" : 2,
+        "ARTELIA GmbH" : 2,
+        "AVENDIS GmbH" : 1,
+        "Akkodis Germany Tech Experts GmbH" : 6,
+        "Amazon Web Services Developmen t Center Germany GmbH" : 1,
+        "BWI GmbH" : 1,
+        "CHN Energy Europe Research GmbH" : 5,
+        "Computacenter AG & Co. oHG" : 1,
+        "DKB Service GmbH" : 1,
+        "Delivery Hero SE" : 1,
+        "Deloitte GmbH" : 7,
+        "Deutsche Telekom AG" : 1,
+        "Deutsche Telekom MMS GmbH" : 1,
+        "EXXETA AG" : 2,
+        "EY Consulting GmbH" : 4,
+        "Forto Logistics SE & Co. KG" : 1,
+        "GDV Gesamtverband der Versicherer" : 1,
+        "Google Germany GmbH" : 1,
+        "HOCHTIEF Infrastructure GmbH" : 1,
+        "Hays Professional Solutions GmbH" : 1,
+        "HelloFresh SE" : 1,
+        "IONOS SE" : 4,
+        "IndustrieAlpine GmbH & Co KG" : 1,
+        "JetBrains GmbH" : 1,
+        "Junini GmbH" : 1,
+        "Limebit GmbH" : 1,
+        "Max Bögl Bauservice GmbH und Co. KG" : 1,
+        "NTT DATA Deutschland SE" : 13,
+        "PRODATO" : 1,
+        "PTA GmbH" : 1,
+        "PharmaHera" : 1,
+        "Profi Talent Recruitment UG PTR" : 1,
+        "Siemens Energy Global GmbH & Co. KG" : 2,
+        "Smartly.io Solutions GmbH" : 2,
+        "Stadtwerke Potsdam GmbH" : 1,
+        "Statista" : 2,
+        "Tesla Germany GmbH" : 22,
+        "Vivantes Netzwerk für Gesundheit GmbH" : 2,
+        "Vodafone GmbH" : 2,
+        "WAITS Software- und Prozessberatungsgesellschaft mbH" : 1,
+        "Zalando SE" : 7,
+        "aconium GmbH Hauptsitz Berlin" : 1,
+        "alfatraining Bildungszentrum GmbH" : 2,
+        "dpa" : 1,
+        "go-e Labs GmbH" : 1,
+        "inovex GmbH" : 3,
+        "netgo group GmbH" : 1,
+        "snafu GmbH" : 1,
+        "via Futuri GmbH" : 1,
+        "zollsoft GmbH" : 1,
+        "zollsoft GmbH    " : 1
+      },
+      "maxCount" : 123
+    },
+    "beruf" : {
+      "counts" : {
+        "Analytiker/in - Chemie" : 1,
+        "Automobil-Fachwirt/in" : 2,
+        "Außendienstmitarbeiter/in" : 1,
+        "BIM-Manager/in" : 1,
+        "Bachelor Professional - IT (IT-Beratung)" : 1,
+        "Bachelor Professional - IT (Informationssicherheit)" : 1,
+        "Berufsspezialist/in - Softwareentwicklung" : 1,
+        "Biochemiker/in" : 1,
+        "Business-Analyst/in" : 1,
+        "Cloud-Architect" : 7,
+        "Cloud-Consultant" : 2,
+        "Cyber-Security-Consultant" : 5,
+        "Data Engineer" : 25,
+        "Data Scientist" : 3,
+        "Data-Analyst/in" : 1,
+        "Data-Consultant" : 2,
+        "Data-Warehouse-Analyst/in" : 2,
+        "Datenbankentwickler/in" : 4,
+        "DevOps Engineer" : 2,
+        "Embedded-Systems-Entwickler/in" : 1,
+        "Fachinformatiker/in - Anwendungsentwicklung" : 3,
+        "Fachinformatiker/in - Systemintegration" : 1,
+        "Fachverkäufer/in - Kraftfahrzeuge" : 1,
+        "Fintech-Entwickler/in" : 1,
+        "Geoinformatiker/in" : 1,
+        "Gruppen-, Teamleiter/in" : 1,
+        "IT-Berater/in" : 3,
+        "IT-Compliance-Consultant" : 2,
+        "IT-Fachwirt/in" : 3,
+        "IT-Forensiker/in" : 1,
+        "IT-Service-Delivery-Manager/in" : 1,
+        "IT-Systemadministrator/in" : 1,
+        "IT-Systemplaner/in" : 1,
+        "Informatiker/in" : 7,
+        "Ingenieur/in - Bau" : 1,
+        "Ingenieur/in - Biotechnologie" : 1,
+        "Ingenieur/in - Chemietechnik" : 3,
+        "Ingenieur/in - Elektrotechnik" : 3,
+        "Ingenieur/in - Energietechnik" : 2,
+        "Ingenieur/in - Erneuerbare Energien" : 2,
+        "Ingenieur/in - Informations-, Kommunikationstechnik" : 1,
+        "Ingenieur/in - Luft- und Raumfahrttechnik" : 1,
+        "Ingenieur/in - Materialwissenschaften" : 2,
+        "Ingenieur/in - Mechanik" : 1,
+        "Ingenieur/in - Mechatronik" : 1,
+        "Ingenieur/in - Systems Engineering" : 3,
+        "Ingenieur/in - Verfahrenstechnik" : 1,
+        "Ingenieur/in - technische Gebäudeausrüstung" : 1,
+        "KI-Engineer" : 17,
+        "KI-Manager/in" : 1,
+        "Leiter/in - Informations-/Cybersicherheit" : 3,
+        "Machine Learning Engineer" : 11,
+        "Netzwerkadministrator/in" : 1,
+        "Produktingenieur/in" : 2,
+        "Produktionsingenieur/in" : 4,
+        "Qualitätsingenieur/in" : 2,
+        "Site Reliability Engineer" : 1,
+        "Software-Architect" : 7,
+        "Softwareentwickler/in" : 15,
+        "Statistiker/in" : 1,
+        "Systeminformatiker/in" : 2,
+        "Techniker/in - Elektrotechnik (ohne Schwerpunkt)/Bachelor Professional in Technik" : 4,
+        "Techniker/in - Informatik (KI und Robotik)/Bachelor Professional in Technik" : 1,
+        "Web Developer" : 1,
+        "Wirtschaftsinformatiker/in (Hochschule)" : 1
+      },
+      "maxCount" : 123
+    },
+    "homeoffice" : {
+      "counts" : {
+        "prozentual" : 12,
+        "nv_false" : 12,
+        "nv_true" : 14
+      },
+      "maxCount" : 123
+    },
+    "angebotsart" : {
+      "counts" : {
+        "1" : 121,
+        "2" : 2
+      },
+      "maxCount" : 123
+    },
+    "quereinstieg" : {
+      "counts" : {
+        "false" : 123
+      },
+      "maxCount" : 123
+    },
+    "branche" : {
+      "counts" : {
+        "1" : 9,
+        "11" : 36,
+        "13" : 17,
+        "21" : 1,
+        "22" : 1,
+        "28" : 8,
+        "29" : 2,
+        "3" : 2,
+        "4" : 2,
+        "6" : 1,
+        "7" : 2,
+        "9" : 31
+      },
+      "maxCount" : 123
+    },
+    "arbeitszeit" : {
+      "counts" : {
+        "tz" : 1,
+        "vz" : 115
+      },
+      "maxCount" : 123
+    },
+    "eintrittsdatum" : {
+      "counts" : {
+        "10_01_01-now" : 85,
+        "26_11_01-26_12_01" : 53,
+        "26_12_01-27_01_01" : 8,
+        "27_01_01-27_02_01" : 18,
+        "27_02_01-27_03_01" : 4
+      },
+      "maxCount" : 123
+    },
+    "zeitarbeit" : {
+      "counts" : {
+        "false" : 115,
+        "true" : 8
+      },
+      "maxCount" : 123
+    },
+    "topberufsfeld" : {
+      "counts" : {
+        "Informatik" : 48,
+        "Softwareentwicklung und Programmierung" : 22,
+        "IT-Netzwerktechnik, -Administration, -Organisation" : 15,
+        "Technische Produktionsplanung und -steuerung" : 9,
+        "Technische Forschung und Entwicklung" : 2,
+        "Elektrotechnik" : 7,
+        "IT-Systemanalyse, -Anwendungsberatung und -Vertrieb" : 3,
+        "Biologie" : 1,
+        "Unternehmensorganisation und -strategie" : 5,
+        "Chemie" : 2,
+        "Handel" : 2
+      },
+      "scores" : {
+        "Informatik" : 153240,
+        "Softwareentwicklung und Programmierung" : 62963,
+        "IT-Netzwerktechnik, -Administration, -Organisation" : 20393,
+        "Technische Produktionsplanung und -steuerung" : 4641,
+        "Technische Forschung und Entwicklung" : 1210,
+        "Elektrotechnik" : 1169,
+        "IT-Systemanalyse, -Anwendungsberatung und -Vertrieb" : 1064,
+        "Biologie" : 721,
+        "Unternehmensorganisation und -strategie" : 514,
+        "Chemie" : 402,
+        "Handel" : 51
+      },
+      "maxCount" : 123
+    }
+  }
+}

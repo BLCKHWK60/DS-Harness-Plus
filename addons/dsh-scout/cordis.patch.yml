@@ -1,0 +1,7 @@
+- insert:
+    - id: scout
+      name: '@local/dsh-scout'
+      config:
+        # Off until you switch it on in Settings > Scout. It then adds a Scout tab beside Chat, Cowork and Code.
+        # Needs the Modes add-on and the Cowork sidebar.
+        enabled: false

@@ -650,6 +650,33 @@ window.__ModuleLoader__.load({
             "prompt": "What has changed for the selected subject in the last month?"
           }
         ]
+      },
+      "scout": {
+        "newLabel": "New search",
+        "pages": [],
+        "greeting": "What work are you looking for?",
+        "chips": [
+          {
+            "label": "Find opportunities",
+            "icon": "research",
+            "prompt": "Find the best opportunities for the work I selected, across my markets."
+          },
+          {
+            "label": "Market brief",
+            "icon": "chart",
+            "prompt": "Give me a market brief for the work I selected: the titles used, pay and demand in each of my markets. Do not search for postings yet."
+          },
+          {
+            "label": "Hidden market",
+            "icon": "spark",
+            "prompt": "Look beyond the job boards for the work I selected: company boards, community hiring threads, and companies showing hiring signals."
+          },
+          {
+            "label": "Make my profile",
+            "icon": "spreadsheet",
+            "prompt": "Read my files in the Scout folder and write my anonymous profile. Show it to me before you save it."
+          }
+        ]
       }
     };
 
@@ -838,6 +865,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       code: 'M9 8l-4 4 4 4M15 8l4 4-4 4',
       finance: 'M4 18l5-6 4 3 7-9M15 6h5v5',
       recon: 'M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14zM16 16l4.5 4.5',
+      scout: 'M12 4a8 8 0 1 0 0 16a8 8 0 0 0 0-16zM15.5 8.5l-2 5-5 2 2-5z',
       data: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
       plus: 'M12 5v14M5 12h14',
       search: 'M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14zM16 16l4.5 4.5',
@@ -880,7 +908,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     function glyphFor(modeId) {
-      return modeId === 'chat' || modeId === 'code' || modeId === 'cowork' || modeId === 'finance' || modeId === 'data' || modeId === 'recon' ? modeId : 'dot';
+      return modeId === 'chat' || modeId === 'code' || modeId === 'cowork' || modeId === 'finance' || modeId === 'data' || modeId === 'recon' || modeId === 'scout' ? modeId : 'dot';
     }
 
     /**

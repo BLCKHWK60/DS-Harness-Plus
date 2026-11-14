@@ -192,6 +192,7 @@ Where a row says "configuration file": that add-on has no settings page. Open **
 | `/routes` | Route health |
 | `/sampling` | Sampling presets |
 | `/saved` | Context Saver |
+| `/scout` | Scout |
 | `/usage` | Usage ledger |
 
 Type a command alone to see what it offers. The app's own commands (such as `/goal`, `/permission`, `/feedback`) are not listed here.
@@ -894,6 +895,27 @@ An isolated Recon mode and tab for research on .onion sites and Usenet text news
 | `usenetHost` | `''` | The one news server of older versions. Read only, to turn it into the first account. |
 | `exportFolder` | `''` | Where `/recon export` writes its files. Empty uses the folder `recon/exports` in the app's home. |
 | `usenetPort` | `563` | That older server's port. Read only, for the same reason. |
+
+### Scout
+
+A Scout mode and tab that searches for work across your markets and plans how to approach the best opportunities. Nothing is sent or applied for.
+
+- **Where:** Settings → Scout; start page of a new conversation; `/scout` in the chat box
+- **After install:** off until you switch it on
+- **Tools the assistant gets:** `scout`, `scout_sources`, `scout_search`, `scout_posting`, `scout_files`, `scout_profile`, `scout_report`
+- **Details:** `addons/dsh-scout/README.md`
+
+| Setting | Starts as | What it does |
+|---|---|---|
+| `enabled` | `false` | The Scout mode and tab. Off leaves nothing of it in the app. |
+| `title` | `''` | The start page: the work, in the user's words. |
+| `location` | `''` | The start page: town, region or "remote". |
+| `salary` | `''` | The start page: the pay target, as the user writes it. |
+| `workType` | `'any'` | The start page: any, employee, freelance, contract, internship or tender. |
+| `markets` | `[...DEFAULT_MARKETS]` | The markets searched. |
+| `folder` | `''` | The folder for the user's files and the saved reports. Empty: `scout/files` in the app's home. |
+| `sourceState` | `'{}'` | Changes to the starting sources: `{ [id]: { on?: boolean, hidden?: boolean } }` as JSON. |
+| `extraSources` | `'[]'` | The user's own sources as JSON. Keys are never here: each is kept in the app's secret store. |
 
 ### Global Search
 

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Scout">
+  <rect x="6" y="6" width="52" height="52" rx="14" fill="#3b6fb6"/>
+  <circle cx="32" cy="32" r="15" fill="none" stroke="#ffffff" stroke-width="4"/>
+  <path d="M40 24l-5 11-11 5 5-11z" fill="#ffffff"/>
+</svg>
