@@ -57,11 +57,11 @@ test('a tool runs only in a Recon conversation and only past the model gate', as
   const state = { enabled: true, recon: true, gate: { ok: true, why: '' } };
   const onion = { search: async (id, query) => `searched ${id} ${query}`, read: async () => 'read' };
   const sources = { find: () => undefined, list: () => [], cite: () => '' };
-  const tools = buildTools({ enabled: () => state.enabled, inRecon: () => state.recon, gate: () => state.gate, onion, sources, idOf: () => 'c1' });
+  const tools = buildTools({ enabled: () => state.enabled, inRecon: () => state.recon, gate: () => state.gate, onion, usenet: { groups: async () => 'g', search: async () => 's', read: async (id, args) => `article ${args.messageId}` }, sources, idOf: () => 'c1' });
   assert.deepEqual(tools.map((tool) => tool.name), TOOLS);
   const run = async () => (await tools[0].execute({ query: 'x' }, {})).text;
   assert.equal(await run(), 'searched c1 x');
-  assert.match((await tools.find((tool) => tool.name === 'recon_usenet_read').execute({ group: 'a', messageId: '<b>' }, {})).text, /Usenet is not connected/);
+  assert.equal((await tools.find((tool) => tool.name === 'recon_usenet_read').execute({ group: 'a', messageId: '<b>' }, {})).text, 'article <b>');
   assert.match((await tools.find((tool) => tool.name === 'recon_cite').execute({ source: 'S1' }, {})).text, /Nothing was read/);
   state.gate = { ok: false, why: 'not agreed' };
   assert.equal(await run(), 'not agreed');

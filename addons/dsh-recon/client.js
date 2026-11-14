@@ -37,6 +37,7 @@ window.__ModuleLoader__.load({
   content: ''; display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--dsw-alias-switch-thumb, var(--dsw-alias-label-primary)); transition: transform .12s ease;
 }
 .dsh-rc-switch[aria-checked="true"]::after { transform: translateX(16px); background: var(--dsw-alias-bg-base); }
+.dsh-rc-input { margin-top: 8px; width: 100%; max-width: 360px; height: 30px; padding: 0 10px; box-sizing: border-box; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; font: inherit; font-size: 13px; color: var(--dsw-alias-label-primary); background: transparent; }
 .dsh-rc-list { margin: 6px 0 0; padding-left: 18px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 .dsh-rc-sql { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; font: 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
   color: var(--dsw-alias-label-secondary); background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent); }
@@ -74,6 +75,8 @@ window.__ModuleLoader__.load({
       const [note, setNote] = useState({ text: '', error: false });
       const [busy, setBusy] = useState(false);
       const alive = useRef(true);
+      const [host, setHost] = useState('');
+      const hostSeen = useRef(false);
       const load = useCallback(async () => {
         try {
           const next = await call();
@@ -88,6 +91,14 @@ window.__ModuleLoader__.load({
         const timer = setInterval(() => { if (!document.hidden) void load(); }, 5000);
         return () => { alive.current = false; clearInterval(timer); };
       }, [load]);
+
+      // The server field starts with what is saved, once.
+      const savedHost = data?.usenet?.host;
+      useEffect(() => {
+        if (savedHost === undefined || hostSeen.current) return;
+        hostSeen.current = true;
+        setHost(savedHost);
+      }, [savedHost]);
 
       // While a test of Tor runs, look again every second. Before the first return, so the hook order never changes.
       const testing = data?.tor?.test?.state === 'running';
@@ -115,6 +126,19 @@ window.__ModuleLoader__.load({
         }
       };
       const tor = data.tor ?? {};
+      const usenet = data.usenet ?? {};
+      const save = async (values, done) => {
+        setBusy(true);
+        try {
+          await setSettings(appCtx, values);
+          if (alive.current) setNote({ text: done, error: false });
+          await load();
+        } catch (problem) {
+          if (alive.current) setNote({ text: `Could not save: ${String(problem?.message ?? problem)}`, error: true });
+        } finally {
+          if (alive.current) setBusy(false);
+        }
+      };
       const testTor = async () => {
         try {
           const next = await call({ action: 'tor-test' });
@@ -126,7 +150,7 @@ window.__ModuleLoader__.load({
       const item = (text) => h('li', null, text);
       return h('div', { className: 'dsh-rc-page' }, h('style', null, CSS),
         h('h2', { className: 'dsh-rc-title' }, 'Recon'),
-        h('p', { className: 'dsh-rc-desc' }, 'An isolated tab for research on .onion sites and Usenet text newsgroups. This version searches and reads .onion sites through Tor, as text only. Usenet is not connected yet.'),
+        h('p', { className: 'dsh-rc-desc' }, 'An isolated tab for research on .onion sites and Usenet text newsgroups. It searches and reads .onion sites through Tor and text newsgroups through your news server, as text only.'),
         data.problem ? h('p', { className: 'dsh-rc-desc', 'data-error': 'true' }, data.problem) : null,
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },
@@ -158,6 +182,26 @@ window.__ModuleLoader__.load({
               ? `Another engine is set in the configuration file: ${data.engine.host}. The blocklist and the word screen still apply.`
               : `The built-in filtered index (Ahmia), at its .onion address: ${data.engine?.builtIn ?? ''}. It filters abuse material from its index. Another engine can be set in the configuration file (otherEngine, engineHost).`))),
 
+        h('div', { className: 'dsh-rc-group' }, 'Usenet'),
+        h('div', { className: 'dsh-rc-row' },
+          h('div', { className: 'dsh-rc-rowtext' },
+            h('div', { className: 'dsh-rc-rowtitle' }, 'Connect to Usenet'),
+            h('div', { className: 'dsh-rc-rowdesc' }, 'Off: Usenet is not reached at all. On: an encrypted connection straight to your news server. The server sees your internet address and knows your account, as with any newsreader. Tor is not used for Usenet.')),
+          h('button', { type: 'button', role: 'switch', className: 'dsh-rc-switch', 'aria-checked': String(usenet.route === 'direct'), 'aria-label': 'Connect to Usenet', disabled: busy || !data.enabled, onClick: () => void save({ usenetRoute: usenet.route === 'direct' ? 'off' : 'direct' }, usenet.route === 'direct' ? 'Usenet is off.' : 'Usenet is on, through a direct encrypted connection.') })),
+        h('div', { className: 'dsh-rc-row' },
+          h('div', { className: 'dsh-rc-rowtext' },
+            h('div', { className: 'dsh-rc-rowtitle' }, 'News server'),
+            h('div', { className: 'dsh-rc-rowdesc' }, `The server name your Usenet provider gives you, for encrypted connections (port ${usenet.port ?? 563}).`),
+            h('input', { className: 'dsh-rc-input', type: 'text', value: host, placeholder: 'news.example.com', spellCheck: false, autoCapitalize: 'off', autoCorrect: 'off', 'aria-label': 'News server', onChange: (event) => setHost(event.target.value) })),
+          h('button', { type: 'button', className: 'dsh-rc-btn', disabled: busy || host.trim() === (usenet.host ?? ''), onClick: () => void save({ usenetHost: host.trim().toLowerCase() }, 'Saved.') }, 'Save')),
+        h('div', { className: 'dsh-rc-row' },
+          h('div', { className: 'dsh-rc-rowtext' },
+            h('div', { className: 'dsh-rc-rowtitle' }, usenet.hasLogin ? 'Login: stored in the Keychain' : 'Login: not stored yet'),
+            h('div', { className: 'dsh-rc-rowdesc' }, 'Your login is kept in the macOS Keychain and nowhere else. Recon reads it only to sign in; it is never shown, saved in a file or given to the model. To store it, type this in the Terminal with your user name in place of YOUR_USERNAME. It asks for the password, which stays hidden:'),
+            h('div', { className: 'dsh-rc-sql' }, usenet.storeCommand ?? ''),
+            h('div', { className: 'dsh-rc-rowdesc' }, 'To remove it:'),
+            h('div', { className: 'dsh-rc-sql' }, usenet.removeCommand ?? ''))),
+
         h('div', { className: 'dsh-rc-group' }, 'What a Recon conversation has'),
         h('ul', { className: 'dsh-rc-list' },
           item(`Only these tools: ${(data.tools ?? []).join(', ')}.`),
@@ -185,7 +229,8 @@ window.__ModuleLoader__.load({
         h('ul', { className: 'dsh-rc-list' },
           item('The app keeps a Recon conversation on disk like any other, and writes its title with the model set for titles.'),
           item('Plugins from other makers are not covered by the isolation. Plus\'s own add-ons are.'),
-          item('Not built yet: Usenet, WireGuard, the export, saved searches, and "End and wipe".')));
+          item('Usenet: text newsgroups only. Groups that hold files are never listed or opened, file postings are skipped, and an article that carries a file is refused before its text is fetched. Usenet has no full-text search: subject, author and date are matched.'),
+          item('Not built yet: WireGuard, the export, saved searches, and "End and wipe".')));
     }
 
     return {

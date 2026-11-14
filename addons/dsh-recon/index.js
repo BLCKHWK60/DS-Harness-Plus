@@ -2,7 +2,8 @@
  * Recon: an isolated mode and tab for research on .onion sites and Usenet text newsgroups.
  *
  * Steps 1 to 3 of 7: the isolation frame, the connection layer, and searching and reading
- * .onion sites behind the filters, with citations and a research log. Usenet is a later step.
+ * .onion sites behind the filters, with citations and a research log; and step 4, Usenet text
+ * newsgroups (lib/usenet.js; the login is in the macOS Keychain, lib/keychain.js).
  * The isolation:
  *   - the mode is marked isolated, so the Modes add-on gives its conversations exactly the six
  *     recon tools, no programs, no helpers, no web search, and never lets them change mode;
@@ -21,11 +22,14 @@ import { join } from 'node:path';
 import { onionAddressesIn, openTrail } from './lib/address.js';
 import { MODE_ID, TOOLS, withRecon } from './lib/mode.js';
 import { mayReceive, openConsent, providerPlace, staysHome } from './lib/model.js';
+import { openForward } from './lib/forward.js';
+import { login, loginName, REMOVE_COMMAND, STORE_COMMAND } from './lib/keychain.js';
 import { AHMIA, createOnion } from './lib/onion.js';
 import { runLocked } from './lib/sandbox.js';
 import { openBlocklist } from './lib/screen.js';
 import { openSources } from './lib/sources.js';
 import { buildTools } from './lib/tools.js';
+import { createUsenet } from './lib/usenet.js';
 import { createTor, findTor, torVersion } from './lib/tor.js';
 
 export const name = 'dsh-recon';
@@ -46,6 +50,15 @@ export const Config = z.object({
   otherEngine: z.boolean().default(false).volatile(),
   /** That other engine's .onion name (the 56 characters and ".onion"). Used only while `otherEngine` is on. */
   engineHost: z.string().default('').volatile(),
+  /**
+   * How Usenet is reached. `off`: not at all. `direct`: an encrypted connection straight to the
+   * news server, which sees your address and knows your account.
+   */
+  usenetRoute: z.union([z.const('off'), z.const('direct')]).default('off').volatile(),
+  /** The news server's name, as your Usenet provider gives it. The login is not kept here: it is in the macOS Keychain. */
+  usenetHost: z.string().default('').volatile(),
+  /** The news server's port for encrypted connections. */
+  usenetPort: z.natural().default(563).volatile(),
 });
 
 function plain(value) {
@@ -76,6 +89,12 @@ export function apply(ctx, config) {
   const trail = openTrail();
   const sources = openSources();
   const onion = createOnion({ tor, run: runLocked, blocklist, trail, sources, engine: () => ({ host: String(plain(config?.engineHost) ?? ''), other: plain(config?.otherEngine) === true }) });
+  const usenetRoute = () => (String(plain(config?.usenetRoute) ?? 'off') === 'direct' ? 'direct' : 'off');
+  const usenetServer = () => ({ host: String(plain(config?.usenetHost) ?? '').trim().toLowerCase(), port: Number(plain(config?.usenetPort)) || 563 });
+  const usenet = createUsenet({ run: runLocked, route: usenetRoute, server: usenetServer, login, forward: openForward, sources });
+  /** Whether a login is in the Keychain, looked up now and then for the page. Only the fact, never the login. */
+  let hasLogin = false;
+  const lookForLogin = () => void loginName().then((name) => { hasLogin = Boolean(name); }, () => { hasLogin = false; });
   let torSeen = { path: '', version: '' };
   /** The last test of the connection, for the page. */
   let torTest = { state: 'none', text: '' };
@@ -170,7 +189,7 @@ export function apply(ctx, config) {
     if (on && !toolsOff) {
       const tools = ctx.get('tools');
       if (!tools?.register) return;
-      toolsOff = buildTools({ enabled, inRecon: (exec) => inRecon(exec?.agent), gate: (exec) => gate(exec?.agent), onion, sources, idOf: (exec) => String(exec?.agent?.id ?? '') }).map((tool) => tools.register(tool));
+      toolsOff = buildTools({ enabled, inRecon: (exec) => inRecon(exec?.agent), gate: (exec) => gate(exec?.agent), onion, usenet, sources, idOf: (exec) => String(exec?.agent?.id ?? '') }).map((tool) => tools.register(tool));
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
       toolsOff = undefined;
@@ -221,7 +240,7 @@ export function apply(ctx, config) {
       `Tools: only ${TOOLS.join(', ')}. No programs, files, memory, helpers or other modes.`,
       `Model: ${model}${where ? `, ${where}` : ''}.`,
       allowed.ok ? (staysHome(place) ? 'What Recon finds stays on your own machines.' : 'You agreed that what Recon finds goes to this cloud model, for this conversation.') : 'What Recon finds is NOT sent to this model. Type /recon cloud to agree for this conversation, or pick a local model.',
-      `Network: .onion sites through Recon's own Tor (${tor.status().state}). Usenet is not connected in this version.`,
+      `Network: .onion sites through Recon's own Tor (${tor.status().state}). Usenet: ${usenetRoute() === 'direct' ? `direct encrypted connection to ${usenetServer().host || '(no server set)'}` : 'off (Settings → Recon → Usenet)'}.`,
       `Blocklist of banned sites: ${blocklist.ready() ? `${blocklist.info().size} sites, fetched ${new Date(blocklist.info().at).toISOString().slice(0, 16).replace('T', ' ')} UTC` : 'not fetched yet; it is fetched before the first search or page'}.`,
       `Read so far: ${sources.list(agent.id).length} sources. /recon log shows every search and source.`,
     ].join('\n');
@@ -268,7 +287,8 @@ export function apply(ctx, config) {
       torSeen = { path, version: '' };
       if (path) void torVersion(path).then((version) => { if (torSeen.path === path) torSeen = { path, version }; });
     }
-    return { at: Date.now(), enabled: enabled(), problem, toolsOn: Boolean(toolsOff), tools: TOOLS, network: true, tor: { ...tor.status(), path, version: torSeen.version, test: torTest }, blocklist: blocklist.info(), engine: { builtIn: AHMIA, other: plain(config?.otherEngine) === true, host: String(plain(config?.engineHost) ?? '') } };
+    lookForLogin();
+    return { usenet: { route: usenetRoute(), ...usenetServer(), hasLogin, storeCommand: STORE_COMMAND, removeCommand: REMOVE_COMMAND }, at: Date.now(), enabled: enabled(), problem, toolsOn: Boolean(toolsOff), tools: TOOLS, network: true, tor: { ...tor.status(), path, version: torSeen.version, test: torTest }, blocklist: blocklist.info(), engine: { builtIn: AHMIA, other: plain(config?.otherEngine) === true, host: String(plain(config?.engineHost) ?? '') } };
   };
   ctx.inject(['webServer', 'connection'], (inner) => {
     inner.effect(

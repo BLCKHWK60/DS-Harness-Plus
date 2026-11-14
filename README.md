@@ -123,7 +123,7 @@ Send them the link to this project, https://github.com/BLCKHWK60/DS-Harness-Plus
 
 ## Status
 
-Release 0.43.1 (the version in `VERSION`). Tested so far:
+Release 0.44.2 (the version in `VERSION`). Tested so far:
 
 - **Install, update and uninstall:** run on a fresh setup and on a copy of a real, long-used setup.
 - **Live start:** the app starts with every add-on loaded.

@@ -865,3 +865,6 @@ An isolated Recon mode and tab for research on .onion sites and Usenet text news
 | `torPath` | `''` | Where the tor program is. Empty looks in the usual places (Homebrew, /usr/local). Plus does not install it. |
 | `otherEngine` | `false` | Search with another .onion search engine than the built-in filtered index. Off uses the built-in one. The blocklist of banned sites and the word screen apply either way. |
 | `engineHost` | `''` | That other engine's .onion name (the 56 characters and ".onion"). Used only while `otherEngine` is on. |
+| `usenetRoute` | `'off'` | How Usenet is reached. `off`: not at all. `direct`: an encrypted connection straight to the news server, which sees your address and knows your account. |
+| `usenetHost` | `''` | The news server's name, as your Usenet provider gives it. The login is not kept here: it is in the macOS Keychain. |
+| `usenetPort` | `563` | The news server's port for encrypted connections. |

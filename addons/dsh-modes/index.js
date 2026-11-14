@@ -385,8 +385,26 @@ export function apply(ctx, config) {
     state.maskKey = JSON.stringify(mask);
     if (!mask) return;
     const accepted = acceptedMask(agent, mask);
+    // Tools the mode names that the app does not have yet (their add-on starts a moment later):
+    // the mask is put on again once they are there, see `refit`.
+    state.short = Array.isArray(mask.allow) && (!accepted || accepted.allow.length < mask.allow.length);
     if (!accepted) return;
     state.unrestrict = agent.ctx.effect(() => agent.ctx.tools.restrict(accepted), 'modes tool restriction');
+  }
+
+  /**
+   * Put the tool mask on again when it was applied before all of the mode's tools existed. Without
+   * this, a conversation restored while the app starts keeps a mask without those tools for good.
+   * @param {object} agent - live Agent.
+   */
+  function refit(agent) {
+    const state = applied.get(agent?.id);
+    if (!state?.short) return;
+    try {
+      applyTools(agent, state, modeOf(agent.id));
+    } catch (error) {
+      ctx.logger.warn(`modes: could not renew the tools of ${agent.id}: ${error?.message ?? error}`);
+    }
   }
 
   /**
@@ -724,6 +742,8 @@ export function apply(ctx, config) {
 
   ctx.on('agent/status', ({ agent, status }) => {
     if (status === 'running') {
+      // Before the turn's tools are put together.
+      refit(agent);
       // Only a conversation that begins in an isolated mode is marked; the mark is for good.
       const begins = fresh.has(agent.id) && isTopLevel(agent) && isIsolated(agent.id);
       if (begins) markIsolated(agent.id);

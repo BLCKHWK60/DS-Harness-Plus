@@ -1,19 +1,16 @@
 /**
  * The tools of a Recon conversation. Each one first checks that it is being called from an
  * isolated Recon conversation and that the user allows content to go to the conversation's model.
- * Searching and reading .onion sites go through lib/onion.js. Usenet is a later step: its tools
- * say so.
+ * Searching and reading .onion sites go through lib/onion.js, Usenet through lib/usenet.js.
  */
 import { TOOLS } from './mode.js';
 
-const USENET_LATER = 'Usenet is not connected in this version. Nothing was fetched. Tell the user that .onion search and reading work, and that Usenet comes in a later step.';
-
 /**
  * @param {object} deps - `enabled()`, `inRecon(exec)` (is this an isolated Recon conversation), `gate(exec)` ({ok, why}),
- *   `onion` (lib/onion.js), `sources` (lib/sources.js), `idOf(exec)` (the conversation's id).
+ *   `onion` (lib/onion.js), `usenet` (lib/usenet.js), `sources` (lib/sources.js), `idOf(exec)` (the conversation's id).
  * @returns {object[]} the tool definitions.
  */
-export function buildTools({ enabled, inRecon, gate, onion, sources, idOf }) {
+export function buildTools({ enabled, inRecon, gate, onion, usenet, sources, idOf }) {
   const output = {
     schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
     render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }],
@@ -36,12 +33,15 @@ export function buildTools({ enabled, inRecon, gate, onion, sources, idOf }) {
     recon_onion_read: ['Read the text of one .onion page. Text only: no pictures, scripts or downloads. The address must come from a search result, a page already read, or the user. Long pages come in parts.', { address: text(600, 'The full .onion address of the page.'), part: { type: 'integer', minimum: 1, maximum: 40, description: 'Which part of a long page. Leave out for the first.' } }, ['address']],
     recon_usenet_groups: ['Find Usenet text newsgroups by name. Binary groups are never listed.', { pattern: text(120, 'Part of a group name, for example "comp.security".') }, ['pattern']],
     recon_usenet_search: ['Search the headers (subject, author, date) of articles in one text newsgroup. Usenet has no full-text search.', { group: text(160, 'The newsgroup.'), subject: text(200, 'Words in the subject.'), author: text(120, 'Part of the author as shown.'), since: text(40, 'Earliest date, as YYYY-MM-DD.') }, ['group']],
-    recon_usenet_read: ['Read the text of one Usenet article by its Message-ID. Articles that carry encoded attachments are refused.', { group: text(160, 'The newsgroup.'), messageId: text(300, 'The article\'s Message-ID, with its angle brackets.') }, ['group', 'messageId']],
+    recon_usenet_read: ['Read the text of one Usenet article by its Message-ID. Articles that carry encoded files are refused. Long articles come in parts.', { group: text(160, 'The newsgroup.'), messageId: text(300, 'The article\'s Message-ID, with its angle brackets.'), part: { type: 'integer', minimum: 1, maximum: 40, description: 'Which part of a long article. Leave out for the first.' } }, ['group', 'messageId']],
     recon_cite: ['Give the full citation of something read in this conversation: source, author and date as shown, when it was retrieved, and the fingerprint of its text.', { source: text(600, 'The source\'s number (S3), its .onion address or its Message-ID.') }, ['source']],
   };
   const work = {
     recon_onion_search: (args, exec) => onion.search(idOf(exec), args.query),
     recon_onion_read: (args, exec) => onion.read(idOf(exec), args.address, args.part),
+    recon_usenet_groups: (args, exec) => usenet.groups(idOf(exec), args.pattern),
+    recon_usenet_search: (args, exec) => usenet.search(idOf(exec), args),
+    recon_usenet_read: (args, exec) => usenet.read(idOf(exec), args),
     recon_cite: async (args, exec) => {
       const source = sources.find(idOf(exec), args.source);
       if (source) return sources.cite(source);
@@ -51,6 +51,6 @@ export function buildTools({ enabled, inRecon, gate, onion, sources, idOf }) {
   };
   return TOOLS.map((name) => {
     const [description, properties, required] = defs[name];
-    return { name, description, parameters: { type: 'object', properties, required, additionalProperties: false }, ...common, execute: guarded(work[name] ?? (async () => USENET_LATER)) };
+    return { name, description, parameters: { type: 'object', properties, required, additionalProperties: false }, ...common, execute: guarded(work[name]) };
   });
 }

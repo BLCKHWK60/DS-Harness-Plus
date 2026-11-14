@@ -317,6 +317,297 @@ export async function get(req) {
   });
 }
 
+// ---- Usenet: text newsgroups over NNTP ------------------------------------------------------------
+
+/** Parts of a group name that mean files, not text. A group with one of them is never listed or opened. */
+const BINARY_GROUP = /(^|\.)(binaries|binary|bin|binaer|pictures|picture|pics|images|multimedia|mp3|mp3s|sounds|movies|movie|video|videos|dvd|dvdr|cd|iso|warez|wares|erotica|x264|x265|hdtv|divx|ebook|ebooks|mm|nzb|nzbs|boneless|teevee|ftd|fileshare|files)(\.|$)/i;
+
+/** @returns {boolean} whether a newsgroup is a text group Recon may open. */
+export function textGroup(name) {
+  const group = String(name ?? '').toLowerCase();
+  return /^[a-z0-9][a-z0-9+_-]*(\.[a-z0-9+_-]+){1,12}$/.test(group) && group.length <= 160 && !BINARY_GROUP.test(group);
+}
+
+/** A header value with its encoded words ("=?utf-8?B?...?=") made readable. */
+export function decodeWords(value) {
+  return tidy(String(value ?? '').replace(/=\?([\w-]+)\?([bBqQ])\?([^?]*)\?=(\s+(?==\?))?/g, (_whole, charset, kind, body) => {
+    try {
+      const bytes = kind.toLowerCase() === 'b' ? Buffer.from(body, 'base64') : Buffer.from(body.replace(/_/g, ' ').replace(/=([0-9a-fA-F]{2})/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16))), 'latin1');
+      return new TextDecoder(charset.toLowerCase(), { fatal: false }).decode(bytes);
+    } catch {
+      return ' ';
+    }
+  })).slice(0, 400);
+}
+
+/** Whether a body carries a file in disguise: yEnc, uuencode, or a long run of base64. */
+export function carriesFile(body) {
+  const text = String(body);
+  if (/^=ybegin /m.test(text) || /^begin [0-7]{3,4} \S/m.test(text)) return true;
+  let run = 0;
+  for (const line of text.split('\n')) {
+    if (/^[A-Za-z0-9+/]{60,76}={0,2}\r?$/.test(line)) {
+      run += 1;
+      if (run >= 12) return true;
+    } else run = 0;
+  }
+  return false;
+}
+
+const decodeBody = (raw, encoding, charset) => {
+  const kind = String(encoding ?? '').trim().toLowerCase();
+  let bytes = raw;
+  if (kind === 'base64') bytes = Buffer.from(raw.toString('latin1').replace(/[^A-Za-z0-9+/=]/g, ''), 'base64');
+  else if (kind === 'quoted-printable') bytes = Buffer.from(raw.toString('latin1').replace(/=\r?\n/g, '').replace(/=([0-9a-fA-F]{2})/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16))), 'latin1');
+  try {
+    return new TextDecoder(String(charset || 'utf-8').toLowerCase(), { fatal: false }).decode(bytes);
+  } catch {
+    return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  }
+};
+const headerMap = (block) => {
+  const headers = {};
+  for (const line of String(block).replace(/\r?\n[ \t]+/g, ' ').split(/\r?\n/)) {
+    const cut = line.indexOf(':');
+    if (cut > 0) headers[line.slice(0, cut).trim().toLowerCase()] ??= line.slice(cut + 1).trim();
+  }
+  return headers;
+};
+const param = (value, name) => new RegExp(`${name}\\s*=\\s*(?:"([^"]*)"|([^;\\s]+))`, 'i').exec(String(value ?? ''))?.slice(1).find((part) => part !== undefined) ?? '';
+
+/**
+ * The text of an article. Parts that are not plain text are dropped, and an article that carries a
+ * file is refused whole.
+ * @param {object} headers - the article's headers, lower-case names.
+ * @param {Buffer} body - its body as it came.
+ * @returns {{ok: true, text: string, dropped: number} | {ok: false, why: string}}
+ */
+export function articleText(headers, body) {
+  const type = String(headers['content-type'] ?? 'text/plain').toLowerCase();
+  const main = type.split(';')[0].trim();
+  if (main.startsWith('multipart/')) {
+    const boundary = param(headers['content-type'], 'boundary');
+    if (!boundary) return { ok: false, why: 'the article is in several parts that cannot be told apart, so it was not read' };
+    const pieces = body.toString('latin1').split(`--${boundary}`).slice(1).filter((piece) => !piece.startsWith('--'));
+    const texts = [];
+    let dropped = 0;
+    for (const piece of pieces.slice(0, 30)) {
+      const cut = piece.search(/\r?\n\r?\n/);
+      const own = headerMap(cut < 0 ? piece : piece.slice(0, cut));
+      const kind = String(own['content-type'] ?? 'text/plain').toLowerCase().split(';')[0].trim();
+      const rest = cut < 0 ? '' : piece.slice(cut).replace(/^\r?\n\r?\n/, '');
+      if (kind !== 'text/plain' || /attachment/i.test(own['content-disposition'] ?? '')) {
+        dropped += 1;
+        continue;
+      }
+      const text = decodeBody(Buffer.from(rest, 'latin1'), own['content-transfer-encoding'], param(own['content-type'], 'charset'));
+      if (carriesFile(text)) return { ok: false, why: 'the article carries an encoded file, so it was not read' };
+      texts.push(text);
+    }
+    if (texts.length === 0) return { ok: false, why: 'the article has no plain text part, so it was not read' };
+    return { ok: true, text: tidy(texts.join('\n\n')).slice(0, TEXT_MAX), dropped };
+  }
+  if (main !== 'text/plain' && main !== 'text' && main !== '') return { ok: false, why: `the article is ${main}, not plain text, so it was not read` };
+  if (carriesFile(body.toString('latin1'))) return { ok: false, why: 'the article carries an encoded file, so it was not read' };
+  const text = decodeBody(body, headers['content-transfer-encoding'], param(headers['content-type'], 'charset'));
+  if (carriesFile(text)) return { ok: false, why: 'the article carries an encoded file, so it was not read' };
+  return { ok: true, text: tidy(text).slice(0, TEXT_MAX), dropped: 0 };
+}
+
+/**
+ * One visit to a news server: sign in, do one thing, leave. The connection is encrypted from this
+ * process to the server; what carries it there (a local forwarder, or a proxy) sees only ciphertext.
+ * @param {object} req - `port` (the one local port this process may reach), `server` (the news server's name, for the
+ *   certificate), `user`, `pass`, `via` ('forward' or 'socks'), `serverPort`, and `action`: 'groups' (`pattern`),
+ *   'over' (`group`, `subject`, `author`, `since`, `span`) or 'article' (`messageId`, `maxBytes`). `ca` is for tests.
+ * @returns {Promise<object>} `{ok: true, ...}` or `{ok: false, why}`. The password is never part of an answer.
+ */
+export async function nntp(req) {
+  const timeoutMs = Math.min(Math.max(Number(req.timeoutMs) || 60_000, 2_000), 180_000);
+  const server = String(req.server);
+  const raw = req.via === 'socks'
+    ? await viaSocks({ proxyPort: Number(req.port), host: server, port: Number(req.serverPort) || 563, user: req.circuit, timeoutMs })
+    : await new Promise((resolve, reject) => {
+      const socket = net.connect({ host: '127.0.0.1', port: Number(req.port) }, () => resolve(socket));
+      socket.on('error', (error) => reject(new Error(`could not reach the connection (${error.code ?? error.message})`)));
+    });
+  const socket = await new Promise((resolve, reject) => {
+    const wrapped = tls.connect({ socket: raw, servername: server, ...(req.ca ? { ca: req.ca } : {}) }, () => resolve(wrapped));
+    wrapped.on('error', (error) => reject(new Error(`the encrypted connection to the news server failed (${error.code ?? error.message})`)));
+  });
+  let buffered = Buffer.alloc(0);
+  let waiting;
+  let failed;
+  const wake = () => {
+    const done = waiting;
+    waiting = undefined;
+    done?.();
+  };
+  socket.on('data', (chunk) => {
+    buffered = Buffer.concat([buffered, chunk]);
+    wake();
+  });
+  socket.on('error', (error) => {
+    failed = new Error(`the connection broke (${error.code ?? error.message})`);
+    wake();
+  });
+  socket.on('close', () => {
+    failed ??= new Error('the news server closed the connection');
+    wake();
+  });
+  const deadline = Date.now() + timeoutMs;
+  const more = async () => {
+    if (failed) throw failed;
+    const left = deadline - Date.now();
+    if (left <= 0) throw new Error('the news server did not answer in time');
+    await new Promise((resolve) => {
+      waiting = resolve;
+      setTimeout(resolve, left);
+    });
+    if (failed && buffered.length === 0) throw failed;
+  };
+  /** One line, without its line end. */
+  const line = async () => {
+    for (;;) {
+      const end = buffered.indexOf('\r\n');
+      if (end >= 0) {
+        const text = buffered.subarray(0, end);
+        buffered = buffered.subarray(end + 2);
+        return text;
+      }
+      if (buffered.length > 2_000_000) throw new Error('the news server sent a line that never ends');
+      await more();
+    }
+  };
+  /** A block that ends with a line holding one dot. Stops reading into memory after `max` bytes but reads on to the end. */
+  const block = async (max) => {
+    const lines = [];
+    let size = 0;
+    let cut = false;
+    for (;;) {
+      const next = await line();
+      if (next.length === 1 && next[0] === 46) return { lines, cut };
+      const clean = next[0] === 46 ? next.subarray(1) : next;
+      if (size + clean.length > max) {
+        cut = true;
+        if (size > max * 4 + 4_000_000) throw new Error('the article is far too large to be text');
+        size += clean.length;
+        continue;
+      }
+      size += clean.length + 1;
+      lines.push(clean);
+    }
+  };
+  /** What the server said next to a code, short and clean, for a message. */
+  const words = (text) => {
+    const clean = tidy(String(text ?? '')).replace(/[^\x20-\x7e]/g, ' ').slice(0, 90).trim();
+    return clean ? `, the server said: "${clean}"` : '';
+  };
+  const say = async (command) => {
+    socket.write(`${command}\r\n`);
+    const answer = (await line()).toString('latin1');
+    return { code: Number(answer.slice(0, 3)), text: answer.slice(4) };
+  };
+  try {
+    const hello = (await line()).toString('latin1');
+    if (!/^20[01]/.test(hello)) return { ok: false, why: `the news server did not welcome the connection (${hello.slice(0, 80)})` };
+    if (req.user) {
+      const first = await say(`AUTHINFO USER ${String(req.user).replace(/[\r\n]/g, '')}`);
+      if (first.code === 381) {
+        const second = await say(`AUTHINFO PASS ${String(req.pass ?? '').replace(/[\r\n]/g, '')}`);
+        if (second.code !== 281) return { ok: false, why: `the news server refused the sign-in (code ${second.code})` };
+      } else if (first.code !== 281) return { ok: false, why: `the news server refused the sign-in (code ${first.code})` };
+    }
+    // Some servers hand out reading commands only after this. Its answer does not matter.
+    await say('MODE READER').catch(() => undefined);
+    if (req.action === 'groups') {
+      const pattern = String(req.pattern ?? '').toLowerCase().replace(/[^a-z0-9.+_-]/g, '').slice(0, 80);
+      if (pattern.length < 2) return { ok: false, why: 'give at least two characters of a group name' };
+      const asked = await say(`LIST ACTIVE *${pattern}*`);
+      if (asked.code !== 215) return { ok: false, why: `the news server would not list groups (code ${asked.code})` };
+      const { lines } = await block(3_000_000);
+      const groups = [];
+      let hidden = 0;
+      for (const entry of lines) {
+        const [name, high, low] = entry.toString('latin1').split(/\s+/);
+        if (!textGroup(name)) {
+          hidden += 1;
+          continue;
+        }
+        if (groups.length < 150) groups.push({ group: name.toLowerCase(), articles: Math.max(0, Number(high) - Number(low) + 1) || 0 });
+      }
+      return { ok: true, groups, hidden };
+    }
+    if (!textGroup(req.group)) return { ok: false, why: 'that is not a text newsgroup, so it was not opened' };
+    const entered = await say(`GROUP ${String(req.group).toLowerCase()}`);
+    if (entered.code !== 211) return { ok: false, why: entered.code === 411 ? 'the news server has no such group' : `the news server would not open the group (code ${entered.code}${words(entered.text)})` };
+    const [, low, high] = entered.text.split(/\s+/).map(Number);
+    if (req.action === 'over') {
+      const span = Math.min(Math.max(Number(req.span) || 3000, 100), 20_000);
+      const from = Math.max(low || 0, (high || 0) - span + 1);
+      // Servers differ: some know OVER, some only the older XOVER, and they refuse the one they do
+      // not know with different codes. Both are tried before giving up.
+      let asked = await say(`OVER ${from}-${high}`);
+      if (asked.code !== 224 && asked.code !== 420 && asked.code !== 423) {
+        const older = await say(`XOVER ${from}-${high}`);
+        if (older.code === 224 || older.code === 420 || older.code === 423) asked = older;
+      }
+      if (asked.code !== 224) return { ok: false, why: asked.code === 420 || asked.code === 423 ? 'the group has no articles in that range' : `the news server would not list articles (code ${asked.code}${words(asked.text)})` };
+      const { lines } = await block(8_000_000);
+      const subject = String(req.subject ?? '').toLowerCase().trim();
+      const author = String(req.author ?? '').toLowerCase().trim();
+      const since = Date.parse(String(req.since ?? '')) || 0;
+      const found = [];
+      let files = 0;
+      for (let at = lines.length - 1; at >= 0 && found.length < 40; at -= 1) {
+        const [number, rawSubject, rawFrom, date, messageId, , bytes, count] = lines[at].toString('latin1').split('\t');
+        const title = decodeWords(rawSubject);
+        const who = decodeWords(rawFrom);
+        // A file posting gives itself away: yEnc in the subject, "(3/41)" part counts, or a size no message has.
+        if (/yenc|\(\d+\/\d+\)|\[\d+\/\d+\]/i.test(title) || Number(bytes) > 150_000 || Number(count) > 3000) {
+          files += 1;
+          continue;
+        }
+        if (subject && !subject.split(/\s+/).every((word) => title.toLowerCase().includes(word))) continue;
+        if (author && !who.toLowerCase().includes(author)) continue;
+        if (since && (Date.parse(date) || 0) < since) continue;
+        if (!/^<[^<>\s]{3,250}>$/.test(String(messageId).trim())) continue;
+        found.push({ number: Number(number), subject: title, author: who, date: tidy(date).slice(0, 60), messageId: messageId.trim(), bytes: Number(bytes) || 0 });
+      }
+      return { ok: true, group: String(req.group).toLowerCase(), looked: lines.length, from, to: high, found, files };
+    }
+    if (req.action === 'article') {
+      const id = String(req.messageId ?? '').trim();
+      if (!/^<[^<>\s]{3,250}>$/.test(id)) return { ok: false, why: 'that is not a Message-ID (it looks like <text@host>)' };
+      const head = await say(`HEAD ${id}`);
+      if (head.code !== 221) return { ok: false, why: head.code === 430 ? 'the news server has no article with that Message-ID' : `the news server would not give the article (code ${head.code}${words(head.text)})` };
+      const headers = headerMap((await block(200_000)).lines.map((entry) => entry.toString('latin1')).join('\n'));
+      const kind = String(headers['content-type'] ?? 'text/plain').toLowerCase().split(';')[0].trim();
+      const groups = String(headers.newsgroups ?? '').split(',').map((name) => name.trim().toLowerCase()).filter(Boolean);
+      // Decided from the headers alone, before one byte of the body is asked for.
+      if (!(kind === '' || kind === 'text/plain' || kind.startsWith('multipart/'))) return { ok: false, why: `the article is ${kind}, not plain text, so its body was not fetched` };
+      if (Number(headers.lines) > 4000 || Number(headers.bytes) > 400_000) return { ok: false, why: 'the article is too large to be a message, so its body was not fetched' };
+      if (groups.length > 0 && !groups.some((name) => textGroup(name))) return { ok: false, why: 'the article was posted only to groups that are not text groups, so its body was not fetched' };
+      if (/yenc|\(\d+\/\d+\)/i.test(headers.subject ?? '')) return { ok: false, why: 'the article is part of a file posting, so its body was not fetched' };
+      const body = await say(`BODY ${id}`);
+      if (body.code !== 222) return { ok: false, why: `the news server would not give the article's text (code ${body.code})` };
+      const max = Math.min(Math.max(Number(req.maxBytes) || 300_000, 10_000), 600_000);
+      const got = await block(max);
+      const read = articleText(headers, Buffer.concat(got.lines.flatMap((entry) => [entry, Buffer.from('\n')])));
+      if (!read.ok) return read;
+      return { ok: true, messageId: id, group: String(req.group).toLowerCase(), subject: decodeWords(headers.subject), author: decodeWords(headers.from), date: tidy(headers.date ?? '').slice(0, 60), groups: groups.slice(0, 12), text: read.text, dropped: read.dropped, bytes: got.lines.reduce((sum, entry) => sum + entry.length + 1, 0), cut: got.cut };
+    }
+    return { ok: false, why: 'unknown request' };
+  } finally {
+    try {
+      socket.write('QUIT\r\n');
+    } catch {
+      /* already closed */
+    }
+    socket.destroy();
+  }
+}
+
 /** For the leak test only: can this process open a connection to somewhere? It should not be able to. */
 function probe({ host, port }) {
   return new Promise((resolve) => {
@@ -344,6 +635,7 @@ async function main() {
   try {
     const req = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     if (req.op === 'get') answer = await get(req);
+    else if (req.op === 'nntp') answer = await nntp(req);
     else if (req.op === 'probe') answer = await probe(req);
     else if (req.op === 'readfile') {
       // For the leak test only: this process should not be able to read the user's files.

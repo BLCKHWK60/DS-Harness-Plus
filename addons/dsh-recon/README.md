@@ -4,9 +4,9 @@ An isolated mode and tab for research on .onion sites and Usenet text newsgroups
 finding and citing sources, open-source intelligence, threat intelligence, and Usenet's text
 archives. It is not a browser.
 
-**This version is steps 1 to 3 of 7.** It searches and reads .onion sites through Tor, as text
-only, behind the filters, with citations and a research log. Usenet, WireGuard, the export, saved
-searches and "End and wipe" are later steps.
+**This version is steps 1 to 4 of 7.** It searches and reads .onion sites through Tor and Usenet
+text newsgroups through your news server, as text only, behind the filters, with citations and a
+research log. WireGuard, the export, saved searches and "End and wipe" are later steps.
 
 You need the `tor` program: `brew install tor`. Plus does not install it.
 
@@ -57,6 +57,34 @@ Off until you switch it on at **Settings → Recon**. Needs the Modes add-on and
 - **Limits:** 400 requests per conversation; a page's first 1.5 MB; 12,000 characters per part.
 - **`/recon stop`** stops Tor and deletes its temporary folder.
 
+## Usenet
+
+Off until you choose a route at **Settings → Recon → Usenet**. You need an account with a Usenet
+provider.
+
+- **Route:** a direct encrypted connection to your news server. The server sees your internet
+  address and knows your account, as with any newsreader. Tor is not used for Usenet.
+- **Login:** kept in the macOS Keychain and nowhere else. You store it yourself in the Terminal;
+  the page shows the command, and the password is typed at a hidden prompt:
+  `security add-generic-password -U -s dsh-recon-usenet -a YOUR_USERNAME -w`.
+  Recon reads it only at the moment it signs in. It is in no file, setting, log or conversation,
+  and no tool or command shows it.
+- **Text groups only.** A group whose name says it holds files (binaries, pictures, multimedia,
+  sounds, movies and the like) is never listed or opened. The rule errs on the safe side, so a few
+  text groups about such subjects are left out too.
+- **`recon_usenet_groups`** finds text groups by name. **`recon_usenet_search`** matches subject,
+  author and date in the newest 3,000 articles of one group; Usenet has no full-text search.
+  File postings (yEnc, "(3/41)" part counts, oversized articles) are skipped.
+  **`recon_usenet_read`** reads one article by its Message-ID.
+- **An article that carries a file is refused.** Its headers decide first, before its body is
+  asked for (not plain text, too large, posted only to file groups). A body that turns out to
+  hold yEnc, uuencode or a long run of base64 is refused and not kept. Parts of an article that
+  are not plain text are dropped.
+- **Citations** name the group, the Message-ID, the author and date as shown, and when it was
+  retrieved.
+- **The same locked process** does the reading. It reaches one local port, which the app opens
+  for the length of one request and which only passes ciphertext on to the news server.
+
 ## The connection layer
 
 - **Recon's own Tor.** Started when needed, stopped with the app or with Recon. It keeps its state
@@ -83,10 +111,13 @@ Off until you switch it on at **Settings → Recon**. Needs the Modes add-on and
 | `torPath` | empty | Where the tor program is. Empty looks in the usual places. Only in the configuration file. |
 | `otherEngine` | off | Search with another .onion engine than the built-in filtered index. Only in the configuration file. |
 | `engineHost` | empty | That engine's .onion name. Used only while `otherEngine` is on. |
+| Connect to Usenet (`usenetRoute`) | off | `direct`: an encrypted connection straight to the news server. |
+| News server (`usenetHost`) | empty | The server name your provider gives you. |
+| `usenetPort` | 563 | The server's port for encrypted connections. Only in the configuration file. |
 
 ## What it does not do yet
 
-- **No Usenet, WireGuard, export, saved searches or "End and wipe":** later steps.
+- **No WireGuard, export, saved searches or "End and wipe":** later steps.
 - **What was read stays in memory** until the app is closed, and in the conversation on disk.
 - **The blocklist file** (`recon/blocklist.json` in the app's home, fingerprints only) is the one
   thing Recon writes to disk.
@@ -100,7 +131,7 @@ Off until you switch it on at **Settings → Recon**. Needs the Modes add-on and
 
 ## Tested
 
-- **Unit tests (7):** the mode, where a model runs, the agreement for cloud models, the tool gate.
+- **Unit tests (9):** the mode, where a model runs, the agreement for cloud models, the tool gate.
 - **Lab run with a stand-in model**, reading exactly what the model was sent:
   the tool list is the six tools; project `AGENTS.md` and Memory do not arrive; a shell call is
   refused; a Cowork conversation is not offered the tools; a conversation moved in or out is locked.
@@ -114,10 +145,19 @@ Off until you switch it on at **Settings → Recon**. Needs the Modes add-on and
   shown addresses are opened; a page's picture is not requested; a screened page is not kept;
   redirects inside a site are followed, to another site reported, off .onion refused; the refused
   words are not in the log.
-- **Lab run in the app with a stand-in model:** search, read, `/recon log`, `/recon`.
+- **Usenet tests (4), against a stand-in news server on this Mac** (NNTP over TLS with a test
+  certificate): only text groups are listed; file postings and screened subjects are skipped; an
+  article is read, fenced and cited; a zip is refused from its headers with no body asked for; a
+  yEnc body is refused; the login reaches the server and appears in no message or log; without a
+  route, a server or a login nothing is sent.
+- **Lab run in the app with a stand-in model:** search, read, `/recon log`, `/recon`; the Usenet
+  settings and page.
 - **Run by the owner on the real Tor network (2026-11-14, tor 0.4.9.17, a local model):** Tor
   connected, the blocklist was fetched, a search on Ahmia returned 20 results, and a page was
   read and cited with its source number.
+- **Run by the owner against a real news server (2026-11-14):** the Keychain login, the sign-in,
+  listing text groups, header search, and reading and citing an article work. The builder has no
+  account and never touches the owner's.
 - **Not verified:** the cloud agreement in the running app (unit test only); other engines than
   Ahmia. The builder has never run the real tor program or opened an .onion site. Ahmia's page formats were read once on the normal web on 2026-11-14 and can change;
   if its result page changes, a search falls back to the page's plain .onion links.
