@@ -227,6 +227,27 @@ export function apply(ctx, config) {
     sections.clear();
   }, 'mission: rules');
 
+  // Stop in the conversation pauses the run and ends the step under way, with its helpers.
+  ctx.on('session/event', (session, event) => {
+    try {
+      const reason = event?.type === 'turn/end' ? event.data?.reason : undefined;
+      if (reason?.kind !== 'aborted' || reason.reason?.kind !== 'user' || !runner.isOn(session?.id)) return;
+      // The step ends at once. The pause is written a moment later: the app does not take a new
+      // entry for a conversation while it is still handing this one out.
+      runner.cut(session.id);
+      const agent = (ctx.get('agents')?.list?.() ?? []).find((other) => other.id === session.id);
+      if (agent) setTimeout(() => {
+        try {
+          runner.stop(agent);
+        } catch (error) {
+          warn(`could not pause the run on Stop: ${String(error?.message ?? error)}`);
+        }
+      }, 0);
+    } catch (error) {
+      warn(`could not pause the run on Stop: ${String(error?.message ?? error)}`);
+    }
+  });
+
   // A checkpoint at the start of every turn.
   ctx.on('session/event', (session, event) => {
     try {

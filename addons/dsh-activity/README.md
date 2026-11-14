@@ -89,3 +89,14 @@ Everything is on **Settings → Activity**, with a preview you can switch throug
   - All seven designs in the settings preview; Pulse line, Ticker tape, Threads and Rings in the real window. The app's bottom line stayed visible above the tape.
   - The Sounds settings; **Try** produced sound output for both sounds (checked by counting the tones the page created, not by ear).
 - **Not checked:** the waiting-for-you and error states with a real approval or failure (unit tests and preview only), so the sound was never triggered by a real approval; how the sounds actually sound through speakers; Lanes in the real window; web tools; two conversations at once; the Mac desktop app (the lab is the web version); a real local model.
+
+## Since 0.40.4: Stop helpers
+
+When a conversation is idle and only its helpers are at work, the app shows no Stop button. The
+line then carries a **Stop helpers** button at its right end. One click stops every helper of the
+conversation (this needs the Modes add-on, which does the stopping). The button is gone as soon as
+no helper is at work, and it is not shown while the conversation itself is working, because the
+app's own Stop button is there then.
+
+- **Tested (0.40.4):** lab run in the browser with a stand-in model: shown, clicked, helper stopped.
+- **Not verified:** in the desktop app with real models.

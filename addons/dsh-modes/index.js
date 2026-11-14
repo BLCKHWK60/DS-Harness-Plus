@@ -14,6 +14,7 @@ import z from '@deepseek-ai/schemastery';
 import { maskFor, parentIdOf, rootOf, webDefault } from './lib/mask.js';
 import { fromScheduler, scheduledModeId } from './lib/scheduled.js';
 import { PROGRAM_TOOL, programNote, programOnly, SLOW_TOOLS } from './lib/ptc.js';
+import { helpersBelow, onlyStopNotes, stoppedByUser } from './lib/stop.js';
 
 export const name = 'modes';
 /** The chat box asks here which tools the model can call in a conversation (header `x-dsh-session`). */
@@ -633,6 +634,58 @@ export function apply(ctx, config) {
     if (!work) return;
     pendingIdle.delete(agent.id);
     void work().catch(report);
+  });
+
+  // Stop in a conversation also stops the helpers it started, and theirs.
+  /** Helpers stopped by the user's Stop, with the time, so their "I was stopped" note wakes nobody. */
+  const stoppedHelpers = new Map();
+  const STOP_NOTE_MS = 2 * 60_000;
+  const wasStopped = (id) => Date.now() - (stoppedHelpers.get(id) ?? -Infinity) < STOP_NOTE_MS;
+  /** Stop every helper at work below a conversation. */
+  const stopHelpers = (id) => {
+    const now = Date.now();
+    for (const [key, at] of stoppedHelpers) if (now - at >= STOP_NOTE_MS) stoppedHelpers.delete(key);
+    for (const helper of helpersBelow(ctx.get('agents')?.list?.() ?? [], id)) {
+      try {
+        stoppedHelpers.set(helper.id, now);
+        helper.cancel({ kind: 'parent' });
+      } catch (error) {
+        ctx.logger.warn(`modes: could not stop helper "${helper.id}": ${error?.message ?? error}`);
+      }
+    }
+  };
+  ctx.on('session/event', (session, event) => {
+    if (stoppedByUser(event) && session?.id) stopHelpers(session.id);
+  });
+  // Stop pressed while the conversation itself is idle and only its helpers work: the app ends no
+  // turn then and records nothing, so the Stop is caught where it arrives.
+  const stopWatched = new WeakSet();
+  const watchStop = (agent) => {
+    if (!agent || stopWatched.has(agent) || typeof agent.cancel !== 'function') return;
+    stopWatched.add(agent);
+    const cancel = agent.cancel.bind(agent);
+    try {
+      agent.cancel = (cause, options) => {
+        if (cause?.kind === 'user') {
+          try {
+            stopHelpers(agent.id);
+          } catch (error) {
+            ctx.logger.warn(`modes: could not stop the helpers of "${agent.id}": ${error?.message ?? error}`);
+          }
+        }
+        return cancel(cause, options);
+      };
+    } catch {
+      /* an Agent that cannot be watched keeps the app's own Stop */
+    }
+  };
+  ctx.on('agent/created', ({ agent }) => watchStop(agent));
+  for (const agent of ctx.get('agents')?.list?.() ?? []) watchStop(agent);
+  // A turn that would start only because stopped helpers reported back ends at once, unasked.
+  // The first step of a turn is step 1.
+  ctx.on('agent/pre-step', ({ messages, step }, next) => {
+    if (step <= 1 && stoppedHelpers.size > 0 && onlyStopNotes(messages, wasStopped)) return Promise.resolve({ kind: 'enter', messages: [] });
+    return next();
   });
 
   ctx.on('agent/disposed', ({ agent }) => {

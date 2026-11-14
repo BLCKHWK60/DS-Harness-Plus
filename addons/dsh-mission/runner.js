@@ -565,6 +565,10 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
       return true;
     },
 
+    /** End the step under way, and its helpers, without pausing the run. */
+    cut(id) {
+      steps.get(id)?.stopper?.abort(new Error('Stopped.'));
+    },
     /** Pause the run: no further rounds start. */
     stop(agent) {
       const run = runOf(agent.id);

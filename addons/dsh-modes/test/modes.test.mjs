@@ -110,3 +110,30 @@ test('the Code method is short enough to sit beside other instructions and names
   assert.ok(CODE_METHOD.length > 800 && CODE_METHOD.length < 3000, String(CODE_METHOD.length));
   for (const word of ['todo_write', 'path:line', 'not verified']) assert.ok(CODE_METHOD.includes(word), word);
 });
+
+test('Stop in a conversation finds the helpers below it', async () => {
+  const { helpersBelow, stoppedByUser } = await import('../lib/stop.js');
+  const end = (reason) => ({ type: 'turn/end', data: { turn: 1, reason } });
+  assert.equal(stoppedByUser(end({ kind: 'aborted', reason: { kind: 'user' } })), true);
+  assert.equal(stoppedByUser(end({ kind: 'aborted', reason: { kind: 'parent' } })), false, 'a helper stopped by its parent does not count');
+  assert.equal(stoppedByUser(end({ kind: 'completed' })), false);
+  assert.equal(stoppedByUser({ type: 'turn/start', data: {} }), false);
+  assert.equal(stoppedByUser(undefined), false);
+
+  const agent = (id, parent, status = 'running') => ({ id, status, session: { header: parent ? { origin: 'subagent', parentSession: parent } : {} } });
+  const agents = [agent('main'), agent('a', 'main'), agent('b', 'a'), agent('idle', 'main', 'idle'), agent('other'), agent('c', 'other'), agent('lost', 'gone')];
+  assert.deepEqual(helpersBelow(agents, 'main').map((one) => one.id), ['a', 'b'], 'its helpers and theirs, only those at work');
+  assert.deepEqual(helpersBelow(agents, 'a').map((one) => one.id), ['b']);
+  assert.deepEqual(helpersBelow(agents, 'b'), []);
+  const loop = [agent('x', 'y'), agent('y', 'x')];
+  assert.deepEqual(helpersBelow(loop, 'main'), [], 'a broken chain ends');
+
+  const { onlyStopNotes } = await import('../lib/stop.js');
+  const note = (id, stopReason = 'aborted') => ({ role: 'user', source: { kind: 'subagent-settled', stopReason, senderSessionId: id } });
+  const was = (id) => id === 'a' || id === 'b';
+  assert.equal(onlyStopNotes([note('a'), note('b')], was), true);
+  assert.equal(onlyStopNotes([note('a'), { role: 'user', source: { kind: 'human' } }], was), false, 'something the user wrote starts the turn');
+  assert.equal(onlyStopNotes([note('a', 'completed')], was), false, 'a helper that finished is heard');
+  assert.equal(onlyStopNotes([note('z')], was), false, 'a helper stopped some other way is heard');
+  assert.equal(onlyStopNotes([], was), false);
+});

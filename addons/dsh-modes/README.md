@@ -127,3 +127,18 @@ The owner runs large local models and cannot hold several in memory at once. Eac
 - The "Model for the helpers" section that used to be in the Deep research panel is gone: the chip is the one place for it.
 - **Tested (0.40.0):** unit test in Mission (one model by default and with Modes saying so; the roles' models with "Different models"). In the test setup: the chip showed "One model", its panel the reason; switching to "Different models" turned it to "2 models" and listed them with their sources; a `/mission` run then started with "2 models" and its log shows both; switched back, the next run started with "one model for everything" and every step ran on the conversation's model. Not tested: Agent swarm, the Tier tools and Code power under either choice (same code path, not run); the refusal of a `subagent` call that names another model; the Mac app.
 
+
+## Since 0.40.1: Stop also stops the helpers
+
+Pressing Stop in a conversation ends its turn. The app leaves the helpers that conversation started
+at work. Modes now stops them too, and their own helpers, the moment you press Stop. A Mission run
+in that conversation is paused; `/mission resume` carries on and takes the stopped step again.
+
+A stopped helper tells its parent that it was stopped, and the app would start a new turn for that
+note. Since 0.40.2 such a note, within two minutes of your Stop, starts nothing; the conversation
+stays stopped until you write again.
+
+Since 0.40.3 this also holds when the conversation itself is idle and only its helpers are at work.
+
+- **Tested (0.40.3):** unit tests; lab runs with a stand-in model, with Mission's helpers and with the app's own helper tool.
+- **Not verified:** with real models.

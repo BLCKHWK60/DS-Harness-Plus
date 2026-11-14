@@ -87,6 +87,20 @@ window.__ModuleLoader__.load({
 .dsh-ac-fold svg { display: block; transition: transform .16s ease; }
 .dsh-ac-fit[data-folded="true"] .dsh-ac-fold svg { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) { .dsh-ac-fold svg { transition: none; } }
+.dsh-ac-stop {
+  position: absolute; right: 10px; top: 50%; height: 24px; margin-top: -12px; padding: 0 9px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; gap: 6px; font: inherit; font-size: 12px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); z-index: 2;
+}
+.dsh-ac-stop::before { content: ''; width: 8px; height: 8px; border-radius: 2px; background: currentColor; }
+.dsh-ac-stop:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dsh-ac-stop:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); }
+.dsh-ac-stop:disabled { opacity: .5; cursor: default; }
+.dsh-ac-fit[data-stop="true"] { position: relative; }
+.dsh-ac-fit[data-stop="true"] .dsh-ac-dock { padding-right: 124px; }
+.dsh-ac-fit[data-arrow="true"] .dsh-ac-stop { right: 42px; }
+.dsh-ac-fit[data-joined="true"] .dsh-ac-stop { right: 16px; }
+.dsh-ac-fit[data-joined="true"][data-arrow="true"] .dsh-ac-stop { right: 50px; }
+.dsh-ac-fit[data-joined="true"]:not([data-folded="true"]) .dsh-ac-stop { top: 12px; margin-top: 0; }
 .dsh-ac-edge { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; pointer-events: none; display: flex; flex-direction: column; gap: 2px; }
 .dsh-ac-inline { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .dsh-ac-canvas { display: block; width: 100%; color: var(--dsw-alias-label-secondary); }
@@ -235,6 +249,8 @@ input.dsh-ac-field { width: 260px; }
 
     /** One copy of the live state for every piece on screen. */
     const store = { snap: null, session: null, listeners: new Set(), users: 0, timer: null, sampler: null, hist: [] };
+    /** The app's Stop for a conversation; set when the add-on starts. */
+    let cancelSession = null;
     const HIST_STEP_MS = 250;
 
     function notify() {
@@ -717,6 +733,8 @@ input.dsh-ac-field { width: 260px; }
     /** The styles that take the message box out of sight while keeping its width measurable. */
     const FOLDED_CARD = { height: '0px', minHeight: '0px', paddingTop: '0px', paddingBottom: '0px', marginTop: '0px', marginBottom: '0px', borderWidth: '0px', overflow: 'hidden', visibility: 'hidden', boxShadow: 'none' };
 
+    /** What the conversation's own model is doing; helpers and other chats are not among them. */
+    const MAIN_KINDS = ['wait', 'prompt', 'reason', 'write', 'tool', 'web'];
     function LiveDock({ sessionId }) {
       const snap = useLive(sessionId);
       const wrap = useRef(null);
@@ -802,9 +820,24 @@ input.dsh-ac-field { width: 260px; }
           onClick: () => fold.set(!folded),
         }, h('svg', { width: 14, height: 14, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' }, h('path', { d: 'M4 6.5l4 4 4-4' })))
         : null;
+      // Helpers at work while the conversation itself is idle: the app shows no Stop button then, so the line carries one.
+      const kinds = snap?.kinds ?? {};
+      const helpersOnly = Number(kinds.sub?.count) > 0 && !MAIN_KINDS.some((kind) => kinds[kind]);
+      const [stopping, setStopping] = useState(false);
+      useEffect(() => { if (!helpersOnly) setStopping(false); }, [helpersOnly]);
+      const stop = helpersOnly && sessionId && cancelSession
+        ? h('button', {
+          type: 'button', className: 'dsh-ac-stop', disabled: stopping, title: 'Stop the helpers of this conversation',
+          onClick: () => {
+            setStopping(true);
+            Promise.resolve().then(() => cancelSession?.(sessionId)).catch(() => {}).finally(() => setTimeout(() => setStopping(false), 4000));
+          },
+        }, stopping ? 'Stopping' : 'Stop helpers')
+        : null;
       return h(React.Fragment, null, h('style', null, CSS),
-        h('div', { ref: wrap, className: 'dsh-ac-fit', 'data-fit': String(fit), 'data-arrow': String(Boolean(arrow)), 'data-folded': String(folded) },
-          shown ? line : folded ? h('div', { className: 'dsh-ac-dock dsh-ac-bare' }) : null,
+        h('div', { ref: wrap, className: 'dsh-ac-fit', 'data-fit': String(fit), 'data-arrow': String(Boolean(arrow)), 'data-folded': String(folded), 'data-stop': String(Boolean(stop)) },
+          shown ? line : folded || stop ? h('div', { className: 'dsh-ac-dock dsh-ac-bare' }) : null,
+          stop,
           arrow));
     }
     function LiveInline({ sessionId }) {
@@ -1071,8 +1104,10 @@ input.dsh-ac-field { width: 260px; }
     }
 
     return {
-      inject: ['slots', 'remote', 'remote.settings', 'locale'],
+      inject: ['slots', 'remote', 'remote.settings', 'remote.session', 'locale'],
       apply(ctx) {
+        cancelSession = (sessionId) => ctx.get('remote.session').cancel({ sessionId });
+        ctx.effect(() => () => { cancelSession = null; });
         ctx.effect(() => ctx.locale.register('activity', DICT));
         const t = ctx.locale.bind('activity');
         ctx.effect(() =>
