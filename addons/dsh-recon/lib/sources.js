@@ -33,11 +33,11 @@ export function openSources() {
      * Keep a source that was read.
      * @returns {object} the source, with its number.
      */
-    keep(id, { kind, url, title, text, bytes, cut, author = '', date = '', group = '', messageId = '' }, at = Date.now()) {
+    keep(id, { kind, url, title, text, bytes, cut, author = '', date = '', group = '', messageId = '', original = '', captured = '' }, at = Date.now()) {
       const entry = of(id);
       const again = entry.sources.find((source) => source.url === url && source.kind === kind);
       const body = String(text ?? '');
-      const made = { n: again?.n ?? entry.sources.length + 1, kind, url, title: String(title ?? '').slice(0, 300), text: body, bytes, cut: Boolean(cut), author, date, group, messageId, at, retrieved: stamp(at), sha256: createHash('sha256').update(body).digest('hex') };
+      const made = { n: again?.n ?? entry.sources.length + 1, kind, url, title: String(title ?? '').slice(0, 300), text: body, bytes, cut: Boolean(cut), author, date, group, messageId, original, captured, at, retrieved: stamp(at), sha256: createHash('sha256').update(body).digest('hex') };
       if (again) entry.sources[entry.sources.indexOf(again)] = made;
       else entry.sources.push(made);
       return made;
@@ -57,7 +57,8 @@ export function openSources() {
     },
     /** @returns {string} the full citation of a source. */
     cite(source) {
-      const where = source.kind === 'usenet' ? `Usenet, ${source.group}, Message-ID ${source.messageId}` : source.url;
+      const where = source.kind === 'usenet' ? `Usenet, ${source.group}, Message-ID ${source.messageId}`
+        : source.kind === 'archive' ? `${source.original}, as captured by the Internet Archive at timestamp ${source.captured} (${source.url})` : source.url;
       return [
         `[S${source.n}] ${source.title || '(no title)'}`,
         `Source: ${where}`,

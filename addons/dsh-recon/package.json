@@ -17,6 +17,7 @@
     "lib/*.mjs",
     "cordis.patch.yml",
     "README.md",
+    "test/*.mjs",
     "locale/*.json",
     "icon.svg",
     "node_modules/@deepseek-ai/schemastery/**",

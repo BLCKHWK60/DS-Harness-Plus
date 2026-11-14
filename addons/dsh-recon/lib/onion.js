@@ -61,6 +61,8 @@ export function createOnion({ tor, run, blocklist, trail, sources, engine, waitM
   };
 
   return {
+    /** Recon's Tor, for the other sources that go through it: `{port}`, or `{wait}` while it connects. */
+    port,
     async search(id, query) {
       const words = String(query ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
       if (!words) return 'Give a few words to search for.';

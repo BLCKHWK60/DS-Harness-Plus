@@ -1,31 +1,40 @@
 /**
  * Usenet for a Recon conversation: finding text newsgroups, searching their headers, reading one
- * article. Text only: binary groups are never listed or opened, file postings are skipped, and an
- * article that carries a file is refused before its body is fetched.
+ * article. The user may have more than one Usenet account (lib/accounts.js): a request names the
+ * one to visit, and signs in with that account's own login. Text only: binary groups are never
+ * listed or opened, file postings are skipped, and an article that carries a file is refused
+ * before its body is fetched.
  */
+import { nameOf, pickAccount, serviceOf, validHost } from './accounts.js';
 import { dropsPage, dropsShort } from './screen.js';
 
 const fence = (text) => `<<<UNTRUSTED SOURCE TEXT\n${String(text).replace(/<<<UNTRUSTED SOURCE TEXT|UNTRUSTED SOURCE TEXT>>>/g, '[removed]')}\nUNTRUSTED SOURCE TEXT>>>`;
 const MAX_VISITS = 400;
 
 /**
- * @param {object} deps - `run(request, {proxyPort})` (the locked process), `route()` ('off' or 'direct'), `server()` ({host, port}),
- *   `login()` (the Keychain login or undefined), `forward(host, port)` (lib/forward.js), `sources`, `ca` (tests only).
- * @returns {object} `groups(id, pattern)`, `search(id, {group, subject, author, since})`, `read(id, {group, messageId, part})`.
+ * @param {object} deps - `run(request, {proxyPort})` (the locked process), `route()` ('off' or 'direct'), `accounts()` (lib/accounts.js),
+ *   `defaultAccount()` (the id of the account used when a request names none), `login(service)` (that account's
+ *   Keychain login or undefined), `forward(host, port)` (lib/forward.js), `sources`, `ca` (tests only).
+ * @returns {object} `groups(id, pattern, account)`, `search(id, {group, subject, author, since, account})`, `read(id, {group, messageId, part, account})`.
  */
-export function createUsenet({ run, route, server, login, forward, sources, ca }) {
-  /** One visit to the news server through the chosen route. */
-  const visit = async (id, request) => {
+export function createUsenet({ run, route, accounts, defaultAccount, login, forward, sources, ca }) {
+  /** How a message names the account a visit used. */
+  const of = (account) => (account?.label ? `the account "${account.label}" (${account.host})` : account?.host || 'the news server');
+
+  /** One visit to the news server of one account, through the chosen route. */
+  const visit = async (id, accountId, request) => {
     const way = String(route?.() ?? 'off');
     if (way !== 'direct') throw new Error('Usenet has no route yet. The user chooses one in Settings → Recon → Usenet. Nothing was sent.');
-    const { host, port } = server?.() ?? {};
-    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(String(host ?? ''))) throw new Error('No news server is set. The user enters it in Settings → Recon → Usenet. Nothing was sent.');
-    const who = await login();
-    if (!who) throw new Error('No Usenet login is stored in the Keychain. Settings → Recon → Usenet shows the user how to store it. Nothing was sent.');
+    const { account, why } = pickAccount(accounts?.() ?? [], accountId, defaultAccount?.());
+    if (!account) throw new Error(why);
+    if (!validHost(account.host)) throw new Error(`The news server of the Usenet account "${nameOf(account)}" is not set yet. The user enters it in Settings → Recon → Usenet. Nothing was sent.`);
+    const who = await login(serviceOf(account.id));
+    if (!who) throw new Error(`No login is stored in the Keychain for the Usenet account "${nameOf(account)}". Settings → Recon → Usenet shows the user how to store it. Nothing was sent.`);
     if (sources.count(id) > MAX_VISITS) throw new Error(`This conversation has made ${MAX_VISITS} requests, which is its limit. Start a new Recon conversation to go on.`);
-    const way2 = await forward(host, Number(port) || 563);
+    const way2 = await forward(account.host, account.port);
     try {
-      return await run({ op: 'nntp', via: 'forward', port: way2.port, server: host, user: who.user, pass: who.pass, ...(ca ? { ca } : {}), ...request }, { proxyPort: way2.port, timeoutMs: 120_000 });
+      const got = await run({ op: 'nntp', via: 'forward', port: way2.port, server: account.host, user: who.user, pass: who.pass, ...(ca ? { ca } : {}), ...request }, { proxyPort: way2.port, timeoutMs: 120_000 });
+      return { ...got, account };
     } finally {
       way2.close();
     }
@@ -42,38 +51,38 @@ export function createUsenet({ run, route, server, login, forward, sources, ca }
   };
 
   return {
-    async groups(id, pattern) {
+    async groups(id, pattern, account) {
       const words = String(pattern ?? '').trim().slice(0, 120);
       if (dropsShort(words)) {
         sources.dropped(id);
         sources.note(id, 'groups refused', 'a group search was refused by the filter and not sent');
         return 'That was refused by the filter and was not sent.';
       }
-      const got = await visit(id, { action: 'groups', pattern: words });
-      if (!got.ok) return `The groups could not be listed: ${got.why}.`;
+      const got = await visit(id, account, { action: 'groups', pattern: words });
+      if (!got.ok) return `The groups could not be listed on ${of(got.account)}: ${got.why}.`;
       const kept = got.groups.filter((entry) => !dropsShort(entry.group.replace(/\./g, ' ')));
       const left = got.groups.length - kept.length;
       if (left > 0) sources.dropped(id, left);
-      sources.note(id, 'groups', `"${words}": ${kept.length} text groups shown${got.hidden + left > 0 ? `, ${got.hidden + left} left out (not text groups, or the filters)` : ''}`);
-      if (kept.length === 0) return `No text newsgroups match "${words}"${got.hidden + left > 0 ? ` (${got.hidden + left} left out: not text groups, or the filters)` : ''}.`;
-      return [`Text newsgroups matching "${words}" (${kept.length} shown${got.hidden + left > 0 ? `; ${got.hidden + left} left out: not text groups, or the filters` : ''}):`, fence(kept.map((entry) => `${entry.group} (about ${entry.articles.toLocaleString('en-US')} articles)`).join('\n')), 'Search one with recon_usenet_search.'].join('\n');
+      sources.note(id, 'groups', `"${words}" on ${of(got.account)}: ${kept.length} text groups shown${got.hidden + left > 0 ? `, ${got.hidden + left} left out (not text groups, or the filters)` : ''}`);
+      if (kept.length === 0) return `No text newsgroups match "${words}" on ${of(got.account)}${got.hidden + left > 0 ? ` (${got.hidden + left} left out: not text groups, or the filters)` : ''}.`;
+      return [`Text newsgroups matching "${words}" on ${of(got.account)} (${kept.length} shown${got.hidden + left > 0 ? `; ${got.hidden + left} left out: not text groups, or the filters` : ''}):`, fence(kept.map((entry) => `${entry.group} (about ${entry.articles.toLocaleString('en-US')} articles)`).join('\n')), 'Search one with recon_usenet_search.'].join('\n');
     },
 
-    async search(id, { group, subject, author, since }) {
+    async search(id, { group, subject, author, since, account }) {
       const name = String(group ?? '').trim().toLowerCase();
       if (dropsShort(`${name.replace(/\./g, ' ')} ${subject ?? ''}`)) {
         sources.dropped(id);
         sources.note(id, 'search refused', 'a Usenet search was refused by the filter and not sent');
         return 'That search was refused by the filter and was not sent.';
       }
-      const got = await visit(id, { action: 'over', group: name, subject, author, since });
-      if (!got.ok) return `${name} could not be searched: ${got.why}.`;
+      const got = await visit(id, account, { action: 'over', group: name, subject, author, since });
+      if (!got.ok) return `${name} could not be searched on ${of(got.account)}: ${got.why}.`;
       const kept = got.found.filter((entry) => !dropsShort(entry.subject));
       const left = got.found.length - kept.length;
       if (left > 0) sources.dropped(id, left);
       const asked = [subject ? `subject "${String(subject).slice(0, 80)}"` : '', author ? `author "${String(author).slice(0, 60)}"` : '', since ? `since ${String(since).slice(0, 20)}` : ''].filter(Boolean).join(', ') || 'newest articles';
-      sources.note(id, 'usenet search', `${name}, ${asked}: ${kept.length} articles shown${left > 0 ? `, ${left} left out by the filters` : ''}`);
-      const scope = `Looked at the headers of the newest ${got.looked.toLocaleString('en-US')} articles of ${name}${got.files > 0 ? `; ${got.files} file postings were skipped` : ''}. Usenet has no full-text search: only subject, author and date are matched.`;
+      sources.note(id, 'usenet search', `${name} on ${of(got.account)}, ${asked}: ${kept.length} articles shown${left > 0 ? `, ${left} left out by the filters` : ''}`);
+      const scope = `Looked at the headers of the newest ${got.looked.toLocaleString('en-US')} articles of ${name} on ${of(got.account)}${got.files > 0 ? `; ${got.files} file postings were skipped` : ''}. Usenet has no full-text search: only subject, author and date are matched.`;
       if (kept.length === 0) return `No articles match (${asked}). ${scope}`;
       const at = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
       return [
@@ -85,7 +94,7 @@ export function createUsenet({ run, route, server, login, forward, sources, ca }
       ].join('\n');
     },
 
-    async read(id, { group, messageId, part }) {
+    async read(id, { group, messageId, part, account }) {
       const name = String(group ?? '').trim().toLowerCase();
       const key = String(messageId ?? '').trim();
       const again = sources.find(id, key);
@@ -95,10 +104,10 @@ export function createUsenet({ run, route, server, login, forward, sources, ca }
         sources.note(id, 'left out', 'a newsgroup was left out by the filters and not opened');
         return 'That newsgroup was left out by the filters and was not opened.';
       }
-      const got = await visit(id, { action: 'article', group: name, messageId: key });
+      const got = await visit(id, account, { action: 'article', group: name, messageId: key });
       if (!got.ok) {
-        sources.note(id, 'read failed', `${name} ${key.slice(0, 120)}: ${got.why}`);
-        return `The article could not be read: ${got.why}.`;
+        sources.note(id, 'read failed', `${name} ${key.slice(0, 120)} on ${of(got.account)}: ${got.why}`);
+        return `The article could not be read on ${of(got.account)}: ${got.why}.`;
       }
       if (dropsPage(got.subject, got.text)) {
         sources.dropped(id);

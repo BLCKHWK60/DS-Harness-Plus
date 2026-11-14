@@ -9,7 +9,8 @@ import { join } from 'node:path';
 import tls from 'node:tls';
 import { articleText, carriesFile, decodeWords, textGroup } from '../lib/fetch-child.mjs';
 import { openForward } from '../lib/forward.js';
-import { loginName, SERVICE, STORE_COMMAND } from '../lib/keychain.js';
+import { storeCommandFor } from '../lib/accounts.js';
+import { loginName, SERVICE } from '../lib/keychain.js';
 import { runLocked } from '../lib/sandbox.js';
 import { openSources } from '../lib/sources.js';
 import { createUsenet } from '../lib/usenet.js';
@@ -32,18 +33,19 @@ test('only text newsgroups, and only text in an article', () => {
 });
 
 test('the login is asked of the Keychain by name, and the command never holds a password', async () => {
-  assert.match(STORE_COMMAND, new RegExp(`-s ${SERVICE} -a YOUR_USERNAME -w$`), 'the password is typed at a hidden prompt, not on the command line');
+  assert.match(storeCommandFor('default'), new RegExp(`-s ${SERVICE} -a YOUR_USERNAME -w$`), 'the password is typed at a hidden prompt, not on the command line');
+  assert.match(storeCommandFor('second'), new RegExp(`-s ${SERVICE}-second -a YOUR_USERNAME -w$`), 'each account has its own Keychain item');
   assert.equal(await loginName('dsh-recon-test-no-such-item'), '');
 });
 
 test('without a route, a server or a login nothing is sent', async () => {
   const sources = openSources();
   let opened = 0;
-  const make = (over) => createUsenet({ run: runLocked, route: () => 'direct', server: () => ({ host: 'news.test', port: 563 }), login: async () => ({ user: 'u', pass: 'p' }), forward: async () => { opened += 1; throw new Error('should not be reached'); }, sources, ...over });
+  const make = (over) => createUsenet({ run: runLocked, route: () => 'direct', accounts: () => [{ id: 'default', label: '', host: 'news.test', port: 563 }], defaultAccount: () => 'default', login: async () => ({ user: 'u', pass: 'p' }), forward: async () => { opened += 1; throw new Error('should not be reached'); }, sources, ...over });
   await assert.rejects(make({ route: () => 'off' }).groups('c', 'comp'), /no route yet.*Nothing was sent/);
-  await assert.rejects(make({ server: () => ({ host: '', port: 563 }) }).groups('c', 'comp'), /No news server is set/);
-  await assert.rejects(make({ server: () => ({ host: 'bad host!', port: 563 }) }).groups('c', 'comp'), /No news server is set/);
-  await assert.rejects(make({ login: async () => undefined }).groups('c', 'comp'), /No Usenet login is stored/);
+  await assert.rejects(make({ accounts: () => [] }).groups('c', 'comp'), /Nothing was sent/);
+  await assert.rejects(make({ accounts: () => [{ id: 'default', label: '', host: 'bad host!', port: 563 }] }).groups('c', 'comp'), /is not set yet.*Nothing was sent/);
+  await assert.rejects(make({ login: async () => undefined }).groups('c', 'comp'), /No login is stored in the Keychain.*Nothing was sent/);
   assert.equal(opened, 0);
   assert.match(await make({}).groups('c', 'preteen'), /refused by the filter and was not sent/);
   assert.equal(opened, 0);
@@ -101,7 +103,7 @@ test('groups, header search and reading through the stand-in news server', { ski
   const nntpPort = server.address().port;
   const sources = openSources();
   let pass = 'open sesame';
-  const usenet = createUsenet({ run: runLocked, route: () => 'direct', server: () => ({ host: 'news.test', port: 563 }), login: async () => ({ user: 'reader', pass }), forward: () => openForward('127.0.0.1', nntpPort), sources, ca: cert });
+  const usenet = createUsenet({ run: runLocked, route: () => 'direct', accounts: () => [{ id: 'default', label: '', host: 'news.test', port: 563 }], defaultAccount: () => 'default', login: async () => ({ user: 'reader', pass }), forward: () => openForward('127.0.0.1', nntpPort), sources, ca: cert });
   t.after(() => { server.close(); rmSync(dir, { recursive: true, force: true }); });
 
   const groups = await usenet.groups('c1', 'comp.security');
@@ -143,8 +145,8 @@ test('groups, header search and reading through the stand-in news server', { ski
   assert.equal(sources.list('c1').length, 1);
 
   const log = sources.log('c1');
-  assert.match(log, /groups: "comp\.security": 2 text groups shown/);
-  assert.match(log, /usenet search: comp\.security\.misc, subject "acme": 1 articles shown/);
+  assert.match(log, /groups: "comp\.security" on news\.test: 2 text groups shown/);
+  assert.match(log, /usenet search: comp\.security\.misc on news\.test, subject "acme": 1 articles shown/);
   assert.match(log, /read: \[S1\] comp\.security\.misc <good@example>/);
   assert.equal(log.includes('open sesame') || log.includes('reader'), false, 'the login is in no log');
 

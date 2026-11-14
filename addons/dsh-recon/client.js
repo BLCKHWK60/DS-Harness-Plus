@@ -38,6 +38,12 @@ window.__ModuleLoader__.load({
 }
 .dsh-rc-switch[aria-checked="true"]::after { transform: translateX(16px); background: var(--dsw-alias-bg-base); }
 .dsh-rc-input { margin-top: 8px; width: 100%; max-width: 360px; height: 30px; padding: 0 10px; box-sizing: border-box; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; font: inherit; font-size: 13px; color: var(--dsw-alias-label-primary); background: transparent; }
+.dsh-rc-account { padding: 14px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
+.dsh-rc-fields { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.dsh-rc-fields .dsh-rc-input { flex: 1 1 150px; max-width: 240px; margin-top: 0; }
+.dsh-rc-fields .dsh-rc-port { flex: 0 0 84px; }
+.dsh-rc-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.dsh-rc-tag { margin-left: 8px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 500; vertical-align: 1px; color: var(--dsw-alias-label-secondary); background: color-mix(in srgb, var(--dsw-alias-label-primary) 10%, transparent); }
 .dsh-rc-list { margin: 6px 0 0; padding-left: 18px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 .dsh-rc-sql { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; font: 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
   color: var(--dsw-alias-label-secondary); background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent); }
@@ -69,14 +75,74 @@ window.__ModuleLoader__.load({
       if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
     }
 
+    /** A news server's name, as a Usenet provider gives it. */
+    const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
+    /** As many accounts as the add-on takes. */
+    const MAX = 8;
+    /** @returns {number | undefined} the port, when what was typed is one. Nothing typed is 563. */
+    const portOf = (typed) => {
+      const text = String(typed ?? '').trim();
+      if (text === '') return 563;
+      const port = Math.trunc(Number(text));
+      return Number.isFinite(port) && port >= 1 && port <= 65535 ? port : undefined;
+    };
+    /** An id for a new account: short, and the Keychain item it names stays readable. */
+    const newId = () => {
+      const bytes = new Uint8Array(6);
+      try {
+        window.crypto.getRandomValues(bytes);
+      } catch {
+        for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+      }
+      return `a${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+    };
+    /** The accounts as the configuration takes them: only the four fields it knows. */
+    const stored = (accounts) => (Array.isArray(accounts) ? accounts : []).map((one) => ({ id: String(one.id ?? ''), label: String(one.label ?? ''), host: String(one.host ?? ''), port: Number(one.port) || 563 }));
+
+    /** One Usenet account: what it is called, which server it is, and where its login stands. */
+    function AccountRow({ account, busy, isDefault, onSave, onDefault, onRemove }) {
+      const [label, setLabel] = useState(account.label ?? '');
+      const [host, setHost] = useState(account.host ?? '');
+      const [port, setPort] = useState(String(account.port ?? 563));
+      const saved = JSON.stringify([account.label ?? '', account.host ?? '', account.port ?? 563]);
+      const seen = useRef(saved);
+      useEffect(() => {
+        if (seen.current === saved) return;
+        seen.current = saved;
+        setLabel(account.label ?? '');
+        setHost(account.host ?? '');
+        setPort(String(account.port ?? 563));
+      }, [saved, account.label, account.host, account.port]);
+      const name = label.trim().slice(0, 40);
+      const server = host.trim().toLowerCase();
+      const portNumber = portOf(port);
+      const changed = name !== (account.label ?? '') || server !== (account.host ?? '') || portNumber !== (account.port ?? 563);
+      const usable = HOST.test(server) && portNumber !== undefined;
+      return h('div', { className: 'dsh-rc-account' },
+        h('div', { className: 'dsh-rc-rowtitle' }, name || account.host || 'This account has no server yet', isDefault ? h('span', { className: 'dsh-rc-tag' }, 'default') : null),
+        h('div', { className: 'dsh-rc-rowdesc' }, account.hasLogin
+          ? 'Login stored in the Keychain. Recon reads it only to sign in; it is never shown, saved in a file or given to the model.'
+          : 'No login stored in the Keychain yet. Recon can sign in to this account only once you have stored it.'),
+        h('div', { className: 'dsh-rc-fields' },
+          h('input', { className: 'dsh-rc-input', type: 'text', value: label, placeholder: 'Name (optional)', spellCheck: false, autoCapitalize: 'off', autoCorrect: 'off', 'aria-label': 'Account name', onChange: (event) => setLabel(event.target.value) }),
+          h('input', { className: 'dsh-rc-input', type: 'text', value: host, placeholder: 'news.example.com', spellCheck: false, autoCapitalize: 'off', autoCorrect: 'off', 'aria-label': 'News server', onChange: (event) => setHost(event.target.value) }),
+          h('input', { className: 'dsh-rc-input dsh-rc-port', type: 'text', value: port, inputMode: 'numeric', placeholder: '563', spellCheck: false, 'aria-label': 'Port', onChange: (event) => setPort(event.target.value) })),
+        h('div', { className: 'dsh-rc-actions' },
+          h('button', { type: 'button', className: 'dsh-rc-btn', disabled: busy || !changed || !usable, title: usable ? 'Save this account' : 'A server name like news.example.com, and a port from 1 to 65535', onClick: () => onSave({ id: account.id, label: name, host: server, port: portNumber }) }, 'Save'),
+          isDefault ? null : h('button', { type: 'button', className: 'dsh-rc-btn', disabled: busy, title: 'Use this account when a request names none', onClick: onDefault }, 'Make default'),
+          h('button', { type: 'button', className: 'dsh-rc-btn', disabled: busy, title: 'Take this account out of Settings. Its login stays in the Keychain.', onClick: onRemove }, 'Remove')),
+        account.hasLogin
+          ? h('div', null, h('div', { className: 'dsh-rc-rowdesc' }, 'To remove this account\'s login from the Keychain, type this in the Terminal:'), h('div', { className: 'dsh-rc-sql' }, account.removeCommand ?? ''))
+          : h('div', null, h('div', { className: 'dsh-rc-rowdesc' }, 'To store this account\'s login, type this in the Terminal with your user name in place of YOUR_USERNAME. It asks for the password, which stays hidden:'), h('div', { className: 'dsh-rc-sql' }, account.storeCommand ?? '')));
+    }
+
     function ReconPage({ appCtx }) {
       const [data, setData] = useState(undefined);
       const [error, setError] = useState('');
       const [note, setNote] = useState({ text: '', error: false });
       const [busy, setBusy] = useState(false);
       const alive = useRef(true);
-      const [host, setHost] = useState('');
-      const hostSeen = useRef(false);
+      const [add, setAdd] = useState({ label: '', host: '', port: '' });
       const load = useCallback(async () => {
         try {
           const next = await call();
@@ -91,14 +157,6 @@ window.__ModuleLoader__.load({
         const timer = setInterval(() => { if (!document.hidden) void load(); }, 5000);
         return () => { alive.current = false; clearInterval(timer); };
       }, [load]);
-
-      // The server field starts with what is saved, once.
-      const savedHost = data?.usenet?.host;
-      useEffect(() => {
-        if (savedHost === undefined || hostSeen.current) return;
-        hostSeen.current = true;
-        setHost(savedHost);
-      }, [savedHost]);
 
       // While a test of Tor runs, look again every second. Before the first return, so the hook order never changes.
       const testing = data?.tor?.test?.state === 'running';
@@ -127,6 +185,8 @@ window.__ModuleLoader__.load({
       };
       const tor = data.tor ?? {};
       const usenet = data.usenet ?? {};
+      const more = data.more ?? {};
+      const accounts = usenet.accounts ?? [];
       const save = async (values, done) => {
         setBusy(true);
         try {
@@ -139,6 +199,27 @@ window.__ModuleLoader__.load({
           if (alive.current) setBusy(false);
         }
       };
+      /** Save the accounts, and make sure the one server of older versions does not come back. */
+      const saveAccounts = (next, done, more) => void save({ usenetAccounts: stored(next), usenetHost: '', ...(more ?? {}) }, done);
+      const removeAccount = (account) => saveAccounts(
+        accounts.filter((one) => one.id !== account.id),
+        `Removed ${account.label || account.host}. Its login stays in the Keychain; to delete it, type this in the Terminal: ${account.removeCommand ?? ''}`,
+        // The default account must not point at one that is gone.
+        account.id === usenet.defaultAccount ? { usenetDefaultAccount: '' } : {},
+      );
+      const makeDefault = (account) => void save({ usenetDefaultAccount: account.id }, `${account.label || account.host} is the default account.`);
+      const addPort = portOf(add.port);
+      const addOk = HOST.test(add.host.trim().toLowerCase()) && addPort !== undefined && accounts.length < MAX;
+      const addAccount = () => {
+        const id = newId();
+        const name = add.label.trim().slice(0, 40);
+        const server = add.host.trim().toLowerCase();
+        const values = { usenetAccounts: stored([...accounts, { id, label: name, host: server, port: addPort }]), usenetHost: '' };
+        // The first account is the default one until the user picks another.
+        if (!usenet.defaultAccount) values.usenetDefaultAccount = id;
+        setAdd({ label: '', host: '', port: '' });
+        void save(values, `Added ${name || server}. Store its login in the Keychain as shown, then it is ready.`);
+      };
       const testTor = async () => {
         try {
           const next = await call({ action: 'tor-test' });
@@ -150,7 +231,7 @@ window.__ModuleLoader__.load({
       const item = (text) => h('li', null, text);
       return h('div', { className: 'dsh-rc-page' }, h('style', null, CSS),
         h('h2', { className: 'dsh-rc-title' }, 'Recon'),
-        h('p', { className: 'dsh-rc-desc' }, 'An isolated tab for research on .onion sites and Usenet text newsgroups. It searches and reads .onion sites through Tor and text newsgroups through your news server, as text only.'),
+        h('p', { className: 'dsh-rc-desc' }, 'An isolated tab for research on .onion sites and Usenet text newsgroups. It searches and reads .onion sites through Tor and text newsgroups through your Usenet accounts, as text only.'),
         data.problem ? h('p', { className: 'dsh-rc-desc', 'data-error': 'true' }, data.problem) : null,
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },
@@ -168,7 +249,7 @@ window.__ModuleLoader__.load({
               : 'The tor program is not installed. Plus does not install it. In the Terminal: brew install tor'),
             tor.test?.text ? h('div', { className: 'dsh-rc-rowdesc', 'data-error': String(tor.test.state === 'failed') }, tor.test.state === 'running' ? `Connecting… ${tor.percent || 0}%` : tor.test.text) : null),
           h('button', { type: 'button', className: 'dsh-rc-btn', disabled: !data.enabled || !tor.path || tor.test?.state === 'running', title: 'Connects this Mac to the Tor network, opens no site, then stops', onClick: () => void testTor() }, tor.test?.state === 'running' ? 'Testing…' : 'Test Tor')),
-        h('p', { className: 'dsh-rc-desc' }, 'The test connects this Mac to the Tor network and opens no site. Your internet provider can see that Tor was used. Usenet and WireGuard are later steps.'),
+        h('p', { className: 'dsh-rc-desc' }, 'The test connects this Mac to the Tor network and opens no site. Your internet provider can see that Tor was used. WireGuard is a later step.'),
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },
             h('div', { className: 'dsh-rc-rowtitle' }, 'Blocklist of banned sites'),
@@ -186,21 +267,45 @@ window.__ModuleLoader__.load({
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },
             h('div', { className: 'dsh-rc-rowtitle' }, 'Connect to Usenet'),
-            h('div', { className: 'dsh-rc-rowdesc' }, 'Off: Usenet is not reached at all. On: an encrypted connection straight to your news server. The server sees your internet address and knows your account, as with any newsreader. Tor is not used for Usenet.')),
+            h('div', { className: 'dsh-rc-rowdesc' }, 'Off: Usenet is not reached at all. On: an encrypted connection straight to the news server of the account a request names. That server sees your internet address and knows that account, as with any newsreader. Tor is not used for Usenet.')),
           h('button', { type: 'button', role: 'switch', className: 'dsh-rc-switch', 'aria-checked': String(usenet.route === 'direct'), 'aria-label': 'Connect to Usenet', disabled: busy || !data.enabled, onClick: () => void save({ usenetRoute: usenet.route === 'direct' ? 'off' : 'direct' }, usenet.route === 'direct' ? 'Usenet is off.' : 'Usenet is on, through a direct encrypted connection.') })),
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },
-            h('div', { className: 'dsh-rc-rowtitle' }, 'News server'),
-            h('div', { className: 'dsh-rc-rowdesc' }, `The server name your Usenet provider gives you, for encrypted connections (port ${usenet.port ?? 563}).`),
-            h('input', { className: 'dsh-rc-input', type: 'text', value: host, placeholder: 'news.example.com', spellCheck: false, autoCapitalize: 'off', autoCorrect: 'off', 'aria-label': 'News server', onChange: (event) => setHost(event.target.value) })),
-          h('button', { type: 'button', className: 'dsh-rc-btn', disabled: busy || host.trim() === (usenet.host ?? ''), onClick: () => void save({ usenetHost: host.trim().toLowerCase() }, 'Saved.') }, 'Save')),
+            h('div', { className: 'dsh-rc-rowtitle' }, accounts.length === 1 ? 'Usenet account' : 'Usenet accounts'),
+            h('div', { className: 'dsh-rc-rowdesc' }, `Each account is a news server with its own login in the Keychain. A search or a read names the account to use; one that names none uses the default account, or the first. Up to ${MAX}.`))),
+        accounts.map((account) => h(AccountRow, {
+          key: account.id,
+          account,
+          busy,
+          isDefault: account.id === (usenet.defaultAccount || accounts[0]?.id),
+          onSave: (next) => saveAccounts(accounts.map((one) => (one.id === next.id ? next : one)), 'Saved.'),
+          onDefault: () => makeDefault(account),
+          onRemove: () => removeAccount(account),
+        })),
+        accounts.length < MAX
+          ? h('div', { className: 'dsh-rc-row' },
+            h('div', { className: 'dsh-rc-rowtext' },
+              h('div', { className: 'dsh-rc-rowtitle' }, 'Add another account'),
+              h('div', { className: 'dsh-rc-rowdesc' }, 'The server name your provider gives you, for encrypted connections. Each account needs its own login in the Keychain.'),
+              h('div', { className: 'dsh-rc-fields' },
+                h('input', { className: 'dsh-rc-input', type: 'text', value: add.label, placeholder: 'Name (optional)', spellCheck: false, autoCapitalize: 'off', autoCorrect: 'off', 'aria-label': 'New account name', onChange: (event) => setAdd({ ...add, label: event.target.value }) }),
+                h('input', { className: 'dsh-rc-input', type: 'text', value: add.host, placeholder: 'news.example.com', spellCheck: false, autoCapitalize: 'off', autoCorrect: 'off', 'aria-label': 'New news server', onChange: (event) => setAdd({ ...add, host: event.target.value }) }),
+                h('input', { className: 'dsh-rc-input dsh-rc-port', type: 'text', value: add.port, inputMode: 'numeric', placeholder: '563', spellCheck: false, 'aria-label': 'New port', onChange: (event) => setAdd({ ...add, port: event.target.value }) }))),
+            h('button', { type: 'button', className: 'dsh-rc-btn', disabled: busy || !addOk, onClick: addAccount }, 'Add'))
+          : null,
+
+        h('div', { className: 'dsh-rc-group' }, 'More sources'),
+        h('p', { className: 'dsh-rc-desc' }, 'Two services on the normal web. Recon reaches them only through its own Tor and only at their own addresses, as text. Both limit automated use, and more so through Tor: expect "asked to slow down" or "refused" now and then. Recon does not try another way.'),
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },
-            h('div', { className: 'dsh-rc-rowtitle' }, usenet.hasLogin ? 'Login: stored in the Keychain' : 'Login: not stored yet'),
-            h('div', { className: 'dsh-rc-rowdesc' }, 'Your login is kept in the macOS Keychain and nowhere else. Recon reads it only to sign in; it is never shown, saved in a file or given to the model. To store it, type this in the Terminal with your user name in place of YOUR_USERNAME. It asks for the password, which stays hidden:'),
-            h('div', { className: 'dsh-rc-sql' }, usenet.storeCommand ?? ''),
-            h('div', { className: 'dsh-rc-rowdesc' }, 'To remove it:'),
-            h('div', { className: 'dsh-rc-sql' }, usenet.removeCommand ?? ''))),
+            h('div', { className: 'dsh-rc-rowtitle' }, 'Internet Archive'),
+            h('div', { className: 'dsh-rc-rowdesc' }, `Dated copies of web pages (${more.archiveHost ?? ''}). The assistant can list the copies of a page and read one as text. This is the only way a page from the normal web is read in Recon. The Archive sees the request come from Tor, and which page was asked for.`)),
+          h('button', { type: 'button', role: 'switch', className: 'dsh-rc-switch', 'aria-checked': String(more.archive === true), 'aria-label': 'Internet Archive', disabled: busy || !data.enabled, onClick: () => void save({ archiveOn: more.archive !== true }, more.archive === true ? 'The Internet Archive is off.' : 'The Internet Archive is on.') })),
+        h('div', { className: 'dsh-rc-row' },
+          h('div', { className: 'dsh-rc-rowtext' },
+            h('div', { className: 'dsh-rc-rowtitle' }, 'GDELT news index'),
+            h('div', { className: 'dsh-rc-rowdesc' }, `Where a topic was reported, worldwide (${more.newsHost ?? ''}). It gives titles, addresses, publishers and dates, not the articles; an article is read as an Internet Archive copy. GDELT allows one request every five seconds, and sees your search words come from Tor.`)),
+          h('button', { type: 'button', role: 'switch', className: 'dsh-rc-switch', 'aria-checked': String(more.news === true), 'aria-label': 'GDELT news index', disabled: busy || !data.enabled, onClick: () => void save({ newsOn: more.news !== true }, more.news === true ? 'GDELT is off.' : 'GDELT is on.') })),
 
         h('div', { className: 'dsh-rc-group' }, 'Export, and End and wipe'),
         h('ul', { className: 'dsh-rc-list' },

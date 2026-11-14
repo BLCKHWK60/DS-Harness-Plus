@@ -882,10 +882,18 @@ An isolated Recon mode and tab for research on .onion sites and Usenet text news
 | `torPath` | `''` | Where the tor program is. Empty looks in the usual places (Homebrew, /usr/local). Plus does not install it. |
 | `otherEngine` | `false` | Search with another .onion search engine than the built-in filtered index. Off uses the built-in one. The blocklist of banned sites and the word screen apply either way. |
 | `engineHost` | `''` | That other engine's .onion name (the 56 characters and ".onion"). Used only while `otherEngine` is on. |
-| `usenetRoute` | `'off'` | How Usenet is reached. `off`: not at all. `direct`: an encrypted connection straight to the news server, which sees your address and knows your account. |
-| `usenetHost` | `''` | The news server's name, as your Usenet provider gives it. The login is not kept here: it is in the macOS Keychain. |
+| `usenetRoute` | `'off'` | How Usenet is reached. `off`: not at all. `direct`: an encrypted connection straight to a news server, which sees your address and knows the account used. |
+| `archiveOn` | `false` | The Internet Archive: dated copies of web pages, read as text through Recon's Tor. On lets recon_archive_find and recon_archive_read work. |
+| `newsOn` | `false` | The GDELT Project's index of news coverage, asked through Recon's Tor. On lets recon_news_search work. |
+| `usenetAccounts` | `''` | The Usenet accounts: a news server each, with its own login. No login is kept here: each is in the macOS Keychain, under an item named after the account's id (lib/accounts.js). |
+| `id` | `''` |  |
+| `label` | `''` |  |
+| `host` | `''` |  |
+| `port` | `563` |  |
+| `usenetDefaultAccount` | `''` | The account used when a request names none. Empty uses the first. |
+| `usenetHost` | `''` | The one news server of older versions. Read only, to turn it into the first account. |
 | `exportFolder` | `''` | Where `/recon export` writes its files. Empty uses the folder `recon/exports` in the app's home. |
-| `usenetPort` | `563` | The news server's port for encrypted connections. |
+| `usenetPort` | `563` | That older server's port. Read only, for the same reason. |
 
 ### Global Search
 

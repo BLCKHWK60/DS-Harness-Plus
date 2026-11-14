@@ -3,7 +3,8 @@
  *
  * Steps 1 to 3 of 7: the isolation frame, the connection layer, and searching and reading
  * .onion sites behind the filters, with citations and a research log; and step 4, Usenet text
- * newsgroups (lib/usenet.js; the login is in the macOS Keychain, lib/keychain.js); and step 6: the
+ * newsgroups on one or more accounts (lib/usenet.js, lib/accounts.js; each login is in the macOS
+ * Keychain, lib/keychain.js); and step 6: the
  * export (lib/export.js), the throwaway folder all Recon conversations run in (ROOM), and End and
  * wipe (lib/wipe.js).
  * The isolation:
@@ -22,18 +23,20 @@
 import z from '@deepseek-ai/schemastery';
 import { chmodSync, existsSync, mkdirSync, readdirSync, realpathSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { nameOf, readAccounts, removeCommandFor, serviceOf, storeCommandFor } from './lib/accounts.js';
 import { onionAddressesIn, openTrail } from './lib/address.js';
 import { MODE_ID, TOOLS, withRecon } from './lib/mode.js';
 import { mayReceive, openConsent, providerPlace, staysHome } from './lib/model.js';
 import { exportText, writeExport } from './lib/export.js';
 import { openForward } from './lib/forward.js';
-import { login, loginName, REMOVE_COMMAND, STORE_COMMAND } from './lib/keychain.js';
+import { login, loginName } from './lib/keychain.js';
 import { AHMIA, createOnion } from './lib/onion.js';
 import { runLocked } from './lib/sandbox.js';
 import { openBlocklist } from './lib/screen.js';
 import { openSources } from './lib/sources.js';
 import { buildTools } from './lib/tools.js';
 import { createUsenet } from './lib/usenet.js';
+import { ARCHIVE, NEWS, createWeb } from './lib/web.js';
 import { openWipeList, wipeFiles } from './lib/wipe.js';
 import { createTor, findTor, torVersion } from './lib/tor.js';
 
@@ -61,15 +64,34 @@ export const Config = z.object({
   /** That other engine's .onion name (the 56 characters and ".onion"). Used only while `otherEngine` is on. */
   engineHost: z.string().default('').volatile(),
   /**
-   * How Usenet is reached. `off`: not at all. `direct`: an encrypted connection straight to the
-   * news server, which sees your address and knows your account.
+   * How Usenet is reached. `off`: not at all. `direct`: an encrypted connection straight to a news
+   * server, which sees your address and knows the account used.
    */
   usenetRoute: z.union([z.const('off'), z.const('direct')]).default('off').volatile(),
-  /** The news server's name, as your Usenet provider gives it. The login is not kept here: it is in the macOS Keychain. */
+  /**
+   * The Internet Archive: dated copies of web pages, read as text through Recon's Tor. On lets
+   * recon_archive_find and recon_archive_read work.
+   */
+  archiveOn: z.boolean().default(false).volatile(),
+  /** The GDELT Project's index of news coverage, asked through Recon's Tor. On lets recon_news_search work. */
+  newsOn: z.boolean().default(false).volatile(),
+  /**
+   * The Usenet accounts: a news server each, with its own login. No login is kept here: each is in
+   * the macOS Keychain, under an item named after the account's id (lib/accounts.js).
+   */
+  usenetAccounts: z.array(z.object({
+    id: z.string().default(''),
+    label: z.string().default(''),
+    host: z.string().default(''),
+    port: z.natural().default(563),
+  })).default([]).volatile(),
+  /** The account used when a request names none. Empty uses the first. */
+  usenetDefaultAccount: z.string().default('').volatile(),
+  /** The one news server of older versions. Read only, to turn it into the first account. */
   usenetHost: z.string().default('').volatile(),
   /** Where `/recon export` writes its files. Empty uses the folder `recon/exports` in the app's home. */
   exportFolder: z.string().default('').volatile(),
-  /** The news server's port for encrypted connections. */
+  /** That older server's port. Read only, for the same reason. */
   usenetPort: z.natural().default(563).volatile(),
 });
 
@@ -102,11 +124,19 @@ export function apply(ctx, config) {
   const sources = openSources();
   const onion = createOnion({ tor, run: runLocked, blocklist, trail, sources, engine: () => ({ host: String(plain(config?.engineHost) ?? ''), other: plain(config?.otherEngine) === true }) });
   const usenetRoute = () => (String(plain(config?.usenetRoute) ?? 'off') === 'direct' ? 'direct' : 'off');
-  const usenetServer = () => ({ host: String(plain(config?.usenetHost) ?? '').trim().toLowerCase(), port: Number(plain(config?.usenetPort)) || 563 });
-  const usenet = createUsenet({ run: runLocked, route: usenetRoute, server: usenetServer, login, forward: openForward, sources });
-  /** Whether a login is in the Keychain, looked up now and then for the page. Only the fact, never the login. */
-  let hasLogin = false;
-  const lookForLogin = () => void loginName().then((name) => { hasLogin = Boolean(name); }, () => { hasLogin = false; });
+  /** The Usenet accounts: the saved list, or the one server of older versions as the first account. */
+  const usenetAccounts = () => readAccounts(plain(config?.usenetAccounts), { host: plain(config?.usenetHost), port: plain(config?.usenetPort) });
+  /** The account used when a request names none. */
+  const usenetDefault = () => String(plain(config?.usenetDefaultAccount) ?? '');
+  const web = createWeb({ port: () => onion.port(), run: runLocked, sources, on: () => ({ archive: plain(config?.archiveOn) === true, news: plain(config?.newsOn) === true }) });
+  const usenet = createUsenet({ run: runLocked, route: usenetRoute, accounts: usenetAccounts, defaultAccount: usenetDefault, login, forward: openForward, sources });
+  /** Whether each account has a login in the Keychain, looked up now and then for the page. Only the fact, never a login. */
+  const hasLogin = new Map();
+  const lookForLogins = () => {
+    for (const account of usenetAccounts()) {
+      void loginName(serviceOf(account.id)).then((name) => { hasLogin.set(account.id, Boolean(name)); }, () => { hasLogin.set(account.id, false); });
+    }
+  };
   let torSeen = { path: '', version: '' };
   /** The last test of the connection, for the page. */
   let torTest = { state: 'none', text: '' };
@@ -223,7 +253,7 @@ export function apply(ctx, config) {
     if (on && !toolsOff) {
       const tools = ctx.get('tools');
       if (!tools?.register) return;
-      toolsOff = buildTools({ enabled, inRecon: (exec) => inRecon(exec?.agent), inRoom: (exec) => inRoom(exec?.agent), gate: (exec) => gate(exec?.agent), onion, usenet, sources, idOf: (exec) => String(exec?.agent?.id ?? '') }).map((tool) => tools.register(tool));
+      toolsOff = buildTools({ enabled, inRecon: (exec) => inRecon(exec?.agent), inRoom: (exec) => inRoom(exec?.agent), gate: (exec) => gate(exec?.agent), onion, usenet, web, sources, idOf: (exec) => String(exec?.agent?.id ?? '') }).map((tool) => tools.register(tool));
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
       toolsOff = undefined;
@@ -287,7 +317,8 @@ export function apply(ctx, config) {
       `Tools: only ${TOOLS.join(', ')}. No programs, files, memory, helpers or other modes.`,
       `Model: ${model}${where ? `, ${where}` : ''}.`,
       allowed.ok ? (staysHome(place) ? 'What Recon finds stays on your own machines.' : 'You agreed that what Recon finds goes to this cloud model, for this conversation.') : 'What Recon finds is NOT sent to this model. Type /recon cloud to agree for this conversation, or pick a local model.',
-      `Network: .onion sites through Recon's own Tor (${tor.status().state}). Usenet: ${usenetRoute() === 'direct' ? `direct encrypted connection to ${usenetServer().host || '(no server set)'}` : 'off (Settings → Recon → Usenet)'}.`,
+      `Network: .onion sites through Recon's own Tor (${tor.status().state}). Usenet: ${usenetRoute() === 'direct' ? `direct encrypted connections; accounts: ${usenetAccounts().map((account) => `${nameOf(account)} (${account.host || 'no server yet'}:${account.port})`).join(', ') || '(none set yet)'}` : 'off (Settings → Recon → Usenet)'}.`,
+      `More sources, through Tor: Internet Archive ${plain(config?.archiveOn) === true ? 'on' : 'off'}, GDELT news ${plain(config?.newsOn) === true ? 'on' : 'off'} (Settings → Recon → More sources).`,
       `Blocklist of banned sites: ${blocklist.ready() ? `${blocklist.info().size} sites, fetched ${new Date(blocklist.info().at).toISOString().slice(0, 16).replace('T', ' ')} UTC` : 'not fetched yet; it is fetched before the first search or page'}.`,
       `Read so far: ${sources.list(agent.id).length} sources. /recon log shows every search and source.`,
     ].join('\n');
@@ -419,8 +450,33 @@ export function apply(ctx, config) {
       torSeen = { path, version: '' };
       if (path) void torVersion(path).then((version) => { if (torSeen.path === path) torSeen = { path, version }; });
     }
-    lookForLogin();
-    return { room: ROOM, exportFolder: exportFolder(), waitingToWipe: wipeList.list().length, usenet: { route: usenetRoute(), ...usenetServer(), hasLogin, storeCommand: STORE_COMMAND, removeCommand: REMOVE_COMMAND }, at: Date.now(), enabled: enabled(), problem, toolsOn: Boolean(toolsOff), tools: TOOLS, network: true, tor: { ...tor.status(), path, version: torSeen.version, test: torTest }, blocklist: blocklist.info(), engine: { builtIn: AHMIA, other: plain(config?.otherEngine) === true, host: String(plain(config?.engineHost) ?? '') } };
+    lookForLogins();
+    const accounts = usenetAccounts();
+    return {
+      more: { archive: plain(config?.archiveOn) === true, news: plain(config?.newsOn) === true, archiveHost: ARCHIVE, newsHost: NEWS },
+      room: ROOM,
+      exportFolder: exportFolder(),
+      waitingToWipe: wipeList.list().length,
+      usenet: {
+        route: usenetRoute(),
+        accounts: accounts.map((account) => ({
+          ...account,
+          hasLogin: hasLogin.get(account.id) === true,
+          storeCommand: storeCommandFor(account.id),
+          removeCommand: removeCommandFor(account.id),
+        })),
+        defaultAccount: usenetDefault(),
+      },
+      at: Date.now(),
+      enabled: enabled(),
+      problem,
+      toolsOn: Boolean(toolsOff),
+      tools: TOOLS,
+      network: true,
+      tor: { ...tor.status(), path, version: torSeen.version, test: torTest },
+      blocklist: blocklist.info(),
+      engine: { builtIn: AHMIA, other: plain(config?.otherEngine) === true, host: String(plain(config?.engineHost) ?? '') },
+    };
   };
   ctx.inject(['webServer', 'connection'], (inner) => {
     inner.effect(

@@ -55,6 +55,26 @@ step "Backing up your current setup"
 backup_profile install
 say "Saved to $BACKUP_DIR"
 
+# The installed add-on files can be changed in place, by you or by the app's creator mode. This
+# install replaces them all, so anything changed since the last install is kept first: the changed
+# and added files are copied into the backup, where they can be picked up again.
+ADDONS_NOW="$DSH_HOME/addons/deepseek-harness-plus"
+if [ -f "$ADDONS_NOW/.installed-files" ]; then
+  EDITED=$(cd "$ADDONS_NOW" && find . -type f -not -path "*/node_modules/*" -not -name ".installed-files" -not -name "VERSION" -print0 2>/dev/null | xargs -0 shasum -a 256 2>/dev/null | sort -k2 | diff - .installed-files 2>/dev/null | sed -n 's/^< [0-9a-f]*  //p')
+  if [ -n "$EDITED" ]; then
+    mkdir -p "$BACKUP_DIR/files-you-changed"
+    printf '%s\n' "$EDITED" | while IFS= read -r file; do
+      mkdir -p "$BACKUP_DIR/files-you-changed/$(dirname "$file")" && cp -p "$ADDONS_NOW/$file" "$BACKUP_DIR/files-you-changed/$file"
+    done
+    say ""
+    say "These installed add-on files were changed since the last install (by you, or by the app's creator mode):"
+    printf '%s\n' "$EDITED" | sed 's/^\.\//  /'
+    say "This install replaces them. A copy of each is kept in:"
+    say "  $BACKUP_DIR/files-you-changed"
+    say ""
+  fi
+fi
+
 step "Copying the add-ons"
 PARENT=$(dirname "$ADDONS_DIR")
 NEW="$PARENT/.deepseek-harness-plus.new"
@@ -78,6 +98,8 @@ trap 'say ""; say "Interrupted. Putting everything back..."; roll_back; exit 1' 
 [ -d "$ADDONS_DIR" ] && { mv "$ADDONS_DIR" "$OLD" || { rm -rf "$NEW"; fail "Could not move the previous add-ons aside"; }; }
 mv "$NEW" "$ADDONS_DIR" || { undo_copy; fail "Could not move the add-ons into place"; }
 printf '%s\n' "$PLUS_VERSION" >"$ADDONS_DIR/VERSION"
+# What was installed, file by file, so the next install can tell what was changed in place since.
+(cd "$ADDONS_DIR" && find . -type f -not -path "*/node_modules/*" -not -name ".installed-files" -not -name "VERSION" -print0 | xargs -0 shasum -a 256 | sort -k2 >.installed-files) 2>/dev/null || true
 
 ADDON_LIST=$(list_addons "$ADDONS_DIR")
 # Add-ons an older release installed that this one no longer ships: their folders are gone now,

@@ -1,12 +1,13 @@
 /**
- * The Usenet login, kept in the macOS Keychain and nowhere else. The user puts it there with one
+ * The Usenet logins, kept in the macOS Keychain and nowhere else: one item per account
+ * (lib/accounts.js says which item belongs to which account). The user puts each one there with a
  * command in the Terminal; Recon only reads it, at the moment a connection is opened, and hands it
  * to the locked process that signs in. It is never written to a file, a setting, a log or the
  * conversation, and no tool or command shows it.
  */
 import { execFile } from 'node:child_process';
 
-/** The name the login is kept under in the Keychain. */
+/** The name the first login is kept under. A later account adds its id to it. */
 export const SERVICE = 'dsh-recon-usenet';
 const SECURITY = '/usr/bin/security';
 
@@ -37,8 +38,3 @@ export async function login(service = SERVICE) {
   const pass = found.out.replace(/\r?\n$/, '');
   return pass ? { user, pass } : undefined;
 }
-
-/** What the user types in the Terminal to store the login. The password is asked for there, hidden. */
-export const STORE_COMMAND = `security add-generic-password -U -s ${SERVICE} -a YOUR_USERNAME -w`;
-/** What removes it again. */
-export const REMOVE_COMMAND = `security delete-generic-password -s ${SERVICE}`;

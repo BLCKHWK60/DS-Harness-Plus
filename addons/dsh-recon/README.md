@@ -95,25 +95,62 @@ The app holds an open conversation in memory, so its files are deleted as soon a
 of it, at the latest when the app next starts. Until then only its id is kept on a list
 (`recon/wipe.json`). An export made earlier is yours to delete.
 
+## More sources: Internet Archive and GDELT
+
+Two services on the normal web, each off until you switch it on at **Settings → Recon → More
+sources**. Recon reaches them only through its own Tor, only at their own addresses
+(`web.archive.org`, `api.gdeltproject.org`), with their certificates checked, and as text.
+
+- **Internet Archive.** `recon_archive_find` lists the dated copies of a web page;
+  `recon_archive_read` reads one copy as text. This is the only way a page from the normal web is
+  read in Recon. A citation names the page's own address, the date of the copy and the Archive's
+  address for it.
+- **GDELT news index.** `recon_news_search` lists where a topic was reported in the last days
+  (title, address, publisher, country, language, date). GDELT holds no articles; an article is
+  read as an Internet Archive copy.
+- **Both limit automated use, and more so through Tor,** whose exit addresses are shared by many.
+  GDELT allows one request every five seconds; the Archive blocks what it takes for bots. A
+  refusal is reported as what it is ("asked to slow down", "refused the request"). Recon paces its
+  requests and never tries another route. After a refusal, that kind of request (list of copies,
+  reading a copy, news search) is held back for a while, whatever the model asks. After a second
+  refusal in one conversation it is off for the rest of that conversation, so the model finishes
+  with what it has instead of waiting and asking again. In practice, reading Archive copies
+  through Tor is mostly refused; the list of copies and GDELT usually answer.
+- The word screen applies to searches, addresses, titles and pages, as everywhere. There is no
+  blocklist for the normal web.
+- Each service sees a request come from Tor, and what was asked for.
+
+Not built: Nostr, IPFS, I2P. Left out on purpose: Hyphanet (Freenet) and ZeroNet, which would
+store or re-share other people's content on this Mac.
+
 ## Usenet
 
-Off until you choose a route at **Settings → Recon → Usenet**. You need an account with a Usenet
-provider.
+Off until you choose a route at **Settings → Recon → Usenet**. You need at least one account with a
+Usenet provider; you can have up to eight.
 
-- **Route:** a direct encrypted connection to your news server. The server sees your internet
-  address and knows your account, as with any newsreader. Tor is not used for Usenet.
-- **Login:** kept in the macOS Keychain and nowhere else. You store it yourself in the Terminal;
-  the page shows the command, and the password is typed at a hidden prompt:
-  `security add-generic-password -U -s dsh-recon-usenet -a YOUR_USERNAME -w`.
-  Recon reads it only at the moment it signs in. It is in no file, setting, log or conversation,
-  and no tool or command shows it.
+- **Route:** a direct encrypted connection to the news server of the account a request names. That
+  server sees your internet address and knows that account, as with any newsreader. Tor is not used
+  for Usenet.
+- **Accounts:** each one is a news server with its own login. You add one on the page: a name (which
+  is optional), the server, and a port (563 unless you say otherwise). A tool call may name the
+  account to use, by its name, its server or its id; when it names none, the account marked as the
+  default is used, and with no default the first one is. A single server set in an older version of
+  Plus shows up as the first account and goes on working.
+- **Logins:** kept in the macOS Keychain and nowhere else, one item per account. You store each one
+  yourself in the Terminal; the page shows the command for that account, and the password is typed
+  at a hidden prompt. The first account uses the original item:
+  `security add-generic-password -U -s dsh-recon-usenet -a YOUR_USERNAME -w`; any later account adds
+  its id to the item's name: `-s dsh-recon-usenet-<id>`. Recon reads a login only at the moment it
+  signs in with that account. A login is in no file, setting, log or conversation, and no tool or
+  command shows it.
 - **Text groups only.** A group whose name says it holds files (binaries, pictures, multimedia,
   sounds, movies and the like) is never listed or opened. The rule errs on the safe side, so a few
   text groups about such subjects are left out too.
 - **`recon_usenet_groups`** finds text groups by name. **`recon_usenet_search`** matches subject,
   author and date in the newest 3,000 articles of one group; Usenet has no full-text search.
   File postings (yEnc, "(3/41)" part counts, oversized articles) are skipped.
-  **`recon_usenet_read`** reads one article by its Message-ID.
+  **`recon_usenet_read`** reads one article by its Message-ID. All three take an optional `account`
+  (a name or a server): it decides which news server is visited and which login signs in.
 - **An article that carries a file is refused.** Its headers decide first, before its body is
   asked for (not plain text, too large, posted only to file groups). A body that turns out to
   hold yEnc, uuencode or a long run of base64 is refused and not kept. Parts of an article that
@@ -149,9 +186,12 @@ provider.
 | `torPath` | empty | Where the tor program is. Empty looks in the usual places. Only in the configuration file. |
 | `otherEngine` | off | Search with another .onion engine than the built-in filtered index. Only in the configuration file. |
 | `engineHost` | empty | That engine's .onion name. Used only while `otherEngine` is on. |
-| Connect to Usenet (`usenetRoute`) | off | `direct`: an encrypted connection straight to the news server. |
-| News server (`usenetHost`) | empty | The server name your provider gives you. |
-| `usenetPort` | 563 | The server's port for encrypted connections. Only in the configuration file. |
+| Connect to Usenet (`usenetRoute`) | off | `direct`: an encrypted connection straight to the news server of the account used. |
+| Usenet accounts (`usenetAccounts`) | empty | The servers, each with its own login. Added on the page. |
+| `usenetDefaultAccount` | empty | The account used when a tool call names none. Empty uses the first. |
+| `usenetHost`, `usenetPort` | empty, 563 | The one server of older versions. Read only, to become the first account. |
+| Internet Archive (`archiveOn`) | off | Lets the assistant list and read archived copies of web pages, through Tor. |
+| GDELT news index (`newsOn`) | off | Lets the assistant search news coverage, through Tor. |
 | `exportFolder` | empty | Where `/recon export` writes. Empty uses `recon/exports` in the app's home. Only in the configuration file. |
 
 ## What it does not do yet
@@ -191,6 +231,14 @@ provider.
   article is read, fenced and cited; a zip is refused from its headers with no body asked for; a
   yEnc body is refused; the login reaches the server and appears in no message or log; without a
   route, a server or a login nothing is sent.
+- **Account tests, run with `node test/*.test.mjs`** (74 checks, no network): a saved list of
+  accounts is read back as saved, and the one server of older versions becomes the first account on
+  the original Keychain item while a later account gets an item of its own; a request reaches the
+  account it names by name, server or id, with that account's login, and the research log says which
+  server was used; an unknown account, a server that is not set and a missing login are refused with
+  nothing sent; the page's data lists every account with its own commands and carries no login; and
+  the page renders, showing a row per account and writing the list, the cleared older server and the
+  default account when accounts are added, removed or marked default.
 - **Export and wipe tests (3):** nothing from a source or the model stands outside a quoted block,
   and material cannot close its own block; an export is a new file readable by the user alone; a
   wipe deletes a conversation's own folder and refuses any other folder.
@@ -201,6 +249,13 @@ provider.
 - **Run by the owner on the real Tor network (2026-11-14, tor 0.4.9.17, a local model):** Tor
   connected, the blocklist was fetched, a search on Ahmia returned 20 results, and a page was
   read and cited with its source number.
+- **Archive and GDELT tests (3), against stand-ins only:** switched off, refused by the filter or
+  told to slow down, nothing is read; only the two services' addresses are ever asked; through the
+  stand-in Tor with certificates checked: a news list, a list of copies, a copy read, fenced and
+  cited, a redirect out of the Archive not followed, and a stranger's certificate refused.
+  **Never run against the real services through Tor.** In a first look from the normal web, the
+  Archive's list of copies answered as documented, while GDELT and the Archive's page copies
+  refused the requests; GDELT's answer format is from its documentation only.
 - **Run by the owner against a real news server (2026-11-14):** the Keychain login, the sign-in,
   listing text groups, header search, and reading and citing an article work. The builder has no
   account and never touches the owner's.

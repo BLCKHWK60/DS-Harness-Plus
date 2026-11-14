@@ -231,7 +231,8 @@ export async function get(req) {
   if (secure) {
     // An .onion address is its own proof of identity; its certificate is usually self-signed.
     socket = await new Promise((resolve, reject) => {
-      const wrapped = tls.connect({ socket, servername: url.hostname, rejectUnauthorized: false }, () => resolve(wrapped));
+      // On the normal web the certificate is checked (`verify`). An .onion name needs no such check.
+      const wrapped = tls.connect({ socket, servername: url.hostname, rejectUnauthorized: req.verify === true, ...(req.ca ? { ca: req.ca } : {}) }, () => resolve(wrapped));
       wrapped.on('error', (error) => reject(new Error(`the secure connection failed (${error.code ?? error.message})`)));
     });
   }
@@ -261,7 +262,14 @@ export async function get(req) {
       // What is handed back depends on what was asked for: a page's text, a result list, a search
       // form's hidden fields, or a list of fingerprints (the blocklist). Never the page as it came.
       let page;
-      if (req.shape === 'hashes') page = { hashes: [...new Set(text.match(/\b[0-9a-f]{32}\b/g) ?? [])].slice(0, 400_000) };
+      if (req.shape === 'json') {
+        // A service's own answer in JSON. Handed back parsed, or as a short piece of text when it is something else (an error page).
+        try {
+          page = { json: JSON.parse(text) };
+        } catch {
+          page = { text: tidy(text.replace(/<[^>]*>/g, ' ')).slice(0, 600) };
+        }
+      } else if (req.shape === 'hashes') page = { hashes: [...new Set(text.match(/\b[0-9a-f]{32}\b/g) ?? [])].slice(0, 400_000) };
       else if (req.shape === 'form') page = { form: searchForm(text) ?? null };
       else if (req.shape === 'results') {
         const results = searchResults(text, url.href);
@@ -290,7 +298,7 @@ export async function get(req) {
         if (status >= 300 && status < 400 && headers.location) return finish({ ok: true, status, redirect: String(headers.location).slice(0, 800) });
         const type = String(headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
         // Anything that is not text is refused before a single byte of it is read.
-        if (!ALLOWED_TYPES.includes(type)) return finish({ ok: false, why: `the address holds ${type || 'something that does not say what it is'}, not text, so it was not read`, status });
+        if (!ALLOWED_TYPES.includes(type) && !(req.shape === 'json' && type === 'application/json')) return finish({ ok: false, why: `the address holds ${type || 'something that does not say what it is'}, not text, so it was not read`, status });
         head = { status, headers, type };
       }
       if (head && raw.length - bodyStart >= maxBytes) {

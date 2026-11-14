@@ -10,7 +10,7 @@ import { TOOLS } from './mode.js';
  *   `inRoom(exec)` (does the conversation run in Recon's throwaway folder), `onion` (lib/onion.js), `usenet` (lib/usenet.js), `sources` (lib/sources.js), `idOf(exec)` (the conversation's id).
  * @returns {object[]} the tool definitions.
  */
-export function buildTools({ enabled, inRecon, inRoom, gate, onion, usenet, sources, idOf }) {
+export function buildTools({ enabled, inRecon, inRoom, gate, onion, usenet, web, sources, idOf }) {
   const output = {
     schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
     render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }],
@@ -32,17 +32,23 @@ export function buildTools({ enabled, inRecon, inRoom, gate, onion, usenet, sour
   const defs = {
     recon_onion_search: ['Search the filtered .onion index for a topic. Gives titles, .onion addresses and short descriptions as untrusted text.', { query: text(300, 'What to look for, in a few words.') }, ['query']],
     recon_onion_read: ['Read the text of one .onion page. Text only: no pictures, scripts or downloads. The address must come from a search result, a page already read, or the user. Long pages come in parts.', { address: text(600, 'The full .onion address of the page.'), part: { type: 'integer', minimum: 1, maximum: 40, description: 'Which part of a long page. Leave out for the first.' } }, ['address']],
-    recon_usenet_groups: ['Find Usenet text newsgroups by name. Binary groups are never listed.', { pattern: text(120, 'Part of a group name, for example "comp.security".') }, ['pattern']],
-    recon_usenet_search: ['Search the headers (subject, author, date) of articles in one text newsgroup. Usenet has no full-text search.', { group: text(160, 'The newsgroup.'), subject: text(200, 'Words in the subject.'), author: text(120, 'Part of the author as shown.'), since: text(40, 'Earliest date, as YYYY-MM-DD.') }, ['group']],
-    recon_usenet_read: ['Read the text of one Usenet article by its Message-ID. Articles that carry encoded files are refused. Long articles come in parts.', { group: text(160, 'The newsgroup.'), messageId: text(300, 'The article\'s Message-ID, with its angle brackets.'), part: { type: 'integer', minimum: 1, maximum: 40, description: 'Which part of a long article. Leave out for the first.' } }, ['group', 'messageId']],
+    recon_usenet_groups: ['Find Usenet text newsgroups by name, on one of the user\'s Usenet accounts. Binary groups are never listed.', { pattern: text(120, 'Part of a group name, for example "comp.security".'), account: text(60, 'Which Usenet account, by its name or its server. Leave out for the default account.') }, ['pattern']],
+    recon_usenet_search: ['Search the headers (subject, author, date) of articles in one text newsgroup, on one of the user\'s Usenet accounts. Usenet has no full-text search.', { group: text(160, 'The newsgroup.'), subject: text(200, 'Words in the subject.'), author: text(120, 'Part of the author as shown.'), since: text(40, 'Earliest date, as YYYY-MM-DD.'), account: text(60, 'Which Usenet account, by its name or its server. Leave out for the default account.') }, ['group']],
+    recon_usenet_read: ['Read the text of one Usenet article by its Message-ID. Articles that carry encoded files are refused. Long articles come in parts.', { group: text(160, 'The newsgroup.'), messageId: text(300, 'The article\'s Message-ID, with its angle brackets.'), part: { type: 'integer', minimum: 1, maximum: 40, description: 'Which part of a long article. Leave out for the first.' }, account: text(60, 'Which Usenet account, by its name or its server. Leave out for the default account.') }, ['group', 'messageId']],
+    recon_news_search: ['Search the GDELT Project\'s index of worldwide news coverage for a topic. Gives titles, addresses, publishers and dates; not the articles themselves.', { query: text(200, 'What to look for, in a few words. Put an exact phrase in double quotes.'), days: { type: 'integer', minimum: 1, maximum: 90, description: 'How many days back. Leave out for 7.' }, language: text(20, 'Only coverage in this language, as an English word: english, german, spanish. Leave out for all.') }, ['query']],
+    recon_archive_find: ['List the dated copies the Internet Archive holds of a web page. Use it before recon_archive_read.', { address: text(500, 'The page\'s address on the web.'), from: text(10, 'Earliest date, YYYY or YYYY-MM-DD.'), to: text(10, 'Latest date, YYYY or YYYY-MM-DD.') }, ['address']],
+    recon_archive_read: ['Read the text of one Internet Archive copy of a web page. Text only. This is the only way to read a page from the normal web here. Long pages come in parts.', { address: text(500, 'The page\'s address on the web.'), timestamp: text(14, 'The copy\'s timestamp, as recon_archive_find lists it.'), part: { type: 'integer', minimum: 1, maximum: 40, description: 'Which part of a long page. Leave out for the first.' } }, ['address', 'timestamp']],
     recon_cite: ['Give the full citation of something read in this conversation: source, author and date as shown, when it was retrieved, and the fingerprint of its text.', { source: text(600, 'The source\'s number (S3), its .onion address or its Message-ID.') }, ['source']],
   };
   const work = {
     recon_onion_search: (args, exec) => onion.search(idOf(exec), args.query),
     recon_onion_read: (args, exec) => onion.read(idOf(exec), args.address, args.part),
-    recon_usenet_groups: (args, exec) => usenet.groups(idOf(exec), args.pattern),
+    recon_usenet_groups: (args, exec) => usenet.groups(idOf(exec), args.pattern, args.account),
     recon_usenet_search: (args, exec) => usenet.search(idOf(exec), args),
     recon_usenet_read: (args, exec) => usenet.read(idOf(exec), args),
+    recon_news_search: (args, exec) => web.news(idOf(exec), args.query, { days: args.days, language: args.language }),
+    recon_archive_find: (args, exec) => web.archiveFind(idOf(exec), args.address, { from: args.from, to: args.to }),
+    recon_archive_read: (args, exec) => web.archiveRead(idOf(exec), args.address, args.timestamp, args.part),
     recon_cite: async (args, exec) => {
       const source = sources.find(idOf(exec), args.source);
       if (source) return sources.cite(source);

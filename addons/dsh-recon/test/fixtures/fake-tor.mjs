@@ -20,9 +20,10 @@ const server = net.createServer((socket) => {
       const n = buf[4]; if (buf.length < 7 + n) return;
       const host = buf.subarray(5, 5 + n).toString(); const rest = buf.subarray(7 + n);
       console.log(`CONNECT ${host}`);
-      if (!host.endsWith('.onion') || host.startsWith('down')) { socket.end(Buffer.from([5, 4, 0, 1, 0, 0, 0, 0, 0, 0])); return; }
+      // FAKE_ANY: play an exit as well, so a test can reach a stand-in for a normal-web service by its real name.
+      if ((!host.endsWith('.onion') && !process.env.FAKE_ANY) || host.startsWith('down')) { socket.end(Buffer.from([5, 4, 0, 1, 0, 0, 0, 0, 0, 0])); return; }
       stage = 3; socket.off('data', onData);
-      const up = net.connect({ host: '127.0.0.1', port: target }, () => { socket.write(Buffer.from([5, 0, 0, 1, 0, 0, 0, 0, 0, 0])); if (rest.length) up.write(rest); socket.pipe(up); up.pipe(socket); });
+      const up = net.connect({ host: '127.0.0.1', port: host.endsWith('.onion') ? target : Number(process.env.FAKE_ANY) }, () => { socket.write(Buffer.from([5, 0, 0, 1, 0, 0, 0, 0, 0, 0])); if (rest.length) up.write(rest); socket.pipe(up); up.pipe(socket); });
       up.on('error', () => socket.destroy());
     }
   });
