@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Recon",
+    "description": "An isolated Recon mode and tab for research on .onion sites and Usenet text newsgroups. This version is the isolation frame; it has no network access yet."
+  }
+}

@@ -312,6 +312,7 @@ export function apply(ctx, config) {
             interpolate: false,
             text: () => {
               try {
+                if (ctx.get('modes')?.isolated?.(agent.id) === true) return '';
                 if (!enabled() || plain(config.promptHint) === false) return '';
                 const folder = folders.get(agent.id) ?? headerFolder(agent);
                 return folder && manager.looksLikeProject(folder) ? HINT : '';

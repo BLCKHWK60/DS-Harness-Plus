@@ -186,6 +186,7 @@ Where a row says "configuration file": that add-on has no settings page. Open **
 | `/notify` | Notify |
 | `/pdf` | PDF reader |
 | `/privacy` | Privacy |
+| `/recon` | Recon |
 | `/router` | Model router |
 | `/routes` | Route health |
 | `/sampling` | Sampling presets |
@@ -229,6 +230,7 @@ Chat, Cowork and Code modes you can switch for each session.
 | `defaultMode` | `'cowork'` | Mode of a session that has not chosen one. |
 | `scheduledMode` | `'cowork'` | Mode of a conversation that an Automation task opens. Nobody picked a tab for it, so the tab last looked at must not decide. An unknown id falls back to the first mode with all tools. |
 | `sessionModes` | `'{}'` | Per-session choice as JSON: `{ sessionId: modeId }`. Written by the composer selector. |
+| `sessionIsolated` | `'{}'` | Conversations that began in an isolated mode (id -> true). They stay isolated whatever happens to the mode. |
 | `pruneStaleSessions` | `true` | Drop per-session entries whose Session is no longer stored, once per start. |
 | `pinOnFirstTurn` | `true` | When a top-level Session starts its first turn without a chosen mode, record the mode it starts in. A later change of `defaultMode` (for example from a sidebar tab) then only affects new Sessions. |
 | `sessionWeb` | `'{}'` | Per-session web switch as JSON: `{ sessionId: true \| false }`. Missing = the mode's default (off in a no-tools mode). |
@@ -847,3 +849,19 @@ Keeps your Plus settings in one file in a folder you choose, such as iCloud Driv
 - **Where:** no page of its own; it works in the background
 - **After install:** on
 - **Details:** `addons/dsh-shared-settings/README.md`
+
+### Recon
+
+An isolated Recon mode and tab for research on .onion sites and Usenet text newsgroups. This version is the isolation frame; it has no network access yet.
+
+- **Where:** Settings → Recon; `/recon` in the chat box
+- **After install:** off until you switch it on
+- **Tools the assistant gets:** `recon`
+- **Details:** `addons/dsh-recon/README.md`
+
+| Setting | Starts as | What it does |
+|---|---|---|
+| `enabled` | `false` | The Recon mode and tab. Off leaves nothing of it in the app. |
+| `torPath` | `''` | Where the tor program is. Empty looks in the usual places (Homebrew, /usr/local). Plus does not install it. |
+| `otherEngine` | `false` | Search with another .onion search engine than the built-in filtered index. Off uses the built-in one. The blocklist of banned sites and the word screen apply either way. |
+| `engineHost` | `''` | That other engine's .onion name (the 56 characters and ".onion"). Used only while `otherEngine` is on. |

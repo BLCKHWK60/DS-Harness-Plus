@@ -334,6 +334,7 @@ export function apply(ctx, config) {
             interpolate: false,
             text: () => {
               try {
+                if (ctx.get('modes')?.isolated?.(agent.id) === true) return '';
                 return settings().enabled ? sessions.instructions(idOf(agent)) : '';
               } catch {
                 return '';

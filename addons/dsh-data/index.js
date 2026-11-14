@@ -209,6 +209,7 @@ export function apply(ctx, config) {
             interpolate: false,
             text: () => {
               try {
+                if (ctx.get('modes')?.isolated?.(agent.id) === true) return '';
                 const mode = modeOf(agent.id);
                 return enabled() && FOLDER_MODES.includes(mode) ? note(agent, mode) : '';
               } catch {

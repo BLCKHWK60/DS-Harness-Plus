@@ -464,6 +464,7 @@ export function apply(ctx) {
         interpolate: false,
         text: () => {
           try {
+            if (ctx.get('modes')?.isolated?.(agent.id) === true) return '';
             return projectNote(agent);
           } catch {
             return '';

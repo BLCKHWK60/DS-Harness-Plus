@@ -1,0 +1,41 @@
+{
+  "name": "@local/dsh-recon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "An isolated Recon mode and tab for research on .onion sites and Usenet text newsgroups: its conversations have only the recon tools, share nothing with the rest of the app, and ask before content goes to a cloud model. This version is the isolation frame; it has no network access yet. Off until you switch it on.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib/*.js",
+    "lib/*.mjs",
+    "cordis.patch.yml",
+    "README.md",
+    "locale/*.json",
+    "icon.svg",
+    "node_modules/@deepseek-ai/schemastery/**",
+    "node_modules/@deepseek-ai/cosmokit/**"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
+}

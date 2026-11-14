@@ -274,6 +274,7 @@ export function apply(ctx, config) {
             interpolate: false,
             text: () => {
               try {
+                if (ctx.get('modes')?.isolated?.(agent.id) === true) return '';
                 return notesFor(agent);
               } catch {
                 return '';

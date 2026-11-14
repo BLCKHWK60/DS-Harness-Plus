@@ -142,3 +142,15 @@ Since 0.40.3 this also holds when the conversation itself is idle and only its h
 
 - **Tested (0.40.3):** unit tests; lab runs with a stand-in model, with Mission's helpers and with the app's own helper tool.
 - **Not verified:** with real models.
+
+## Since 0.41.0: isolated modes
+
+A mode can be marked `isolated: true` (the Recon add-on does this). Its conversations then get
+exactly the tools the mode lists and nothing else: no web search, no Deep research, no programs,
+no helpers. The app's own notes (instruction files, the skill list) are not handed to them, and
+Plus's other add-ons leave them alone. A conversation that begins in an isolated mode is isolated
+for good; one that began elsewhere can never become isolated. Other add-ons ask
+`modes.isolated(sessionId)`.
+
+- **Tested (0.41.0):** lab runs with a stand-in model, reading what the model was sent.
+- **Not verified:** with real models.

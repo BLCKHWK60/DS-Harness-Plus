@@ -282,7 +282,7 @@ export function apply(ctx, config) {
 
   ctx.on('agent/pre-step', async (payload, next) => {
     const decisionOfLoop = await next();
-    if (payload.step !== 1) return decisionOfLoop;
+    if (payload.step !== 1 || ctx.get('modes')?.isolated?.(payload.agent?.id) === true) return decisionOfLoop;
     try {
       await routeTurn(payload);
     } catch (error) {

@@ -240,6 +240,8 @@ export function apply(ctx, config) {
     try {
       if (decision.kind !== 'accept' || decision.value !== undefined || result.isError) return decision;
       if (!applies(exec)) return decision;
+      // What an isolated conversation reads is not kept anywhere outside it.
+      if (ctx.get('modes')?.isolated?.(exec?.agent?.id) === true) return decision;
       const blocks = decision.content ?? result.content;
       if (!Array.isArray(blocks)) return decision;
       const minChars = Number(plain(config.minChars));
@@ -303,7 +305,7 @@ export function apply(ctx, config) {
       const agentCtx = agent?.ctx;
       if (!agentCtx?.systemPrompt || owned.has(agent.id)) return;
       try {
-        owned.set(agent.id, agentCtx.effect(() => agentCtx.systemPrompt.section({ ...section, interpolate: false }), 'context-saver prompt section'));
+        owned.set(agent.id, agentCtx.effect(() => agentCtx.systemPrompt.section({ ...section, text: () => (ctx.get('modes')?.isolated?.(agent.id) === true ? '' : section.text), interpolate: false }), 'context-saver prompt section'));
       } catch (error) {
         ctx.logger.warn(`context-saver: prompt section not added: ${error?.message ?? error}`);
       }

@@ -639,6 +639,7 @@ export function apply(ctx, config) {
             order: 76,
             interpolate: false,
             text: () => {
+              if (ctx.get('modes')?.isolated?.(agent.id) === true) return '';
               const swarmName = byMode[ctx.get('modes')?.get?.(agent.id)];
               return swarmName ? `For work that needs several independent viewpoints, the \`${swarmTool.name}\` tool can run the "${swarmName}" swarm.` : '';
             },

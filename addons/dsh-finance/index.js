@@ -189,6 +189,7 @@ export function apply(ctx, config) {
             interpolate: false,
             text: () => {
               try {
+                if (ctx.get('modes')?.isolated?.(agent.id) === true) return '';
                 const now = settings();
                 if (!now.enabled || modeOf(agent.id) !== MODE_ID) return '';
                 // A helper agent works for a conversation; it gets that conversation's selection when known.

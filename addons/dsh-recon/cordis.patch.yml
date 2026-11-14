@@ -1,0 +1,6 @@
+- insert:
+    - id: recon
+      name: '@local/dsh-recon'
+      config:
+        # Off until you switch it on in Settings > Recon. It then adds a Recon tab beside Chat, Cowork and Code.
+        enabled: false

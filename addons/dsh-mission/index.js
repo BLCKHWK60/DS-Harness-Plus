@@ -192,6 +192,7 @@ export function apply(ctx, config) {
             interpolate: false,
             text: () => {
               try {
+                if (ctx.get('modes')?.isolated?.(agent.id) === true) return '';
                 const guard = guardOf(agent);
                 if (!guard) return '';
                 // The conversation's own model conducts a run; its helpers do the work.

@@ -101,7 +101,7 @@ export function apply(ctx, config) {
               order: section.order,
               // The text is the user's own prose: never treat `{{...}}` in it as a variable.
               interpolate: false,
-              text: () => textFor(agent, key),
+              text: () => (ctx.get('modes')?.isolated?.(agent.id) === true ? '' : textFor(agent, key)),
             }),
           `role-prompts section ${key}`,
         ),

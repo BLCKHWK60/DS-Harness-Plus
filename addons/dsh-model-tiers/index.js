@@ -1521,6 +1521,7 @@ export function apply(ctx, config) {
             // The section carries user text (custom tier prompts); a stray {{...}} must not break prompt assembly.
             interpolate: false,
             text: () => {
+              if (ctx.get('modes')?.isolated?.(agent.id) === true) return '';
               // The route is only recorded at the first request, so a new Session
               // resolves its tier from the Agent's current selection until then.
               const tier = resolveTierOf(agent.id);
@@ -2031,6 +2032,8 @@ export function apply(ctx, config) {
     await loadTierSkills(agent);
   });
   ctx.on('agent/pre-step', async (payload, next) => {
+    // An isolated conversation keeps the model it was given: no tier, no skills, no rerouting.
+    if (ctx.get('modes')?.isolated?.(payload.agent?.id) === true) return next();
     await loadTierSkills(payload.agent);
     const decision = await next();
     await reconcileEffort(payload.agent, payload.modelSelection);
@@ -2057,6 +2060,7 @@ export function apply(ctx, config) {
   // loop throws if a listener changes any of them after step preparation. It
   // stays only for sampling controls, which have no replacement API.
   ctx.on('agent/request', async (payload, next) => {
+    if (ctx.get('modes')?.isolated?.(payload.agent?.id) === true) return next();
     const base = await next();
     const sessionId = payload.agent.id;
     const profiles = readModelProfiles(config);
@@ -2391,6 +2395,7 @@ export function apply(ctx, config) {
     if (before !== now && before !== undefined) emitTierChanged(agent.id, before, now);
   }
   ctx.on('agent/pre-step', async (payload, next) => {
+    if (ctx.get('modes')?.isolated?.(payload.agent?.id) === true) return next();
     const decision = await next();
     noteTier(payload.agent);
     return decision;
@@ -2693,6 +2698,8 @@ export function apply(ctx, config) {
   // chain with `agent.model.select()`; the next message uses it. The failed
   // step still ends with the provider error.
   ctx.on('agent/request-error', async (payload, next) => {
+    // No fallback to another model for an isolated conversation: its content goes to one model only.
+    if (ctx.get('modes')?.isolated?.(payload.agent?.id) === true) return next();
     const downstream = await next();
     if (downstream?.kind === 'retry' || payload.signal.aborted) return downstream;
     try {
@@ -2730,7 +2737,7 @@ export function apply(ctx, config) {
 
   ctx.on('tools/pre-execute', async (exec, next) => {
     const sessionId = exec.agent?.id;
-    if (!sessionId) return next();
+    if (!sessionId || ctx.get('modes')?.isolated?.(sessionId) === true) return next();
     const tier = tierForSession(sessionId, lastRoute, config);
     if (!tier) return next();
 

@@ -787,6 +787,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       cowork: 'M4 7h16v12H4zM9 7V5h6v2',
       code: 'M9 8l-4 4 4 4M15 8l4 4-4 4',
       finance: 'M4 18l5-6 4 3 7-9M15 6h5v5',
+      recon: 'M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14zM16 16l4.5 4.5',
       data: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
       plus: 'M12 5v14M5 12h14',
       panel: 'M4 5h16v14H4zM9 5v14',
@@ -828,7 +829,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     function glyphFor(modeId) {
-      return modeId === 'chat' || modeId === 'code' || modeId === 'cowork' || modeId === 'finance' || modeId === 'data' ? modeId : 'dot';
+      return modeId === 'chat' || modeId === 'code' || modeId === 'cowork' || modeId === 'finance' || modeId === 'data' || modeId === 'recon' ? modeId : 'dot';
     }
 
     /**
