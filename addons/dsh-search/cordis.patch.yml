@@ -1,0 +1,13 @@
+# Global Search uses the app's own search of message text. The app ships that search switched
+# off (`openAt: never`). This bundle switches it on: the index is built in memory at the first
+# search and is gone when the app closes; nothing is written to disk.
+- id: session-query-sqlite
+  config:
+    path: ':memory:'
+    openAt: first-search
+- insert:
+    - id: search
+      name: '@local/dsh-search'
+      config:
+        # On: Cmd-K (Ctrl-K) opens Global Search. Off leaves the shortcut to the app.
+        shortcut: true

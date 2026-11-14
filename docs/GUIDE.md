@@ -886,3 +886,15 @@ An isolated Recon mode and tab for research on .onion sites and Usenet text news
 | `usenetHost` | `''` | The news server's name, as your Usenet provider gives it. The login is not kept here: it is in the macOS Keychain. |
 | `exportFolder` | `''` | Where `/recon export` writes its files. Empty uses the folder `recon/exports` in the app's home. |
 | `usenetPort` | `563` | The news server's port for encrypted connections. |
+
+### Global Search
+
+Global Search: one box, opened with Cmd-K, that finds conversations by their titles and by the text of their messages across every tab, and projects by name.
+
+- **Where:** window edge
+- **After install:** on
+- **Details:** `addons/dsh-search/README.md`
+
+| Setting | Starts as | What it does |
+|---|---|---|
+| `shortcut` | `true` | Cmd-K (Ctrl-K) opens Global Search. Off leaves that shortcut to the app. |

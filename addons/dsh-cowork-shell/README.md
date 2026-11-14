@@ -274,3 +274,18 @@ When instructions written by a model are saved, a mark of the folder (file names
 - **In the test setup**, with a stand-in model, on a folder with a README, an `AGENTS.md`, a CSV, a letter and a `.env`: the panel listed 4 files and named `.env` as left out; the request the model received held the type, the file list, the quoted files and the `AGENTS.md` rule, **no** line of `.env`, and it was offered no tools; the result showed as marked lines with three ideas; Use, Save, Earlier versions (Model, Type, You) and Put back worked; a request for an unknown provider without the tick was refused, as was one for a folder that is not a project; a new conversation in the Paperwork project started with no web tools on offer and carried the Data pointer, while one in another project was untouched; the folder's files were unchanged.
 - **Not tested:** a real model writing instructions (quality, and whether it keeps to the answer shape); the warning and tick with a real internet provider on the page (the server's refusal was tested, the lab has only local providers); a very large folder; the Mac app.
 
+
+## Since 0.47.0: search in a tab, right-click, several at once
+
+- **Search field** at the top of each tab's list: titles as you type, the text of messages after
+  Enter, Esc to clear. A search opens every project that holds a match. With the Global Search
+  add-on there is a **⌘K** button beside it.
+- **Right-click a conversation** for Open, Rename, Archive and Delete. On an archived one:
+  Put back in the list, and Delete.
+- **Several at once:** Cmd-click adds or removes one, Shift-click takes the range. Then right-click
+  for "Archive 5 conversations" or "Delete 5 conversations". One question for the lot.
+- Delete still moves conversations to the trash for 30 days, as before.
+
+- **Tested (0.47.0):** lab run in the app: filter by title, text search, pick two with Cmd-click
+  and with Shift-click, archive two, rename one, delete two archived ones into the trash.
+- **Not verified:** on a large real history.

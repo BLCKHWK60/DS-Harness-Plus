@@ -91,6 +91,25 @@ window.__ModuleLoader__.load({
         'move.label': 'Move "{title}" to another tab',
         'move.failed': 'Could not move the conversation.',
         'archive': 'Archive',
+        'find.placeholder': 'Search {tab}…',
+        'find.hint': 'Titles as you type. Press Enter to search the text of messages too.',
+        'find.text': 'Showing conversations whose title or messages match.',
+        'find.failed': 'The text of messages could not be searched; titles were.',
+        'find.none': 'Nothing in {tab} matches.',
+        'find.clear': 'Clear the search',
+        'find.global': 'Search everything',
+        'ctx.open': 'Open',
+        'ctx.rename': 'Rename',
+        'ctx.rename.save': 'Save',
+        'ctx.archive.n': 'Archive {n} conversations',
+        'ctx.delete.n': 'Delete {n} conversations',
+        'ctx.restore': 'Put back in the list',
+        'ctx.restore.n': 'Put {n} back in the list',
+        'pick.count': '{n} selected',
+        'pick.clear': 'Clear',
+        'pick.hint': 'Cmd-click or Shift-click selects several. Right-click for more.',
+        'delete.confirm.n': 'Delete {n} conversations?\n\nThey go to the trash. You can put them back for 30 days. After that they are gone for good.',
+        'rename.failed': 'Could not rename the conversation.',
         'archive.failed': 'Could not archive the conversation.',
         'archive.running': 'This conversation is still working. Stop it and archive it?',
         'archived.title': 'Archived ({n})',
@@ -291,6 +310,25 @@ window.__ModuleLoader__.load({
         'move.label': '把“{title}”移到其他标签页',
         'move.failed': '无法移动该对话。',
         'archive': '归档',
+        'find.placeholder': '搜索{tab}…',
+        'find.hint': '输入时按标题筛选。按回车同时搜索消息内容。',
+        'find.text': '显示标题或消息内容匹配的对话。',
+        'find.failed': '无法搜索消息内容；已按标题筛选。',
+        'find.none': '{tab}中没有匹配项。',
+        'find.clear': '清除搜索',
+        'find.global': '搜索全部',
+        'ctx.open': '打开',
+        'ctx.rename': '重命名',
+        'ctx.rename.save': '保存',
+        'ctx.archive.n': '归档 {n} 个对话',
+        'ctx.delete.n': '删除 {n} 个对话',
+        'ctx.restore': '放回列表',
+        'ctx.restore.n': '将 {n} 个放回列表',
+        'pick.count': '已选 {n} 个',
+        'pick.clear': '清除',
+        'pick.hint': '按住 Cmd 或 Shift 点击可多选。右键查看更多。',
+        'delete.confirm.n': '删除 {n} 个对话？\n\n它们会进入废纸篓，30 天内可以放回，之后永久删除。',
+        'rename.failed': '无法重命名该对话。',
         'archive.failed': '无法归档该对话。',
         'archive.running': '该对话仍在运行。要停止并归档吗？',
         'archived.title': '已归档（{n}）',
@@ -743,6 +781,18 @@ html[data-cws-wide] [class*='_composerStack']:not([class*='_composerHero'] *) [c
 .cws-proj-row,.cws-conv{display:flex;align-items:center;border-radius:var(--dsw-radius-sm);position:relative}
 .cws-proj-main,.cws-conv-main{flex:1;min-width:0;display:flex;align-items:center;gap:8px;min-height:30px;padding:4px 6px 4px 9px;border:0;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;font:inherit;text-align:left;border-radius:var(--dsw-radius-sm)}
 .cws-conv-main{padding-left:12px;color:var(--dsw-alias-label-primary)}
+.cws-conv[data-picked="true"]{background:color-mix(in srgb,var(--dsw-alias-brand-primary) 18%,transparent)}
+.cws-find{display:flex;align-items:center;gap:6px;padding:6px 6px 2px}
+.cws-find input{flex:1;min-width:0;height:28px;padding:0 9px;border:0.5px solid var(--dsw-alias-border-l2);border-radius:8px;font:inherit;font-size:12px;color:var(--dsw-alias-label-primary);background:transparent}
+.cws-find input:focus{outline:1px solid var(--dsw-alias-brand-primary);outline-offset:-1px}
+.cws-find-note{padding:2px 8px 4px;font-size:11px;line-height:15px;color:var(--dsw-alias-label-secondary)}
+.cws-pickbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 8px;font-size:11px;color:var(--dsw-alias-label-secondary)}
+.cws-ctx{position:fixed;z-index:300;min-width:200px;max-width:280px;padding:5px;border-radius:10px;border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-base));box-shadow:0 10px 34px rgba(0,0,0,.3)}
+.cws-ctx button{display:block;width:100%;padding:6px 10px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.cws-ctx button:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.cws-ctx button[data-danger="true"]{color:var(--dsw-alias-state-error-primary)}
+.cws-ctx input{width:100%;box-sizing:border-box;height:28px;margin:2px 0 4px;padding:0 8px;border:0.5px solid var(--dsw-alias-border-l2);border-radius:7px;font:inherit;font-size:13px;color:var(--dsw-alias-label-primary);background:transparent}
+.cws-ctx hr{margin:4px 2px;border:0;border-top:0.5px solid var(--dsw-alias-border-l1)}
 .cws-proj-list .cws-conv-main{padding-left:34px}
 .cws-conv[aria-current='page']{background:var(--dsw-alias-interactive-bg-hover)}
 .cws-conv[aria-current='page'] .cws-conv-main{font-weight:500}
@@ -790,6 +840,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       recon: 'M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14zM16 16l4.5 4.5',
       data: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
       plus: 'M12 5v14M5 12h14',
+      search: 'M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14zM16 16l4.5 4.5',
       panel: 'M4 5h16v14H4zM9 5v14',
       grid: 'M5 5h5v5H5zM14 5h5v5h-5zM5 14h5v5H5zM14 14h5v5h-5z',
       dot: 'M12 11.5a.5.5 0 1 0 0 1 .5.5 0 1 0 0-1',
@@ -1677,6 +1728,33 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const deleted = new Set(bin.items.map((item) => item.id));
       const [open, setOpen] = useState({});
       const [more, setMore] = useState({});
+      // Search inside this tab: titles as the user types, and the text of messages after Enter.
+      const [find, setFind] = useState('');
+      const [textHits, setTextHits] = useState(null);
+      const [findNote, setFindNote] = useState('');
+      // Several conversations picked with Cmd-click or Shift-click, and the right-click menu.
+      const [picked, setPicked] = useState(() => new Set());
+      const [menu, setMenu] = useState(null);
+      const lastPick = useRef(null);
+      const [hasGlobal, setHasGlobal] = useState(() => window.__dshGlobalSearch === true);
+      useEffect(() => {
+        const update = () => setHasGlobal(window.__dshGlobalSearch === true);
+        window.addEventListener('dsh-search:ready', update);
+        return () => window.removeEventListener('dsh-search:ready', update);
+      }, []);
+      // Another tab starts clean.
+      useEffect(() => { setFind(''); setTextHits(null); setFindNote(''); setPicked(new Set()); setMenu(null); }, [selected.id]);
+      useEffect(() => {
+        if (!menu) return undefined;
+        const close = (event) => { if (!(event.target instanceof Element) || !event.target.closest('.cws-ctx')) setMenu(null); };
+        const onKey = (event) => { if (event.key === 'Escape') setMenu(null); };
+        window.addEventListener('mousedown', close, true);
+        window.addEventListener('keydown', onKey, true);
+        return () => { window.removeEventListener('mousedown', close, true); window.removeEventListener('keydown', onKey, true); };
+      }, [menu]);
+      const findWords = find.toLowerCase().split(/\s+/).filter(Boolean);
+      const titleOfId = (id) => String(lib.byId[id]?.displayTitle ?? '').toLowerCase();
+      const shows = (id) => findWords.length === 0 || findWords.every((word) => titleOfId(id).includes(word)) || (textHits ? textHits.has(id) : false);
       const tabIds = tabs.map((m) => m.id);
       const uw = (() => { try { return appCtx.get('uiWorkspace'); } catch { return null; } })();
 
@@ -1685,7 +1763,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const placed = new Set();
       // An empty new conversation shows only while it is the open one.
       const sortRows = (ids) => ids
-        .filter((id) => lib.byId[id] && lib.byId[id].origin !== 'subagent' && !archived.has(id) && !deleted.has(id) && (!lib.byId[id].blank || id === lib.currentId))
+        .filter((id) => lib.byId[id] && lib.byId[id].origin !== 'subagent' && !archived.has(id) && !deleted.has(id) && (!lib.byId[id].blank || id === lib.currentId) && shows(id))
         .sort((a, b) => (pinned.has(b) - pinned.has(a)) || ((lib.byId[b].updatedAt ?? 0) - (lib.byId[a].updatedAt ?? 0)));
 
       const projects = [];
@@ -1801,12 +1879,138 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         }
       };
 
+      // ---- several at once, and the right-click menu ---------------------------------------------
+      /** The conversations as they are listed now, top to bottom, for Shift-click and for the order of a bulk action. */
+      const listed = [];
+      const clickRow = (event, id) => {
+        if (event.metaKey || event.ctrlKey) {
+          event.preventDefault();
+          setPicked((old) => { const next = new Set(old); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+          lastPick.current = id;
+          return;
+        }
+        if (event.shiftKey && lastPick.current && listed.includes(lastPick.current) && listed.includes(id)) {
+          event.preventDefault();
+          const [from, to] = [listed.indexOf(lastPick.current), listed.indexOf(id)].sort((a, b) => a - b);
+          setPicked((old) => new Set([...old, ...listed.slice(from, to + 1)]));
+          return;
+        }
+        if (picked.size > 0) setPicked(new Set());
+        lastPick.current = id;
+        openSession(id);
+      };
+      const askMenu = (event, id) => {
+        event.preventDefault();
+        const ids = picked.has(id) && picked.size > 1 ? listed.filter((other) => picked.has(other)) : [id];
+        if (!picked.has(id) && picked.size > 0) setPicked(new Set());
+        setMenu({ x: Math.min(event.clientX, window.innerWidth - 290), y: Math.min(event.clientY, window.innerHeight - 220), ids, rename: null });
+      };
+      const archiveMany = async (ids) => {
+        setMenu(null);
+        for (const id of ids) {
+          if (archived.has(id)) continue;
+          try {
+            await archiveQuietly(id, t('archive.running'));
+          } catch {
+            model.fail(t('archive.failed'));
+            break;
+          }
+        }
+        setPicked(new Set());
+      };
+      const removeMany = async (ids) => {
+        setMenu(null);
+        const titleOf = (id) => (lib.byId[id]?.displayTitle && String(lib.byId[id].displayTitle).trim()) || t('untitled');
+        if (!window.confirm(ids.length === 1 ? t('delete.confirm', { title: titleOf(ids[0]) }) : t('delete.confirm.n', { n: ids.length }))) return;
+        for (const id of ids) {
+          try {
+            if (archived.has(id)) {
+              if (id === lib.currentId) startNew(appCtx, library, selected.id);
+            } else if (!(await archiveQuietly(id, t('delete.running')))) continue;
+            await trash.remove(id, titleOf(id));
+          } catch {
+            model.fail(t('delete.failed'));
+            break;
+          }
+        }
+        setPicked(new Set());
+      };
+      const restoreMany = async (ids) => {
+        setMenu(null);
+        for (const id of ids) await restore(id);
+        setPicked(new Set());
+      };
+      const renameOne = async (id, title) => {
+        setMenu(null);
+        const next = String(title ?? '').trim().slice(0, 200);
+        if (!next) return;
+        try {
+          const done = await appCtx.get('remote.session').rename({ sessionId: id, title: next });
+          if (done && done.ok === false) throw new Error(done.error?.message ?? 'refused');
+          void model.refresh();
+        } catch {
+          model.fail(t('rename.failed'));
+        }
+      };
+      const menuView = () => {
+        if (!menu) return null;
+        const ids = menu.ids.filter((id) => lib.byId[id]);
+        if (ids.length === 0) return null;
+        const one = ids.length === 1 ? ids[0] : null;
+        const allArchived = ids.every((id) => archived.has(id));
+        const noneArchived = ids.every((id) => !archived.has(id));
+        return h('div', { className: 'cws-ctx', role: 'menu', style: { left: menu.x, top: menu.y } },
+          menu.rename !== null
+            ? h('form', { onSubmit: (event) => { event.preventDefault(); void renameOne(one, menu.rename); } },
+              h('input', { autoFocus: true, value: menu.rename, 'aria-label': t('ctx.rename'), onChange: (event) => setMenu({ ...menu, rename: event.target.value }) }),
+              h('button', { type: 'submit' }, t('ctx.rename.save')))
+            : h(React.Fragment, null,
+              one ? h('button', { type: 'button', role: 'menuitem', onClick: () => { setMenu(null); openSession(one); } }, t('ctx.open')) : null,
+              one && !archived.has(one) ? h('button', { type: 'button', role: 'menuitem', onClick: () => setMenu({ ...menu, rename: String(lib.byId[one]?.displayTitle ?? '') }) }, t('ctx.rename')) : null,
+              one ? h('hr') : null,
+              noneArchived ? h('button', { type: 'button', role: 'menuitem', onClick: () => void archiveMany(ids) }, one ? t('archive') : t('ctx.archive.n', { n: ids.length })) : null,
+              allArchived ? h('button', { type: 'button', role: 'menuitem', onClick: () => void restoreMany(ids) }, one ? t('ctx.restore') : t('ctx.restore.n', { n: ids.length })) : null,
+              h('button', { type: 'button', role: 'menuitem', 'data-danger': 'true', onClick: () => void removeMany(ids) }, one ? t('delete') : t('ctx.delete.n', { n: ids.length }))));
+      };
+      /** The tab's own search field, the search-everything button, and the count of picked conversations. */
+      const searchText = async () => {
+        const text = find.trim();
+        if (text.length < 2) return;
+        try {
+          // The Global Search add-on searches deeper and leaves out the app's own notes; without it, the app's search is used.
+          let ids;
+          const better = await fetch(new URL('dsh-search/match', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: text, text: true }) }).catch(() => null);
+          if (better?.ok) {
+            const found = await better.json();
+            if (found.note) throw new Error(found.note);
+            ids = found.hitIds ?? [];
+          } else {
+            const answer = await appCtx.get('remote.session').search({ query: text });
+            if (!answer?.ok) throw new Error('refused');
+            ids = (answer.value?.items ?? []).map((item) => item.sessionId);
+          }
+          setTextHits(new Set(ids));
+          setFindNote(t('find.text'));
+        } catch {
+          setTextHits(null);
+          setFindNote(t('find.failed'));
+        }
+      };
+      const findField = () => h(React.Fragment, null,
+        h('div', { className: 'cws-find' },
+          h('input', { type: 'search', value: find, placeholder: t('find.placeholder', { tab: selected.label }), title: t('find.hint'), 'aria-label': t('find.placeholder', { tab: selected.label }), spellCheck: false,
+            onChange: (event) => { setFind(event.target.value); setTextHits(null); setFindNote(''); },
+            onKeyDown: (event) => { if (event.key === 'Enter') void searchText(); else if (event.key === 'Escape') { setFind(''); setTextHits(null); setFindNote(''); } } }),
+          hasGlobal ? h('button', { type: 'button', className: 'cws-link', title: t('find.global') + ' (⌘K)', 'aria-label': t('find.global'), onClick: () => window.dispatchEvent(new Event('dsh-search:open')) }, '⌘K') : null),
+        findNote ? h('div', { className: 'cws-find-note' }, findNote) : null,
+        picked.size > 0 ? h('div', { className: 'cws-pickbar' }, h('span', { title: t('pick.hint') }, t('pick.count', { n: picked.size })), h('button', { type: 'button', className: 'cws-link', onClick: () => setPicked(new Set()) }, t('pick.clear'))) : null);
+
       // Archived conversations of this tab, newest first.
       const wsById = {};
       for (const ws of lib.workspaces) for (const id of ws.sessionIds ?? []) wsById[id] = ws;
       const archivedIds = lib.archived
         .filter((id) => lib.byId[id] && lib.byId[id].origin !== 'subagent' && !lib.byId[id].blank && !deleted.has(id)
-          && tabOfSession(id, lib.byId[id], wsById[id] ?? null, state, tabIds) === selected.id)
+          && tabOfSession(id, lib.byId[id], wsById[id] ?? null, state, tabIds) === selected.id && shows(id))
         .sort((a, b) => (lib.byId[b].updatedAt ?? 0) - (lib.byId[a].updatedAt ?? 0));
       // Every conversation that waits for the user, from all tabs: an approval, a plan review or a question.
       const needsIds = Object.keys(lib.waiting)
@@ -1853,8 +2057,9 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           shown ? archivedIds.map((id) => {
             const sess = lib.byId[id];
             const title = (sess.displayTitle && String(sess.displayTitle).trim()) || t('untitled');
-            return h('div', { key: id, className: 'cws-conv cws-archived', 'aria-current': lib.currentId === id ? 'page' : undefined },
-              h('button', { type: 'button', className: 'cws-conv-main', onClick: () => openSession(id), title },
+            listed.push(id);
+            return h('div', { key: id, className: 'cws-conv cws-archived', 'aria-current': lib.currentId === id ? 'page' : undefined, 'data-picked': String(picked.has(id)), onContextMenu: (event) => askMenu(event, id) },
+              h('button', { type: 'button', className: 'cws-conv-main', onClick: (event) => clickRow(event, id), title },
                 h('span', { className: 'cws-label' }, title),
                 h('span', { className: 'cws-time' }, ago(t, sess.updatedAt))),
               h('button', { type: 'button', className: 'cws-link', 'aria-label': t('archived.restore.label', { title }), onClick: () => void restore(id) }, t('archived.restore')),
@@ -1867,8 +2072,9 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         const sess = lib.byId[id];
         const title = (!sess.blank && sess.displayTitle && String(sess.displayTitle).trim()) || t('untitled');
         const current = lib.currentId === id;
-        return h('div', { key: id, className: 'cws-conv', 'aria-current': current ? 'page' : undefined },
-          h('button', { type: 'button', className: 'cws-conv-main', onClick: () => openSession(id), title },
+        listed.push(id);
+        return h('div', { key: id, className: 'cws-conv', 'aria-current': current ? 'page' : undefined, 'data-picked': String(picked.has(id)), onContextMenu: sess.blank ? undefined : (event) => askMenu(event, id) },
+          h('button', { type: 'button', className: 'cws-conv-main', onClick: (event) => (sess.blank ? openSession(id) : clickRow(event, id)), title },
             lib.waiting[id]
               ? h('span', { className: 'cws-dot cws-dot-wait', role: 'img', 'aria-label': t('needs.' + lib.waiting[id]), title: t('needs.' + lib.waiting[id]) })
               : sess.running ? h('span', { className: 'cws-dot', role: 'img', 'aria-label': t('running'), title: t('running') }) : null,
@@ -1896,24 +2102,28 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       if (flat) {
         return h('div', { className: 'cws-lib' },
           needsSection(),
+          findField(),
           h('div', { className: 'cws-lib-head' },
             h('span', null, t('lib.title.chat', { tab: selected.label })),
             h('button', { type: 'button', className: 'cws-link', onClick: onShowAll, title: t('lib.all.hint') }, t('lib.all'))),
-          empty ? h('p', { className: 'cws-lib-empty' }, t('lib.empty', { tab: selected.label })) : null,
+          empty ? h('p', { className: 'cws-lib-empty' }, findWords.length > 0 ? t('find.none', { tab: selected.label }) : t('lib.empty', { tab: selected.label })) : null,
           h(React.Fragment, null, flatIds.slice(0, more.__flat ? flatIds.length : 30).map((id) => row(id, wsOf[id] ?? null)),
             flatIds.length > 30 && !more.__flat ? h('button', { type: 'button', className: 'cws-more-btn', onClick: () => setMore((m) => ({ ...m, __flat: true })) }, t('show.more', { n: flatIds.length - 30 })) : null),
-          archivedSection());
+          archivedSection(),
+          menuView());
       }
       return h('div', { className: 'cws-lib' },
         needsSection(),
+        findField(),
         h('div', { className: 'cws-lib-head' },
           h('span', null, t('lib.title.' + (['chat', 'cowork', 'code'].includes(selected.id) ? selected.id : 'other'), { tab: selected.label })),
           h('span', { className: 'cws-lib-links' },
             h('button', { type: 'button', className: 'cws-link', onClick: () => void addProject(), title: t('proj.add.hint') }, '+ ' + t('proj.add')),
             h('button', { type: 'button', className: 'cws-link', onClick: onShowAll, title: t('lib.all.hint') }, t('lib.all')))),
-        empty ? h('p', { className: 'cws-lib-empty' }, t('lib.empty', { tab: selected.label })) : null,
+        empty ? h('p', { className: 'cws-lib-empty' }, findWords.length > 0 ? t('find.none', { tab: selected.label }) : t('lib.empty', { tab: selected.label })) : null,
         projects.map(({ ws, ids, all }) => {
-          const isOpen = open[ws.workspaceId] ?? ids.includes(lib.currentId);
+          // A search opens every project that holds a match.
+          const isOpen = findWords.length > 0 ? ids.length > 0 : open[ws.workspaceId] ?? ids.includes(lib.currentId);
           return h('div', { key: ws.workspaceId, className: 'cws-proj' },
             h('div', { className: 'cws-proj-row' },
               h('button', { type: 'button', className: 'cws-proj-main', 'aria-expanded': isOpen, onClick: () => setOpen((o) => ({ ...o, [ws.workspaceId]: !isOpen })) },
@@ -1928,7 +2138,8 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         loose.length ? h(React.Fragment, null,
           h('div', { className: 'cws-lib-head' }, h('span', null, t('lib.loose'))),
           list(loose, '__loose', null)) : null,
-        archivedSection());
+        archivedSection(),
+        menuView());
     }
 
     /** The New button: on the Chat tab it always starts in the app's default workspace, when there is one. */
@@ -1970,6 +2181,14 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const [showAll, setShowAllState] = useState(() => { try { return window.localStorage.getItem(LIST_KEY) === '1'; } catch { return false; } });
       const setShowAll = (value) => { setShowAllState(value); try { window.localStorage.setItem(LIST_KEY, value ? '1' : '0'); } catch { /* private mode */ } };
       const t = appCtx.locale.bind(NS);
+      // The search icon shows while the Global Search add-on is there.
+      const [hasGlobal, setHasGlobal] = useState(() => window.__dshGlobalSearch === true);
+      useEffect(() => {
+        const update = () => setHasGlobal(window.__dshGlobalSearch === true);
+        window.addEventListener('dsh-search:ready', update);
+        update();
+        return () => window.removeEventListener('dsh-search:ready', update);
+      }, []);
       const state = useSyncExternalStore(model.subscribe, model.get);
       const allPages = useSyncExternalStore(pages.subscribe, pages.get);
       const active = typeof usePanelInfo === 'function' ? usePanelInfo((info) => info.activePanelId) : null;
@@ -2067,9 +2286,12 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         tabsRef.current?.querySelectorAll('[role=tab]')[next]?.focus();
       };
 
-      const toggle = h(Tooltip, { label: toggleLabel, show: true },
+      const searchAll = hasGlobal ? h(Tooltip, { key: 'search', label: `${t('find.global')} (⌘K)`, show: true },
+        h('button', { type: 'button', className: 'cws-icon', 'aria-label': t('find.global'), onClick: () => window.dispatchEvent(new Event('dsh-search:open')) },
+          h(Glyph, { name: 'search', size: wide ? 16 : 18 }))) : null;
+      const toggle = h(React.Fragment, null, searchAll, h(Tooltip, { key: 'toggle', label: toggleLabel, show: true },
         h('button', { type: 'button', className: 'cws-icon', 'data-sidebar-toggle': '', 'aria-label': toggleLabel, onClick: () => appCtx.layout.toggleSidebar() },
-          h(Glyph, { name: 'panel', size: wide ? 16 : 18 })));
+          h(Glyph, { name: 'panel', size: wide ? 16 : 18 }))));
 
       const pageRow = (p) => h(Tooltip, { key: p.id, label: p.label, show: !wide },
         h('button', {
@@ -2145,7 +2367,8 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const key = ['chat', 'cowork', 'code'].includes(state.selected) ? 'new.' + state.selected : 'new.other';
       return h('div', { className: 'cws-lead' },
         h('button', { type: 'button', className: 'cws-icon', 'data-sidebar-opener': '', 'aria-label': t('toggle.open'), onClick: () => appCtx.layout.toggleSidebar() }, h(Glyph, { name: 'panel', size: 16 })),
-        h('button', { type: 'button', className: 'cws-icon', 'aria-label': t(key), onClick: () => startNew(appCtx, library, state.selected) }, h(Glyph, { name: 'plus', size: 16 })));
+        h('button', { type: 'button', className: 'cws-icon', 'aria-label': t(key), onClick: () => startNew(appCtx, library, state.selected) }, h(Glyph, { name: 'plus', size: 16 })),
+        window.__dshGlobalSearch === true ? h('button', { type: 'button', className: 'cws-icon', 'aria-label': t('find.global'), title: `${t('find.global')} (⌘K)`, onClick: () => window.dispatchEvent(new Event('dsh-search:open')) }, h(Glyph, { name: 'search', size: 16 })) : null);
     }
 
 
@@ -2422,7 +2645,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     function SparkleIcon({ size }) { return h(Glyph, { name: 'sparkle', size }); }
 
     return {
-      inject: ['slots', 'layout', 'uiWorkspace', 'locale', 'remote', 'remote.settings'],
+      inject: ['slots', 'layout', 'uiWorkspace', 'locale', 'remote', 'remote.settings', 'remote.session'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, DICT));
         const style = document.createElement('style');
