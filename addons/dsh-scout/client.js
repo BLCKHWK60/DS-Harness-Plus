@@ -416,7 +416,7 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
 
         h('div', { className: 'dsh-sc-group' }, 'Good to know'),
         h('ul', { className: 'dsh-sc-list' },
-          h('li', null, 'Scout conversations get only these tools: Scout\'s own six, web search and page reading (with the Search switch), Deep research (with its switch), the Finance news and filings tools when Finance is on, charts, a step list and questions. No file, shell or program tools.'),
+          h('li', null, 'Scout conversations get only these tools: Scout\'s own nine (sources, search, posting text, titles, demand, pay, your files, your profile, the report), web search and page reading (with the Search switch), Deep research (with its switch), the Finance news and filings tools when Finance is on, charts, a step list and questions. No file, shell or program tools.'),
           h('li', null, 'Search queries carry titles, skills and places, never your name or contact details. Web search goes through your web search provider; the job sources get only the search itself.'),
           h('li', null, 'Every run ends with a report saved as Markdown and a table (CSV) in the reports folder inside your Scout folder.'),
           h('li', null, 'Results depend on what each source lists and on the model. Check a posting on its own page before you act on it.')));

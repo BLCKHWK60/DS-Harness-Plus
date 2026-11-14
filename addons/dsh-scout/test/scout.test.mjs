@@ -281,3 +281,70 @@ test('plain text from markup', () => {
   assert.equal(plainText('&lt;p&gt;Escaped &amp;amp; once more&lt;/p&gt;'), 'Escaped & once more');
   assert.equal(plainText('<script>alert(1)</script>Text'), 'Text');
 });
+
+test('step 2, research: titles from ESCO, demand by title, and pay', async () => {
+  const { titles, demand, readPay, payFromPostings, adzunaPay } = await import('../lib/research.js');
+  const asked = network([
+    [/esco\/api\/search\?/, { status: 200, text: fixture('esco-search.json') }],
+    [/esco\/api\/resource\/occupation\?/, { status: 200, text: fixture('esco-occupation.json') }],
+    [/pc\/v6\/jobs/, (url) => ({ status: 200, text: JSON.stringify({ maxErgebnisse: new URL(url).searchParams.get('was') === 'Data Engineer' ? 123 : 7, ergebnisliste: [] }) })],
+    [/adzuna\.com\/v1\/api\/jobs\/gb\/histogram/, { status: 200, text: JSON.stringify({ histogram: { 20000: 5, 40000: 20, 60000: 50, 80000: 20, 100000: 5 } }) }],
+  ]);
+  const found = await titles('data engineer', { languages: ['German', 'Spanish'] });
+  assert.match(found, /German: Datenwissenschaftler\/Datenwissenschaftlerin/);
+  assert.match(found, /Spanish: científico de datos/);
+  assert.match(found, /ISCO 2511/);
+  assert.match(found, /Essential skills: /);
+  assert.ok(asked.every((request) => request.url.startsWith('https://ec.europa.eu/esco/api/')));
+
+  const registry = readRegistry('{}', '[]');
+  let requests = 0;
+  const table = await demand({ titles: ['Data Engineer', 'Dateningenieur'], market: 'Germany', registry, keyOf: async () => '', hasKey: () => false, request: () => { requests += 1; } });
+  assert.match(table, /"Data Engineer": Bundesagentur für Arbeit Jobbörse: 123/);
+  assert.match(table, /"Dateningenieur": Bundesagentur für Arbeit Jobbörse: 7/);
+  assert.equal(requests, 2);
+  assert.equal(new URL(asked.find((request) => /pc\/v6\/jobs/.test(request.url)).url).searchParams.get('size'), '1', 'a count asks for one result only');
+  assert.match(await demand({ titles: ['Data Engineer'], market: 'UK', registry, keyOf: async () => '', hasKey: () => false, request: () => {} }), /Adzuna, Reed would \(they need a free key/);
+
+  assert.deepEqual(readPay('€150K - €250K'), { currency: 'EUR', low: 150000, high: 250000, per: 'year' });
+  assert.deepEqual(readPay('GBP 60,000–70,000'), { currency: 'GBP', low: 60000, high: 70000, per: 'year' });
+  assert.deepEqual(readPay('USD 99,000–128,000 per year'), { currency: 'USD', low: 99000, high: 128000, per: 'year' });
+  assert.deepEqual(readPay('€650 per day'), { currency: 'EUR', low: 650, high: 650, per: 'day' });
+  assert.equal(readPay('competitive'), undefined);
+  const summary = payFromPostings([
+    { n: 1, title: 'Data Engineer', pay: '€80K - €100K' }, { n: 2, title: 'Data Engineer', pay: '€60K - €70K' }, { n: 3, title: 'Analyst', pay: '' }, { n: 4, title: 'Data Engineer', pay: 'GBP 60,000–70,000' },
+  ]);
+  assert.match(summary, /EUR per year: 2 postings; middle of the ranges from 65,000 to 90,000, median 77,500 \(P1, P2\)/);
+  assert.match(summary, /GBP per year: 1 posting/);
+  assert.equal(await adzunaPay({ market: 'UK', what: 'x', key: '' }), '');
+  assert.match(await adzunaPay({ market: 'UK', what: 'data engineer', key: 'id:secret' }), /100 postings across UK: lower quarter from 40,000, middle from 60,000, upper quarter from 60,000/);
+});
+
+test('step 2, the research tools in a conversation', async () => {
+  network([
+    [/esco\/api\/search\?/, { status: 200, text: fixture('esco-search.json') }],
+    [/esco\/api\/resource\/occupation\?/, { status: 200, text: fixture('esco-occupation.json') }],
+    [/pc\/v6\/jobs/, { status: 200, text: fixture('ba-search.json') }],
+  ]);
+  const dir = mkdtempSync(join(tmpdir(), 'scout-research-'));
+  try {
+    const registry = readRegistry('{}', '[]');
+    const store = openStore();
+    const tools = Object.fromEntries(buildTools({
+      enabled: () => true, registry: () => registry, selection: () => readSelection({ markets: ['Germany', 'Spain'] }),
+      keyOf: async () => '', hasKey: () => false, store, folder: openFolder(join(dir, 'f')), profile: openProfile(join(dir, 'p.md')),
+      gate: () => ({ files: { ok: true, why: '' }, profile: { ok: true, why: '' } }), idOf: () => 'c1',
+    }).map((tool) => [tool.name, tool]));
+    const run = async (name, args) => (await tools[name].execute(args, {})).text;
+    const named = await run('scout_titles', { title: 'data engineer' });
+    assert.match(named, /German: /);
+    assert.match(named, /Spanish: /, 'languages come from the selected markets');
+    assert.match(await run('scout_demand', { titles: ['Data Engineer'], market: 'Germany' }), /Bundesagentur für Arbeit Jobbörse: \d+/);
+    const pay = await run('scout_pay', { what: 'Data Engineer', market: 'Germany' });
+    assert.match(pay, /No posting found in this conversation/);
+    assert.match(pay, /Adzuna's pay statistics for Germany need its free key/);
+    assert.match(pay, /Entgeltatlas/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

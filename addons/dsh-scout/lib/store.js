@@ -63,6 +63,8 @@ export function openStore() {
       return Number.isInteger(n) && n > 0 ? of(id).list[n - 1] : undefined;
     },
     count: (id) => of(id).list.length,
+    /** Every posting found in a conversation, in order. */
+    all: (id) => [...of(id).list],
     forget: (id) => all.delete(id),
   };
 }

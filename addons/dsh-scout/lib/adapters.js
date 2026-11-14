@@ -45,7 +45,7 @@ export const ADAPTERS = {
     async search(want) {
       need(want.what || want.where, 'what to search for or where');
       const base = 'https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v6/jobs';
-      const query = new URLSearchParams({ size: '50', page: String(Math.max(1, Number(want.page) || 1)) });
+      const query = new URLSearchParams({ size: String(Number(want.size) || 50), page: String(Math.max(1, Number(want.page) || 1)) });
       if (want.what) query.set('was', clip(want.what, 120));
       if (want.where) query.set('wo', clip(want.where, 80));
       if (want.where && Number(want.radius) > 0) query.set('umkreis', String(Math.min(200, Math.round(Number(want.radius)))));
@@ -132,7 +132,7 @@ export const ADAPTERS = {
       const country = MARKETS[want.market]?.adzuna;
       if (!country) throw new Error(`Adzuna has no data for ${want.market || 'that market'}; give one of: ${Object.entries(MARKETS).filter(([, m]) => m.adzuna).map(([name]) => name).join(', ')}`);
       need(want.what, 'what to search for');
-      const query = new URLSearchParams({ app_id: id, app_key: secret, results_per_page: '50', what: clip(want.what, 120), 'content-type': 'application/json' });
+      const query = new URLSearchParams({ app_id: id, app_key: secret, results_per_page: String(Number(want.size) || 50), what: clip(want.what, 120), 'content-type': 'application/json' });
       if (want.where) query.set('where', clip(want.where, 80));
       if (want.where && Number(want.radius) > 0) query.set('distance', String(Math.min(200, Math.round(Number(want.radius)))));
       if (Number(want.days) > 0) query.set('max_days_old', String(Math.round(Number(want.days))));
@@ -168,7 +168,7 @@ export const ADAPTERS = {
       const at = String(key ?? '').indexOf(':');
       const [email, secret] = at > 0 ? [String(key).slice(0, at), String(key).slice(at + 1)] : ['', ''];
       if (!email.includes('@') || !secret) throw new Error('the USAJOBS key must be entered as EMAIL:KEY in Settings → Scout');
-      const query = new URLSearchParams({ ResultsPerPage: '50', Page: String(Math.max(1, Number(want.page) || 1)) });
+      const query = new URLSearchParams({ ResultsPerPage: String(Number(want.size) || 50), Page: String(Math.max(1, Number(want.page) || 1)) });
       if (want.what) query.set('Keyword', clip(want.what, 120));
       if (want.where) query.set('LocationName', clip(want.where, 80));
       if (want.where && Number(want.radius) > 0) query.set('Radius', String(Math.min(200, Math.round(Number(want.radius)))));
@@ -205,7 +205,7 @@ export const ADAPTERS = {
   reed: {
     async search(want, key) {
       if (!key) throw new Error('Reed needs its key in Settings → Scout');
-      const query = new URLSearchParams({ resultsToTake: '50', resultsToSkip: String((Math.max(1, Number(want.page) || 1) - 1) * 50) });
+      const query = new URLSearchParams({ resultsToTake: String(Number(want.size) || 50), resultsToSkip: String((Math.max(1, Number(want.page) || 1) - 1) * 50) });
       if (want.what) query.set('keywords', clip(want.what, 120));
       if (want.where) query.set('locationName', clip(want.where, 80));
       if (want.where && Number(want.radius) > 0) query.set('distanceFromLocation', String(Math.min(100, Math.round(Number(want.radius) * 0.62))));

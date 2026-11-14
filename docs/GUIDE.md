@@ -902,7 +902,7 @@ A Scout mode and tab that searches for work across your markets and plans how to
 
 - **Where:** Settings → Scout; start page of a new conversation; `/scout` in the chat box
 - **After install:** off until you switch it on
-- **Tools the assistant gets:** `scout`, `scout_sources`, `scout_search`, `scout_posting`, `scout_files`, `scout_profile`, `scout_report`
+- **Tools the assistant gets:** `scout`, `scout_sources`, `scout_search`, `scout_titles`, `scout_demand`, `scout_pay`, `scout_posting`, `scout_files`, `scout_profile`, `scout_report`
 - **Details:** `addons/dsh-scout/README.md`
 
 | Setting | Starts as | What it does |
