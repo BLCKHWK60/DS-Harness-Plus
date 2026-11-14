@@ -280,7 +280,7 @@ When instructions written by a model are saved, a mark of the folder (file names
 - **Search field** at the top of each tab's list: titles as you type, the text of messages after
   Enter, Esc to clear. A search opens every project that holds a match. With the Global Search
   add-on there is a **⌘K** button beside it.
-- **Right-click a conversation** for Open, Rename, Archive and Delete. On an archived one:
+- **Right-click a conversation** for Open, Rename, Show in Finder (its project's folder; since 0.51.1), Archive and Delete. **Right-click a project** for Show in Finder. Both use the app's own request for this, so nothing new runs on the Mac. On an archived one:
   Put back in the list, and Delete.
 - **Several at once:** Cmd-click adds or removes one, Shift-click takes the range. Then right-click
   for "Archive 5 conversations" or "Delete 5 conversations". One question for the lot.

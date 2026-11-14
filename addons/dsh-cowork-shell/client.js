@@ -101,6 +101,8 @@ window.__ModuleLoader__.load({
         'ctx.open': 'Open',
         'ctx.rename': 'Rename',
         'ctx.rename.save': 'Save',
+        'ctx.reveal': 'Show in Finder',
+        'reveal.failed': 'Could not show it in Finder.',
         'ctx.archive.n': 'Archive {n} conversations',
         'ctx.delete.n': 'Delete {n} conversations',
         'ctx.restore': 'Put back in the list',
@@ -320,6 +322,8 @@ window.__ModuleLoader__.load({
         'ctx.open': '打开',
         'ctx.rename': '重命名',
         'ctx.rename.save': '保存',
+        'ctx.reveal': '在访达中显示',
+        'reveal.failed': '无法在访达中显示。',
         'ctx.archive.n': '归档 {n} 个对话',
         'ctx.delete.n': '删除 {n} 个对话',
         'ctx.restore': '放回列表',
@@ -1794,6 +1798,9 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         .filter((id) => lib.byId[id] && lib.byId[id].origin !== 'subagent' && !archived.has(id) && !deleted.has(id) && (!lib.byId[id].blank || id === lib.currentId) && shows(id))
         .sort((a, b) => (pinned.has(b) - pinned.has(a)) || ((lib.byId[b].updatedAt ?? 0) - (lib.byId[a].updatedAt ?? 0)));
 
+      /** Each conversation's project, for Show in Finder. */
+      const homeOf = {};
+      for (const ws of lib.workspaces) for (const id of ws.sessionIds ?? []) homeOf[id] = ws;
       const projects = [];
       for (const ws of lib.workspaces) {
         const ids = sortRows(ws.sessionIds ?? []);
@@ -1980,8 +1987,27 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           model.fail(t('rename.failed'));
         }
       };
+      /** Show a project's folder in Finder, through the app's own request for that. */
+      const reveal = async (path) => {
+        setMenu(null);
+        try {
+          const done = await appCtx.get('remote.session').openWorkspacePath({ path, action: 'reveal' });
+          if (!done?.ok) throw new Error('refused');
+        } catch {
+          model.fail(t('reveal.failed'));
+        }
+      };
+      const askProjectMenu = (event, ws) => {
+        event.preventDefault();
+        if (!ws?.path) return;
+        setMenu({ x: Math.min(event.clientX, window.innerWidth - 290), y: Math.min(event.clientY, window.innerHeight - 120), ids: [], project: ws, rename: null });
+      };
       const menuView = () => {
         if (!menu) return null;
+        if (menu.project) {
+          return h('div', { className: 'cws-ctx', role: 'menu', style: { left: menu.x, top: menu.y } },
+            h('button', { type: 'button', role: 'menuitem', title: menu.project.path, onClick: () => void reveal(menu.project.path) }, t('ctx.reveal')));
+        }
         const ids = menu.ids.filter((id) => lib.byId[id]);
         if (ids.length === 0) return null;
         const one = ids.length === 1 ? ids[0] : null;
@@ -1995,6 +2021,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             : h(React.Fragment, null,
               one ? h('button', { type: 'button', role: 'menuitem', onClick: () => { setMenu(null); openSession(one); } }, t('ctx.open')) : null,
               one && !archived.has(one) ? h('button', { type: 'button', role: 'menuitem', onClick: () => setMenu({ ...menu, rename: String(lib.byId[one]?.displayTitle ?? '') }) }, t('ctx.rename')) : null,
+              one && homeOf[one]?.path ? h('button', { type: 'button', role: 'menuitem', title: homeOf[one].path, onClick: () => void reveal(homeOf[one].path) }, t('ctx.reveal')) : null,
               one ? h('hr') : null,
               noneArchived ? h('button', { type: 'button', role: 'menuitem', onClick: () => void archiveMany(ids) }, one ? t('archive') : t('ctx.archive.n', { n: ids.length })) : null,
               allArchived ? h('button', { type: 'button', role: 'menuitem', onClick: () => void restoreMany(ids) }, one ? t('ctx.restore') : t('ctx.restore.n', { n: ids.length })) : null,
@@ -2153,7 +2180,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           // A search opens every project that holds a match.
           const isOpen = findWords.length > 0 ? ids.length > 0 : open[ws.workspaceId] ?? ids.includes(lib.currentId);
           return h('div', { key: ws.workspaceId, className: 'cws-proj' },
-            h('div', { className: 'cws-proj-row' },
+            h('div', { className: 'cws-proj-row', onContextMenu: (event) => askProjectMenu(event, ws) },
               h('button', { type: 'button', className: 'cws-proj-main', 'aria-expanded': isOpen, onClick: () => setOpen((o) => ({ ...o, [ws.workspaceId]: !isOpen })) },
                 h('span', { className: 'cws-glyph', 'aria-hidden': true }, h(Glyph, { name: isOpen ? 'folderOpen' : 'folder', size: 16 })),
                 h('span', { className: 'cws-label' }, ws.title || ws.path || t('untitled')),
