@@ -401,7 +401,7 @@ Written 2026-11-15 from step 0 of "DeepSeek Harness Plus next features plan" (th
 
 > **Status after step 16 (0.59.0, owner's decisions in the session of 2026-11-15).** The owner redesigned Depth while step 16 was built: the Web button is only On or Off; Depth (Quick, Standard, Thorough) carries how much the model searches plus planning, checks and reviews; Effort is how hard the model thinks, nothing more; and there is **one Depth for every tab** ("the Depth Settings should not differ, so I don't have to remember which mode had which settings"). So:
 > - **Step 16** is done in that form: the Depth button in every tab, Recon, Research and Scout included.
-> - **Step 17** still stands, but its exclusions (Recon, Research, Scout) must be asked again, since those tabs now get Depth's notes.
+> - **Step 17** is done (0.59.0): the check in every tab, Recon and Research as research-level modes and Scout included, with the owner's words and his rule that a check never starts the work over (long-running tools refused during the check).
 > - **Step 18** (per-tab starting Depth and per-tab stops) and **step 19** (per-tab Web level) are **dropped**: one Depth start for all tabs, and the Web button has no levels.
 > - **Step 20** is done, differently: Research's own Depth is gone (its value not carried over); research runs follow the starting conversation's Depth, and Research and Scout get Depth's care note too.
 > - **Step 21** (a 'Web · Always on' button in Research and Scout) is still open.

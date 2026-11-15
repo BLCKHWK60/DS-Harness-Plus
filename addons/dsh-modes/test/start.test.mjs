@@ -732,3 +732,164 @@ test('the move also runs a moment after loading, when no conversation opens', as
   assert.deepEqual(JSON.parse(world.config.sessionDepth), { a: 'quick' });
   app.stop();
 });
+
+test('Thorough: one check just before a turn ends, in every tab, never twice, never starting the work over', async () => {
+  const { DEPTH_CHECK_PROMPT, DEPTH_CHECK_KIND, DEPTH_CHECK_SUMMARY, DEPTH_CHECK_REFUSAL } = await import('../lib/prompt.js');
+  // The owner's words, with his rule that a check never starts the work over.
+  assert.equal(DEPTH_CHECK_PROMPT, 'Before you finish, check your answer against the request and your working method. Fix only what is missing, without starting the work over or starting a new research run, then finish. If nothing is missing, say so in one line.');
+  const RECON = { label: 'Recon', tools: ['recon_cite', 'recon_news_search'], sandbox: 'read-only', prompt: 'Recon method.', isolated: true };
+  const LOCKED = { label: 'Locked', tools: [], sandbox: 'read-only', prompt: 'No tools are available.', isolated: true };
+  const RESEARCH = { label: 'Research', tools: ['deep_research', 'web_search', 'web_fetch'], sandbox: 'read-only', prompt: 'Research method.' };
+  const goals = new Map();
+  const world = makeWorld({
+    pruneStaleSessions: false,
+    searchDepth: 'thorough',
+    extraModes: JSON.stringify({ recon: RECON, research: RESEARCH, locked: LOCKED }),
+    sessionModes: JSON.stringify({ c1: 'cowork', ch: 'chat', r1: 'recon', s1: 'research', q1: 'cowork', st: 'cowork', off1: 'cowork', m1: 'cowork', lk: 'locked' }),
+    sessionDepth: JSON.stringify({ q1: 'quick', st: 'standard' }),
+    sessionTools: JSON.stringify({ off1: false }),
+  });
+  const app = boot(world, { known: ['read', 'web_search', 'web_fetch', 'deep_research', 'run_swarm', 'recon_cite'], goals });
+  const open = async (id, header) => (await app.open(id, header ? { header } : {})).agent;
+  /** One turn the user started: their message is claimed, then the app asks before closing. */
+  const userTurn = async (agent, turn) => {
+    await app.claim(agent, turn);
+    await app.turnStopping(agent, turn);
+  };
+  const refused = (id, name = 'deep_research') => app.guard({ name, agent: { id }, arguments: {} }) === DEPTH_CHECK_REFUSAL;
+  const c1 = await open('c1');
+  // The first ask: one check, as a one-line row of its own (not the user's message).
+  await userTurn(c1, 1);
+  assert.equal(c1.steered.length, 1);
+  const [check] = c1.steered;
+  assert.equal(check.role, 'user');
+  assert.deepEqual(check.content, [{ type: 'text', text: DEPTH_CHECK_PROMPT }]);
+  assert.deepEqual(check.source, { kind: DEPTH_CHECK_KIND, form: 'notice', summary: DEPTH_CHECK_SUMMARY });
+  assert.match(check.id, /^[0-9a-f-]{36}$/);
+  // During the check, nothing that starts a whole new run; small work goes on.
+  for (const name of ['deep_research', 'run_swarm', 'run_pipeline', 'review_lanes', 'delegate_role', 'workflow']) assert.ok(refused('c1', name), name);
+  assert.equal(app.guard({ name: 'web_search', agent: { id: 'c1' }, arguments: {} }), undefined);
+  assert.ok(!refused('ch'), 'only the conversation in its check');
+  // A helper started during the check is held to it; one started before is not.
+  const before = await open('hb', { parentSession: 'ch' });
+  const during = await open('hd', { parentSession: 'c1' });
+  assert.ok(refused('hd') && !refused('hb'));
+  // The check step itself claims the check message: that does not lift the block.
+  await app.claim(c1, 1, DEPTH_CHECK_KIND);
+  assert.ok(refused('c1'));
+  // The second ask closes the turn: no second check, and the block is lifted; later asks add nothing.
+  await app.turnStopping(c1, 1);
+  await app.turnStopping(c1, 1);
+  await app.turnStopping(c1, 1);
+  assert.equal(c1.steered.length, 1, 'never twice in a turn');
+  assert.ok(!refused('c1') && !refused('hd'));
+  void before; void during;
+  // Something the user sends during the check step is theirs: the block ends, and there is no second check.
+  await userTurn(c1, 2);
+  assert.equal(c1.steered.length, 2);
+  await app.claim(c1, 2);
+  assert.ok(!refused('c1'), 'the user\'s own request for research is not refused');
+  await app.turnStopping(c1, 2);
+  assert.equal(c1.steered.length, 2);
+  // A turn that ends early (stopped) gets none; going idle lifts the block.
+  await app.claim(c1, 3);
+  await app.turnStopping(c1, 3, { aborted: true });
+  assert.equal(c1.steered.length, 2);
+  await userTurn(c1, 4);
+  await app.emit('agent/status', { agent: c1, status: 'idle' });
+  assert.ok(!refused('c1'));
+  // A turn without a message from the user (a goal round, a helper's notice, an Automation task): no check.
+  for (const kind of ['goal', 'subagent-settled', 'schedule', 'tool-jobs']) {
+    await app.claim(c1, 10, kind);
+    await app.turnStopping(c1, 10);
+  }
+  assert.equal(c1.steered.length, 3, 'no check without the user');
+  // Every tab, Recon and Research (research-level modes) and Chat included.
+  for (const id of ['ch', 'r1', 's1']) {
+    const agent = await open(id);
+    await userTurn(agent, 1);
+    assert.equal(agent.steered.length, 1, id);
+  }
+  // None: Quick, Standard, tools off, a helper, a Mission run, a Recon conversation that can use no tool, an Automation task's conversation.
+  const none = [await open('q1'), await open('st'), await open('off1'), await open('h1', { parentSession: 'c1' }), await open('lk')];
+  goals.set('m1', { phase: 'active', activation: 'armed', objective: 'Mission run r-2: tidy\n\nIn each round call the step tool once.' });
+  none.push(await open('m1'));
+  none.push(await app.waterfall('schedule/resolve-agent', 'task-1', async () => (await app.open('task-1')).agent));
+  for (const agent of none) {
+    await userTurn(agent, 1);
+    assert.equal(agent.steered.length, 0, agent.id);
+  }
+  assert.equal(app.service().depthSpoken({ id: 'lk' }), 'standard', 'an isolated conversation that can use no tool has no Depth note');
+  // A reply cut off at the output limit: the turn ends there, no check.
+  const cut = await open('cut');
+  await app.claim(cut, 1);
+  await app.cutOff(cut);
+  await app.turnStopping(cut, 1);
+  assert.equal(cut.steered.length, 0);
+  await userTurn(cut, 2);
+  assert.equal(cut.steered.length, 1, 'the next turn is checked again');
+  // An engine does its whole task again on any new message: no check on an engine.
+  const engine = await open('en');
+  engine.model.current = () => ({ provider: 'engine-opencode', model: 'x' });
+  await userTurn(engine, 1);
+  assert.equal(engine.steered.length, 0);
+  // A question to the user or a plan to approve: still waiting at the end, no check; answered, the rest is checked.
+  const asks = await open('a1');
+  assert.equal(app.guard({ name: 'ask_user_question', agent: { id: 'a1' }, arguments: {} }), undefined, 'the question itself runs');
+  await app.toolResult(asks, 'ask_user_question', { output: { pending: true, callId: 'c', message: 'later' } });
+  await userTurn(asks, 1);
+  assert.equal(asks.steered.length, 0, 'no answer yet');
+  app.guard({ name: 'ask_user_question', agent: { id: 'a1' }, arguments: {} });
+  await app.toolResult(asks, 'ask_user_question', { output: { answers: [{ id: 'q', selected: ['Yes'] }] } });
+  await userTurn(asks, 2);
+  assert.equal(asks.steered.length, 1, 'answered: the work after it is checked');
+  const plans = await open('p1');
+  app.guard({ name: 'exit_plan_mode', agent: { id: 'p1' }, arguments: {} });
+  await app.toolResult(plans, 'exit_plan_mode', { output: { approved: false } });
+  await userTurn(plans, 1);
+  assert.equal(plans.steered.length, 0, 'a dismissed review: the user replies first');
+  app.guard({ name: 'exit_plan_mode', agent: { id: 'p1' }, arguments: {} });
+  await app.toolResult(plans, 'exit_plan_mode', { output: { approved: true } });
+  await userTurn(plans, 2);
+  assert.equal(plans.steered.length, 1, 'an approved plan\'s work is checked');
+  // A question asked during the check step never takes the next turn's check; nor one left open when the turn was stopped.
+  const late = await open('a2');
+  await userTurn(late, 1);
+  app.guard({ name: 'ask_user_question', agent: { id: 'a2' }, arguments: {} });
+  await app.turnStopping(late, 1);
+  await userTurn(late, 2);
+  assert.equal(late.steered.length, 2);
+  const stopped = await open('a3');
+  app.guard({ name: 'ask_user_question', agent: { id: 'a3' }, arguments: {} });
+  await app.emit('agent/status', { agent: stopped, status: 'idle' });
+  await userTurn(stopped, 2);
+  assert.equal(stopped.steered.length, 1);
+  // A failing steer never breaks the turn and leaves no block behind.
+  const broken = await open('b1');
+  broken.steer = () => { throw new Error('closed'); };
+  await userTurn(broken, 1);
+  assert.ok(!refused('b1'));
+  app.stop();
+});
+
+test('with only the final answer shown, there is no check: its one line would hide the answer', async () => {
+  const world = makeWorld({ pruneStaleSessions: false, searchDepth: 'thorough' });
+  const app = boot(world, { chat: { foldedReplies: 'final' } });
+  const agent = (await app.open('f1')).agent;
+  await app.claim(agent, 1);
+  await app.turnStopping(agent, 1);
+  assert.equal(agent.steered.length, 0);
+  app.stop();
+  const shown = boot(makeWorld({ pruneStaleSessions: false, searchDepth: 'thorough' }), { chat: { foldedReplies: 'all' } });
+  const other = (await shown.open('f2')).agent;
+  await shown.claim(other, 1);
+  await shown.turnStopping(other, 1);
+  assert.equal(other.steered.length, 1, 'all replies shown (and without the setting): the check runs');
+  shown.stop();
+});
+
+test('the check is never read as the user naming tools', async () => {
+  const { readFileSync } = await import('node:fs');
+  const host = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  assert.match(host, /message\?\.source\?\.kind !== 'runtime-context' && message\?\.source\?\.kind !== DEPTH_CHECK_KIND/);
+});

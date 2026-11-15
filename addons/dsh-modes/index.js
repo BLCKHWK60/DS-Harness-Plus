@@ -10,6 +10,7 @@
  * Changes apply at a turn boundary (when the Agent is idle), never in the
  * middle of a turn.
  */
+import { randomUUID } from 'node:crypto';
 import z from '@deepseek-ai/schemastery';
 import { IMAGE_TOOLS, WEB_TOOLS, goesOnline, imageToolsOffline, oldWebMarks, parentIdOf, programGoesOnline, researchTab, rootOf, toolMaskFor, webFor, webReaching } from './lib/mask.js';
 import { trashedIds } from './lib/trashed.js';
@@ -18,11 +19,11 @@ import { PROGRAM_TOOL, programNote, programOnly, SLOW_TOOLS } from './lib/ptc.js
 import { helpersBelow, onlyStopNotes, stoppedByUser } from './lib/stop.js';
 import { CORE, FAMILIES, FIND_TOOL, brings, catalog as trimCatalog, mentioned, others as trimOthers, resolveRequest, skillFamilies } from './lib/trim.js';
 import { dropIsolatedNotes, heldMode, isolatedMayRun, modeChangeRefusal } from './lib/isolation.js';
-import { promptText } from './lib/prompt.js';
+import { DEPTH_CHECK_KIND, DEPTH_CHECK_PROMPT, DEPTH_CHECK_REFUSAL, DEPTH_CHECK_SUMMARY, promptText } from './lib/prompt.js';
 import { movedSince, readBase, readEntry, sandboxStep } from './lib/sandbox.js';
 import { beforeFirstMessage, sidebarTabs, tabCount } from './lib/tabs.js';
 
-export { CODE_METHOD, COWORK_METHOD, DEPTH_PROMPTS, DEPTH_SEARCH_PROMPTS, ISOLATED_DEPTH_PROMPTS, ISOLATED_LEVEL_PROMPTS, ISOLATED_OFF_PROMPT, SEARCH_DEPTH_PROMPTS } from './lib/prompt.js';
+export { CODE_METHOD, COWORK_METHOD, DEPTH_CHECK_PROMPT, DEPTH_PROMPTS, DEPTH_SEARCH_PROMPTS, ISOLATED_DEPTH_PROMPTS, ISOLATED_LEVEL_PROMPTS, ISOLATED_OFF_PROMPT, SEARCH_DEPTH_PROMPTS } from './lib/prompt.js';
 
 export const name = 'modes';
 /** The chat box asks here which tools the model can call in a conversation (header `x-dsh-session`). */
@@ -610,7 +611,8 @@ export function apply(ctx, config) {
     try {
       if (!agent?.id || topOf(agent.id) !== agent.id || !trimmed(agent.id, modeOf(agent.id))) return;
       const waiting = [...(agent.inbox?.nextTurn ?? []), ...(agent.inbox?.nextStep ?? [])];
-      const said = waiting.filter((message) => message?.role === 'user' && message?.source?.kind !== 'runtime-context').map((message) => textOf(message)).join('\n');
+      // Not the app's context, and not Thorough's check (its words name a research run).
+      const said = waiting.filter((message) => message?.role === 'user' && message?.source?.kind !== 'runtime-context' && message?.source?.kind !== DEPTH_CHECK_KIND).map((message) => textOf(message)).join('\n');
       // A skill the user started (/office-pptx) brings its family as well.
       const skills = waiting.filter((message) => message?.source?.kind === 'skill-invocation').flatMap((message) => skillFamilies(message.source.name));
       if (addTools(agent.id, [...mentioned(said), ...skills]).length > 0) refreshTools(agent);
@@ -663,6 +665,8 @@ export function apply(ctx, config) {
     if (typeof id !== 'string' || !id || topOf(id) !== id) return 'standard';
     const mode = modeOf(id);
     if (!mode || toolsOff(id) || missionRound(agent)) return 'standard';
+    // An isolated conversation that can use none of its tools (locked, late, or under PTC) gets no Depth words.
+    if (mode.isolated === true && (!Array.isArray(mode.tools) || mode.tools.length === 0 || programOnly(ctx.tools, agent))) return 'standard';
     return depthOf(id);
   }
 
@@ -1171,7 +1175,144 @@ export function apply(ctx, config) {
     });
   }
 
+  // ---- Thorough: one check before the turn ends (step 17) --------------------------------------
+  /** The turn each conversation last got its check in: one check per turn. */
+  const checkedTurn = new Map();
+  /** Conversations in their check step: a tool that would start a whole new run is refused. */
+  const checking = new Set();
+  /** Helpers started during a conversation's check step -> that conversation (refused the same tools). */
+  const checkHelpers = new Map();
+  /** Conversations whose turn last called a tool that asks the user (a question, a plan to approve), still unanswered. */
+  const askedUser = new Set();
+  /** The turn in which each conversation last got a message from its user (typed, a skill, an answer). */
+  const userTurn = new Map();
+  /** Conversations whose current turn had a reply cut off at the output limit: no check then. */
+  const cutOff = new Set();
+  const ASKING_TOOLS = new Set(['ask_user_question', 'exit_plan_mode']);
+  /** Messages that come from the user: a turn without one (a goal round, a helper's notice, an Automation task) gets no check. */
+  const USER_KINDS = new Set(['user', 'skill-invocation', 'user-question-reply']);
+  /** What the check refuses: the tools that start a whole new run (the owner: never start the work over). */
+  const CHECK_BLOCKED = new Set([...SLOW_TOOLS, 'workflow']);
+  /** @returns {object} the check, as a message the app shows as one line, not as the user's. */
+  function checkMessage() {
+    return Object.freeze({
+      id: randomUUID(),
+      role: 'user',
+      content: Object.freeze([Object.freeze({ type: 'text', text: DEPTH_CHECK_PROMPT })]),
+      source: Object.freeze({ kind: DEPTH_CHECK_KIND, form: 'notice', summary: DEPTH_CHECK_SUMMARY }),
+    });
+  }
+  /** @returns {boolean} whether the app shows only a turn's final answer (Settings → General → Replies after collapse). */
+  function finalAnswerOnly() {
+    try {
+      return plain(ctx.get('settings')?.describe?.().find((entry) => entry.ns === 'ui-chat')?.value?.foldedReplies) === 'final';
+    } catch {
+      return false;
+    }
+  }
+  /**
+   * @param {object} agent - live Agent.
+   * @param {number} turn - the turn about to close.
+   * @returns {boolean} whether this turn gets the check: the conversation itself (no helper), a turn
+   *   with a message from its user (not a goal round, a helper's notice or an Automation task), its
+   *   Depth note Thorough (so not with tools off, while a Mission run is on, or in a Recon conversation
+   *   that can use none of its tools), not on an engine (Engines would run its whole task again), and
+   *   not while only the final answer is shown (the check's one line would hide the answer).
+   */
+  function checkWanted(agent, turn) {
+    if (!agent?.id || topOf(agent.id) !== agent.id || !isTopLevel(agent) || scheduled.has(agent.id)) return false;
+    if (userTurn.get(agent.id) !== turn) return false;
+    if (depthSpoken(agent) !== 'thorough') return false;
+    let provider = '';
+    try {
+      provider = String(agent.model?.current?.()?.provider ?? '');
+    } catch {
+      provider = '';
+    }
+    return !provider.startsWith('engine-') && !finalAnswerOnly();
+  }
+  // Which turns the user spoke in; and input the user sends during the check step ends the check's block.
+  ctx.on('agent/inbox/claimed', ({ agent, message, turn }) => {
+    const id = agent?.id;
+    if (!id || !USER_KINDS.has(message?.source?.kind)) return;
+    userTurn.set(id, turn);
+    checking.delete(id);
+  });
+  // A reply cut off at the output limit: the app ends the turn there, and a check step could only leave a tool unanswered.
+  ctx.on('agent/assistant-stream', ({ agent, frame }) => {
+    if (agent?.id && frame?.type === 'chunk' && frame.chunk?.type === 'finish' && frame.chunk.reason?.kind === 'max-tokens') cutOff.add(agent.id);
+  });
+  // The app asks before a turn closes; a listener that steers gets one more step (the check), and
+  // the next ask closes the turn. Only once per turn, so it can never loop.
+  ctx.on('agent/turn-stopping', ({ agent, turn, signal }) => {
+    const id = agent?.id;
+    if (!id) return;
+    try {
+      const asked = askedUser.delete(id);
+      const cut = cutOff.delete(id);
+      // The check step has run: the turn closes now.
+      if (checking.delete(id)) return;
+      if (signal?.aborted || asked || cut || checkedTurn.get(id) === turn || !checkWanted(agent, turn)) return;
+      checkedTurn.set(id, turn);
+      checking.add(id);
+      agent.steer(checkMessage());
+    } catch (error) {
+      checking.delete(id);
+      report(error);
+    }
+  });
+  // A helper started during the check step is held to the check's rule too.
+  ctx.on('agent/created', ({ agent }) => {
+    try {
+      const parent = parentIdOf(agent?.header ?? agent?.session?.header);
+      const root = parent ? rootOf(parent, parents) : null;
+      if (agent?.id && root && checking.has(root)) checkHelpers.set(agent.id, root);
+    } catch {
+      // never in the way of a new conversation
+    }
+  });
+  // A question to the user or a plan to approve that was answered lets the rest of the turn be
+  // checked; one still waiting (no answer in time, a review the user dismissed) does not.
+  ctx.on('tools/result', (exec, result) => {
+    try {
+      const id = exec?.agent?.id;
+      if (!id || !ASKING_TOOLS.has(exec.name)) return;
+      const text = JSON.stringify(result ?? {});
+      const waiting = result?.isError === true || /"pending"\s*:\s*true|"approved"\s*:\s*false|dismissed the plan review/.test(text);
+      if (!waiting) askedUser.delete(id);
+    } catch {
+      // keep the mark: no check rather than a check over an open question
+    }
+  });
+  // During the check, a tool that would start a whole new run is refused (the owner: a check never
+  // starts the work over); small fixes and single searches still run. A question to the user or a
+  // plan to approve is noted, so a turn that ends waiting on the user gets no check.
+  ctx.effect(
+    () =>
+      ctx.tools.guard((exec) => {
+        try {
+          const id = exec?.agent?.id;
+          if (!id) return undefined;
+          if (ASKING_TOOLS.has(exec.name)) {
+            askedUser.add(id);
+            return undefined;
+          }
+          const inCheck = checking.has(id) || checking.has(checkHelpers.get(id));
+          return inCheck && CHECK_BLOCKED.has(exec.name) ? DEPTH_CHECK_REFUSAL : undefined;
+        } catch {
+          return undefined;
+        }
+      }),
+    'modes: the check before finishing never starts the work over',
+  );
+
   ctx.on('agent/status', ({ agent, status }) => {
+    if (status === 'idle' && agent?.id) {
+      checking.delete(agent.id);
+      askedUser.delete(agent.id);
+      cutOff.delete(agent.id);
+      for (const [helper, root] of checkHelpers) if (root === agent.id) checkHelpers.delete(helper);
+    }
     if (status === 'running') {
       // Before the turn's tools are put together.
       refit(agent);
@@ -1363,6 +1504,12 @@ export function apply(ctx, config) {
   });
 
   ctx.on('agent/disposed', ({ agent }) => {
+    checkedTurn.delete(agent.id);
+    checking.delete(agent.id);
+    askedUser.delete(agent.id);
+    userTurn.delete(agent.id);
+    cutOff.delete(agent.id);
+    checkHelpers.delete(agent.id);
     applied.get(agent.id)?.unrestrict?.();
     applied.delete(agent.id);
     fresh.delete(agent.id);

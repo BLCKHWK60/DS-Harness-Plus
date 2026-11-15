@@ -180,3 +180,18 @@ test('the route in a stand-in app: an isolated conversation is found neither by 
   assert.deepEqual(inTab.body.hitIds, ['c1', 'c2', 'r1', 'r2', 'm1', 'm2']);
   assert.equal(inTab.body.total, 0);
 });
+
+test('Thorough\'s check before finishing is never a hit, even in one conversation', async () => {
+  const { CHECK_TEXT, isCheck } = await import('../lib/text.js');
+  const { DEPTH_CHECK_PROMPT } = await import('../../dsh-modes/lib/prompt.js');
+  assert.equal(CHECK_TEXT, DEPTH_CHECK_PROMPT, 'the same words as Modes sends');
+  assert.ok(isCheck(`… ${CHECK_TEXT} …`));
+  assert.ok(isCheck('… check your answer against the request and your working …'), 'a piece of it');
+  assert.ok(!isCheck('… check the login request …'), 'not other text');
+  assert.ok(!isCheck('finish'), 'too short to tell');
+  const events = [['c1', CHECK_TEXT], ['c2', 'please check the request headers']];
+  const search = async ({ query }) => ({
+    items: events.filter(([, text]) => text.toLowerCase().includes(query.toLowerCase())).map(([sessionId, text]) => ({ header: { id: sessionId }, bestMatch: { sessionId, snippet: `… ${text} …` } })),
+  });
+  assert.deepEqual((await searchText(search, 'request')).hits.map((hit) => hit.sessionId), ['c2']);
+});

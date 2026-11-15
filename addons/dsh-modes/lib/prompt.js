@@ -177,6 +177,17 @@ export const DEPTH_PROMPTS_NO_HELPERS = {
 export function depthCare(tools, depth) {
   return (helpersOffered(tools) ? DEPTH_PROMPTS : DEPTH_PROMPTS_NO_HELPERS)[depth] ?? '';
 }
+/**
+ * Thorough's check before finishing (step 17): sent once, just before a Thorough turn would end, in
+ * every tab. The owner's words, with his rule that a check never starts the work over.
+ */
+export const DEPTH_CHECK_PROMPT = 'Before you finish, check your answer against the request and your working method. Fix only what is missing, without starting the work over or starting a new research run, then finish. If nothing is missing, say so in one line.';
+/** Its source kind: the app shows it as a one-line row ("Context injection · depth-check · …"), never as the user's message. */
+export const DEPTH_CHECK_KIND = 'depth-check';
+/** That row's line. */
+export const DEPTH_CHECK_SUMMARY = 'Thorough: one check before finishing';
+/** The reply to a tool that would start a whole new run during that check (the owner: no complete re-runs). */
+export const DEPTH_CHECK_REFUSAL = 'not run: this is the check before finishing, which fixes only what is missing and never starts the work over (no new research run, swarm, pipeline, review lanes or role delegation). Fix what is missing directly, or say in one line what is still missing.';
 export const DEPTH_SEARCH_PROMPTS = {
   quick: 'When you look something up on the web, one search is usually enough: answer from the results, open a page only when the results do not answer the question, keep it short and name the source.',
   thorough: "When you look something up on the web, run at least ten searches with different wording, open and read at least ten pages from different sites with web_fetch (a search result's snippet is not a source), cross-check every key fact, figure and date in at least two independent sources, say plainly where sources disagree, and cite each source with its date. Take the time this needs.",

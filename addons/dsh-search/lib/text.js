@@ -8,10 +8,19 @@
  *     snippet that turns up word for word in three or more conversations is taken to be such a
  *     note and left out.
  * A query of several words finds conversations that hold every word, not only the exact phrase.
+ * Thorough's check before finishing (the Modes add-on) is such a note too, from the first time.
  */
 
 const FILTERS = [{ kind: 'type', values: ['user/message', 'assistant/message'] }, { kind: 'surface', values: ['current'] }];
 const clean = (text) => String(text ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/** The words of Modes' check before finishing (its DEPTH_CHECK_PROMPT; a test keeps the two the same). Copied, so Search works without Modes. */
+export const CHECK_TEXT = 'Before you finish, check your answer against the request and your working method. Fix only what is missing, without starting the work over or starting a new research run, then finish. If nothing is missing, say so in one line.';
+/** @returns {boolean} whether a snippet is a piece of that check, not something said in the conversation. */
+export function isCheck(snippet) {
+  const core = clean(snippet).replace(/^[.…\s]+|[.…\s]+$/g, '').toLowerCase();
+  return core.length >= 12 && CHECK_TEXT.toLowerCase().includes(core);
+}
 
 /**
  * Every hit for one word or phrase, a few pages deep.
@@ -67,7 +76,7 @@ export async function searchText(search, query, { pages = 3, words: most = 4 } =
     more = more || got.more;
     const junk = boilerplate(got.hits);
     const bySession = new Map();
-    for (const hit of got.hits) if (!junk.has(hit.snippet.toLowerCase()) && !bySession.has(hit.sessionId)) bySession.set(hit.sessionId, hit.snippet);
+    for (const hit of got.hits) if (!junk.has(hit.snippet.toLowerCase()) && !isCheck(hit.snippet) && !bySession.has(hit.sessionId)) bySession.set(hit.sessionId, hit.snippet);
     perPart.push(bySession);
   }
   const phrase = perPart[0];

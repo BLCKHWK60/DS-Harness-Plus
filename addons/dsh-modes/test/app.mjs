@@ -54,9 +54,10 @@ export async function settle() {
  * @param {number} [options.writeDelay] - milliseconds a settings write of Modes takes.
  * @param {Map<string, object>} [options.goals] - each conversation's goal as the app's goals service views it: `{ phase, activation, objective }`.
  * @param {(ops: object[]) => boolean} [options.failWrite] - a settings write it returns true for fails (as a refused or crashed write does).
+ * @param {object} [options.chat] - the app's chat settings (`ui-chat`), e.g. `{ foldedReplies: 'final' }`.
  * @returns {object} the running app.
  */
-export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0, home, goals, failWrite } = {}) {
+export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0, home, goals, failWrite, chat } = {}) {
   const { config } = world;
   const handlers = new Map();
   const agents = new Map();
@@ -69,7 +70,7 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
   const sections = new Map();
   let command;
   const settings = {
-    describe: () => [{ ns: 'modes', value: config }, ...(tabs ? [{ ns: 'cowork-shell', value: { maxTabs } }] : [])],
+    describe: () => [{ ns: 'modes', value: config }, ...(tabs ? [{ ns: 'cowork-shell', value: { maxTabs } }] : []), ...(chat ? [{ ns: 'ui-chat', value: chat }] : [])],
     mutate: async (ns, ops) => {
       if (ns !== 'modes') throw new Error(`unexpected namespace ${ns}`);
       if (writeDelay > 0) await new Promise((resolve) => setTimeout(resolve, writeDelay));
@@ -164,6 +165,9 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
       },
       model: { current: () => ({ provider: 'p', model: 'm' }) },
       cancel: () => {},
+      /** Messages steered into the running turn (the app runs one more step for them). */
+      steered: [],
+      steer: (message) => agent.steered.push(message),
     };
     agents.set(id, agent);
     return { agent, masks };
@@ -223,6 +227,18 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
     },
     /** Run the slash command in a conversation. */
     command: (agent, rawInput) => command.handler({ agent, rawInput }),
+    /** A message is claimed into a turn (`agent/inbox/claimed`); `kind` is its source (the user's by default). */
+    claim: (agent, turn, kind = 'user') => emit('agent/inbox/claimed', { agent, turn, message: { role: 'user', content: [], source: { kind } } }),
+    /** A model reply stopped at the output limit (`agent/assistant-stream`). */
+    cutOff: (agent) => emit('agent/assistant-stream', { agent, frame: { type: 'chunk', chunk: { type: 'finish', reason: { kind: 'max-tokens' } } } }),
+    /** A tool's final result (`tools/result`). */
+    toolResult: (agent, name, result) => emit('tools/result', { name, agent, arguments: {} }, result),
+    /** The app asks before a turn closes (`agent/turn-stopping`); `aborted` is the turn's signal. */
+    turnStopping: (agent, turn, { aborted = false } = {}) => {
+      const controller = new AbortController();
+      if (aborted) controller.abort();
+      return emit('agent/turn-stopping', { agent, turn, signal: controller.signal });
+    },
     /** The text Modes adds to a conversation's instructions. */
     prompt: (id) => sections.get(id)?.text({}) ?? '',
     stop: () => disposers.forEach((dispose) => dispose()),
