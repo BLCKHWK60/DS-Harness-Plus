@@ -897,6 +897,8 @@ Nothing uses them yet. Bring them to you for word-for-word approval.
 
 ### Steps
 
+> **Status (15 November 2026):** lab trial 1 done: a conversation outside any project gets the disabled 'Choose a workspace to start' box. The owner chose one hidden 'Scratch' project with a sub-folder per thread.
+
 **Step 32. Scratch place and helpers (no visible change)** (size M)
 
 - What: After lab trial 1 and the owner's answer on the place: make the hidden Scratch place in the app's home (one 'Scratch' project kept out of Plus's project lists and out of 'last used', like the Recon room, or folder-only threads), a sub-folder per thread, a shared isScratch(path) helper that decides by place, creating or reusing a Scratch thread behind no button, and the working-folder guard so a thread's working folder stays in its own sub-folder.
