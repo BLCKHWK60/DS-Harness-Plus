@@ -785,3 +785,28 @@ test('the page code parses: an apostrophe inside a quoted text once took every M
   const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
   assert.doesNotThrow(() => new Function(source));
 });
+
+test('Research and Scout show a fixed "Web · Always on" label (step 21): no list, nothing to change, Off with tools off', async () => {
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  assert.match(source, /researchTab \? h\(WebAlways, \{ t, off: off \|\| lockedHere \}\) : h\(WebButton, \{/);
+  // A Recon conversation moved into Research or Scout is locked with no tools (heldMode): the label reads Off there.
+  assert.match(source, /const lockedHere = readObject\(state\.view\.sessionIsolated\)\[sessionId\] === true && modeDef\.isolated !== true;/);
+  // Off looks off (dimmed), and the fixed label gets no hover highlight.
+  assert.match(source, /\.dsh-mt \.pair\[data-fixed\] button\[aria-pressed='false'\]\{opacity:\.5\}/);
+  assert.match(source, /:not\(\[aria-disabled='true'\]\)\{background:var\(--dsw-alias-interactive-bg-hover\)\}/);
+  const start = source.indexOf('function WebAlways(');
+  const body = source.slice(start, source.indexOf('\n    }\n', start));
+  assert.match(body, /const name = t\(off \? 'web\.off' : 'web\.always'\);/);
+  assert.match(body, /'aria-disabled': 'true'/);
+  assert.match(body, /title: off \? t\('tools\.blocked'\) : t\('web\.always\.hint'\)/);
+  assert.doesNotMatch(body, /onClick|createPortal|onPick/, 'no list and nothing to pick');
+  for (const key of ['web.always', 'web.always.open', 'web.always.hint']) {
+    assert.equal(source.split('\n').filter((line) => line.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+  }
+  // The prompt is unchanged: Research and Scout still get no web note and no searching note (research-1, scout-9).
+  const { promptText, DEPTH_SEARCH_PROMPTS } = await import('../lib/prompt.js');
+  const text = promptText({ mode: { id: 'research', tools: ['deep_research', 'web_search', 'web_fetch'], prompt: 'Research method.' }, web: true, depth: 'thorough' });
+  assert.doesNotMatch(text, /Web is on for this conversation/);
+  assert.ok(!text.includes(DEPTH_SEARCH_PROMPTS.thorough));
+});

@@ -20,6 +20,7 @@ import { helpersBelow, onlyStopNotes, stoppedByUser } from './lib/stop.js';
 import { CORE, FAMILIES, FIND_TOOL, brings, catalog as trimCatalog, mentioned, others as trimOthers, resolveRequest, skillFamilies } from './lib/trim.js';
 import { dropIsolatedNotes, heldMode, isolatedMayRun, modeChangeRefusal } from './lib/isolation.js';
 import { DEPTH_CHECK_KIND, DEPTH_CHECK_PROMPT, DEPTH_CHECK_REFUSAL, DEPTH_CHECK_SUMMARY, promptText } from './lib/prompt.js';
+import { lensIdIn, lensTextIn, ownLensesOf } from './lib/lens.js';
 import { movedSince, readBase, readEntry, sandboxStep } from './lib/sandbox.js';
 import { beforeFirstMessage, sidebarTabs, tabCount } from './lib/tabs.js';
 
@@ -151,6 +152,19 @@ export const Config = z.object({
    * with tools off; a user's own /goal keeps it.
    */
   sessionDepth: z.string().default('{}').volatile(),
+  /**
+   * Per-session Lens as JSON: `{ sessionId: 'blunt' | 'scientific' | 'journalistic' | 'data-only' |
+   * 'skeptic' | 'encouraging' }` (missing or unknown = Default, which adds nothing). How the answer is
+   * worded (lib/lens.js, texts approved word for word). Its own section after the standing texts.
+   * Not for helpers, and paused during a /learn study session. No button yet (Lens part, step 28).
+   */
+  sessionLens: z.string().default('{}').volatile(),
+  /**
+   * Your own Lenses (Lens part, step 30): `[{ name, text }]`, at most 40, names up to 40 characters,
+   * texts up to 4,000, no name of a shipped Lens. Each gets the same guard as every Lens. Edited on
+   * Settings → Modes; kept in these settings, so Shared settings carries them to a second Mac.
+   */
+  ownLenses: z.array(z.object({ id: z.string(), name: z.string(), text: z.string() })).default([]).volatile(),
   /** Each conversation's former Web level has been moved into its Depth (once, since 0.59.0). */
   depthMoved: z.boolean().default(false).volatile(),
   /** Per-session tools switch as JSON: `{ sessionId: false }`. While off, the model is offered no tool at all. */
@@ -1033,7 +1047,43 @@ export function apply(ctx, config) {
         }),
       'modes prompt section',
     );
-    promptDisposers.set(agent.id, dispose);
+    // The Lens: its own section, after the standing texts (tiers 70, Self-improve's lessons 72), so it
+    // wins on wording, as the owner chose; empty for Default, for helpers and during a study session.
+    const disposeLens = agent.ctx.effect(
+      () => agent.ctx.systemPrompt.section({ name: 'modes:lens', order: 73, interpolate: false, text: () => lensSaid(agent) }),
+      'modes lens section',
+    );
+    promptDisposers.set(agent.id, () => {
+      dispose?.();
+      disposeLens?.();
+    });
+  }
+
+  /** @returns {string} a conversation's Lens id: its own pick, else Default (a helper follows its conversation). */
+  function lensOf(sessionId) {
+    // A Lens of your own that was removed is Default again.
+    return lensIdIn(readObject(config.sessionLens)[topOf(sessionId)], ownLensesOf(plain(config.ownLenses)));
+  }
+  /** @returns {string} the text the model is told for a conversation's Lens ('' for Default). */
+  function lensWordsOf(sessionId) {
+    return lensTextIn(lensOf(sessionId), ownLensesOf(plain(config.ownLenses)));
+  }
+  /**
+   * @param {object} agent - live Agent.
+   * @returns {string} the Lens text its instructions carry: '' for Default, for a helper (searchers and
+   *   workers stay neutral), and while Learn's tutor runs a study session in it (the owner: the Lens
+   *   pauses; without Learn it simply stays). It stays with tools off and under a model version that
+   *   stands alone ("Use only these"), like the Web and Depth notes.
+   */
+  function lensSaid(agent) {
+    try {
+      const id = agent?.id;
+      if (!id || topOf(id) !== id) return '';
+      if (ctx.get('learning')?.studying?.(id) === true) return '';
+      return lensWordsOf(id);
+    } catch {
+      return '';
+    }
   }
 
   ctx.effect(() => () => {
@@ -1632,7 +1682,7 @@ export function apply(ctx, config) {
       // Without an app home there is no trash (the Cowork sidebar keeps it there).
       const trashed = typeof home === 'function' ? trashedIds(home('trash', 'conversations')) : new Set();
       if (trashed === null) return;
-      const fields = ['sessionModes', 'sessionWeb', 'sessionResearch', 'sessionSearchDepth', 'sessionDepth', 'sessionTools', 'sessionHelpers', 'sessionIsolated', 'sessionToolSets', 'sessionSandboxBase'];
+      const fields = ['sessionModes', 'sessionWeb', 'sessionResearch', 'sessionSearchDepth', 'sessionDepth', 'sessionLens', 'sessionTools', 'sessionHelpers', 'sessionIsolated', 'sessionToolSets', 'sessionSandboxBase'];
       const ids = new Set(fields.flatMap((field) => Object.keys(readObject(config[field]))));
       const gone = new Set();
       for (const sessionId of ids) {
@@ -1681,6 +1731,27 @@ export function apply(ctx, config) {
      */
     depthOf(sessionId) {
       return depthOf(sessionId);
+    },
+    /**
+     * @param {string} sessionId - a conversation (or one of its helpers: the top conversation counts).
+     * @returns {string} its Lens id ('default' when none is picked).
+     */
+    lens(sessionId) {
+      return lensOf(sessionId);
+    },
+    /**
+     * @param {string} sessionId - a conversation (or one of its helpers).
+     * @returns {string} its Lens text for Deep research's report writer ('' for Default, and while a
+     *   study session runs in the conversation).
+     */
+    lensWords(sessionId) {
+      try {
+        const top = topOf(String(sessionId ?? ''));
+        if (!top || ctx.get('learning')?.studying?.(top) === true) return '';
+        return lensWordsOf(top);
+      } catch {
+        return '';
+      }
     },
     /**
      * @param {object} agent - live Agent.

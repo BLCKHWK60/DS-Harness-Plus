@@ -33,7 +33,7 @@ const SUITE_NAME = /^[A-Za-z0-9][A-Za-z0-9 _.-]{0,59}$/;
 const JOB_ID = /^\d{14}-\d{1,6}$/;
 
 const graderSchema = z.object({
-  type: z.union([z.const('exact'), z.const('contains'), z.const('regex'), z.const('judge')]).required(),
+  type: z.union([z.const('exact'), z.const('contains'), z.const('regex'), z.const('noneOf'), z.const('judge')]).required(),
   expect: z.string(),
   rubric: z.string(),
 });
@@ -97,6 +97,15 @@ function plain(value) {
 // ---- pure helpers (exported for tests) -------------------------------------------------
 
 /**
+ * The phrases of a 'none of these' grader: separated by | or new lines, in lower case, spaces made single.
+ * @param {string} expect - the grader's text.
+ * @returns {string[]} the phrases (empty ones left out).
+ */
+export function phrasesOf(expect) {
+  return String(expect ?? '').split(/\||\n/).map((phrase) => phrase.trim().toLowerCase().replace(/\s+/g, ' ')).filter(Boolean);
+}
+
+/**
  * Score one answer with a non-judge grader.
  * @param {{type: string, expect?: string}} grader - grader definition.
  * @param {string} answer - model answer.
@@ -112,6 +121,11 @@ export function gradeLocal(grader, answer) {
       return text.toLowerCase().includes(expect.toLowerCase()) ? 1 : 0;
     case 'regex':
       return new RegExp(expect, 'i').test(text) ? 1 : 0;
+    case 'noneOf': {
+      // Passes when the answer holds none of the phrases, in any letter case, also across lines.
+      const flat = text.toLowerCase().replace(/\s+/g, ' ');
+      return phrasesOf(expect).some((phrase) => flat.includes(phrase)) ? 0 : 1;
+    }
     default:
       throw new Error(`not a local grader: ${grader.type}`);
   }
@@ -292,13 +306,14 @@ export function renderReport(cells, picks) {
 export function promptProblem(prompt, hasJudge) {
   if (!String(prompt?.prompt ?? '').trim()) return 'has no text';
   const grader = prompt.grader ?? {};
-  if (!['exact', 'contains', 'regex', 'judge'].includes(grader.type)) return 'has no way to grade the answer';
+  if (!['exact', 'contains', 'regex', 'noneOf', 'judge'].includes(grader.type)) return 'has no way to grade the answer';
   if (grader.type === 'judge') {
     if (!String(grader.rubric ?? '').trim()) return 'needs a description of a good answer for the judge';
     if (!hasJudge) return 'is graded by the judge, but no judge model is set';
     return '';
   }
   if (!String(grader.expect ?? '')) return 'needs the text to look for';
+  if (grader.type === 'noneOf' && phrasesOf(grader.expect).length === 0) return 'needs at least one phrase the answer must not contain';
   if (grader.type === 'regex') {
     try {
       new RegExp(grader.expect, 'i');

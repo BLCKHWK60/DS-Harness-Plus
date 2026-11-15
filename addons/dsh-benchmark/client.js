@@ -28,7 +28,196 @@ window.__ModuleLoader__.load({
       { id: 'contains', label: 'Contains this text', hint: 'Passes when the answer contains the text, in any letter case.', field: 'expect', placeholder: 'Text the answer must contain' },
       { id: 'exact', label: 'Is exactly this text', hint: 'Passes only when the whole answer equals the text (spaces at the ends are ignored).', field: 'expect', placeholder: 'The exact answer' },
       { id: 'regex', label: 'Matches a pattern', hint: 'Passes when the answer matches a regular expression. For people who know them.', field: 'expect', placeholder: 'A regular expression, for example ^\\d+$' },
+      { id: 'noneOf', label: 'Contains none of these', hint: 'Passes when the answer contains none of the phrases, in any letter case, also across lines. Separate the phrases with |.', field: 'expect', placeholder: 'phrase one | phrase two' },
       { id: 'judge', label: 'The judge scores it', hint: 'The judge model reads the answer and scores it from 1 to 5 against your description of a good answer.', field: 'rubric', placeholder: 'Describe what a good answer looks like' },
+    ];
+
+    /**
+     * The Lenses suite (Lens part, step 25): each Lens's text, exactly as Modes has it (a test keeps the
+     * two the same), as the system text of three questions. Benchmark puts it before the message, so the
+     * results are a guide, not proof of how a conversation follows it.
+     */
+    const LENS_SUITE = [
+      {
+        "id": "blunt-1",
+        "prompt": "I plan to open a video rental shop in 2026. Is it a good idea?",
+        "system": "Lens: Blunt. The most direct Lens. Answer first, at whatever length the question needs. No softening, euphemism, praise, reassurance or moral commentary, and no concern for whose feelings a fact hurts. Give the most likely explanation, not the most charitable one. Mark each key claim as fact, inference or guess; where this tab already labels claims its own way, use its labels instead. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "noneOf",
+          "expect": "great question | i hope this helps | rest assured | don't worry | i understand that | to be fair | it's important to | it is important to",
+          "rubric": ""
+        }
+      },
+      {
+        "id": "blunt-2",
+        "prompt": "Is it fine to skip my car's oil changes for two years?",
+        "system": "Lens: Blunt. The most direct Lens. Answer first, at whatever length the question needs. No softening, euphemism, praise, reassurance or moral commentary, and no concern for whose feelings a fact hurts. Give the most likely explanation, not the most charitable one. Mark each key claim as fact, inference or guess; where this tab already labels claims its own way, use its labels instead. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "judge",
+          "expect": "",
+          "rubric": "Answers yes or no in the first sentence, with no softening, reassurance or praise. Gives the most likely consequence plainly. Marks key claims as fact, inference or guess."
+        }
+      },
+      {
+        "id": "blunt-3",
+        "prompt": "Why do most diets fail?",
+        "system": "Lens: Blunt. The most direct Lens. Answer first, at whatever length the question needs. No softening, euphemism, praise, reassurance or moral commentary, and no concern for whose feelings a fact hurts. Give the most likely explanation, not the most charitable one. Mark each key claim as fact, inference or guess; where this tab already labels claims its own way, use its labels instead. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "noneOf",
+          "expect": "great question | i hope this helps | rest assured | don't worry | i understand that | to be fair | it's important to | it is important to",
+          "rubric": ""
+        }
+      },
+      {
+        "id": "scientific-1",
+        "prompt": "Does intermittent fasting help people lose weight?",
+        "system": "Lens: Scientific. Rank the evidence: reviews, trials, single studies, opinion. Give sample sizes, effect sizes and whether it was replicated. Say what would change the conclusion. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "judge",
+          "expect": "",
+          "rubric": "Ranks the evidence by kind (reviews, trials, single studies, opinion), gives sample or effect sizes or says they are not known, says whether results were replicated, and says what would change the conclusion. Invents no study."
+        }
+      },
+      {
+        "id": "scientific-2",
+        "prompt": "Is creatine safe for healthy adults?",
+        "system": "Lens: Scientific. Rank the evidence: reviews, trials, single studies, opinion. Give sample sizes, effect sizes and whether it was replicated. Say what would change the conclusion. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "noneOf",
+          "expect": "studies prove | science says | it is a proven fact | 100% safe",
+          "rubric": ""
+        }
+      },
+      {
+        "id": "scientific-3",
+        "prompt": "Do blue-light glasses reduce eye strain?",
+        "system": "Lens: Scientific. Rank the evidence: reviews, trials, single studies, opinion. Give sample sizes, effect sizes and whether it was replicated. Say what would change the conclusion. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "judge",
+          "expect": "",
+          "rubric": "Ranks the evidence by kind, names how strong it is, and says what would change the conclusion. Anything not checked is called an inference or a guess."
+        }
+      },
+      {
+        "id": "journalistic-1",
+        "prompt": "What happened in the 2008 financial crisis?",
+        "system": "Lens: Journalistic. Who, what, when, where, and how we know. Every claim attributed. Confirmed kept apart from alleged. Say what is still unknown. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "judge",
+          "expect": "",
+          "rubric": "Covers who, what, when and where, says how we know, attributes every claim, keeps confirmed apart from alleged, and says what is still unknown."
+        }
+      },
+      {
+        "id": "journalistic-2",
+        "prompt": "Who founded Wikipedia, and when?",
+        "system": "Lens: Journalistic. Who, what, when, where, and how we know. Every claim attributed. Confirmed kept apart from alleged. Say what is still unknown. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "noneOf",
+          "expect": "everyone knows | it is widely believed | some say | many people believe",
+          "rubric": ""
+        }
+      },
+      {
+        "id": "journalistic-3",
+        "prompt": "What is known about the cause of the 1986 Chernobyl accident?",
+        "system": "Lens: Journalistic. Who, what, when, where, and how we know. Every claim attributed. Confirmed kept apart from alleged. Say what is still unknown. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "judge",
+          "expect": "",
+          "rubric": "Attributes each claim to a source, keeps confirmed facts apart from claims, and says what is still unknown."
+        }
+      },
+      {
+        "id": "data-only-1",
+        "prompt": "How has the world population changed since 1950?",
+        "system": "Lens: Data only. Numbers, tables and charts with sources. No interpretation beyond what the figures show. \"No data\" said plainly. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "noneOf",
+          "expect": "this suggests | this means that | which indicates | in my opinion | i think | it seems | interestingly",
+          "rubric": ""
+        }
+      },
+      {
+        "id": "data-only-2",
+        "prompt": "Give the population of Germany, France and Italy.",
+        "system": "Lens: Data only. Numbers, tables and charts with sources. No interpretation beyond what the figures show. \"No data\" said plainly. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "judge",
+          "expect": "",
+          "rubric": "Gives the figures, ideally in a table, each with a source or a note that it is from memory. Adds no interpretation beyond what the figures show. Says \"No data\" plainly where it has none."
+        }
+      },
+      {
+        "id": "data-only-3",
+        "prompt": "What is the average monthly rainfall in Paris?",
+        "system": "Lens: Data only. Numbers, tables and charts with sources. No interpretation beyond what the figures show. \"No data\" said plainly. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "noneOf",
+          "expect": "this suggests | this means that | which indicates | in my opinion | i think | it seems | interestingly",
+          "rubric": ""
+        }
+      },
+      {
+        "id": "skeptic-1",
+        "prompt": "I plan to quit my job and day-trade full time with my savings.",
+        "system": "Lens: Skeptic. Argue the strongest case against it. List what would have to be true, and what breaks first. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "judge",
+          "expect": "",
+          "rubric": "Argues the strongest case against the plan, lists what would have to be true for it to work, and says what breaks first. Does not cheer the plan on."
+        }
+      },
+      {
+        "id": "skeptic-2",
+        "prompt": "Our startup will grow 20% every month for the next three years.",
+        "system": "Lens: Skeptic. Argue the strongest case against it. List what would have to be true, and what breaks first. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "noneOf",
+          "expect": "great idea | sounds like a solid plan | sounds promising | you've got this | i love this",
+          "rubric": ""
+        }
+      },
+      {
+        "id": "skeptic-3",
+        "prompt": "This article says coffee prevents cancer. Should I trust it?",
+        "system": "Lens: Skeptic. Argue the strongest case against it. List what would have to be true, and what breaks first. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "judge",
+          "expect": "",
+          "rubric": "Argues the strongest case against the claim and the source, lists what would have to be true, and says what breaks first."
+        }
+      },
+      {
+        "id": "encouraging-1",
+        "prompt": "I failed my driving test twice. What now?",
+        "system": "Lens: Encouraging. The same facts, nothing hidden. Lead with what works and the next step. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "judge",
+          "expect": "",
+          "rubric": "Keeps the same facts with nothing hidden, leads with what works and gives a concrete next step."
+        }
+      },
+      {
+        "id": "encouraging-2",
+        "prompt": "My refactor left 40 failing tests.",
+        "system": "Lens: Encouraging. The same facts, nothing hidden. Lead with what works and the next step. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "noneOf",
+          "expect": "hopeless | give up | not cut out for",
+          "rubric": ""
+        }
+      },
+      {
+        "id": "encouraging-3",
+        "prompt": "My first novel was rejected by ten publishers.",
+        "system": "Lens: Encouraging. The same facts, nothing hidden. Lead with what works and the next step. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+        "grader": {
+          "type": "judge",
+          "expect": "",
+          "rubric": "States the facts plainly, hides nothing, leads with what works and the next step."
+        }
+      }
     ];
 
     const EN = {
@@ -112,6 +301,8 @@ window.__ModuleLoader__.load({
       'suites.head': 'Suites',
       'suites.new': 'New suite',
       'suites.example': 'Add an example suite',
+      'suites.lenses': 'Add the Lenses suite',
+      'suites.lenses.hint': 'Each Lens of the chat box (its text as the system text) on three questions: two judged against what the Lens asks for, one checked for phrases it must not use. Needs a judge model for the judged ones. A guide only: here the Lens comes before the message, in a conversation it is in the instructions.',
       'suites.empty': 'No suites yet. A suite is a set of prompts with a way to grade each answer.',
       'suite.name': 'Name',
       'suite.category': 'Category',
@@ -782,6 +973,10 @@ textarea.dsh-bm-field { height: auto; min-height: 60px; padding: 8px 14px; line-
                 ],
               }]]),
             }, t('suites.example')),
+            h('button', {
+              type: 'button', className: 'dsh-bm-btn', 'data-act': 'lenses-suite', disabled: saving, title: t('suites.lenses.hint'),
+              onClick: () => saveSuites([...entries, [freeName('lenses'), { category: 'lens', prompts: LENS_SUITE }]]),
+            }, t('suites.lenses')),
             h('button', {
               type: 'button', className: 'dsh-bm-btn', 'data-main': 'true', 'data-act': 'new-suite', disabled: saving,
               onClick: () => saveSuites([...entries, [freeName('suite'), { category: 'general', prompts: [] }]]),

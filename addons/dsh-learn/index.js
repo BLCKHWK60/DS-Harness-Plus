@@ -429,7 +429,13 @@ export function apply(ctx, config) {
     } else ctx.logger?.warn?.('learn: the skills service is not available; the study-tutor skill is not registered');
   }
 
-  ctx.effect(() => ctx.provide('learning', Object.freeze({ apiVersion: 1, due: () => dueIdeas(store.topics(), Date.now()), stats: () => store.stats() })), 'learning service');
+  ctx.effect(() => ctx.provide('learning', Object.freeze({
+    apiVersion: 1,
+    due: () => dueIdeas(store.topics(), Date.now()),
+    stats: () => store.stats(),
+    /** Whether a study session runs in a conversation (Modes pauses its Lens then: the tutor holds back answers). */
+    studying: (sessionId) => settings().enabled && Boolean(sessions.get(String(sessionId ?? ''))),
+  })), 'learning service');
 
   /** Everything the progress page shows. */
   function overview() {

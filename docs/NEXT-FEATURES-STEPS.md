@@ -404,7 +404,7 @@ Written 2026-11-15 from step 0 of "DeepSeek Harness Plus next features plan" (th
 > - **Step 17** is done (0.59.0): the check in every tab, Recon and Research as research-level modes and Scout included, with the owner's words and his rule that a check never starts the work over (long-running tools refused during the check).
 > - **Step 18** (per-tab starting Depth and per-tab stops) and **step 19** (per-tab Web level) are **dropped**: one Depth start for all tabs, and the Web button has no levels.
 > - **Step 20** is done, differently: Research's own Depth is gone (its value not carried over); research runs follow the starting conversation's Depth, and Research and Scout get Depth's care note too.
-> - **Step 21** (a 'Web · Always on' button in Research and Scout) is still open.
+> - **Step 21** is done (0.59.1): Research and Scout show a fixed 'Web · Always on' label (Off with tools off).
 > - **Step 22** (Effort follows a Depth pick) is **dropped**: the owner chose "Effort = thinking only".
 > - **Step 23** is done, differently: Recon has the full Depth (care note plus its search effort), not an effort-only button.
 
@@ -658,6 +658,8 @@ Each tab also fixes the order of its answers: Finance's 'Shape of a full answer'
 - **What Put back from the trash keeps (for the Trash part)** Why: Modes clears entries for conversations that are no longer stored, so a conversation put back after a restart may come back without its Web, Tools, Lens and isolation marks. How: In the lab: set Web Off on a conversation, delete it, restart, Put back, and read its Modes entries.
 
 ### Steps
+
+> **Status (15 November 2026):** step 24 done (texts approved word for word), step 25 done (Benchmark's 'Contains none of these' grader and the Lenses suite; the owner runs it on his models). Step 26 done: the Lens in its own section (order 73), kept under 'Use only these', paused during a study session. Step 27 done: Deep research's report writer follows the Lens (planner, searchers, review neutral). Step 28 done: the Lens chips inside the Depth list (button 'Depth · Thorough · Blunt'), the Web Off hint for fact Lenses. Step 29 dropped (owner, 15 November, after the one-Depth rule): every new conversation starts on Default; no starting Lens per tab. Step 30 done: your own Lenses on Settings → Modes (40, 40 characters, 4,000 characters, shipped names refused, the same guard).
 
 **Step 24. Lens texts, hidden** (size S)
 

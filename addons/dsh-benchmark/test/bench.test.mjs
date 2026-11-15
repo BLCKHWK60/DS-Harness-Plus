@@ -253,3 +253,43 @@ test('no model names, hosts or keys are shipped in the bundle patch', () => {
   const patch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8').split('\n').filter((line) => !line.trim().startsWith('#')).join('\n');
   assert.doesNotMatch(patch, /provider:|model:|apiKey|http/);
 });
+
+test('"Contains none of these": passes only when no phrase is there, in any letter case, also across lines', async () => {
+  const { gradeLocal, phrasesOf, promptProblem } = await import('../index.js');
+  const grader = { type: 'noneOf', expect: 'Great question | I hope this helps\nrest  assured' };
+  assert.deepEqual(phrasesOf(grader.expect), ['great question', 'i hope this helps', 'rest assured']);
+  assert.equal(gradeLocal(grader, 'The shop will fail: rentals are gone.'), 1);
+  assert.equal(gradeLocal(grader, 'GREAT QUESTION. The shop will fail.'), 0, 'any letter case');
+  assert.equal(gradeLocal(grader, 'It fails.\nI hope\n  this helps.'), 0, 'across lines');
+  assert.equal(gradeLocal(grader, 'Rest assured, it fails.'), 0);
+  // The other graders give the same results as before.
+  assert.equal(gradeLocal({ type: 'contains', expect: 'Paris' }, 'paris'), 1);
+  assert.equal(gradeLocal({ type: 'exact', expect: '42' }, ' 42 '), 1);
+  assert.equal(gradeLocal({ type: 'regex', expect: '^\\d+$' }, '42'), 1);
+  // A suite prompt needs at least one phrase.
+  assert.equal(promptProblem({ prompt: 'x', grader: { type: 'noneOf', expect: ' | \n ' } }, false), 'needs at least one phrase the answer must not contain');
+  assert.equal(promptProblem({ prompt: 'x', grader: { type: 'noneOf', expect: 'a | b' } }, false), '');
+});
+
+test('the Lenses suite: each Lens, as Modes sends it, on three questions, two judged and one checked for phrases', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { promptProblem } = await import('../index.js');
+  const { LENS_IDS, LENS_PROMPTS } = await import('../../dsh-modes/lib/lens.js');
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  const start = source.indexOf('const LENS_SUITE = ') + 'const LENS_SUITE = '.length;
+  const suite = JSON.parse(source.slice(start, source.indexOf(';\n\n    const EN = {', start)));
+  const lenses = LENS_IDS.filter((id) => id !== 'default');
+  assert.equal(suite.length, lenses.length * 3);
+  for (const id of lenses) {
+    const mine = suite.filter((prompt) => prompt.id.startsWith(`${id}-`));
+    assert.equal(mine.length, 3, id);
+    for (const prompt of mine) assert.equal(prompt.system, LENS_PROMPTS[id], `${prompt.id}: the approved text, word for word`);
+    assert.equal(mine.filter((prompt) => prompt.grader.type === 'noneOf').length >= 1, true, id);
+    assert.equal(mine.filter((prompt) => prompt.grader.type === 'judge').length >= 1, true, id);
+  }
+  // Every prompt is valid with a judge set; the judged ones say what they need without one.
+  for (const prompt of suite) assert.equal(promptProblem(prompt, true), '', prompt.id);
+  assert.equal(promptProblem(suite.find((prompt) => prompt.grader.type === 'judge'), false), 'is graded by the judge, but no judge model is set');
+  assert.match(source, /onClick: \(\) => saveSuites\(\[\.\.\.entries, \[freeName\('lenses'\), \{ category: 'lens', prompts: LENS_SUITE \}\]\]\)/);
+  assert.match(source, /\{ id: 'noneOf', label: 'Contains none of these'/);
+});

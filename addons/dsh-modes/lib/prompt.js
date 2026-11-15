@@ -221,7 +221,7 @@ export function promptText({ mode, child = false, off = false, alone = false, we
       programOnly ? ISOLATED_PTC_PROMPT : '',
     ]);
   }
-  // A research tab (Research, Scout) has no Web button and works by its own method: no web note, no Web level.
+  // A research tab (Research, Scout) always has the web (a fixed label) and works by its own method: no web note, no searching note.
   const ownSearch = researchTab(mode.tools);
   // The web tools on offer: those the step admits (a provider without a key is not), or all while it is not known.
   const webTools = !web ? [] : Array.isArray(stepWeb) ? WEB_TOOLS.filter((name) => stepWeb.includes(name)) : WEB_TOOLS;

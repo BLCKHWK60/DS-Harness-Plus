@@ -34,6 +34,7 @@ export const ALWAYS_SKIP = [
   'modes.sessionIsolated',
   'modes.sessionSearchDepth',
   'modes.sessionDepth',
+  'modes.sessionLens',
   // The one-time move of this Mac's Web levels into Depth: shared, it would stop the other Mac's own move.
   'modes.depthMoved',
   'modes.sessionTools',

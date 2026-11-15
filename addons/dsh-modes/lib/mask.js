@@ -35,7 +35,7 @@ export function webReaching(known) {
   return (Array.isArray(known) ? known : []).filter((name) => !LOCAL_ONLY.includes(name) && (WEB_REACHING.names.includes(name) || WEB_REACHING.prefixes.some((prefix) => name.startsWith(prefix))));
 }
 
-/** @returns {boolean} whether a mode is a research tab (it lists the research tool): it has no Web button and always has the web. */
+/** @returns {boolean} whether a mode is a research tab (it lists the research tool): it always has the web, and shows a fixed 'Web · Always on' label instead of a Web button. */
 export function researchTab(tools) {
   return Array.isArray(tools) && tools.includes(RESEARCH_TOOL);
 }
@@ -51,7 +51,7 @@ export function researchTab(tools) {
  */
 export function webFor({ tools, isolated, off, chosen }) {
   if (off || isolated) return false;
-  // The Research tab always researches with the web; it has no Web button to change it with.
+  // The Research tab always researches with the web; its Web label is fixed (Always on).
   if (researchTab(tools)) return true;
   return typeof chosen === 'boolean' ? chosen : webDefault(tools);
 }

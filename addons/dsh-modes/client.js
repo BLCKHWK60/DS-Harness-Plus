@@ -133,6 +133,36 @@ window.__ModuleLoader__.load({
         'depth.label': 'Depth',
         'depth.title': 'Depth',
         'depth.open': 'Depth: {0}. Click to change.',
+        'depth.open.lens': 'Depth: {0}, Lens: {1}. Click to change.',
+        'lens.title': 'Lens: how the answer is worded',
+        'lens.default': 'Default',
+        'lens.blunt': 'Blunt',
+        'lens.scientific': 'Scientific',
+        'lens.journalistic': 'Journalistic',
+        'lens.data-only': 'Data only',
+        'lens.skeptic': 'Skeptic',
+        'lens.encouraging': 'Encouraging',
+        'lens.default.hint': 'Everyday use. Adds nothing.',
+        'lens.blunt.hint': 'The plain truth, no cushioning',
+        'lens.scientific.hint': 'Health, technology, anything with studies',
+        'lens.journalistic.hint': 'Events, people, organisations',
+        'lens.data-only.hint': 'Figures you will judge yourself',
+        'lens.skeptic.hint': 'Testing a plan, a claim or a source',
+        'lens.encouraging.hint': 'When you want momentum',
+        'lens.note': 'For this conversation only. A Lens changes how the answer is worded, never which facts are gathered; the tab\'s own rules come first.',
+        'lens.web.off': 'Web is Off here: this Lens labels anything it could not check as an inference or a guess. Switch Web on to check facts.',
+        'lens.own.hint': 'Your own Lens (Settings → Modes)',
+        'own.group': 'Your own Lenses',
+        'own.hint': 'Lenses you write yourself appear in the chat box\'s Depth list after the six that come with Plus. At most 40, names up to 40 characters, texts up to 4,000. Each gets the same closing lines as every Lens: the tab\'s own rules, labels and order come first, and a required warning is not softening. Kept in Modes\' settings, so Shared settings carries them to your other Mac. A conversation whose Lens you remove goes back to Default.',
+        'own.name': 'Name',
+        'own.text': 'What the model is told',
+        'own.add': 'Add a Lens',
+        'own.remove': 'Remove',
+        'own.save': 'Save your Lenses',
+        'own.saved': 'Saved.',
+        'own.full': 'You have 40 Lenses of your own, the most there can be.',
+        'own.empty': 'None yet.',
+        'own.problem': 'Lens {n} {problem}.',
         'depth.quick.hint': 'One short pass with quick checks; usually one web search. Helpers only when the tier asks for them.',
         'depth.standard.hint': 'As the working method says; the model decides how much to search. Adds nothing.',
         'depth.thorough.hint': 'A short plan first, 10+ searches with facts checked in two sources, its own work checked before finishing, and one review by a helper when helpers are allowed. Slower.',
@@ -160,6 +190,9 @@ window.__ModuleLoader__.load({
         'web.note': 'For this conversation only: whether the model may go online. How much it searches is set by Depth. In-depth research with many helpers is in the Research tab.',
         'web.on': 'On',
         'web.on.hint': 'The model may search the web, read pages and use other tools and programs that go online. How much it searches is set by Depth.',
+        'web.always': 'Always on',
+        'web.always.open': 'Web access: {0}. Fixed in this tab.',
+        'web.always.hint': 'Always on in this tab: searching is its work. Only the Tools switch takes the web away. How much it searches is set by Depth.',
         'trim.group': 'Load tools as needed',
         'trim.hint': 'A mode switched on below starts each conversation with the core tools only (files, shell, step list, questions, skills, web) and a tool that adds the others when needed: PDF, data, finance, diagrams, scheduling, helpers and more. Your message adds them too when it names them ("read this PDF"). Requests are far smaller, so local models answer sooner. Added tools stay for the rest of the conversation.',
         'trim.mode': '{mode}: load tools as needed',
@@ -297,6 +330,36 @@ window.__ModuleLoader__.load({
         'depth.label': '细致度',
         'depth.title': '细致度',
         'depth.open': '细致度：{0}。点击更改。',
+        'depth.open.lens': '细致度：{0}，视角：{1}。点击更改。',
+        'lens.title': '视角：回答的措辞方式',
+        'lens.default': '默认',
+        'lens.blunt': '直言',
+        'lens.scientific': '科学',
+        'lens.journalistic': '新闻',
+        'lens.data-only': '只给数据',
+        'lens.skeptic': '质疑',
+        'lens.encouraging': '鼓励',
+        'lens.default.hint': '日常使用。不额外添加内容。',
+        'lens.blunt.hint': '直截了当，不加缓冲',
+        'lens.scientific.hint': '健康、技术，任何涉及研究的话题',
+        'lens.journalistic.hint': '事件、人物、机构',
+        'lens.data-only.hint': '只给数据，由你自己判断',
+        'lens.skeptic.hint': '检验计划、说法或来源',
+        'lens.encouraging.hint': '想要动力的时候',
+        'lens.note': '仅对本对话生效。视角只改变回答的措辞，从不改变收集哪些事实；标签页自己的规则优先。',
+        'lens.web.off': '此处联网已关闭：此视角会把无法核实的内容标为推断或猜测。开启联网以核实事实。',
+        'lens.own.hint': '你自己的视角（设置 → 模式）',
+        'own.group': '你自己的视角',
+        'own.hint': '你自己写的视角会出现在输入框细致度列表中，排在 Plus 自带的六个之后。最多 40 个，名称最多 40 个字符，文字最多 4,000 个字符。每个都会加上与所有视角相同的结尾：标签页自己的规则、标签和顺序优先，必要的警告不算软化。保存在模式的设置中，因此共享设置会把它们带到你的另一台 Mac。删除某个视角后，使用它的对话会回到默认。',
+        'own.name': '名称',
+        'own.text': '告诉模型的内容',
+        'own.add': '添加视角',
+        'own.remove': '删除',
+        'own.save': '保存你的视角',
+        'own.saved': '已保存。',
+        'own.full': '你已有 40 个自己的视角，已达上限。',
+        'own.empty': '还没有。',
+        'own.problem': '视角 {n} {problem}。',
         'depth.quick.hint': '简短一遍，只做快速检查；通常只搜索一次。仅在层级要求时才使用助手。',
         'depth.standard.hint': '按工作方法进行，由模型决定搜索多少。不额外添加内容。',
         'depth.thorough.hint': '先做简短计划，10 次以上搜索并以两个来源核实事实，完成前检查自己的工作；允许使用助手时，由一个助手复核一次。较慢。',
@@ -324,6 +387,9 @@ window.__ModuleLoader__.load({
         'web.note': '仅对本对话生效：模型是否可以联网。搜索多少由细致度决定。多助手的深入研究请使用"研究"标签页。',
         'web.on': '开启',
         'web.on.hint': '模型可以搜索网页、阅读页面，并使用其他联网的工具和程序。搜索多少由细致度决定。',
+        'web.always': '始终开启',
+        'web.always.open': '联网访问：{0}。此标签页中固定。',
+        'web.always.hint': '此标签页中始终开启：搜索就是它的工作。只有工具开关能关闭联网。搜索多少由细致度决定。',
         'trim.group': '按需加载工具',
         'trim.hint': '在下方开启的模式在每次对话开始时只加载核心工具（文件、终端、步骤列表、提问、技能、网页），并提供一个按需添加其他工具的工具：PDF、数据、财经、图表、日程、助手等。消息中提到时也会自动添加。请求小得多，本地模型响应更快。添加的工具在对话剩余部分保留。',
         'trim.mode': '{mode}：按需加载工具',
@@ -544,7 +610,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       // A copy that carries earlier turns of an isolated conversation (Recon) is isolated for good
       // too: it holds what that conversation read. A copy of the first question carries none.
       // A copy with earlier turns also has their access level, so it keeps the level to go back to.
-      const CARRIED = ['sessionModes', 'sessionWeb', 'sessionSearchDepth', 'sessionDepth', 'sessionTools', 'sessionHelpers', 'sessionToolSets', ...(plan.cut !== undefined ? ['sessionIsolated', 'sessionSandboxBase'] : [])];
+      const CARRIED = ['sessionModes', 'sessionWeb', 'sessionSearchDepth', 'sessionDepth', 'sessionLens', 'sessionTools', 'sessionHelpers', 'sessionToolSets', ...(plan.cut !== undefined ? ['sessionIsolated', 'sessionSandboxBase'] : [])];
       const fresh = await load(appCtx);
       const carried = CARRIED.filter((field) => (field === 'sessionIsolated' ? readObject(fresh.value[field])[sessionId] === true : readObject(fresh.value[field])[sessionId] !== undefined));
       if (carried.length > 0) {
@@ -679,7 +745,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
 .dsh-mt button{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:13px;white-space:nowrap}
 .dsh-mt button[aria-pressed='true']{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary);background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent)}
 .dsh-mt button:disabled{opacity:.5;cursor:default}
-@media (hover:hover){.dsh-mt button:hover:not([aria-pressed='true']){background:var(--dsw-alias-interactive-bg-hover)}}
+@media (hover:hover){.dsh-mt button:hover:not([aria-pressed='true']):not([aria-disabled='true']){background:var(--dsw-alias-interactive-bg-hover)}.dsh-mt .pair[data-fixed] button[aria-pressed='false']{opacity:.5}}
 @media (max-width:760px){.dsh-mt button{padding:0 8px}.dsh-mt button .lbl{display:none}}
 .dsh-mt svg{flex:none}
 .dsh-mt .pair{display:inline-flex;align-items:center}
@@ -720,7 +786,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
 .dsh-mt-pop .row > span:first-child{flex:1;font-size:14px;line-height:22px}
 .dsh-mt-pop .hint{margin:4px 0 0;color:var(--dsw-alias-label-secondary)}
 .dsh-mt-pop .head{margin:12px 0 4px;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}
-.dsh-mt-pop .names{display:flex;flex-wrap:wrap;gap:4px}
+.dsh-mt-pop .names{display:flex;flex-wrap:wrap;gap:4px}.dsh-mt-pop .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.dsh-mt-pop .chips button{padding:3px 10px;border-radius:999px;border:0.5px solid var(--dsw-alias-border-l2);background:transparent;color:inherit;font:inherit;cursor:pointer}.dsh-mt-pop .chips button[aria-selected='true']{background:color-mix(in srgb, var(--dsw-alias-label-primary) 12%, transparent);border-color:transparent;font-weight:500}.dsh-mt-pop .chips button:hover:not([aria-selected='true']){background:var(--dsw-alias-interactive-bg-hover)}
 .dsh-mt-pop .names span{padding:0 7px;border-radius:9px;line-height:18px;font-size:11px;background:color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent)}
 .dsh-mt-pop .names[data-no='true'] span{color:var(--dsw-alias-label-secondary);text-decoration:line-through}
 .dsh-mt-pop .sw{flex:none;position:relative;width:36px;height:20px;padding:2px;border:0;border-radius:999px;cursor:pointer;background:var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));transition:background .12s ease}
@@ -766,7 +832,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       // window's width, because the row also holds the app's own buttons and the model's name.
       const root = useRef(null);
       const shown = state.status === 'ready' && Boolean(sessionId) && state.view?.sessionWeb !== undefined;
-      const marks = shown ? `${state.view.searchDepth}|${state.view.sessionSearchDepth}|${state.view.sessionDepth}|${state.view.sessionWeb}|${state.view.sessionTools}` : '';
+      const marks = shown ? `${state.view.searchDepth}|${state.view.sessionSearchDepth}|${state.view.sessionDepth}|${state.view.sessionLens}|${state.view.sessionWeb}|${state.view.sessionTools}` : '';
       useLayoutEffect(() => {
         const el = root.current;
         if (!el) return undefined;
@@ -892,7 +958,9 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           void refresh();
         }
       };
-      // Research and Scout always have the web and search in their own way: no Web button there.
+      // Research and Scout always have the web and search in their own way: a fixed "Always on" label there.
+      // A conversation once isolated (Recon) and now in a tab that is not is locked by the host (heldMode): no tools.
+      const lockedHere = readObject(state.view.sessionIsolated)[sessionId] === true && modeDef.isolated !== true;
       const researchTab = Array.isArray(tools) && tools.includes('deep_research');
       const sessionDepthNow = depthNow(state.view, sessionId);
       /** A pick of the Web or Depth button (what it writes: settingOps). */
@@ -918,13 +986,17 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       return h(React.Fragment, null,
         h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
         h('span', { className: 'dsh-mt', ref: root },
-          researchTab ? null : h(WebButton, { t, level: webLevelOf(off, web), disabled: off, busy: state.busy, onPick: (picked) => void pickSetting('web', picked) }),
+          // Research and Scout always have the web (searching is their work): a fixed label, Off only with tools off.
+          // A Recon conversation moved into another tab is locked by the host with no tools at all: Off.
+          researchTab ? h(WebAlways, { t, off: off || lockedHere }) : h(WebButton, { t, level: webLevelOf(off, web), disabled: off, busy: state.busy, onPick: (picked) => void pickSetting('web', picked) }),
           // Depth: how much work this conversation gets (how much it searches, helpers, planning, checks,
           // reviews; in Research and Scout also the size of a research run). The same in every tab (the
           // owner's rule); only its list texts fit the tab. Not while all tools are off (nothing is sent then).
           off ? null : h(DepthButton, {
             t, depth: sessionDepthNow, kind: depthKind(modeDef), busy: state.busy,
+            lens: lensNow(state.view, sessionId), own: ownLensesOf(state.view.ownLenses), webOff: !researchTab && !web,
             onPick: (picked) => void pickSetting('depth', picked),
+            onPickLens: (picked) => void pickSetting('lens', picked),
           }),
           h(HelpersButton, {
             t, sessionId, busy: state.busy,
@@ -941,6 +1013,56 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
     }
 
     const DEPTHS = ['quick', 'standard', 'thorough'];
+    /** The Lenses, as Modes' lib/lens.js has them (a test keeps the two the same). */
+    const LENS_IDS = ['default', 'blunt', 'scientific', 'journalistic', 'data-only', 'skeptic', 'encouraging'];
+    /** The Lenses that deal in facts: with Web Off their list shows a one-line hint. */
+    const FACT_LENSES = ['blunt', 'scientific', 'journalistic', 'data-only'];
+    /** The shipped Lenses' English names: your own may not take one (Modes' lib/lens.js has the same rule). */
+    const LENS_NAMES = ['Default', 'Blunt', 'Scientific', 'Journalistic', 'Data only', 'Skeptic', 'Encouraging'];
+    const OWN_MAX = 40;
+    const OWN_NAME_MAX = 40;
+    const OWN_TEXT_MAX = 4000;
+    /** @returns {string} the id of your own Lens with this name (as Modes' lib/lens.js makes it). */
+    function ownSlug(name) {
+      const slug = String(name ?? '').toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 48);
+      return `own-${slug || 'lens'}`;
+    }
+    /** @returns {string} what is wrong with one of your own Lenses ('' when it can be saved); the same rules as Modes. */
+    function ownLensProblem(entry, others = []) {
+      const name = String(entry?.name ?? '').trim();
+      const text = String(entry?.text ?? '').trim();
+      if (!name) return 'needs a name';
+      if (name.length > OWN_NAME_MAX) return `has a name longer than ${OWN_NAME_MAX} characters`;
+      if (LENS_NAMES.some((shipped) => shipped.toLowerCase() === name.toLowerCase())) return 'has the name of a Lens that comes with Plus';
+      if (!text) return 'needs a text';
+      if (text.length > OWN_TEXT_MAX) return `has a text longer than ${OWN_TEXT_MAX} characters`;
+      if (others.some((other) => ownSlug(other?.name) === ownSlug(name))) return 'has the same name as another of your Lenses';
+      return '';
+    }
+    /** @returns {Array<{id: string, name: string, text: string}>} your own Lenses that can be used (as Modes reads them). */
+    function ownLensesOf(value) {
+      let list = value;
+      if (typeof list === 'string') {
+        try {
+          list = JSON.parse(list);
+        } catch {
+          list = [];
+        }
+      }
+      const out = [];
+      for (const entry of Array.isArray(list) ? list : []) {
+        if (out.length >= OWN_MAX) break;
+        if (ownLensProblem(entry, out)) continue;
+        const name = String(entry.name).trim();
+        out.push({ id: ownSlug(name), name, text: String(entry.text).trim() });
+      }
+      return out;
+    }
+    /** @returns {string} a conversation's Lens: its own pick (a shipped one or one of yours), else Default (also once yours was removed). */
+    function lensNow(view, sessionId, own = ownLensesOf(view.ownLenses)) {
+      const id = readObject(view.sessionLens)[sessionId];
+      return LENS_IDS.includes(id) || own.some((entry) => entry.id === id) ? id : 'default';
+    }
     const depthOf = (value) => (DEPTHS.includes(value) ? value : 'standard');
     /** @returns {string} the Depth new conversations start with, from the stored `searchDepth` (the former Web Deep is Thorough). */
     function startDepthOf(value) {
@@ -972,6 +1094,13 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       if (kind === 'web') {
         const webs = { ...readObject(current.sessionWeb), [sessionId]: picked === 'on' };
         return [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify(webs) }];
+      }
+      if (kind === 'lens') {
+        // For this conversation only; Default stores nothing.
+        const lenses = { ...readObject(current.sessionLens) };
+        if (picked === 'default') delete lenses[sessionId];
+        else lenses[sessionId] = picked;
+        return [{ op: 'set', path: ['sessionLens'], value: JSON.stringify(lenses) }];
       }
       const depths = { ...readObject(current.sessionDepth), [sessionId]: picked };
       return [{ op: 'set', path: ['sessionDepth'], value: JSON.stringify(depths) }, { op: 'set', path: ['searchDepth'], value: picked }];
@@ -1024,19 +1153,34 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
     }
 
     /**
+     * Research's and Scout's Web label (step 21): the web is always on there, so it reads "Always on"
+     * (Off while the Tools switch is off), has no list, and cannot be changed; its hint says why.
+     */
+    function WebAlways({ t, off }) {
+      const name = t(off ? 'web.off' : 'web.always');
+      return h('span', { className: 'pair', 'data-kind': 'search', 'data-fixed': '' },
+        h('button', {
+          type: 'button', 'aria-pressed': !off, 'aria-disabled': 'true',
+          title: off ? t('tools.blocked') : t('web.always.hint'), 'aria-label': t('web.always.open').replace('{0}', name),
+          style: { cursor: 'default' },
+        }, icon('search'), h('span', { className: 'lbl' }, t('web.label')), h('span', { className: 'lbl lvl' }, `· ${name}`)));
+    }
+
+    /**
      * The Depth button in the chat box, and its list: Quick, Standard, Thorough. How much care the
      * conversation wants: Standard adds nothing; Quick and Thorough add a short note to the instructions.
      */
-    function DepthButton({ t, depth, kind, busy, onPick }) {
+    function DepthButton({ t, depth, kind, lens = 'default', own = [], webOff = false, busy, onPick, onPickLens }) {
       const [open, setOpen] = useState(false);
-      const [place, setPlace] = useState({ left: 12, bottom: 80 });
+      const [place, setPlace] = useState({ left: 12, bottom: 80, maxHeight: 520 });
       const button = useRef(null);
       const panel = useRef(null);
       // Placed before the list is drawn, so it never shows for a moment in the corner while the page is busy.
       useLayoutEffect(() => {
         if (!open) return undefined;
         const rect = button.current?.getBoundingClientRect();
-        if (rect) setPlace({ left: Math.max(12, Math.min(rect.left - 20, window.innerWidth - 332)), bottom: window.innerHeight - rect.top + 8 });
+        // All the room above the button: Depth's three stops and the Lens chips then show without scrolling.
+        if (rect) setPlace({ left: Math.max(12, Math.min(rect.left - 20, window.innerWidth - 332)), bottom: window.innerHeight - rect.top + 8, maxHeight: Math.max(200, rect.top - 24) });
         const away = (event) => {
           if (panel.current?.contains(event.target) || button.current?.contains(event.target)) return;
           setOpen(false);
@@ -1050,22 +1194,39 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         };
       }, [open]);
       const name = t(`depth.${depth}`);
+      const mine = own.find((entry) => entry.id === lens);
+      const lensName = mine ? mine.name : t(`lens.${lens}`);
+      // "Depth · Thorough · Blunt"; with Default it reads as before. The names go first when the row is narrow.
+      const open_ = lens === 'default' ? t('depth.open').replace('{0}', name) : t('depth.open.lens').replace('{0}', name).replace('{1}', lensName);
       return h('span', { className: 'pair', 'data-kind': 'depth' },
         h('button', {
-          ref: button, type: 'button', 'aria-expanded': open, 'aria-haspopup': 'dialog', disabled: busy, 'data-depth': depth,
-          title: t('depth.open').replace('{0}', name), 'aria-label': t('depth.open').replace('{0}', name),
+          ref: button, type: 'button', 'aria-expanded': open, 'aria-haspopup': 'dialog', disabled: busy, 'data-depth': depth, 'data-lens': lens,
+          title: open_, 'aria-label': open_,
           onClick: () => setOpen(!open),
-        }, icon('depth'), h('span', { className: 'lbl' }, t('depth.label')), h('span', { className: 'lbl lvl' }, `· ${name}`)),
+        }, icon('depth'), h('span', { className: 'lbl' }, t('depth.label')), h('span', { className: 'lbl lvl' }, lens === 'default' ? `· ${name}` : `· ${name} · ${lensName}`)),
         open
           ? ReactDOM.createPortal(
-              h('div', { ref: panel, className: 'dsh-mt-pop', role: 'dialog', 'aria-label': t('depth.title'), style: { left: place.left, bottom: place.bottom } },
+              h('div', { ref: panel, className: 'dsh-mt-pop', role: 'dialog', 'aria-label': t('depth.title'), style: { left: place.left, bottom: place.bottom, maxHeight: place.maxHeight } },
                 h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
                 h('div', { className: 'title' }, t('depth.title')),
                 h('div', { className: 'opts', role: 'listbox', 'aria-label': t('depth.title') },
                   DEPTHS.map((id) => h('button', { key: id, type: 'button', role: 'option', 'aria-selected': id === depth, 'aria-current': String(id === depth), disabled: busy, onClick: () => { setOpen(false); onPick(id); } },
                     h('b', null, t(`depth.${id}`)), h('small', null, t(kind ? `depth.${id}.hint.${kind}` : `depth.${id}.hint`))))),
                 // Recon searches with its own tools, Research and Scout run research runs: the list says so.
-                h('p', { className: 'hint' }, t(kind ? `depth.note.${kind}` : 'depth.note'))),
+                h('p', { className: 'hint' }, t(kind ? `depth.note.${kind}` : 'depth.note')),
+                // The Lens (step 28): how the answer is worded, for this conversation only.
+                h('div', { className: 'title' }, t('lens.title')),
+                // Seven small chips (the list stays short); each one's use is its tooltip, the picked one's shows below.
+                h('div', { className: 'chips', role: 'listbox', 'aria-label': t('lens.title') },
+                  LENS_IDS.map((id) => h('button', { key: id, type: 'button', role: 'option', 'aria-selected': id === lens, 'aria-current': String(id === lens), disabled: busy, 'data-lens': id, title: t(`lens.${id}.hint`), onClick: () => { setOpen(false); onPickLens?.(id); } },
+                    t(`lens.${id}`))),
+                  // Your own Lenses (Settings → Modes) come after the shipped ones.
+                  own.map((entry) => h('button', { key: entry.id, type: 'button', role: 'option', 'aria-selected': entry.id === lens, 'aria-current': String(entry.id === lens), disabled: busy, 'data-lens': entry.id, 'data-own': '', title: t('lens.own.hint'), onClick: () => { setOpen(false); onPickLens?.(entry.id); } },
+                    entry.name))),
+                h('p', { className: 'hint' }, mine ? t('lens.own.hint') : t(`lens.${lens}.hint`)),
+                // Owner's rule: a Lens never switches the web on; a fact-heavy one says what Web Off means.
+                webOff && FACT_LENSES.includes(lens) ? h('p', { className: 'hint', 'data-lens-web': '' }, t('lens.web.off')) : null,
+                h('p', { className: 'hint' }, t('lens.note'))),
               document.body,
             )
           : null);
@@ -1380,6 +1541,48 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       return { value: entry.value, revision: entry.revision, tiers: tierIdsOf(result.value.namespaces), shell };
     }
 
+    /**
+     * Settings → Modes, "Your own Lenses" (Lens part, step 30): add, edit and remove, then Save. The
+     * same rules as Modes reads them (ownLensProblem); nothing is saved while one is wrong.
+     */
+    function OwnLenses({ t, saved, onSave }) {
+      const [rows, setRows] = useState(saved);
+      const [note, setNote] = useState(null);
+      const savedKey = JSON.stringify(saved);
+      useEffect(() => setRows(JSON.parse(savedKey)), [savedKey]);
+      const set = (index, patch) => {
+        setRows((prev) => prev.map((row, at) => (at === index ? { ...row, ...patch } : row)));
+        setNote(null);
+      };
+      const problems = rows.map((row, index) => ownLensProblem(row, rows.slice(0, index)));
+      const first = problems.findIndex(Boolean);
+      const save = async () => {
+        if (first >= 0) {
+          setNote({ bad: true, text: t('own.problem').replace('{n}', String(first + 1)).replace('{problem}', problems[first]) });
+          return;
+        }
+        const ok = await onSave(rows.map((row) => ({ id: ownSlug(row.name), name: String(row.name).trim(), text: String(row.text).trim() })));
+        setNote(ok ? { bad: false, text: t('own.saved') } : null);
+      };
+      return h('div', { className: 'dsh-me-own' },
+        h('div', { className: 'dsh-me-note' }, t('own.hint')),
+        rows.length === 0 ? h('div', { className: 'dsh-me-note' }, t('own.empty')) : null,
+        rows.map((row, index) => h('section', { key: index, className: 'dsh-me-card', 'data-own-lens': '' },
+          h('div', { className: 'dsh-me-row' },
+            h('label', { className: 'dsh-me-field' }, h('span', null, t('own.name')),
+              h('input', { className: 'dsh-me-in', value: row.name ?? '', maxLength: OWN_NAME_MAX, 'data-bad': String(Boolean(problems[index])), onChange: (event) => set(index, { name: event.target.value }) })),
+            h('button', { type: 'button', className: 'dsh-me-btn', onClick: () => { setRows((prev) => prev.filter((_, at) => at !== index)); setNote(null); } }, t('own.remove'))),
+          h('label', { className: 'dsh-me-field wide' }, h('span', null, t('own.text')),
+            h('textarea', { className: 'dsh-me-ta', value: row.text ?? '', maxLength: OWN_TEXT_MAX, rows: 3, onChange: (event) => set(index, { text: event.target.value }) })),
+          problems[index] ? h('div', { className: 'dsh-me-note', 'data-bad': 'true' }, t('own.problem').replace('{n}', String(index + 1)).replace('{problem}', problems[index])) : null)),
+        h('div', { className: 'dsh-me-row' },
+          rows.length >= OWN_MAX
+            ? h('div', { className: 'dsh-me-note' }, t('own.full'))
+            : h('button', { type: 'button', className: 'dsh-me-btn', onClick: () => { setRows((prev) => [...prev, { name: '', text: '' }]); setNote(null); } }, t('own.add')),
+          h('button', { type: 'button', className: 'dsh-me-btn', 'data-main': 'true', disabled: JSON.stringify(rows) === savedKey, onClick: () => void save() }, t('own.save'))),
+        note ? h('div', { className: 'dsh-me-note', 'data-bad': String(note.bad) }, note.text) : null);
+    }
+
     function ModesPage({ appCtx }) {
       const t = appCtx.locale.bind('modes');
       const [loaded, setLoaded] = useState({ status: 'loading' });
@@ -1414,6 +1617,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           scheduledMode: typeof view.scheduledMode === 'string' && view.scheduledMode ? view.scheduledMode : 'cowork',
           codeMethod: view.codeMethod !== false,
           coworkMethod: view.coworkMethod !== false,
+          ownLenses: ownLensesOf(view.ownLenses).map(({ name, text }) => ({ name, text })),
         });
         setDirty(false);
       }, []);
@@ -1544,9 +1748,11 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           }
           if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
           setLoaded((prev) => ({ ...prev, revision: result.value.revision }));
+          return true;
         } catch (error) {
           setGeneral((prev) => ({ ...prev, [key]: before }));
           setMessage({ text: `${t('save.failed')}: ${error?.message ?? error}`, bad: true });
+          return false;
         }
       };
       // The sidebar's tab count belongs to the Cowork sidebar's own settings; it is written there.
@@ -1638,6 +1844,8 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         h('div', null,
           Toggle(t('method.code'), t('method.code.hint'), general.codeMethod, (on) => void saveNow('codeMethod', on)),
           Toggle(t('method.cowork'), t('method.cowork.hint'), general.coworkMethod, (on) => void saveNow('coworkMethod', on))),
+        h('div', { className: 'dsh-me-group' }, t('own.group')),
+        h(OwnLenses, { t, saved: general.ownLenses ?? [], onSave: (list) => saveNow('ownLenses', list) }),
         h('div', { className: 'dsh-me-group' }, t('answer.group')),
         h('div', null,
           Toggle(t('answer.rerun'), t('answer.rerun.hint'), answer.rerun, (on) => void flipAnswer('rerunButton', 'rerun', on)),

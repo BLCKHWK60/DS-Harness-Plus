@@ -619,7 +619,14 @@ export function apply(ctx, config) {
       const partial = Date.now() >= deadline;
       run.stage = 'writing';
       // Each finding carries its own helper's status, so the writer can say which claims rest on pages their helper did not read.
-      const written = await runChild({ role: roles.writer, label: 'Research report', parent, run, signal: exec.signal, prompt: writePrompt({ question, findings, conflicts, gaps, today, followups: tab.followups === true }) });
+      // The conversation's Lens reaches the writer only (the owner's choice): planner, searchers and review stay neutral.
+      let lens = '';
+      try {
+        lens = String(ctx.get('modes')?.lensWords?.(parent.id) ?? '');
+      } catch {
+        lens = '';
+      }
+      const written = await runChild({ role: roles.writer, label: 'Research report', parent, run, signal: exec.signal, prompt: writePrompt({ question, findings, conflicts, gaps, today, followups: tab.followups === true, lens }) });
 
       // 6. Check the citations.
       const cited = new Set([...written.text.matchAll(/\[(\d+)\]/g)].map((match) => Number(match[1])));

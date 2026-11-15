@@ -99,3 +99,11 @@ Real models (every answer was scripted), long jobs, the `/bench` command in the 
 - **Look:** checked in the stock scheme (dark) and Forest (dark and light).
 
 **Not checked:** Cancel on the page (the mock answers at once, so no job stays running; cancel is covered by a unit test); a judge-graded prompt with a real model; the spend limit stopping a real run; the Chinese strings (new texts fall back to English); a narrow window for this page specifically (it shares its layout rules with the Arena page, which was checked at 900 px); the Mac desktop app.
+
+## Lens measuring (Lens part, step 25)
+
+- **New grader, "Contains none of these"** (`noneOf`): passes when the answer contains none of the phrases, in any letter case, also across lines. Phrases are separated by `|` or new lines (`phrasesOf`). A prompt needs at least one phrase. The other graders are unchanged.
+- **"Add the Lenses suite"** on the Suites section: each of the six Lenses (the approved text, word for word, as the system text; a test keeps it the same as Modes' `lib/lens.js`) on three questions: two judged against what the Lens asks for, one checked for phrases it must not use (softening for Blunt, praise for Skeptic, interpretation for Data only, unattributed claims for Journalistic, overclaiming for Scientific, gloom for Encouraging). Category `lens`. The judged ones need a judge model.
+- **A guide, not proof:** Benchmark puts the system text in front of the message; in a conversation a Lens will be in the instructions (step 26). Only the owner can run it on his models; nothing reaches his conversations.
+- Tested: the grader (pass, fail, letter case, across lines, a prompt without phrases), the other graders unchanged, the suite (18 prompts, the approved texts, valid with a judge). Lab: the button added the suite with no problem shown.
+

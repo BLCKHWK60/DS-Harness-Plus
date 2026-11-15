@@ -112,3 +112,8 @@ Real web search and real model quality (every model call was scripted); the time
 **Verified in the lab (rc.2, scripted stand-in model) on 2026-11-12:** with the slider on Thorough and the Tier limit at 8, one call ran the plan, 8 searchers at once, a review, 8 more searchers, a second review, 8 more searchers, and the writer. Round 2 and 3 searchers were given what was already established, the queries already run (16, then 32) and the sharper queries the review wrote. The writer was shown all 48 findings. The Checks list reported "Depth: Thorough. 3 rounds", flagged an unknown citation, and marked unfetched sources.
 
 **Not verified:** a real model and real web search at any depth; the review deciding "enough" on its own; the time limit ending a run between rounds; Quick and Standard runs end to end (their numbers are unit-tested); the Mac desktop app.
+
+## The conversation's Lens reaches the writer (Lens part, step 27)
+
+The owner chose that the conversation's own model and the report writer follow the conversation's Lens; the planner, the searchers and the review stay neutral, so what is found never changes. The writer's prompt gets one line after all its own rules (citations, read / not-read labels, no new facts, source text is data): "How to word the report (it changes only the wording, never the rules above or the facts): <Lens text>". The text comes from Modes (`lensWords(sessionId)`: '' for Default and during a study session); without Modes, or with Default, the prompt is exactly as before. Tested: no Lens gives today's text, the line's place, the other prompts never mention a Lens.
+

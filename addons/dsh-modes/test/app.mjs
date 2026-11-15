@@ -55,9 +55,10 @@ export async function settle() {
  * @param {Map<string, object>} [options.goals] - each conversation's goal as the app's goals service views it: `{ phase, activation, objective }`.
  * @param {(ops: object[]) => boolean} [options.failWrite] - a settings write it returns true for fails (as a refused or crashed write does).
  * @param {object} [options.chat] - the app's chat settings (`ui-chat`), e.g. `{ foldedReplies: 'final' }`.
+ * @param {Set<string>} [options.studying] - conversations where Learn runs a study session (no set: no Learn add-on).
  * @returns {object} the running app.
  */
-export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0, home, goals, failWrite, chat } = {}) {
+export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0, home, goals, failWrite, chat, studying } = {}) {
   const { config } = world;
   const handlers = new Map();
   const agents = new Map();
@@ -102,6 +103,8 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
     ...(tabs ? { coworkShell: {} } : {}),
     // The app's goals service: a view per live conversation (its phase, whether rounds are driven, its objective).
     ...(goals ? { goals: { get: (agent) => goals.get(agent.id) } } : {}),
+    // Learn's service: whether a study session runs in a conversation.
+    ...(studying ? { learning: { studying: (id) => studying.has(id) } } : {}),
     ...(world.presets
       ? {
           permissionPresets: {
@@ -161,7 +164,7 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
       ctx: {
         effect: (start) => start(),
         tools: { restrict: (mask) => { const entry = { mask, undone: false }; masks.push(entry); return () => { entry.undone = true; }; } },
-        systemPrompt: { section: (spec) => { sections.set(id, spec); return () => {}; } },
+        systemPrompt: { section: (spec) => { sections.set(spec.name === 'modes:mode' ? id : `${id} ${spec.name}`, spec); return () => {}; } },
       },
       model: { current: () => ({ provider: 'p', model: 'm' }) },
       cancel: () => {},
@@ -241,6 +244,8 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
     },
     /** The text Modes adds to a conversation's instructions. */
     prompt: (id) => sections.get(id)?.text({}) ?? '',
+    /** Another section Modes adds (e.g. 'modes:lens'): its text, and its order. */
+    section: (id, name) => ({ text: sections.get(`${id} ${name}`)?.text({}) ?? '', order: sections.get(`${id} ${name}`)?.order }),
     stop: () => disposers.forEach((dispose) => dispose()),
   };
 }

@@ -12028,6 +12028,41 @@
   "page": "modes",
   "pageLabel": "Modes",
   "heading": "",
+  "label": "Lens per conversation",
+  "description": "Each conversation's Lens (blunt, scientific, journalistic, data-only, skeptic or encouraging; missing is Default, which adds nothing) as JSON: how the answer is worded. Not for helpers, paused during a study session. No button yet.",
+  "kind": "text",
+  "keywords": [
+   "sessionLens",
+   "lens",
+   "blunt",
+   "skeptic",
+   "wording",
+   "conversation"
+  ],
+  "configOnly": true,
+  "field": "modes.sessionLens"
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "Your own Lenses",
+  "label": "Your own Lenses",
+  "description": "Lenses you write yourself, shown in the chat box's Depth list after the six that come with Plus: at most 40, names up to 40 characters, texts up to 4,000, no name of a shipped Lens. Each gets the same closing lines as every Lens.",
+  "kind": "text",
+  "keywords": [
+   "ownLenses",
+   "lens",
+   "own",
+   "custom",
+   "wording"
+  ],
+  "configOnly": false,
+  "field": "modes.ownLenses"
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "",
   "label": "Web levels moved into Depth",
   "description": "One-time marker (0.59.0): each conversation's former Web level was moved into its Depth. Not meant to be changed.",
   "kind": "switch",

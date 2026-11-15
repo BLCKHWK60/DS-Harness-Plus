@@ -893,3 +893,86 @@ test('the check is never read as the user naming tools', async () => {
   const host = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
   assert.match(host, /message\?\.source\?\.kind !== 'runtime-context' && message\?\.source\?\.kind !== DEPTH_CHECK_KIND/);
 });
+
+test('the Lens: its own section after the standing texts; nothing for Default or helpers; kept with tools off and "Use only these"; paused while studying', async () => {
+  const { LENS_PROMPTS } = await import('../lib/lens.js');
+  const studying = new Set();
+  const world = makeWorld({
+    pruneStaleSessions: false,
+    extraModes: JSON.stringify({ recon: { label: 'Recon', tools: ['recon_cite'], sandbox: 'read-only', prompt: 'Recon method.', isolated: true } }),
+    sessionModes: JSON.stringify({ b1: 'cowork', s1: 'chat', d1: 'cowork', r1: 'recon', off1: 'cowork', st1: 'cowork' }),
+    sessionLens: JSON.stringify({ b1: 'blunt', s1: 'skeptic', r1: 'data-only', off1: 'encouraging', st1: 'scientific', bad: 'nonsense' }),
+    sessionTools: JSON.stringify({ off1: false }),
+  });
+  const app = boot(world, { alone: true, studying });
+  for (const id of ['b1', 's1', 'd1', 'r1', 'off1', 'st1']) await app.open(id);
+  const lens = (id) => app.section(id, 'modes:lens');
+  // After the tiers (70) and Self-improve's lessons (72), so it wins on wording.
+  assert.equal(lens('b1').order, 73);
+  assert.equal(lens('b1').text, LENS_PROMPTS.blunt, 'kept under a model version that stands alone');
+  assert.equal(lens('s1').text, LENS_PROMPTS.skeptic);
+  assert.equal(lens('r1').text, LENS_PROMPTS['data-only'], 'Recon too (its rules come first, the Lens says so)');
+  assert.equal(lens('off1').text, LENS_PROMPTS.encouraging, 'with tools off too: it is about wording');
+  assert.equal(lens('d1').text, '', 'Default adds nothing');
+  assert.equal(app.service().lens('bad'), 'default', 'an unknown Lens is Default');
+  // Modes' own section is unchanged by a Lens.
+  assert.ok(!app.prompt('b1').includes('Lens:'));
+  // A helper gets nothing (searchers and workers stay neutral), though it follows its conversation's pick.
+  await app.open('h1', { header: { parentSession: 'b1' } });
+  assert.equal(app.service().lens('h1'), 'blunt');
+  assert.equal(lens('h1').text, '');
+  // A study session pauses it; it comes back when the session ends.
+  studying.add('st1');
+  assert.equal(lens('st1').text, '');
+  studying.delete('st1');
+  assert.equal(lens('st1').text, LENS_PROMPTS.scientific);
+  app.stop();
+  // Without Learn the Lens simply stays.
+  const plain = boot(makeWorld({ pruneStaleSessions: false, sessionLens: JSON.stringify({ x1: 'blunt' }) }));
+  await plain.open('x1');
+  assert.equal(plain.section('x1', 'modes:lens').text, LENS_PROMPTS.blunt);
+  plain.stop();
+});
+
+test('the Lens pick is kept per conversation like Depth: cleaned up, carried into Rerun, kept on each Mac, searchable', async () => {
+  const { readFileSync } = await import('node:fs');
+  const host = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  assert.match(host, /sessionLens: z\.string\(\)\.default\('\{\}'\)\.volatile\(\),/);
+  assert.match(host, /const fields = \[[^\]]*'sessionLens'[^\]]*\];/);
+  assert.match(client, /const CARRIED = \[[^\]]*'sessionLens'/);
+  const { ALWAYS_SKIP } = await import('../../dsh-shared-settings/index.mjs');
+  assert.ok(ALWAYS_SKIP.includes('modes.sessionLens'));
+  const index = JSON.parse(readFileSync(new URL('../../dsh-settings-plus/settings-index.json', import.meta.url), 'utf8'));
+  assert.ok(index.some((entry) => entry.field === 'modes.sessionLens'));
+  const learn = readFileSync(new URL('../../dsh-learn/index.js', import.meta.url), 'utf8');
+  assert.match(learn, /studying: \(sessionId\) => settings\(\)\.enabled && Boolean\(sessions\.get\(String\(sessionId \?\? ''\)\)\)/);
+});
+
+test('Deep research\'s writer gets the conversation\'s Lens text (helpers too follow their conversation); none while studying', async () => {
+  const { LENS_PROMPTS } = await import('../lib/lens.js');
+  const studying = new Set();
+  const app = boot(makeWorld({ pruneStaleSessions: false, sessionLens: JSON.stringify({ w1: 'journalistic' }) }), { studying });
+  await app.open('w1');
+  await app.open('w2');
+  await app.open('wh', { header: { parentSession: 'w1' } });
+  assert.equal(app.service().lensWords('w1'), LENS_PROMPTS.journalistic);
+  assert.equal(app.service().lensWords('wh'), LENS_PROMPTS.journalistic, 'a run started by a helper of the conversation');
+  assert.equal(app.service().lensWords('w2'), '', 'Default');
+  studying.add('w1');
+  assert.equal(app.service().lensWords('w1'), '');
+  app.stop();
+});
+
+test('your own Lens reaches the conversation\'s instructions with the guard; removed, the conversation is back on Default', async () => {
+  const { LENS_GUARD } = await import('../lib/lens.js');
+  const world = makeWorld({ pruneStaleSessions: false, ownLenses: [{ id: 'own-calm', name: 'Calm', text: 'Short sentences.' }], sessionLens: JSON.stringify({ o1: 'own-calm' }) });
+  const app = boot(world);
+  await app.open('o1');
+  assert.equal(app.section('o1', 'modes:lens').text, `Lens: Calm. Short sentences. ${LENS_GUARD}`);
+  assert.equal(app.service().lensWords('o1'), `Lens: Calm. Short sentences. ${LENS_GUARD}`, 'Deep research\'s writer too');
+  world.config.ownLenses = [];
+  assert.equal(app.service().lens('o1'), 'default');
+  assert.equal(app.section('o1', 'modes:lens').text, '');
+  app.stop();
+});
