@@ -25,6 +25,16 @@ done
 rm -f /tmp/plus-check-$$.log
 
 step "Pages"
+# Page code that does not parse never loads, and every button it adds goes with it (the Modes
+# buttons in a 0.59.0 build: an apostrophe inside a quoted text).
+parsed=0
+for page in "$HERE"/addons/*/client.js; do
+  if ! app_node --check "$page" >/tmp/plus-parse-$$.log 2>&1; then
+    say "FAIL  $(basename "$(dirname "$page")")/client.js does not parse"; head -8 /tmp/plus-parse-$$.log; parsed=1
+  fi
+done
+rm -f /tmp/plus-parse-$$.log
+[ "$parsed" = 0 ] && say "ok    every page's code parses" || failed=1
 # A hook after an early return takes a whole page down (the blank Data settings page of 0.33.0).
 if app_node "$HERE/scripts/dev-hook-scan.mjs" "$HERE"/addons/*/client.js; then
   say "ok    no page calls a hook after an early return"

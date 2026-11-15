@@ -392,14 +392,15 @@ test('only a conversation\'s folder can be erased, never the trash\'s own waitin
 
 test('the tidy-up never stops on a file it cannot write: it reports the problem and goes on', async () => {
   const { root, make, trash } = home();
-  const file = join(root, 'trash', 'pending.json');
+  const folder = join(root, 'trash');
   try {
     const x = make('session-x');
     const y = make('session-y');
     trash.addPending({ id: x.id, title: 'x', deletedAt: 1 });
     trash.addPending({ id: y.id, title: 'y', deletedAt: 2 });
     trash.erase(x.id);
-    chmodSync(file, 0o444);
+    // The trash folder read-only: no record can be written (writes go through a temp file there).
+    chmodSync(folder, 0o555);
     const seen = [];
     const done = await tidyPending(trash, {
       isArchived: () => true,
@@ -411,7 +412,7 @@ test('the tidy-up never stops on a file it cannot write: it reports the problem 
     assert.deepEqual(seen, [x.id, y.id], 'the next one is still handled');
     assert.ok(done.failed.some((f) => f.id === x.id && /EACCES|permission/i.test(f.error)), 'the failed unmark is reported');
   } finally {
-    chmodSync(file, 0o644);
+    chmodSync(folder, 0o755);
     rmSync(root, { recursive: true, force: true });
   }
 });

@@ -54,7 +54,6 @@ window.__ModuleLoader__.load({
         'depth.research.quick': '1 round of searching, up to 4 helpers at once. At most about 10 minutes.',
         'depth.research.standard': '2 rounds, up to 6 helpers at once. After the first round the findings are reviewed, and the second round searches for what is missing with sharper queries. At most about 25 minutes.',
         'depth.research.thorough': '3 rounds, up to 8 helpers at once. Each round is reviewed and the next digs deeper. At most about 45 minutes, and the most tokens.',
-        'depth.note': 'Applies to all conversations, from your next message.',
         'depth.research.cap': 'Helpers at once are also held to the sub-agent limit in Settings → Model Tiers.',
         'helpers.one': 'One model',
         'helpers.many': '{n} models',
@@ -110,8 +109,8 @@ window.__ModuleLoader__.load({
         'f.prompt': 'Prompt added while this mode is active',
         'f.prompt.cowork': 'Empty: Plus uses its own working method for Cowork (understand the task, a step list, care with your files, check the result, report plainly). Write here to use your own instead.',
         'new.group': 'New conversations',
-        'new.web': 'Web level for new conversations (and those that never picked one)',
-        'new.web.hint': 'Where the Web button starts in a new conversation. A conversation that never had a level picked in the chat box follows it too. Picking a level in the chat box sets this too.',
+        'new.depth': 'Depth for new conversations (and those that never picked one)',
+        'new.depth.hint': 'Where the Depth button starts in a new conversation, in every tab. A conversation that never had a Depth picked in the chat box follows it too. Picking a Depth in the chat box sets this too.',
         'new.scheduled': 'Mode for scheduled tasks',
         'new.scheduled.hint': 'A conversation that an Automation task opens starts in this mode, whatever tab is selected. A mode without tools cannot do the task\'s work.',
         'new.scheduled.gone': '{id} (not found: the first mode with all tools is used)',
@@ -131,6 +130,21 @@ window.__ModuleLoader__.load({
         'rerun.files': 'Rerun started. Pictures and files attached to the question were not sent again; add them if they are needed.',
         'answer.group': 'Buttons under an answer',
         'web.label': 'Web',
+        'depth.label': 'Depth',
+        'depth.title': 'Depth',
+        'depth.open': 'Depth: {0}. Click to change.',
+        'depth.quick.hint': 'One short pass with quick checks; usually one web search. Helpers only when the tier asks for them.',
+        'depth.standard.hint': 'As the working method says; the model decides how much to search. Adds nothing.',
+        'depth.thorough.hint': 'A short plan first, 10+ searches with facts checked in two sources, its own work checked before finishing, and one review by a helper when helpers are allowed. Slower.',
+        'depth.note': 'For this conversation, and where new conversations start in every tab. Depth sets how much work it gets: how much it searches when Web is on, helpers, planning, checks and reviews. A deep research run follows it too (about 10, 25 or 45 minutes; sooner where tools run through programs, the app\'s PTC preset). It adds to the working method and never replaces it. How hard the model thinks is the effort on the model button.',
+        'depth.note.isolated': 'For this conversation, and where new conversations start in every tab. Here Depth sets how much it searches with its own tools, planning and checks; its own rules stay as they are. How hard the model thinks is the effort on the model button.',
+        'depth.quick.hint.isolated': 'One short pass with quick checks; one or two searches with its own tools.',
+        'depth.standard.hint.isolated': 'As its own rules say. Adds nothing.',
+        'depth.thorough.hint.isolated': 'A short plan first, ten or more searches, ten sources read, every key fact checked in two sources, its own work checked before finishing. Slower.',
+        'depth.note.research': 'For this conversation, and where new conversations start in every tab. Here Depth also sets how long a research run takes and how many helpers work at once (sooner where tools run through programs, the app\'s PTC preset: a run then stops before the app\'s program time limit). It adds to the method and never replaces it. How hard the model thinks is the effort on the model button.',
+        'depth.quick.hint.research': 'Short work; a research run takes about 10 minutes, with up to 4 helpers.',
+        'depth.standard.hint.research': 'As the method says; a research run takes about 25 minutes, with up to 6 helpers.',
+        'depth.thorough.hint.research': 'A short plan and a check before finishing; a research run takes about 45 minutes, with up to 8 helpers. Slower.',
         'web.title': 'Web access',
         'web.open': 'Web access: {0}. Click to change.',
         'web.off': 'Off',
@@ -143,7 +157,9 @@ window.__ModuleLoader__.load({
         'web.standard.hint': 'A few searches; opens the pages that matter.',
         'web.thorough.hint': 'Several searches; reads at least 5 pages from different sites and cites each.',
         'web.deep.hint': '10+ searches, at least 10 pages read, facts cross-checked between sources. Slower.',
-        'web.note': 'For this conversation. The level you pick is also where new conversations start; Off applies only here. In-depth research with many helpers is in the Research tab.',
+        'web.note': 'For this conversation only: whether the model may go online. How much it searches is set by Depth. In-depth research with many helpers is in the Research tab.',
+        'web.on': 'On',
+        'web.on.hint': 'The model may search the web, read pages and use other tools and programs that go online. How much it searches is set by Depth.',
         'trim.group': 'Load tools as needed',
         'trim.hint': 'A mode switched on below starts each conversation with the core tools only (files, shell, step list, questions, skills, web) and a tool that adds the others when needed: PDF, data, finance, diagrams, scheduling, helpers and more. Your message adds them too when it names them ("read this PDF"). Requests are far smaller, so local models answer sooner. Added tools stay for the rest of the conversation.',
         'trim.mode': '{mode}: load tools as needed',
@@ -202,7 +218,6 @@ window.__ModuleLoader__.load({
         'depth.research.quick': '搜索 1 轮，最多 4 个助手同时工作。最多约 10 分钟。',
         'depth.research.standard': '2 轮，最多 6 个助手同时工作。第一轮后审阅结果，第二轮用更准确的查询补充缺失内容。最多约 25 分钟。',
         'depth.research.thorough': '3 轮，最多 8 个助手同时工作。每轮都会审阅，下一轮更深入。最多约 45 分钟，消耗最多。',
-        'depth.note': '适用于所有对话，从下一条消息开始。',
         'depth.research.cap': '同时工作的助手数量还受“设置 → 模型档位”中子代理上限的限制。',
         'helpers.one': '单一模型',
         'helpers.many': '{n} 个模型',
@@ -258,8 +273,8 @@ window.__ModuleLoader__.load({
         'f.prompt': '此模式启用时附加的提示词',
         'f.prompt.cowork': '留空：Plus 使用自带的 Cowork 工作方法（先理解任务、步骤列表、谨慎对待你的文件、检查结果、如实报告）。在此填写则使用你自己的。',
         'new.group': '新会话',
-        'new.web': '新会话（及从未选过级别的会话）的联网级别',
-        'new.web.hint': '新会话中联网按钮的起始级别。从未在输入框中选过级别的会话也跟随它。在输入框中选择级别也会设置它。',
+        'new.depth': '新会话（及从未选过的会话）的细致度',
+        'new.depth.hint': '每个标签中新会话细致度按钮的起始值。从未在输入框中选过细致度的会话也跟随它。在输入框中选择细致度也会设置它。',
         'new.scheduled': '定时任务的模式',
         'new.scheduled.hint': '自动化任务打开的会话以此模式开始，与所选标签页无关。没有工具的模式无法完成任务。',
         'new.scheduled.gone': '{id}（未找到：使用第一个拥有全部工具的模式）',
@@ -279,6 +294,21 @@ window.__ModuleLoader__.load({
         'rerun.files': '已开始重新运行。问题中附带的图片和文件未再次发送，如有需要请重新添加。',
         'answer.group': '回答下方的按钮',
         'web.label': '联网',
+        'depth.label': '细致度',
+        'depth.title': '细致度',
+        'depth.open': '细致度：{0}。点击更改。',
+        'depth.quick.hint': '简短一遍，只做快速检查；通常只搜索一次。仅在层级要求时才使用助手。',
+        'depth.standard.hint': '按工作方法进行，由模型决定搜索多少。不额外添加内容。',
+        'depth.thorough.hint': '先做简短计划，10 次以上搜索并以两个来源核实事实，完成前检查自己的工作；允许使用助手时，由一个助手复核一次。较慢。',
+        'depth.note': '对本对话生效，也是每个标签中新会话的起始值。细致度决定投入多少工作：联网时搜索多少、助手、计划、检查和复核。深度研究的运行也跟随它（约 10、25 或 45 分钟；在通过程序运行工具的对话中（应用的 PTC 预设）会更早结束）。它是对工作方法的补充，从不取代它。模型思考的深浅由模型按钮上的推理强度决定。',
+        'depth.note.isolated': '对本对话生效，也是每个标签中新会话的起始值。在这里，细致度决定用它自己的工具搜索多少、计划和检查；它自己的规则保持不变。模型思考的深浅由模型按钮上的推理强度决定。',
+        'depth.quick.hint.isolated': '简短一遍，只做快速检查；用它自己的工具搜索一两次。',
+        'depth.standard.hint.isolated': '按它自己的规则进行。不额外添加内容。',
+        'depth.thorough.hint.isolated': '先做简短计划，十次以上搜索，阅读十个来源，每个关键事实以两个来源核实，完成前检查自己的工作。较慢。',
+        'depth.note.research': '对本对话生效，也是每个标签中新会话的起始值。在这里，细致度还决定一次研究运行的时长和同时工作的助手数量（在通过程序运行工具的对话中（应用的 PTC 预设），运行会在应用的程序时间限制之前更早结束）。它是对方法的补充，从不取代它。模型思考的深浅由模型按钮上的推理强度决定。',
+        'depth.quick.hint.research': '简短的工作；一次研究运行约 10 分钟，最多 4 个助手。',
+        'depth.standard.hint.research': '按方法进行；一次研究运行约 25 分钟，最多 6 个助手。',
+        'depth.thorough.hint.research': '先做简短计划，完成前检查；一次研究运行约 45 分钟，最多 8 个助手。较慢。',
         'web.title': '联网访问',
         'web.open': '联网访问：{0}。点击更改。',
         'web.off': '关闭',
@@ -291,7 +321,9 @@ window.__ModuleLoader__.load({
         'web.standard.hint': '几次搜索；打开关键页面。',
         'web.thorough.hint': '多次搜索；阅读至少 5 个不同网站的页面并逐一注明出处。',
         'web.deep.hint': '10 次以上搜索，至少阅读 10 个页面，在不同来源间交叉核实事实。较慢。',
-        'web.note': '仅对本对话生效。你选择的级别也是新对话的起始级别；"关闭"只对本对话生效。多助手的深入研究请使用"研究"标签页。',
+        'web.note': '仅对本对话生效：模型是否可以联网。搜索多少由细致度决定。多助手的深入研究请使用"研究"标签页。',
+        'web.on': '开启',
+        'web.on.hint': '模型可以搜索网页、阅读页面，并使用其他联网的工具和程序。搜索多少由细致度决定。',
         'trim.group': '按需加载工具',
         'trim.hint': '在下方开启的模式在每次对话开始时只加载核心工具（文件、终端、步骤列表、提问、技能、网页），并提供一个按需添加其他工具的工具：PDF、数据、财经、图表、日程、助手等。消息中提到时也会自动添加。请求小得多，本地模型响应更快。添加的工具在对话剩余部分保留。',
         'trim.mode': '{mode}：按需加载工具',
@@ -512,7 +544,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       // A copy that carries earlier turns of an isolated conversation (Recon) is isolated for good
       // too: it holds what that conversation read. A copy of the first question carries none.
       // A copy with earlier turns also has their access level, so it keeps the level to go back to.
-      const CARRIED = ['sessionModes', 'sessionWeb', 'sessionSearchDepth', 'sessionTools', 'sessionHelpers', 'sessionToolSets', ...(plan.cut !== undefined ? ['sessionIsolated', 'sessionSandboxBase'] : [])];
+      const CARRIED = ['sessionModes', 'sessionWeb', 'sessionSearchDepth', 'sessionDepth', 'sessionTools', 'sessionHelpers', 'sessionToolSets', ...(plan.cut !== undefined ? ['sessionIsolated', 'sessionSandboxBase'] : [])];
       const fresh = await load(appCtx);
       const carried = CARRIED.filter((field) => (field === 'sessionIsolated' ? readObject(fresh.value[field])[sessionId] === true : readObject(fresh.value[field])[sessionId] !== undefined));
       if (carried.length > 0) {
@@ -663,6 +695,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
 .dsh-mt button[data-helpers='many']{border-color:var(--dsw-alias-state-warning-primary,#d98a00);color:var(--dsw-alias-state-warning-primary,#d98a00)}
 .dsh-mt[data-f2] button[data-tools] .lbl{display:none}
 .dsh-mt[data-f3] .pair[data-kind='research'] .lbl{display:none}
+.dsh-mt[data-f3] .pair[data-kind='depth'] .lbl{display:none}
 .dsh-mt[data-f4] .pair[data-kind='search'] .lbl{display:none}
 .dsh-mt[data-f5] button:not(.more){padding:0 6px}
 .dsh-mt[data-f5] .pair > button.more{width:16px}
@@ -699,6 +732,8 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       search: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3.5 12h17M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z',
       research: 'M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.3 15.3 20 20M8 10.5h5M10.5 8v5',
       tools: 'M14.5 6.5a4 4 0 0 0-5.4 5L4 16.6V20h3.4l5.1-5.1a4 4 0 0 0 5-5.4l-2.6 2.6-2.4-.6-.6-2.4 2.6-2.6z',
+      // Three bars of rising height: how much care.
+      depth: 'M5 19v-4M12 19V10M19 19V5',
       // One chip (a model); two stacked chips (several models).
       one: 'M7 7h10v10H7zM10 4v3M14 4v3M10 17v3M14 17v3M4 10h3M4 14h3M17 10h3M17 14h3',
       many: 'M9 9h10v10H9zM5 15V5h10M12 19v2M16 19v2M19 12h2M19 16h2',
@@ -731,7 +766,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       // window's width, because the row also holds the app's own buttons and the model's name.
       const root = useRef(null);
       const shown = state.status === 'ready' && Boolean(sessionId) && state.view?.sessionWeb !== undefined;
-      const marks = shown ? `${state.view.searchDepth}|${state.view.sessionSearchDepth}|${state.view.sessionWeb}|${state.view.sessionTools}` : '';
+      const marks = shown ? `${state.view.searchDepth}|${state.view.sessionSearchDepth}|${state.view.sessionDepth}|${state.view.sessionWeb}|${state.view.sessionTools}` : '';
       useLayoutEffect(() => {
         const el = root.current;
         if (!el) return undefined;
@@ -739,12 +774,26 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         let row = el.parentElement;
         for (let i = 0; i < 6 && row && getComputedStyle(row).flexWrap !== 'wrap'; i += 1) row = row.parentElement;
         if (!row || getComputedStyle(row).flexWrap !== 'wrap') return undefined;
+        // The items of the row's first line (through wrappers that only group, `display: contents`).
+        const itemsOf = (parent) => [...parent.children].flatMap((child) => {
+          const display = getComputedStyle(child).display;
+          return display === 'contents' ? itemsOf(child) : display === 'none' ? [] : [child];
+        });
+        // A button that may shrink (min-width 0) and is squeezed below its own width: the app's
+        // access-level button, whose name then runs under the next one. Others overflow only by
+        // what is drawn outside them (an open list), which is no sign of a full line.
+        const squeezed = (item) => {
+          const style = getComputedStyle(item);
+          return style.minWidth === '0px' && Number(style.flexShrink) > 0 && item.scrollWidth > item.clientWidth + 1;
+        };
+        // The first line overflows, or a button on it is squeezed.
+        const crowded = (first) => first.scrollWidth > first.clientWidth + 1 || itemsOf(first).some(squeezed);
         const wrapped = () => {
           const first = row.firstElementChild;
           const last = row.lastElementChild;
           if (!first || !last) return false;
           if (first !== last && last.getBoundingClientRect().top > first.getBoundingClientRect().top + 8) return true;
-          return first.scrollWidth > first.clientWidth + 1;
+          return crowded(first);
         };
         // Steps: 1 tighter and no step name, 2 "Tools" as an icon, 3 "Deep research" as an icon,
         // 4 "Search" as an icon, 5 tightest.
@@ -763,7 +812,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           for (let level = 0; level <= LEVELS; level += 1) {
             set(level);
             const first = row.firstElementChild;
-            if (first && first.scrollWidth <= first.clientWidth + 1) return;
+            if (first && !crowded(first)) return;
           }
         };
         fit();
@@ -843,23 +892,15 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           void refresh();
         }
       };
-      // The Research tab searches in its own way (its start page sets the depth): no Web button there.
+      // Research and Scout always have the web and search in their own way: no Web button there.
       const researchTab = Array.isArray(tools) && tools.includes('deep_research');
-      const sessionLevel = levelOf(readObject(state.view.sessionSearchDepth)[sessionId] ?? state.view.searchDepth);
-      /** Off: this conversation only. A level: this conversation, and where new conversations start. */
-      const pickLevel = async (picked) => {
+      const sessionDepthNow = depthNow(state.view, sessionId);
+      /** A pick of the Web or Depth button (what it writes: settingOps). */
+      const pickSetting = async (kind, picked) => {
         if (state.busy) return;
         setState((prev) => ({ ...prev, busy: true }));
         try {
-          const build = (current) => {
-            const webs = { ...readObject(current.sessionWeb), [sessionId]: picked !== 'off' };
-            const ops = [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify(webs) }];
-            if (picked !== 'off') {
-              const levels = { ...readObject(current.sessionSearchDepth), [sessionId]: picked };
-              ops.push({ op: 'set', path: ['sessionSearchDepth'], value: JSON.stringify(levels) }, { op: 'set', path: ['searchDepth'], value: picked });
-            }
-            return ops;
-          };
+          const build = (current) => settingOps(kind, picked, current, sessionId);
           let fresh = await load(appCtx);
           let result = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
           if (!result.ok && result.error.code === 'settings/conflict') {
@@ -877,7 +918,14 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       return h(React.Fragment, null,
         h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
         h('span', { className: 'dsh-mt', ref: root },
-          researchTab ? null : h(WebButton, { t, level: off ? 'off' : web ? sessionLevel : 'off', disabled: off, busy: state.busy, onPick: (picked) => void pickLevel(picked) }),
+          researchTab ? null : h(WebButton, { t, level: webLevelOf(off, web), disabled: off, busy: state.busy, onPick: (picked) => void pickSetting('web', picked) }),
+          // Depth: how much work this conversation gets (how much it searches, helpers, planning, checks,
+          // reviews; in Research and Scout also the size of a research run). The same in every tab (the
+          // owner's rule); only its list texts fit the tab. Not while all tools are off (nothing is sent then).
+          off ? null : h(DepthButton, {
+            t, depth: sessionDepthNow, kind: depthKind(modeDef), busy: state.busy,
+            onPick: (picked) => void pickSetting('depth', picked),
+          }),
           h(HelpersButton, {
             t, sessionId, busy: state.busy,
             chosen: readObject(state.view.sessionHelpers)[sessionId],
@@ -894,16 +942,51 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
 
     const DEPTHS = ['quick', 'standard', 'thorough'];
     const depthOf = (value) => (DEPTHS.includes(value) ? value : 'standard');
-    const LEVELS = ['off', 'quick', 'standard', 'thorough', 'deep'];
-    const levelOf = (value) => (LEVELS.includes(value) && value !== 'off' ? value : 'standard');
+    /** @returns {string} the Depth new conversations start with, from the stored `searchDepth` (the former Web Deep is Thorough). */
+    function startDepthOf(value) {
+      return depthOf(value === 'deep' ? 'thorough' : value);
+    }
+    /** @returns {string} a conversation's Depth: its own pick, else where new conversations start. */
+    function depthNow(view, sessionId) {
+      return depthOf(readObject(view.sessionDepth)[sessionId] ?? startDepthOf(view.searchDepth));
+    }
+    /**
+     * @param {object} mode - the conversation's mode.
+     * @returns {'isolated' | 'research' | undefined} which list texts the Depth button shows: Recon's
+     *   (an isolated tab, searching with its own tools), a research tab's (Research, Scout: a mode that
+     *   lists deep_research, where Depth also sizes a research run), or the usual ones.
+     */
+    function depthKind(mode) {
+      if (mode?.isolated === true) return 'isolated';
+      return Array.isArray(mode?.tools) && mode.tools.includes('deep_research') ? 'research' : undefined;
+    }
+    /** @returns {'on' | 'off'} what the Web button shows: Off while all tools are off or the web is. */
+    function webLevelOf(off, web) {
+      return off || !web ? 'off' : 'on';
+    }
+    /**
+     * The settings a pick writes: Web On or Off for this conversation only (how much it searches is
+     * Depth); a Depth for this conversation, which is also where new conversations start.
+     */
+    function settingOps(kind, picked, current, sessionId) {
+      if (kind === 'web') {
+        const webs = { ...readObject(current.sessionWeb), [sessionId]: picked === 'on' };
+        return [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify(webs) }];
+      }
+      const depths = { ...readObject(current.sessionDepth), [sessionId]: picked };
+      return [{ op: 'set', path: ['sessionDepth'], value: JSON.stringify(depths) }, { op: 'set', path: ['searchDepth'], value: picked }];
+    }
+    // Since 0.59.0 the Web button is only On or Off; how much the model searches is Depth.
+    const LEVELS = ['off', 'on'];
 
-    /** The Web button in the chat box, and its list: Off, Quick, Standard, Thorough, Deep. */
+    /** The Web button in the chat box, and its list: Off and On. */
     function WebButton({ t, level, disabled, busy, onPick }) {
       const [open, setOpen] = useState(false);
       const [place, setPlace] = useState({ left: 12, bottom: 80 });
       const button = useRef(null);
       const panel = useRef(null);
-      useEffect(() => {
+      // Placed before the list is drawn, so it never shows for a moment in the corner while the page is busy.
+      useLayoutEffect(() => {
         if (!open) return undefined;
         const rect = button.current?.getBoundingClientRect();
         if (rect) setPlace({ left: Math.max(12, Math.min(rect.left - 20, window.innerWidth - 332)), bottom: window.innerHeight - rect.top + 8 });
@@ -941,6 +1024,54 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
     }
 
     /**
+     * The Depth button in the chat box, and its list: Quick, Standard, Thorough. How much care the
+     * conversation wants: Standard adds nothing; Quick and Thorough add a short note to the instructions.
+     */
+    function DepthButton({ t, depth, kind, busy, onPick }) {
+      const [open, setOpen] = useState(false);
+      const [place, setPlace] = useState({ left: 12, bottom: 80 });
+      const button = useRef(null);
+      const panel = useRef(null);
+      // Placed before the list is drawn, so it never shows for a moment in the corner while the page is busy.
+      useLayoutEffect(() => {
+        if (!open) return undefined;
+        const rect = button.current?.getBoundingClientRect();
+        if (rect) setPlace({ left: Math.max(12, Math.min(rect.left - 20, window.innerWidth - 332)), bottom: window.innerHeight - rect.top + 8 });
+        const away = (event) => {
+          if (panel.current?.contains(event.target) || button.current?.contains(event.target)) return;
+          setOpen(false);
+        };
+        const key = (event) => event.key === 'Escape' && setOpen(false);
+        document.addEventListener('pointerdown', away, true);
+        document.addEventListener('keydown', key, true);
+        return () => {
+          document.removeEventListener('pointerdown', away, true);
+          document.removeEventListener('keydown', key, true);
+        };
+      }, [open]);
+      const name = t(`depth.${depth}`);
+      return h('span', { className: 'pair', 'data-kind': 'depth' },
+        h('button', {
+          ref: button, type: 'button', 'aria-expanded': open, 'aria-haspopup': 'dialog', disabled: busy, 'data-depth': depth,
+          title: t('depth.open').replace('{0}', name), 'aria-label': t('depth.open').replace('{0}', name),
+          onClick: () => setOpen(!open),
+        }, icon('depth'), h('span', { className: 'lbl' }, t('depth.label')), h('span', { className: 'lbl lvl' }, `· ${name}`)),
+        open
+          ? ReactDOM.createPortal(
+              h('div', { ref: panel, className: 'dsh-mt-pop', role: 'dialog', 'aria-label': t('depth.title'), style: { left: place.left, bottom: place.bottom } },
+                h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
+                h('div', { className: 'title' }, t('depth.title')),
+                h('div', { className: 'opts', role: 'listbox', 'aria-label': t('depth.title') },
+                  DEPTHS.map((id) => h('button', { key: id, type: 'button', role: 'option', 'aria-selected': id === depth, 'aria-current': String(id === depth), disabled: busy, onClick: () => { setOpen(false); onPick(id); } },
+                    h('b', null, t(`depth.${id}`)), h('small', null, t(kind ? `depth.${id}.hint.${kind}` : `depth.${id}.hint`))))),
+                // Recon searches with its own tools, Research and Scout run research runs: the list says so.
+                h('p', { className: 'hint' }, t(kind ? `depth.note.${kind}` : 'depth.note'))),
+              document.body,
+            )
+          : null);
+    }
+
+    /**
      * The Tools button and its small panel: one switch for all tools of the conversation, and the
      * list of what the model can and cannot call.
      */
@@ -968,7 +1099,8 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         const timer = setInterval(() => { if (!document.hidden) load(); }, open ? 3000 : 15000);
         return () => { alive = false; clearInterval(timer); };
       }, [sessionId, open, policy]);
-      useEffect(() => {
+      // Placed before the list is drawn, so it never shows for a moment in the corner while the page is busy.
+      useLayoutEffect(() => {
         if (!open) return undefined;
         const rect = button.current?.getBoundingClientRect();
         if (rect) setPlace({ left: Math.max(12, Math.min(rect.left, window.innerWidth - 332)), bottom: window.innerHeight - rect.top + 8, maxHeight: Math.max(160, rect.top - 24) });
@@ -1023,7 +1155,8 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       const [place, setPlace] = useState({ left: 12, bottom: 80, maxHeight: 360 });
       const button = useRef(null);
       const panel = useRef(null);
-      useEffect(() => {
+      // Placed before the list is drawn, so it never shows for a moment in the corner while the page is busy.
+      useLayoutEffect(() => {
         if (!open) return undefined;
         const rect = button.current?.getBoundingClientRect();
         if (rect) setPlace({ left: Math.max(12, Math.min(rect.left, window.innerWidth - 332)), bottom: window.innerHeight - rect.top + 8, maxHeight: Math.max(160, rect.top - 24) });
@@ -1276,7 +1409,8 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         setTrim(Array.isArray(view.trimModes) ? view.trimModes : ['cowork', 'code', 'data']);
         setExtraModes(extraModesOf(view));
         setGeneral({
-          searchDepth: levelOf(view.searchDepth),
+          // The Depth start (the former Web Deep is Thorough).
+          searchDepth: startDepthOf(view.searchDepth),
           scheduledMode: typeof view.scheduledMode === 'string' && view.scheduledMode ? view.scheduledMode : 'cowork',
           codeMethod: view.codeMethod !== false,
           coworkMethod: view.coworkMethod !== false,
@@ -1483,8 +1617,8 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         ),
         h('div', { className: 'dsh-me-group' }, t('new.group')),
         h('div', null,
-          Choice(t('new.web'), t('new.web.hint'), general.searchDepth,
-            LEVELS.filter((id) => id !== 'off').map((id) => ({ value: id, label: t(`web.${id}`) })),
+          Choice(t('new.depth'), t('new.depth.hint'), general.searchDepth,
+            DEPTHS.map((id) => ({ value: id, label: t(`depth.${id}`) })),
             (value) => void saveNow('searchDepth', value)),
           Choice(t('new.scheduled'), t('new.scheduled.hint'), general.scheduledMode,
             [

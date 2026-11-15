@@ -8,7 +8,7 @@ import { apply } from '../index.js';
 import { MODE, MODE_ID } from '../lib/mode.js';
 
 /** The add-on on a stand-in app whose Modes settings hold `extraModes`. */
-function plugin(extraModes, { modeOf = () => 'cowork' } = {}) {
+function plugin(extraModes, { modeOf = () => 'cowork', depthOf, agents = [] } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'research-apply-'));
   const writes = [];
   const provided = {};
@@ -21,7 +21,7 @@ function plugin(extraModes, { modeOf = () => 'cowork' } = {}) {
       for (const op of ops) if (ns === 'modes' && op.path[0] === 'extraModes') stored = op.value;
     },
   };
-  const services = { dshHomePath: (name) => join(home, name), settings, deepResearch: {}, modes: { get: modeOf }, agents: { list: () => [] } };
+  const services = { dshHomePath: (name) => join(home, name), settings, deepResearch: {}, modes: { get: modeOf, ...(depthOf ? { depthOf } : {}) }, agents: { list: () => agents } };
   const ctx = {
     get: (key) => services[key],
     on() {},
@@ -78,6 +78,21 @@ test('Deep research gets the focus, follow-ups and saving only in a Research con
     await settle();
     assert.deepEqual(app.provided.research.runOptions('conv-r'), { focus: 'news', followups: true, save: true });
     assert.deepEqual(app.provided.research.runOptions('conv-c'), {});
+  } finally {
+    app.close();
+  }
+});
+
+test('the selection note gives the Depth of the conversation itself (the same Depth as every tab)', async () => {
+  const sections = new Map();
+  const agentOf = (id) => ({ id, ctx: { effect: (fn) => fn(), systemPrompt: { section: (spec) => { sections.set(id, spec); return () => {}; } } } });
+  const depths = { 'conv-a': 'thorough', 'conv-b': 'quick' };
+  const app = plugin('{}', { modeOf: () => MODE_ID, depthOf: (id) => depths[id], agents: [agentOf('conv-a'), agentOf('conv-b'), agentOf('conv-c')] });
+  try {
+    await settle();
+    assert.match(sections.get('conv-a').text(), /depth Thorough \(about 45 minutes\)/);
+    assert.match(sections.get('conv-b').text(), /depth Quick \(about 10 minutes\)/);
+    assert.match(sections.get('conv-c').text(), /depth Standard \(about 25 minutes\)/, 'unknown: Standard');
   } finally {
     app.close();
   }

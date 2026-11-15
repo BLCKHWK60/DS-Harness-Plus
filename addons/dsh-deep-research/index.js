@@ -12,9 +12,9 @@
  * page, saw it only in search results, or neither (lib/sources.js). It does not
  * compare a claim with the text of its page.
  *
- * How deep a run goes (rounds, helpers at once, sub-questions, time) comes from
- * the depth chosen in the Research tab's Depth dropdown or Settings → Research (kept by the
- * Modes add-on): Quick, Standard or Thorough. See `lib/rounds.js`.
+ * How deep a run goes (rounds, helpers at once, sub-questions, time) comes from the Depth of the
+ * conversation that starts it: the Modes add-on's Depth button, the same in every tab
+ * (`modes.depthOf`): Quick, Standard or Thorough. See `lib/rounds.js`.
  *
  * Helpers at once are also held to the Tier plugin's sub-agent limit (Settings → Model Tiers).
  * Children run on the model of the conversation that started the research, or, when the
@@ -82,7 +82,7 @@ export const Config = z.object({
    * the conversation that started the research) or `roles` (the Tier add-on's role models).
    */
   helperModel: z.union([z.const('same'), z.const('roles')]).default('same'),
-  /** Used when the Modes add-on is not there to say which depth the slider is on. */
+  /** Used when the Modes add-on is not there to give the conversation's Depth. */
   depth: z.union([z.const('quick'), z.const('standard'), z.const('thorough')]).default('standard'),
   /** Upper bounds. The chosen depth decides the actual numbers and is held to these. */
   maxSubquestions: z.number().min(1).max(12).default(8),
@@ -448,10 +448,13 @@ export function apply(ctx, config) {
       } catch {
         programMaxMs = undefined;
       }
-      // How deep to go: the Depth setting, held to the settings' and the model version's limits.
+      // How deep to go: the Depth of the conversation that started the run (the Modes add-on's, the
+      // same in every tab; a helper follows its conversation), held to the settings' and the model
+      // version's limits. An older Modes without depthOf: its one setting.
       let chosen;
       try {
-        chosen = ctx.get('modes')?.researchDepth?.();
+        const modes = ctx.get('modes');
+        chosen = typeof modes?.depthOf === 'function' ? modes.depthOf(parent.id) : modes?.researchDepth?.();
       } catch {
         chosen = undefined;
       }

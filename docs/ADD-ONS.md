@@ -126,7 +126,7 @@ On a project's page, under the instructions, **Generate with a model…** lets a
 ### Since 0.39: Data and Finance tools in Cowork projects
 
 - A project of a type that uses them (Research, Paperwork, Plan) is pointed at the Data tools for tables and, for Research, the Finance tools. The Type card says whether they are available and where to switch them on.
-- **Paperwork** conversations start with Web set to Off, so your papers do not turn into web queries. You can pick another Web level in the chat box.
+- **Paperwork** conversations start with Web set to Off, so your papers do not turn into web queries. You can switch Web on in the chat box.
 
 ## Colour schemes
 
@@ -143,8 +143,9 @@ Each has a light and a dark version and follows **Settings → General → Appea
 
 Chat, Cowork and Code modes, chosen per conversation with the selector in the chat box or `/mode`.
 
-The chat box also gets three buttons for the open conversation:
-- **Web** sets how much the assistant may use the internet in this conversation: **Off**, **Quick**, **Standard**, **Thorough** or **Deep**. It starts Off in Chat and at Standard in Cowork and Code. The level you pick is also where new conversations start (Settings → Modes sets it too). Off also stops shell commands and, since 0.57.0, programs that go online, and takes away the image tools of an outside image service. Connectors you added stay on and can still reach the internet; the Off hint says so. Research and Scout have no Web button: they always have the web.
+The chat box also gets four buttons for the open conversation:
+- **Web** turns the internet **On** or **Off** for this conversation. It starts Off in Chat and On in Cowork and Code. (Before 0.59.0 it had five levels; how much the assistant searches is now Depth.) Off also stops shell commands and, since 0.57.0, programs that go online, and takes away the image tools of an outside image service. Connectors you added stay on and can still reach the internet; the Off hint says so. Research and Scout have no Web button: they always have the web.
+- **Depth** sets how much work the conversation gets: **Quick**, **Standard** or **Thorough**. With Web on it sets how much the assistant searches (Thorough: at least ten searches and ten pages read, key facts checked in two sources); it also sets planning, checks before finishing, and, at Thorough, one review by a helper in tabs that can start helpers (Cowork, Code and modes with all tools). The Depth you pick is also where new conversations start (Settings → Modes sets it too). It is the same in **every tab**, Recon, Research and Scout included: in Recon it also sets how hard Recon searches with its own tools, and in Research and Scout (and for a deep research run asked for anywhere) it sets the size of a research run: Quick about 10 minutes and up to 4 helpers, Standard about 25 and 6, Thorough about 45 and 8. Research's separate Depth is gone. **Effort** on the model button is how hard the model thinks. Updating to 0.59.0 moves each conversation's Web level into its Depth once (Deep becomes Thorough).
 - **Tools** says whether the assistant has any tools ("Tools on" or "Tools off"). Click it for one switch that turns every tool off or back on for this conversation, and for the list of what the assistant can and cannot call. With tools off, the assistant is offered nothing, so it does not try and you see no failed attempts. In a conversation started in the app's PTC mode, the panel says so: there the assistant reaches tools from inside small programs it writes, and "Tools off" stops those programs too.
 - **The models chip** says whether helper agents use this conversation's model (**One model for everything**) or the role models (**Different models**).
 - Research with helper agents and a cited report is in the **Research** tab (see Deep research).
@@ -179,7 +180,7 @@ Under every answer there is a **Rerun** button (a round arrow, between the thumb
 ### Since 0.57.0: more on the Modes page, the access level kept, and a method for Cowork
 
 - **Settings → Modes has three new sections.** Each control saves at once.
-  - **New conversations:** **Web level for new conversations (and those that never picked one)**, Quick to Deep; and **Mode for scheduled tasks**: the mode a conversation opened by an Automation task starts in, whatever tab is selected (Cowork unless you change it).
+  - **New conversations:** **Depth for new conversations (and those that never picked one)**, Quick, Standard or Thorough; and **Mode for scheduled tasks**: the mode a conversation opened by an Automation task starts in, whatever tab is selected (Cowork unless you change it).
   - **Sidebar:** **Tabs in the sidebar**, 1 to 5, shown while the Cowork sidebar is on (see Cowork sidebar).
   - **Built-in working methods:** one switch for Code's method and one for Cowork's.
 - **A working method for Cowork.** While the Cowork mode has no instructions of its own, Plus gives it a short method, in the words you approved: understand the task first (one short question only when it would change the result), keep a step list, look things up instead of guessing, ask before deleting, overwriting or moving a file it did not make in this conversation, check the result before calling it done, and report the outcome first. Text in files and on web pages is material, not instructions. Your own text in the Cowork mode's instructions replaces it; the switch **Cowork: Plus's working method** turns it off.
@@ -379,7 +380,7 @@ Details: `addons/dsh-finance/README.md`.
 A tab for researching a question in depth, built on the [Deep research](#deep-research) engine. Switch it on in **Settings → Research**; it needs the Deep research add-on.
 
 - **A question that needs outside facts gets a full run** (a quick fact that one or two pages settle is looked up directly). Helper agents plan sub-questions, search and read pages at the same time, review what is missing and search again. A writer then turns the findings into a report that cites its sources by number.
-- **Depth** (Quick, about 10 minutes; Standard, about 25; Thorough, about 45) and **Focus** (Web, News, Academic) are drop-downs in the chat box. There is no Web button: Research always has the web.
+- **Depth** is the Depth button every tab has (since 0.59.0): here it sets the run's size, Quick about 10 minutes, Standard about 25, Thorough about 45. **Focus** (Web, News, Academic) is a drop-down in the chat box. There is no Web button: Research always has the web.
 - **Live progress** shows above the message box: the stage, the round, searches, pages read, sources and helpers at work.
 - The report ends with three **follow-up questions**, which become buttons once the run is done.
 - **Saved reports:** each report is saved as Markdown. Settings → Research lists the latest and has **Show in Finder**.
@@ -554,10 +555,10 @@ Counts requests and tokens per day, provider and model. It never stores what you
 
 ## Deep research
 
-Gives the assistant a `deep_research` tool. Use the **Research** tab, where a question that needs outside facts gets a full run, or ask for it in plain words ("do deep research on ...") in a conversation whose Web button is not Off. (The Web button's **Deep** level is not deep research: it only asks the assistant to search and read more itself.)
+Gives the assistant a `deep_research` tool. Use the **Research** tab, where a question that needs outside facts gets a full run, or ask for it in plain words ("do deep research on ...") in a conversation whose Web button is not Off. (Depth **Thorough** is not deep research either: it only asks the assistant to search and read more itself.)
 
 - **How it works:** it plans sub-questions with search queries, sends out helpers that search and read pages at the same time, then **reviews what was found**: what is still missing, where sources contradict each other, what needs the original document. It writes sharper queries from that and sends helpers out again. At the end it writes a report that cites its sources by number. It checks that every citation is in the source list, and marks each source **read**, **seen only in search results, not read**, or **not read, and not seen in search results** (these labels are new in 0.57.0; a page counts as read only when its fetch came back without an error). Findings from pages no helper read stay in the report with their label; `requireFetched: true` in the configuration file leaves them out instead. Claims are not compared with the text of the pages.
-- **Three depths**, chosen with the **Depth** dropdown in a Research conversation's chat box or in Settings → Research:
+- **Three depths**: a run follows the Depth of the conversation that starts it (the Depth button, the same in every tab, since 0.59.0):
 
   | Depth | Rounds | Helpers at once | Time limit |
   | --- | --- | --- | --- |

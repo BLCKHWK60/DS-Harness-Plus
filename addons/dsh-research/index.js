@@ -2,7 +2,8 @@
  * Research: a mode and tab for researching a question in depth, built on the Deep research
  * add-on's engine. Switched on, it adds:
  *   - the Research mode (through the Modes add-on) with its method and tool list;
- *   - the Research tab, with Depth and Focus dropdowns in its chat box;
+ *   - the Research tab, with a Focus dropdown in its chat box (Depth is the Modes add-on's Depth
+ *     button, the same in every tab: it also sets how long a run takes and how many helpers work);
  *   - for Deep research runs in its conversations: the tab's focus, three follow-up questions at
  *     the end of the report, and the report saved as Markdown in the Research folder;
  *   - the live progress of a run, with the follow-up questions as buttons (browser half).
@@ -53,8 +54,14 @@ export function apply(ctx, config) {
       return undefined;
     }
   };
-  const depthNow = () => {
-    const value = String(plain(settingsOf(MODES_NS)?.researchDepth) ?? 'standard');
+  /** A conversation's Depth: the Modes add-on's, the same in every tab (Standard without Modes). */
+  const depthFor = (sessionId) => {
+    let value;
+    try {
+      value = ctx.get('modes')?.depthOf?.(sessionId);
+    } catch {
+      value = undefined;
+    }
     return DEPTHS.some((item) => item.id === value) ? value : 'standard';
   };
 
@@ -148,7 +155,7 @@ export function apply(ctx, config) {
           text: () => {
             try {
               if (!enabled() || rootOf(agent) !== agent.id || !inResearch(agent.id)) return '';
-              return selectionNote({ focus: focusFor(agent.id), depth: depthNow() });
+              return selectionNote({ focus: focusFor(agent.id), depth: depthFor(agent.id) });
             } catch {
               return '';
             }
@@ -201,7 +208,6 @@ export function apply(ctx, config) {
     at: Date.now(),
     enabled: enabled(),
     focus: focusOf(plain(config?.focus)),
-    depth: depthNow(),
     focuses: FOCUSES,
     depths: DEPTHS,
     programMinutes: programMinutes(),
@@ -244,7 +250,7 @@ export function apply(ctx, config) {
                 await ctx.get('settings')?.mutate?.('research', [{ op: 'set', path: ['focus'], value: focus }]);
               } else throw new Error('unknown action');
             }
-            res.end(JSON.stringify({ ...view(), ...(session ? { session: { inResearch: enabled() && inResearch(session), focus: focusFor(session) } } : {}) }));
+            res.end(JSON.stringify({ ...view(), ...(session ? { session: { inResearch: enabled() && inResearch(session), focus: focusFor(session), depth: depthFor(session) } } : {}) }));
             void syncMode();
           } catch (error) {
             res.statusCode = 400;

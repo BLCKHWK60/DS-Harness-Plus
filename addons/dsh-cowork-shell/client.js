@@ -148,6 +148,22 @@ window.__ModuleLoader__.load({
         'trash.empty.confirm': 'Delete all {n} conversations in this tab\'s Trash permanently?\n\nThey are erased from this Mac and cannot be put back. Any the app still holds open are erased as soon as it lets go of them, at the latest at the next start. The Trash of other tabs is not touched. A copy may remain in a backup, such as Time Machine, or, if you use Sync, in your sync repository\'s history.',
         'trash.empty.confirm.one': 'Delete the 1 conversation in this tab\'s Trash permanently?\n\nIt is erased from this Mac and cannot be put back. If the app still holds it open, it is erased as soon as it lets go of it, at the latest at the next start. The Trash of other tabs is not touched. A copy may remain in a backup, such as Time Machine, or, if you use Sync, in your sync repository\'s history.',
         'trash.empty.busy': 'Emptying…',
+        'trash.empty.confirm.rows': 'Delete all {n} rows in this tab\'s Trash permanently ({what})?\n\nThey are erased from this Mac and cannot be put back. Any the app still holds open are erased as soon as it lets go of them, at the latest at the next start. The Trash of other tabs is not touched. A copy may remain in a backup, such as Time Machine, or, if you use Sync, in your sync repository\'s history.',
+        'trash.empty.confirm.rows.one': 'Delete the 1 row in this tab\'s Trash permanently ({what})?\n\nThey are erased from this Mac and cannot be put back. Any the app still holds open are erased as soon as it lets go of them, at the latest at the next start. The Trash of other tabs is not touched. A copy may remain in a backup, such as Time Machine, or, if you use Sync, in your sync repository\'s history.',
+        'trash.erase.confirm.group': 'Delete "{title}" permanently ({what})?\n\nThey are erased from this Mac and cannot be put back. Any the app still holds open are erased as soon as it lets go of them, at the latest at the next start. A copy may remain in a backup, such as Time Machine, or, if you use Sync, in your sync repository\'s history.',
+        'trash.count': '{n} conversations',
+        'trash.count.one': '1 conversation',
+        'trash.data': 'saved settings',
+        'trash.data.its': 'its saved settings',
+        'trash.folder': 'a folder',
+        'trash.folder.its': 'its folder',
+        'trash.erase.partly': '{n} could not be deleted permanently: {reason}',
+        'trash.and': ' and ',
+        'trash.empty.label.rows': 'Empty this tab\'s trash: delete its {n} rows permanently',
+        'trash.left.oldest': 'oldest: {n}d left',
+        'trash.back.needs': 'Put back needs {label}, which is off now. Switch it on, then try again.',
+        'trash.back.newer': 'Put back needs a newer version of the Cowork sidebar.',
+        'trash.back.partly': '{back} came back, {left} did not: {reason}',
         'trash.empty.untold': '{n} older conversations, deleted before their tab was kept, show in every tab\'s Trash: Empty trash leaves them. Delete them one at a time if you want them gone now.',
         'trash.empty.untold.one': '1 older conversation, deleted before its tab was kept, shows in every tab\'s Trash: Empty trash leaves it. Delete it on its own if you want it gone now.',
         'trash.empty.failed': '{n} could not be deleted permanently and stay in the Trash.',
@@ -217,7 +233,7 @@ window.__ModuleLoader__.load({
         'type.tool.data.off': 'This type can use the Data tools for tables (CSV, Excel). They are switched off: Settings → Data → Show the Data tab.',
         'type.tool.finance.on': 'This type uses the Finance tools for company and economy figures. They are available.',
         'type.tool.finance.off': 'This type can use the Finance tools for company and economy figures. They are switched off: Settings → Finance → Show the Finance tab.',
-        'type.search.off': 'New conversations in this project start with Web set to Off, so your papers do not turn into web queries. You can pick another Web level in the chat box.',
+        'type.search.off': 'New conversations in this project start with Web set to Off, so your papers do not turn into web queries. You can switch Web on in the chat box.',
         'gen.open': 'Generate with a model…',
         'gen.title': 'Write the instructions with a model',
         'gen.hint': 'A model reads a summary of this folder and the project\'s type, and writes instructions for this project. It gets no tools: it cannot open, change or delete anything. You see the result before anything is saved.',
@@ -396,6 +412,22 @@ window.__ModuleLoader__.load({
         'trash.empty.confirm': '要永久删除此标签废纸篓中的全部 {n} 个对话吗？\n\n它们会从这台 Mac 上清除，无法放回。应用仍打开的对话会在应用释放后清除，最迟在下次启动时。其他标签的废纸篓不受影响。备份（如 Time Machine）中，或使用同步时同步仓库的历史中，可能仍有副本。',
         'trash.empty.confirm.one': '要永久删除此标签废纸篓中的这 1 个对话吗？\n\n它会从这台 Mac 上清除，无法放回。如果应用仍打开它，会在应用释放后清除，最迟在下次启动时。其他标签的废纸篓不受影响。备份（如 Time Machine）中，或使用同步时同步仓库的历史中，可能仍有副本。',
         'trash.empty.busy': '正在清空…',
+        'trash.empty.confirm.rows': '要永久删除此标签废纸篓中的全部 {n} 行（{what}）吗？\n\n它们会从这台 Mac 上清除，无法放回。应用仍打开的对话会在应用释放后清除，最迟在下次启动时。其他标签的废纸篓不受影响。备份（如 Time Machine）中，或使用同步时同步仓库的历史中，可能仍有副本。',
+        'trash.empty.confirm.rows.one': '要永久删除此标签废纸篓中的这 1 行（{what}）吗？\n\n它们会从这台 Mac 上清除，无法放回。应用仍打开的对话会在应用释放后清除，最迟在下次启动时。其他标签的废纸篓不受影响。备份（如 Time Machine）中，或使用同步时同步仓库的历史中，可能仍有副本。',
+        'trash.erase.confirm.group': '要永久删除“{title}”（{what}）吗？\n\n它们会从这台 Mac 上清除，无法放回。应用仍打开的对话会在应用释放后清除，最迟在下次启动时。备份（如 Time Machine）中，或使用同步时同步仓库的历史中，可能仍有副本。',
+        'trash.count': '{n} 个对话',
+        'trash.count.one': '1 个对话',
+        'trash.data': '已保存的设置',
+        'trash.data.its': '其已保存的设置',
+        'trash.folder': '一个文件夹',
+        'trash.folder.its': '其文件夹',
+        'trash.erase.partly': '有 {n} 项无法永久删除：{reason}',
+        'trash.and': '和',
+        'trash.empty.label.rows': '清空此标签的废纸篓：永久删除其中 {n} 行',
+        'trash.left.oldest': '最早的剩 {n} 天',
+        'trash.back.needs': '放回需要“{label}”，它现在已关闭。请先打开它，再试一次。',
+        'trash.back.newer': '放回需要更新版本的 Cowork 侧边栏。',
+        'trash.back.partly': '{back} 项已放回，{left} 项未能放回：{reason}',
         'trash.empty.untold': '有 {n} 个较早的对话（删除时尚未记录所属标签）显示在每个标签的废纸篓中：清空废纸篓不会删除它们。如需立即删除，请逐个删除。',
         'trash.empty.untold.one': '有 1 个较早的对话（删除时尚未记录所属标签）显示在每个标签的废纸篓中：清空废纸篓不会删除它。如需立即删除，请单独删除。',
         'trash.empty.failed': '有 {n} 个无法永久删除，仍在废纸篓中。',
@@ -465,7 +497,7 @@ window.__ModuleLoader__.load({
         'type.tool.data.off': '此类型可使用数据工具处理表格（CSV、Excel）。工具已关闭：设置 → 数据 → 显示数据标签页。',
         'type.tool.finance.on': '此类型使用财经工具获取公司和经济数据。工具可用。',
         'type.tool.finance.off': '此类型可使用财经工具获取公司和经济数据。工具已关闭：设置 → 财经 → 显示财经标签页。',
-        'type.search.off': '此项目中的新对话默认将联网设为关闭，以免你的文件内容变成网络查询。可在聊天框中选择其他联网级别。',
+        'type.search.off': '此项目中的新对话默认将联网设为关闭，以免你的文件内容变成网络查询。可在聊天框中将联网开启。',
         'gen.open': '用模型生成…',
         'gen.title': '用模型撰写指令',
         'gen.hint': '模型会阅读此文件夹的摘要和项目类型，为该项目撰写指令。它没有任何工具，无法打开、修改或删除任何内容。保存前你会先看到结果。',
@@ -1030,6 +1062,7 @@ html[data-cws-wide] [class*='_composerStack']:not([class*='_composerHero'] *) [c
 .cws-trash-meta{display:flex;align-items:center;flex-wrap:wrap;gap:2px;padding:0 6px 0 12px}
 .cws-trash-meta .cws-link{font-size:11px;padding:1px 3px}
 .cws-trash-dot{color:var(--dsw-alias-label-secondary);font-size:11px}
+.cws-trash-note{font-size:11px;color:var(--dsw-alias-label-secondary)}
 .cws-trash-empty{display:flex;justify-content:flex-end;padding:2px 8px 6px}
 .cws-trash-empty .cws-link[disabled],.cws-trash-meta .cws-link[disabled]{opacity:.6;cursor:default}
 .cws-dot-wait{background:var(--dsw-alias-state-warn-primary,#d9822b) !important;animation:none !important}
@@ -1892,10 +1925,18 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         },
         /** `where`: `{tab, fallbackTab}`, the tab it is deleted from (only that tab's Trash list shows it) and the tab its folder gives. */
         remove: (id, title, where) => post('delete', id, title, where),
-        restore: (id) => post('restore', id),
-        erase: (id) => post('erase', id),
-        /** Empty trash: delete permanently the conversations one tab's list showed. */
-        empty: (ids) => call({ method: 'POST', body: JSON.stringify({ action: 'empty', sessionIds: ids }) }),
+        /** Put back or delete permanently one row: a conversation, or a whole group row (`row.kind === 'group'`). */
+        restore: (row) => (row?.kind === 'group' ? call({ method: 'POST', body: JSON.stringify({ action: 'restore', itemId: row.id }) }) : post('restore', row?.id ?? row)),
+        // A row is erased as the list showed it (its runs and pieces then), never what came in since.
+        erase: (row) => (row?.kind === 'group' ? call({ method: 'POST', body: JSON.stringify({ action: 'erase', itemId: row.id, ids: row.ids ?? [], pieces: row.pieces ?? [] }) }) : post('erase', row?.id ?? row)),
+        /** Empty trash: delete permanently the rows one tab's list showed (conversations and group rows). */
+        empty: (ids) => {
+          const rows = new Map(snapshot.items.filter((item) => item?.kind === 'group').map((item) => [item.id, item]));
+          const sessionIds = ids.filter((id) => !rows.has(id));
+          const itemIds = ids.filter((id) => rows.has(id));
+          const shown = Object.fromEntries(itemIds.map((id) => [id, { ids: rows.get(id).ids ?? [], pieces: rows.get(id).pieces ?? [] }]));
+          return call({ method: 'POST', body: JSON.stringify({ action: 'empty', ...(sessionIds.length ? { sessionIds } : {}), ...(itemIds.length ? { itemIds, shown } : {}) }) });
+        },
         /** Ask again now, for example when a conversation was just archived (Recon's End and wipe). */
         refresh: () => call(),
       };
@@ -1962,12 +2003,42 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     /**
+     * What one or more Trash rows hold, in words for a question: "3 conversations", "1 conversation",
+     * "its saved settings", or both. An ordinary row counts as one conversation.
+     */
+    function rowContents(items, t) {
+      const list = Array.isArray(items) ? items : [items];
+      const conversations = list.reduce((sum, item) => sum + (item?.kind === 'group' ? Number(item.count) || 0 : 1), 0);
+      const saved = list.some((item) => Number(item?.data) > 0);
+      const folders = list.some((item) => Number(item?.folders) > 0);
+      const parts = [];
+      if (conversations > 0) parts.push(conversations === 1 ? t('trash.count.one') : t('trash.count', { n: conversations }));
+      if (saved) parts.push(t('trash.data.its'));
+      if (folders) parts.push(t('trash.folder.its'));
+      return parts.join(t('trash.and'));
+    }
+
+    /** A group row's second line: how many conversations, the dates they span, and saved settings. */
+    function groupSummary(item, t) {
+      const n = Number(item?.count) || 0;
+      const parts = [];
+      if (n > 0) parts.push(n === 1 ? t('trash.count.one') : t('trash.count', { n }));
+      const day = (ms) => (Number(ms) > 0 ? new Date(Number(ms)).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
+      const from = day(item?.firstAt);
+      const to = day(item?.deletedAt);
+      if (from && to) parts.push(from === to ? from : `${from} – ${to}`);
+      if (Number(item?.data) > 0) parts.push(t('trash.data'));
+      if (Number(item?.folders) > 0) parts.push(t('trash.folder'));
+      return parts.join(' · ');
+    }
+
+    /**
      * What Empty trash erases from a tab's Trash list: the rows that belong to this tab, except those
      * already being deleted. Rows whose tab is not known show in every tab and are left (one at a time).
      */
     function emptyIds(items, state, tabIds, selectedId) {
       return (Array.isArray(items) ? items : [])
-        .filter((item) => item && item.erasing !== true && typeof item.id === 'string' && trashTab(item, state, tabIds) === selectedId)
+        .filter((item) => item && item.erasing !== true && item.newer !== true && typeof item.id === 'string' && trashTab(item, state, tabIds) === selectedId)
         .map((item) => item.id);
     }
 
@@ -1981,7 +2052,13 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const ids = emptyIds(items, state, tabIds, selectedId);
       if (ids.length === 0) return { asked: false, sent: [], failed: 0 };
       const untold = (Array.isArray(items) ? items : []).filter((item) => item && item.erasing !== true && trashTab(item, state, tabIds) === null).length;
-      let question = t(ids.length === 1 ? 'trash.empty.confirm.one' : 'trash.empty.confirm', { n: ids.length });
+      // With a group row among them (old runs of an automation, for example) the question counts rows
+      // and the conversations in them; otherwise today's words.
+      const chosen = (Array.isArray(items) ? items : []).filter((item) => item && ids.includes(item.id));
+      const grouped = chosen.some((item) => item.kind === 'group');
+      let question = grouped
+        ? t(ids.length === 1 ? 'trash.empty.confirm.rows.one' : 'trash.empty.confirm.rows', { n: ids.length, what: rowContents(chosen, t) })
+        : t(ids.length === 1 ? 'trash.empty.confirm.one' : 'trash.empty.confirm', { n: ids.length });
       if (untold > 0) question += '\n\n' + t(untold === 1 ? 'trash.empty.untold.one' : 'trash.empty.untold', { n: untold });
       if (!ask(question)) return { asked: true, sent: [], failed: 0 };
       start?.();
@@ -2093,7 +2170,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const archivedKey = (lib.archived ?? []).join(',');
       useEffect(() => { void trash.refresh?.().catch(() => {}); }, [archivedKey]);
       // A deleted conversation is hidden at once, also while its files have not moved yet.
-      const deleted = new Set(bin.items.map((item) => item.id));
+      const deleted = new Set(bin.items.flatMap((item) => [item.id, ...(Array.isArray(item.ids) ? item.ids : [])]));
       const [open, setOpen] = useState({});
       const [more, setMore] = useState({});
       // Empty trash is running (the button waits).
@@ -2262,11 +2339,21 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           model.fail(t('delete.failed'));
         }
       };
-      const putBack = async (id) => {
+      const putBack = async (row) => {
         try {
-          await trash.restore(id);
-        } catch {
-          model.fail(t('trash.back.failed'));
+          const data = await trash.restore(row);
+          // A group row may come back in part: say what stayed and why.
+          const done = data?.restored;
+          const lines = [];
+          if (done && ((done.left?.length ?? 0) > 0 || (done.data?.failed?.length ?? 0) > 0)) {
+            const reason = done.left?.[0]?.reason ?? done.data?.failed?.[0]?.reason ?? '';
+            lines.push(t('trash.back.partly', { back: (done.back?.length ?? 0) + (done.data?.done?.length ?? 0), left: (done.left?.length ?? 0) + (done.data?.failed?.length ?? 0), reason }));
+          }
+          // What the owning add-on says could not come back (an automation's old run list, for example).
+          for (const note of Array.isArray(done?.notes) ? done.notes : []) if (typeof note === 'string' && note) lines.push(note);
+          if (lines.length > 0) model.fail(lines.join(' '));
+        } catch (error) {
+          model.fail(row?.kind === 'group' && error?.message ? String(error.message) : t('trash.back.failed'));
         }
       };
       /**
@@ -2288,10 +2375,13 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         }
       };
       /** Delete permanently: no way back, so it always asks first. */
-      const erase = async (id, title) => {
-        if (!window.confirm(t('trash.erase.confirm', { title }))) return;
+      const erase = async (row, title) => {
+        const question = row?.kind === 'group' ? t('trash.erase.confirm.group', { title, what: rowContents(row, t) }) : t('trash.erase.confirm', { title });
+        if (!window.confirm(question)) return;
         try {
-          await trash.erase(id);
+          const data = await trash.erase(row);
+          const erased = data?.erased;
+          if (erased && Number(erased.failed) > 0) model.fail(t('trash.erase.partly', { n: erased.failed, reason: erased.reasons?.[0] ?? '' }));
         } catch {
           model.fail(t('trash.erase.failed'));
         }
@@ -2489,27 +2579,35 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             (shown ? '▾ ' : '▸ ') + t('trash.title', { n: binHere.length })),
           shown ? binHere.map((item) => {
             const title = item.title || t('untitled');
-            const left = Math.max(0, Math.ceil((item.deletedAt + bin.keepMs - Date.now()) / 86400000));
+            const group = item.kind === 'group';
+            // A group row (old runs of an automation, for example): days left of its oldest run.
+            const left = Math.max(0, Math.ceil(((group ? item.firstAt : item.deletedAt) + bin.keepMs - Date.now()) / 86400000));
             // Two lines: the whole width for the title, then the days left and the buttons below it.
             const dot = (key) => h('span', { key, className: 'cws-trash-dot', 'aria-hidden': true }, '·');
+            const blocked = group && (item.putBackNeeds || item.newer)
+              ? (item.newer ? t('trash.back.newer') : t('trash.back.needs', { label: item.putBackNeeds }))
+              : '';
             return h('div', { key: item.id, className: 'cws-conv cws-archived cws-trash-row' },
               h('span', { className: 'cws-conv-main cws-trashed', title },
                 h('span', { className: 'cws-label' }, title)),
+              group ? h('div', { className: 'cws-trash-meta cws-trash-sub' },
+                h('span', { className: 'cws-time' }, groupSummary(item, t))) : null,
               h('div', { className: 'cws-trash-meta' },
-                h('span', { className: 'cws-time' }, t('trash.left', { n: left })),
+                h('span', { className: 'cws-time' }, t(group ? 'trash.left.oldest' : 'trash.left', { n: left })),
                 ...(item.erasing
                   ? [dot('d1'), h('span', { key: 'erasing', className: 'cws-time', title: t('trash.erasing.hint') }, t('trash.erasing'))]
                   : [
                     dot('d1'),
                     // While Empty trash runs, a row may be erased any moment: no Put back or erase then.
-                    h('button', { key: 'back', type: 'button', className: 'cws-link', disabled: emptying, 'aria-label': t('trash.back.label', { title }), onClick: () => void putBack(item.id) }, t('trash.back')),
+                    h('button', { key: 'back', type: 'button', className: 'cws-link', disabled: emptying || Boolean(blocked), title: blocked || undefined, 'aria-label': t('trash.back.label', { title }), onClick: () => void putBack(item) }, t('trash.back')),
                     dot('d2'),
-                    h('button', { key: 'erase', type: 'button', className: 'cws-link', disabled: emptying, 'aria-label': t('trash.erase.label', { title }), onClick: () => void erase(item.id, title) }, t('trash.erase')),
-                  ])));
+                    h('button', { key: 'erase', type: 'button', className: 'cws-link', disabled: emptying || item.newer === true, title: item.newer ? t('trash.back.newer') : undefined, 'aria-label': t('trash.erase.label', { title }), onClick: () => void erase(item, title) }, t('trash.erase')),
+                  ])),
+              group && (blocked || item.lastError) ? h('div', { className: 'cws-trash-meta cws-trash-note' }, blocked || item.lastError) : null);
           }) : null,
           shown && emptyIds(binHere, state, tabIds, selected.id).length > 0
             ? h('div', { className: 'cws-trash-empty' },
-              h('button', { type: 'button', className: 'cws-link', disabled: emptying, 'aria-label': ((n) => t(n === 1 ? 'trash.empty.label.one' : 'trash.empty.label', { n }))(emptyIds(binHere, state, tabIds, selected.id).length), onClick: () => void emptyHere() }, emptying ? t('trash.empty.busy') : t('trash.empty')))
+              h('button', { type: 'button', className: 'cws-link', disabled: emptying, 'aria-label': ((n) => (binHere.some((item) => item.kind === 'group') ? t('trash.empty.label.rows', { n }) : t(n === 1 ? 'trash.empty.label.one' : 'trash.empty.label', { n })))(emptyIds(binHere, state, tabIds, selected.id).length), onClick: () => void emptyHere() }, emptying ? t('trash.empty.busy') : t('trash.empty')))
             : null);
       };
       const archivedSection = () => {
@@ -2826,7 +2924,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         if (!snap.ok) return;
         const last = readLast()[m.id];
         const sess = last ? snap.byId[last] : null;
-        const gone = !sess || snap.archived.includes(last) || trash.get().items.some((item) => item.id === last);
+        const gone = !sess || snap.archived.includes(last) || trash.get().items.some((item) => item.id === last || (Array.isArray(item.ids) && item.ids.includes(last)));
         try { appCtx.layout.selectPanel(null); } catch { /* already on the conversation */ }
         if (!gone && last !== snap.currentId) {
           try { appCtx.get('uiWorkspace').openSession(last); return; } catch { /* fall through to a new one */ }

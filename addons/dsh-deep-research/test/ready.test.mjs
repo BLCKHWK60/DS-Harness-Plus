@@ -74,3 +74,23 @@ test('helpers on role models: the searchers\' route is the one checked, not the 
   assert.deepEqual(providers, ['search-cloud', 'p'], 'the searchers\' route first, then the conversation\'s own for the advice');
   assert.equal(counts.started, 0);
 });
+
+test('a run is as big as the Depth of the conversation that started it (Modes, the same in every tab)', async () => {
+  /** The planner's instructions for a run started under these Modes answers. */
+  const planned = async (modes) => {
+    const specs = [];
+    const asked = [];
+    const subagents = { startActivation: async (spec) => { specs.push(spec); throw new Error('no helpers in this test'); } };
+    const wrapped = modes && { ...modes, ...(modes.depthOf ? { depthOf: (id) => { asked.push(id); return modes.depthOf(id); } } : {}) };
+    const { run } = plugin(ready(true), { config: { depth: 'standard' }, services: { subagents, ...(wrapped ? { modes: wrapped } : {}) } });
+    await assert.rejects(run({ question: 'What changed?' }), /no helpers in this test/);
+    return { text: JSON.stringify(specs[0] ?? {}), asked };
+  };
+  const thorough = await planned({ depthOf: () => 'thorough', researchDepth: () => 'quick' });
+  assert.match(thorough.text, /3 to 8 sub-questions/);
+  assert.deepEqual(thorough.asked, ['conv-1'], 'asked for the conversation that started the run');
+  assert.match((await planned({ depthOf: () => 'quick', researchDepth: () => 'thorough' })).text, /3 to 4 sub-questions/);
+  // An older Modes without depthOf: its one setting; no Modes: this add-on's own setting.
+  assert.match((await planned({ researchDepth: () => 'quick' })).text, /3 to 4 sub-questions/);
+  assert.match((await planned(undefined)).text, /3 to 6 sub-questions/);
+});

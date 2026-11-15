@@ -2936,7 +2936,7 @@
   "pageLabel": "Research",
   "heading": "",
   "label": "Depth and focus",
-  "description": "How long a research run takes, where it looks first, and which model its helpers run on.",
+  "description": "Depth (the same as every tab, from the chat box's Depth button), where a run looks first, and which model its helpers run on.",
   "kind": "section",
   "keywords": [
    "depth",
@@ -2952,15 +2952,17 @@
   "pageLabel": "Research",
   "heading": "Depth and focus",
   "label": "Depth",
-  "description": "How long a run may take and how many helpers work at once: Quick (about 10 min), Standard (about 25 min) or Thorough (about 45 min).",
-  "kind": "segments",
+  "description": "The same Depth as in every tab, picked with the Depth button in the chat box (Settings → Modes sets where new conversations start). For a research run it sets how long the run takes and how many helpers work at once: Quick (about 10 min), Standard (about 25 min) or Thorough (about 45 min). The former separate research Depth (researchDepth) is no longer used since 0.59.0.",
+  "kind": "text",
   "keywords": [
    "research depth",
    "researchDepth",
+   "depth",
    "quick",
    "standard",
    "thorough",
-   "rounds"
+   "rounds",
+   "helpers"
   ],
   "configOnly": false,
   "field": "modes.researchDepth"
@@ -11959,7 +11961,7 @@
   "pageLabel": "Modes",
   "heading": "",
   "label": "Web switch per conversation",
-  "description": "Each conversation's web on or off as JSON, set with the Web button in the chat box. Missing uses the mode's default.",
+  "description": "Each conversation's Web On or Off as JSON, set with the Web button in the chat box. Missing uses the mode's default. How much it searches is its Depth.",
   "kind": "text",
   "keywords": [
    "sessionWeb",
@@ -11991,17 +11993,53 @@
   "page": "modes",
   "pageLabel": "Modes",
   "heading": "",
-  "label": "Web level per conversation",
-  "description": "Each conversation's Web level (quick, standard, thorough or deep) as JSON, set with the Web button in the chat box.",
+  "label": "Web level per conversation (obsolete)",
+  "description": "Obsolete since 0.59.0: each conversation's former Web level, moved into its Depth once (Deep became Thorough). The Web button is now only On or Off.",
   "kind": "text",
   "keywords": [
    "sessionSearchDepth",
    "web level",
    "search depth",
-   "conversation"
+   "obsolete"
   ],
   "configOnly": true,
   "field": "modes.sessionSearchDepth"
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "",
+  "label": "Depth per conversation",
+  "description": "Each conversation's Depth (quick, standard or thorough; missing follows Depth for new conversations) as JSON, set with the Depth button in the chat box, the same in every tab: how much it searches when Web is on, helpers, planning, checks and reviews, and the size of a research run.",
+  "kind": "text",
+  "keywords": [
+   "sessionDepth",
+   "depth",
+   "quick",
+   "standard",
+   "thorough",
+   "conversation",
+   "search"
+  ],
+  "configOnly": true,
+  "field": "modes.sessionDepth"
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "",
+  "label": "Web levels moved into Depth",
+  "description": "One-time marker (0.59.0): each conversation's former Web level was moved into its Depth. Not meant to be changed.",
+  "kind": "switch",
+  "keywords": [
+   "depthMoved",
+   "migration",
+   "marker",
+   "depth",
+   "web level"
+  ],
+  "configOnly": true,
+  "field": "modes.depthMoved"
  },
  {
   "page": "modes",
@@ -12023,15 +12061,16 @@
   "page": "modes",
   "pageLabel": "Modes",
   "heading": "New conversations",
-  "label": "Web level for new conversations (and those that never picked one)",
-  "description": "Where the Web button starts in a new conversation: Quick, Standard, Thorough or Deep. A conversation that never had a level picked in the chat box follows it too. Picking a level in the chat box sets it too. Default Standard.",
+  "label": "Depth for new conversations (and those that never picked one)",
+  "description": "Where the Depth button starts in a new conversation, in every tab (Research, Scout and Recon included): Quick, Standard or Thorough. A conversation that never had a Depth picked follows it too. Picking a Depth in the chat box sets it too. Default Standard. It also sizes a research run (about 10, 25 or 45 minutes). (The former Web level Deep is Thorough.)",
   "kind": "select",
   "keywords": [
    "searchDepth",
-   "web",
+   "depth",
+   "quick",
+   "thorough",
    "search",
-   "level",
-   "depth"
+   "new conversations"
   ],
   "configOnly": false,
   "field": "modes.searchDepth"
@@ -12123,12 +12162,13 @@
   "pageLabel": "Modes",
   "heading": "",
   "label": "New conversations",
-  "description": "Where a new conversation starts: its Web level, and the mode of conversations that Automation tasks open. These save at once.",
+  "description": "Where a new conversation starts: its Depth, and the mode of conversations that Automation tasks open. These save at once.",
   "kind": "section",
   "keywords": [
    "new conversation",
    "start",
    "scheduled",
+   "depth",
    "web level"
   ],
   "configOnly": false,

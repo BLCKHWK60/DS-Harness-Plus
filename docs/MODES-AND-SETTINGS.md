@@ -1,6 +1,6 @@
 # Modes and settings: the complete reference
 
-Version 0.57.0 · written 2026-11-15
+Version 0.57.0 · written 2026-11-15 · **updated for 0.59.0:** the Web button is only On or Off; how much the model searches is the new **Depth** button (Quick, Standard, Thorough), which also sets planning, checks and reviews; Effort is how hard the model thinks. **One Depth for every tab** (the owner's rule): Recon, Research and Scout have the Depth button too; it also sizes every research run (Quick about 10 minutes, Standard about 25, Thorough about 45), and Research's own Depth (`researchDepth`) is gone. Updated for it: chapter 2's Web button and Depth sections, the section order and notes, the settings tables, the Recon chapter's Web and Depth rows, and the `researchDepth` rows. The full Depth rules are in `addons/dsh-modes/README.md` ("Since 0.59.0: Depth"). **Everywhere else** (chapters 3 to 5 and 9, the Scout and Research chapters, the decisions and the audit records) "Web level", "Web · Standard" and the five levels Off to Deep are the 0.57.0 wording: Web is now On or Off; read a level as Depth, with Deep as Thorough, and read "Research's Depth" as the shared Depth. The former Thorough (five pages) is gone.
 
 This document describes every mode (tab) of DeepSeek Harness Plus as the code stands now: what it is for, the instructions the model gets, the tools it has out of the box and later, and every setting that changes it. It also lists the gaps the audit found, which ones this run fixed, and your decisions on the rest.
 
@@ -33,7 +33,7 @@ This document describes every mode (tab) of DeepSeek Harness Plus as the code st
 | **Code** | Software work, with a built-in working method | on | all, loaded as needed | Workspace write | Standard at first | Settings → Modes |
 | **Finance** | Companies, markets and economies, every figure with its source | off | all, including six Finance data tools; loading as needed can be switched on | as the conversation has it | Standard at first | Settings → Finance |
 | **Data** | Your tables: SQL and Python, every number tied to its query | off | all, loaded as needed (data and PDF tools from the start) | Read Only (Python writes only to data-output) | Standard at first; Off = your files only | Settings → Data |
-| **Research** | Cited research reports | off | its own list of 8: deep research, web search and reading, Library, diagrams, questions, step list | Read Only | no Web button: always has the web; Depth and Focus instead | Settings → Research |
+| **Research** | Cited research reports | off | its own list of 8: deep research, web search and reading, Library, diagrams, questions, step list | Read Only | no Web button: always has the web; the Depth button like every tab (it sizes the research run), and Focus | Settings → Research |
 | **Scout** | Jobs, freelance work, contracts and tenders | off | its own list of 18: Scout's 9 tools, web, deep research, 3 Finance tools, diagrams, questions, step list | as the conversation has it | no Web button: always has the web | Settings → Scout |
 | **Recon** | Isolated research on .onion sites and Usenet text | off | its own 9 Recon tools, nothing else | Read only | levels tell it how much to search; Off keeps only citing | Settings → Recon |
 
@@ -120,22 +120,20 @@ Words used here:
 
 ### The Web button
 
-**In short:** the Web button sets how much the model may use the internet in one conversation: Off, Quick, Standard, Thorough or Deep. Since 0.57.0 Off also stops programs that go online and the image tools of an outside image service. Connectors stay on, and the button says so.
+**In short:** the Web button turns the internet On or Off for one conversation (since 0.59.0; before that it had five levels, Off to Deep, and how much the model searched was its level: that is now the Depth button, below). Since 0.57.0 Off also stops programs that go online and the image tools of an outside image service. Connectors stay on, and the button says so.
 
 **Where and when** (`WebButton` and `ToggleControl` in `addons/dsh-modes/client.js`)
-- In the chat box it reads `Web · <level>`. Its list shows the five levels with a one-line hint each, and a note.
+- In the chat box it reads `Web`, highlighted while on. Its list shows Off and On with a hint each, and a note.
 - **Starting state:**
   - Chat: Off.
-  - Cowork, Code, Data and Finance: on, at the level new conversations start with (`searchDepth`, default Standard).
-  - Recon: on, at the same level.
+  - Cowork, Code, Data and Finance: on.
+  - Recon: on.
   - A new conversation in a project of the Paperwork type starts with Web Off (`addons/dsh-cowork-shell/index.js`, `startSearchOff`).
-- **Picking a level** switches the web on for this conversation and stores its level. The level also becomes the start for new conversations.
-- **The starting level** can also be set on Settings → Modes → New conversations → "Web level for new conversations (and those that never picked one)" (new in 0.57.0). As the label says, a conversation that never had a level picked in the chat box follows it too, so changing it changes theirs.
-- **Picking Off** applies to this conversation only.
+- **Picking On or Off** applies to this conversation only (`sessionWeb`).
 - **Hidden** in every tab whose mode lists `deep_research`: Research and Scout. Those tabs always have the web; an Off stored there is ignored (`webFor` in `addons/dsh-modes/lib/mask.js`).
 - **Greyed out** while the Tools switch is off.
 
-**What each level tells the model** (`SEARCH_DEPTH_PROMPTS` in `addons/dsh-modes/lib/prompt.js`). The note is added only while `web_search` is really offered to the step (core-5).
+**What each level told the model before 0.59.0** (`SEARCH_DEPTH_PROMPTS` in `addons/dsh-modes/lib/prompt.js`, kept but no longer sent; Off's row still holds). Since 0.59.0 the searching words come from Depth: Quick uses the Quick words below, Standard adds none, **Thorough uses the Deep words** (`DEPTH_SEARCH_PROMPTS`), added only while `web_search` is really offered to the step (core-5). The former Thorough (five pages) is gone.
 
 | Level | Hint in the list | What the model is told |
 |---|---|---|
@@ -149,8 +147,10 @@ More notes that depend on the tab:
 - **Chat (a mode with no tools of its own) with Web on** also gets: "Web is on for this conversation: you may use web_search and web_fetch to look things up, even though file and command tools are unavailable in this mode."
   - The note names only the web tools the step really offers.
   - If only `web_fetch` is offered, it adds that there is no web search, so the model should open only addresses it knows or is given.
-- **Research and Scout** get neither the web note nor a level note. They follow their own method (research-1, scout-9).
-- **Recon** uses the same five levels with its own wording, which fits its own search tools (`ISOLATED_LEVEL_PROMPTS`). With Off, Recon's online tools go and only its citation tool stays (`ISOLATED_OFF_PROMPT`).
+- **Research and Scout** get neither the web note nor a searching note. They follow their own method (research-1, scout-9).
+- **Recon** gets Depth's care note and then its search effort since 0.59.0, the search effort in words that fit its own search tools (`ISOLATED_DEPTH_PROMPTS`: Quick, or Thorough = the former Deep, named Thorough). With Off, Recon's online tools go and only its citation tool stays (`ISOLATED_OFF_PROMPT`, in place of the search effort).
+
+**The Depth button (since 0.59.0)** is the same in every tab, Recon, Research and Scout included (the owner's rule: one Depth everywhere), and is hidden only while the Tools switch is off. Quick and Thorough add a care note after the mode's own words (`DEPTH_PROMPTS`) and, while Web is on and `web_search` is offered, the searching note after the web note (`DEPTH_SEARCH_PROMPTS`); Standard adds nothing. In Recon the care note is followed by its search effort; in Research and Scout there is no searching note, and Depth sizes their research runs (about 10, 25 or 45 minutes), as it does for a deep research run started in any tab. Research's own Depth (`researchDepth`) is gone. Helpers, all tools off and a running Mission run get no care note. A pick is kept per conversation (`sessionDepth`) and becomes the start for new conversations in every tab (`searchDepth`, Settings → Modes → "Depth for new conversations (and those that never picked one)"). Where the care note is given, Model Tiers' Effort words say only how hard to think. Each conversation's former Web level was moved into its Depth once (`depthMoved`; Deep became Thorough).
 
 **What Off takes away** (`maskFor` and `webReaching` in `addons/dsh-modes/lib/mask.js`)
 - `web_search` and `web_fetch`.
@@ -596,7 +596,7 @@ Recon adds two protections of its own:
 |---|---|---|---|
 | Mode for conversations that have not chosen one (`modes.defaultMode`) | Settings → Modes; also written by every sidebar tab click and by Engines' compare page | cowork | The mode a new conversation starts in. With the sidebar on, it is the selected tab. |
 | Mode cards: Tools, File sandbox, Tier for this mode, Prompt (`modes.modes`) | Settings → Modes | Chat: no tools, read only. Cowork: all tools, left as it is. Code: all tools, write in the workspace. | What each mode allows and adds. The tier applies to new conversations in the mode and to switches into it. The prompt is at most 4,000 characters. A card beyond the tab count says it has no sidebar tab. "Add mode", "Remove" and "Restore built-in modes" are here too. |
-| Web level for new conversations (and those that never picked one) (`modes.searchDepth`) | Settings → Modes → New conversations; chat box → Web button (picking a level sets it) | standard | The level new conversations start with, and the level of every conversation that never picked one. |
+| Depth for new conversations (and those that never picked one) (`modes.searchDepth`) | Settings → Modes → New conversations; chat box → Depth button (picking a Depth sets it) | standard | The Depth new conversations start with, and the Depth of every conversation that never picked one (before 0.59.0: the Web level; a stored Deep counts as Thorough). |
 | Mode for scheduled tasks (`modes.scheduledMode`) | Settings → Modes → New conversations (new in 0.57.0) | cowork | The mode of a conversation that a scheduled task opens. Offers the mode cards and the add-on modes that are not isolated. |
 | Tabs in the sidebar (`cowork-shell.maxTabs`) | Settings → Modes → Sidebar, shown only while the Cowork sidebar is on (new in 0.57.0) | 3 | How many of the mode cards get a tab, 1 to 5. Add-on modes always get one. |
 | Code: Plus's working method (`modes.codeMethod`) | Settings → Modes → Built-in working methods (new in 0.57.0) | on | Code's built-in method while its prompt is empty. |
@@ -606,7 +606,8 @@ Recon adds two protections of its own:
 | Rerun button (`modes.rerunButton`) | Settings → Modes → Buttons under an answer | on | The Rerun arrow under answers. |
 | Hide thumbs up and thumbs down (`modes.hideFeedback`) | Settings → Modes → Buttons under an answer | off | Hides the app's feedback buttons. |
 | Web per conversation (`modes.sessionWeb`) | chat box → Web button | not set: Chat Off, other tabs on | Web on or off for one conversation. |
-| Web level per conversation (`modes.sessionSearchDepth`) | chat box → Web button | not set: follows the starting level | Quick, Standard, Thorough or Deep. |
+| Web level per conversation (`modes.sessionSearchDepth`) | no control since 0.59.0 | `{}` | Obsolete: moved into `sessionDepth` once. |
+| Depth per conversation (`modes.sessionDepth`) | chat box → Depth button | not set: follows the start | Quick, Standard or Thorough. |
 | Tools switch (`modes.sessionTools`) | chat box → Tools button | on | Off: no tools at all in one conversation. |
 | Helpers' model per conversation (`modes.sessionHelpers`) | chat box → models chip | not set: follows the default | One model, or role models, for helpers. |
 | Helpers' model for new conversations (`modes.researchModel`) | chat box → models chip → "Use this for new conversations too"; Settings → Research → "Model for the helpers" | same | The default for all conversations. |
@@ -732,10 +733,10 @@ Cross-cutting changes. The ids are those of the change list and of your decision
 - They are on right after install. You pick one with the sidebar tabs (Chat, Cowork, Code). A new conversation starts in the tab you have selected; out of the box that is Cowork. With the sidebar on (as out of the box), `/mode` typed before the first message does not switch: it tells you that the tab decides and names the tabs.
 - Chat has no tools. Its Web button can give it web search and page reading, nothing more. It cannot read or change files or run commands.
 - Cowork and Code start with 16 core tools (files, shell, step list, questions, skills, plan approval, and a finder for more tools) plus web search and page reading. Other tools (PDF, data, charts, helpers, Office files and more) are added when the model asks for them or when your message names them, and then stay for the conversation.
-- The Web button decides how much the model searches (Off, Quick, Standard, Thorough, Deep). Off takes away the web tools, deep research and other tools that go online, including the image tools when their image service is outside this Mac and your own network. It also refuses shell commands and programs that go online. Connectors stay on and can still reach the internet; the Off hint and the note to the model say so.
+- The Web button turns the web On or Off (since 0.59.0; how much the model searches, plans and checks is the Depth button: Quick, Standard, Thorough). Off takes away the web tools, deep research and other tools that go online, including the image tools when their image service is outside this Mac and your own network. It also refuses shell commands and programs that go online. Connectors stay on and can still reach the internet; the Off hint and the note to the model say so.
 - Chat sets the access level to Read only, and Code to Write in the workspace, only when a conversation starts in that mode or is moved into it. A level you pick by hand survives a restart. Leaving the mode puts back the level from before, also after a restart, unless you changed it by hand since.
-- Settings → Modes also sets the Web level new conversations start with, the mode for scheduled tasks, how many sidebar tabs there are, and the two working-method switches. A mode's tier now applies to new conversations that start in it, not only on a switch.
-- Your choices per conversation (mode, Web, Tools, helper models, added tools, the access level from before a mode changed it) stay in this Mac's settings. Shared settings never copies the per-conversation Tools, Web level, helper-model, added-tool and access-level choices to another Mac, and by default it does not copy the mode and Web choices either. Recon's tools and Recon conversations are always kept out of these three modes.
+- Settings → Modes also sets the Depth new conversations start with, the mode for scheduled tasks, how many sidebar tabs there are, and the two working-method switches. A mode's tier now applies to new conversations that start in it, not only on a switch.
+- Your choices per conversation (mode, Web, Tools, helper models, added tools, the access level from before a mode changed it) stay in this Mac's settings. Shared settings never copies the per-conversation Tools, Depth, helper-model, added-tool and access-level choices to another Mac, and by default it does not copy the mode and Web choices either. Recon's tools and Recon conversations are always kept out of these three modes.
 
 ### What it is for and how it is set up
 
@@ -791,9 +792,8 @@ Cowork and Code:
 **The web tools need a backend.** The app offers `web_search` and `web_fetch` to a step only while its web service says search or fetch is ready for the model's provider (`app/dsh-tool-web/src/search.ts`, `app/dsh-tool-web/src/fetch.ts`). Modes now reads what the step really admits: its notes name only the web tools on offer, and the Tools panel lists a web tool that is not ready under "Cannot call", with the line "Not set up for this conversation's model, so not offered: …".
 
 **Web button behaviour.**
-- Levels: Off, Quick, Standard, Thorough, Deep. New Cowork and Code conversations start at `searchDepth` (Standard out of the box); new Chat conversations start at Off.
-- Picking a level sets it for this conversation and also for new conversations (`searchDepth`). Off applies only to this conversation.
-- Settings → Modes → New conversations sets `searchDepth` too ("Web level for new conversations (and those that never picked one)"). A conversation that never had a level picked in the chat box follows it, so changing it changes theirs as well; the label says so.
+- Since 0.59.0: On or Off. New Cowork and Code conversations start On; new Chat conversations start Off. A pick applies only to this conversation.
+- How much it searches is the Depth button: Quick, Standard or Thorough, kept per conversation; a pick also sets `searchDepth`, where new conversations start. Settings → Modes → New conversations sets it too ("Depth for new conversations (and those that never picked one)"). A conversation that never had a Depth picked follows it.
 - The button is greyed out while the Tools switch is off. It is not shown in a mode whose tool list contains `deep_research` (Research, Scout).
 - A Cowork project of type Paperwork starts new conversations with Web Off.
 
@@ -807,10 +807,11 @@ Cowork and Code:
 
 **How the section is built** (`promptText`). Its parts are joined by blank lines in this order:
 1. The mode's own prompt. For Code with an empty prompt and `codeMethod` on: `CODE_METHOD`. For Cowork with an empty prompt and `coworkMethod` on: `COWORK_METHOD`. Left out when the conversation's model version is set to stand alone (Model Tiers' `instructionsReplaced`), except for a mode that asks to keep it (`keepPrompt`, set by Scout) and for isolated modes such as Recon.
-2. The web note: only in a mode that is not `all` (here: Chat), only while Web is on, and only naming the web tools the step offers.
-3. The Web-level note: only while Web is on and the step offers `web_search`. Or, with Web Off in a mode that could go online (Cowork, Code), the Web-off note.
-4. `TRIM_PROMPT`, only while the conversation loads its tools as needed (`trimPrompt`; for a mode with start families, such as Data, it also names those).
-5. The PTC note, only in the PTC preset.
+2. Since 0.59.0, the Depth care note (Quick or Thorough; `DEPTH_PROMPTS`), in every tab: not for helpers, nor while a Mission run is on.
+3. The web note: only in a mode that is not `all` (here: Chat), only while Web is on, and only naming the web tools the step offers.
+4. The searching note from Depth (Quick or Thorough; `DEPTH_SEARCH_PROMPTS`): only while Web is on and the step offers `web_search`. Or, with Web Off in a mode that could go online (Cowork, Code), the Web-off note.
+5. `TRIM_PROMPT`, only while the conversation loads its tools as needed (`trimPrompt`; for a mode with start families, such as Data, it also names those).
+6. The PTC note, only in the PTC preset.
 
 Special cases:
 - Tools switch Off: the section is the Chat prompt (Chat only) followed by `TOOLS_OFF_PROMPT`. Nothing else, not even `CODE_METHOD` or `COWORK_METHOD`.
@@ -864,7 +865,7 @@ How to report:
 
 **Notes Modes adds on top of the mode text.**
 - Web note (Chat with Web on; `webPrompt`): "Web is on for this conversation: you may use web_search and web_fetch to look things up, even though file and command tools are unavailable in this mode." When only `web_fetch` is on offer it names only that tool and adds: "There is no web search here, so open only pages whose address you know or are given." When no web tool is on offer, there is no note.
-- Web-level notes (while Web is on and `web_search` is on offer; `SEARCH_DEPTH_PROMPTS`):
+- Web-level notes as they were before 0.59.0 (`SEARCH_DEPTH_PROMPTS`, no longer sent). Since 0.59.0 the Depth notes are sent instead (words in `addons/dsh-modes/README.md`): the care note for Quick or Thorough, and while Web is on and `web_search` is offered the searching note, whose Quick is the Quick below and whose Thorough is the Deep below (without the "Web level is Deep" opening):
   - Standard: no words. This is the default.
   - Quick: "Search depth is set to Quick: when you look something up on the web, one search is usually enough. Answer from the results, and open a page only when the results do not answer the question. Keep it short and name the source."
   - Thorough: "Search depth is set to Thorough: when you look something up on the web, run several searches with different wording, open at least five pages from different sites and read them (a search result's snippet is not a source), prefer primary sources, cross-check figures and dates between sources, say where sources disagree, and cite each source you used with its date."
@@ -923,7 +924,7 @@ The README's lab note measured 16 tools (about 3,000 tokens) for a plain "hello"
 ### Tools added later or only under a condition
 
 **Chat**
-- Web button set to Quick, Standard, Thorough or Deep: `web_search` and `web_fetch` (each only while ready for the model's provider), plus the web note and the level note.
+- Web button On: `web_search` and `web_fetch` (each only while ready for the model's provider), plus the web note and, at Depth Quick or Thorough, the searching note.
 - Switching the Tools switch on in Chat switches Web on.
 - Nothing else can be added to Chat.
 
@@ -974,7 +975,7 @@ The README's lab note measured 16 tools (about 3,000 tokens) for a plain "hello"
 **Settings → Modes, from top to bottom** (`ModesPage` in `addons/dsh-modes/client.js`):
 - The page's note: a new conversation takes the mode of the selected sidebar tab (without the sidebar: the mode list in the chat box); `/mode` switches a conversation's mode (with the sidebar on: only after its first message).
 - "Mode for conversations that have not chosen one" (`defaultMode`).
-- New conversations (new in 0.57.0): "Web level for new conversations (and those that never picked one)" and "Mode for scheduled tasks".
+- New conversations (new in 0.57.0): "Depth for new conversations (and those that never picked one)" (the Web level before 0.59.0) and "Mode for scheduled tasks".
 - Sidebar (new in 0.57.0, shown only while the Cowork sidebar is on): "Tabs in the sidebar", 1 to 5.
 - Built-in working methods (new in 0.57.0): "Code: Plus's working method" and "Cowork: Plus's working method".
 - Buttons under an answer: "Rerun button" and "Hide thumbs up and thumbs down".
@@ -994,9 +995,11 @@ The README's lab note measured 16 tools (about 3,000 tokens) for a plain "hello"
 | `hideFeedback` | Settings → Modes → Buttons under an answer ("Hide thumbs up and thumbs down"); saves at once | false | Hides the app's thumbs buttons. |
 | `codeMethod` | Settings → Modes → Built-in working methods ("Code: Plus's working method"); saves at once | true | Use `CODE_METHOD` as Code's instructions while its prompt is empty. |
 | `coworkMethod` (new in 0.57.0) | Settings → Modes → Built-in working methods ("Cowork: Plus's working method"); saves at once | true | Use `COWORK_METHOD` as Cowork's instructions while its prompt is empty. |
-| `sessionWeb` | chat box → Web button (Off, or a level); also written by Paperwork projects (Off) and by the Tools switch in Chat (on) | `{}` (missing: Chat off, Cowork and Code on) | Web on or off for one conversation. |
-| `sessionSearchDepth` | chat box → Web button level | `{}` (missing: follows `searchDepth`) | One conversation's Web level: quick, standard, thorough or deep. |
-| `searchDepth` | chat box → Web button (picking a level also sets it for new conversations); Settings → Modes → New conversations ("Web level for new conversations (and those that never picked one)": Quick, Standard, Thorough or Deep); saves at once | standard | The Web level new conversations start with, and the level of every conversation that never had one picked. |
+| `sessionWeb` | chat box → Web button (On or Off); also written by Paperwork projects (Off) and by the Tools switch in Chat (on) | `{}` (missing: Chat off, Cowork and Code on) | Web on or off for one conversation. |
+| `sessionSearchDepth` | none since 0.59.0 | `{}` | Obsolete: each conversation's former Web level, moved into `sessionDepth` once (`depthMoved`). |
+| `sessionDepth` (new in 0.59.0) | chat box → Depth button | `{}` (missing: follows `searchDepth`) | One conversation's Depth: quick, standard or thorough. |
+| `depthMoved` (new in 0.59.0) | no control | false | The one-time move of the Web levels into Depth is done. Kept on each Mac. |
+| `searchDepth` | chat box → Depth button (a pick also sets it for new conversations); Settings → Modes → New conversations ("Depth for new conversations (and those that never picked one)": Quick, Standard or Thorough); saves at once | standard | The Depth new conversations start with, and the Depth of every conversation that never had one picked (before 0.59.0 the Web level; a stored deep counts as thorough). |
 | `sessionTools` | chat box → Tools button → switch | `{}` | false means no tools at all in that conversation. |
 | `sessionHelpers` | chat box → models chip ("One model for everything" or "Different models") | `{}` (follows `researchModel`) | Whether one conversation's helper agents run on its own model or on role models. |
 | `researchModel` | chat box → models chip → "Use this for new conversations too" | same | The default helper-model choice for all conversations. |
@@ -1006,7 +1009,7 @@ The README's lab note measured 16 tools (about 3,000 tokens) for a plain "hello"
 | `pinOnFirstTurn` | configuration file only | true | Records the starting mode at the first turn. |
 | `pruneStaleSessions` | configuration file only | true | Drops per-conversation entries of deleted conversations once per start. |
 | `commandName` | configuration file only | mode | The name of the slash command (`/mode`). |
-| `researchDepth` | Settings → Research (Depth), and the Research tab's Depth dropdown in the chat box | standard | Rounds and helpers of a `deep_research` run, also when Cowork or Code calls it. One setting for all conversations. |
+| `researchDepth` | Settings → Research (Depth), and the Research tab's Depth dropdown in the chat box | standard | Obsolete since 0.59.0: a research run follows the Depth of the conversation that starts it (`modes.depthOf`; the Depth button, the same in every tab). Research's own Depth (this field, its Settings → Research segments and chat-box dropdown) is gone. |
 | `extraModes` | written by other add-ons (no control) | `{}` | Adds tabs and modes after these three; never replaces one of them. |
 | `sessionSandboxBase` (new in 0.57.0) | internal (no control) | `{}` | Per conversation: the mode its access level was last set for, the level from before a mode changed it, and the level that mode set. Kept on each Mac. |
 | `sessionResearch`, `sessionIsolated`, `webMarksCleared`, `dataTrimAdded` | internal (no control) | `{}`, `{}`, false, false | An old Deep research switch (no longer read), the marks of conversations that began in Recon, and two one-time flags (old Web marks cleared; `data` added to `trimModes`). |
@@ -1462,7 +1465,7 @@ With Finance switched on, Web at Standard and the other add-ons at their default
 | Web level (`sessionWeb`, `sessionSearchDepth`; global `searchDepth`) | Chat box → Web button; since 0.57.0 the starting level also on Settings → Modes → New conversations ("Web level for new conversations (and those that never picked one)") | On, Standard | Off removes the web, the online Finance tools and an outside image service's tools for this conversation, refuses shell commands and programs that go online, and adds the Web-off note. Connectors stay on. Quick, Thorough and Deep add a search-effort note when web search is set up; a level also sets where new conversations start, in every mode. A conversation that never picked a level follows the starting level. |
 | `sessionTools` | Chat box → Tools button | on | Off gives the conversation no tools at all and adds the Modes tools-off note. Since 0.57.0 it also adds Finance's own Tools-off note: figures only from memory, each marked as such, never with a source. |
 | `sessionHelpers` / `researchModel` | Chat box → models chip | `same` | Whether helpers (Deep research, swarm, tier tools, Mission) run on the conversation's model or on role models. |
-| `researchDepth` | Settings → Research (and the Research tab's chat box) | `standard` | How many rounds and helpers a `deep_research` run uses, Finance included. |
+| `researchDepth` | Settings → Research (and the Research tab's chat box) | `standard` | Obsolete since 0.59.0: a research run follows the Depth of the conversation that starts it (`modes.depthOf`; the Depth button, the same in every tab). Research's own Depth (this field, its Settings → Research segments and chat-box dropdown) is gone. |
 | `rerunButton` | Settings → Modes | on | Rerun button under answers, Finance included. |
 | `hideFeedback` | Settings → Modes | off | Hides the thumbs buttons under answers. |
 | `trimModes` | Settings → Modes → Load tools as needed ("Finance (add-on): load tools as needed") | Cowork, Code and Data (Data since 0.57.0; Finance not included) | On: Finance conversations start with the core tools plus `tools_find`, and get the load-as-needed note. The method, chips and briefs then rely on `tools_find` to bring the Finance tools. |
@@ -1814,7 +1817,7 @@ With Data on, Web on, Tools on, loading as needed on (the default since 0.57.0),
 | `list_mcp_resource_templates` | app (dsh-mcp-resources) | later: connectors | List connector resource templates. |
 | `read_mcp_resource` | app (dsh-mcp-resources) | later: connectors | Read a connector resource. |
 | `diagram_draw` | dsh-diagram (Plus) | later: visual | Draw a flowchart, tree, sequence, timeline, chart or formula plot in the chat. |
-| `deep_research` | dsh-deep-research (Plus) | later: helpers | Multi-helper web research with a cited report; depth from `modes.researchDepth`. Stops at once with a plain reason when the helpers' model has no web search (research-3). Removed by Web Off. |
+| `deep_research` | dsh-deep-research (Plus) | later: helpers | Multi-helper web research with a cited report; size from the Depth of the conversation that starts it (`modes.depthOf`, since 0.59.0). Stops at once with a plain reason when the helpers' model has no web search (research-3). Removed by Web Off. |
 | `delegate_role` | dsh-model-tiers (Plus) | later: helpers | Give one task to a role model (plan, implement, review, fast). |
 | `review_lanes` | dsh-model-tiers (Plus) | later: helpers | Up to three parallel review lanes on the Review role model. |
 | `run_pipeline` | dsh-model-tiers (Plus) | later: helpers | Plan → implement → review pipeline on the role models. |
@@ -1867,7 +1870,7 @@ In the default set-up each tool below also needs its family added (by `tools_fin
 | `modes.searchDepth` / `modes.sessionSearchDepth` | chat box, Web button (Quick / Standard / Thorough / Deep); `searchDepth` also on Settings → Modes, "Web level for new conversations (and those that never picked one)" (new in 0.57.0) | standard | Search effort. Any level but Standard adds a note while web_search is offered. Picking a level in the chat box also sets where new conversations start. |
 | `modes.sessionTools` | chat box, Tools switch | on | Off gives the model no tools and replaces METHOD with the Tools-off note. |
 | `modes.sessionHelpers` / `modes.researchModel` | chat box, Helpers button | same | Whether helper agents (deep_research, swarm, tier tools, mission, code power) run on this conversation's model or on the role models. |
-| `modes.researchDepth` | Settings → Research, and the Research tab's chat box | standard | Rounds and helpers deep_research uses when called from Data. |
+| `modes.researchDepth` | Settings → Research, and the Research tab's chat box | standard | Obsolete since 0.59.0: a research run follows the Depth of the conversation that starts it (`modes.depthOf`; the Depth button, the same in every tab). Research's own Depth (this field, its Settings → Research segments and chat-box dropdown) is gone. |
 | `modes.rerunButton` / `modes.hideFeedback` | Settings → Modes ("Buttons under an answer") | on / off | Rerun button and the app's thumbs under Data answers. |
 | `modes.pinOnFirstTurn` | configuration file only | on | Records `data` for the conversation at its first turn, so it stays in Data. Under the sidebar the tab's mode is recorded anyway. |
 | `modes.commandName` | configuration file only | mode | Name of the slash command; `/mode data` switches a conversation to Data (with the Cowork sidebar on, only after its first message). |
@@ -2095,10 +2098,10 @@ Switching it off removes the `extraModes` entry, sets `defaultMode` back to `cow
 - The real room's own name is never taken, in any spelling. The temporary folder has two names on a Mac, and the Mac's disk does not tell capitals from small letters, so other spellings can name the same folder.
 - Every test that starts the add-on loads it through `addons/dsh-recon/test/fixtures/room.mjs`. It makes a throwaway room and refuses to start Recon if that room is the real one by what the disk says.
 
-**Web button.** It is shown, because Recon does not list `deep_research`. With no choice made, it counts as on, at the starting Web level (Standard unless you picked another level in a chat box or, since 0.57.0, at Settings → Modes). The chat box treats "no choice" as on for an isolated mode (`addons/dsh-modes/client.js`). The host treats Web as Off only when this conversation's `sessionWeb` entry is `false`.
+**Web button.** It is shown, because Recon does not list `deep_research`. With no choice made, it counts as on. Since 0.59.0 it is only On or Off; Recon's search effort is its Depth button (the conversation's own Depth, else the start `searchDepth`, Standard unless you picked another in a chat box or at Settings → Modes). The chat box treats "no choice" as on for an isolated mode (`addons/dsh-modes/client.js`). The host treats Web as Off only when this conversation's `sessionWeb` entry is `false`.
 - Off leaves only `recon_cite` and adds the "Searching is switched off" note.
-- Quick, Thorough and Deep add the isolated-mode effort notes quoted below. Standard adds nothing.
-- Picking a level also makes it the starting level for new conversations in every tab. Off applies to this conversation only.
+- On adds nothing by itself. The Depth button (since 0.59.0): Quick and Thorough add Depth's care note (Thorough without the helper sentence, since Recon starts no helpers), then the isolated-mode search effort quoted below (with Web Off, the Off note in its place). Standard adds nothing. A locked, late or PTC Recon conversation, which can use none of its tools, gets no Depth words.
+- Picking a Depth also makes it the start for new conversations in every tab. Web On or Off applies to this conversation only.
 
 ### Instructions
 
@@ -2128,7 +2131,7 @@ How to report:
 
 **Notes Modes adds, and when.** They are joined after METHOD, each separated by a blank line.
 
-- **Web level** (the conversation's own level, else the starting level `searchDepth`). Text from `ISOLATED_LEVEL_PROMPTS` in `addons/dsh-modes/lib/prompt.js`:
+- **Depth** since 0.59.0 (the conversation's own Depth, else the start `searchDepth`; before, the Web level): first the care note every tab gets (`DEPTH_PROMPTS`), then the search effort. Text from `ISOLATED_DEPTH_PROMPTS` in `addons/dsh-modes/lib/prompt.js`: Quick and Standard as below; Thorough is the Deep text below, opening "Search effort is Thorough:". The 0.57.0 levels were:
   - Standard (the default): nothing. A new Recon conversation with defaults untouched gets METHOD alone.
   - Quick: "Search effort is Quick: one or two searches with your search tools; read only the sources needed to answer; keep it short."
   - Thorough: "Search effort is Thorough: several searches with different wording across the sources you have; read at least five sources; cross-check names, figures and dates between them; cite each source."
@@ -2231,8 +2234,9 @@ Limit: 400 requests per conversation (searches, blocklist fetches, reads, group 
 | `/recon cloud` agreement | chat box command, per conversation | not agreed (held in memory only) | Lets what Recon finds go to this conversation's cloud or unknown-location model until the app closes. Works only in a real Recon conversation. |
 | Model (chat-box model control) | chat box (the Model Tiers "Model" control while Model Tiers is on; the app's own menu otherwise) | the app's default model | Decides the gate and the step check. The start page's status bar shows it. |
 | Provider addresses (`providers` base URLs) | Settings → Models (the app's own page) | as you set them | Tell Recon where a model runs. A provider at this computer's own address, or at a private or local-network address, counts as home. DeepSeek, a provider with no address, and any provider Recon cannot find count as cloud. |
-| Web button (`sessionWeb`, `sessionSearchDepth`) | chat box (Web · Off / Quick / Standard / Thorough / Deep) | on, at the starting level | Off leaves only `recon_cite` and adds the Off note. A level adds the matching isolated-mode note. |
-| Starting Web level (`searchDepth`) | Settings → Modes, "Web level for new conversations (and those that never picked one)" (new in 0.57.0); picking a level in any tab's chat box also sets it | Standard | The level a new conversation starts at, and the level of one that never picked one. Standard adds no words in Recon. |
+| Web button (`sessionWeb`) | chat box (Web · On / Off; five levels before 0.59.0) | on | Off leaves only `recon_cite` and adds the Off note. |
+| Depth button (`sessionDepth`, since 0.59.0) | chat box (Quick / Standard / Thorough) | the start, `searchDepth` | Quick and Thorough add the care note, then the matching isolated-mode search effort. |
+| Starting Depth (`searchDepth`; the starting Web level before 0.59.0) | Settings → Modes, "Depth for new conversations (and those that never picked one)"; picking a Depth in any tab's chat box also sets it | Standard | The level a new conversation starts at, and the level of one that never picked one. Standard adds no words in Recon. |
 | Tools switch (`sessionTools`) | chat box Tools button | on | Off: no tools. The prompt then carries METHOD plus the tools-off note. |
 | Helpers chip (`sessionHelpers`, `researchModel`) | chat box models chip; `researchModel` also by its "Use this for new conversations too" | "same" | Shown in Recon but has no effect: isolated conversations start no helpers. |
 | Rerun button (`rerunButton`) | Settings → Modes | on | Shows a Rerun button under Recon answers too. A copy that carries earlier turns stays a Recon conversation, isolated for good. |
@@ -2671,7 +2675,7 @@ Scout's list has 20 names. The three Finance tools exist only while Finance is o
 | `scheduledMode` (modes) | Settings → Modes → New conversations → "Mode for scheduled tasks" (offers Scout while Scout is on) | cowork | The mode a conversation opened by an Automation task starts in, whatever tab is selected. |
 | `sessionTools` (modes) | Chat box, Tools button | `{}` (tools on) | Off gives this Scout conversation and its helpers no tools at all. |
 | `sessionHelpers` / `researchModel` (modes) | Chat box, Helpers button (this conversation, or "Use this for new conversations too"); Settings → Research → "Model for the helpers" | `{}` / same | Whether Deep research's helpers run on the conversation's model or on the role models. |
-| `researchDepth` (modes) | Settings → Research → Depth; the Research tab's chat box | standard | How deep `deep_research` goes (Quick, Standard, Thorough), in Scout too. |
+| `researchDepth` (modes) | Settings → Research → Depth; the Research tab's chat box | standard | Obsolete since 0.59.0: a research run follows the Depth of the conversation that starts it (`modes.depthOf`; the Depth button, the same in every tab). Research's own Depth (this field, its Settings → Research segments and chat-box dropdown) is gone. |
 | `rerunButton` / `hideFeedback` (modes) | Settings → Modes | on / off | The Rerun button and the thumbs under answers, in Scout as in every mode. |
 | `commandName` (modes) | configuration file only | mode | The slash command (`/mode scout`) that moves a conversation into or out of Scout. |
 | `tabs` (cowork-shell) | configuration file only | stored default with no `scout` entry | Each tab's New label, pages, greeting and chips. Without a `scout` entry, Scout's built-in copy is used. |
@@ -2940,7 +2944,7 @@ Since 0.57.0 point 5 also says to keep every "not read" label (research-4).
 - With the Tools switch Off, all of the above is replaced by: "Tools are switched off for this conversation. Answer from what you know and do not try to call a tool. If the task cannot be done without tools, say so in one sentence."
 - Helpers get none of this, only the programs note under PTC.
 
-(b) Research's section `research:selection` (order 59), for top-level Research conversations while Research is on, Tools off included. Default text: "Research selection: focus Web (the whole web); depth Standard (about 25 minutes). deep_research uses both by itself." The focus is the conversation's own (pinned at its first turn or picked in the chat box), else `research.focus`. The depth is Modes' `researchDepth`.
+(b) Research's section `research:selection` (since 0.59.0 its depth is the conversation's own, `modes.depthOf`) (order 59), for top-level Research conversations while Research is on, Tools off included. Default text: "Research selection: focus Web (the whole web); depth Standard (about 25 minutes). deep_research uses both by itself." The focus is the conversation's own (pinned at its first turn or picked in the chat box), else `research.focus`. The depth is Modes' `researchDepth`.
 
 (c) Sections of other add-ons that are not about Research but are not left out either:
 - Model Tiers (`model-tiers`, order 70): the active tier, its internet access, its effort wording and the sub-agent lines. Research does not count as "no tools", so the full text is given, including lines about delegating to sub-agents and `workflow` calls that Research cannot use. With Tools Off, Modes reports "no tools" (`noTools`), and Model Tiers leaves out the web, sub-agent, skill-loading and "run the checks" lines (x-7).
@@ -3009,7 +3013,7 @@ Places follow the grouped Settings window: Research is under Tabs and modes; Mod
 | `research.enabled` | Settings → Research → "Show the Research tab" | false | Adds or removes the Research mode and tab. Off also sets `modes.defaultMode` back to `cowork` if it was `research`. |
 | `research.focus` | Settings → Research → Focus; the chat-box Focus dropdown also writes it | `web` | Where a run looks first (Web, News, Academic). The focus new Research conversations start with; each conversation keeps the one pinned at its first turn or picked in its chat box. |
 | `research.folder` | configuration file only | `''` (`research/reports` in the app's home) | Where reports are saved. Settings → Research shows the path but cannot change it. |
-| `modes.researchDepth` | Settings → Research → Depth; the chat-box Depth dropdown | `standard` | Quick (1 round, up to 4 helpers at once, about 10 min, 30 sources), Standard (2 rounds, 6, 25 min, 60) or Thorough (3 rounds, 8, 45 min, 120). One value for all conversations, also used by `deep_research` in other tabs. |
+| `modes.researchDepth` | Settings → Research → Depth; the chat-box Depth dropdown | `standard` | Obsolete since 0.59.0: a research run follows the Depth of the conversation that starts it (`modes.depthOf`; the Depth button, the same in every tab). Research's own Depth (this field, its Settings → Research segments and chat-box dropdown) is gone. |
 | `modes.researchModel` | Settings → Research → "Model for the helpers"; the models chip's "Use this for new conversations too" | `same` | Helpers run on the conversation's model (`same`) or on the Model Tiers role models (`roles`: planner, analyst and writer on plan, searchers on fast). The default for every tool that starts helpers. |
 | `modes.sessionHelpers` | chat-box models chip ("One model" / "N models") | `{}` (follows `researchModel`) | The same choice for one conversation; it wins over `researchModel` there. Not shared between Macs (x-5). |
 | `modes.sessionTools` | chat-box Tools button | `{}` (tools on) | Off removes every tool from the conversation and its helpers and replaces the method with the tools-off note. Not shared between Macs (x-5). |
@@ -3059,7 +3063,7 @@ The tab has no pages of its own.
 - "The Deep research add-on is not running, so research runs cannot start. Switch it on under Plugins."
 - "The Research tab could not be added: …" (or "removed").
 
-Otherwise it shows nothing. Depth and Focus are in the chat box, not on the start page.
+Otherwise it shows nothing. Focus is in the chat box, not on the start page; since 0.59.0 Depth is the Depth button every tab has.
 
 **Chat box, left group, in order:**
 - Modes mode selector. Hidden while the Cowork sidebar is on.
@@ -3067,7 +3071,7 @@ Otherwise it shows nothing. Depth and Focus are in the chat box, not on the star
   - The models chip, "One model" or "N models". Its panel "Models for helper agents" offers "One model for everything" or "Different models" for this conversation (`sessionHelpers`), lists the models it may use, and has "Use this for new conversations too", which writes `researchModel`.
   - The Tools button, "Tools on" or "Tools off". Its panel has one switch for all tools of the conversation and lists "Can call" and "Cannot call". Web tools not set up for the conversation's model are listed under "Cannot call" with a hint line (core-5). Under PTC it says tools are reached from inside programs.
 - Research's "Depth · Standard" and "Focus · Web" dropdowns. They show only while Research is on and the conversation is a Research one (a draft on the Research tab counts):
-  - Depth lists Quick ("About 10 minutes: one round, up to 4 helpers at once."), Standard ("About 25 minutes: two rounds, up to 6 helpers; the second round fills the gaps.") and Thorough ("About 45 minutes: three rounds, up to 8 helpers; the most sources and cross-checks."). It writes the global `modes.researchDepth`. Where the app has a PTC runtime, a note at the bottom says a run started from a program "ends after at most about N minutes" (about 7 with the app's default limit) (research-7).
+  - (Before 0.59.0.) Depth lists Quick ("About 10 minutes: one round, up to 4 helpers at once."), Standard ("About 25 minutes: two rounds, up to 6 helpers; the second round fills the gaps.") and Thorough ("About 45 minutes: three rounds, up to 8 helpers; the most sources and cross-checks."). It writes the global `modes.researchDepth`. Where the app has a PTC runtime, a note at the bottom says a run started from a program "ends after at most about N minutes" (about 7 with the app's default limit) (research-7).
   - Focus lists Web ("The whole web, primary sources first."), News ("Recent reporting from established news outlets, each with its date.") and Academic ("Papers, preprints, reviews and research institutes, with authors and year."). A pick pins this conversation and also sets `research.focus` for new conversations.
   - Each chat box runs one refresh loop (every 4 seconds, 15 when the window is hidden), and a Focus pick does not make the dropdowns blink away (research-8).
 
@@ -3165,7 +3169,7 @@ The READMEs say nothing has been run with a real model and real web search (`add
 - **research-3**: `deep_research` checks that web search works for the searchers' model before any helper starts, in standard and wide mode, and stops with a plain reason if not.
 - **research-5**: the analyst and writer are told page text is data, not instructions; Research helpers no longer get the Library tools, `diagram_draw`, `todo_write` or `ask_user_question`.
 - **research-6**: tried and undone; the mode stayed at "inherit" (built in 0.57.0, see below).
-- **research-7**: the Depth dropdown and the Depth row in Settings → Research say how many minutes a run gets inside a PTC program. No behaviour changed.
+- **research-7**: the Depth dropdown and the Depth row in Settings → Research say how many minutes a run gets inside a PTC program. No behaviour changed. Since 0.59.0 the Depth row in Settings → Research says it, and the chat box's Depth list says a run stops sooner where tools run through programs.
 - **research-8**: one refresh loop per chat box; a Focus pick keeps the dropdowns in place.
 - **research-17**: the always-web rule and the clean-up of old Search-off marks are pure functions with tests; URL and JSON parsing are tested.
 - **core-5**: the Tools panel lists web tools not set up for the model under "Cannot call", with a hint.
@@ -3257,7 +3261,7 @@ The generated guide (`docs/GUIDE.md`, part 2) lists every setting with its defau
 
 | Section | Control | What it does |
 |---|---|---|
-| New conversations | Web level for new conversations (and those that never picked one) | Where the Web button starts: Quick, Standard, Thorough or Deep. A conversation that never had a level picked follows it too. Picking a level in the chat box sets it as well. (`searchDepth`) |
+| New conversations | Depth for new conversations (and those that never picked one) | Where the Depth button starts: Quick, Standard or Thorough (the Web level before 0.59.0). A conversation that never had a Depth picked follows it too. Picking a Depth in the chat box sets it as well. Also sizes Research, Scout and deep research runs: Quick about 10 minutes with up to 4 helpers, Standard about 25 with 6, Thorough about 45 with 8. (`searchDepth`) |
 | New conversations | Mode for scheduled tasks | The mode a conversation opened by an Automation task starts in, whatever tab is selected. Offers your modes and the add-ons' modes, except isolated ones such as Recon. (`scheduledMode`) |
 | Sidebar | Tabs in the sidebar | How many of your modes get a sidebar tab, 1 to 5, in their order; a mode an add-on adds always gets one. Shown only while the Cowork sidebar is on, and saved in the sidebar's own settings (`cowork-shell.maxTabs`). A mode card without a tab warns that it can only be reached with /mode. |
 | Built-in working methods | Code: Plus's working method | Used while the Code mode's own instructions are empty. (`codeMethod`) |

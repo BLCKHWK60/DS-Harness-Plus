@@ -81,6 +81,7 @@ export const ISOLATED_PTC_PROMPT = 'This conversation runs in the app\'s PTC pre
  * What the model is told about how hard to search, per step. Standard is how it searches without
  * being told anything, so it adds no words.
  */
+/** The former Web level notes, no longer sent since 0.59.0 (Depth carries them: DEPTH_SEARCH_PROMPTS); kept for older references. */
 export const SEARCH_DEPTH_PROMPTS = {
   quick: 'Search depth is set to Quick: when you look something up on the web, one search is usually enough. Answer from the results, and open a page only when the results do not answer the question. Keep it short and name the source.',
   standard: '',
@@ -130,7 +131,7 @@ export function webOffPrompt(offline = [], { connectors = false } = {}) {
  * @param {boolean} [want.alone] - the model version stands alone: the mode's own wording is left out, except an isolated mode's, whose rules always hold, and one that asks to keep it (`keepPrompt`).
  * @param {boolean} [want.web] - the conversation has the web.
  * @param {string[]} [want.stepWeb] - the web tools this step offers; undefined when the app does not say (an inspection).
- * @param {string} [want.level] - the conversation's Web level.
+ * @param {string} [want.depth] - the conversation's Depth: how much care, and how much it searches when Web is on.
  * @param {boolean} [want.webOff] - an isolated conversation's Web button is on Off.
  * @param {boolean} [want.codeMethod] - the Code mode gets its working method while it has no prompt of its own.
  * @param {boolean} [want.coworkMethod] - the Cowork mode gets its working method while it has no prompt of its own.
@@ -141,7 +142,54 @@ export function webOffPrompt(offline = [], { connectors = false } = {}) {
  * @param {boolean} [want.programOnly] - the agent reaches its tools only through programs (the PTC preset).
  * @returns {string} the section's text.
  */
-export function promptText({ mode, child = false, off = false, alone = false, web = false, stepWeb, level = 'standard', webOff = false, codeMethod = true, coworkMethod = true, trimmed = false, offline = [], connectors = false, programs = '', programOnly = false }) {
+/**
+ * Depth notes (the owner approved these words, 2026-11-15): how much care a conversation wants. They
+ * add to the working methods and never contradict them; Standard adds nothing. The searching part
+ * (when Web is on) is in DEPTH_SEARCH_PROMPTS.
+ */
+/** The app's tools that start a helper (sub-agent). */
+export const HELPER_TOOLS = ['subagent', 'subagent_fork'];
+/** @returns {boolean} whether a mode's tools can start a helper: all tools, or a list with a helper tool. */
+export function helpersOffered(tools) {
+  return tools === 'all' || (Array.isArray(tools) && tools.some((name) => HELPER_TOOLS.includes(name)));
+}
+export const DEPTH_PROMPTS = {
+  quick: 'How much care this conversation wants: Quick. Keep the work short: one pass and only quick checks. Start helpers only when the tier asks for them. Everything in your working method still applies.',
+  thorough: "How much care this conversation wants: Thorough. Make a short plan before you act. Before you finish, check your work against the request and your working method's checks. If helpers are allowed, ask one helper to review the result once, and fix what it finds.",
+};
+
+/**
+ * How much Depth searches when Web is on (since 0.59.0 the Web button is only On or Off, and Depth
+ * carries what the Web levels did: Quick as Web Quick, Thorough as the former Web Deep). Standard
+ * adds nothing: the model decides.
+ */
+/**
+ * Thorough without its last sentence ("If helpers are allowed, ask one helper to review the result
+ * once, and fix what it finds."), for a tab whose tools cannot start a helper (Chat, Research,
+ * Scout, Recon, a list without a helper tool): there the sentence could only be read as asking for
+ * another research run, or for edits to a report its method says to present as it came.
+ */
+export const DEPTH_PROMPTS_NO_HELPERS = {
+  quick: DEPTH_PROMPTS.quick,
+  thorough: DEPTH_PROMPTS.thorough.replace(' If helpers are allowed, ask one helper to review the result once, and fix what it finds.', ''),
+};
+/** @returns {string} Depth's care note for a mode's tools ('' at Standard). */
+export function depthCare(tools, depth) {
+  return (helpersOffered(tools) ? DEPTH_PROMPTS : DEPTH_PROMPTS_NO_HELPERS)[depth] ?? '';
+}
+export const DEPTH_SEARCH_PROMPTS = {
+  quick: 'When you look something up on the web, one search is usually enough: answer from the results, open a page only when the results do not answer the question, keep it short and name the source.',
+  thorough: "When you look something up on the web, run at least ten searches with different wording, open and read at least ten pages from different sites with web_fetch (a search result's snippet is not a source), cross-check every key fact, figure and date in at least two independent sources, say plainly where sources disagree, and cite each source with its date. Take the time this needs.",
+};
+
+/** An isolated tab's (Recon's) search effort by Depth: its own tools' wording; Thorough is the former Deep. */
+export const ISOLATED_DEPTH_PROMPTS = {
+  quick: ISOLATED_LEVEL_PROMPTS.quick,
+  // The former Deep's words, named for the button the user sees.
+  thorough: ISOLATED_LEVEL_PROMPTS.deep.replace('Search effort is Deep:', 'Search effort is Thorough:'),
+};
+
+export function promptText({ mode, child = false, off = false, alone = false, web = false, stepWeb, depth = 'standard', webOff = false, codeMethod = true, coworkMethod = true, trimmed = false, offline = [], connectors = false, programs = '', programOnly = false }) {
   if (child) return programs;
   const join = (parts) => parts.filter(Boolean).join('\n\n');
   // A mode without tools, and an isolated one (its rules on untrusted text hold with tools off too), keep their own words.
@@ -152,7 +200,15 @@ export function promptText({ mode, child = false, off = false, alone = false, we
   const own = mode.prompt || builtIn;
   if (mode.isolated) {
     // Its tools are its own, never reached through programs: under PTC it says it cannot work there.
-    return join([own, webOff ? ISOLATED_OFF_PROMPT : ISOLATED_LEVEL_PROMPTS[level], programOnly ? ISOLATED_PTC_PROMPT : '']);
+    // Depth is the same in every tab: its care note, then how hard it searches with its own tools.
+    // A conversation that can use none of its tools (a locked or late one, or one under PTC) gets no Depth words.
+    const canWork = Array.isArray(mode.tools) && mode.tools.length > 0 && !programOnly;
+    return join([
+      own,
+      canWork ? depthCare(mode.tools, depth) : '',
+      webOff ? ISOLATED_OFF_PROMPT : canWork ? (ISOLATED_DEPTH_PROMPTS[depth] ?? '') : '',
+      programOnly ? ISOLATED_PTC_PROMPT : '',
+    ]);
   }
   // A research tab (Research, Scout) has no Web button and works by its own method: no web note, no Web level.
   const ownSearch = researchTab(mode.tools);
@@ -162,9 +218,14 @@ export function promptText({ mode, child = false, off = false, alone = false, we
   // With Web Off, only a mode that would otherwise go online is told what went.
   const couldGoOnline = mode.tools === 'all' || (Array.isArray(mode.tools) && mode.tools.some((name) => WEB_TOOLS.includes(name) || offline.includes(name)));
   let levelNote = '';
-  if (!ownSearch && web && webTools.includes('web_search')) levelNote = SEARCH_DEPTH_PROMPTS[level] ?? '';
+  if (!ownSearch && web && webTools.includes('web_search')) levelNote = DEPTH_SEARCH_PROMPTS[depth] ?? '';
   else if (!ownSearch && !web && couldGoOnline) levelNote = webOffPrompt(offline, { connectors });
   // A mode that holds rules of its own (Scout) keeps its words under a model version that stands alone.
   const keep = mode.keepPrompt === true;
-  return join([alone && !keep ? '' : own, webNote, levelNote, trimmed ? trimPrompt(mode.startFamilies) : '', programs]);
+  // Depth is the same in every tab (the owner's rule): its care note here too, Research and Scout
+  // included (there it also sets the size of a research run, which deep_research reads itself; no
+  // searching note, since they search by their own method). None for a helper or with tools off
+  // (both left above). Kept under a model version that stands alone, like the Web notes.
+  const depthNote = depthCare(mode.tools, depth);
+  return join([alone && !keep ? '' : own, depthNote, webNote, levelNote, trimmed ? trimPrompt(mode.startFamilies) : '', programs]);
 }

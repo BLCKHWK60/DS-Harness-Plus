@@ -1,5 +1,6 @@
 /**
- * Research, browser half: the Depth and Focus dropdowns in a Research conversation's chat box, a
+ * Research, browser half: the Focus dropdown in a Research conversation's chat box (Depth is the
+ * Modes add-on's Depth button, the same in every tab), a
  * start-page line that shows problems only, the Settings >
  * Research page, and the live progress of a Deep research run above the message box, with its
  * follow-up questions as buttons once it is done.
@@ -74,7 +75,7 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
 .dsh-rs-x { float: right; border: 0; background: transparent; cursor: pointer; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 14px; line-height: 14px; }
 `;
 
-    /** What the depth cannot change: a run started from a program stops at the app's program time limit. */
+    /** What Depth cannot change: a run started from a program stops at the app's program time limit. */
     const programNote = (minutes) => (minutes ? `In conversations that run tools through programs (the app's PTC preset), searching stops after about ${minutes} minute${minutes === 1 ? '' : 's'} and the report is written in the time left before the app\'s program limit, so a longer depth may do fewer rounds there.` : '');
 
     const STEPS = [['planning', 'Plan'], ['searching', 'Search'], ['reviewing', 'Review'], ['writing', 'Write'], ['done', 'Done']];
@@ -188,7 +189,7 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
           : null);
     }
 
-    /** Depth and Focus in the chat box of a Research conversation. */
+    /** Focus in the chat box of a Research conversation (Depth is the Modes add-on's button there, as in every tab). */
     function ResearchControls({ appCtx, sessionId }) {
       const [view, setView] = useState(null);
       const [busy, setBusy] = useState(false);
@@ -211,18 +212,6 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
         return () => { alive = false; clearTimeout(timer); listeners.delete(tick); };
       }, [sessionId]);
       if (!view || view.enabled !== true || !view.session?.inResearch) return null;
-      const pickDepth = async (id) => {
-        setBusy(true);
-        setView((v) => ({ ...v, depth: id }));
-        try {
-          await setIn(appCtx, 'modes', { researchDepth: id });
-          tell();
-        } catch {
-          /* the next refresh shows what is saved */
-        } finally {
-          setBusy(false);
-        }
-      };
       const pickFocus = async (id) => {
         setBusy(true);
         setView((v) => ({ ...v, focus: id, session: { ...v.session, focus: id } }));
@@ -238,7 +227,6 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
       };
       return h('span', { className: 'dsh-rs-ctls' },
         h('style', null, CSS),
-        h(DropButton, { label: 'Depth', items: view.depths ?? [], value: view.depth, busy, note: programNote(view.programMinutes), onPick: (id) => void pickDepth(id) }),
         h(DropButton, { label: 'Focus', items: view.focuses ?? [], value: view.session.focus ?? view.focus, busy, onPick: (id) => void pickFocus(id) }));
     }
 
@@ -346,8 +334,7 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
           h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Show the Research tab'), h('div', { className: 'dsh-rs-rowdesc' }, 'Needs the Deep research add-on. Off takes the tab away; saved reports are kept.')),
           h(Switch, { on: data.enabled === true, label: 'Show the Research tab', onChange: (on) => void save(NS, { enabled: on }, on ? 'Switched on. The Research tab appears in the sidebar in a moment.' : 'Switched off.') })),
         h('div', { className: 'dsh-rs-group' }, 'Depth and focus'),
-        h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Depth'), h('div', { className: 'dsh-rs-rowdesc' }, `How long a run may take and how many helpers work at once.${data.programMinutes ? ` ${programNote(data.programMinutes)}` : ''}`)),
-          h(Segments, { items: data.depths ?? [], value: data.depth, label: 'Depth', onPick: (id) => void save('modes', { researchDepth: id }, 'Depth saved.') })),
+        h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Depth'), h('div', { className: 'dsh-rs-rowdesc' }, `The same Depth as in every tab: pick it with the Depth button in the chat box; Settings → Modes sets where new conversations start. For a research run it sets how long the run takes and how many helpers work at once: ${(data.depths ?? []).map((item) => `${item.label}, ${item.about.charAt(0).toLowerCase()}${item.about.slice(1)}`).join(' ')}${data.programMinutes ? ` ${programNote(data.programMinutes)}` : ''}`))),
         h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Focus'), h('div', { className: 'dsh-rs-rowdesc' }, 'Where a run looks first. A conversation keeps the focus it started with.')),
           h(Segments, { items: data.focuses ?? [], value: data.focus, label: 'Focus', onPick: (id) => void save(NS, { focus: id }, 'Focus saved.') })),
         h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Model for the helpers'), h('div', { className: 'dsh-rs-rowdesc' }, (data.helperModels ?? []).find((item) => item.id === data.helperModel)?.hint ?? '')),
@@ -358,7 +345,7 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
         h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }), h('button', { type: 'button', className: 'dsh-rs-btn', onClick: () => void post({ action: 'reveal' }).catch((problem) => setNote({ text: problem.message, error: true })) }, 'Show in Finder')),
         h('div', { className: 'dsh-rs-group' }, 'Good to know'),
         h('ul', { className: 'dsh-rs-list' },
-          h('li', null, 'The helpers search with your web search provider. In other tabs, the Web button in the chat box sets how much the assistant searches by itself; in-depth research with helpers is here.'),
+          h('li', null, 'The helpers search with your web search provider. In other tabs, the Depth button in the chat box sets how much the assistant searches by itself (with Web on); in-depth research with helpers is here.'),
           h('li', null, 'A Thorough run can start more than 25 helper runs. With a cloud model that costs tokens; with a local one it takes time.'),
           h('li', null, 'Sources are pages from the web. The report marks which ones a helper read and which were seen only in search results. Claims are not compared with the pages, so check the important ones yourself.'),
           h('li', null, 'Research conversations run Read Only: the assistant cannot change your files without asking you first. Leaving Research puts back the access level the conversation had before. Reports and diagrams are still saved.')));

@@ -17,7 +17,7 @@ Installing, updating and removing are in the [README](../README.md). The history
 | **Top of the sidebar** | The tabs: Chat, Cowork, Code, and Finance, Data, Research, Scout and Recon once you switch them on. With more than three they sit in rows of three. How many of your own modes get a tab is set in Settings → Modes. |
 | **Sidebar, under the tabs** | The tab's own pages (Automation tasks, Connectors, Skills, Plugins…), then its projects and conversations, then the Trash. |
 | **Bottom of the sidebar** | Your DeepSeek balance, and **More** (Settings, look options). |
-| **Chat box, left** | Web, the models chip, Tools (in a Research conversation: Depth and Focus instead of Web; in a Finance conversation: its selection too). |
+| **Chat box, left** | Web, Depth, the models chip, Tools (Depth is in every tab and hidden only while Tools are off; in Research and Scout there is no Web button, and Research adds Focus; in a Finance conversation: its selection too). |
 | **Chat box, right** | The model button: model, effort, tier. |
 | **Above the chat box** | The activity line, with the arrow that folds the chat box away. |
 | **Under an answer** | Copy, Rerun, Branch, usage, and pictures the assistant drew. |
@@ -32,7 +32,7 @@ A tab is a way of working. Clicking a tab returns you to the conversation you la
 
 | Tab | For | What is special |
 |---|---|---|
-| **Chat** | Plain conversation. | No tools. Pick a Web level other than Off and it may search the web and read pages. No projects. |
+| **Chat** | Plain conversation. | No tools. Switch Web on and it may search the web and read pages. No projects. |
 | **Cowork** | Any work in a folder. | All tools, and a working method: understand the task first, keep a step list, ask before changing your files, check the result, report plainly. Projects with types (see 4). |
 | **Code** | Programming. | All tools, and a working method: read first, small changes, run the tests, report plainly. |
 | **Finance** | Companies, markets, economies. | Its own data tools and drop-downs for subject, market, focus and period. Off until you switch it on in Settings → Finance. |
@@ -41,7 +41,7 @@ A tab is a way of working. Clicking a tab returns you to the conversation you la
 | **Scout** | Finding work: jobs, freelance projects, contracts, public tenders. | Its own job sources and checks; a scored report with draft messages, and nothing is sent. Off until you switch it on in Settings → Scout (see 9). |
 | **Recon** | Research on .onion sites and Usenet text newsgroups. | Isolated: only its own tools (.onion sites through Tor); nothing from other conversations comes in or goes out. Needs the `tor` program. Off until you switch it on in Settings → Recon (see 10). |
 
-- Change what a tab's mode allows in **Settings → Modes** (tools, file sandbox, tier, instructions). The same page sets the Web level new conversations start with, the mode for scheduled tasks, how many of your modes get a sidebar tab (1 to 5), and switches for the built-in working methods of Code and Cowork.
+- Change what a tab's mode allows in **Settings → Modes** (tools, file sandbox, tier, instructions). The same page sets the Depth new conversations start with, the mode for scheduled tasks, how many of your modes get a sidebar tab (1 to 5), and switches for the built-in working methods of Code and Cowork.
 - A mode's tier applies to a new conversation from its first message.
 - **The access level** (file sandbox): Chat, Data, Research and Recon set Read Only and Code sets Workspace Write, only when a conversation starts in the mode or is moved into it. A level you pick by hand in the chat box is kept, also after a restart. Moving to a tab that sets none (Cowork, Finance, Scout) puts back the earlier level, unless you changed it by hand.
 - `/mode` shows or switches the mode of a conversation. With the sidebar on, before the first message the selected tab decides: `/mode` then only names the tabs.
@@ -50,8 +50,9 @@ A tab is a way of working. Clicking a tab returns you to the conversation you la
 
 | Control | What it does | How to use it |
 |---|---|---|
-| **Web** | How much the assistant may use the internet in this conversation. | Click and pick: **Off**, **Quick**, **Standard**, **Thorough** or **Deep** (at least ten searches and ten pages read, facts cross-checked). Off takes away web search, page reading and other tools that go online (an outside image service too), and stops commands and programs that go online; connectors you added stay on and can still reach the internet. The level you pick is also where new conversations start (also set in Settings → Modes). Not shown in Research and Scout, which always have the web. |
-| **Depth** and **Focus** (Research tab) | How long a research run may take and where it looks first. | Pick in the chat box of a Research conversation. A research run works in rounds with helper agents and ends in a cited report. |
+| **Web** | Whether the assistant may use the internet in this conversation. | Click and pick **On** or **Off**. Off takes away web search, page reading and other tools that go online (an outside image service too), and stops commands and programs that go online; connectors you added stay on and can still reach the internet. Not shown in Research and Scout, which always have the web. |
+| **Depth** | How much work the conversation gets: how much it searches when Web is on, planning, checks and reviews. | Click and pick **Quick**, **Standard** or **Thorough** (at least ten searches and ten pages read, key facts checked in two sources, a short plan, a check before finishing, and one review by a helper in tabs that can start helpers). The Depth you pick is also where new conversations start (also set in Settings → Modes). It is the same in every tab: in Recon it also sets how hard Recon searches, and in Research and Scout (and any deep research run) it sets the size of a research run: about 10, 25 or 45 minutes. How hard the model thinks is the **Effort** on the model button. |
+| **Focus** (Research tab) | Where a research run looks first: Web, News or Academic. | Pick in the chat box of a Research conversation. How long the run takes is the Depth button. A research run works in rounds with helper agents and ends in a cited report. |
 | **Selection** (Finance tab) | What a Finance conversation is about: kind, subject, market, focus, period. | Shown once the conversation has started. Press a part to change it, for this conversation only. |
 | **Models chip** | Shows whether helper agents use this conversation's model (**One model**) or others as well (an amber **3 models**). | Click to switch for this conversation. One model is the default and needs the least memory. |
 | **Tools** | Shows what the assistant can and cannot call right now, with one switch for all tools. | Click to see the list. |

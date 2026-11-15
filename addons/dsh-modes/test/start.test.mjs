@@ -576,3 +576,159 @@ test('a conversation in the trash keeps its tab, Web, Tools and Recon isolation 
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('Depth reaches the model: the care note, then the web note, then how much to search; a Mission run\'s rounds get none of it', async () => {
+  // Chat, Recon and Research cannot start a helper: their Thorough note ends at the check (no helper review).
+  const { DEPTH_PROMPTS_NO_HELPERS: DEPTH_PROMPTS, DEPTH_SEARCH_PROMPTS, ISOLATED_DEPTH_PROMPTS } = await import('../lib/prompt.js');
+  const RECON = { label: 'Recon', tools: ['recon_cite', 'web_search'], sandbox: 'read-only', prompt: 'Recon method.', isolated: true };
+  const RESEARCH = { label: 'Research', tools: ['deep_research', 'web_search', 'web_fetch'], sandbox: 'read-only', prompt: 'Research method.' };
+  const goals = new Map();
+  const world = makeWorld({
+    // The stand-in app stores no conversations: nothing is cleaned up as gone.
+    pruneStaleSessions: false,
+    // The start stored before 0.59.0: the Web level Deep, which is Thorough now.
+    searchDepth: 'deep',
+    extraModes: JSON.stringify({ recon: RECON, research: RESEARCH }),
+    sessionModes: JSON.stringify({ c1: 'chat', c2: 'chat', c3: 'chat', r1: 'recon', g1: 'chat', s1: 'research' }),
+    sessionWeb: JSON.stringify({ c1: true, c2: false, c3: true, g1: true }),
+    sessionDepth: JSON.stringify({ c3: 'quick' }),
+  });
+  const app = boot(world, { known: ['read', 'web_search', 'web_fetch', 'recon_cite'], goals });
+  for (const id of ['c1', 'c2', 'c3', 'r1', 'g1', 's1']) await app.open(id);
+  const c1 = app.prompt('c1');
+  const care = c1.indexOf(DEPTH_PROMPTS.thorough);
+  const webNote = c1.search(/Web is on for this conversation/);
+  const search = c1.indexOf(DEPTH_SEARCH_PROMPTS.thorough);
+  assert.ok(care >= 0 && webNote > care && search > webNote, `order: care ${care}, web ${webNote}, search ${search}`);
+  // Web Off: the care note stays; nothing about searching.
+  const c2 = app.prompt('c2');
+  assert.ok(c2.includes(DEPTH_PROMPTS.thorough) && !c2.includes(DEPTH_SEARCH_PROMPTS.thorough));
+  // A conversation's own pick wins over the start.
+  const c3 = app.prompt('c3');
+  assert.ok(c3.includes(DEPTH_PROMPTS.quick) && c3.includes(DEPTH_SEARCH_PROMPTS.quick) && !c3.includes(DEPTH_PROMPTS.thorough));
+  // Recon: the care note like every tab, then its own search effort by Depth.
+  const r1 = app.prompt('r1');
+  assert.ok(r1.indexOf(DEPTH_PROMPTS.thorough) >= 0 && r1.indexOf(ISOLATED_DEPTH_PROMPTS.thorough) > r1.indexOf(DEPTH_PROMPTS.thorough), r1);
+  // A Mission run's rounds are running (its goal, armed): they only conduct, so no Depth words at all.
+  const MISSION = { phase: 'active', activation: 'armed', objective: 'Mission run r-1: tidy the books\n\nIn each round call the step tool once.' };
+  goals.set('g1', MISSION);
+  const during = app.prompt('g1');
+  assert.ok(!during.includes('How much care') && !during.includes(DEPTH_SEARCH_PROMPTS.thorough), during);
+  assert.match(during, /Web is on for this conversation/, 'the web note itself stays');
+  // Also while its goal is disarmed (after a restart or an error) and the user writes: Mission still
+  // conducts the run and refuses every other tool.
+  goals.set('g1', { ...MISSION, activation: 'disarmed' });
+  assert.ok(!app.prompt('g1').includes('How much care'));
+  assert.equal(app.service().depthSpoken({ id: 'g1' }), 'standard');
+  // They come back once it is done or paused, and for the user's own /goal (running or only stored),
+  // whose rounds do the work.
+  for (const goal of [{ ...MISSION, phase: 'complete' }, { ...MISSION, phase: 'paused' }, { phase: 'active', activation: 'armed', objective: 'research the market' }, { phase: 'active', activation: 'disarmed', objective: 'research the market' }]) {
+    goals.set('g1', goal);
+    assert.ok(app.prompt('g1').includes(DEPTH_PROMPTS.thorough), JSON.stringify(goal));
+    assert.equal(app.service().depthSpoken({ id: 'g1' }), 'thorough', JSON.stringify(goal));
+  }
+  goals.delete('g1');
+  // Model Tiers keeps only its thinking words exactly where the Depth note is given (depthSpoken).
+  assert.equal(app.service().depthSpoken({ id: 'c1' }), 'thorough');
+  assert.equal(app.service().depthSpoken({ id: 'c3' }), 'quick');
+  // Recon and Research get the Depth note too (one Depth everywhere): Model Tiers goes thinking-only there as well.
+  assert.equal(app.service().depthSpoken({ id: 'r1' }), 'thorough', 'Recon');
+  assert.equal(app.service().depthSpoken({ id: 's1' }), 'thorough', 'Research');
+  assert.ok(app.prompt('s1').includes(DEPTH_PROMPTS.thorough));
+  assert.ok(!app.prompt('s1').includes(DEPTH_SEARCH_PROMPTS.thorough), 'Research searches by its own method');
+  goals.set('g1', MISSION);
+  assert.equal(app.service().depthSpoken({ id: 'g1' }), 'standard', 'a Mission run\'s rounds');
+  goals.delete('g1');
+  assert.equal(app.service().depthSpoken({ id: 'g1' }), 'thorough');
+  const helper = await app.open('h1', { header: { parentSession: 'c1' } });
+  assert.equal(app.service().depthOf('h1'), 'thorough', 'a helper follows its conversation\'s Depth');
+  assert.equal(app.service().depthSpoken(helper.agent), 'standard', 'but gets no Depth note');
+  world.config.sessionTools = JSON.stringify({ c1: false });
+  assert.equal(app.service().depthSpoken({ id: 'c1' }), 'standard', 'tools off');
+  world.config.sessionTools = '{}';
+  assert.equal(app.service().depthSpoken(undefined), 'standard');
+  // The service answers the same.
+  assert.equal(app.service().searchDepth(), 'thorough');
+  assert.equal(app.service().depthOf('c3'), 'quick');
+  assert.equal(app.service().depthOf('c1'), 'thorough');
+  app.stop();
+});
+
+test('the first start after 0.59.0 moves each conversation\'s Web level into its Depth, once', async () => {
+  const world = makeWorld({
+    pruneStaleSessions: false,
+    searchDepth: 'deep',
+    sessionSearchDepth: JSON.stringify({ a: 'quick', b: 'deep' }),
+    sessionDepth: JSON.stringify({ c: 'quick' }),
+  });
+  let app = boot(world);
+  await app.open('m1');
+  await settle();
+  assert.deepEqual(JSON.parse(world.config.sessionDepth), { a: 'quick', b: 'thorough', c: 'quick' });
+  assert.equal(world.config.sessionSearchDepth, '{}', 'the old levels are cleared');
+  assert.equal(world.config.searchDepth, 'thorough');
+  assert.equal(world.config.depthMoved, true);
+  app.stop();
+  // Later picks are never overwritten by the old levels on the next start.
+  world.config.sessionDepth = JSON.stringify({ a: 'standard', b: 'thorough', c: 'quick' });
+  world.config.sessionSearchDepth = JSON.stringify({ a: 'quick', z: 'deep' });
+  app = boot(world);
+  await app.open('m2');
+  await settle();
+  assert.deepEqual(JSON.parse(world.config.sessionDepth), { a: 'standard', b: 'thorough', c: 'quick' }, 'moved once only');
+  app.stop();
+  // Before the move is written (or should it fail), a start of Deep already counts as Thorough.
+  const early = makeWorld({ pruneStaleSessions: false, depthMoved: true, searchDepth: 'deep' });
+  app = boot(early);
+  assert.equal(app.service().searchDepth(), 'thorough');
+  assert.equal(app.service().depthOf('any'), 'thorough');
+  app.stop();
+});
+
+test('the start-up clean-up never undoes the move of the Web levels into Depth', async () => {
+  // A conversation stored in the settings was deleted: the clean-up drops it while the move is written.
+  const world = makeWorld({
+    searchDepth: 'deep',
+    sessionModes: JSON.stringify({ a: 'chat', b: 'chat', gone: 'chat' }),
+    sessionSearchDepth: JSON.stringify({ a: 'quick', b: 'deep', gone: 'quick' }),
+  });
+  const app = boot(world, { persisted: new Set(['a', 'b']), writeDelay: 5 });
+  await app.open('m1');
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.equal(world.config.depthMoved, true);
+  assert.deepEqual(JSON.parse(world.config.sessionDepth), { a: 'quick', b: 'thorough' }, 'moved, and the gone one dropped');
+  assert.equal(world.config.sessionSearchDepth, '{}');
+  assert.deepEqual(JSON.parse(world.config.sessionModes), { a: 'chat', b: 'chat' });
+  assert.equal(app.service().depthOf('a'), 'quick');
+  assert.equal(app.service().depthOf('b'), 'thorough');
+  app.stop();
+});
+
+test('a failed write of the move is tried again with the next conversation that opens', async () => {
+  let refused = 0;
+  const world = makeWorld({ pruneStaleSessions: false, sessionSearchDepth: JSON.stringify({ a: 'deep' }) });
+  const app = boot(world, { failWrite: (ops) => ops.some((op) => op.path[0] === 'depthMoved') && refused++ === 0 });
+  await app.open('m1');
+  await settle();
+  assert.equal(refused, 1);
+  assert.notEqual(world.config.depthMoved, true, 'not marked done');
+  assert.equal(app.service().depthOf('a'), 'standard', 'nothing moved yet');
+  await app.open('m2');
+  await settle();
+  assert.equal(world.config.depthMoved, true);
+  assert.deepEqual(JSON.parse(world.config.sessionDepth), { a: 'thorough' });
+  app.stop();
+});
+
+test('the move also runs a moment after loading, when no conversation opens', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const world = makeWorld({ pruneStaleSessions: false, sessionSearchDepth: JSON.stringify({ a: 'quick' }) });
+  const app = boot(world);
+  await settle();
+  assert.notEqual(world.config.depthMoved, true);
+  t.mock.timers.tick(2000);
+  await settle();
+  assert.equal(world.config.depthMoved, true);
+  assert.deepEqual(JSON.parse(world.config.sessionDepth), { a: 'quick' });
+  app.stop();
+});

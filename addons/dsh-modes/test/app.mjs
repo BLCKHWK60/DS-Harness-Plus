@@ -52,9 +52,11 @@ export async function settle() {
  * @param {Array<{id: string, lastTurn?: number}>} [options.before] - conversations already open when the add-on loads.
  * @param {number} [options.tierDelay] - milliseconds Model Tiers takes before a tier change reaches the model (its settings write).
  * @param {number} [options.writeDelay] - milliseconds a settings write of Modes takes.
+ * @param {Map<string, object>} [options.goals] - each conversation's goal as the app's goals service views it: `{ phase, activation, objective }`.
+ * @param {(ops: object[]) => boolean} [options.failWrite] - a settings write it returns true for fails (as a refused or crashed write does).
  * @returns {object} the running app.
  */
-export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0, home } = {}) {
+export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0, home, goals, failWrite } = {}) {
   const { config } = world;
   const handlers = new Map();
   const agents = new Map();
@@ -71,6 +73,7 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
     mutate: async (ns, ops) => {
       if (ns !== 'modes') throw new Error(`unexpected namespace ${ns}`);
       if (writeDelay > 0) await new Promise((resolve) => setTimeout(resolve, writeDelay));
+      if (failWrite?.(ops)) throw new Error('settings write failed');
       for (const op of ops) if (op.op === 'set') config[op.path[0]] = op.value;
     },
   };
@@ -96,6 +99,8 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
     ...(home ? { dshHomePath: (...parts) => join(home, ...parts) } : {}),
     loader: { entries: () => loader },
     ...(tabs ? { coworkShell: {} } : {}),
+    // The app's goals service: a view per live conversation (its phase, whether rounds are driven, its objective).
+    ...(goals ? { goals: { get: (agent) => goals.get(agent.id) } } : {}),
     ...(world.presets
       ? {
           permissionPresets: {

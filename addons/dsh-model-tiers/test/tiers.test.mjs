@@ -195,13 +195,25 @@ test('a version that stands alone leaves out the tier wording but keeps the rule
 // ---- isolated conversations and conversations without tools ---------------------------------
 
 /** Run the add-on on a stand-in host and give back its service, with one conversation on `prov-a/model-x`. */
-async function running(config, { isolated = false, noTools = false } = {}) {
+async function running(config, { isolated = false, noTools = false, depth, prompt = false } = {}) {
   const { apply } = await import('../index.js');
   let current = { provider: 'prov-a', model: 'model-x' };
-  const agent = { id: 's1', session: {}, model: { current: () => current, select: (route) => { current = { provider: route.provider, model: route.model }; } } };
+  let section;
+  const effect = (make) => { const undo = make(); return typeof undo === 'function' ? undo : () => {}; };
+  const agent = {
+    id: 's1', session: {},
+    model: { current: () => current, select: (route) => { current = { provider: route.provider, model: route.model }; } },
+    // With `prompt`, the conversation is open when the add-on loads and its tier section is captured.
+    ...(prompt ? { ctx: { effect, systemPrompt: { section: (spec) => { section = spec; return () => {}; } } } } : {}),
+  };
   const services = {
-    agents: { get: (id) => (id === agent.id ? agent : undefined), list: () => [] },
-    modes: { isolated: () => isolated, noTools: () => noTools },
+    agents: { get: (id) => (id === agent.id ? agent : undefined), list: () => (prompt ? [agent] : []) },
+    modes: {
+      isolated: () => isolated,
+      noTools: () => noTools,
+      // Modes' answer to "which Depth note does this conversation's instructions carry" (an Error: it throws).
+      ...(depth === undefined ? {} : { depthSpoken: () => { if (depth instanceof Error) throw depth; return depth; } }),
+    },
   };
   let service;
   const ctx = {
@@ -215,7 +227,7 @@ async function running(config, { isolated = false, noTools = false } = {}) {
     tools: { register: () => () => {} },
   };
   apply(ctx, config);
-  return { service, now: () => current };
+  return { service, now: () => current, text: () => section?.text?.() ?? '' };
 }
 
 const STANDING_ALONE = { modelVersions: INSTRUCTED, tiers: { opus: { version: 'solo' } } };
@@ -320,4 +332,60 @@ test('a conversation in the Cowork sidebar\'s trash keeps its tier across a rest
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test('with Depth at Quick or Thorough the effort says only how hard to think; planning and checks are Depth\'s', () => {
+  const deck = readDeck({});
+  const CHECKS = /verify|Run the narrowest|typecheck|self-review loop|act on the first sound approach|Plan briefly|check the result|Before finishing/i;
+  const think = {
+    off: 'Answer directly with no extended reasoning preamble.',
+    low: 'Keep reasoning brief.',
+    medium: 'Reason as much as the task needs.',
+    high: 'Reason carefully and state your assumptions.',
+    'extra-high': 'Reason exhaustively: consider edge cases and failure paths.',
+  };
+  for (const id of TIER_IDS) {
+    for (const [effort, line] of Object.entries(think)) {
+      const tier = { ...deck.tiers[id], provider: 'p', model: 'm', effort };
+      const only = tierPrompt(tier, 3, true, {}, { thinkingOnly: true });
+      assert.ok(only.includes(line), `${id} at ${effort}`);
+      const standard = tierPrompt(tier, 3, true, {}, {});
+      assert.ok(!standard.includes(line), `${id} at ${effort}: at Standard the wording is as before`);
+      // Only the effort's line differs, and it asks for no planning or checks (a tier's own words may).
+      const added = only.split('\n').filter((text) => !standard.split('\n').includes(text));
+      assert.deepEqual(added, [line], `${id} at ${effort}`);
+      assert.doesNotMatch(line, CHECKS);
+    }
+  }
+  // Ultra keeps its planning and sub-agents (as in Claude Code) but not the checks before finishing.
+  const ultra = { ...deck.tiers.sonnet, provider: 'p', model: 'm', effort: 'ultra', subagents: true };
+  const auto = tierPrompt(ultra, 3, true, {}, { thinkingOnly: true });
+  assert.match(auto, /\*\*Ultra Code\.\*\* Decompose the task before acting/);
+  assert.doesNotMatch(auto, /Before finishing, run the narrowest checks/);
+  assert.match(tierPrompt(ultra, 3, true, {}, {}), /Before finishing, run the narrowest checks/, 'at Standard Ultra keeps them');
+  const manual = tierPrompt(ultra, 3, false, {}, { thinkingOnly: true });
+  assert.match(manual, /\*\*Ultra Code\.\*\* Reason exhaustively\. Do not proactively delegate/);
+  assert.doesNotMatch(manual, /and verify the result/);
+  const solo = tierPrompt({ ...ultra, subagents: false }, 3, true, {}, { thinkingOnly: true });
+  assert.match(solo, /\*\*Ultra Code\.\*\* Reason exhaustively\. Sub-agent delegation is disabled/);
+  // Wired to where the Depth note is really given (Modes' depthSpoken), never to the bare pick.
+  const source = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  assert.match(source, /depth = modes\?\.depthSpoken\?\.\(agent\);/);
+  assert.doesNotMatch(source, /modes\?\.depthOf\?\./);
+  // Ultra with no tools: the deepest thinking line.
+  assert.ok(tierPrompt(ultra, 3, true, {}, { thinkingOnly: true, bare: true }).includes(think['extra-high']));
+});
+
+test('in a running app the tier section keeps only the thinking words exactly where Modes gives the Depth note', async () => {
+  const config = { tiers: { haiku: { provider: 'prov-a', model: 'model-x', effort: 'high' } } };
+  const section = async (depth) => (await running(config, { depth, prompt: true })).text();
+  for (const depth of ['quick', 'thorough']) {
+    const text = await section(depth);
+    assert.ok(text.includes('Reason carefully and state your assumptions.'), depth);
+    assert.doesNotMatch(text, /verify the result|Run the narrowest/, depth);
+  }
+  const OLD = /verify the result before finishing\. Run the narrowest relevant checks/;
+  assert.match(await section('standard'), OLD);
+  assert.match(await section(new Error('Modes failed')), OLD, 'a failing Modes leaves the usual words');
+  assert.match(await section(undefined), OLD, 'an older Modes without depthSpoken leaves the usual words');
 });

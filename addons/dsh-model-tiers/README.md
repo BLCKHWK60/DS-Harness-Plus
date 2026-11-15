@@ -172,6 +172,18 @@ DSH only accepts reasoning efforts an adapter advertises. The plugin maps each l
 
 Each tier also carries a short behavior prompt: Haiku favors fast, narrow changes; Sonnet balances planning and implementation; Opus takes the harder reasoning path; Fable explores and synthesizes broadly; Code restricts itself to review, check, and fix.
 
+**Since Plus 0.59.0, Effort is thinking only while Depth is Quick or Thorough.** The Modes add-on's Depth button (Quick, Standard, Thorough) now says how much work a conversation gets: searching, helpers, planning, checks and reviews. While a conversation's Depth note is given at Quick or Thorough (read with `modes.depthSpoken(agent)`: not in helpers, with tools off or while a Mission run is on, where no Depth note is sent; since one Depth holds for every tab, Recon, Research and Scout get the note too), the effort words say only how hard to think, so the two never speak against each other and no check is left unasked:
+
+| Effort | Words while Depth is Quick or Thorough |
+|---|---|
+| Off | "Answer directly with no extended reasoning preamble." |
+| Low | "Keep reasoning brief." |
+| Medium | "Reason as much as the task needs." |
+| High | "Reason carefully and state your assumptions." |
+| Extra high (and Ultra with no tools) | "Reason exhaustively: consider edge cases and failure paths." |
+
+**Ultra Code** keeps its planning and sub-agents, as Ultra does in Claude Code, but drops "and verify the result" and the "Before finishing, run the narrowest checks…" line: the checks are Depth's. At Standard every wording is as before. The reasoning effort sent to the model never changes with Depth. Tested in `test/tiers.test.mjs`.
+
 ## Code tier
 
 The Code tier's prompt restricts it to review, check, and fix work: start from the diff or named files, run the narrowest checks that prove the change, report findings by severity with `file:line`, then fix and re-run. It does not plan new product scope.

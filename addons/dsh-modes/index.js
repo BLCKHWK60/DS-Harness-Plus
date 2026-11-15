@@ -22,7 +22,7 @@ import { promptText } from './lib/prompt.js';
 import { movedSince, readBase, readEntry, sandboxStep } from './lib/sandbox.js';
 import { beforeFirstMessage, sidebarTabs, tabCount } from './lib/tabs.js';
 
-export { CODE_METHOD, COWORK_METHOD, ISOLATED_LEVEL_PROMPTS, ISOLATED_OFF_PROMPT, SEARCH_DEPTH_PROMPTS } from './lib/prompt.js';
+export { CODE_METHOD, COWORK_METHOD, DEPTH_PROMPTS, DEPTH_SEARCH_PROMPTS, ISOLATED_DEPTH_PROMPTS, ISOLATED_LEVEL_PROMPTS, ISOLATED_OFF_PROMPT, SEARCH_DEPTH_PROMPTS } from './lib/prompt.js';
 
 export const name = 'modes';
 /** The chat box asks here which tools the model can call in a conversation (header `x-dsh-session`). */
@@ -71,6 +71,25 @@ export const SEARCH_LEVELS = ['quick', 'standard', 'thorough', 'deep'];
  * @param {unknown} value - quick, standard, thorough or deep.
  * @returns {string} the level; standard when unknown.
  */
+/**
+ * The move of 0.59.0: each conversation's former Web level becomes its Depth (Deep is Thorough), unless
+ * it already has a Depth; a start of Deep becomes Thorough.
+ * @param {Record<string, string>} levels - `sessionSearchDepth`.
+ * @param {Record<string, string>} depths - `sessionDepth`.
+ * @param {unknown} start - `searchDepth`.
+ * @returns {{depths: Record<string, string>, start: string}} the new `sessionDepth` and start.
+ */
+export function movedDepths(levels, depths, start) {
+  const out = { ...depths };
+  for (const [id, level] of Object.entries(levels ?? {})) {
+    if (out[id] !== undefined) continue;
+    const value = searchLevel(level);
+    out[id] = value === 'deep' ? 'thorough' : value;
+  }
+  const first = searchLevel(start);
+  return { depths: out, start: first === 'deep' ? 'thorough' : first };
+}
+
 export function searchLevel(value) {
   const id = String(plain(value) ?? '').toLowerCase();
   return SEARCH_LEVELS.includes(id) ? id : 'standard';
@@ -119,11 +138,23 @@ export const Config = z.object({
   sessionWeb: z.string().default('{}').volatile(),
   /** Obsolete: the old per-conversation Deep research switch, no longer offered or read (kept so older settings files still load). Old entries are pruned with the others. */
   sessionResearch: z.string().default('{}').volatile(),
-  /** Per-session Web level as JSON: `{ sessionId: 'quick' | 'standard' | 'thorough' | 'deep' }`. Missing = `searchDepth`. */
+  /** Obsolete since 0.59.0: each conversation's former Web level, moved into `sessionDepth` once (`depthMoved`). Kept so older settings files still load. */
   sessionSearchDepth: z.string().default('{}').volatile(),
+  /**
+   * Per-session Depth as JSON: `{ sessionId: 'quick' | 'standard' | 'thorough' }` (missing = where new
+   * conversations start, `searchDepth`). How much work the conversation gets: how much it searches when
+   * Web is on, helpers, planning, checks and reviews. Set with the Depth button in the chat box, the
+   * same in every tab (the owner's rule): Recon gets the care note and then its search effort; Research
+   * and Scout get the care note but no searching note (they search by their own method), and a research
+   * run started from the conversation is sized by it. Never for helpers, while a Mission run is on, or
+   * with tools off; a user's own /goal keeps it.
+   */
+  sessionDepth: z.string().default('{}').volatile(),
+  /** Each conversation's former Web level has been moved into its Depth (once, since 0.59.0). */
+  depthMoved: z.boolean().default(false).volatile(),
   /** Per-session tools switch as JSON: `{ sessionId: false }`. While off, the model is offered no tool at all. */
   sessionTools: z.string().default('{}').volatile(),
-  /** The Web level new conversations start with (quick, standard, thorough, deep): how hard the model searches. A conversation's own pick on the Web button is kept in `sessionSearchDepth`. */
+  /** The Depth new conversations start with (quick, standard, thorough), and that a conversation without its own pick follows. Set on Settings → Modes, and by every pick on the Depth button. (Named for the former Web level, which it replaced in 0.59.0.) */
   searchDepth: z.string().default('standard').volatile(),
   /** Give the Code mode a working method (read first, small changes, run the tests, report plainly) while it has no instructions of its own. */
   codeMethod: z.boolean().default(true).volatile(),
@@ -137,7 +168,7 @@ export const Config = z.object({
    * mode is no longer `mode` when it is opened was moved while closed: it gets its new mode's level.
    */
   sessionSandboxBase: z.string().default('{}').volatile(),
-  /** Depth of a Deep research run (quick, standard, thorough): how many rounds and helpers it uses. Chosen in the Research tab's chat box and in Settings → Research. One setting for all conversations. */
+  /** Obsolete since 0.59.0: the former separate Depth of Deep research runs. A run now follows the Depth of the conversation that starts it (`sessionDepth`, else `searchDepth`), the same in every tab. Kept so older settings files still load. */
   researchDepth: z.string().default('standard').volatile(),
   /**
    * Which model Deep research's helpers run on: `same` (the model of the conversation that started
@@ -608,9 +639,47 @@ export function apply(ctx, config) {
     return readObject(config.sessionWeb)[topOf(sessionId)] === false;
   }
 
-  /** @returns {string} a conversation's Web level (below Off): its own, else the one new conversations start with. */
-  function levelOf(sessionId) {
-    return searchLevel(readObject(config.sessionSearchDepth)[topOf(sessionId)] ?? config.searchDepth);
+
+  /** @returns {string} the Depth new conversations start with: 'quick', 'standard' or 'thorough' (the former Web Deep is Thorough). */
+  function depthStart() {
+    const start = searchLevel(config.searchDepth);
+    return start === 'deep' ? 'thorough' : start;
+  }
+
+  /** @returns {string} a conversation's Depth: its own pick, else where new conversations start. */
+  function depthOf(sessionId) {
+    const chosen = readObject(config.sessionDepth)[topOf(sessionId)];
+    return chosen === 'quick' || chosen === 'standard' || chosen === 'thorough' ? chosen : depthStart();
+  }
+
+  /**
+   * @param {object} agent - live Agent.
+   * @returns {string} the Depth whose care note this agent's instructions carry: 'standard' (none) for
+   *   a helper, with tools off, and while a Mission run is on. Model Tiers keeps only its thinking words exactly then, so
+   *   the checks it leaves out are always asked for by the Depth note instead.
+   */
+  function depthSpoken(agent) {
+    const id = agent?.id;
+    if (typeof id !== 'string' || !id || topOf(id) !== id) return 'standard';
+    const mode = modeOf(id);
+    if (!mode || toolsOff(id) || missionRound(agent)) return 'standard';
+    return depthOf(id);
+  }
+
+  /**
+   * @returns {boolean} whether a Mission run is on in the conversation: its goal is active and its
+   *   objective is the one Mission writes (`Mission run <id>: …`, dsh-mission/runner.js). The
+   *   conversation then only conducts the run, and Mission refuses every tool but its step tool,
+   *   also while the goal is disarmed (after a restart or an error) and the user writes in it. A
+   *   user's own /goal does the work in its rounds, so it keeps its Depth, stored or running.
+   */
+  function missionRound(agent) {
+    try {
+      const goal = ctx.get('goals')?.get?.(agent);
+      return goal?.phase === 'active' && String(goal?.objective ?? '').startsWith('Mission run ');
+    } catch {
+      return false;
+    }
   }
 
   /** @returns {boolean} whether the conversation is a research one (the Research tab): its helpers search. */
@@ -944,7 +1013,8 @@ export function apply(ctx, config) {
               alone,
               web: webOn(agent.id, mode),
               stepWeb: stepWebTools(context),
-              level: levelOf(agent.id),
+              // During a Mission run's rounds the conversation only conducts: no Depth words.
+              depth: missionRound(agent) ? 'standard' : depthOf(agent.id),
               webOff: isolatedWebOff(agent.id),
               codeMethod: plain(config.codeMethod) !== false,
               coworkMethod: plain(config.coworkMethod) !== false,
@@ -991,6 +1061,7 @@ export function apply(ctx, config) {
     }
     void pruneStale().catch(report);
     void clearOldWebMarks().catch(report);
+    void moveWebLevels().catch(report);
     void addDataTrim().catch(report);
   });
   // Loading the add-on is a reload: conversations already there keep their tier and their access
@@ -1311,8 +1382,10 @@ export function apply(ctx, config) {
    * cleared once, and the conversation gets its tab's search back.
    */
   let marksDone = false;
+  /** Its write while in flight (pruning waits for it, so it never writes the old marks back). */
+  let marksWriting = Promise.resolve();
   async function clearOldWebMarks() {
-    if (marksDone || plain(config.webMarksCleared) === true) return;
+    if (marksDone || plain(config.webMarksCleared) === true) return marksWriting;
     marksDone = true;
     const settings = ctx.get('settings');
     if (!settings) return;
@@ -1322,8 +1395,42 @@ export function apply(ctx, config) {
     for (const id of cleared) delete next[id];
     const ops = [{ op: 'set', path: ['webMarksCleared'], value: true }];
     if (cleared.length > 0) ops.push({ op: 'set', path: ['sessionWeb'], value: JSON.stringify(next) });
-    await settings.mutate('modes', ops);
+    const writing = settings.mutate('modes', ops);
+    marksWriting = writing.catch(() => {});
+    await writing;
     if (cleared.length > 0) ctx.logger.info(`modes: cleared ${cleared.length} old "Search off" mark(s) in tabs with their own search`);
+  }
+
+  /**
+   * Since 0.59.0 the Web button is only On or Off, and Depth carries how much the model searches. Each
+   * conversation's former Web level becomes its Depth once (Deep becomes Thorough; a Depth already
+   * picked stays), and a start of Deep becomes Thorough.
+   */
+  let depthMoveDone = false;
+  /** Its write while in flight (pruning waits for it, so it never writes the old values back). */
+  let depthMoving = Promise.resolve();
+  async function moveWebLevels() {
+    if (depthMoveDone || plain(config.depthMoved) === true) return depthMoving;
+    const settings = ctx.get('settings');
+    if (!settings) return;
+    depthMoveDone = true;
+    const { depths, start } = movedDepths(readObject(config.sessionSearchDepth), readObject(config.sessionDepth), config.searchDepth);
+    const ops = [
+      { op: 'set', path: ['depthMoved'], value: true },
+      { op: 'set', path: ['sessionDepth'], value: JSON.stringify(depths) },
+      { op: 'set', path: ['sessionSearchDepth'], value: '{}' },
+    ];
+    if (start !== config.searchDepth) ops.push({ op: 'set', path: ['searchDepth'], value: start });
+    const writing = settings.mutate('modes', ops);
+    depthMoving = writing.catch(() => {});
+    try {
+      await writing;
+    } catch (error) {
+      // Tried again with the next conversation that opens.
+      depthMoveDone = false;
+      throw error;
+    }
+    ctx.logger.info('modes: each conversation\'s Web level moved into its Depth (the Web button is now On or Off)');
   }
 
   /**
@@ -1351,10 +1458,13 @@ export function apply(ctx, config) {
   }
   // Also a moment after loading, when Settings accepts this add-on's writes, for a start without any conversation opening.
   ctx.effect(() => {
-    const timer = setTimeout(() => void addDataTrim().catch(report), 2000);
+    const timer = setTimeout(() => {
+      void moveWebLevels().catch(report);
+      void addDataTrim().catch(report);
+    }, 2000);
     timer.unref?.();
     return () => clearTimeout(timer);
-  }, 'modes: Data loads its tools as needed (once)');
+  }, 'modes: Web levels move into Depth, Data loads its tools as needed (once each)');
 
   let pruned = false;
   /**
@@ -1375,7 +1485,7 @@ export function apply(ctx, config) {
       // Without an app home there is no trash (the Cowork sidebar keeps it there).
       const trashed = typeof home === 'function' ? trashedIds(home('trash', 'conversations')) : new Set();
       if (trashed === null) return;
-      const fields = ['sessionModes', 'sessionWeb', 'sessionResearch', 'sessionSearchDepth', 'sessionTools', 'sessionHelpers', 'sessionIsolated', 'sessionToolSets', 'sessionSandboxBase'];
+      const fields = ['sessionModes', 'sessionWeb', 'sessionResearch', 'sessionSearchDepth', 'sessionDepth', 'sessionTools', 'sessionHelpers', 'sessionIsolated', 'sessionToolSets', 'sessionSandboxBase'];
       const ids = new Set(fields.flatMap((field) => Object.keys(readObject(config[field]))));
       const gone = new Set();
       for (const sessionId of ids) {
@@ -1387,13 +1497,19 @@ export function apply(ctx, config) {
         }
       }
       if (gone.size > 0) {
-        // Build from the current values (they may have changed while checking) and drop only the gone ids.
-        const ops = fields.map((field) => {
-          const next = { ...readObject(config[field]) };
+        // The one-time moves (Web levels into Depth, old Search-off marks) write some of these fields
+        // too: wait for them, so this write is built from their result and never undoes them.
+        await Promise.all([moveWebLevels().catch(() => {}), clearOldWebMarks().catch(() => {})]);
+        // Build from the current values (they may have changed while checking); write only the fields
+        // that hold a gone id, and drop only those ids.
+        const ops = fields.flatMap((field) => {
+          const current = readObject(config[field]);
+          if (![...gone].some((id) => Object.hasOwn(current, id))) return [];
+          const next = { ...current };
           for (const id of gone) delete next[id];
-          return { op: 'set', path: [field], value: JSON.stringify(next) };
+          return [{ op: 'set', path: [field], value: JSON.stringify(next) }];
         });
-        await settings.mutate('modes', ops);
+        if (ops.length > 0) await settings.mutate('modes', ops);
         ctx.logger.info(`modes: pruned ${gone.size} stale session entries`);
       }
     } catch (error) {
@@ -1408,9 +1524,29 @@ export function apply(ctx, config) {
     list() {
       return Object.values(readModes(config)).map((mode) => Object.freeze({ id: mode.id, label: mode.label }));
     },
-    /** @returns {string} the Web level new conversations start with: quick, standard, thorough or deep. */
+    /** @returns {string} the Depth new conversations start with: quick, standard or thorough. */
     searchDepth() {
-      return searchLevel(config.searchDepth);
+      return depthStart();
+    },
+    /**
+     * @param {string} sessionId - a conversation (or one of its helpers: the top conversation counts).
+     * @returns {string} its Depth as picked: quick, standard or thorough.
+     */
+    depthOf(sessionId) {
+      return depthOf(sessionId);
+    },
+    /**
+     * @param {object} agent - live Agent.
+     * @returns {string} the Depth whose note its instructions carry ('standard': none). Model Tiers
+     *   keeps only its thinking words when it is Quick or Thorough (Depth then speaks for planning,
+     *   checks and reviews).
+     */
+    depthSpoken(agent) {
+      try {
+        return depthSpoken(agent);
+      } catch {
+        return 'standard';
+      }
     },
     /** @returns {'same' | 'roles'} the default for all conversations: helpers on the conversation's model, or on other models. */
     researchModel() {
@@ -1428,9 +1564,12 @@ export function apply(ctx, config) {
       if (chosen === 'same' || chosen === 'roles') return chosen;
       return String(plain(config.researchModel) ?? '') === 'roles' ? 'roles' : 'same';
     },
-    /** @returns {string} the Deep research slider's step: quick, standard or thorough. */
+    /**
+     * @returns {string} for older callers: the Depth new conversations start with (quick, standard or
+     *   thorough). Since 0.59.0 a research run follows its conversation's Depth: `depthOf(sessionId)`.
+     */
     researchDepth() {
-      return depthId(config.researchDepth);
+      return depthStart();
     },
     /**
      * @param {string} sessionId - Agent id.

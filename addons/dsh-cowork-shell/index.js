@@ -8,7 +8,7 @@
  */
 import { dirname } from 'node:path';
 import z from '@deepseek-ai/schemastery';
-import { KEEP_MS, openTrash, safeId, safeTab, tidyPending } from './lib/trash.js';
+import { KEEP_MS, groupLabel, jsonSize, openTrash, safeId, safeOwner, safeTab, tidyPending } from './lib/trash.js';
 import { UPLOAD_MAX, addFile, canonical, listFiles, noteOf, openProjects } from './lib/projects.js';
 import { openPresets } from './lib/presets.js';
 import { buildDigest, drift } from './lib/digest.js';
@@ -649,6 +649,43 @@ export function apply(ctx) {
     }), 'cowork-shell projects route');
   });
 
+  // The shared trash (`coworkTrash`): other add-ons put their own things in this trash through it (old
+  // runs of an automation as one row, an automation's recipe, later a Scratch thread). Offered at once,
+  // ready only while the trash part below runs. Owners register; the trash never calls an add-on by a
+  // name read from a record.
+  const trashOwners = new Map();
+  let trashHost = null;
+  const NOT_AVAILABLE = 'The trash is not available now (the Cowork sidebar is off, still starting, or has no data folder). Nothing was moved.';
+  /** A promise that gives up after `ms` (an owner's own work never holds the trash up for long). */
+  const withTime = (promise, ms) => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('it took too long')), ms);
+    promise.then((value) => { clearTimeout(timer); resolve(value); }, (error) => { clearTimeout(timer); reject(error); });
+  });
+  const registerTrashOwner = (spec) => {
+    if (!safeOwner(spec?.owner)) throw new Error('Not a valid owner name.');
+    if (typeof spec.label !== 'string' || !spec.label.trim()) throw new Error('Say what to call this add-on.');
+    const token = Symbol(spec.owner);
+    trashOwners.set(spec.owner, { spec, token });
+    const live = () => trashOwners.get(spec.owner)?.token === token;
+    return Object.freeze({
+      add: async (request) => {
+        if (!live()) throw new Error('This add-on is no longer registered with the trash.');
+        if (!trashHost) throw new Error(NOT_AVAILABLE);
+        return trashHost.add(spec, request);
+      },
+      items: (filter) => (live() && trashHost ? trashHost.items(spec.owner, filter) : []),
+      dispose: () => { if (live()) trashOwners.delete(spec.owner); },
+    });
+  };
+  ctx.effect(() => ctx.provide('coworkTrash', Object.freeze({
+    apiVersion: 1,
+    keepMs: KEEP_MS,
+    ready: () => trashHost !== null,
+    find: (id) => trashHost?.find(id),
+    findMany: (ids) => trashHost?.findMany(ids) ?? {},
+    register: registerTrashOwner,
+  })), 'cowork-shell trash service');
+
   // Trash: the app cannot delete a conversation, so Delete moves an archived conversation's files
   // into <home>/trash/conversations for 30 days (see lib/trash.js). One the app still holds in
   // memory is only remembered; its files move at the next start.
@@ -676,9 +713,8 @@ export function apply(ctx) {
       }
     };
 
-    /** The conversation and its helper conversations, each with its folder; undefined when one is in memory. */
-    const partsOf = async (id) => {
-      const stored = await inner.sessionPersistence.list();
+    /** The conversation and its helper conversations, each with its folder, from one reading of the store; undefined when one is in memory. */
+    const partsFrom = (stored, id) => {
       const parentOf = new Map(stored.map((snap) => [snap.header?.id, snap.header?.origin === 'subagent' ? snap.header?.parentSession : undefined]));
       const under = (sid) => {
         const seen = new Set();
@@ -704,11 +740,13 @@ export function apply(ctx) {
       if (parts[0]?.id !== id) throw new Error('conversation not found');
       return parts;
     };
+    const partsOf = async (id) => partsFrom(await inner.sessionPersistence.list(), id);
 
     /**
      * `tab`: the sidebar tab it is deleted from, so only that tab's Trash list shows it; `fallbackTab`:
      * the tab its folder gives, used while that tab is not shown. `stillWaiting` (the tidy-up): checked
      * right before anything moves, so one put back or taken out of the archive meanwhile stays put.
+     * A waiting run of a group row keeps its group (the trash copies it from the waiting entry).
      */
     const remove = async (id, title, deletedAt, tab, fallbackTab, stillWaiting) => {
       if (!inner.workspaceRegistry.archivedSessionIds.includes(id)) throw new Error('archive the conversation first');
@@ -728,6 +766,7 @@ export function apply(ctx) {
      * One look at the store for all of them.
      */
     const forgetMany = async (ids) => {
+      if (ids.length === 0) return;
       let stored;
       try {
         stored = new Set((await inner.sessionPersistence.list()).map((snap) => snap.header?.id));
@@ -749,35 +788,6 @@ export function apply(ctx) {
     };
     const forget = (id) => forgetMany([id]);
 
-    /**
-     * Empty trash: delete permanently every conversation the open tab's Trash list showed. One still
-     * waiting to move is marked (with its file's change token) and erased when it moves. Unknown ids
-     * (put back meanwhile) are skipped; one that cannot be erased is counted and left as it was.
-     * @param {string[]} ids - the ids the list showed.
-     * @returns {Promise<{erased: number, marked: number, failed: number}>} what happened.
-     */
-    const emptyTrash = async (ids) => {
-      const out = { erased: 0, marked: 0, failed: 0 };
-      const erased = [];
-      for (const id of ids) {
-        try {
-          const stamp = trash.isWaiting(id) ? await stampOf(id) : undefined;
-          const result = trash.erase(id, { stamp });
-          if (result === 'erased') {
-            out.erased += 1;
-            erased.push(id);
-          } else if (result === 'marked') out.marked += 1;
-        } catch (error) {
-          out.failed += 1;
-          ctx.logger?.warn?.(`cowork-shell: Empty trash could not erase "${id}": ${String(error?.message ?? error)}`);
-        }
-        // Many at once: let the app answer other requests in between.
-        await new Promise((done) => setImmediate(done));
-      }
-      await forgetMany(erased);
-      return out;
-    };
-
     /** The app's change token of a stored conversation's file (its identity, size and times), if any. */
     const stampOf = async (id) => {
       try {
@@ -790,10 +800,391 @@ export function apply(ctx) {
       }
     };
 
+    // Every trash write runs here, one at a time: the route's actions, the tidy-up and other add-ons'
+    // adds. The unarchive listener and the owners' own functions stay outside it (the app waits for its
+    // listeners while a job here may wait for the app), so nothing can lock up.
+    let chain = Promise.resolve();
+    const queued = (job) => {
+      const run = chain.then(job);
+      chain = run.then(() => {}, () => {});
+      return run;
+    };
+
+    /** Tell an owning add-on what happened to its things (never waited for; a slow or failing owner changes nothing here). */
+    const notify = (owner, notice) => {
+      const hook = trashOwners.get(owner)?.spec?.onNotice;
+      if (typeof hook !== 'function') return;
+      void withTime(Promise.resolve().then(() => hook(notice)), 10000)
+        .catch((error) => ctx.logger?.warn?.(`cowork-shell: ${owner} could not take a trash notice: ${String(error?.message ?? error)}`));
+    };
+    /** One notice per row for grouped conversations and pieces: `found` from trash.locate or records. */
+    const noticeRows = (type, why, gone) => {
+      const rows = new Map();
+      for (const item of gone) {
+        if (!item?.group || !item.owner) continue;
+        const row = rows.get(item.group) ?? rows.set(item.group, { owner: item.owner, conversations: [], data: [] }).get(item.group);
+        if (item.item) row.data.push({ item: item.item, ...(item.ownerData !== undefined ? { ownerData: item.ownerData } : {}) });
+        else row.conversations.push({ id: item.id, ...(item.ownerData !== undefined ? { ownerData: item.ownerData } : {}) });
+      }
+      for (const [row, { owner, conversations, data }] of rows) {
+        notify(owner, { type, ...(why ? { why } : {}), row, key: row.slice(`group.${owner}.`.length), conversations, data });
+      }
+    };
+    /** What the trash knows of a conversation's group (before it changes), for notices. */
+    const groupOf = (ids) => {
+      const found = trash.locate(ids);
+      const out = new Map();
+      for (const [id, where] of Object.entries(found)) if (where.owner) out.set(id, { id, group: where.row, owner: where.owner });
+      return out;
+    };
+
+    /**
+     * Empty trash: delete permanently every row the open tab's Trash list showed. One still waiting to
+     * move is marked (with its file's change token) and erased when it moves. Unknown ids (put back
+     * meanwhile) are skipped; one that cannot be erased is counted and left as it was. A group row counts
+     * once: erased when all of it went, marked when some of it waits, failed when any of it failed.
+     */
+    const emptyNow = async (ids, rowIds, shown = {}) => {
+      const out = { erased: 0, marked: 0, failed: 0 };
+      const erased = [];
+      for (const id of ids) {
+        try {
+          if (trash.isPiece(id)) throw new Error('Put back or delete the whole row.');
+          const before = groupOf([id]);
+          const stamp = trash.isWaiting(id) ? await stampOf(id) : undefined;
+          const result = trash.erase(id, { stamp });
+          if (result === 'erased') {
+            out.erased += 1;
+            erased.push(id);
+            noticeRows('gone', 'emptied', [...before.values()]);
+          } else if (result === 'marked') out.marked += 1;
+        } catch (error) {
+          out.failed += 1;
+          ctx.logger?.warn?.(`cowork-shell: Empty trash could not erase "${id}": ${String(error?.message ?? error)}`);
+        }
+        // Many at once: let the app answer other requests in between.
+        await new Promise((done) => setImmediate(done));
+      }
+      await forgetMany(erased);
+      for (const group of rowIds) {
+        // One row that cannot be emptied now (being put back, changed, or from a newer version) is
+        // counted and the others still go.
+        try {
+          const done = await eraseRowNow(group, shown[group], 'emptied');
+          if (done.failed > 0) out.failed += 1;
+          else if (done.marked > 0) out.marked += 1;
+          else if (done.erased > 0) out.erased += 1;
+        } catch (error) {
+          out.failed += 1;
+          ctx.logger?.warn?.(`cowork-shell: Empty trash left the row "${group}": ${String(error?.message ?? error)}`);
+        }
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      return out;
+    };
+
+    // Group rows (several records, for example the old runs of one automation, and data pieces) are put
+    // back or deleted as a whole. A row being changed answers so instead of being changed twice.
+    const busyRows = new Set();
+    const ROW_BUSY = 'It is being changed right now; try again in a moment.';
+
+    /**
+     * Delete a group row permanently (inside the queue): only what the list showed (`shown.ids` and
+     * `shown.pieces`), never what came into the row since; that stays in the row.
+     */
+    const eraseRowNow = async (group, shown, why = 'erased') => {
+      if (busyRows.has(group)) throw new Error(ROW_BUSY);
+      const showIds = new Set(Array.isArray(shown?.ids) ? shown.ids : []);
+      const showPieces = new Set(Array.isArray(shown?.pieces) ? shown.pieces : []);
+      const parts = trash.groupParts(group);
+      const records = parts.records.filter((src) => showIds.has(src.id));
+      const waiting = parts.waiting.filter((src) => showIds.has(src.id));
+      const pieces = parts.pieces.filter((piece) => showPieces.has(piece.item));
+      if (records.length + waiting.length + pieces.length === 0) throw new Error('It is no longer in the trash.');
+      if (pieces.some((piece) => piece.kind !== 'data')) throw new Error('This needs a newer version of the Cowork sidebar.');
+      const out = { erased: 0, marked: 0, failed: 0, reasons: [] };
+      const erasedIds = [];
+      const gone = [];
+      for (const src of records) {
+        try {
+          if (trash.erase(src.id) === 'erased') {
+            out.erased += 1;
+            erasedIds.push(src.id);
+            gone.push({ id: src.id, group, owner: src.owner, ownerData: src.ownerData });
+          }
+        } catch (error) {
+          out.failed += 1;
+          out.reasons.push(String(error?.message ?? error).slice(0, 300));
+          ctx.logger?.warn?.(`cowork-shell: could not erase "${src.id}": ${String(error?.message ?? error)}`);
+        }
+      }
+      for (const src of waiting) {
+        try {
+          if (trash.erase(src.id, { stamp: await stampOf(src.id) }) === 'marked') out.marked += 1;
+        } catch (error) {
+          out.failed += 1;
+          out.reasons.push(String(error?.message ?? error).slice(0, 300));
+        }
+      }
+      for (const piece of pieces) {
+        try {
+          if (trash.removePiece(piece.item)) {
+            out.erased += 1;
+            gone.push({ item: piece.item, group, owner: piece.owner, ownerData: piece.ownerData });
+          }
+        } catch (error) {
+          out.failed += 1;
+          out.reasons.push(String(error?.message ?? error).slice(0, 300));
+        }
+      }
+      await forgetMany(erasedIds);
+      noticeRows('gone', why, gone);
+      return out;
+    };
+
+    /**
+     * Put a whole group row back: each conversation as today (all or nothing for each one, so one whose
+     * place is taken stays and is named), then the owner puts back its data pieces. A row with data
+     * cannot be put back while its owner is off: nothing is changed then.
+     */
+    const putBackRow = async (group) => {
+      if (busyRows.has(group)) throw new Error(ROW_BUSY);
+      busyRows.add(group);
+      try {
+        const first = await queued(async () => {
+          const { records, waiting, pieces } = trash.groupParts(group);
+          const any = records[0] ?? waiting[0] ?? pieces[0];
+          if (!any) throw new Error('It is no longer in the trash.');
+          if (pieces.some((piece) => piece.kind !== 'data')) throw new Error('This needs a newer version of the Cowork sidebar.');
+          const owner = any.owner;
+          const ownerLabel = any.ownerLabel || owner;
+          if (pieces.length > 0 && typeof trashOwners.get(owner)?.spec?.putBack !== 'function') {
+            throw new Error(`Put back needs ${ownerLabel}, which is off now. Switch it on, then try again. Nothing was changed.`);
+          }
+          const back = [];
+          const left = [];
+          for (const src of [...records, ...waiting]) {
+            try {
+              if (trash.restore(src.id)) back.push(src);
+              else left.push({ id: src.id, reason: 'It is no longer in the trash.' });
+            } catch (error) {
+              left.push({ id: src.id, reason: String(error?.message ?? error) });
+            }
+          }
+          // Back to the list only for those this add-on archived itself and that asked for it.
+          for (const src of back) {
+            if (src.back !== 'list' || src.archivedBy !== 'plus') continue;
+            try {
+              await inner.workspaceRegistry.unarchiveSession?.(src.id);
+            } catch { /* it stays in the Archived list */ }
+          }
+          return { owner, ownerLabel, title: any.groupTitle || ownerLabel, back, left, pieces };
+        });
+        const backIds = first.back.map((src) => src.id);
+        const data = { done: [], failed: [] };
+        let notes = [];
+        // A piece goes back only once its conversations of this row are back (one still in this row
+        // holds it back; one that is now elsewhere in the trash does not).
+        const left = trash.groupParts(group);
+        const stillHere = new Set([...left.records, ...left.waiting].map((src) => src.id));
+        const usable = first.pieces.filter((piece) => (piece.with ?? []).every((id) => !stillHere.has(id)));
+        const heldBack = first.pieces.filter((piece) => !usable.includes(piece));
+        if (usable.length > 0) {
+          const hook = trashOwners.get(first.owner)?.spec?.putBack;
+          try {
+            if (typeof hook !== 'function') throw new Error('it is off now');
+            const answer = await withTime(Promise.resolve().then(() => hook({
+              row: group, key: group.slice(`group.${first.owner}.`.length), title: first.title,
+              data: usable.map((piece) => ({ item: piece.item, ownerData: piece.ownerData, deletedAt: piece.deletedAt })),
+              restored: { conversations: backIds },
+            })), 60000);
+            data.done = (Array.isArray(answer?.done) ? answer.done : []).filter((item) => usable.some((piece) => piece.item === item));
+            data.failed = usable.filter((piece) => !data.done.includes(piece.item)).map((piece) => ({
+              item: piece.item,
+              reason: String((Array.isArray(answer?.failed) ? answer.failed : []).find((f) => f?.item === piece.item)?.reason ?? 'It was not put back.').slice(0, 300),
+            }));
+            notes = (Array.isArray(answer?.notes) ? answer.notes : []).filter((note) => typeof note === 'string').map((note) => note.slice(0, 300)).slice(0, 10);
+          } catch (error) {
+            data.failed = usable.map((piece) => ({ item: piece.item, reason: `${first.ownerLabel} did not finish putting it back: ${String(error?.message ?? error)}`.slice(0, 300) }));
+          }
+          await queued(async () => {
+            for (const item of data.done) trash.removePiece(item);
+            for (const failed of data.failed) trash.setPieceError(failed.item, failed.reason);
+          });
+        }
+        for (const piece of heldBack) data.failed.push({ item: piece.item, reason: 'It goes back with its conversations: put those back first.' });
+        notify(first.owner, {
+          type: 'put-back', row: group, key: group.slice(`group.${first.owner}.`.length),
+          conversations: first.back.map((src) => ({ id: src.id, ...(src.ownerData !== undefined ? { ownerData: src.ownerData } : {}) })),
+          data: usable.filter((piece) => data.done.includes(piece.item)).map((piece) => ({ item: piece.item, ownerData: piece.ownerData })),
+        });
+        return { back: backIds, left: first.left, data, notes };
+      } finally {
+        busyRows.delete(group);
+      }
+    };
+
+    /**
+     * Another add-on puts its things in the trash (the coworkTrash service): conversations, each
+     * archived by the trash only when that is safe (never a pinned one, one an automation delivers
+     * into or names, one changed since the caller looked, or one still working), and data for its owner.
+     * Everything refused is named with its reason; nothing is half done.
+     */
+    const serviceAdd = (spec, request) => queued(async () => {
+      if (!request || typeof request !== 'object') throw new Error('Nothing to put in the trash.');
+      if (request.folders !== undefined) throw new Error('Folders cannot go to the trash yet.');
+      const group = groupLabel(spec.owner, request.key);
+      if (!group) throw new Error('not a row key');
+      if (!safeTab(request.tab)) throw new Error("Say which tab's Trash list shows it.");
+      const conversations = Array.isArray(request.conversations) ? request.conversations : [];
+      if (conversations.length > 500) throw new Error('Too many conversations at once (at most 500).');
+      if (conversations.length === 0 && request.data === undefined) throw new Error('Nothing to put in the trash.');
+      if (request.data !== undefined && jsonSize(request.data?.ownerData ?? null) > 65536) throw new Error('The kept data is too large (at most 64 KB).');
+      if (conversations.some((c) => c?.ownerData !== undefined && jsonSize(c.ownerData) > 4096)) throw new Error('The kept data with a conversation is too large (at most 4 KB).');
+      // Always now: the 30 days count from the moment it enters the trash (an owner's own dates go in ownerData).
+      const deletedAt = Date.now();
+      const base = {
+        group, owner: spec.owner, ownerLabel: spec.label,
+        ...(typeof request.title === 'string' ? { groupTitle: request.title } : {}),
+        tab: request.tab, ...(safeTab(request.fallbackTab) ? { fallbackTab: request.fallbackTab } : {}),
+      };
+      const options = request.options && typeof request.options === 'object' ? request.options : {};
+      const out = { row: group, moved: [], waiting: [], skipped: [], failed: [] };
+      const skip = (id, code, reason) => out.skipped.push({ id, code, reason });
+      const stored = await inner.sessionPersistence.list();
+      const byId = new Map(stored.map((snap) => [snap.header?.id, snap]));
+      const inTrash = trash.locate(conversations.map((c) => c?.id));
+      let catalog;
+      const tasks = async () => {
+        if (catalog !== undefined) return catalog;
+        try {
+          const schedule = ctx.get('schedule');
+          catalog = typeof schedule?.catalog === 'function' ? await schedule.catalog() : null;
+        } catch {
+          catalog = null;
+        }
+        return catalog;
+      };
+      const seen = new Set();
+      for (const c of conversations) {
+        const id = c?.id;
+        if (!safeId(id) || id.startsWith('group.') || id.startsWith('piece-')) {
+          skip(String(id ?? ''), 'bad-id', 'Not a conversation id.');
+          continue;
+        }
+        if (seen.has(id)) continue;
+        seen.add(id);
+        if (inTrash[id]) { skip(id, 'in-trash', 'This conversation is already in the trash.'); continue; }
+        if (reconWipe()?.has?.(id) === true) { skip(id, 'wiping', 'This Recon conversation was ended with End and wipe: it is being deleted for good, not moved to the trash.'); continue; }
+        const snap = byId.get(id);
+        if (!snap) { skip(id, 'unknown', 'The app does not have this conversation.'); continue; }
+        if (snap.header?.origin === 'subagent') { skip(id, 'helper', 'A helper conversation goes with its main conversation.'); continue; }
+        if (snap.location?.kind !== 'jsonl') { skip(id, 'not-files', 'This conversation is not stored as files.'); continue; }
+        const archived = () => inner.workspaceRegistry.archivedSessionIds.includes(id);
+        let archivedBy;
+        if (c.archive === 'already') {
+          if (!archived()) { skip(id, 'not-archived', 'Archive the conversation first.'); continue; }
+          archivedBy = 'user';
+        } else if (c.archive === 'plus') {
+          if ((inner.workspaceRegistry.pinnedSessionIds ?? []).includes(id) && options.allowPinned !== true) { skip(id, 'pinned', 'It is pinned, so it was left alone.'); continue; }
+          if (typeof c.expectRevision === 'string' && (await stampOf(id)) !== c.expectRevision) { skip(id, 'changed', 'It changed since, so it was left alone.'); continue; }
+          const list = await tasks();
+          if (!Array.isArray(list)) { skip(id, 'cannot-check', 'The automations could not be checked, so it was left alone.'); continue; }
+          if (list.some((task) => task?.target?.sessionId === id || (Array.isArray(task?.involvedSessionIds) && task.involvedSessionIds.includes(id)))) {
+            skip(id, 'automation-target', 'An automation delivers into it or names it, so it was left alone.');
+            continue;
+          }
+          // Looked at again right before archiving: the checks above waited, and a pin or the user's own
+          // archive may have come meanwhile.
+          if ((inner.workspaceRegistry.pinnedSessionIds ?? []).includes(id) && options.allowPinned !== true) { skip(id, 'pinned', 'It is pinned, so it was left alone.'); continue; }
+          if (archived()) archivedBy = 'user';
+          else {
+            try {
+              // Never with stopActivity: a conversation that is still working is left alone.
+              await inner.workspaceRegistry.archiveSession(id);
+              archivedBy = 'plus';
+            } catch (error) {
+              if (error?.name === 'WorkspaceActiveSessionError' || Array.isArray(error?.activity)) {
+                const kinds = (Array.isArray(error?.activity) ? error.activity : []).map((entry) => entry?.kind).filter(Boolean).join(', ');
+                skip(id, 'busy', `It is still working${kinds ? ` (${kinds})` : ''}. Try again later.`);
+              } else if (error?.name === 'WorkspaceUnknownSessionError') skip(id, 'unknown', 'The app does not have this conversation.');
+              else out.failed.push({ id, code: 'failed', reason: String(error?.message ?? error).slice(0, 200) });
+              continue;
+            }
+          }
+        } else {
+          skip(id, 'bad-request', "Say whether it is archived already ('already') or the trash should archive it ('plus').");
+          continue;
+        }
+        const fields = {
+          ...base, archivedBy, title: typeof c.title === 'string' ? c.title : '', deletedAt,
+          ...(c.ownerData !== undefined ? { ownerData: c.ownerData } : {}),
+          ...(options.back === 'list' ? { back: 'list' } : {}),
+        };
+        try {
+          const parts = inMemory(id) ? undefined : partsFrom(stored, id);
+          if (parts === undefined) {
+            trash.addPending({ id, ...fields });
+            out.waiting.push(id);
+          } else {
+            trash.add({ id, parts, ...fields });
+            out.moved.push(id);
+          }
+        } catch (error) {
+          const failed = { id, code: 'move-failed', reason: String(error?.message ?? error).slice(0, 200) };
+          if (trash.locate([id])[id]) {
+            // Part of it reached the trash (its record is written first): it must stay archived.
+            failed.inTrash = true;
+            failed.reason += ' Part of it reached the trash, so it stays archived: put it back from the Trash, or delete it there.';
+          } else if (archivedBy === 'plus') {
+            try {
+              await inner.workspaceRegistry.unarchiveSession(id);
+            } catch {
+              failed.stillArchived = true;
+              failed.reason += ' It stays archived; restore it from the Archived list.';
+            }
+          }
+          out.failed.push(failed);
+        }
+      }
+      // The data never depends on the conversations: its owner has already let go of it.
+      if (request.data !== undefined) {
+        out.data = trash.addPiece({ ...base, title: request.title, deletedAt, with: [...out.moved, ...out.waiting], ownerData: request.data?.ownerData ?? null });
+      }
+      return out;
+    });
+
+    /** One owner's rows, with each run and piece, optionally for one key only. */
+    const serviceItems = (owner, filter) => {
+      const only = filter && filter.key !== undefined ? groupLabel(owner, filter.key) : '';
+      if (filter && filter.key !== undefined && !only) return [];
+      return trash.list().filter((row) => row.kind === 'group' && row.owner === owner && (!only || row.id === only)).map((row) => {
+        const { records, waiting, pieces } = trash.groupParts(row.id);
+        const member = (src, state) => ({ id: src.id, title: src.title ?? '', deletedAt: Number(src.deletedAt) || 0, state, erasing: src.erase === true, ...(src.archivedBy ? { archivedBy: src.archivedBy } : {}), ...(src.ownerData !== undefined ? { ownerData: src.ownerData } : {}) });
+        return {
+          row: row.id, key: row.id.slice(`group.${owner}.`.length), title: row.title, tab: row.tab, ...(row.fallbackTab ? { fallbackTab: row.fallbackTab } : {}),
+          members: [...records.map((src) => member(src, 'moved')), ...waiting.map((src) => member(src, 'waiting'))],
+          data: pieces.map((piece) => ({ item: piece.item, deletedAt: Number(piece.deletedAt) || 0, ownerData: piece.ownerData, ...(piece.lastError ? { lastError: piece.lastError } : {}) })),
+        };
+      });
+    };
+    const host = {
+      add: serviceAdd,
+      items: serviceItems,
+      find: (id) => trash.locate([id])[id],
+      findMany: (ids) => trash.locate((Array.isArray(ids) ? ids : []).slice(0, 2000)),
+    };
+    inner.effect(() => {
+      trashHost = host;
+      return () => { if (trashHost === host) trashHost = null; };
+    }, 'cowork-shell trash service ready');
+
     // At start: move what was waiting, then drop what is older than 30 days. Repeated a few times a day.
     // Never rejects: the app stops on an unhandled rejection.
-    const tidy = async () => {
+    const tidy = () => queued(async () => {
       try {
+        // Groups of what the tidy-up may change, read before it changes them (for the owners' notices).
+        const before = groupOf([...trash.pending().map((item) => item.id), ...trash.markedMoved()]);
         const done = await tidyPending(trash, {
           isArchived: (id) => inner.workspaceRegistry.archivedSessionIds.includes(id),
           inMemory,
@@ -801,24 +1192,36 @@ export function apply(ctx) {
           move: (item) => remove(item.id, item.title, item.deletedAt, item.tab, item.fallbackTab, () => trash.isWaiting(item.id)),
           stampOf,
         });
-        for (const id of done.erased) await forget(id);
+        await forgetMany(done.erased);
+        noticeRows('gone', 'marked-erased', done.erased.map((id) => before.get(id)).filter(Boolean));
+        noticeRows('left', 'unarchived', done.restored.map((id) => before.get(id)).filter(Boolean));
+        noticeRows('left', 'files-gone', done.dropped.map((id) => before.get(id)).filter(Boolean));
         for (const id of done.kept) ctx.logger?.info?.(`cowork-shell: "${id}" changed after Delete permanently (it was taken back at some point), so it went to the trash with Put back instead`);
         for (const id of done.unmarked) ctx.logger?.warn?.(`cowork-shell: "${id}" could not be deleted permanently; it is back in the Trash list with Put back`);
         for (const id of done.dropped) ctx.logger?.info?.(`cowork-shell: "${id}" left the trash list: its files are gone, so there is nothing to put back`);
         for (const { id, error } of done.failed) ctx.logger?.warn?.(`cowork-shell: could not move "${id}" to the trash: ${error}`);
-        trash.purge();
+        const expired = [];
+        trash.purge(Date.now(), (gone) => expired.push(gone));
+        await forgetMany(expired.filter((gone) => gone.id).map((gone) => gone.id));
+        noticeRows('gone', 'expired', expired);
+        trash.sweepTemp();
       } catch (error) {
         ctx.logger?.warn?.(`cowork-shell: the trash tidy-up stopped: ${String(error?.message ?? error)}`);
       }
-    };
+    });
     void tidy();
     // Taken out of the archive (here or in the app's own list) while it waited to move: it is not deleted
     // after all, and a "delete permanently" mark goes with it, at once rather than at the next tidy-up.
-    // Never throws: the app waits for this before it unarchives.
+    // Never throws and never waits for the queue: the app waits for this before it unarchives.
     inner.on('workspace/session-unarchiving', (request) => {
       try {
         const id = request?.sessionId;
-        if (safeId(id) && trash.isWaiting(id) && trash.dropPending(id)) ctx.logger?.info?.(`cowork-shell: "${id}" was taken out of the archive, so it is no longer deleted`);
+        if (!safeId(id) || !trash.isWaiting(id)) return;
+        const before = groupOf([id]);
+        if (trash.dropPending(id)) {
+          ctx.logger?.info?.(`cowork-shell: "${id}" was taken out of the archive, so it is no longer deleted`);
+          noticeRows('left', 'unarchived', [...before.values()]);
+        }
       } catch (error) {
         ctx.logger?.warn?.(`cowork-shell: could not update the trash after an unarchive: ${String(error?.message ?? error)}`);
       }
@@ -829,12 +1232,15 @@ export function apply(ctx) {
       return () => clearInterval(timer);
     }, 'cowork-shell trash tidy');
 
+    /** A group row's id (its label), as the route accepts it. */
+    const rowId = (value) => typeof value === 'string' && value.startsWith('group.') && safeId(value);
+
     inner.effect(() => inner.webServer.register({
       kind: 'exact',
       path: TRASH_PATH,
       handler: async (req, res) => {
         if (!guard(inner, req, res, ['GET', 'POST'])) return;
-        let emptied;
+        const extra = {};
         try {
           if (req.method === 'POST') {
             const chunks = [];
@@ -846,25 +1252,53 @@ export function apply(ctx) {
               chunks.push(chunk);
             }
             const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-            if (body?.action === 'empty') {
-              // Empty trash: the ids the open tab's Trash list showed.
-              const ids = Array.isArray(body.sessionIds) ? body.sessionIds : null;
-              if (!ids || ids.length === 0 || ids.length > EMPTY_MAX || !ids.every(safeId)) throw new Error('not a list of conversation ids');
-              emptied = await emptyTrash([...new Set(ids)]);
-            } else {
-              const id = body?.sessionId;
-              if (!safeId(id)) throw new Error('not a conversation id');
-              if (body.action === 'delete') await remove(id, body.title, undefined, safeTab(body.tab) ? body.tab : undefined, safeTab(body.fallbackTab) ? body.fallbackTab : undefined);
-              else if (body.action === 'restore') {
-                // Nothing to put back (erased meanwhile, for example by Empty trash): say so, not "done".
-                if (!trash.restore(id)) throw new Error('It is no longer in the trash.');
+            if (body?.action === 'restore' && body.itemId !== undefined) {
+              // Put back a whole group row (it runs partly outside the queue: its owner's own work).
+              if (!rowId(body.itemId)) throw new Error('not a row of the trash');
+              const restored = await putBackRow(body.itemId);
+              if (restored.back.length === 0 && restored.data.done.length === 0) {
+                throw new Error(restored.left[0]?.reason ?? restored.data.failed[0]?.reason ?? 'Nothing could be put back.');
               }
-              else if (body.action === 'erase') {
-                // Delete permanently: once its files are gone the app's archived list may forget it too.
-                // One still waiting keeps its file's change token: erased only if unchanged when it moves.
-                const stamp = trash.isWaiting(id) ? await stampOf(id) : undefined;
-                if (trash.erase(id, { stamp }) === 'erased') await forget(id);
-              } else throw new Error('unknown action');
+              extra.restored = restored;
+            } else {
+              await queued(async () => {
+                if (body?.action === 'empty') {
+                  // Empty trash: the conversations and rows the open tab's Trash list showed.
+                  const ids = Array.isArray(body.sessionIds) ? body.sessionIds : [];
+                  const rows = Array.isArray(body.itemIds) ? body.itemIds : [];
+                  if (!Array.isArray(body.sessionIds) && !Array.isArray(body.itemIds)) throw new Error('not a list of conversation ids');
+                  if (ids.length + rows.length === 0 || ids.length + rows.length > EMPTY_MAX || !ids.every(safeId) || !rows.every(rowId)) throw new Error('not a list of conversation ids');
+                  const shown = body.shown && typeof body.shown === 'object' ? body.shown : {};
+                  extra.emptied = await emptyNow([...new Set(ids)], [...new Set(rows)], shown);
+                } else if (body?.action === 'erase' && body.itemId !== undefined) {
+                  if (!rowId(body.itemId)) throw new Error('not a row of the trash');
+                  // What the list showed: only that is erased.
+                  const erased = await eraseRowNow(body.itemId, { ids: body.ids, pieces: body.pieces });
+                  if (erased.erased + erased.marked === 0) throw new Error(erased.failed > 0 ? 'It could not be deleted permanently.' : 'It is no longer in the trash.');
+                  extra.erased = erased;
+                } else {
+                  const id = body?.sessionId;
+                  if (!safeId(id)) throw new Error('not a conversation id');
+                  if (trash.isPiece(id)) throw new Error('Put back or delete the whole row.');
+                  if (body.action === 'delete') await remove(id, body.title, undefined, safeTab(body.tab) ? body.tab : undefined, safeTab(body.fallbackTab) ? body.fallbackTab : undefined);
+                  else if (body.action === 'restore') {
+                    // One run of a group row can be put back on its own too; its owner is told.
+                    const before = groupOf([id]);
+                    // Nothing to put back (erased meanwhile, for example by Empty trash): say so, not "done".
+                    if (!trash.restore(id)) throw new Error('It is no longer in the trash.');
+                    noticeRows('put-back', '', [...before.values()]);
+                  } else if (body.action === 'erase') {
+                    // Delete permanently: once its files are gone the app's archived list may forget it too.
+                    // One still waiting keeps its file's change token: erased only if unchanged when it moves.
+                    const before = groupOf([id]);
+                    const stamp = trash.isWaiting(id) ? await stampOf(id) : undefined;
+                    if (trash.erase(id, { stamp }) === 'erased') {
+                      await forget(id);
+                      noticeRows('gone', 'erased', [...before.values()]);
+                    }
+                  } else throw new Error('unknown action');
+                }
+              });
             }
           }
           let wiping = [];
@@ -873,7 +1307,8 @@ export function apply(ctx) {
           } catch {
             wiping = [];
           }
-          res.end(JSON.stringify({ at: Date.now(), keepMs: KEEP_MS, items: trash.list(), wiping, ...(emptied ? { emptied } : {}) }));
+          const registered = (owner) => typeof trashOwners.get(owner)?.spec?.putBack === 'function';
+          res.end(JSON.stringify({ at: Date.now(), keepMs: KEEP_MS, items: trash.list({ registered }), wiping, ...extra }));
         } catch (error) {
           res.statusCode = req.method === 'POST' ? 400 : 500;
           res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 300) }));

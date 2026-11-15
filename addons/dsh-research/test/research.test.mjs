@@ -68,3 +68,24 @@ test('reports are saved as Markdown and listed newest first', () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('Research has no Depth of its own any more: the Modes Depth button, the same in every tab, sets its runs', async () => {
+  const { readFileSync } = await import('node:fs');
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  const host = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(client + host, /researchDepth/, 'never reads or writes the old setting');
+  assert.doesNotMatch(client, /label: 'Depth'/, 'no Depth dropdown or segments of its own');
+  assert.match(host, /ctx\.get\('modes'\)\?\.depthOf\?\.\(sessionId\)/);
+  assert.match(client, /The same Depth as in every tab/);
+  // The chat box keeps only Focus, with nothing about Depth or run times (the Depth list says those).
+  assert.match(client, /h\(DropButton, \{ label: 'Focus', items: view\.focuses \?\? \[\], value: view\.session\.focus \?\? view\.focus, busy, onPick: \(id\) => void pickFocus\(id\) \}\)/);
+  // Good to know: the Depth button, not the Web button, sets how much the assistant searches by itself.
+  const good = /'The helpers search with your web search provider\.[^']*'/.exec(client)?.[0] ?? '';
+  assert.match(good, /the Depth button in the chat box sets how much the assistant searches by itself/);
+  assert.doesNotMatch(good, /Web button[^.]*sets how much/);
+  // Settings search finds the row by its title.
+  const index = JSON.parse(readFileSync(new URL('../../dsh-settings-plus/settings-index.json', import.meta.url), 'utf8'));
+  const entry = index.find((item) => item.page === 'research' && item.field === 'modes.researchDepth');
+  assert.equal(entry?.label, 'Depth');
+  assert.match(client, /h\('div', \{ className: 'dsh-rs-rowtitle' \}, 'Depth'\)/);
+});

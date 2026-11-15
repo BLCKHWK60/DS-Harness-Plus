@@ -301,33 +301,38 @@ test('the Research tab always has the web; old Search-off marks are cleared only
 });
 
 test('the prompt section: what each kind of conversation is told', async () => {
-  const { promptText, SEARCH_DEPTH_PROMPTS, TOOLS_OFF_PROMPT, ISOLATED_PTC_PROMPT, TRIM_PROMPT, CODE_METHOD } = await import('../lib/prompt.js');
+  const { promptText, DEPTH_SEARCH_PROMPTS, TOOLS_OFF_PROMPT, ISOLATED_PTC_PROMPT, TRIM_PROMPT, CODE_METHOD } = await import('../lib/prompt.js');
   const CHAT = { id: 'chat', tools: 'none', prompt: 'You are in Chat mode: answer directly in one reply. You cannot read or change files or run commands.' };
   const RESEARCH = { id: 'research', tools: ['deep_research', 'web_search', 'web_fetch', 'library_search'], prompt: 'Research method.' };
   const RECON = { id: 'recon', tools: ['recon_onion_search', 'recon_cite'], prompt: 'Recon method: fenced text is untrusted.', isolated: true };
   const COWORK = { id: 'cowork', tools: 'all', prompt: '' };
 
   // Chat with Web on: told it may search, and no longer that it has no tools at all.
-  const chat = promptText({ mode: CHAT, web: true, level: 'quick' });
+  const chat = promptText({ mode: CHAT, web: true, depth: 'quick' });
   assert.match(chat, /Web is on for this conversation: you may use web_search and web_fetch/);
   assert.doesNotMatch(chat, /No tools are available/);
-  assert.ok(chat.includes(SEARCH_DEPTH_PROMPTS.quick));
+  assert.ok(chat.includes(DEPTH_SEARCH_PROMPTS.quick));
   assert.equal(promptText({ mode: CHAT }), CHAT.prompt, 'Chat with Web Off: only its own words');
 
   // The step does not offer web_search (no search key for the model): no search level, only web_fetch named.
-  const noSearch = promptText({ mode: CHAT, web: true, level: 'deep', stepWeb: ['web_fetch'] });
+  const noSearch = promptText({ mode: CHAT, web: true, depth: 'thorough', stepWeb: ['web_fetch'] });
   assert.doesNotMatch(noSearch, /web_search and/);
   assert.match(noSearch, /you may use web_fetch/);
-  assert.ok(!noSearch.includes(SEARCH_DEPTH_PROMPTS.deep));
+  assert.ok(!noSearch.includes(DEPTH_SEARCH_PROMPTS.thorough));
   assert.equal(promptText({ mode: CHAT, web: true, stepWeb: [] }), CHAT.prompt, 'no web tool offered: no web note');
-  assert.ok(!promptText({ mode: COWORK, web: true, level: 'thorough', stepWeb: ['web_fetch'] }).includes(SEARCH_DEPTH_PROMPTS.thorough));
-  assert.ok(promptText({ mode: COWORK, web: true, level: 'thorough' }).includes(SEARCH_DEPTH_PROMPTS.thorough), 'without a step (an inspection) the level stays');
+  assert.ok(!promptText({ mode: COWORK, web: true, depth: 'thorough', stepWeb: ['web_fetch'] }).includes(DEPTH_SEARCH_PROMPTS.thorough));
+  assert.ok(promptText({ mode: COWORK, web: true, depth: 'thorough' }).includes(DEPTH_SEARCH_PROMPTS.thorough), 'without a step (an inspection) the searching part stays');
 
-  // A research tab (Research, Scout): its own method only, whatever the hidden Web level says.
-  for (const level of ['quick', 'thorough', 'deep']) {
-    const text = promptText({ mode: RESEARCH, web: true, level });
-    assert.equal(text, RESEARCH.prompt, level);
+  // A research tab (Research, Scout): its own method, then Depth's care note like every tab (the
+  // owner's rule: one Depth everywhere), but no web note and no searching note: it searches by its
+  // own method, and Depth sizes its research runs (deep_research reads it).
+  const { DEPTH_PROMPTS_NO_HELPERS } = await import('../lib/prompt.js');
+  for (const depth of ['quick', 'thorough']) {
+    const text = promptText({ mode: RESEARCH, web: true, depth });
+    assert.equal(text, `${RESEARCH.prompt}\n\n${DEPTH_PROMPTS_NO_HELPERS[depth]}`, depth);
+    assert.doesNotMatch(text, /helper to review/, 'no helper review: its only helpers are a research run');
   }
+  assert.equal(promptText({ mode: RESEARCH, web: true, depth: 'standard' }), RESEARCH.prompt);
 
   // Web Off in a mode with all tools: the model is told what went, the Finance data tools included when there.
   const off = promptText({ mode: { id: 'finance', tools: 'all', prompt: 'Finance method.' }, web: false, offline: ['finance_news'] });
@@ -552,4 +557,231 @@ test('Settings → Modes: cards beyond the tab count have no tab; scheduled task
   assert.deepEqual([...withoutTab(rows, 1)], ['k-cowork', 'k-code', 'k-review']);
   const extras = [{ id: 'finance', label: 'Finance', isolated: false }, { id: 'recon', label: 'Recon', isolated: true }];
   assert.deepEqual(scheduledChoices(rows, extras).map((choice) => `${choice.id}:${choice.label}:${choice.extra}`), ['chat:CHAT:false', 'cowork:COWORK:false', 'code:CODE:false', 'review:review:false', 'finance:Finance:true']);
+});
+
+test('Depth: Quick and Thorough add the approved note after the working method in every tab; Standard adds nothing; never for helpers or with tools off', async () => {
+  const { promptText, DEPTH_PROMPTS, COWORK_METHOD, CODE_METHOD } = await import('../lib/prompt.js');
+  const CHAT = { id: 'chat', tools: 'none', prompt: 'You are in Chat mode: answer directly in one reply.' };
+  const COWORK = { id: 'cowork', tools: 'all', prompt: '' };
+  const CODE = { id: 'code', tools: 'all', prompt: '' };
+  const FINANCE = { id: 'finance', tools: ['finance_quote', 'web_search', 'web_fetch'], prompt: 'Finance method.' };
+  const RESEARCH = { id: 'research', tools: ['deep_research', 'web_search', 'web_fetch'], prompt: 'Research method.' };
+  const SCOUT = { id: 'scout', tools: ['scout_search', 'deep_research'], prompt: 'Scout rules.', keepPrompt: true };
+  const RECON = { id: 'recon', tools: ['recon_cite'], prompt: 'Recon method.', isolated: true };
+  // The owner's words, exactly.
+  assert.equal(DEPTH_PROMPTS.quick, 'How much care this conversation wants: Quick. Keep the work short: one pass and only quick checks. Start helpers only when the tier asks for them. Everything in your working method still applies.');
+  assert.equal(DEPTH_PROMPTS.thorough, "How much care this conversation wants: Thorough. Make a short plan before you act. Before you finish, check your work against the request and your working method's checks. If helpers are allowed, ask one helper to review the result once, and fix what it finds.");
+  for (const text of Object.values(DEPTH_PROMPTS)) {
+    assert.doesNotMatch(text, /search depth/i, 'never worded like the Web level');
+    assert.doesNotMatch(text, /no self-check|skip (the )?check/i, 'never contradicts a method\'s check');
+  }
+  assert.equal(DEPTH_PROMPTS.standard, undefined);
+  // The same in every tab (the owner's rule), Research, Scout and Recon included. Thorough's last
+  // sentence (a helper's review) only where the tools can start a helper: all tools, or a list with one.
+  const { DEPTH_PROMPTS_NO_HELPERS: NO_HELPERS, helpersOffered } = await import('../lib/prompt.js');
+  assert.equal(NO_HELPERS.quick, DEPTH_PROMPTS.quick);
+  assert.equal(NO_HELPERS.thorough, "How much care this conversation wants: Thorough. Make a short plan before you act. Before you finish, check your work against the request and your working method's checks.");
+  assert.ok(helpersOffered('all') && helpersOffered(['read', 'subagent']) && helpersOffered(['subagent_fork']));
+  assert.ok(!helpersOffered('none') && !helpersOffered(['deep_research', 'web_search']) && !helpersOffered(undefined));
+  const HELPERS = { id: 'mine', tools: ['read', 'subagent'], prompt: 'Mine.' };
+  for (const mode of [CHAT, COWORK, CODE, FINANCE, RESEARCH, SCOUT, RECON, HELPERS]) {
+    assert.equal(promptText({ mode, depth: 'standard' }), promptText({ mode }), `${mode.id}: Standard adds nothing`);
+    const own = mode.prompt || (mode.id === 'cowork' ? COWORK_METHOD : mode.id === 'code' ? CODE_METHOD : '');
+    const care = [COWORK, CODE, HELPERS].includes(mode) ? DEPTH_PROMPTS : NO_HELPERS;
+    for (const depth of ['quick', 'thorough']) {
+      const text = promptText({ mode, depth, web: true });
+      assert.ok(text.startsWith(`${own}\n\n${care[depth]}`), `${mode.id}: ${depth}, right after its own words`);
+      if (care === NO_HELPERS) assert.doesNotMatch(text, /helper to review/, `${mode.id}: ${depth}`);
+    }
+  }
+  // Scout keeps its rules and the note under a model version that stands alone.
+  assert.ok(promptText({ mode: SCOUT, depth: 'thorough', alone: true }).startsWith(`Scout rules.\n\n${NO_HELPERS.thorough}`));
+  // A Recon conversation that can use none of its tools (locked, late, or under PTC) gets no Depth words.
+  const { LOCKED_MODE, LATE_MODE } = await import('../lib/isolation.js');
+  for (const depth of ['quick', 'thorough']) {
+    for (const [what, args] of [['locked', { mode: LOCKED_MODE }], ['late', { mode: LATE_MODE }], ['PTC', { mode: RECON, programOnly: true }]]) {
+      const text = promptText({ ...args, depth });
+      assert.ok(!text.includes('How much care') && !/Search effort is/.test(text), `${what}: ${depth}`);
+    }
+  }
+  // Right after the working method, which stays word for word.
+  const cowork = promptText({ mode: COWORK, depth: 'thorough', web: true, level: 'standard' });
+  assert.ok(cowork.startsWith(`${COWORK_METHOD}\n\n${DEPTH_PROMPTS.thorough}`));
+  assert.ok(promptText({ mode: CODE, depth: 'quick' }).startsWith(`${CODE_METHOD}\n\n${DEPTH_PROMPTS.quick}`));
+  // Under a model version that stands alone the mode's words go, the Depth note stays (like the Web notes).
+  assert.ok(promptText({ mode: COWORK, depth: 'quick', alone: true }).includes(DEPTH_PROMPTS.quick));
+  // Never: helpers, all tools off (Recon's included).
+  for (const [what, args] of [
+    ['a helper', { mode: COWORK, child: true }], ['tools off', { mode: COWORK, off: true }], ['Recon, tools off', { mode: RECON, off: true }],
+  ]) {
+    for (const depth of ['quick', 'thorough']) assert.ok(!promptText({ ...args, depth }).includes('How much care this conversation wants'), `${what}: ${depth}`);
+  }
+});
+
+test('Depth is kept per conversation like the Web level: cleaned up, carried into Rerun copies, kept on each Mac, searchable', async () => {
+  const { readFileSync } = await import('node:fs');
+  const host = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  assert.match(host, /sessionDepth: z\.string\(\)\.default\('\{\}'\)\.volatile\(\),/);
+  assert.match(host, /const fields = \[[^\]]*'sessionDepth'[^\]]*\];/, 'pruned with the others');
+  assert.match(host, /depth: missionRound\(agent\) \? 'standard' : depthOf\(agent\.id\),/);
+  assert.match(source, /const CARRIED = \[[^\]]*'sessionDepth'/, 'carried into a Rerun copy');
+  const { ALWAYS_SKIP } = await import('../../dsh-shared-settings/index.mjs');
+  assert.ok(ALWAYS_SKIP.includes('modes.sessionDepth'), 'never shared between Macs');
+  assert.ok(ALWAYS_SKIP.includes('modes.depthMoved'), 'each Mac moves its own Web levels once');
+  const index = JSON.parse(readFileSync(new URL('../../dsh-settings-plus/settings-index.json', import.meta.url), 'utf8'));
+  assert.ok((Array.isArray(index) ? index : index.entries ?? []).some((entry) => entry.field === 'modes.sessionDepth'));
+  // The button: in every tab (Research, Scout and Recon too), only not while all tools are off.
+  assert.match(source, /^\s*off \? null : h\(DepthButton, \{\s*t, depth: sessionDepthNow, kind: depthKind\(modeDef\),/m, 'nothing but tools off hides it');
+  assert.doesNotMatch(source, /researchTab \|\| off \? null : h\(DepthButton/);
+  assert.match(source, /onPick: \(picked\) => void pickSetting\('depth', picked\)/);
+  // A pick is stored (Standard too, against a start that differs) and becomes where new conversations start.
+  assert.match(source, /const depths = \{ \.\.\.readObject\(current\.sessionDepth\), \[sessionId\]: picked \};\s*return \[\{ op: 'set', path: \['sessionDepth'\], value: JSON\.stringify\(depths\) \}, \{ op: 'set', path: \['searchDepth'\], value: picked \}\];/);
+  // Web is only On or Off; it never writes a level any more.
+  assert.match(source, /const LEVELS = \['off', 'on'\];/);
+  assert.match(source, /return \[\{ op: 'set', path: \['sessionWeb'\], value: JSON\.stringify\(webs\) \}\];/);
+  for (const key of ['depth.label', 'depth.quick', 'depth.standard', 'depth.thorough', 'depth.quick.hint', 'depth.thorough.hint', 'depth.note', 'depth.note.research', 'depth.quick.hint.research', 'depth.standard.hint.research', 'depth.thorough.hint.research', 'depth.note.isolated', 'depth.quick.hint.isolated', 'depth.standard.hint.isolated', 'depth.thorough.hint.isolated', 'depth.standard.hint', 'depth.title', 'depth.open', 'new.depth', 'new.depth.hint', 'web.on', 'web.on.hint']) {
+    assert.equal(source.split('\n').filter((line) => line.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+  }
+  assert.doesNotMatch(source.split('\n').find((line) => line.includes("'depth.label':") && /[一-鿿]/.test(line)), /深度/, 'not the Web level Deep\'s word');
+  // The Settings hint: one Depth start for every tab, no tab left out (the owner's rule).
+  const hint = source.split('\n').filter((line) => line.includes("'new.depth.hint':"));
+  assert.match(hint[0], /in every tab\./);
+  assert.match(hint[1], /每个标签中/);
+  assert.doesNotMatch(hint.join('\n'), /except|除/);
+});
+
+test('since 0.59.0 Depth carries how much the model searches: its searching part with Web on, Recon\'s effort by Depth', async () => {
+  const { promptText, DEPTH_PROMPTS, DEPTH_SEARCH_PROMPTS, ISOLATED_DEPTH_PROMPTS, ISOLATED_LEVEL_PROMPTS, ISOLATED_OFF_PROMPT } = await import('../lib/prompt.js');
+  const COWORK = { id: 'cowork', tools: 'all', prompt: '' };
+  const CHAT = { id: 'chat', tools: 'none', prompt: 'Chat.' };
+  const RECON = { id: 'recon', tools: ['recon_cite'], prompt: 'Recon method.', isolated: true };
+  // Thorough is the former Web Deep: ten searches, two sources.
+  assert.match(DEPTH_SEARCH_PROMPTS.thorough, /at least ten searches/);
+  assert.match(DEPTH_SEARCH_PROMPTS.thorough, /at least two independent sources/);
+  assert.doesNotMatch(Object.values(DEPTH_SEARCH_PROMPTS).join(' '), /Search depth is set|Web level is/, 'never worded as a Web level');
+  // Web on: the care note and the searching part; Web off: the care note only; Standard: neither.
+  const on = promptText({ mode: COWORK, web: true, depth: 'thorough' });
+  assert.ok(on.includes(DEPTH_PROMPTS.thorough) && on.includes(DEPTH_SEARCH_PROMPTS.thorough));
+  const off = promptText({ mode: COWORK, web: false, depth: 'thorough' });
+  assert.ok(off.includes(DEPTH_PROMPTS.thorough) && !off.includes(DEPTH_SEARCH_PROMPTS.thorough));
+  const standard = promptText({ mode: CHAT, web: true, depth: 'standard' });
+  assert.ok(!standard.includes('How much care') && !Object.values(DEPTH_SEARCH_PROMPTS).some((text) => standard.includes(text)));
+  // Recon: the care note like every tab, then its own search effort by Depth (Thorough is its former
+  // Deep, named Thorough); Web Off still says so in place of the search effort.
+  assert.equal(ISOLATED_DEPTH_PROMPTS.thorough, ISOLATED_LEVEL_PROMPTS.deep.replace('Search effort is Deep:', 'Search effort is Thorough:'));
+  assert.match(ISOLATED_DEPTH_PROMPTS.thorough, /^Search effort is Thorough: at least ten searches/, 'named as the button says');
+  const { DEPTH_PROMPTS_NO_HELPERS: CARE } = await import('../lib/prompt.js');
+  assert.equal(promptText({ mode: RECON, depth: 'thorough' }), `Recon method.\n\n${CARE.thorough}\n\n${ISOLATED_DEPTH_PROMPTS.thorough}`);
+  assert.equal(promptText({ mode: RECON, depth: 'quick' }), `Recon method.\n\n${CARE.quick}\n\n${ISOLATED_LEVEL_PROMPTS.quick}`);
+  assert.equal(promptText({ mode: RECON, depth: 'standard' }), 'Recon method.');
+  assert.equal(promptText({ mode: RECON, depth: 'thorough', webOff: true }), `Recon method.\n\n${CARE.thorough}\n\n${ISOLATED_OFF_PROMPT}`);
+});
+
+test('each conversation\'s former Web level moves into its Depth once; Deep becomes Thorough; a Depth already picked stays', async () => {
+  const { movedDepths } = await import('../index.js');
+  const moved = movedDepths({ a: 'quick', b: 'deep', c: 'standard', d: 'thorough', e: 'nonsense' }, { d: 'quick' }, 'deep');
+  assert.deepEqual(moved.depths, { a: 'quick', b: 'thorough', c: 'standard', d: 'quick', e: 'standard' });
+  assert.equal(moved.start, 'thorough');
+  assert.equal(movedDepths({}, {}, 'quick').start, 'quick');
+  assert.equal(movedDepths({}, {}, undefined).start, 'standard');
+  const { readFileSync } = await import('node:fs');
+  const host = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  assert.match(host, /depthMoved: z\.boolean\(\)\.default\(false\)\.volatile\(\),/);
+  assert.match(host, /void moveWebLevels\(\)\.catch\(report\);\s*void addDataTrim\(\)\.catch\(report\);\s*\}\);/, 'on every opening');
+  assert.match(host, /setTimeout\(\(\) => \{\s*void moveWebLevels\(\)\.catch\(report\);/, 'and a moment after loading');
+  // During a Mission run's rounds the conversation only conducts: no Depth words.
+  assert.match(host, /depth: missionRound\(agent\) \? 'standard' : depthOf\(agent\.id\),/);
+  // Mission names its goals so; Modes knows a Mission round by it.
+  const runner = readFileSync(new URL('../../dsh-mission/runner.js', import.meta.url), 'utf8');
+  assert.ok((runner.match(/objective: `Mission run \$\{run\.id\}: /g) ?? []).length >= 2, 'Mission still starts its goal objectives with "Mission run <id>: "');
+  assert.match(runner, /const objective = `Mission run \$\{run\.id\}: /);
+});
+
+test('the chat box: a Web pick writes only On or Off; a Depth pick is kept for the conversation and becomes the start', async () => {
+  const { readFileSync } = await import('node:fs');
+  // client.js is a browser bundle, so its plain helpers are cut out of the source and run here alone.
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  const cut = (name) => {
+    const start = source.indexOf(`function ${name}(`);
+    assert.ok(start >= 0, `client.js has no function ${name}`);
+    let depth = 0;
+    for (let i = source.indexOf('{', start); i < source.length; i += 1) {
+      if (source[i] === '{') depth += 1;
+      else if (source[i] === '}' && (depth -= 1) === 0) return source.slice(start, i + 1);
+    }
+    throw new Error(`unbalanced braces in ${name}`);
+  };
+  const line = (name) => source.match(new RegExp(`^\\s*const ${name} = .*;$`, 'm'))[0];
+  const { depthNow, settingOps, startDepthOf, webLevelOf } = new Function(`${cut('readObject')}\n${line('DEPTHS')}\n${line('depthOf')}\n${cut('startDepthOf')}\n${cut('depthNow')}\n${cut('webLevelOf')}\n${cut('settingOps')}\nreturn { depthNow, settingOps, startDepthOf, webLevelOf };`)();
+  // Settings → Modes shows the start as the Depth button does (a stored Deep is Thorough).
+  assert.equal(startDepthOf('deep'), 'thorough');
+  assert.equal(startDepthOf('quick'), 'quick');
+  assert.equal(startDepthOf(undefined), 'standard');
+  assert.match(source, /searchDepth: startDepthOf\(view\.searchDepth\),/);
+  // The Web button: Off while all tools are off or the web is.
+  assert.equal(webLevelOf(false, true), 'on');
+  assert.equal(webLevelOf(false, false), 'off');
+  assert.equal(webLevelOf(true, true), 'off');
+  assert.match(source, /h\(WebButton, \{ t, level: webLevelOf\(off, web\),/);
+  // Recon (an isolated tab) gets its own list texts: Depth there sets only how hard it searches.
+  // The row shortens its names also when a button on its first line is squeezed (the app's access-level
+  // button shrinks, and its name then ran under the next one), in both ways the row is fitted.
+  assert.match(source, /const crowded = \(first\) => first\.scrollWidth > first\.clientWidth \+ 1 \|\| itemsOf\(first\)\.some\(squeezed\);/);
+  // Only a button that may shrink counts (an open list drawn outside a button is no sign of a full line).
+  assert.match(source, /return style\.minWidth === '0px' && Number\(style\.flexShrink\) > 0 && item\.scrollWidth > item\.clientWidth \+ 1;/);
+  assert.match(source, /return crowded\(first\);\s*\};/);
+  assert.match(source, /if \(first && !crowded\(first\)\) return;/);
+  // Only the list texts fit the tab: Recon's (its own search tools), a research tab's (run size), the usual ones.
+  assert.match(source, /h\(DepthButton, \{\s*t, depth: sessionDepthNow, kind: depthKind\(modeDef\),/);
+  assert.match(source, /t\(kind \? `depth\.\$\{id\}\.hint\.\$\{kind\}` : `depth\.\$\{id\}\.hint`\)/);
+  assert.match(source, /t\(kind \? `depth\.note\.\$\{kind\}` : 'depth\.note'\)/);
+  assert.doesNotMatch(cut('DepthButton'), /return null/, 'the button never hides itself');
+  const { depthKind } = new Function(`${cut('depthKind')}\nreturn { depthKind };`)();
+  assert.equal(depthKind({ isolated: true, tools: ['recon_cite'] }), 'isolated');
+  assert.equal(depthKind({ tools: ['deep_research', 'web_search'] }), 'research');
+  assert.equal(depthKind({ tools: ['scout_search', 'deep_research'] }), 'research', 'Scout');
+  assert.equal(depthKind({ tools: 'all' }), undefined);
+  assert.equal(depthKind(undefined), undefined);
+  // The research texts give the run sizes Deep research really uses, in English and Chinese.
+  const { DEPTHS: RUNS } = await import('../../dsh-deep-research/lib/rounds.js');
+  const lines = (key) => source.split('\n').filter((text) => text.includes(`'${key}':`));
+  for (const id of ['quick', 'standard', 'thorough']) {
+    const [en, zh] = lines(`depth.${id}.hint.research`);
+    assert.match(en, new RegExp(`about ${RUNS[id].minutes} minutes, with up to ${RUNS[id].runners} helpers`), id);
+    assert.match(zh, new RegExp(`约 ${RUNS[id].minutes} 分钟，最多 ${RUNS[id].runners} 个助手`), id);
+  }
+  const minutes = ['quick', 'standard', 'thorough'].map((id) => RUNS[id].minutes);
+  assert.match(lines('depth.note')[0], new RegExp(`about ${minutes[0]}, ${minutes[1]} or ${minutes[2]} minutes; sooner where tools run through programs`));
+  assert.match(lines('depth.note')[1], new RegExp(`约 ${minutes[0]}、${minutes[1]} 或 ${minutes[2]} 分钟`));
+  // Every list note says it is one Depth for every tab, and none says Depth does only part of its job.
+  for (const key of ['depth.note', 'depth.note.isolated', 'depth.note.research']) {
+    const [en, zh] = lines(key);
+    assert.match(en, /where new conversations start in every tab/, key);
+    assert.match(zh, /每个标签中/, key);
+    assert.doesNotMatch(en, /only how hard|sets only/, key);
+  }
+  assert.match(lines('depth.note.research')[0], /sooner where tools run through programs/);
+  assert.match(lines('depth.thorough.hint.isolated')[0], /A short plan first, .*its own work checked before finishing/);
+  // What the Depth button shows.
+  assert.equal(depthNow({}, 's'), 'standard');
+  assert.equal(depthNow({ searchDepth: 'deep' }, 's'), 'thorough', 'a start of the former Web Deep');
+  assert.equal(depthNow({ searchDepth: 'quick', sessionDepth: JSON.stringify({ s: 'thorough' }) }, 's'), 'thorough');
+  assert.equal(depthNow({ searchDepth: 'quick', sessionDepth: JSON.stringify({ s: 'standard' }) }, 's'), 'standard', 'Standard picked against another start stays');
+  assert.equal(depthNow({ searchDepth: 'thorough', sessionDepth: JSON.stringify({ other: 'quick' }) }, 's'), 'thorough');
+  assert.equal(depthNow({ sessionDepth: JSON.stringify({ s: 'deep' }) }, 's'), 'standard', 'nothing unknown shown');
+  // What a pick writes.
+  assert.deepEqual(settingOps('web', 'on', { sessionWeb: JSON.stringify({ x: false }) }, 's'), [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify({ x: false, s: true }) }]);
+  assert.deepEqual(settingOps('web', 'off', {}, 's'), [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify({ s: false }) }]);
+  assert.deepEqual(settingOps('depth', 'thorough', { sessionDepth: JSON.stringify({ x: 'quick' }) }, 's'), [
+    { op: 'set', path: ['sessionDepth'], value: JSON.stringify({ x: 'quick', s: 'thorough' }) },
+    { op: 'set', path: ['searchDepth'], value: 'thorough' },
+  ]);
+  assert.deepEqual(settingOps('depth', 'standard', {}, 's')[0], { op: 'set', path: ['sessionDepth'], value: JSON.stringify({ s: 'standard' }) });
+});
+
+test('the page code parses: an apostrophe inside a quoted text once took every Modes button away', async () => {
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  assert.doesNotThrow(() => new Function(source));
 });

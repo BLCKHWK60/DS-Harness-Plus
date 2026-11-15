@@ -17,7 +17,7 @@ Installing, updating and removing are in the [README](../README.md). The history
 | **Top of the sidebar** | The tabs: Chat, Cowork, Code, and Finance, Data, Research, Scout and Recon once you switch them on. With more than three they sit in rows of three. How many of your own modes get a tab is set in Settings → Modes. |
 | **Sidebar, under the tabs** | The tab's own pages (Automation tasks, Connectors, Skills, Plugins…), then its projects and conversations, then the Trash. |
 | **Bottom of the sidebar** | Your DeepSeek balance, and **More** (Settings, look options). |
-| **Chat box, left** | Web, the models chip, Tools (in a Research conversation: Depth and Focus instead of Web; in a Finance conversation: its selection too). |
+| **Chat box, left** | Web, Depth, the models chip, Tools (Depth is in every tab and hidden only while Tools are off; in Research and Scout there is no Web button, and Research adds Focus; in a Finance conversation: its selection too). |
 | **Chat box, right** | The model button: model, effort, tier. |
 | **Above the chat box** | The activity line, with the arrow that folds the chat box away. |
 | **Under an answer** | Copy, Rerun, Branch, usage, and pictures the assistant drew. |
@@ -32,7 +32,7 @@ A tab is a way of working. Clicking a tab returns you to the conversation you la
 
 | Tab | For | What is special |
 |---|---|---|
-| **Chat** | Plain conversation. | No tools. Pick a Web level other than Off and it may search the web and read pages. No projects. |
+| **Chat** | Plain conversation. | No tools. Switch Web on and it may search the web and read pages. No projects. |
 | **Cowork** | Any work in a folder. | All tools, and a working method: understand the task first, keep a step list, ask before changing your files, check the result, report plainly. Projects with types (see 4). |
 | **Code** | Programming. | All tools, and a working method: read first, small changes, run the tests, report plainly. |
 | **Finance** | Companies, markets, economies. | Its own data tools and drop-downs for subject, market, focus and period. Off until you switch it on in Settings → Finance. |
@@ -41,7 +41,7 @@ A tab is a way of working. Clicking a tab returns you to the conversation you la
 | **Scout** | Finding work: jobs, freelance projects, contracts, public tenders. | Its own job sources and checks; a scored report with draft messages, and nothing is sent. Off until you switch it on in Settings → Scout (see 9). |
 | **Recon** | Research on .onion sites and Usenet text newsgroups. | Isolated: only its own tools (.onion sites through Tor); nothing from other conversations comes in or goes out. Needs the `tor` program. Off until you switch it on in Settings → Recon (see 10). |
 
-- Change what a tab's mode allows in **Settings → Modes** (tools, file sandbox, tier, instructions). The same page sets the Web level new conversations start with, the mode for scheduled tasks, how many of your modes get a sidebar tab (1 to 5), and switches for the built-in working methods of Code and Cowork.
+- Change what a tab's mode allows in **Settings → Modes** (tools, file sandbox, tier, instructions). The same page sets the Depth new conversations start with, the mode for scheduled tasks, how many of your modes get a sidebar tab (1 to 5), and switches for the built-in working methods of Code and Cowork.
 - A mode's tier applies to a new conversation from its first message.
 - **The access level** (file sandbox): Chat, Data, Research and Recon set Read Only and Code sets Workspace Write, only when a conversation starts in the mode or is moved into it. A level you pick by hand in the chat box is kept, also after a restart. Moving to a tab that sets none (Cowork, Finance, Scout) puts back the earlier level, unless you changed it by hand.
 - `/mode` shows or switches the mode of a conversation. With the sidebar on, before the first message the selected tab decides: `/mode` then only names the tabs.
@@ -50,8 +50,9 @@ A tab is a way of working. Clicking a tab returns you to the conversation you la
 
 | Control | What it does | How to use it |
 |---|---|---|
-| **Web** | How much the assistant may use the internet in this conversation. | Click and pick: **Off**, **Quick**, **Standard**, **Thorough** or **Deep** (at least ten searches and ten pages read, facts cross-checked). Off takes away web search, page reading and other tools that go online (an outside image service too), and stops commands and programs that go online; connectors you added stay on and can still reach the internet. The level you pick is also where new conversations start (also set in Settings → Modes). Not shown in Research and Scout, which always have the web. |
-| **Depth** and **Focus** (Research tab) | How long a research run may take and where it looks first. | Pick in the chat box of a Research conversation. A research run works in rounds with helper agents and ends in a cited report. |
+| **Web** | Whether the assistant may use the internet in this conversation. | Click and pick **On** or **Off**. Off takes away web search, page reading and other tools that go online (an outside image service too), and stops commands and programs that go online; connectors you added stay on and can still reach the internet. Not shown in Research and Scout, which always have the web. |
+| **Depth** | How much work the conversation gets: how much it searches when Web is on, planning, checks and reviews. | Click and pick **Quick**, **Standard** or **Thorough** (at least ten searches and ten pages read, key facts checked in two sources, a short plan, a check before finishing, and one review by a helper in tabs that can start helpers). The Depth you pick is also where new conversations start (also set in Settings → Modes). It is the same in every tab: in Recon it also sets how hard Recon searches, and in Research and Scout (and any deep research run) it sets the size of a research run: about 10, 25 or 45 minutes. How hard the model thinks is the **Effort** on the model button. |
+| **Focus** (Research tab) | Where a research run looks first: Web, News or Academic. | Pick in the chat box of a Research conversation. How long the run takes is the Depth button. A research run works in rounds with helper agents and ends in a cited report. |
 | **Selection** (Finance tab) | What a Finance conversation is about: kind, subject, market, focus, period. | Shown once the conversation has started. Press a part to change it, for this conversation only. |
 | **Models chip** | Shows whether helper agents use this conversation's model (**One model**) or others as well (an amber **3 models**). | Click to switch for this conversation. One model is the default and needs the least memory. |
 | **Tools** | Shows what the assistant can and cannot call right now, with one switch for all tools. | Click to see the list. |
@@ -254,6 +255,7 @@ Chat, Cowork and Code tabs at the top of the left sidebar, each with its own sec
 |---|---|---|
 | `tabs` | `JSON.stringify(DEFAULT_TABS)` | Tab layout as JSON: `{ modeId: { newLabel, pages: [pageId], greeting, chips: [{ label, prompt, icon }] } }`. Tabs follow the Modes add-on's modes; a mode not listed here gets a tab with no pages of its own. Pages that no tab lists (for example Plugins) show un |
 | `maxTabs` | `3` | At most this many tabs (the first modes in order). |
+| `tabOrder` | `[]` | Your own tab order (tab ids, set by arranging the tabs). Only the order: which tabs show is unchanged. |
 | `hideLogos` | `false` | Hide the DeepSeek logo and name at the top of the sidebar and the logo on the start page. |
 | `dateTitle` | `false` | Show today's date as the start page title instead of the tab's greeting. |
 | `wideChat` | `false` | Let the conversation and the message box use the whole width of the window instead of a centred column. |
@@ -278,13 +280,15 @@ Chat, Cowork and Code modes you can switch for each session.
 | `pinOnFirstTurn` | `true` | When a top-level Session starts its first turn without a chosen mode, record the mode it starts in. A later change of `defaultMode` (for example from a sidebar tab) then only affects new Sessions. |
 | `sessionWeb` | `'{}'` | Per-session web switch as JSON: `{ sessionId: true \| false }`. Missing = the mode's default (off in a no-tools mode). |
 | `sessionResearch` | `'{}'` | Obsolete: the old per-conversation Deep research switch, no longer offered or read (kept so older settings files still load). Old entries are pruned with the others. |
-| `sessionSearchDepth` | `'{}'` | Per-session Web level as JSON: `{ sessionId: 'quick' \| 'standard' \| 'thorough' \| 'deep' }`. Missing = `searchDepth`. |
+| `sessionSearchDepth` | `'{}'` | Obsolete since 0.59.0: each conversation's former Web level, moved into `sessionDepth` once (`depthMoved`). Kept so older settings files still load. |
+| `sessionDepth` | `'{}'` | Per-session Depth as JSON: `{ sessionId: 'quick' \| 'standard' \| 'thorough' }` (missing = where new conversations start, `searchDepth`). How much work the conversation gets: how much it searches when Web is on, helpers, planning, checks and reviews. Set with th |
+| `depthMoved` | `false` | Each conversation's former Web level has been moved into its Depth (once, since 0.59.0). |
 | `sessionTools` | `'{}'` | Per-session tools switch as JSON: `{ sessionId: false }`. While off, the model is offered no tool at all. |
-| `searchDepth` | `'standard'` | The Web level new conversations start with (quick, standard, thorough, deep): how hard the model searches. A conversation's own pick on the Web button is kept in `sessionSearchDepth`. |
+| `searchDepth` | `'standard'` | The Depth new conversations start with (quick, standard, thorough), and that a conversation without its own pick follows. Set on Settings → Modes, and by every pick on the Depth button. (Named for the former Web level, which it replaced in 0.59.0.) |
 | `codeMethod` | `true` | Give the Code mode a working method (read first, small changes, run the tests, report plainly) while it has no instructions of its own. |
 | `coworkMethod` | `true` | Give the Cowork mode a working method (understand the task, a step list, care with the user's files, check the result, report plainly) while it has no instructions of its own. |
 | `sessionSandboxBase` | `'{}'` | Per-conversation access level from before a mode changed it, as JSON: `{ sessionId: { mode: 'chat', base: 'workspace-write', set: 'read-only' } }` (`mode`: the mode the level was last applied for; `set`: the level that mode set). Leaving the mode puts `base` b |
-| `researchDepth` | `'standard'` | Depth of a Deep research run (quick, standard, thorough): how many rounds and helpers it uses. Chosen in the Research tab's chat box and in Settings → Research. One setting for all conversations. |
+| `researchDepth` | `'standard'` | Obsolete since 0.59.0: the former separate Depth of Deep research runs. A run now follows the Depth of the conversation that starts it (`sessionDepth`, else `searchDepth`), the same in every tab. Kept so older settings files still load. |
 | `researchModel` | `'same'` | Which model Deep research's helpers run on: `same` (the model of the conversation that started the research) or `roles` (the role models set in Settings → Model Tiers). All conversations. |
 | `sessionHelpers` | `'{}'` | The same choice for one conversation, as JSON: `{ sessionId: 'same' \| 'roles' }`. It decides for every tool that starts helper agents (Mission, Deep research, Agent swarm, the Tier tools, Code power). A conversation without an entry follows `researchModel`, wh |
 | `rerunButton` | `true` | A Rerun button under every answer: asks the same question again, with the model now selected, in a fresh copy of the conversation. |
@@ -369,7 +373,7 @@ A deep_research tool that plans, researches in parallel with child agents, and w
 | `searcher` | `'fast'` |  |
 | `writer` | `'plan'` |  |
 | `helperModel` | `'same'` | Which model the helpers run on when the Modes add-on is not there to say: `same` (the model of the conversation that started the research) or `roles` (the Tier add-on's role models). |
-| `depth` | `'standard'` | Used when the Modes add-on is not there to say which depth the slider is on. |
+| `depth` | `'standard'` | Used when the Modes add-on is not there to give the conversation's Depth. |
 | `maxSubquestions` | `8` | Upper bounds. The chosen depth decides the actual numbers and is held to these. |
 | `maxParallel` | `8` |  |
 | `maxSources` | `120` |  |

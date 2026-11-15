@@ -96,7 +96,7 @@ test('the Delete permanently question says it cannot be put back and where copie
   // A row being erased offers no Put back and no second delete.
   assert.match(source, /item\.erasing\s*\?\s*\[dot\('d1'\), h\('span', \{ key: 'erasing'/);
   // Two lines: the title alone on the first, so a narrow sidebar does not cut it to one letter.
-  assert.match(source, /h\('span', \{ className: 'cws-conv-main cws-trashed', title \},\s*h\('span', \{ className: 'cws-label' \}, title\)\),\s*h\('div', \{ className: 'cws-trash-meta' \}/);
+  assert.match(source, /h\('span', \{ className: 'cws-conv-main cws-trashed', title \},\s*h\('span', \{ className: 'cws-label' \}, title\)\),\s*group \? h\('div', \{ className: 'cws-trash-meta cws-trash-sub' \}/, 'a group row adds its own line; the title line stays alone');
 });
 
 const trashTab = new Function(`${functionText('trashTab')}\nreturn trashTab;`)();
@@ -119,7 +119,7 @@ test('both ways to delete keep the tab, and the Trash list counts and lists only
   assert.match(source, /t\('trash\.title', \{ n: binHere\.length \}\)/);
   assert.match(source, /shown \? binHere\.map\(/);
   // Hiding a deleted conversation from the lists still uses the whole trash.
-  assert.match(source, /const deleted = new Set\(bin\.items\.map/);
+  assert.match(source, /const deleted = new Set\(bin\.items\.flatMap\(\(item\) => \[item\.id, \.\.\.\(Array\.isArray\(item\.ids\) \? item\.ids : \[\]\)\]\)\);/, 'and the runs inside group rows');
 });
 
 const trashLists = new Function(`${functionText('trashTab')}\n${functionText('inTabTrash')}\n${functionText('guessTab')}\nreturn { trashTab, inTabTrash, guessTab };`)();
@@ -154,7 +154,7 @@ test('the right-click menu offers neither Restore nor Delete for a Recon convers
   assert.doesNotMatch(source, /restoreMany\(ids\)|removeMany\(ids\)\s*}/);
 });
 
-const emptying = new Function(`${functionText('trashTab')}\n${functionText('emptyIds')}\nasync ${functionText('runEmpty')}\nreturn { emptyIds, runEmpty };`)();
+const emptying = new Function(`${functionText('trashTab')}\n${functionText('emptyIds')}\n${functionText('rowContents')}\nasync ${functionText('runEmpty')}\nreturn { emptyIds, runEmpty, rowContents };`)();
 
 test('Empty trash takes only this tab\'s own rows (not those being deleted, not those listed in every tab), after one question naming how many', async () => {
   const { emptyIds, runEmpty } = emptying;
@@ -221,7 +221,7 @@ test('Empty trash texts: true in English and Chinese, and the sidebar wires them
   assert.match(source, /items: binHere, state, tabIds, selectedId: selected\.id, t,/);
   assert.match(source, /shown && emptyIds\(binHere, state, tabIds, selected\.id\)\.length > 0/);
   // While it runs: the Empty button and every row's Put back and Delete permanently wait.
-  assert.equal((source.match(/className: 'cws-link', disabled: emptying,/g) ?? []).length, 3);
+  assert.equal((source.match(/className: 'cws-link', disabled: emptying(,| \|\| Boolean\(blocked\),| \|\| item\.newer === true,)/g) ?? []).length, 3);
 });
 
 test('every tab shows its full name when pointed at: to the right in the folded rail, above it in the wide sidebar', () => {
@@ -433,4 +433,51 @@ test('a refresh that began before a save does not put the old order back', async
   store.value.tabOrder = ['a', 'b'];
   await model.refresh();
   assert.deepEqual(model.get().tabOrder, ['a', 'b']);
+});
+
+test('a group row (old runs of an automation): its second line, its tab, and Empty trash counting rows', async () => {
+  const { runEmpty } = emptying;
+  const groupSummary = new Function(`${functionText('groupSummary')}\nreturn groupSummary;`)();
+  const t = (key, vars) => `${key}|${vars?.n ?? ''}|${vars?.what ?? ''}`;
+  const day = Date.UTC(2026, 10, 3, 12);
+  const line = groupSummary({ kind: 'group', count: 12, firstAt: day, deletedAt: day + 4 * 86400000, data: 1 }, t);
+  assert.match(line, /^trash\.count\|12\|/);
+  assert.match(line, / – /, 'the dates it spans');
+  assert.match(line, /trash\.data/, 'and saved settings');
+  assert.equal(groupSummary({ count: 1, firstAt: day, deletedAt: day }, t).split(' · ').length, 2, 'one day: no range');
+  const items = [
+    { id: 'group.automations.task-1', kind: 'group', tab: 'automations', count: 12 },
+    { id: 'session-x', tab: 'automations' },
+    { id: 'group.automations.task-2', kind: 'group', tab: 'cowork', count: 3 },
+  ];
+  const asked = [];
+  const sent = [];
+  await runEmpty({ items, state: {}, tabIds: ['automations', 'cowork'], selectedId: 'automations', t, ask: (q) => { asked.push(q); return true; }, send: async (ids) => { sent.push(ids); return {}; } });
+  assert.deepEqual(sent, [['group.automations.task-1', 'session-x']], 'only this tab\'s rows');
+  assert.equal(asked[0], 'trash.empty.confirm.rows|2|trash.count|13|', 'two rows, thirteen conversations');
+  // What a row holds, in words (found in the lab: "with its 0 conversations", "the 1 conversations").
+  const { rowContents } = emptying;
+  const words = (key, vars) => ({ 'trash.count': `${vars?.n} conversations`, 'trash.count.one': '1 conversation', 'trash.data.its': 'its saved settings', 'trash.and': ' and ' })[key];
+  assert.equal(rowContents({ kind: 'group', count: 0, data: 1 }, words), 'its saved settings');
+  assert.equal(rowContents({ kind: 'group', count: 1 }, words), '1 conversation');
+  assert.equal(rowContents([{ kind: 'group', count: 2, data: 1 }, { id: 'x' }], words), '3 conversations and its saved settings');
+  // The list hides every run inside a row, and the buttons act on the whole row.
+  assert.match(source, /restore: \(row\) => \(row\?\.kind === 'group' \? call\(\{ method: 'POST', body: JSON\.stringify\(\{ action: 'restore', itemId: row\.id \}\) \}\)/);
+  assert.match(source, /onClick: \(\) => void putBack\(item\) \}/);
+  for (const key of ['trash.empty.confirm.rows', 'trash.empty.confirm.rows.one', 'trash.erase.confirm.group', 'trash.count', 'trash.left.oldest', 'trash.back.needs', 'trash.back.newer', 'trash.back.partly']) {
+    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+  }
+  const en = source.split('\n').find((text) => text.includes("'trash.erase.confirm.group':") && /[a-z]{4}/.test(text.split(':').slice(1).join(':')));
+  assert.match(en, /cannot be put back/);
+  assert.match(en, /Time Machine/);
+});
+
+test('row actions: a Delete names what the list showed; partial results and the owner\'s notes are shown; rows from a newer version are left out of Empty trash', () => {
+  const { emptyIds } = emptying;
+  assert.deepEqual(emptyIds([{ id: 'group.a.b', kind: 'group', tab: 'cowork', newer: true }, { id: 'x', tab: 'cowork' }], {}, ['cowork'], 'cowork'), ['x']);
+  assert.match(source, /action: 'erase', itemId: row\.id, ids: row\.ids \?\? \[\], pieces: row\.pieces \?\? \[\]/);
+  assert.match(source, /itemIds, shown \}/);
+  assert.match(source, /for \(const note of Array\.isArray\(done\?\.notes\) \? done\.notes : \[\]\)/);
+  assert.match(source, /model\.fail\(t\('trash\.erase\.partly'/);
+  for (const key of ['trash.erase.partly', 'trash.folder', 'trash.folder.its']) assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 2, key);
 });

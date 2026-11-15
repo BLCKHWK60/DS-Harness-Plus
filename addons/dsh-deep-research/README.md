@@ -31,7 +31,7 @@ The `## Checks` list counts the cited sources of the last two kinds, one line ea
 
 ## Depth: Quick, Standard, Thorough
 
-Chosen with the **Depth** dropdown in a Research conversation's chat box or in Settings → Research (since 0.55.0; from 0.54.0 on the Research tab's start page; before that, with a slider beside a Deep research button). It is one setting for all conversations (kept by the Modes add-on as `researchDepth`).
+Since Plus 0.59.0 a run is as big as the **Depth of the conversation that starts it**: the Modes add-on's Depth button, the same in every tab (`modes.depthOf(sessionId)`; a helper follows its conversation). An older Modes without `depthOf`: its `researchDepth()`; without Modes: this add-on's `depth`. (Before 0.59.0 it was one setting for all conversations, Modes' `researchDepth`, chosen with a Depth dropdown in a Research conversation's chat box or in Settings → Research.)
 
 | Depth | Rounds | Helpers at once | Sub-questions | Follow-ups per later round | Findings per helper | Time limit | Sources |
 | --- | --- | --- | --- | --- | --- | --- | --- |

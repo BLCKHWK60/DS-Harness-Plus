@@ -1201,8 +1201,21 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
     lines.push(`Instructions for ${extras.version.name}:`, ...extras.version.texts);
   }
 
+  // With Depth at Quick or Thorough, the effort says only how hard to think: planning, checks and
+  // reviews are Depth's (its note in the Modes section). At Standard the wording is as before.
+  const thinkingOnly = extras.thinkingOnly === true;
   if (alone) {
     // The effort wording is the tier's; the reasoning effort itself is still sent to the model.
+  } else if (thinkingOnly) {
+    const think = {
+      off: 'Answer directly with no extended reasoning preamble.',
+      low: 'Keep reasoning brief.',
+      medium: 'Reason as much as the task needs.',
+      high: 'Reason carefully and state your assumptions.',
+      'extra-high': 'Reason exhaustively: consider edge cases and failure paths.',
+    };
+    const line = think[tier.effort] ?? (bare && tier.effort === 'ultra' ? think['extra-high'] : '');
+    if (line) lines.push(line);
   } else if (tier.effort === 'off') {
     lines.push('Answer directly with no extended reasoning preamble and no self-review loop.');
   } else if (tier.effort === 'low') {
@@ -1250,17 +1263,24 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
       );
     } else if (tier.subagents) {
       lines.push(
-        '**Ultra Code.** Reason exhaustively and verify the result. Do not proactively delegate; only use a sub-agent when the user asks for one or when a piece is clearly blocking.',
+        thinkingOnly
+          ? '**Ultra Code.** Reason exhaustively. Do not proactively delegate; only use a sub-agent when the user asks for one or when a piece is clearly blocking.'
+          : '**Ultra Code.** Reason exhaustively and verify the result. Do not proactively delegate; only use a sub-agent when the user asks for one or when a piece is clearly blocking.',
         `If you do delegate, keep concurrent children at or below ${maxSubagents} and keep working while they run.`,
       );
     } else {
       lines.push(
-        '**Ultra Code.** Reason exhaustively and verify the result. Sub-agent delegation is disabled for this tier, so do the work directly.',
+        thinkingOnly
+          ? '**Ultra Code.** Reason exhaustively. Sub-agent delegation is disabled for this tier, so do the work directly.'
+          : '**Ultra Code.** Reason exhaustively and verify the result. Sub-agent delegation is disabled for this tier, so do the work directly.',
       );
     }
-    lines.push(
-      'Before finishing, run the narrowest checks that prove the change (typecheck, focused tests, lint), review the final diff, and fix and rerun on failure. State which checks you ran.',
-    );
+    // The checks before finishing are Depth's while it is Quick or Thorough; Ultra keeps its planning and delegation.
+    if (!thinkingOnly) {
+      lines.push(
+        'Before finishing, run the narrowest checks that prove the change (typecheck, focused tests, lint), review the final diff, and fix and rerun on failure. State which checks you ran.',
+      );
+    }
     if (tier.id === 'code') {
       lines.push(
         'At Ultra on this review tier, fan out independent review angles when sub-agents are available (correctness, security, performance, tests), then consolidate their findings yourself and verify each fix.',
@@ -1557,6 +1577,16 @@ export function apply(ctx, config) {
               const bare = modes?.noTools?.(agent.id) === true;
               // Web Off: the Modes add-on tells the model so; the tier's own internet line would contradict it.
               const webOff = modes?.webOff?.(agent.id) === true;
+              // Depth Quick or Thorough: Depth speaks for planning, checks and reviews, so the effort
+              // words keep only how hard to think (the owner's rule: effort is thinking only).
+              // Only where the Depth note is really given (not a helper, tools off, or while a Mission run is on).
+              let depth;
+              try {
+                depth = modes?.depthSpoken?.(agent);
+              } catch {
+                depth = undefined;
+              }
+              const thinkingOnly = depth === 'quick' || depth === 'thorough';
               // The route is only recorded at the first request, so a new Session
               // resolves its tier from the Agent's current selection until then.
               const tier = resolveTierOf(agent.id);
@@ -1565,7 +1595,7 @@ export function apply(ctx, config) {
                 readMaxSubagents(config, tier),
                 plain(config.ultraAutoDelegate) !== false,
                 readRoleModels(config),
-                { skillText: (name) => skillTexts.get(skillKey(agent, name))?.text, version: versionExtras(agent, tier), bare, webOff },
+                { skillText: (name) => skillTexts.get(skillKey(agent, name))?.text, version: versionExtras(agent, tier), bare, webOff, thinkingOnly },
               );
             },
           }),
