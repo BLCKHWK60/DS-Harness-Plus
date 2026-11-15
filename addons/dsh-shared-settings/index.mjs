@@ -36,6 +36,7 @@ export const ALWAYS_SKIP = [
   'modes.sessionTools',
   'modes.sessionHelpers',
   'modes.sessionToolSets',
+  'modes.sessionSandboxBase',
 ];
 
 /** Per-conversation choices: they change all the time and mean little on the other Mac. */

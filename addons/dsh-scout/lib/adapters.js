@@ -6,7 +6,7 @@
  * source's own public addresses.
  */
 import { MARKETS } from './registry.js';
-import { getJson, plainText } from './net.js';
+import { getJson, hooks, plainText } from './net.js';
 
 const clip = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const day = (value) => {
@@ -37,6 +37,95 @@ const slugOk = (value) => /^[a-z0-9][a-z0-9._-]{0,79}$/i.test(String(value ?? ''
 const need = (value, what) => {
   if (!String(value ?? '').trim()) throw new Error(`give ${what}`);
 };
+
+/** Notices that are no longer open. */
+const SHUT = ['cancelled', 'unsuccessful', 'complete', 'withdrawn'];
+
+/**
+ * One public contract notice in the Open Contracting Data Standard (OCDS), as both UK services
+ * publish them, in the shape of a posting. The contract's value is not pay, so it is kept apart.
+ * @param {object} release - one OCDS release.
+ * @param {(release: object) => string} link - the notice's public page.
+ */
+export function fromOcds(release, link) {
+  const tender = release?.tender ?? {};
+  const buyer = (release?.parties ?? []).find((party) => (party?.roles ?? []).includes('buyer')) ?? {};
+  const address = buyer.address ?? {};
+  const contact = buyer.contactPoint ?? {};
+  const lots = (tender.lots ?? []).slice(0, 12).map((lot) => [lot?.title, lot?.description].filter(Boolean).map((part) => plainText(part)).join(': ')).filter(Boolean);
+  const period = tender.contractPeriod ?? {};
+  const length = period.startDate || period.endDate ? `${day(period.startDate) || '?'} to ${day(period.endDate) || '?'}` : period.durationInDays ? `${period.durationInDays} days` : '';
+  return {
+    ref: clip(release?.ocid ?? release?.id, 80),
+    title: clip(tender.title, 200),
+    company: clip(release?.buyer?.name ?? buyer.name, 120),
+    location: [address.locality, address.countryName].filter(Boolean).map((part) => clip(part, 60)).join(', '),
+    pay: '',
+    value: tender.value?.amount ? money(tender.value.amount, 0, clip(tender.value.currency, 5)) : '',
+    posted: day(tender.datePublished ?? release?.date),
+    closes: day(tender.tenderPeriod?.endDate),
+    status: clip(tender.status, 20),
+    type: 'tender',
+    remote: '',
+    url: clip(link(release), 400),
+    snippet: [tender.classification?.description, tender.mainProcurementCategory, tender.suitability?.sme ? 'suitable for small firms' : ''].filter(Boolean).map((part) => clip(part, 80)).join(' · '),
+    text: [
+      plainText(tender.description),
+      release?.description ? plainText(release.description) : '',
+      lots.length > 0 ? `Lots:\n${lots.map((lot) => `• ${lot}`).join('\n')}` : '',
+      length ? `Contract period: ${length}` : '',
+      tender.tenderPeriod?.endDate ? `Responses due: ${day(tender.tenderPeriod.endDate)}` : '',
+      tender.submissionMethodDetails ? `How to respond: ${clip(plainText(tender.submissionMethodDetails), 300)}` : '',
+      [contact.name, contact.email, contact.telephone, contact.url].some(Boolean) ? `Buyer's contact, as published: ${[contact.name, contact.email, contact.telephone, contact.url].filter(Boolean).map((part) => clip(part, 120)).join(' · ')}` : '',
+    ].filter(Boolean).join('\n\n').slice(0, 20_000),
+    textFull: true,
+  };
+}
+
+/**
+ * A reader for a UK service's OCDS search: the newest tender notices in a time window (up to 5
+ * pages of 100), the latest version of each, kept when they match the words asked for. The
+ * services have no word search that answers to GET, so the matching is done here.
+ */
+function ocdsReader({ base, from, to, link }) {
+  return {
+    async search(want) {
+      need(want.what, 'words from the work, matched against the notices\' titles and descriptions');
+      const days = Math.min(30, Math.max(1, Math.round(Number(want.days) || 10)));
+      const end = new Date(hooks.now());
+      const start = new Date(end.getTime() - days * 86_400_000);
+      const stamp = (date) => date.toISOString().slice(0, 19);
+      let address = `${base}?${new URLSearchParams({ stages: 'tender', limit: '100', [from]: stamp(start), [to]: stamp(end) })}`;
+      const found = [];
+      for (let page = 0; page < 5 && address; page += 1) {
+        const answer = await getJson(address);
+        const list = Array.isArray(answer?.releases) ? answer.releases : [];
+        found.push(...list);
+        const next = String(answer?.links?.next ?? '');
+        // Only the service's own next page is followed.
+        address = list.length > 0 && next.startsWith(`${base}?`) ? next : '';
+      }
+      const latest = new Map();
+      for (const release of found) {
+        const id = release?.ocid ?? release?.id;
+        const known = latest.get(id);
+        if (id && (!known || String(release.date ?? '') > String(known.date ?? ''))) latest.set(id, release);
+      }
+      const today = new Date(hooks.now()).toISOString().slice(0, 10);
+      const kept = [...latest.values()].map((release) => fromOcds(release, link))
+        .filter((posting) => posting.ref && !SHUT.includes(posting.status) && (!posting.closes || posting.closes >= today)
+          && matches(`${posting.title} ${posting.snippet} ${posting.text}`, want.what)
+          && (!want.where || matches(`${posting.location} ${posting.text}`, want.where)));
+      return { total: kept.length, read: latest.size, days, postings: kept.slice(0, 60) };
+    },
+    async detail(posting) {
+      return posting.text || '(no text)';
+    },
+  };
+}
+
+/** SAM.gov's dates are written MM/dd/yyyy. */
+const usDate = (date) => `${String(date.getUTCMonth() + 1).padStart(2, '0')}/${String(date.getUTCDate()).padStart(2, '0')}/${date.getUTCFullYear()}`;
 
 /** Each reader: `search(want, key)` → postings; `detail(posting, key)` → full text. */
 export const ADAPTERS = {
@@ -116,6 +205,7 @@ export const ADAPTERS = {
           url: clip(item.url, 400),
           snippet: (item.tags ?? []).slice(0, 5).map((tag) => clip(tag, 40)).join(', '),
           text: plainText(item.description).slice(0, 20_000),
+          textFull: true,
         })),
       };
     },
@@ -164,6 +254,8 @@ export const ADAPTERS = {
     async detail(posting) {
       return `${posting.text || '(no text)'}\n\nAdzuna gives only this short extract. The full posting is on the board it came from: ${posting.url}`;
     },
+    /** Only a short extract: the checks on the text say so, and do not judge its length. */
+    extract: () => true,
   },
 
   // ---- USAJOBS (key) ---------------------------------------------------------------------------
@@ -196,6 +288,8 @@ export const ADAPTERS = {
             url: clip(item.PositionURI, 400),
             snippet: clip(item.QualificationSummary, 160),
             text: [item.UserArea?.Details?.JobSummary, item.QualificationSummary, (item.UserArea?.Details?.MajorDuties ?? []).join('\n'), item.ApplicationCloseDate ? `Closes: ${day(item.ApplicationCloseDate)}` : ''].filter(Boolean).map((part) => plainText(part)).join('\n\n').slice(0, 20_000),
+            textFull: true,
+            closes: day(item.ApplicationCloseDate),
           };
         }),
       };
@@ -276,6 +370,7 @@ export const ADAPTERS = {
             url: `https://news.ycombinator.com/item?id=${encodeURIComponent(hit.objectID)}`,
             snippet: '',
             text: text.slice(0, 20_000),
+            textFull: true,
           };
         }),
       };
@@ -340,6 +435,7 @@ export const ADAPTERS = {
           url: clip(job.hostedUrl, 400),
           snippet: clip(job.categories?.team, 80),
           text: [job.descriptionPlain, ...(job.lists ?? []).map((list) => `${clip(list.text, 80)}\n${plainText(list.content)}`), job.additionalPlain].filter(Boolean).join('\n\n').slice(0, 20_000),
+          textFull: true,
         })),
       };
     },
@@ -367,11 +463,101 @@ export const ADAPTERS = {
           url: clip(job.jobUrl, 400),
           snippet: clip(job.department, 80),
           text: String(job.descriptionPlain ?? plainText(job.descriptionHtml)).slice(0, 20_000),
+          textFull: true,
         })),
       };
     },
     async detail(posting) {
       return posting.text || '(no text)';
     },
+  },
+
+  // ---- Public tenders: UK (open data, no key) and US federal (SAM.gov, key) -------------------
+  contractsfinder: ocdsReader({
+    base: 'https://www.contractsfinder.service.gov.uk/Published/Notices/OCDS/Search',
+    from: 'publishedFrom',
+    to: 'publishedTo',
+    link: (release) => {
+      const notice = (release?.tender?.documents ?? []).find((document) => document?.documentType === 'tenderNotice' && /^https:\/\/www\.contractsfinder\.service\.gov\.uk\//.test(String(document.url ?? '')));
+      return notice?.url ?? `https://www.contractsfinder.service.gov.uk/Notice/${encodeURIComponent(String(release?.id ?? '').slice(0, 36))}`;
+    },
+  }),
+  findatender: ocdsReader({
+    base: 'https://www.find-tender.service.gov.uk/api/1.0/ocdsReleasePackages',
+    from: 'updatedFrom',
+    to: 'updatedTo',
+    link: (release) => `https://www.find-tender.service.gov.uk/Notice/${encodeURIComponent(String(release?.id ?? ''))}`,
+  }),
+  sam: {
+    async search(want, key) {
+      if (!key) throw new Error('SAM.gov needs its key in Settings → Scout');
+      need(want.what, 'words from the opportunity\'s title');
+      const days = Math.min(365, Math.max(1, Math.round(Number(want.days) || 30)));
+      const end = new Date(hooks.now());
+      const start = new Date(end.getTime() - days * 86_400_000);
+      const page = Math.max(1, Number(want.page) || 1);
+      // SAM.gov takes its key only in the address. It is never shown: errors name the service alone.
+      const query = new URLSearchParams({ api_key: key, postedFrom: usDate(start), postedTo: usDate(end), limit: '50', offset: String((page - 1) * 50), title: clip(want.what, 120) });
+      // Solicitations, combined synopses, presolicitations and sources sought: work that can still be bid for.
+      for (const type of ['o', 'k', 'p', 'r']) query.append('ptype', type);
+      const state = /^[A-Za-z]{2}$/.test(String(want.where ?? '').trim()) ? String(want.where).trim().toUpperCase() : '';
+      if (state) query.set('state', state);
+      let answer;
+      try {
+        answer = await getJson(`https://api.sam.gov/opportunities/v2/search?${query}`);
+      } catch (error) {
+        // SAM.gov answers 404 when nothing matches.
+        if (/status 404/.test(String(error?.message))) return { total: 0, postings: [] };
+        throw error;
+      }
+      const list = Array.isArray(answer?.opportunitiesData) ? answer.opportunitiesData : [];
+      const postings = list.map((item) => {
+        const place = item?.placeOfPerformance ?? {};
+        const contacts = (Array.isArray(item?.pointOfContact) ? item.pointOfContact : []).filter(Boolean)
+          .map((person) => [person.title, person.fullName, person.email, person.phone].filter(Boolean).map((part) => clip(part, 80)).join(', ')).filter(Boolean);
+        const description = String(item?.description ?? '');
+        return {
+          ref: clip(item?.noticeId, 60),
+          title: clip(item?.title, 200),
+          company: String(item?.fullParentPathName ?? item?.department ?? '').split('.').map((part) => clip(part, 80)).filter(Boolean).slice(-2).join(', '),
+          location: [place.city?.name, place.state?.code ?? place.state?.name].filter(Boolean).map((part) => clip(part, 60)).join(', '),
+          pay: '',
+          value: '',
+          posted: day(item?.postedDate),
+          closes: day(item?.responseDeadLine),
+          type: 'tender',
+          remote: '',
+          url: `https://sam.gov/opp/${encodeURIComponent(String(item?.noticeId ?? ''))}/view`,
+          snippet: [item?.type, item?.typeOfSetAsideDescription, item?.naicsCode ? `NAICS ${item.naicsCode}` : ''].filter(Boolean).map((part) => clip(part, 80)).join(' · '),
+          descUrl: /^https:\/\/api\.sam\.gov\//.test(description) ? clip(description, 300) : '',
+          text: [
+            item?.type ? `Notice type: ${clip(item.type, 60)}` : '',
+            item?.solicitationNumber ? `Solicitation number: ${clip(item.solicitationNumber, 60)}` : '',
+            item?.typeOfSetAsideDescription ? `Set aside for: ${clip(item.typeOfSetAsideDescription, 120)}` : '',
+            item?.responseDeadLine ? `Responses due: ${day(item.responseDeadLine)}` : '',
+            contacts.length > 0 ? `Contacts, as published: ${contacts.join('; ')}` : '',
+          ].filter(Boolean).join('\n'),
+        };
+      }).filter((posting) => posting.ref && (!want.where || state || matches(posting.location, want.where)));
+      return { total: Number(answer?.totalRecords) || list.length, postings };
+    },
+    async detail(posting, key) {
+      const parts = [posting.text];
+      if (posting.descUrl && key) {
+        try {
+          const address = new URL(posting.descUrl);
+          if (address.hostname !== 'api.sam.gov') throw new Error('not SAM.gov');
+          address.searchParams.set('api_key', key);
+          const answer = await getJson(address.href);
+          const text = typeof answer?.description === 'string' ? plainText(answer.description) : '';
+          if (text) parts.unshift(text.slice(0, 25_000));
+        } catch (error) {
+          parts.push(`The full description could not be read (${clip(error?.message ?? error, 120)}). It is on the notice's page.`);
+        }
+      }
+      return parts.filter(Boolean).join('\n\n') || '(no text)';
+    },
+    /** Without its description, a notice is only its details: not a full text. */
+    extract: (body) => String(body ?? '').startsWith('Notice type:'),
   },
 };

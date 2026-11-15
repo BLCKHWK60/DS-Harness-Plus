@@ -50,6 +50,15 @@ The app shows a command's answer as one line that opens with a click; each answe
 - Changes the user makes by hand are never undone by the put-back, but `/mission back` returns the whole folder, the user's own later changes included (they are in the "before going back" checkpoint).
 - Very large files that the project does not ignore are copied into the store at every change.
 
+## Where Mission does not work (0.57.0)
+
+The rules are in `lib/gate.js`, a pure function.
+
+- **Isolated conversations (Recon).** Other add-ons leave an isolated conversation alone, and so does Mission. When the Modes add-on says a conversation is isolated (`modes.isolated(id)`; a Modes add-on that cannot answer counts as isolated), `/mission` answers "Mission is not available here: this is an isolated conversation (Recon), and other add-ons leave it alone." and changes nothing: no permission preset, no checkpoint of the folder, no run. `mission_step` answers the same. Only `/mission off`, `stop` and `end` still work, so a mode or a run an earlier version started there can be taken back. A mode left on from before is not applied any more (no checks of tool calls, no checkpoints at the start of a turn). A run left on there (one an earlier version started, or one in a conversation moved to the Recon tab with the Cowork sidebar) cannot move, because Modes refuses `mission_step` in an isolated conversation; so it is paused a moment after the next turn the app starts there, with the reason kept in the run, and does not use up the goal's rounds. `/mission end` closes it with a report.
+- **A tier with Sub-agents off.** A run's planner, workers and reviewer are sub-agents. When the conversation's tier has Sub-agents switched off (Model Tiers: `modelTiers.resolveTier(id).subagents === false`), `/mission <goal>` and `/mission resume` are refused with the reason and what to do (switch Sub-agents on for the tier in Settings → Model Tiers, or give the conversation another tier). Nothing is switched on first. A run already under way is paused at its next step (`mission_step` pauses the app's goal and keeps the reason, which `/mission` shows), so it does not use up rounds; `/mission resume` carries on once the tier allows sub-agents again. The modes and checkpoints (`/mission restricted`, `ask`, `auto`, `checkpoints`, `back`) start no helpers and still work.
+- **How the owner's decision is read.** The decision says to refuse `/mission` where the tier allows no sub-agents. Mission refuses there what needs helper models: starting a run and carrying one on. The permission modes still switch on such a tier (`/mission restricted`, `ask`, `auto`, `on`, which also set the app's permission preset and take a checkpoint), and checkpoints still work, because none of them starts a helper. In an isolated conversation everything but taking back is refused, as above.
+- `mission_step` is not registered with Model Tiers' own sub-agent gate (`registerSubagentTool`): that gate also counts the step's own running helper, so on a tier capped at one sub-agent the conductor's next call (which only waits for that helper) would be refused and the run would stall. Mission reads the tier's switch itself instead.
+
 ## Settings
 
 Settings → Mission: the switch (`enabled`, default on), the mode `/mission on` uses (`defaultMode`, default `restricted`), the models for a run (`roles`, `projects`), and a run's limits (`maxItems` 12, `maxTries` 3, `maxReviews` 2, `maxSteps` 60, `waitMinutes` 3).
@@ -83,7 +92,7 @@ The app's own goal system is the clock. Starting a run creates an app goal (`goa
 - **PTC.** In the app's PTC preset a conversation can call only `run_code` directly and reaches every other tool from inside that program. 0.37.0 refused `run_code` to the conductor ("call mission_step and nothing else"), so a run in PTC could never step: the owner's first run used all 70 rounds on that. Now the program is let through and what it calls is decided one by one, so only `tools.mission_step({})` gets through. The conductor's note gives the exact program in PTC conversations.
 - **Long steps.** A step now runs on its own, apart from the tool call that started it. A call of `mission_step` only waits for it: 100 seconds in PTC (the app stops a program after two minutes unless the model asks for more, ten minutes at most), 70 minutes otherwise. When the wait ends first, the tool says the step is still under way and to call again; the next call finds the same step. A call that is cut off does not stop the step, unless the goal was paused (the user pressed Stop), in which case the step stops too.
 - **The app's round cap** for the goal is set far above a run's own step limit (3000), because waiting rounds use rounds. A run's own limits are what end it.
-- **Stalled runs.** Five rounds in a row without a call of `mission_step` pause the run, with the reason shown by `/mission`. Before, such a run used every round it had.
+- **Stalled runs.** Five rounds in a row without a call of `mission_step` pause the run, with the reason shown by `/mission`. Before, such a run used every round it had. Since 0.57.0 the count, and the pause, are made a moment after the turn starts: inside the app's turn-start event a goal cannot be paused (the app refuses to write to the conversation while it is handing out that event), so until then this brake did not work in the app, only in the tests. A pause that the app refuses is not reported as made.
 
 ### When the user is away
 
@@ -107,6 +116,18 @@ In `<folder>/.dsh-mission/runs/<id>/`: `run.json` (the run as it stands), `log.j
 - No browser checks of its own. A worker can use whatever browser tool or command the conversation has, and a check command can be a browser script, but the add-on does not drive a browser.
 - The conductor has to call `mission_step` and should relay the final report. A model that does neither stalls the run or leaves the report in the tool result; `/mission report` shows it either way.
 - Proof commands run with the user's shell PATH and without network limits, like the assistant's own terminal.
+
+## Tested (0.57.0, where Mission does not work)
+
+- **Unit tests (7 more, 23 in all), `test/gate.test.mjs`, with Mission running on stand-in services (Modes, Model Tiers, the goal service, permission presets; like the app, the stand-in goal service refuses a pause while a session event is handed out):**
+  - the gate's rules on their own;
+  - an isolated conversation: `/mission restricted`, `on`, a goal, `/mission` alone, `checkpoints` and `resume` are refused with the reason, and nothing is switched, taken or started; `off` and `end` answer; `mission_step` refuses;
+  - a mode switched on before the conversation became isolated: the guard no longer refuses a write outside the folder (Modes decides there), and `/mission off` puts the earlier preset back;
+  - a tier with Sub-agents off: a goal and `resume` are refused before anything is switched on, `/mission restricted` works, `mission_step` starts no helper;
+  - a run under way when the tier's Sub-agents go off: the next `mission_step` pauses the goal and starts no helper, `/mission` shows why, `resume` is refused until the tier allows sub-agents again and then carries on;
+  - a run left on in a conversation that is isolated now: the next turn start pauses its goal a moment later (not inside the event), keeps the reason in the run and its log, later turns change nothing more, and `/mission end` closes it;
+  - turns that start without a step: after five the run is paused, through the turn-start event.
+- **Not tested:** the Mac app; real Model Tiers and Modes add-ons (stand-ins only).
 
 ## Tested (0.37.0, the run)
 

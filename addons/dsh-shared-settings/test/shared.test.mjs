@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fieldDigests, mergeSection, parseFieldList, resolveFolder, secretPaths, withoutPaths } from '../lib/core.mjs';
 import { SharedSettingsEngine } from '../lib/engine.mjs';
-import { DEFAULT_SKIP, pickFolder, shareRule, skipList } from '../index.mjs';
+import { ALWAYS_SKIP, DEFAULT_SKIP, pickFolder, shareRule, skipList } from '../index.mjs';
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'dsh-shared-'));
 
@@ -265,9 +265,19 @@ test('an entry the app refuses is reported and left out of the sync record', asy
   assert.equal(readFile(folder).settings.modes.defaultMode, 'code', 'the file keeps the shared value');
 });
 
+test('the README names every field that always stays on each Mac, and how many there are', () => {
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  const line = readme.split('\n').find((text) => text.includes('`modes.sessionIsolated`')) ?? '';
+  const fields = ALWAYS_SKIP.map((path) => path.replace(/^modes\./, ''));
+  for (const field of fields) assert.ok(line.includes(`\`${field}\``) || line.includes(`\`modes.${field}\``), `${field} is listed`);
+  const words = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+  assert.match(readme, new RegExp(`The ${words[ALWAYS_SKIP.length]} \`modes\` fields on the second line stay on each Mac`));
+});
+
 test('per-Mac Modes fields are never written to or taken from the file, even with your own skipFields', async () => {
   const own = skipList(['color-schemes.custom']);
   assert.ok(own.includes('color-schemes.custom') && own.includes('modes.sessionIsolated') && own.includes('modes.extraModes'));
+  assert.ok(own.includes('modes.sessionSandboxBase'), 'each conversation\'s earlier access level stays on its Mac');
   assert.ok(!own.includes('modes.sessionModes'), 'your own list replaces the default for the other fields');
   assert.deepEqual(skipList(undefined), DEFAULT_SKIP);
 
@@ -278,6 +288,7 @@ test('per-Mac Modes fields are never written to or taken from the file, even wit
     sessionTools: `{"${tag}":false}`,
     sessionHelpers: `{"${tag}":"same"}`,
     sessionToolSets: `{"${tag}":["web"]}`,
+    sessionSandboxBase: `{"${tag}":{"base":"workspace-write","set":"read-only"}}`,
   });
   const folder = tmp();
   const a = mac(folder, plusEntries(), { skip: own });

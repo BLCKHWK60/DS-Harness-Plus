@@ -565,6 +565,33 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
       return true;
     },
 
+    /**
+     * Pause a run that may not go on here now (the conversation is isolated, or its tier has
+     * sub-agents off), so it does not use up rounds. The reason is kept and shown by /mission.
+     * @param {object} agent - the conversation's agent.
+     * @param {string} reason - why, for the user.
+     * @returns {boolean} whether a running run was paused. False also when the app's goal could
+     *   not be paused: then nothing is changed or reported, since the rounds would go on.
+     */
+    hold(agent, reason) {
+      const run = runOf(agent.id);
+      if (!run || run.status !== 'running') return false;
+      const goal = goalRef(agent);
+      if (goal && goal.view.phase === 'active') {
+        try {
+          goalsOf().pause(agent, goal.ref);
+        } catch (error) {
+          warn(`could not pause the run: ${String(error?.message ?? error)}`);
+          return false;
+        }
+      }
+      // As with /mission stop: the step under way stops, and is taken again on resume.
+      steps.get(agent.id)?.stopper?.abort(new Error('Stopped.'));
+      run.stalled = `Paused: ${reason}`;
+      save(run);
+      record(run, { kind: 'held', reason });
+      return true;
+    },
     /** End the step under way, and its helpers, without pausing the run. */
     cut(id) {
       steps.get(id)?.stopper?.abort(new Error('Stopped.'));

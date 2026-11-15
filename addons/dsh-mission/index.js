@@ -18,9 +18,15 @@
  *
  * The `/mission` command switches a mode on and off, lists checkpoints and goes back to one, and
  * with a goal after it starts a run on several models (runner.js, lib/run.js).
+ *
+ * Where it does not work (lib/gate.js): an isolated conversation (Recon) is left alone (a run left
+ * on there is paused at its next turn), and a run is refused, or paused, while the conversation's
+ * tier has its sub-agents switched off. On such a tier the permission modes still switch: they
+ * start no helpers.
  */
 import z from '@deepseek-ai/schemastery';
 import { join } from 'node:path';
+import { ISOLATED_TEXT, whyNot } from './lib/gate.js';
 import { COMMAND_TOOLS, MODES, MODE_LABELS, WRITE_TOOLS, decide, modeOf, rulesNote } from './lib/guard.js';
 import { exists, isInside, pathsOf, real, shown } from './lib/paths.js';
 import { openCheckpoints } from './lib/checkpoints.js';
@@ -112,6 +118,8 @@ export const HELP = [
   '/mission checkpoint   take a checkpoint now (a name may follow)',
   '/mission checkpoints  list the checkpoints',
   '/mission back 12      put the folder back as it was at checkpoint 12',
+  '',
+  'Not available in an isolated conversation (Recon). A run needs helper models: its tier must have Sub-agents on (Settings → Model Tiers).',
 ].join('\n');
 
 /**
@@ -154,11 +162,33 @@ export function apply(ctx, config) {
     }
     return id;
   };
+  /**
+   * Whether a conversation, or the one a helper works for, is isolated (Recon). Other add-ons leave
+   * it alone. A Modes add-on that cannot answer counts as isolated, as Modes itself says.
+   */
+  const isolated = (id) => {
+    try {
+      return ctx.get('modes')?.isolated?.(id) === true;
+    } catch {
+      return true;
+    }
+  };
+  /** @returns {object | null} the conversation's tier from Model Tiers (its `subagents` gate), or null. */
+  const tierOf = (id) => {
+    try {
+      return ctx.get('modelTiers')?.resolveTier?.(id) ?? null;
+    } catch {
+      return null;
+    }
+  };
+
   /** @returns {{id: string, entry: object} | undefined} the conversation's mode, when one is on. */
   const guardOf = (agent) => {
     if (!settings().enabled || !agent?.id) return undefined;
     const id = ownerOf(agent);
-    const entry = id ? state.get(id) : undefined;
+    // A mode an earlier version let through in an isolated conversation is left alone.
+    if (!id || isolated(id)) return undefined;
+    const entry = state.get(id);
     return entry ? { id, entry } : undefined;
   };
 
@@ -259,16 +289,41 @@ export function apply(ctx, config) {
     }
   });
 
+  /**
+   * Run something a moment after a session event. Inside the app's `session/event` listeners a
+   * goal cannot be paused (`goals.pause` writes to the conversation, and the app refuses that while
+   * it is still handing out this event: "session append cannot reenter"), so a pause waits a tick,
+   * as the Stop handler above does.
+   * @param {() => void} work - what to do.
+   * @param {string} what - for the warning when it fails.
+   */
+  const afterEvent = (work, what) => {
+    setTimeout(() => {
+      try {
+        work();
+      } catch (error) {
+        warn(`${what}: ${String(error?.message ?? error)}`);
+      }
+    }, 0);
+  };
+
   // A checkpoint at the start of every turn.
   ctx.on('session/event', (session, event) => {
     try {
       if (event?.type !== 'turn/start' || !session?.id || !settings().enabled) return;
+      const agent = (ctx.get('agents')?.list?.() ?? []).find((other) => other.id === session.id);
+      // An isolated conversation (Recon) gets no checkpoint. A run left on there (one an earlier
+      // version started, or one in a conversation moved to the Recon tab) cannot move, because
+      // Modes refuses mission_step there: it is paused, so it does not use up the goal's rounds.
+      if (isolated(session.id)) {
+        if (agent && runner.isOn(session.id) && !runner.paused(agent)) afterEvent(() => runner.hold(agent, ISOLATED_TEXT), 'could not pause the run in an isolated conversation');
+        return;
+      }
       const entry = state.get(session.id);
       if (!entry) return;
       void settle(session.id, pointsOf(entry.root).take(`Start of turn ${event.data?.turn ?? ''}`.trim()));
       // A run that is not being stepped is paused rather than left to use up rounds.
-      const agent = (ctx.get('agents')?.list?.() ?? []).find((other) => other.id === session.id);
-      if (agent) runner.round(agent);
+      if (agent) afterEvent(() => runner.round(agent), 'could not count the run\'s round');
     } catch (error) {
       warn(`could not take the turn's checkpoint: ${String(error?.message ?? error)}`);
     }
@@ -500,6 +555,15 @@ export function apply(ctx, config) {
               if (!exec?.agent?.id) return { text: 'This call has no conversation.' };
               // A helper must not drive the run it is part of.
               if (parentOf(exec.agent)) return { text: 'Only the conversation that owns the run calls this tool. Do your own item and report.' };
+              // Not in an isolated conversation, and not while the tier has its sub-agents off: the
+              // run is paused instead of using up rounds, with the reason for /mission to show.
+              const isolatedHere = isolated(exec.agent.id);
+              const no = whyNot({ isolated: isolatedHere, tier: tierOf(exec.agent.id), helpers: true });
+              if (no) {
+                const paused = runner.hold(exec.agent, no);
+                const next = isolatedHere ? 'End it with /mission end.' : 'Once that is changed, the user carries on with /mission resume.';
+                return { text: paused ? `The mission run is paused. ${no} ${next} Tell the user this and do not call ${STEP_TOOL} again.` : no };
+              }
               return { text: await runner.step(exec.agent, exec.signal, viaProgram(exec.agent) ? WAIT_MS.program : WAIT_MS.direct) };
             } catch (error) {
               return { text: `It did not work: ${String(error?.message ?? error).slice(0, 300)}` };
@@ -559,11 +623,21 @@ export function apply(ctx, config) {
               const text = String(rawInput ?? '').trim();
               const [first = '', ...rest] = text.split(/\s+/);
               const word = first.toLowerCase();
+              // An isolated conversation (Recon) is left alone; only what takes back a mode or a run
+              // an earlier version started there still works (off, stop, end).
+              const isolatedHere = isolated(agent?.id);
+              const shut = whyNot({ isolated: isolatedHere, word });
+              if (shut) return { kind: 'error', text: shut };
+              /** Why a run may not start or carry on here: its helpers need the tier's sub-agents. */
+              const noHelpers = () => whyNot({ isolated: isolatedHere, tier: tierOf(agent?.id), helpers: true, word });
               if (!word || word === 'status' || word === 'help') return { kind: 'success', text: status(agent) };
               const mode = word === 'on' ? settings().defaultMode : modeOf(text);
               if (mode) return { kind: 'success', text: await switchOn(agent, mode) };
               if (word === 'stop' || word === 'pause') return { kind: 'success', text: runner.stop(agent) };
-              if (word === 'resume' || word === 'go' || word === 'continue') return { kind: 'success', text: runner.resume(agent) };
+              if (word === 'resume' || word === 'go' || word === 'continue') {
+                const no = noHelpers();
+                return no ? { kind: 'error', text: no } : { kind: 'success', text: runner.resume(agent) };
+              }
               if (word === 'end' || word === 'finish') return { kind: 'success', text: runner.end(agent) };
               if (word === 'report') return { kind: 'success', text: runner.status(agent) || 'No mission run was started in this conversation.' };
               if (word === 'off') {
@@ -598,6 +672,9 @@ export function apply(ctx, config) {
               const named = modeOf(`${first} ${rest[0] ?? ''}`) ? 2 : modeOf(first) ? 1 : 0;
               const goal = text.split(/\s+/).slice(named).join(' ').trim();
               if (goal.split(/\s+/).length < 3) return { kind: 'error', text: `/mission does not know "${text.slice(0, 60)}". Click for the commands.\nA goal needs a few words, for example: /mission make every test pass and add a --json option\n\n${HELP}` };
+              // Before anything is switched on: a run's helpers need the tier's sub-agents.
+              const no = noHelpers();
+              if (no) return { kind: 'error', text: no };
               const wanted = named === 2 ? modeOf(`${first} ${rest[0]}`) : named === 1 ? modeOf(first) : state.get(agent.id)?.mode ?? settings().defaultMode;
               let lead = '';
               if (state.get(agent.id)?.mode !== wanted) lead = `${(await switchOn(agent, wanted)).split('\n')[0]}\n`;

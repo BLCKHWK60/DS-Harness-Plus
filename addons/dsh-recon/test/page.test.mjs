@@ -131,7 +131,11 @@ const state = {
   tor: { state: 'stopped', path: '/opt/homebrew/bin/tor', version: '0.4.8', test: { state: 'none', text: '' } },
   blocklist: { size: 0, at: 0 },
   engine: { builtIn: 'ahmia', other: false, host: '' },
+  more: { archive: true, archiveDirect: true, news: false, archiveHost: 'web.archive.org', newsHost: 'api.gdeltproject.org' },
 };
+
+/** What the route tells the start page's status bar about its conversation. */
+const bar = { tab: 'recon', asked: 0, conversation: { known: true, recon: true, inRoom: true, model: 'small', provider: 'Mine', where: 'local', may: true, agreed: false } };
 
 // ---- load and render the page ----------------------------------------------------------------
 
@@ -139,8 +143,13 @@ const source = readFileSync(join(import.meta.dirname, '..', 'client.js'), 'utf8'
 let page = null;
 const sandbox = {
   window: { __ModuleLoader__: { load: (module) => { page = module; } } },
-  document: { hidden: false, baseURI: 'http://127.0.0.1:55314/' },
-  fetch: async () => ({ ok: true, json: async () => state }),
+  document: { hidden: false, baseURI: 'http://127.0.0.1:55314/', documentElement: { getAttribute: (name) => (name === 'data-cws-tab' ? bar.tab : null), style: { setProperty: () => {}, removeProperty: () => {} } } },
+  fetch: async (address) => {
+    if (!String(address).includes('session=')) return { ok: true, json: async () => state };
+    bar.asked += 1;
+    bar.last = String(address);
+    return { ok: true, json: async () => ({ ...state, conversation: bar.conversation }) };
+  },
   setInterval: () => 1,
   clearInterval: () => {},
   setTimeout: () => 1,
@@ -156,12 +165,14 @@ const module = page.factory((name) => {
 });
 
 let section = null;
+/** Every slot the module fills, by name. */
+const filled = new Map();
 /** Every write the page asks for, so what it saves can be read. */
 const mutations = [];
 const ctx = {
   effect: (fn) => { fn(); return () => {}; },
   locale: { register: () => {}, bind: () => (key) => key },
-  slots: { inject: (_name, fn) => fn(), register: (decl, component) => { section = { decl, component }; } },
+  slots: { inject: (_name, fn) => fn(), register: (decl, component) => { filled.set(decl.name, { decl, component }); if (decl.name === 'settings.section') section = { decl, component }; } },
   remote: {
     settings: {
       describe: async () => ({ ok: true, value: { namespaces: [{ ns: 'recon', revision: 1, value: {} }] } }),
@@ -248,6 +259,63 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 20));
   await tick();
   const set = Object.fromEntries((mutations.at(-1)?.ops ?? []).map((op) => [op.path.join('.'), op.value]));
   check('another account can be made the default', mutations.length > before && set.usenetDefaultAccount === 'a1', JSON.stringify(set));
+}
+
+// ---- the Internet Archive's route ---------------------------------------------------------------
+
+{
+  const now = walk(section.component({}));
+  const toggle = elementsOf(now).find((element) => element.props['aria-label'] === 'Read Internet Archive copies directly (not through Tor)');
+  check('the page has the switch for reading the Archive directly', toggle?.props.role === 'switch' && toggle.props['aria-checked'] === 'true', JSON.stringify(toggle?.props ?? null));
+  check('its description says the Archive then sees this Mac\'s address', allText(now).includes('The Archive then sees this Mac\'s internet address.') && allText(now).includes('GDELT and .onion sites always go through Tor.'));
+  const before = mutations.length;
+  toggle.props.onClick();
+  await tick();
+  const set = Object.fromEntries((mutations.at(-1)?.ops ?? []).map((op) => [op.path.join('.'), op.value]));
+  check('switching it off writes archiveDirect', mutations.length > before && set.archiveDirect === false, JSON.stringify(set));
+}
+
+// ---- the status bar on the Recon tab's start page -----------------------------------------------
+
+{
+  const slot = filled.get('conversation.hero.options');
+  check('the status bar is registered on the start page', slot?.decl?.id === 'recon-bar' && typeof slot.component === 'function');
+  const draw = async (sessionId) => {
+    walk(slot.component({ sessionId }));
+    await tick();
+    const nodes = walk(slot.component({ sessionId }));
+    return { nodes, text: allText(nodes), pills: nodesOfClass(nodes, 'dsh-rc-pill').map((node) => ({ text: allText([node]), state: node.element.props['data-state'] })), hint: nodesOfClass(nodes, 'dsh-rc-hint')[0] };
+  };
+  const shown = await draw('s1');
+  check('it asks the route about its own conversation', bar.asked === 1 && bar.last === 'http://127.0.0.1:55314/dsh-recon/state?session=s1', bar.last);
+  check('it shows Tor, Usenet, the Archive\'s route and the model', ['Tor starts with the first search', 'Usenet on, 2 accounts', 'Internet Archive read directly', 'small, on this Mac', 'Findings go to this model'].every((text) => shown.pills.some((pill) => pill.text === text)), JSON.stringify(shown.pills));
+  check('a local model is shown as fine', shown.pills.find((pill) => pill.text === 'Findings go to this model')?.state === 'ok');
+  check('it says the conversation is isolated', allText([shown.hint]).startsWith('Isolated:') && shown.hint.element.props['data-error'] === 'false');
+  check('it says what isolation means, and not that nothing goes out', allText([shown.hint]).includes('nothing from other conversations comes in, and nothing of it goes to them') && !allText([shown.hint]).includes('nothing goes out'), allText([shown.hint]));
+  check('it has no button: agreeing to a cloud model stays typed', elementsOf(shown.nodes).every((element) => element.type !== 'button'));
+
+  bar.conversation = { ...bar.conversation, model: 'big', provider: 'DeepSeek', where: 'cloud', may: false };
+  const cloud = await draw('s2');
+  check('a cloud model shows findings held back', cloud.pills.some((pill) => pill.text === 'big, in the cloud' && pill.state === 'warn') && cloud.pills.some((pill) => pill.text === 'Findings held back' && pill.state === 'warn'), JSON.stringify(cloud.pills));
+  check('and says to type /recon cloud', allText([cloud.hint]).includes('Type /recon cloud to agree for this conversation') && cloud.hint.element.props['data-error'] === 'true');
+
+  bar.conversation = { ...bar.conversation, may: true, agreed: true, inRoom: false };
+  const outside = await draw('s3');
+  check('a conversation outside Recon\'s folder is told to start a new one', allText([outside.hint]).includes('not in Recon\'s own folder'));
+
+  bar.conversation = { known: false };
+  const unknown = await draw('s4');
+  check('a conversation the app has not loaded shows its model as not known yet', unknown.pills.some((pill) => pill.text === 'Model not known yet' && pill.state === 'none') && !unknown.pills.some((pill) => pill.text === 'No model picked'), JSON.stringify(unknown.pills));
+  check('and does not ask to pick a model', !allText([unknown.hint]).startsWith('Pick a model') && allText([unknown.hint]).includes('once the app has loaded this conversation') && unknown.hint.element.props['data-error'] === 'false', allText([unknown.hint]));
+
+  bar.conversation = { known: true, recon: true, inRoom: true, model: '', provider: '', where: '', may: false, agreed: false };
+  const none = await draw('s4b');
+  check('with no model it asks for one', none.pills.some((pill) => pill.text === 'No model picked' && pill.state === 'warn') && allText([none.hint]).startsWith('Pick a model in the chat box.'), JSON.stringify(none.pills));
+
+  bar.tab = 'cowork';
+  const asked = bar.asked;
+  await draw('s5');
+  check('on another tab it does not ask the route', bar.asked === asked);
 }
 
 console.log(fails === 0 ? `ALL OK (${ran})` : `${fails} of ${ran} FAILED`);

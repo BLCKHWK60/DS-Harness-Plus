@@ -333,6 +333,8 @@ export function apply(ctx, config) {
   /**
    * For other add-ons: show a picture in the chat, under the turn it was made in. Either a
    * description to draw (the same as diagram_draw takes), or a picture file that add-on made.
+   * With a description, `file` may name an SVG of the same drawing that the add-on saved: it is
+   * shown after a restart if it still carries this add-on's mark.
    * @param {object} agent - the Agent whose turn it is.
    * @param {{title?: string, description?: object, file?: string}} picture - what to show.
    * @returns {{ok: boolean, id?: string, outline?: string, errors?: string[]}} what happened.
@@ -351,7 +353,10 @@ export function apply(ctx, config) {
       if (!result.ok) return { ok: false, errors: result.errors };
       recent.set(id, result);
       while (recent.size > 80) recent.delete(recent.keys().next().value);
-      remember({ id, session, at: Date.now(), title: String(picture.title || result.title).slice(0, 120), file: '', problems: 0 });
+      // An SVG file the add-on saved of the same drawing (Data's chart files) is recorded with it, so
+      // the picture shows again after a restart. It is served only while it carries this add-on's mark.
+      const svgFile = typeof picture.file === 'string' && picture.file.toLowerCase().endsWith('.svg') ? picture.file : '';
+      remember({ id, session, at: Date.now(), title: String(picture.title || result.title).slice(0, 120), file: svgFile, problems: 0 });
       return { ok: true, id, outline: result.outline };
     }
     const file = String(picture?.file ?? '');

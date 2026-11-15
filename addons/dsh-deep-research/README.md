@@ -1,6 +1,6 @@
 # Deep research
 
-Host plugin `@local/dsh-deep-research` (dsh 0.2.2-rc.2). It adds one tool, `deep_research`, that the model can call for questions that need several sources. It wraps what dsh already has (child agents, the `web_search` / `web_fetch` tools and whichever search backend `dsh-web` uses); the new code is the orchestration and the citation check.
+Host plugin `@local/dsh-deep-research` (dsh 0.2.2-rc.2). It adds one tool, `deep_research`, that the model can call for questions that need several sources. It wraps what dsh already has (child agents, the `web_search` / `web_fetch` tools and whichever search backend `dsh-web` uses); the new code is the orchestration, the citation check and the labels that say which sources a helper read.
 
 ## How a run works
 
@@ -9,8 +9,25 @@ Host plugin `@local/dsh-deep-research` (dsh 0.2.2-rc.2). It adds one tool, `deep
 3. **Review** (between rounds): an analyst helper reads everything found so far and names what is still unanswered, where sources contradict each other, and which claims need the original document. It then writes follow-up sub-questions with **sharper queries**, built from the names, terms and dates the findings revealed. If the question is already answered well, it says so and the run goes straight to the report.
 4. **Next round**: new searchers take the follow-ups. Each is told what is already established and which queries were already run, so it digs deeper and does not repeat.
 5. **Merge**: URLs are normalized (host lower-cased, fragment removed) and de-duplicated into numbered sources; the same claim from the same page is kept once.
-6. **Write**: a writer helper writes the report from the numbered findings only: the answer first, then the detail, contradictions set out side by side, and what could not be established.
-7. **Check**: the host verifies every `[n]` exists, and marks each source `fetched` (the searcher really called `web_fetch` on it), `search result only`, or `not fetched`. The result ends with a `## Sources` list and a `## Checks` list that starts with the depth, the rounds run, the helpers used at once and the number of sources.
+6. **Write**: a writer helper writes the report from the numbered findings only: the answer first, then the detail, contradictions set out side by side, and what could not be established. A finding whose own helper did not read the page is labelled in what the writer gets (with what that helper did, not the source's label, so another helper having read the page does not hide it), and the writer is told to say so in the sentence with that finding's own label ("(seen only in search results, not read)" or "(not read, and not seen in search results)") and never to present it as confirmed.
+7. **Check**: the host verifies that every `[n]` is in the source list and labels each source by how the helpers came to it (`lib/sources.js`). It does not compare a claim or its quote with the text of the page. The result ends with a `## Sources` list and a `## Checks` list that starts with the depth, the rounds run, the helpers used at once and the number of sources.
+
+## Sources no helper read
+
+Findings from pages no helper read stay in the report (the owner's choice in 0.57.0, research-4), with a label in the Sources list. A source's label comes from what the helpers that cited it did; the other helpers are not counted (each helper's record is its own). A finding the writer gets carries the label of what its own helper did, which can be less certain than its source's label (see **Two helpers, one page**).
+
+| Label | What it means |
+| --- | --- |
+| `read` | A helper that cited it read the page: its `web_fetch` (one of `fetchToolNames`) came back without an error. |
+| `seen only in search results, not read` | The address was in the search results of a helper that cited it, but none of the helpers that cited it read the page: what the report takes from it rests at most on the search result's short summary. |
+| `not read, and not seen in search results` | None of the helpers that cited it read the page, and it was not in the search results of the helpers that cited it (a link from another page, or the helper's own memory). |
+
+- **Read means the fetch came back.** A page counts as read when its fetch's result arrives without an error, not when the helper asks for it. A result marked as an error (a timeout, a refused or too large page, a blocked redirect, a page type the app cannot read) does not count, and neither does an error page from the site: `web_fetch` gives the page's HTTP status, and 400 or above (403, 404, 500 …) does not count. Other fetch tools give no status, so only the error mark applies to them. A page that answers normally with only a teaser (a paywall) still counts as read. After a redirect the page it ended on counts as read too. The progress strip's "pages read" counts the same way.
+- **Two helpers, one page.** When several helpers cite the same address, the source keeps the most certain of what they did: read, then seen in search results, then neither (`moreCertain` in `lib/sources.js`). So a page one helper named from memory and another saw in its search results is `seen only in search results, not read`. That merged label is the Sources list's. Each finding keeps its own helper's label for the writer: when one helper read a page and another only saw it in its search results, the second helper's finding reaches the writer labelled `seen only in search results, not read`, since that helper wrote its claim from the search result, not from the page. The same claim from the same page, reported by two helpers, is kept once with the more certain of their two labels.
+
+The `## Checks` list counts the cited sources of the last two kinds, one line each. When a source is listed as read but a claim about it came from a helper that did not read the page (that claim is labelled in the text), one more line says so, so the two do not look like a contradiction. Before 0.57.0 the labels were `fetched`, `search result only` and `not fetched`, and the tool's description said every citation was checked "against the pages the children fetched", which promised a comparison with the page text that is not made.
+
+`requireFetched: true` (configuration file only) drops every finding whose own helper did not read the page instead. It decides per finding, from that helper's record: a finding is dropped even when another helper read the same page. The Checks then say how many were dropped and why ("or its helper did not read the page").
 
 ## Depth: Quick, Standard, Thorough
 
@@ -27,13 +44,13 @@ Chosen with the **Depth** dropdown in a Research conversation's chat box or in S
 - The numbers are upper bounds in the settings too (`maxParallel`, `maxSubquestions`, `maxSources`, `maxMinutes`); the depth is held to them.
 - More rounds mean more model calls: Thorough can make over 25 helper runs for one question.
 
-`requireFetched: true` drops any finding whose page the searcher did not fetch. If every searcher fails the tool errors; if time runs out the report covers what finished and says so.
+`requireFetched: true` drops any finding whose own helper did not read the page (see above). If every searcher fails the tool errors; if time runs out the report covers what finished and says so.
 
 Before any helper starts, the tool asks the app whether web search works on the model the searchers run on (`searchReady`, no network call). It asks only when the app's own `web_search` is the searchers' only search tool (`searchToolNames`); another search tool, such as a connector's, is not checked. If it does not, for example because the search provider has no API key for that model's provider, the tool stops at once with a reason that names the model, instead of failing minutes later with "found no usable sources".
 
 Inside a program (the app's PTC preset) a run ends early enough to finish before the app's program time limit, keeping 3 minutes for the report: with the app's default limit of 10 minutes that is about 7 minutes at any depth. The Research tab shows this number (`deepResearch.programMinutes()`).
 
-**Wide mode** (`mode: "wide"`, with `items` and `columns`): one searcher per item returns one row; the tool returns CSV text (RFC 4180) with `Sources` (only pages that were fetched) and `Notes` columns. It does not write a file: save the text with your own file tool (so the sandbox applies) and use `present`. Wide mode has no rounds; the depth only sets how many helpers work at once.
+**Wide mode** (`mode: "wide"`, with `items` and `columns`): one searcher per item returns one row; the tool returns CSV text (RFC 4180) with `Sources` (only pages a helper read, by the same rule as above) and `Notes` columns. It does not write a file: save the text with your own file tool (so the sandbox applies) and use `present`. Wide mode has no rounds; the depth only sets how many helpers work at once. A row's Notes column says "sources no helper read were left out" when a helper named pages it did not read (never fetched, or the fetch failed).
 
 ## Models
 
@@ -62,7 +79,7 @@ The tool is registered with Tier's sub-agent gate (`registerSubagentTool`), so a
     maxMinutes: 60
     searchToolNames: [web_search]   # use other names for another search backend (for example an MCP one)
     fetchToolNames: [web_fetch]
-    requireFetched: false
+    requireFetched: false   # true: drop a finding when its own helper did not read the page, even if another helper did; false: keep it, labelled
     wide: { maxRows: 500 }
 ```
 
@@ -75,6 +92,10 @@ Nothing user-specific is preset. Choose the search backend where it already live
 - **Quality was not measured.** The method is now the one the well-known research products describe (plan, search in parallel, review, search again with better queries, write, check), but how good a report is still depends on the model, on the search service the app uses, and on how many pages can be opened. It has not been compared against any of them.
 - **No own search engine or page reader.** It uses the app's `web_search` and `web_fetch`. Pages behind a login, a paywall or heavy scripts are not read.
 - **A small local model is the weak point.** Helpers must write queries, read pages and return clean JSON. Models that are weak at tool use give thin results at any depth.
+
+## Tested in 0.57.0
+
+`test/sources.test.mjs`: a source's status from what its helper read and was shown, the more certain of two statuses (every pair, and an unknown status), when a fetch's result counts as read (no error mark, a status below 400), the three labels, the Sources lines, the Checks notes (singular and plural, one per kind) and the dropped note ("or its helper did not read the page" only with `requireFetched`). `test/rounds.test.mjs`: the writer's findings carry the label when the page was not read, with the rule to say so, which names both labels; no label and no rule when every page was read. `test/report.test.mjs`: a whole Quick run on a stand-in app (planner, a searcher that reads one page, is shown a second by a search and names a third it never met, and a writer): all three stay in the report, labelled in the writer's findings, the Sources list and the Checks; with `requireFetched: true` two are dropped and the Checks say why; the tool's description promises only what the check does. Also: two helpers cite one page, one from memory and one from its search results, in both orders, and the source is `seen only in search results, not read` while each finding reaches the writer with its own helper's label; a page one helper read stays read, in both orders, and the finding of the helper that only saw it in its search results reaches the writer labelled `seen only in search results, not read`; the same claim from both helpers is kept once, as read; with `requireFetched: true` the finding of the helper that did not read the page is dropped although the other helper read it; a fetch that ended in an error result, in an HTTP 403 page or in no result at all does not make the page read (Sources, Checks and the writer's findings), and with `requireFetched: true` its finding is dropped; the progress strip counts only pages whose fetch came back; a redirect's end page counts as read; wide mode keeps only sources whose fetch came back.
 
 ## Verified (rc.1, scripted mock model, throwaway home)
 

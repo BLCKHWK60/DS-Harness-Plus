@@ -5,9 +5,12 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { apply, Config } from '../index.js';
 import { LEFT_OUT, dropMentions, mentionedId, withoutMentions } from '../lib/mentions.js';
 import { SUMMARY_MARK, holdsFindings, wasCompacted } from '../lib/tools.js';
+import { loadRecon } from './fixtures/room.mjs';
+
+// Never the real room: apply() empties it.
+const { apply, Config } = await loadRecon();
 
 const uriOf = (id) => `dsh-session:${Buffer.from(JSON.stringify(id), 'utf8').toString('base64url')}`;
 

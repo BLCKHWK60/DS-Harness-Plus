@@ -8,8 +8,10 @@ tab, and your projects by name.
 - Press **Cmd-K** (Ctrl-K on other systems), or the **search icon** at the top of the sidebar, or
   the **⌘K** button beside the search field in the list.
 - Type. Titles are matched at once; the text of messages a moment later.
-- Results are grouped by tab (Chat, Cowork, Code, Finance, Data, Recon, …), each with the piece of
-  text that matched. Projects are listed last.
+- Results are grouped by tab (Chat, Cowork, Code, Finance, Data, …), each with the piece of text
+  that matched. Projects are listed last.
+- Isolated conversations (Recon) are never shown here, neither by their title nor by the text of
+  their messages.
 - Arrow keys move, **Enter** opens, **Esc** closes. A project opens a new conversation in it.
 
 Several words find conversations that hold every word, not only the exact phrase.
@@ -38,8 +40,21 @@ add-on, and works without this one):
 - **It leaves out the app's own notes.** The app adds notes to every conversation by itself (the
   list of skills, instruction files), and its search finds them too. A piece of text that turns up
   word for word in three or more conversations is taken to be such a note and left out.
-- **Nothing is given to a model.** Results are only shown to you. Recon conversations are found
-  like any others and stand under their own heading.
+- **Nothing is given to a model.** Results are only shown to you.
+- **Isolated conversations stay out (0.57.0).** Recon conversations are isolated: other add-ons
+  leave them alone. Global Search drops them before it matches anything (`lib/hidden.js`), so
+  they are found neither by title nor by message text. A conversation counts as isolated when the
+  Modes add-on's settings list it in `sessionIsolated` (the conversations that began in an
+  isolated mode, written at their first turn; Rerun's copies carry it too), or, for a conversation
+  open in the app, when Modes answers that it is (`modes.isolated`, which also covers a new Recon
+  conversation before its mark is stored). A conversation moved into the Recon tab after it ran
+  (the Cowork sidebar's "Move to" menu) stays findable, open or closed: Modes only locked it
+  (its mode `isolated-late`), it holds nothing from Recon, and its stored mode alone
+  (`sessionModes`) does not hide it. The check runs on the server side of the add-on, at every
+  search. With the Modes add-on off, nothing is known to be isolated, and nothing is left out.
+- The search field inside a tab (Cowork sidebar) still searches that tab's own conversations, the
+  Recon tab's included: it gets the ids of every text match (`hitIds`) and keeps only those of the
+  tab it is in, whose list it shows anyway.
 
 ## The shortcut
 
@@ -61,11 +76,15 @@ is Cmd-Alt-K; plain Cmd-K works there too.
 
 ## Tested
 
-- **Unit tests (3):** matching and grouping; the text search with a stand-in index (several pages,
-  every word, repeated notes left out).
-- **Lab run in the app:** Cmd-K and the sidebar button open the box; titles, message text and
-  projects are found and grouped by tab, a Recon conversation included; Esc and a click outside
-  close it.
+- **Unit tests (6):** matching and grouping; the text search with a stand-in index (several pages,
+  every word, repeated notes left out); which conversations count as isolated (a conversation
+  moved into the Recon tab, open or closed, does not); results that never show an isolated
+  conversation; the route in a stand-in app (settings, Modes, open conversations, the index): an
+  isolated conversation is found neither by title nor by text, conversations moved into the Recon
+  tab are found by both, and the tab search still gets every text match.
+- **Lab run in the app (before 0.57.0):** Cmd-K and the sidebar button open the box; titles,
+  message text and projects are found and grouped by tab; Esc and a click outside close it.
 - **Confirmed by the owner in the desktop app (2026-11-14):** Cmd-K, the sidebar icon, the search
   field in a tab, and the right-click menu.
-- **Not verified:** how well the repeated-notes rule works on a large real history.
+- **Not verified:** how well the repeated-notes rule works on a large real history; leaving out
+  Recon conversations in the desktop app (stand-ins only).

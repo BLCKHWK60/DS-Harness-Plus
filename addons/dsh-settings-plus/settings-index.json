@@ -1586,7 +1586,7 @@
   "pageLabel": "Modes",
   "heading": "",
   "label": "Modes",
-  "description": "A mode narrows the tools the model sees, can set the file sandbox, can move the conversation to a tier and adds a short prompt. Pick one in the chat box or with /mode.",
+  "description": "A mode narrows the tools the model sees, can set the file sandbox, can move the conversation to a tier and adds a short prompt. A new conversation takes the selected sidebar tab's mode; /mode switches a conversation's mode (with the sidebar on: only after its first message).",
   "kind": "section",
   "keywords": [
    "mode",
@@ -1743,7 +1743,7 @@
   "pageLabel": "Modes",
   "heading": "Load tools as needed",
   "label": "Data (add-on): load tools as needed",
-  "description": "For the Data tab: start each conversation with the core tools and add other tool families (the data tools included) when needed. Shown while Data is switched on. Saves at once.",
+  "description": "For the Data tab: start each conversation with the core tools and the data and PDF tools, and add other families when needed. On by default. Shown while Data is switched on. Saves at once.",
   "kind": "switch",
   "keywords": [
    "data",
@@ -1777,7 +1777,7 @@
   "pageLabel": "Modes",
   "heading": "",
   "label": "Cowork",
-  "description": "Card of the built-in Cowork mode (all tools, sandbox left as it is). Its id, label, tools, sandbox, tier and prompt can be edited here.",
+  "description": "Card of the built-in Cowork mode (all tools, sandbox left as it is; Plus's working method while its prompt is empty). Its id, label, tools, sandbox, tier and prompt can be edited here.",
   "kind": "section",
   "keywords": [
    "cowork mode",
@@ -1875,7 +1875,7 @@
   "pageLabel": "Modes",
   "heading": "",
   "label": "File sandbox",
-  "description": "In each mode's card: Leave as it is, Read only, or Write in the workspace.",
+  "description": "In each mode's card: Leave as it is, Read only, or Write in the workspace. Set when a conversation starts in the mode or switches to it, never on a restart; leaving the mode puts the earlier level back.",
   "kind": "select",
   "keywords": [
    "sandbox",
@@ -1891,14 +1891,15 @@
   "page": "modes",
   "pageLabel": "Modes",
   "heading": "",
-  "label": "Tier to switch to with this mode (optional)",
-  "description": "In each mode's card: a model tier the conversation moves to when this mode is chosen. Suggests the tier ids from Model Tiers.",
+  "label": "Tier for this mode (optional): new conversations in it and switches to it use it",
+  "description": "In each mode's card: a model tier that a new conversation in this mode starts on, and that a switch to the mode moves to. Suggests the tier ids from Model Tiers.",
   "kind": "text",
   "keywords": [
    "tier",
    "defaultTier",
    "model tier",
-   "switch model"
+   "switch model",
+   "new conversation"
   ],
   "configOnly": false,
   "field": "modes.modes"
@@ -1908,14 +1909,15 @@
   "pageLabel": "Modes",
   "heading": "",
   "label": "Prompt added while this mode is active",
-  "description": "In each mode's card: up to 4000 characters added to the prompt. Left empty for Code, Plus uses its own working method for code.",
+  "description": "In each mode's card: up to 4000 characters added to the prompt. Left empty for Code or Cowork, Plus uses its own working method (switches under Built-in working methods).",
   "kind": "text",
   "keywords": [
    "prompt",
    "instructions",
    "system prompt",
    "mode prompt",
-   "code method"
+   "code method",
+   "cowork method"
   ],
   "configOnly": false,
   "field": "modes.modes"
@@ -2003,23 +2005,6 @@
   "page": "modes",
   "pageLabel": "Modes",
   "heading": "",
-  "label": "scheduledMode",
-  "description": "Mode of a conversation that an Automation task opens. Default cowork; an unknown id falls back to the first mode with all tools. Only in the configuration file.",
-  "kind": "text",
-  "keywords": [
-   "scheduled",
-   "automation",
-   "task",
-   "scheduledMode",
-   "mode"
-  ],
-  "configOnly": true,
-  "field": "modes.scheduledMode"
- },
- {
-  "page": "modes",
-  "pageLabel": "Modes",
-  "heading": "",
   "label": "pinOnFirstTurn",
   "description": "Records the mode a new conversation starts in on its first turn, so a later default change affects only new conversations. Default on. Only in the configuration file.",
   "kind": "switch",
@@ -2063,22 +2048,6 @@
   ],
   "configOnly": true,
   "field": "modes.commandName"
- },
- {
-  "page": "modes",
-  "pageLabel": "Modes",
-  "heading": "",
-  "label": "codeMethod",
-  "description": "Gives the Code mode Plus's working method (read first, small changes, run the tests, report plainly) while its prompt is empty. Default on. Only in the configuration file.",
-  "kind": "switch",
-  "keywords": [
-   "code method",
-   "working method",
-   "codeMethod",
-   "code prompt"
-  ],
-  "configOnly": true,
-  "field": "modes.codeMethod"
  },
  {
   "page": "finance",
@@ -2129,6 +2098,25 @@
   ],
   "configOnly": false,
   "field": "finance.enabled"
+ },
+ {
+  "page": "finance",
+  "pageLabel": "Finance",
+  "heading": "The tab",
+  "label": "Selection in the chat box",
+  "description": "Once a Finance conversation has started, its chat box shows kind, subject, market, focus and period. A change there is for that conversation only, from the assistant's next step; the start page's drop-downs set where new ones start.",
+  "kind": "info",
+  "keywords": [
+   "chat box",
+   "change subject",
+   "change market",
+   "focus",
+   "period",
+   "pinned selection",
+   "this conversation"
+  ],
+  "configOnly": false,
+  "field": ""
  },
  {
   "page": "finance",
@@ -2645,13 +2633,15 @@
   "pageLabel": "Finance",
   "heading": "",
   "label": "Good to know",
-  "description": "Limits of the research and the adviser, what is sent to the regulator and World Bank, where keys are kept, and that briefs run only while the app runs.",
+  "description": "Limits of the research and the adviser, figures from memory with Tools off, what is sent to the regulator and World Bank, where keys are kept, and that briefs run only while the app runs.",
   "kind": "section",
   "keywords": [
    "notes",
    "privacy",
    "limits",
-   "not advice"
+   "not advice",
+   "tools off",
+   "from memory"
   ],
   "configOnly": false,
   "field": ""
@@ -2759,13 +2749,18 @@
   "pageLabel": "Data",
   "heading": "",
   "label": "How to use it",
-  "description": "How to pick a folder, which file types are read, query marks like [Q7], charts, Python, saving analyses and AGENTS.md notes.",
+  "description": "How to pick a folder, which file types are read, query marks like [Q7], charts (in a Data conversation each also saved as an SVG file in data-output; pie and area charts with Python), Python, Web on by default, saving analyses and AGENTS.md notes.",
   "kind": "section",
   "keywords": [
    "help",
    "how to",
    "usage",
-   "guide"
+   "guide",
+   "chart file",
+   "svg",
+   "pie chart",
+   "area chart",
+   "data-output"
   ],
   "configOnly": false,
   "field": ""
@@ -2804,12 +2799,71 @@
   "pageLabel": "Data",
   "heading": "",
   "label": "Good to know",
-  "description": "Files are never changed, everything stays on this Mac, file size and row limits, the 90-second query limit and how currency and percent values are read.",
+  "description": "Read Only in Data conversations, what goes to your model and to the web search provider (search words; Data's own tools never send your files), what Web Off stops, file size and row limits, the 90-second query limit and how currency and percent values are read.",
   "kind": "section",
   "keywords": [
    "notes",
    "privacy",
-   "limits"
+   "limits",
+   "read only",
+   "web",
+   "offline"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "data",
+  "pageLabel": "Data",
+  "heading": "Good to know",
+  "label": "A conversation that starts in Data, or is moved into it, runs Read Only",
+  "description": "A conversation that starts in Data, or is moved into it, runs Read Only: the assistant cannot change your files with the app's file and command tools without asking you first. Data conversations started before 0.57.0 keep their permission. Change it in the chat box; moving to a tab that does not set its own permission, such as Cowork, gives back the one it had before, unless you changed it by hand.",
+  "kind": "info",
+  "keywords": [
+   "read only",
+   "permission",
+   "sandbox",
+   "files changed",
+   "safety",
+   "write"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "data",
+  "pageLabel": "Data",
+  "heading": "Good to know",
+  "label": "With Web on, the words the assistant searches for",
+  "description": "What can leave the Mac while Web is on (the default in Data): the search words go to the app's web search provider and pages are fetched from the web. Data's own tools never send your files anywhere. The assistant is told not to put private details from your files (people's or customers' names, account numbers, rows, exact figures) into a search or a web address; that is an instruction, not a check. Read Only does not keep the app's command tool off the internet.",
+  "kind": "info",
+  "keywords": [
+   "privacy",
+   "web search",
+   "search provider",
+   "what leaves",
+   "internet",
+   "file contents",
+   "private details"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "data",
+  "pageLabel": "Data",
+  "heading": "Good to know",
+  "label": "With Web Off there are no searches, no pages and no deep research",
+  "description": "Web Off in the chat box: no searches, no pages, no deep research, and commands and programs that look like they go online are stopped (a check on their text: it catches the usual ways, not every way). Your model still gets the conversation, and connectors you added stay on and can still reach the internet.",
+  "kind": "info",
+  "keywords": [
+   "offline",
+   "web off",
+   "privacy",
+   "local only",
+   "no internet",
+   "commands",
+   "connectors"
   ],
   "configOnly": false,
   "field": ""
@@ -2835,7 +2889,7 @@
   "pageLabel": "Research",
   "heading": "",
   "label": "Research",
-  "description": "A tab for researching a question in depth: helpers search and read many sources at once, gaps are searched again, and the report cites and checks every claim.",
+  "description": "A tab for researching a question in depth: helpers search and read many sources at once, gaps are searched again, and the report cites its sources by number and marks which ones a helper read.",
   "kind": "section",
   "keywords": [
    "research",
@@ -2981,13 +3035,18 @@
   "pageLabel": "Research",
   "heading": "",
   "label": "Good to know",
-  "description": "Helpers search with your web search provider, a Thorough run can start more than 25 helper runs, and sources should be checked.",
+  "description": "Helpers search with your web search provider, a Thorough run can start more than 25 helper runs, sources seen only in search results are marked not read, and Research conversations run Read Only.",
   "kind": "section",
   "keywords": [
    "notes",
    "cost",
    "tokens",
-   "sources"
+   "sources",
+   "not read",
+   "search results only",
+   "read only",
+   "sandbox",
+   "access level"
   ],
   "configOnly": false,
   "field": ""
@@ -3109,8 +3168,40 @@
   "page": "scout",
   "pageLabel": "Scout",
   "heading": "",
+  "label": "Saved reports",
+  "description": "Every run's report (Markdown and a CSV table), newest first. Scout also notes every posting a run found, ranked or not, so a later run can say what is new since then.",
+  "kind": "section",
+  "keywords": [
+   "reports",
+   "earlier runs",
+   "history",
+   "csv",
+   "what is new"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "scout",
+  "pageLabel": "Scout",
+  "heading": "Saved reports",
+  "label": "Show reports in Finder",
+  "description": "Opens the reports folder inside the Scout folder in Finder.",
+  "kind": "button",
+  "keywords": [
+   "finder",
+   "reports folder",
+   "open reports"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "scout",
+  "pageLabel": "Scout",
+  "heading": "",
   "label": "Your profile",
-  "description": "A short summary: titles, years, skills, languages, pay, what you want. Read in every Scout conversation.",
+  "description": "A short summary: titles, years, skills, languages, pay, what you want. A Scout conversation reads it when it needs it; the helpers it starts cannot.",
   "kind": "section",
   "keywords": [
    "profile",
@@ -3251,13 +3342,15 @@
   "pageLabel": "Scout",
   "heading": "Sources",
   "label": "Save key",
-  "description": "On a source that needs a free key (for example Adzuna, USAJOBS): paste it in the box beside it, then Save key. Kept in the app's secret store.",
+  "description": "On a source that needs a free key (for example Adzuna, USAJOBS, SAM.gov): paste it in the box beside it, then Save key. Kept in the app's secret store.",
   "kind": "button",
   "keywords": [
    "api key",
    "save key",
    "Adzuna",
-   "USAJOBS"
+   "USAJOBS",
+   "SAM.gov",
+   "tenders"
   ],
   "configOnly": false,
   "field": ""
@@ -3422,13 +3515,19 @@
   "pageLabel": "Scout",
   "heading": "",
   "label": "Good to know",
-  "description": "The tools a Scout conversation gets, what search queries carry (never your name or contacts), where reports are saved, and checking postings yourself.",
+  "description": "The tools a Scout conversation gets; searches that hold an email address or a phone number are refused (under the PTC preset a program's own requests are not checked, the tools it calls are); how opportunities are scored and ghost jobs and scams flagged, and things to check that do not lower legitimacy; where reports are saved; checking postings yourself.",
   "kind": "section",
   "keywords": [
    "notes",
    "privacy",
    "tools",
-   "reports"
+   "reports",
+   "contact details",
+   "email",
+   "phone",
+   "scam",
+   "ghost job",
+   "scores"
   ],
   "configOnly": false,
   "field": ""
@@ -3785,7 +3884,7 @@
   "pageLabel": "Recon",
   "heading": "",
   "label": "More sources",
-  "description": "Two services on the normal web, reached only through Recon's own Tor and as text: the Internet Archive and the GDELT news index.",
+  "description": "Two services on the normal web, reached only at their own addresses and as text: the Internet Archive (directly or through Tor) and the GDELT news index (through Tor).",
   "kind": "section",
   "keywords": [
    "more sources",
@@ -3811,6 +3910,24 @@
   ],
   "configOnly": false,
   "field": "recon.archiveOn"
+ },
+ {
+  "page": "recon",
+  "pageLabel": "Recon",
+  "heading": "More sources",
+  "label": "Read Internet Archive copies directly (not through Tor)",
+  "description": "On by default: the list of copies and the copies come straight from the Archive, as text, with the same filters and limits; the Archive sees this Mac's internet address. Off: through Tor, where most reads are refused.",
+  "kind": "switch",
+  "keywords": [
+   "archiveDirect",
+   "internet archive",
+   "wayback",
+   "direct",
+   "tor",
+   "ip address"
+  ],
+  "configOnly": false,
+  "field": "recon.archiveDirect"
  },
  {
   "page": "recon",
@@ -7694,14 +7811,18 @@
   "pageLabel": "Mission",
   "heading": "Good to know",
   "label": "Good to know",
-  "description": "How modes, checkpoints (the hidden .dsh-mission folder, needs git) and runs work, and what PASSED and REVIEWED mean.",
+  "description": "How modes, checkpoints (the hidden .dsh-mission folder, needs git) and runs work, what PASSED and REVIEWED mean, and where Mission does not work: isolated (Recon) conversations, and runs on a tier with Sub-agents off.",
   "kind": "section",
   "keywords": [
    "notes",
    "checkpoints",
    "git",
    "sandbox",
-   "help"
+   "help",
+   "isolated",
+   "recon",
+   "sub-agents off",
+   "model tiers"
   ],
   "configOnly": false,
   "field": ""
@@ -11753,10 +11874,10 @@
  {
   "page": "modes",
   "pageLabel": "Modes",
-  "heading": "",
+  "heading": "New conversations",
   "label": "Mode for scheduled tasks",
-  "description": "Mode of a conversation an Automation task opens. An unknown id falls back to the first mode with all tools. Default cowork.",
-  "kind": "text",
+  "description": "A conversation that an Automation task opens starts in this mode, whatever tab is selected. Saves at once. Default Cowork.",
+  "kind": "select",
   "keywords": [
    "scheduledMode",
    "scheduled",
@@ -11764,7 +11885,7 @@
    "task",
    "mode"
   ],
-  "configOnly": true,
+  "configOnly": false,
   "field": "modes.scheduledMode"
  },
  {
@@ -11901,9 +12022,9 @@
  {
   "page": "modes",
   "pageLabel": "Modes",
-  "heading": "",
-  "label": "Web search level",
-  "description": "How hard the model searches: quick, standard, thorough or deep. Set with the Web button in the chat box; new conversations start there. Default standard.",
+  "heading": "New conversations",
+  "label": "Web level for new conversations (and those that never picked one)",
+  "description": "Where the Web button starts in a new conversation: Quick, Standard, Thorough or Deep. A conversation that never had a level picked in the chat box follows it too. Picking a level in the chat box sets it too. Default Standard.",
   "kind": "select",
   "keywords": [
    "searchDepth",
@@ -11912,15 +12033,15 @@
    "level",
    "depth"
   ],
-  "configOnly": true,
+  "configOnly": false,
   "field": "modes.searchDepth"
  },
  {
   "page": "modes",
   "pageLabel": "Modes",
-  "heading": "",
-  "label": "Code working method",
-  "description": "Give the Code mode a working method (read first, small changes, run the tests, report plainly) while it has no instructions of its own. Default on.",
+  "heading": "Built-in working methods",
+  "label": "Code: Plus's working method",
+  "description": "Used while the Code mode's prompt is empty: read first, make small changes, run the tests, report plainly. Default on. Saves at once.",
   "kind": "switch",
   "keywords": [
    "codeMethod",
@@ -11929,7 +12050,7 @@
    "instructions",
    "tests"
   ],
-  "configOnly": true,
+  "configOnly": false,
   "field": "modes.codeMethod"
  },
  {
@@ -11996,6 +12117,122 @@
   ],
   "configOnly": true,
   "field": "modes.webMarksCleared"
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "",
+  "label": "New conversations",
+  "description": "Where a new conversation starts: its Web level, and the mode of conversations that Automation tasks open. These save at once.",
+  "kind": "section",
+  "keywords": [
+   "new conversation",
+   "start",
+   "scheduled",
+   "web level"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "",
+  "label": "Sidebar",
+  "description": "How many modes get a tab in the Cowork sidebar. Shown while the sidebar is on.",
+  "kind": "section",
+  "keywords": [
+   "sidebar",
+   "tabs",
+   "cowork sidebar"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "Sidebar",
+  "label": "Tabs in the sidebar",
+  "description": "How many of the modes on this page get a sidebar tab, in their order, 1 to 5. A mode an add-on adds always gets one. A mode without a tab can only be reached with /mode. Saves at once.",
+  "kind": "select",
+  "keywords": [
+   "maxTabs",
+   "tabs",
+   "sidebar",
+   "tab count",
+   "missing tab",
+   "new mode"
+  ],
+  "configOnly": false,
+  "field": "cowork-shell.maxTabs"
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "",
+  "label": "Built-in working methods",
+  "description": "Plus's working methods for Code and Cowork, used while that mode's prompt is empty. These save at once.",
+  "kind": "section",
+  "keywords": [
+   "working method",
+   "codeMethod",
+   "coworkMethod",
+   "instructions"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "Built-in working methods",
+  "label": "Cowork: Plus's working method",
+  "description": "Used while the Cowork mode's prompt is empty: understand the task, keep a step list, ask before changing your files, check the result, report plainly. Default on. Saves at once.",
+  "kind": "switch",
+  "keywords": [
+   "coworkMethod",
+   "cowork",
+   "method",
+   "instructions",
+   "ask before deleting"
+  ],
+  "configOnly": false,
+  "field": "modes.coworkMethod"
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "",
+  "label": "Earlier access level per conversation",
+  "description": "Each conversation's access level from before a mode changed it, and the mode its level was last set for, as JSON: leaving the mode puts the level back, also after a restart, and a conversation moved to another mode while it was closed gets that mode's level when it is opened. Written by the app; kept on each Mac.",
+  "kind": "text",
+  "keywords": [
+   "sessionSandboxBase",
+   "sandbox",
+   "access level",
+   "read only",
+   "restart"
+  ],
+  "configOnly": true,
+  "field": "modes.sessionSandboxBase"
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "",
+  "label": "Data added to Load tools as needed",
+  "description": "One-time marker (0.57.0): data was added to a stored Load tools as needed list. Not meant to be changed.",
+  "kind": "switch",
+  "keywords": [
+   "dataTrimAdded",
+   "migration",
+   "marker",
+   "trimModes",
+   "data"
+  ],
+  "configOnly": true,
+  "field": "modes.dataTrimAdded"
  },
  {
   "page": "pdf",
@@ -13746,22 +13983,6 @@
   "page": "none",
   "pageLabel": "Cowork sidebar",
   "heading": "",
-  "label": "Most tabs",
-  "description": "At most this many tabs at the top of the sidebar (the first modes in order), 1 to 5. Default 3.",
-  "kind": "number",
-  "keywords": [
-   "maxTabs",
-   "tabs",
-   "limit",
-   "sidebar"
-  ],
-  "configOnly": true,
-  "field": "cowork-shell.maxTabs"
- },
- {
-  "page": "none",
-  "pageLabel": "Cowork sidebar",
-  "heading": "",
   "label": "Hide DeepSeek logos",
   "description": "Hides the logo and name at the top of the sidebar and the logo on the start page. Also in the sidebar's More menu. Default off.",
   "kind": "switch",
@@ -14021,13 +14242,15 @@
   "pageLabel": "Deep research",
   "heading": "",
   "label": "Only use pages really read",
-  "description": "Drop findings whose source page was not actually fetched. Default off.",
+  "description": "Drop a finding when its own helper did not read the page (it only saw it in search results, or not at all), even if another helper read it. Default off: it stays in the report, marked not read.",
   "kind": "switch",
   "keywords": [
    "requireFetched",
    "fetched",
    "sources",
-   "citations"
+   "citations",
+   "not read",
+   "search results only"
   ],
   "configOnly": true,
   "field": "deep-research.requireFetched"

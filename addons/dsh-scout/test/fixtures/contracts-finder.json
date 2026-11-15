@@ -1,0 +1,396 @@
+{
+ "uri": "https://www.contractsfinder.service.gov.uk/Published/Notices/OCDS/Search?publishedFrom=2026-11-12T00:00:00&publishedTo=2026-11-14T23:59:59&stages=tender&limit=3",
+ "version": "1.1",
+ "extensions": [
+  "https://standard.open-contracting.org/profiles/eu/master/en/extension.json",
+  "https://raw.githubusercontent.com/portaledcahn/ocds_tenderDatePublished_extension/master/extension.json",
+  "https://raw.githubusercontent.com/open-contracting-extensions/ocds_budget_breakdown_extension/master/extension.json",
+  "https://raw.githubusercontent.com/Crown-Commercial-Service/ocds_awards_datePublished_extension/main/extension.json",
+  "https://raw.githubusercontent.com/Crown-Commercial-Service/ocds_partyDetails_vcse_extension/main/extension.json",
+  "https://raw.githubusercontent.com/Crown-Commercial-Service/ocds_tender_suitability_extension/main/extension.json",
+  "https://raw.githubusercontent.com/open-contracting-extensions/ocds_pagination_extension/master/extension.json"
+ ],
+ "publishedDate": "2026-11-13T18:08:05Z",
+ "publisher": {
+  "name": "Cabinet Office",
+  "scheme": "GB-GOR",
+  "uid": "D2",
+  "uri": "https://www.gov.uk/government/organisations/cabinet-office"
+ },
+ "license": "http://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+ "publicationPolicy": "https://www.gov.uk/government/publications/open-contracting",
+ "releases": [
+  {
+   "ocid": "ocds-b5fd17-9d0444a4-185f-4c8c-a58f-fa02003d0439",
+   "id": "42c80b0b-fbe7-49d7-8ac2-07a1a30e6e1a-921337",
+   "language": "en",
+   "date": "2026-11-13T18:08:04Z",
+   "tag": [
+    "tenderAmendment"
+   ],
+   "initiationType": "tender",
+   "tender": {
+    "id": "RNT-LTC_TEC-01",
+    "title": "Balfour Beatty - Roads North of the Thames-LTC - Technology Disconnections and Street Lighting Diversions",
+    "description": "We are inviting expressions of interest from experienced suppliers for Technology Disconnections and Street Lighting Diversions on the Lower Thames Crossing Roads North programme. The works support the Roads North Temporary Diversions (RNoT), including the A13 and M25 temporary diversion routes.\r\n\r\nPackage Scope\r\n The package includes, but is not limited to:\r\nTechnology disconnections, diversions and alteration works on the M25.\r\nStreet lighting diversions and alterations on the M25, A13, A1089 and associated side roads.\r\nDisconnection, relocation, modification and reconnection of street lighting and technology assets.\r\nAlterations to lighting feeder pillars, electrical supplies, cabling and associated infrastructure.\r\nAlterations and diversions to technology electrical infrastructure (EI).\r\nInstallation, relocation or replacement of lighting columns, luminaires, cabling and equipment.\r\nTesting, inspection, commissioning and certification of completed works.\r\nManaging temporary and permanent arrangements to maintain safe operation of affected systems.\r\nProducing test certification, commissioning records and as-built information.\r\nCoordinating with the Contractor, Design Team and stakeholders to meet programme and design requirements.\r\n\r\nSuppliers should be able to:\r\nDeliver highway technology disconnections, diversions and street lighting works on operational road networks.\r\nUndertake electrical isolation, installation, testing and commissioning.\r\nDemonstrate experience working safely on live highways, including strategic roads and motorways.\r\nManage interfaces with existing highway technology and lighting infrastructure.\r\nProvide robust quality assurance and testing processes.\r\nDeliver within challenging programme and traffic management constraints.\r\nWork collaboratively with Tier 1 contractors, designers and stakeholders.\r\n\r\nExperience & Standards\r\n We are looking for companies with:\r\nProven experience delivering street lighting diversions and highway technology works on major infrastructure projects.\r\nExperience in feeder pillar alterations, circuit modifications, electrical disconnections/reconnections and lighting works.\r\nAppropriately qualified personnel for electrical installation, isolation, inspection, testing and commissioning.\r\nStrong health, safety, environmental and quality management systems.\r\nExperience working within National Highways and/or local authority environments.\r\nAbility to meet Lower Thames Crossing requirements relating to sustainability, carbon reduction and social value.\r\n\r\nWe actively welcome expressions of interest from SMEs with the relevant experience and capability.\r\n\r\nNext Steps\r\n If you are interested and would like further information, including pre-qualification requirements and tender timelines, please respond by 23.11.26.\r\n\r\nAdditional information: The Lower Thames Crossing (LTC) is a new road to better connect Essex and Kent through a tunnel beneath the River Thames. Our purpose is to drive a change in how we deliver - connecting people to jobs and businesses to opportunities, leaving a skills legacy for the local community and construction industry, all whilst restoring nature and drawing a new blueprint for low-carbon construction.\r\n\r\nOur ambition is to deliver the UK's greenest road, and to do the right thing for local communities and the environment. We can only achieve this with the support of our supply chain, and it is therefore critical that for any supplier to be successful in winning work on LTC, they must demonstrate commitments to supporting delivery of our ambitions:\r\n\r\n• Delivering the works through a 'zero emissions' solution, and not using diesel on site in any plant or machinery.\r\n\r\n• Supporting us to leave a skills legacy for the local community, by not only recruiting locally, but upskilling your workforce to enable meaningful progression into higher paid higher skilled work.\r\n\r\n• Helping to facilitate successful opportunities by providing early careers roles, as well as inspiring young people into construction through delivery of STEM engagement.",
+    "datePublished": "2026-08-03T16:34:28+01:00",
+    "status": "active",
+    "classification": {
+     "scheme": "CPV",
+     "id": "34928500",
+     "description": "Street-lighting equipment"
+    },
+    "additionalClassifications": [
+     {
+      "scheme": "CPV",
+      "id": "34928530",
+      "description": "Street lamps"
+     },
+     {
+      "scheme": "CPV",
+      "id": "34929000",
+      "description": "Highway materials"
+     },
+     {
+      "scheme": "CPV",
+      "id": "34993000",
+      "description": "Road lights"
+     },
+     {
+      "scheme": "CPV",
+      "id": "50232000",
+      "description": "Maintenance services of public-lighting installations and traffic lights"
+     },
+     {
+      "scheme": "CPV",
+      "id": "71334000",
+      "description": "Mechanical and electrical engineering services"
+     },
+     {
+      "scheme": "CPV",
+      "id": "71356100",
+      "description": "Technical control services"
+     },
+     {
+      "scheme": "CPV",
+      "id": "71356200",
+      "description": "Technical assistance services"
+     },
+     {
+      "scheme": "CPV",
+      "id": "71356300",
+      "description": "Technical support services"
+     },
+     {
+      "scheme": "CPV",
+      "id": "71356400",
+      "description": "Technical planning services"
+     },
+     {
+      "scheme": "CPV",
+      "id": "71631000",
+      "description": "Technical inspection services"
+     }
+    ],
+    "items": [
+     {
+      "id": "1",
+      "deliveryAddresses": [
+       {
+        "region": "East of England",
+        "countryName": "United Kingdom"
+       },
+       {
+        "region": "South East",
+        "countryName": "United Kingdom"
+       }
+      ]
+     }
+    ],
+    "value": {
+     "amount": 50000,
+     "currency": "GBP"
+    },
+    "procurementMethod": "open",
+    "procurementMethodDetails": "Open procedure (above threshold)",
+    "tenderPeriod": {
+     "endDate": "2026-11-23T17:00:00Z"
+    },
+    "contractPeriod": {
+     "startDate": "2027-02-01T00:00:00Z",
+     "endDate": "2027-11-01T23:59:59Z"
+    },
+    "suitability": {
+     "sme": true,
+     "vcse": true
+    },
+    "mainProcurementCategory": "works",
+    "documents": [
+     {
+      "id": "1",
+      "documentType": "tenderNotice",
+      "description": "Opportunity notice on Contracts Finder",
+      "url": "https://www.contractsfinder.service.gov.uk/Notice/42c80b0b-fbe7-49d7-8ac2-07a1a30e6e1a",
+      "datePublished": "2026-08-03T16:34:28+01:00",
+      "dateModified": "2026-11-13T18:08:04Z",
+      "format": "text/html",
+      "language": "en"
+     },
+     {
+      "id": "5",
+      "documentType": "eligibilityCriteria",
+      "description": "To express an interest in the Technology Disconnections and Street Lighting Diversions package, please complete the attached Technology Disconnections & Street Lighting Diversions Eligibility Criteria and return it by 23.11.26 to procurement@example.org.\r\n\r\nPlease complete all sections fully, as incomplete information may affect progression to the next stage. The questions are designed to assess your organisation's ability to meet Balfour Beatty and Lower Thames Crossing supply chain requirements.\r\n\r\nPlease note that submission does not guarantee any future work or appointment",
+      "url": "https://www.contractsfinder.service.gov.uk/Notice/Attachment/f4de2954-ac88-4cbd-bba9-4f8db56c9477",
+      "format": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+     }
+    ]
+   },
+   "parties": [
+    {
+     "id": "GB-SRS-supplierregistration.cabinetoffice.gov.uk/UfZq8heB",
+     "name": "BALFOUR BEATTY CIVIL ENGINEERING LIMITED",
+     "identifier": {
+      "legalName": "BALFOUR BEATTY CIVIL ENGINEERING LIMITED",
+      "scheme": "GB-SRS",
+      "id": "supplierregistration.cabinetoffice.gov.uk/UfZq8heB"
+     },
+     "address": {
+      "streetAddress": "5 Churchill Pl",
+      "locality": "London",
+      "postalCode": "E145HU",
+      "countryName": "England"
+     },
+     "contactPoint": {
+      "name": "Procurement team",
+      "email": "procurement@example.org"
+     },
+     "roles": [
+      "buyer"
+     ]
+    }
+   ],
+   "buyer": {
+    "id": "GB-SRS-supplierregistration.cabinetoffice.gov.uk/UfZq8heB",
+    "name": "BALFOUR BEATTY CIVIL ENGINEERING LIMITED"
+   }
+  },
+  {
+   "ocid": "ocds-b5fd17-17003970-950b-47d6-94c5-541c0d894f7e",
+   "id": "8ecce09c-950c-4d69-af94-eaeb733d7b35-921539",
+   "language": "en",
+   "date": "2026-11-13T13:10:18Z",
+   "tag": [
+    "tenderAmendment"
+   ],
+   "initiationType": "tender",
+   "tender": {
+    "id": "RA361340",
+    "title": "RA361340 - Coaching/ Mentoring Platform",
+    "description": "Please find the request for a quote and terms and conditions attached.\r\n1. Agree to the terms and conditions and send your acceptance by email to Procurement team procurement@example.org\r\n2. Submit your quote on Multiquote with a clear method statement and proforma invoice as an attachment.\r\n \r\nNo quotes through email are accepted - To access this competition: login to https://suppliers.multiquote.com and view the opportunity RA361340. Not registered on MultiQuote - visit https://suppliers.multiquote.com then register and quote RA361340 as the reason for registration. Any queries please contact MultiQuote on 020 7946 0000.",
+    "datePublished": "2026-11-12T16:31:39Z",
+    "status": "active",
+    "classification": {
+     "scheme": "CPV",
+     "id": "80000000",
+     "description": "Education and training services"
+    },
+    "items": [
+     {
+      "id": "1",
+      "deliveryAddresses": [
+       {
+        "postalCode": "CF15 7QZ"
+       },
+       {
+        "countryName": "British Oversea Territories"
+       },
+       {
+        "countryName": "Channel Islands"
+       },
+       {
+        "countryName": "Europe"
+       },
+       {
+        "countryName": "Isle of Man"
+       },
+       {
+        "countryName": "Rest of the World"
+       },
+       {
+        "countryName": "United Kingdom"
+       }
+      ]
+     }
+    ],
+    "procurementMethod": "open",
+    "procurementMethodDetails": "Open procedure",
+    "tenderPeriod": {
+     "endDate": "2026-12-07T12:00:00Z"
+    },
+    "contractPeriod": {
+     "startDate": "2026-12-08T12:00:00Z",
+     "endDate": "2026-12-08T23:59:59Z"
+    },
+    "suitability": {
+     "sme": true,
+     "vcse": false
+    },
+    "mainProcurementCategory": "goods",
+    "documents": [
+     {
+      "id": "1",
+      "documentType": "tenderNotice",
+      "description": "Opportunity notice on Contracts Finder",
+      "url": "https://www.contractsfinder.service.gov.uk/Notice/8ecce09c-950c-4d69-af94-eaeb733d7b35",
+      "datePublished": "2026-11-12T16:31:39Z",
+      "dateModified": "2026-11-13T13:10:18Z",
+      "format": "text/html",
+      "language": "en"
+     }
+    ]
+   },
+   "parties": [
+    {
+     "id": "GB-CFS-242186",
+     "name": "NHS Wales Shared Services Partnership (NWSSP)",
+     "identifier": {
+      "legalName": "NHS Wales Shared Services Partnership (NWSSP)"
+     },
+     "address": {
+      "streetAddress": "4-5 Charnwood Court, Heol Billingsley",
+      "locality": "Parc Nantgarw",
+      "postalCode": "CF15 7QZ",
+      "countryName": "England"
+     },
+     "contactPoint": {
+      "name": "Procurement team",
+      "email": "procurement@example.org",
+      "telephone": "+44 20 7946 0000"
+     },
+     "details": {
+      "url": "https://suppliers.multiquote.com"
+     },
+     "roles": [
+      "buyer"
+     ]
+    }
+   ],
+   "buyer": {
+    "id": "GB-CFS-242186",
+    "name": "NHS Wales Shared Services Partnership (NWSSP)"
+   }
+  },
+  {
+   "ocid": "ocds-b5fd17-878ed281-6a75-4a83-ae1f-a67d68ac7f6f",
+   "id": "e22d5d91-9b44-4aa7-9bbb-97d3e4e7efad-921534",
+   "language": "en",
+   "date": "2026-11-13T12:42:13Z",
+   "tag": [
+    "tender"
+   ],
+   "initiationType": "tender",
+   "tender": {
+    "id": "53cef8b3-b102-4e28-a377-c1b55eaf8cd2",
+    "title": "CA18682 - RFQ 2026/47 - Kilcurry Subcatchment Targeted River & Catchment Assessment",
+    "description": "NMDDC wishes to appoint a suitably qualified environmental consultancy to undertake a targeted assessment of the Forkhill River and Cully River within the Northern Ireland section of the Kilcurry Subcatchment.\r\n\r\nTo access this competition: \r\n\r\nRegistered:\r\nLogin to https://suppliers.multiquote.com and view the opportunity CA18682.\r\n\r\nNot registered:\r\nVisit https://suppliers.multiquote.com then register and quote CA18682 as the reason for registration. \r\n\r\n Any queries please contact MultiQuote on 020 3920 8054.",
+    "datePublished": "2026-11-13T12:42:13Z",
+    "status": "active",
+    "classification": {
+     "scheme": "CPV",
+     "id": "90700000",
+     "description": "Environmental services"
+    },
+    "items": [
+     {
+      "id": "1",
+      "deliveryAddresses": [
+       {
+        "postalCode": "BT34 2QU"
+       },
+       {
+        "countryName": "British Oversea Territories"
+       },
+       {
+        "countryName": "Channel Islands"
+       },
+       {
+        "countryName": "Europe"
+       },
+       {
+        "countryName": "Isle of Man"
+       },
+       {
+        "countryName": "Rest of the World"
+       },
+       {
+        "countryName": "United Kingdom"
+       }
+      ]
+     }
+    ],
+    "value": {
+     "amount": 19550,
+     "currency": "GBP"
+    },
+    "procurementMethod": "open",
+    "procurementMethodDetails": "Open procedure",
+    "tenderPeriod": {
+     "endDate": "2026-11-28T12:00:00Z"
+    },
+    "contractPeriod": {
+     "startDate": "2026-12-07T00:00:00Z",
+     "endDate": "2027-04-05T23:59:59+01:00"
+    },
+    "suitability": {
+     "sme": true,
+     "vcse": false
+    },
+    "mainProcurementCategory": "services",
+    "documents": [
+     {
+      "id": "1",
+      "documentType": "tenderNotice",
+      "description": "Opportunity notice on Contracts Finder",
+      "url": "https://www.contractsfinder.service.gov.uk/Notice/e22d5d91-9b44-4aa7-9bbb-97d3e4e7efad",
+      "datePublished": "2026-11-13T12:42:13Z",
+      "format": "text/html",
+      "language": "en"
+     }
+    ]
+   },
+   "parties": [
+    {
+     "id": "GB-CFS-333373",
+     "name": "Newry, Mourne and Down District Council (NMD)",
+     "identifier": {
+      "legalName": "Newry, Mourne and Down District Council (NMD)"
+     },
+     "address": {
+      "streetAddress": "Unit 19 Rampart Road, Greenbank Industrial Estate",
+      "locality": "Newry",
+      "postalCode": "BT34 2QU",
+      "countryName": "England"
+     },
+     "contactPoint": {
+      "name": "Procurement team",
+      "email": "procurement@example.org",
+      "telephone": "+44 20 7946 0000"
+     },
+     "details": {
+      "url": "https://suppliers.multiquote.com"
+     },
+     "roles": [
+      "buyer"
+     ]
+    }
+   ],
+   "buyer": {
+    "id": "GB-CFS-333373",
+    "name": "Newry, Mourne and Down District Council (NMD)"
+   }
+  }
+ ],
+ "links": {
+  "next": "https://www.contractsfinder.service.gov.uk/Published/Notices/OCDS/Search?publishedFrom=2026-11-12T00:00:00&publishedTo=2026-11-14T23:59:59&stages=tender&limit=3&cursor=cHVibGlzaGVkRnJvbT0yMDI2LTExLTEyVDAwOjAwOjAwfHB1Ymxpc2hlZFRvPTIwMjYtMTEtMTRUMjM6NTk6NTl8c3RhZ2VzPXRlbmRlcnxsaW1pdD0zfG5leHRDdXJzb3I9Nzg5NzY2"
+ }
+}

@@ -5,7 +5,8 @@
  * Switched on, it adds:
  *   - the Finance mode (through the Modes add-on) with its method as the mode's instructions;
  *   - the Finance tab in the Cowork sidebar, with drop-downs for subject, market, focus and period;
- *   - a note in every Finance conversation saying what was selected when it started;
+ *   - a note in every Finance conversation saying what was selected when it started, or since in
+ *     its chat box (and, while its tools are off, that any figure is from memory);
  *   - seven skills, one for each common research task.
  * Switched off, it takes all of that away again.
  *
@@ -15,11 +16,12 @@
  * everything else the assistant uses the app's web search, the Deep research add-on, the Library
  * and the chart tools. It is research, not advice, unless the adviser is switched on (lib/adviser.js).
  *
- * Route: `GET /dsh-finance/data`.
+ * Route: `GET /dsh-finance/data` (with `?session=<id>`: what one conversation's chat box shows), and
+ * `POST` to it for the page's actions and the chat box's change of a conversation's selection (`pin`).
  */
 import z from '@deepseek-ai/schemastery';
 import { join } from 'node:path';
-import { FOCUSES, KINDS, MARKETS, MODE_ID, PERIODS, WATCHLIST_MAX, cleanList, openPins, readSelection, selectionNote, withFinance } from './lib/finance.js';
+import { FOCUSES, KINDS, MARKETS, MODE_ID, PERIODS, WATCHLIST_MAX, changeSelection, cleanList, openPins, readSelection, selectionNote, toolsOffNote, withFinance } from './lib/finance.js';
 import { BRIEF_PREFIX, OWN_MAX, RHYTHMS, briefPrompt, briefRule, briefTitle, briefsOf, ownTasksOf, researchOnly, scheduledIn } from './lib/briefs.js';
 import { PRESETS, addressProblem, keyRef, readSources, sourceGet, sourcesNote } from './lib/sources.js';
 import { buildSourceTool, buildTools } from './lib/tools.js';
@@ -176,6 +178,14 @@ export function apply(ctx, config) {
     }
   };
   const isHelper = (session) => session?.header?.origin === 'subagent';
+  /** Whether a conversation has no tools now (the Tools switch in its chat box is off). */
+  const noTools = (agentId) => {
+    try {
+      return ctx.get('modes')?.noTools?.(agentId) === true;
+    } catch {
+      return false;
+    }
+  };
 
   /** Agent id -> prompt section disposer. */
   const sections = new Map();
@@ -196,12 +206,16 @@ export function apply(ctx, config) {
                 // A helper agent works for a conversation; it gets that conversation's selection when known.
                 const root = agent.header?.parentSession ?? agent.session?.header?.parentSession;
                 const note = selectionNote(pins.get(agent.id) ?? (root ? pins.get(root) : undefined) ?? now.selection);
-                const extra = sourcesNote(now.sources, (id) => keys[id]?.set === true);
                 // The adviser's voice and the user's profile are for the conversation itself. A helper
                 // only researches for it, and may run on another model or provider.
                 const helper = Boolean(root) || isHelper(agent) || isHelper(agent.session);
-                const advice = now.adviser && !helper ? adviserNote(profile.read(), Boolean(profileToolOff)) : '';
-                return [note, extra, advice].filter(Boolean).join('\n\n');
+                const adviser = now.adviser && !helper;
+                // With Tools off the Modes add-on leaves the Finance method out; nothing can be fetched or
+                // saved, so the sources and the profile tool go unmentioned and figures are marked as from memory.
+                const off = noTools(agent.id);
+                const extra = off ? '' : sourcesNote(now.sources, (id) => keys[id]?.set === true);
+                const advice = adviser ? adviserNote(profile.read(), Boolean(profileToolOff), off) : '';
+                return [note, off ? toolsOffNote(adviser) : '', extra, advice].filter(Boolean).join('\n\n');
               } catch {
                 return '';
               }
@@ -496,6 +510,61 @@ export function apply(ctx, config) {
     };
   };
 
+  // ---- the chat box of a Finance conversation: its own selection --------------------------------
+
+  /** Whether a conversation has had its first message (a turn has started). */
+  const started = (id) => {
+    try {
+      const agents = ctx.get('agents');
+      const session = agents?.get?.(id)?.session;
+      if (!session || typeof agents.turnBoundaryOf !== 'function') return false;
+      const boundary = agents.turnBoundaryOf(session);
+      return Number(boundary?.lastTurn) > 0 || (boundary?.openTurnStartSeq ?? null) !== null;
+    } catch {
+      return false;
+    }
+  };
+  /** Why the chat box of a conversation shows no selection; '' when it shows one. */
+  const notShown = (id) => {
+    if (!settings().enabled) return 'Finance is switched off.';
+    if (!id || modeOf(id) !== MODE_ID) return 'This is not a Finance conversation.';
+    let helper = false;
+    try {
+      const session = ctx.get('agents')?.get?.(id)?.session;
+      helper = isHelper(session) || Boolean(session?.header?.parentSession);
+    } catch {
+      helper = false;
+    }
+    if (helper) return 'A helper follows the selection of its conversation.';
+    // Before the first message, the drop-downs on the start page are the selection.
+    if (!pins.get(id) && !started(id)) return 'Before the first message, the drop-downs under the message box set the selection.';
+    return '';
+  };
+  /** What the chat box needs: the lists, and the conversation's selection. */
+  const chatView = (id) => {
+    const now = settings();
+    const pin = pins.get(id);
+    return {
+      enabled: now.enabled,
+      kinds: KINDS,
+      markets: [...MARKETS, ...now.moreMarkets],
+      focuses: FOCUSES.map(({ id: value, label, text }) => ({ id: value, label, about: text })),
+      periods: PERIODS.map(({ id: value, label, text }) => ({ id: value, label, about: text })),
+      watchlist: now.watchlist,
+      session: { id, shown: notShown(id) === '', pinned: Boolean(pin), selection: pin ?? now.selection },
+    };
+  };
+  /**
+   * A change in the chat box: it becomes that conversation's selection, and only that one's. A
+   * market must be on the Market list (built-in or your own) or be the conversation's market now.
+   */
+  const changePin = (id, values) => {
+    const reason = notShown(id);
+    if (reason) throw new Error(reason);
+    const now = settings();
+    return pins.set(id, changeSelection(pins.get(id) ?? now.selection, values, [...MARKETS, ...now.moreMarkets]));
+  };
+
   ctx.inject(['webServer', 'connection'], (inner) => {
     inner.effect(
       () =>
@@ -518,7 +587,14 @@ export function apply(ctx, config) {
             res.setHeader('content-type', 'application/json; charset=utf-8');
             res.setHeader('cache-control', 'no-store');
             try {
+              // The chat box of one conversation asks with `?session=<id>` and gets only what it needs.
+              const session = String(new URL(req.url ?? '/', 'http://local').searchParams.get('session') ?? '').slice(0, 200);
+              if (req.method === 'GET' && session) {
+                res.end(JSON.stringify(chatView(session)));
+                return;
+              }
               let extra = {};
+              let chat = '';
               if (req.method === 'POST') {
                 const chunks = [];
                 let size = 0;
@@ -563,8 +639,17 @@ export function apply(ctx, config) {
                   case 'unbrief':
                     await removeBrief(String(body.id ?? ''));
                     break;
+                  case 'pin':
+                    // The chat box of a Finance conversation: `{ sessionId, values: { kind?, subject?, market?, focus?, period? } }`.
+                    chat = String(body.sessionId ?? '').slice(0, 200);
+                    changePin(chat, body.values);
+                    break;
                   default:
                     throw new Error('unknown action');
+                }
+                if (chat) {
+                  res.end(JSON.stringify(chatView(chat)));
+                  return;
                 }
                 syncTools();
               }

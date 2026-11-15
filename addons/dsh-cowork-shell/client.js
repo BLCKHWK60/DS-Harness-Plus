@@ -712,6 +712,37 @@ window.__ModuleLoader__.load({
             "prompt": "Read my files in the Scout folder and write my anonymous profile. Show it to me before you save it."
           }
         ]
+      },
+      "recon": {
+        "pages": [],
+        "greeting": "What should Recon look into?",
+        "chips": [
+          {
+            "label": "Search .onion sites",
+            "icon": "research",
+            "prompt": "Search .onion sites for this and read the most relevant pages, with sources: "
+          },
+          {
+            "label": "Search Usenet",
+            "icon": "spreadsheet",
+            "prompt": "Find text newsgroups about this, search their recent articles and read the most relevant ones: "
+          },
+          {
+            "label": "News coverage",
+            "icon": "chart",
+            "prompt": "Find where this was reported in the news and read archived copies of the main articles: "
+          },
+          {
+            "label": "Old web page",
+            "icon": "website",
+            "prompt": "List the Internet Archive's copies of this page and read the latest one: "
+          },
+          {
+            "label": "Check a claim",
+            "icon": "spark",
+            "prompt": "Look for sources that confirm or contradict this claim, and say how far it can be trusted: "
+          }
+        ]
       }
     };
 

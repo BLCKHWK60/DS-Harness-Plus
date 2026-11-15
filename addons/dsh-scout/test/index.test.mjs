@@ -86,6 +86,21 @@ test('the app wiring: mode, tools per conversation, guard, pinned selection, act
     assert.equal(guard({ name: 'web_fetch', agent: cowork, arguments: { url: 'https://www.indeed.com/viewjob?jk=1' } }), undefined, 'only in Scout');
     assert.equal(guard({ name: 'web_fetch', agent: scout, arguments: { url: 'https://www.reed.co.uk/jobs/1' } }), undefined);
 
+    // No search from a Scout conversation, or its helpers, carries an email address or a phone number.
+    const contact = app.guards[1];
+    const refused = contact({ name: 'scout_search', agent: scout, arguments: { source: 'ba', what: 'jane.doe@example.org data engineer' } });
+    assert.match(refused, /does not search with contact details: this scout_search call holds an email address \(j…@example\.org\)/);
+    assert.ok(!refused.includes('jane.doe@example.org'), 'the refusal does not repeat the address');
+    assert.match(contact({ name: 'web_search', agent: scout, arguments: { queries: ['data engineer', '"+49 151 23456789"'] } }), /a phone number/);
+    assert.match(contact({ name: 'deep_research', agent: helper, arguments: { question: 'Who would hire jane.doe@example.org?' } }), /an email address/, 'helpers too');
+    assert.match(contact({ name: 'web_fetch', agent: scout, arguments: { url: 'https://example.org/find?q=jane%40example.org' } }), /an email address/);
+    assert.equal(contact({ name: 'web_fetch', agent: scout, arguments: { url: 'https://www.arbeitsagentur.de/jobsuche/jobdetail/10000-1201234567-S' } }), undefined, 'a posting\'s reference number is not a phone number');
+    assert.equal(contact({ name: 'scout_search', agent: scout, arguments: { source: 'ba', what: 'Data Engineer', where: 'Berlin', days: 14 } }), undefined);
+    assert.equal(contact({ name: 'web_search', agent: scout, arguments: { queries: ['Data Engineer Gehalt 70.000-90.000 München', 'Data Engineer 45.000-55.000€ 01.10.2026-31.03.2027'] } }), undefined, 'pay and date ranges are not phone numbers');
+    assert.match(contact({ name: 'web_search', agent: scout, arguments: { queries: ['data engineer Juan 612 34 56 78'] } }), /a phone number \(…678\)/);
+    assert.equal(contact({ name: 'scout_files', agent: scout, arguments: { name: 'cv-jane.doe@example.org.pdf' } }), undefined, 'reading the user\'s own files is not a search');
+    assert.equal(contact({ name: 'web_search', agent: cowork, arguments: { queries: ['jane.doe@example.org'] } }), undefined, 'only in Scout');
+
     // The conversation starts with Germany; the start page then changes to France for another one.
     app.handlers['session/event']({ id: 's1', header: {} }, { type: 'turn/start' });
     config.markets = ['France'];
@@ -98,13 +113,16 @@ test('the app wiring: mode, tools per conversation, guard, pinned selection, act
       app.handlers['agent/created']({ agent: { ...agent, ctx: { systemPrompt: { section: (options) => { section = options; return () => {}; } }, effect: (make) => make() } } });
       return section.text();
     };
-    assert.match(noteOf(scout), /Markets: Germany[\s\S]*User's files: 0 files/);
+    assert.match(noteOf(scout), /Markets: Germany[\s\S]*User's files: 0 files[\s\S]*Earlier reports: none yet/);
     const helperNote = noteOf(helper);
     assert.match(helperNote, /Markets: Germany/);
-    assert.doesNotMatch(helperNote, /User's files|Profile:/, 'a helper is not told about the files or the profile');
+    assert.doesNotMatch(helperNote, /User's files|Profile:|Earlier reports/, 'a helper is not told about the files, the profile or the reports');
 
     const route = app.routes[0];
-    assert.equal((await post(route, { action: 'toggle', id: 'indeed', on: false })).statusCode, 200);
+    const shown = JSON.parse((await post(route, { action: 'toggle', id: 'indeed', on: false })).body);
+    assert.deepEqual(shown.reports, [], 'the page lists saved reports (none yet)');
+    assert.equal(shown.reportsFolder, join(home, 'scout', 'files', 'reports'));
+    assert.ok(shown.sources.some((source) => source.id === 'sam' && source.key === 'required' && source.keySet === false), 'SAM.gov waits for its key');
     assert.equal(JSON.parse(config.sourceState).indeed.on, false);
     await post(route, { action: 'hide', id: 'dice' });
     assert.equal(JSON.parse(config.sourceState).dice.hidden, true);

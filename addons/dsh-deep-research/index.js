@@ -7,8 +7,10 @@
  * between rounds an analyst child reads the findings, names what is missing or
  * contradictory and writes sharper follow-up questions and queries for the next
  * round; the host merges and de-duplicates the sources; a writer child writes a
- * report that cites them by number; the host then checks every citation against
- * the numbered sources and against what each searcher actually fetched.
+ * report that cites them by number; the host then checks that every citation is
+ * in the numbered sources and labels each source by whether a searcher read the
+ * page, saw it only in search results, or neither (lib/sources.js). It does not
+ * compare a claim with the text of its page.
  *
  * How deep a run goes (rounds, helpers at once, sub-questions, time) comes from
  * the depth chosen in the Research tab's Depth dropdown or Settings → Research (kept by the
@@ -24,6 +26,7 @@ import z from '@deepseek-ai/schemastery';
 import { insideProgram, programMinutes, researchMinutes } from './lib/budget.js';
 import { searchProblem } from './lib/ready.js';
 import { FOCUS, analysisOf, analyzePrompt, capped, depthOf, followupsOf, planPrompt, roundLeft, searchAnswer, searchPrompt, tasksOf, writePrompt } from './lib/rounds.js';
+import { droppedNote, fetchSucceeded, moreCertain, notRead, sourceLines, statusOf, unreadNotes } from './lib/sources.js';
 
 /**
  * Start a helper agent. App 0.2.2-rc.2 takes the task's fields (prompt, parent, agentOptions) at
@@ -290,7 +293,11 @@ export function apply(ctx, config) {
 
   /** Session id -> what its fetch and search tools touched. A child is disposed when it finishes, so this is recorded live. */
   const logs = new Map();
-  /** Session id -> call id -> tool name, for pairing results with calls. */
+  /**
+   * Session id -> call id -> the call (tool name, and for a fetch the address it asked for), for
+   * pairing results with calls. A page counts as read only once its fetch's result came back
+   * without an error (lib/sources.js `fetchSucceeded`), not when the fetch is called.
+   */
   const calls = new Map();
 
   /**
@@ -320,19 +327,24 @@ export function apply(ctx, config) {
       const id = session?.id;
       if (!id) return;
       if (event.type === 'tool/call') {
-        const names = calls.get(id) ?? new Map();
-        names.set(event.data.callId, event.data.name);
-        calls.set(id, names);
-        const run = childRun.get(id);
-        if (fetchNames.has(event.data.name)) {
-          const url = normalizeUrl(JSON.parse(event.data.arguments)?.url);
-          if (url) logOf(id).fetched.add(url);
-          if (url && run) {
-            run.pages += 1;
-            const host = new URL(url).hostname.replace(/^www\./, '');
-            if (!run.hosts.includes(host)) run.hosts.push(host);
-            if (run.hosts.length > 30) run.hosts.shift();
+        const pending = calls.get(id) ?? new Map();
+        const isFetch = fetchNames.has(event.data.name);
+        let url = null;
+        if (isFetch) {
+          try {
+            url = normalizeUrl(JSON.parse(event.data.arguments)?.url);
+          } catch {
+            url = null;
           }
+        }
+        pending.set(event.data.callId, { name: event.data.name, url });
+        calls.set(id, pending);
+        const run = childRun.get(id);
+        // The latest sites show at once; a page counts as read (here and in the report) only once its result is in.
+        if (isFetch && url && run) {
+          const host = new URL(url).hostname.replace(/^www\./, '');
+          if (!run.hosts.includes(host)) run.hosts.push(host);
+          if (run.hosts.length > 30) run.hosts.shift();
         }
         if (run && searchNames.has(event.data.name)) {
           run.searches += 1;
@@ -350,8 +362,20 @@ export function apply(ctx, config) {
         }
       } else {
         const callId = event.data.message?.toolCallId ?? event.data.callId;
-        if (!searchNames.has(calls.get(id)?.get(callId))) return;
-        calls.get(id)?.delete(callId);
+        const pending = calls.get(id);
+        const call = pending?.get(callId);
+        if (!call) return;
+        pending.delete(callId);
+        if (pending.size === 0) calls.delete(id);
+        if (fetchNames.has(call.name)) {
+          if (!fetchSucceeded(event.data)) return;
+          // The address the helper asked for (the one it cites), and the one a redirect ended on.
+          for (const url of [call.url, normalizeUrl(event.data.meta?.url)]) if (url) logOf(id).fetched.add(url);
+          const run = childRun.get(id);
+          if (run && call.url) run.pages += 1;
+          return;
+        }
+        if (!searchNames.has(call.name)) return;
         const text = JSON.stringify(event.data.message?.content ?? event.data.content ?? event.data.result ?? '');
         for (const match of text.matchAll(/https?:\/\/[^\s"'<>\\)]+/g)) {
           const url = normalizeUrl(match[0]);
@@ -385,7 +409,7 @@ export function apply(ctx, config) {
     name: plain(config.toolName),
     description:
       'Research a question in depth: plan sub-questions, search and read the web in parallel with child agents, review what was found and search again for what is missing, and return a cited report. ' +
-      'Every citation is checked against the numbered sources and against the pages the children fetched. ' +
+      'Each citation is checked to be in the numbered source list, and each source is labelled by whether a helper read the page or saw it only in search results; claims are not compared with the pages. ' +
       'mode "wide" researches one row per item and returns a CSV text with a Sources column; save it with your own file tools. ' +
       'Use it for questions that need several sources; answer simple questions directly.',
     parameters: {
@@ -524,8 +548,10 @@ export function apply(ctx, config) {
               dropped += 1;
               continue;
             }
-            const status = outcome.log.fetched.has(url) ? 'fetched' : outcome.log.seen.has(url) ? 'search result only' : 'not fetched';
-            if (plain(config.requireFetched) === true && status !== 'fetched') {
+            // What this finding's own helper did with the page. requireFetched decides from it alone:
+            // a finding is kept only when its own helper read the page, even if another helper did.
+            const status = statusOf(url, outcome.log);
+            if (plain(config.requireFetched) === true && notRead(status)) {
               dropped += 1;
               continue;
             }
@@ -538,12 +564,18 @@ export function apply(ctx, config) {
               entry = { n: sources.length + 1, url, status, host: new URL(url).hostname.replace(/^www\./, '') };
               sources.push(entry);
               sourceIndex.set(url, entry);
-            } else if (status === 'fetched') {
-              entry.status = 'fetched';
+            } else {
+              // Another helper cited the same page: the source (the Sources list) keeps the most certain of what they did.
+              entry.status = moreCertain(entry.status, status);
             }
-            // The same claim from the same page, reported by two helpers, is kept once.
-            if (findings.some((other) => other.n === entry.n && other.claim.toLowerCase() === claim.toLowerCase())) continue;
-            findings.push({ n: entry.n, host: entry.host, claim, quote: String(finding?.quote ?? '').trim().slice(0, 300), date: String(finding?.date ?? '').trim().slice(0, 40) });
+            // The same claim from the same page, reported by two helpers, is kept once, with the more certain of their two statuses.
+            const same = findings.find((other) => other.n === entry.n && other.claim.toLowerCase() === claim.toLowerCase());
+            if (same) {
+              same.status = moreCertain(same.status, status);
+              continue;
+            }
+            // The finding keeps its own helper's status: the writer's label says what that helper did, not what another helper did with the page.
+            findings.push({ n: entry.n, host: entry.host, claim, quote: String(finding?.quote ?? '').trim().slice(0, 300), date: String(finding?.date ?? '').trim().slice(0, 40), status });
           }
         }
 
@@ -583,6 +615,7 @@ export function apply(ctx, config) {
       // 5. Write the report.
       const partial = Date.now() >= deadline;
       run.stage = 'writing';
+      // Each finding carries its own helper's status, so the writer can say which claims rest on pages their helper did not read.
       const written = await runChild({ role: roles.writer, label: 'Research report', parent, run, signal: exec.signal, prompt: writePrompt({ question, findings, conflicts, gaps, today, followups: tab.followups === true }) });
 
       // 6. Check the citations.
@@ -595,13 +628,15 @@ export function apply(ctx, config) {
       if (stoppedEarly === 'time') notes.push('Not enough time was left for another round.');
       if (stoppedEarly === 'review failed') notes.push('The review between rounds failed, so no further round was run.');
       if (unknown.length) notes.push(`The report cites [${unknown.join('], [')}], which are not in the source list.`);
-      const unverified = usedSources.filter((source) => source.status !== 'fetched');
-      if (unverified.length) notes.push(`${unverified.length} cited source(s) were not fetched by a researcher; treat them with care.`);
+      notes.push(...unreadNotes(usedSources));
+      // A source listed as read can still carry claims from a helper that only saw it in search results.
+      const mixed = usedSources.filter((source) => !notRead(source.status) && findings.some((finding) => finding.n === source.n && notRead(finding.status))).length;
+      if (mixed) notes.push(`${mixed === 1 ? '1 cited source is' : `${mixed} cited sources are`} listed as read, but some claims about ${mixed === 1 ? 'it' : 'them'} came from a helper that did not read the page; those claims are marked not read in the text.`);
       if (partial) notes.push('The time budget ran out; the report covers only the sub-questions finished in time.');
       if (failures.length) notes.push(`${failures.length} step(s) failed.`);
-      if (dropped) notes.push(`${dropped} finding(s) were dropped (no usable URL, over the source limit, or not fetched).`);
+      if (dropped) notes.push(droppedNote(dropped, plain(config.requireFetched) === true));
 
-      const list = (usedSources.length ? usedSources : sources).map((source) => `[${source.n}] ${source.url} (${source.status})`).join('\n');
+      const list = sourceLines(usedSources.length ? usedSources : sources);
       let text = `${written.text}\n\n## Sources\n${list}${notes.length ? `\n\n## Checks\n${notes.map((note) => `- ${note}`).join('\n')}` : ''}`;
       run.followups = followupsOf(written.text);
       if (tab.save === true) {
@@ -667,7 +702,7 @@ export function apply(ctx, config) {
         const log = fetchLog(answer.childId);
         const urls = (Array.isArray(parsed?.sources) ? parsed.sources : []).map(normalizeUrl).filter(Boolean);
         const verified = urls.filter((url) => log.fetched.has(url));
-        return { item, values: parsed?.values ?? {}, sources: verified, note: urls.length > verified.length ? 'some sources not fetched and omitted' : '' };
+        return { item, values: parsed?.values ?? {}, sources: verified, note: urls.length > verified.length ? 'sources no helper read were left out' : '' };
       } catch (error) {
         return { item, values: {}, sources: [], note: `failed: ${error?.message ?? error}` };
       }

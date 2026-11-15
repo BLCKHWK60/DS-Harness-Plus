@@ -7,6 +7,8 @@ window.__ModuleLoader__.load({
     const { useCallback, useEffect, useRef, useState, useLayoutEffect } = React;
 
     const NS = 'modes';
+    /** The Cowork sidebar's settings, whose tab count Settings → Modes sets. */
+    const SHELL_NS = 'cowork-shell';
     const FALLBACK_MODES = [
       { id: 'chat', label: 'Chat' },
       { id: 'cowork', label: 'Cowork' },
@@ -83,7 +85,7 @@ window.__ModuleLoader__.load({
         'research.model.same.hint': 'Every helper runs on the model the conversation is on when the research starts.',
         'research.model.roles.hint': 'Helpers run on the role models set in Settings → Model Tiers → Role models: the planner, the reviewer and the writer on "Plan", the searchers on "Fast". A role without a model uses the conversation\'s model.',
         'section.title': 'Modes',
-        'head.hint': 'A mode narrows the tools the model sees, can set the file sandbox, can move the conversation to a tier and adds a short prompt. A conversation picks a mode in the chat box or with /mode. Changes apply from the next message.',
+        'head.hint': 'A mode narrows the tools the model sees, can set the file sandbox, can move the conversation to a tier and adds a short prompt. A new conversation takes the mode of the selected sidebar tab (without the sidebar: the mode list in the chat box); /mode switches a conversation\'s mode (with the sidebar on: only after its first message). Changes apply from the next message.',
         'default.label': 'Mode for conversations that have not chosen one',
         'default.extra': '{label} (add-on)',
         'add': 'Add mode',
@@ -104,8 +106,24 @@ window.__ModuleLoader__.load({
         'f.sandbox.inherit': 'Leave as it is',
         'f.sandbox.read-only': 'Read only',
         'f.sandbox.workspace-write': 'Write in the workspace',
-        'f.tier': 'Tier to switch to with this mode (optional)',
+        'f.tier': 'Tier for this mode (optional): new conversations in it and switches to it use it',
         'f.prompt': 'Prompt added while this mode is active',
+        'f.prompt.cowork': 'Empty: Plus uses its own working method for Cowork (understand the task, a step list, care with your files, check the result, report plainly). Write here to use your own instead.',
+        'new.group': 'New conversations',
+        'new.web': 'Web level for new conversations (and those that never picked one)',
+        'new.web.hint': 'Where the Web button starts in a new conversation. A conversation that never had a level picked in the chat box follows it too. Picking a level in the chat box sets this too.',
+        'new.scheduled': 'Mode for scheduled tasks',
+        'new.scheduled.hint': 'A conversation that an Automation task opens starts in this mode, whatever tab is selected. A mode without tools cannot do the task\'s work.',
+        'new.scheduled.gone': '{id} (not found: the first mode with all tools is used)',
+        'tabs.group': 'Sidebar',
+        'tabs.count': 'Tabs in the sidebar',
+        'tabs.count.hint': 'How many of the modes below get a tab, in their order. A mode an add-on adds always gets one.',
+        'tabs.none': 'No sidebar tab (only the first {n} modes get one), so this mode can only be reached with /mode.',
+        'method.group': 'Built-in working methods',
+        'method.code': 'Code: Plus\'s working method',
+        'method.code.hint': 'Used while the Code mode\'s prompt below is empty: read first, make small changes, run the tests, report plainly.',
+        'method.cowork': 'Cowork: Plus\'s working method',
+        'method.cowork.hint': 'Used while the Cowork mode\'s prompt below is empty: understand the task, keep a step list, ask before changing your files, check the result, report plainly.',
         'rerun': 'Rerun with the selected model',
         'rerun.busy': 'Starting the rerun…',
         'rerun.none': 'This answer cannot be rerun: its question was not found.',
@@ -120,7 +138,7 @@ window.__ModuleLoader__.load({
         'web.standard': 'Standard',
         'web.thorough': 'Thorough',
         'web.deep': 'Deep',
-        'web.off.hint': 'No web access, and no other tools that go online, such as Finance\'s data tools. The model answers from what it knows and from your files.',
+        'web.off.hint': 'No web search or page reading, and no other tools or programs that go online, such as Finance\'s data tools or an outside image service. Connectors stay on and can still reach the internet. The model answers from what it knows and from your files.',
         'web.quick.hint': 'One search, answer from the results. Fastest.',
         'web.standard.hint': 'A few searches; opens the pages that matter.',
         'web.thorough.hint': 'Several searches; reads at least 5 pages from different sites and cites each.',
@@ -215,7 +233,7 @@ window.__ModuleLoader__.load({
         'research.model.same.hint': '每个助手都使用研究开始时此对话所用的模型。',
         'research.model.roles.hint': '助手使用“设置 → 模型档位 → 角色模型”中设置的模型：规划、审阅和撰写使用“规划”，搜索使用“快速”。未设置模型的角色使用对话的模型。',
         'section.title': '模式',
-        'head.hint': '模式会限制模型可见的工具，可设置文件沙箱、切换档位并附加一小段提示词。会话在输入框或用 /mode 选择模式，修改在下一轮开始时生效。',
+        'head.hint': '模式会限制模型可见的工具，可设置文件沙箱、切换档位并附加一小段提示词。新会话使用侧边栏所选标签页的模式（没有侧边栏时：输入框中的模式列表）；/mode 切换会话的模式（开启侧边栏时：仅在第一条消息之后）。修改在下一轮开始时生效。',
         'default.label': '尚未选择模式的会话使用',
         'default.extra': '{label}（插件）',
         'add': '添加模式',
@@ -236,8 +254,24 @@ window.__ModuleLoader__.load({
         'f.sandbox.inherit': '保持不变',
         'f.sandbox.read-only': '只读',
         'f.sandbox.workspace-write': '可写工作区',
-        'f.tier': '切换到此模式时的默认档位（需要 Tier 插件，留空为不切换）',
+        'f.tier': '此模式的档位（可选）：此模式中的新会话和切换到此模式时使用',
         'f.prompt': '此模式启用时附加的提示词',
+        'f.prompt.cowork': '留空：Plus 使用自带的 Cowork 工作方法（先理解任务、步骤列表、谨慎对待你的文件、检查结果、如实报告）。在此填写则使用你自己的。',
+        'new.group': '新会话',
+        'new.web': '新会话（及从未选过级别的会话）的联网级别',
+        'new.web.hint': '新会话中联网按钮的起始级别。从未在输入框中选过级别的会话也跟随它。在输入框中选择级别也会设置它。',
+        'new.scheduled': '定时任务的模式',
+        'new.scheduled.hint': '自动化任务打开的会话以此模式开始，与所选标签页无关。没有工具的模式无法完成任务。',
+        'new.scheduled.gone': '{id}（未找到：使用第一个拥有全部工具的模式）',
+        'tabs.group': '侧边栏',
+        'tabs.count': '侧边栏中的标签页',
+        'tabs.count.hint': '下方模式中按顺序有多少个获得标签页。插件添加的模式总会有标签页。',
+        'tabs.none': '没有侧边栏标签页（只有前 {n} 个模式有），因此只能用 /mode 进入此模式。',
+        'method.group': '内置工作方法',
+        'method.code': 'Code：Plus 的工作方法',
+        'method.code.hint': '在下方 Code 模式的提示词为空时使用：先阅读、小步修改、运行测试、如实报告。',
+        'method.cowork': 'Cowork：Plus 的工作方法',
+        'method.cowork.hint': '在下方 Cowork 模式的提示词为空时使用：先理解任务、使用步骤列表、修改你的文件前先询问、检查结果、如实报告。',
         'rerun': '用当前所选模型重新运行',
         'rerun.busy': '正在开始重新运行…',
         'rerun.none': '无法重新运行此回答：找不到对应的问题。',
@@ -252,7 +286,7 @@ window.__ModuleLoader__.load({
         'web.standard': '标准',
         'web.thorough': '深入',
         'web.deep': '深度',
-        'web.off.hint': '不联网，其他联网工具（例如财经的数据工具）也会关闭。模型根据已有知识和你的文件回答。',
+        'web.off.hint': '不搜索、不读网页，其他联网的工具和程序（例如财经的数据工具或外部图像服务）也会关闭。连接器仍然开启，仍可访问互联网。模型根据已有知识和你的文件回答。',
         'web.quick.hint': '一次搜索，根据结果回答。最快。',
         'web.standard.hint': '几次搜索；打开关键页面。',
         'web.thorough.hint': '多次搜索；阅读至少 5 个不同网站的页面并逐一注明出处。',
@@ -332,6 +366,8 @@ window.__ModuleLoader__.load({
 .dsh-me-sw[aria-checked="true"]::after { transform: translateX(16px); background: var(--dsw-alias-bg-base); }
 .dsh-me-group { margin: 8px 0 0; font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--dsw-alias-label-secondary); }
 .dsh-me-title code { font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.dsh-me-toggle > .dsh-me-sel { flex: 0 1 220px; }
+.dsh-me-note[data-warn="true"] { color: var(--dsw-alias-state-warn-primary); }
 `;
 
     /**
@@ -475,7 +511,8 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       // and the tools it added.
       // A copy that carries earlier turns of an isolated conversation (Recon) is isolated for good
       // too: it holds what that conversation read. A copy of the first question carries none.
-      const CARRIED = ['sessionModes', 'sessionWeb', 'sessionSearchDepth', 'sessionTools', 'sessionHelpers', 'sessionToolSets', ...(plan.cut !== undefined ? ['sessionIsolated'] : [])];
+      // A copy with earlier turns also has their access level, so it keeps the level to go back to.
+      const CARRIED = ['sessionModes', 'sessionWeb', 'sessionSearchDepth', 'sessionTools', 'sessionHelpers', 'sessionToolSets', ...(plan.cut !== undefined ? ['sessionIsolated', 'sessionSandboxBase'] : [])];
       const fresh = await load(appCtx);
       const carried = CARRIED.filter((field) => (field === 'sessionIsolated' ? readObject(fresh.value[field])[sessionId] === true : readObject(fresh.value[field])[sessionId] !== undefined));
       if (carried.length > 0) {
@@ -1162,6 +1199,30 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       return { rows: byRow, form };
     }
 
+    /**
+     * The mode cards without a sidebar tab: the sidebar shows the first `count` modes of the list
+     * (and every mode an add-on adds, which has no card here).
+     * @param {object[]} rows - the mode cards, in order.
+     * @param {number} count - the sidebar's tab count.
+     * @returns {Set<string>} the keys of the cards beyond it.
+     */
+    function withoutTab(rows, count) {
+      return new Set(rows.slice(Math.max(0, count)).map((row) => row.key));
+    }
+
+    /**
+     * The modes a scheduled task may start in: the cards, then the add-ons' modes that are not isolated.
+     * @param {object[]} rows - the mode cards.
+     * @param {Array<{id: string, label: string, isolated: boolean}>} extras - the add-ons' modes.
+     * @returns {Array<{id: string, label: string, extra: boolean}>} the choices.
+     */
+    function scheduledChoices(rows, extras) {
+      return [
+        ...rows.map((row) => ({ id: row.id, label: row.label.trim() || row.id, extra: false })),
+        ...extras.filter((extra) => !extra.isolated).map((extra) => ({ id: extra.id, label: extra.label, extra: true })),
+      ];
+    }
+
     /** Tier ids known to the Tier plugin, best effort: built-in ids plus saved custom ones. */
     function tierIdsOf(namespaces) {
       const entry = namespaces.find((item) => item.ns === 'model-tiers');
@@ -1180,7 +1241,10 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
       const entry = result.value.namespaces.find((item) => item.ns === NS);
       if (!entry) throw new Error('The Modes settings namespace is not mounted.');
-      return { value: entry.value, revision: entry.revision, tiers: tierIdsOf(result.value.namespaces) };
+      // The Cowork sidebar's own settings, while it is on: its tab count is set on this page too.
+      const shellEntry = result.value.namespaces.find((item) => item.ns === SHELL_NS);
+      const shell = shellEntry ? { revision: shellEntry.revision, maxTabs: Number.isInteger(shellEntry.value?.maxTabs) ? shellEntry.value.maxTabs : 3 } : null;
+      return { value: entry.value, revision: entry.revision, tiers: tierIdsOf(result.value.namespaces), shell };
     }
 
     function ModesPage({ appCtx }) {
@@ -1193,8 +1257,12 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       const [busy, setBusy] = useState(false);
       const [message, setMessage] = useState(null);
       const [answer, setAnswer] = useState({ rerun: true, thumbs: false });
-      const [trim, setTrim] = useState(['cowork', 'code']);
+      const [trim, setTrim] = useState(['cowork', 'code', 'data']);
       const [extraModes, setExtraModes] = useState([]);
+      // Settings that save at once: where new conversations start, and the built-in working methods.
+      const [general, setGeneral] = useState({ searchDepth: 'standard', scheduledMode: 'cowork', codeMethod: true, coworkMethod: true });
+      // The Cowork sidebar's tab count, while the sidebar is on (null: it is off).
+      const [shell, setShell] = useState(null);
       const nextKey = React.useRef(1);
 
       const adopt = useCallback((view) => {
@@ -1205,8 +1273,14 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         setBroken(invalid);
         setDefaultMode(typeof view.defaultMode === 'string' ? view.defaultMode : 'cowork');
         setAnswer({ rerun: view.rerunButton !== false, thumbs: view.hideFeedback === true });
-        setTrim(Array.isArray(view.trimModes) ? view.trimModes : ['cowork', 'code']);
+        setTrim(Array.isArray(view.trimModes) ? view.trimModes : ['cowork', 'code', 'data']);
         setExtraModes(extraModesOf(view));
+        setGeneral({
+          searchDepth: levelOf(view.searchDepth),
+          scheduledMode: typeof view.scheduledMode === 'string' && view.scheduledMode ? view.scheduledMode : 'cowork',
+          codeMethod: view.codeMethod !== false,
+          coworkMethod: view.coworkMethod !== false,
+        });
         setDirty(false);
       }, []);
 
@@ -1214,6 +1288,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         try {
           const data = await loadEditor(appCtx);
           setLoaded({ status: 'ready', revision: data.revision, tiers: data.tiers });
+          setShell(data.shell);
           adopt(data.value);
         } catch {
           setLoaded({ status: 'error' });
@@ -1321,9 +1396,54 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           setMessage({ text: `${t('save.failed')}: ${error?.message ?? error}`, bad: true });
         }
       };
+      // One setting of this page saved at once, apart from the mode list and its Save button.
+      const saveNow = async (key, value) => {
+        const before = general[key];
+        setGeneral((prev) => ({ ...prev, [key]: value }));
+        try {
+          const ops = [{ op: 'set', path: [key], value }];
+          let fresh = await loadEditor(appCtx);
+          let result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
+          if (!result.ok && result.error.code === 'settings/conflict') {
+            fresh = await loadEditor(appCtx);
+            result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
+          }
+          if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+          setLoaded((prev) => ({ ...prev, revision: result.value.revision }));
+        } catch (error) {
+          setGeneral((prev) => ({ ...prev, [key]: before }));
+          setMessage({ text: `${t('save.failed')}: ${error?.message ?? error}`, bad: true });
+        }
+      };
+      // The sidebar's tab count belongs to the Cowork sidebar's own settings; it is written there.
+      const saveTabs = async (count) => {
+        const before = shell;
+        setShell((prev) => (prev ? { ...prev, maxTabs: count } : prev));
+        try {
+          const ops = [{ op: 'set', path: ['maxTabs'], value: count }];
+          let fresh = await loadEditor(appCtx);
+          if (!fresh.shell) throw new Error('the Cowork sidebar is switched off');
+          let result = await appCtx.remote.settings.mutate(SHELL_NS, ops, fresh.shell.revision);
+          if (!result.ok && result.error.code === 'settings/conflict') {
+            fresh = await loadEditor(appCtx);
+            if (!fresh.shell) throw new Error('the Cowork sidebar is switched off');
+            result = await appCtx.remote.settings.mutate(SHELL_NS, ops, fresh.shell.revision);
+          }
+          if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+          setShell((prev) => (prev ? { ...prev, revision: result.value.revision, maxTabs: count } : prev));
+        } catch (error) {
+          setShell(before);
+          setMessage({ text: `${t('save.failed')}: ${error?.message ?? error}`, bad: true });
+        }
+      };
       const Toggle = (title, hint, on, onChange) =>
         h('div', { className: 'dsh-me-toggle' }, h('div', null, h('b', null, title), h('span', null, hint)),
           h('button', { type: 'button', role: 'switch', className: 'dsh-me-sw', 'aria-checked': on, 'aria-label': title, onClick: () => onChange(!on) }));
+      // A row with a drop-down on the right, like a switch row.
+      const Choice = (title, hint, value, options, onChange) =>
+        h('div', { className: 'dsh-me-toggle' }, h('div', null, h('b', null, title), h('span', null, hint)),
+          h('select', { className: 'dsh-me-sel', value, 'aria-label': title, onChange: (event) => onChange(event.target.value) },
+            options.map((option, index) => h('option', { key: `${index}-${option.value}`, value: option.value }, option.label))));
 
       if (loaded.status === 'loading') return h('div', { className: 'dsh-me-note' }, h('style', null, CSS), t('loading'));
       if (loaded.status === 'error') {
@@ -1331,6 +1451,9 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       }
 
       const tierList = h('datalist', { id: 'dsh-me-tiers' }, (loaded.tiers ?? []).map((id) => h('option', { key: id, value: id })));
+      const choices = scheduledChoices(rows, extras);
+      // Mode cards beyond the sidebar's tab count have no tab (only while the sidebar is on).
+      const tabless = shell ? withoutTab(rows, shell.maxTabs) : new Set();
       const Field = (label, control, wide) =>
         h('label', { className: 'dsh-me-field' + (wide ? ' wide' : '') }, h('span', null, label), control);
 
@@ -1358,6 +1481,29 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
             extras.map((extra) => h('option', { key: `extra-${extra.id}`, value: extra.id }, t('default.extra', { label: extra.label }))),
           ),
         ),
+        h('div', { className: 'dsh-me-group' }, t('new.group')),
+        h('div', null,
+          Choice(t('new.web'), t('new.web.hint'), general.searchDepth,
+            LEVELS.filter((id) => id !== 'off').map((id) => ({ value: id, label: t(`web.${id}`) })),
+            (value) => void saveNow('searchDepth', value)),
+          Choice(t('new.scheduled'), t('new.scheduled.hint'), general.scheduledMode,
+            [
+              ...choices.map((choice) => ({ value: choice.id, label: choice.extra ? t('default.extra', { label: choice.label }) : choice.label })),
+              ...(choices.some((choice) => choice.id === general.scheduledMode) ? [] : [{ value: general.scheduledMode, label: t('new.scheduled.gone', { id: general.scheduledMode }) }]),
+            ],
+            (value) => void saveNow('scheduledMode', value))),
+        // The tab count is the Cowork sidebar's: shown only while the sidebar is on.
+        shell ? h('div', { className: 'dsh-me-group' }, t('tabs.group')) : null,
+        shell
+          ? h('div', null,
+              Choice(t('tabs.count'), t('tabs.count.hint'), String(shell.maxTabs),
+                [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n) })),
+                (value) => void saveTabs(Number(value))))
+          : null,
+        h('div', { className: 'dsh-me-group' }, t('method.group')),
+        h('div', null,
+          Toggle(t('method.code'), t('method.code.hint'), general.codeMethod, (on) => void saveNow('codeMethod', on)),
+          Toggle(t('method.cowork'), t('method.cowork.hint'), general.coworkMethod, (on) => void saveNow('coworkMethod', on))),
         h('div', { className: 'dsh-me-group' }, t('answer.group')),
         h('div', null,
           Toggle(t('answer.rerun'), t('answer.rerun.hint'), answer.rerun, (on) => void flipAnswer('rerunButton', 'rerun', on)),
@@ -1387,6 +1533,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
               h('span', { className: 'dsh-me-spacer' }),
               h('button', { type: 'button', className: 'dsh-me-btn', onClick: () => remove(row.key) }, t('remove')),
             ),
+            tabless.has(row.key) ? h('div', { className: 'dsh-me-note', 'data-warn': 'true' }, t('tabs.none', { n: shell.maxTabs })) : null,
             h(
               'div',
               { className: 'dsh-me-row' },
@@ -1457,7 +1604,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
               h('textarea', {
                 className: 'dsh-me-ta',
                 value: row.prompt,
-                placeholder: row.id === 'code' ? t('f.prompt.code') : undefined,
+                placeholder: row.id === 'code' && general.codeMethod ? t('f.prompt.code') : row.id === 'cowork' && general.coworkMethod ? t('f.prompt.cowork') : undefined,
                 maxLength: PROMPT_MAX,
                 onChange: (event) => edit(row.key, { prompt: event.target.value }),
               }),

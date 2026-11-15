@@ -43,6 +43,11 @@ test('the mode and its method', () => {
   assert.ok(TOP_ONLY.every((tool) => OWN_TOOLS.includes(tool)));
   assert.match(METHOD, /search result you saw/, 'a search-engine-only find can be reported');
   assert.match(METHOD, /Save a profile only after the user has seen the draft/);
+  assert.equal(MODE.keepPrompt, true, 'Scout\'s rules stay under a model version that stands alone');
+  for (const tool of ['scout_assess', 'scout_reports']) assert.ok(OWN_TOOLS.includes(tool) && METHOD.includes(tool), tool);
+  assert.ok(TOP_ONLY.includes('scout_reports'), 'helpers never read earlier reports');
+  assert.match(METHOD, /one with an email address or phone number is refused/);
+  assert.match(METHOD, /fit, freshness, pay and legitimacy from 1 to 5, each with a short reason/);
   const added = JSON.parse(withScout('{"finance":{"label":"Finance"}}', true));
   assert.deepEqual(Object.keys(added), ['finance', MODE_ID]);
   assert.equal(withScout(JSON.stringify(added), true), undefined, 'nothing to change');
@@ -310,7 +315,10 @@ test('the tools: files and profile for any model, terms held, a run saved', asyn
     assert.match(found, /UNTRUSTED SOURCE TEXT/);
     assert.match(await run('scout_posting', { id: 'P1' }), /Lehrauftrag/);
     assert.match(await run('scout_posting', { id: 'P99' }), /no posting P99/);
-    const saved = await run('scout_report', { title: 'Data engineer Germany', markdown: '## Understanding\nA run in Germany for data engineering work.', opportunities: [{ rank: 1, title: 'Data Engineer', fit: 4 }] });
+    // A row needs its four scores, each with a reason.
+    assert.match(await run('scout_report', { title: 'Data engineer Germany', markdown: '## Understanding\nA run in Germany for data engineering work.', opportunities: [{ rank: 1, title: 'Data Engineer', fit: 4 }] }), /Not saved yet[\s\S]*fit has no reason[\s\S]*freshness is missing/);
+    const row = { rank: 1, posting: 'P1', fit: 4, fit_reason: 'matches the skills', freshness: 4, freshness_reason: 'recent', pay_score: 3, pay_reason: 'no pay given', legitimacy: 5, legitimacy_reason: 'public job exchange' };
+    const saved = await run('scout_report', { title: 'Data engineer Germany', markdown: '## Understanding\nA run in Germany for data engineering work.', opportunities: [row] });
     assert.match(saved, /reports\/.*data-engineer-germany\.md/);
     assert.match(tools.scout_profile.description, /save only after they agree/);
     const off = buildTools({ enabled: () => false, registry: () => registry, selection: () => readSelection({}), keyOf: async () => '', hasKey: () => false, store: openStore(), folder, profile, gate, idOf: () => 'c1' });

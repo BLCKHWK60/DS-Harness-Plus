@@ -1,6 +1,7 @@
 // The Internet Archive and GDELT sources. First with a stand-in for the locked process, then end
-// to end through the stand-in Tor to a local server that plays both services under their own
-// names, with a certificate made for the test. Nothing here reaches the network.
+// to end through the stand-in Tor (or, for the Archive read directly, through the real forwarder)
+// to a local server that plays both services under their own names, with a certificate made for
+// the test. Nothing here reaches the network.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -9,6 +10,8 @@ import https from 'node:https';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { get } from '../lib/fetch-child.mjs';
+import { openForward } from '../lib/forward.js';
 import { MODE, TOOLS, METHOD } from '../lib/mode.js';
 import { runLocked } from '../lib/sandbox.js';
 import { openSources } from '../lib/sources.js';
@@ -135,4 +138,101 @@ test('through the stand-in Tor: news list, list of copies, and a copy read and c
   // Without the test's certificate the stand-in is a stranger: the certificate check refuses it.
   const strict = createWeb({ port: async () => ({ port: await tor.start() }), run: runLocked, sources, on: () => ({ archive: true, news: true }), sleep: async () => {} });
   assert.match(await strict.archiveFind('c1', 'https://news.example.org/acme-breach'), /could not be asked: .*secure connection failed|could not be asked/);
+});
+
+test('the Internet Archive read directly: no Tor, one fixed address, the route named, never retried the other way', async () => {
+  const sources = openSources();
+  const sent = [];
+  const opened = [];
+  let torAsked = 0;
+  let direct = true;
+  let clock = 1_000_000;
+  let answer = { ok: true, status: 200, json: [['timestamp'], ['20200101000000', 'http://example.com/', '200', 'text/html']] };
+  const web = createWeb({
+    now: () => clock,
+    port: async () => { torAsked += 1; return { port: 9 }; },
+    run: async (request, options) => { sent.push({ ...request, lockedTo: options.proxyPort }); return answer; },
+    sources,
+    on: () => ({ archive: true, news: true }),
+    archiveDirect: () => direct,
+    forward: async (host, port) => { opened.push(`${host}:${port}`); return { port: 7, close: () => opened.push('closed') }; },
+    sleep: async () => {},
+  });
+  assert.equal(web.archiveRoute(), 'direct');
+  assert.match(await web.archiveFind('c', 'example.com'), /asked \S+ \(UTC\) directly \(not through Tor\):\n- 2020-01-01 00:00 UTC/);
+  assert.equal(torAsked, 0, 'Tor is not asked for');
+  assert.deepEqual(opened, ['web.archive.org:443', 'closed'], 'the way out leads to the Archive\'s own address, and is shut after the request');
+  const [list] = sent;
+  assert.deepEqual([list.via, list.proxyPort, list.lockedTo, list.verify, list.user, list.op], ['forward', 7, 7, true, undefined, 'get']);
+  assert.ok(list.url.startsWith(`https://${ARCHIVE}/cdx/search/cdx?`));
+
+  answer = { ok: true, status: 200, title: 'A page', text: 'Some text', bytes: 9 };
+  const page = await web.archiveRead('c', 'example.com', '2020');
+  assert.match(page, /^\[S1\] http:\/\/example\.com\/, as captured by the Internet Archive on 2020\nRetrieved \S+ \(UTC\) directly from https:\/\/web\.archive\.org\/web\/2020\/http:\/\/example\.com\/\. Text fingerprint/);
+  assert.match(sources.cite(sources.find('c', 'S1')), /Retrieved: \S+ \(UTC\), directly from the Internet Archive, not through Tor/);
+  assert.match(sources.log('c'), /archive list: http:\/\/example\.com\/: 1 dated copies \(asked directly\)[\s\S]*read: \[S1\] Internet Archive copy of http:\/\/example\.com\/ from 2020 \(9 bytes, read directly\)/);
+
+  // GDELT goes through Tor whatever the Archive does.
+  answer = { ok: true, status: 200, json: { articles: [] } };
+  await web.news('c', 'acme breach');
+  assert.equal(torAsked, 1);
+  assert.deepEqual([sent.at(-1).via, sent.at(-1).proxyPort, sent.at(-1).user], [undefined, 9, 'recon-c']);
+
+  // Refused on the direct route: said without blaming Tor, and not sent through Tor instead.
+  answer = { ok: true, status: 403, text: 'blocked' };
+  const asked = sent.length;
+  assert.match(await web.archiveRead('c', 'example.com/x', '2021'), /The Internet Archive refused the request \(it may be limiting automated requests at the moment\)\. Nothing was read\./);
+  assert.equal(sent.length, asked + 1);
+  assert.equal(torAsked, 1, 'no second try through Tor');
+  answer = { ok: true, status: 429, text: 'slow down' };
+  assert.match(await web.archiveFind('c', 'example.com/y'), /asked to slow down \(it limits automated requests\)\. Nothing was read\./);
+
+  // Switched off (after the hold above has passed): through Tor, as before, and said so.
+  clock += 6 * 60_000;
+  direct = false;
+  assert.equal(web.archiveRoute(), 'tor');
+  answer = { ok: true, status: 200, json: [['timestamp'], ['20200101000000', 'http://example.com/', '200', 'text/html']] };
+  const openedBefore = opened.length;
+  assert.match(await web.archiveFind('c2', 'example.com'), /asked \S+ \(UTC\) through Tor:/);
+  assert.equal(opened.length, openedBefore, 'no direct way is opened');
+  assert.deepEqual([sent.at(-1).via, sent.at(-1).proxyPort], [undefined, 9]);
+});
+
+test('the locked process goes outside Tor only to an https address whose certificate it checks', async () => {
+  assert.match((await get({ op: 'get', url: 'http://web.archive.org/web/2020/x', via: 'forward', verify: true, proxyPort: 1 })).why, /only to an https address whose certificate is checked/);
+  assert.match((await get({ op: 'get', url: 'https://web.archive.org/web/2020/x', via: 'forward', proxyPort: 1 })).why, /only to an https address whose certificate is checked/);
+});
+
+test('read directly, end to end: the locked process, the forwarder and a stand-in Archive, without Tor', { skip: !mac }, async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-recon-direct-'));
+  execFileSync('/usr/bin/openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '2', '-subj', `/CN=${ARCHIVE}`, '-addext', `subjectAltName=DNS:${ARCHIVE}`, '-keyout', join(dir, 'key.pem'), '-out', join(dir, 'cert.pem')], { stdio: 'ignore' });
+  const cert = readFileSync(join(dir, 'cert.pem'), 'utf8');
+  const hits = [];
+  const server = https.createServer({ key: readFileSync(join(dir, 'key.pem')), cert }, (req, res) => {
+    hits.push(`${req.headers.host} ${req.url.slice(0, 40)}`);
+    const send = (type, body, status = 200, headers = {}) => { res.writeHead(status, { 'content-type': type, ...headers }); res.end(body); };
+    if (req.url.startsWith('/cdx/')) return send('application/json', JSON.stringify([['timestamp', 'original', 'statuscode', 'mimetype'], ['20261114103000', 'https://news.example.org/acme-breach', '200', 'text/html']]));
+    if (req.url.startsWith('/web/2026id_/')) return send('text/html', '', 302, { location: '/web/20261114103000id_/https://news.example.org/acme-breach' });
+    if (req.url.startsWith('/web/20261114103000id_/')) return send('text/html; charset=utf-8', '<title>Acme confirms breach</title><p>Four million records.</p><img src="/a.jpg">');
+    return send('text/html', 'not found', 404);
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => { server.close(); rmSync(dir, { recursive: true, force: true }); });
+  // The real forwarder, sent to the stand-in instead of the Archive's own address.
+  const ways = [];
+  const forward = (host, port) => { ways.push(`${host}:${port}`); return openForward('127.0.0.1', server.address().port); };
+  const noTor = async () => { throw new Error('Tor must not be used for the Archive read directly'); };
+  const sources = openSources();
+  const web = createWeb({ port: noTor, run: runLocked, sources, on: () => ({ archive: true, news: true }), archiveDirect: () => true, forward, ca: cert, sleep: async () => {} });
+
+  assert.match(await web.archiveFind('c1', 'https://news.example.org/acme-breach'), /directly \(not through Tor\):\n- 2026-11-14 10:30 UTC/);
+  const page = await web.archiveRead('c1', 'https://news.example.org/acme-breach', '2026');
+  assert.match(page, /^\[S1\] https:\/\/news\.example\.org\/acme-breach, as captured by the Internet Archive on 2026-11-14 10:30 UTC\nRetrieved \S+ \(UTC\) directly from https:\/\/web\.archive\.org\/web\/20261114103000\//);
+  assert.match(page, /<<<UNTRUSTED SOURCE TEXT\n[\s\S]*Four million records\.\nUNTRUSTED SOURCE TEXT>>>/);
+  assert.ok(hits.every((hit) => hit.startsWith(`${ARCHIVE} `)), 'the request names the Archive itself');
+  assert.equal(hits.some((hit) => hit.includes('a.jpg')), false, 'nothing the page points to is asked for');
+  assert.ok(ways.length === 3 && ways.every((way) => way === `${ARCHIVE}:443`), ways.join(', '));
+  // Without the test's certificate the stand-in is a stranger: refused, and nothing is tried through Tor.
+  const strict = createWeb({ port: noTor, run: runLocked, sources, on: () => ({ archive: true, news: true }), archiveDirect: () => true, forward, sleep: async () => {} });
+  assert.match(await strict.archiveFind('c2', 'https://news.example.org/acme-breach'), /could not be asked: .*secure connection failed|could not be asked/);
 });

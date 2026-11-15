@@ -1,0 +1,877 @@
+{
+ "uri": "https://www.find-tender.service.gov.uk/api/1.0/ocdsReleasePackages?stages=tender&limit=3&updatedFrom=2026-11-12T00:00:00&updatedTo=2026-11-15T09:34:02",
+ "version": "1.1",
+ "extensions": [
+  "https://standard.open-contracting.org/profiles/eu/latest/en/extension.json",
+  "https://raw.githubusercontent.com/open-contracting-extensions/ocds_amendment_rationale_classifications_extension/master/extension.json",
+  "https://raw.githubusercontent.com/open-contracting-extensions/ocds_budget_breakdown_extension/master/extension.json",
+  "https://raw.githubusercontent.com/open-contracting-extensions/ocds_contract_completion_extension/master/extension.json",
+  "https://raw.githubusercontent.com/open-contracting-extensions/ocds_documentation_extension/master/extension.json",
+  "https://raw.githubusercontent.com/open-contracting-extensions/ocds_pagination_extension/master/extension.json",
+  "https://raw.githubusercontent.com/open-contracting-extensions/ocds_suitability_extension/master/extension.json",
+  "https://raw.githubusercontent.com/portaledcahn/ocds_Links_extension/main/extension.json",
+  "https://raw.githubusercontent.com/cabinetoffice/ocds_uk_extension/main/extension.json"
+ ],
+ "publishedDate": "2026-11-13T16:52:40Z",
+ "publisher": {
+  "name": "Cabinet Office",
+  "scheme": "GB-GOR",
+  "uid": "D2",
+  "uri": "https://www.gov.uk/government/organisations/cabinet-office"
+ },
+ "license": "http://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+ "publicationPolicy": "https://www.gov.uk/government/publications/open-contracting",
+ "releases": [
+  {
+   "ocid": "ocds-h6vhtk-07bc24",
+   "id": "108199-2026",
+   "date": "2026-11-13T16:52:40Z",
+   "tag": [
+    "tender"
+   ],
+   "description": "The Council are seeking to appoint suitable suppliers per Lot. All Lots will be unranked.\nBidders may be excluded from this competition if they are in any situations referred to in regulation 58 of the Public Contracts\n(Scotland) Regulations 2015.Bidders must hold certificates for Quality Assurance & Environmental Management Standards or comply with all questions noted in the SPD Section 4D. Bidders are also required to provide detail of all relevant industry standards, accreditation, affiliations or memberships that they may hold.\nFreedom of Information Act\nInformation on the FOI Act is contained in Appendix A of the ITT. Applicants must note the implications of this legislation and ensure that any information they wish the council to consider withholding is specifically indicated on the FOI certificate (NB the council does not bind itself to withhold this information).\nTenderers Amendments\nBidders must enter any clause, condition, amendment to specification or any other qualification they may wish to make conditional to this\noffer.\nPrompt Payment\nThe successful Suppliers shall, as a condition of being awarded the tender, be required to demonstrate to the Council's satisfaction that all funds due to the Supplier's permitted sub-contractors in respect of these services are paid timeously and that as a minimum invoices rendered by subcontractors shall (unless formally disputed by the tenderer) be paid within 30 days of receipt. The successful Bidders shall also impose this condition on its sub-contractors in respect of payments due to any sub-sub-contractors, if any.\nNon Collusion\nBidders will be required to complete the Non Collusion certificate.\nInsurance Mandate\nAll successful suppliers will be required to sign an Insurance Mandate, contained in the suppliers  attachments area within PCS-T\nauthorising the Council to request copies of insurance documents from the supplier’s insurance provider. If the mandate is not signed and returned the Council reserves the right to request copies of insurance certificates from bidders at any point during the contract period.\nTerms and Conditions are located within the attachments area within the PCS Tender portal.\nAdditional information pertaining to this framework is contained in the ITT Document.\nBidders must ensure they read all the attachments available in the attachment area in line with this contract notice.\nThe buyer is using PCS-Tender to conduct this ITT exercise. The Project code is 33027. For more information see https://www.publictendersscotland.publiccontractsscotland.gov.uk\nThe buyer is using PCS-Tender to conduct this PQQ exercise. The Project code is 33027. For more information see: http://www.publiccontractsscotland.gov.uk/info/InfoCentre.aspx?ID=2343\nA sub-contract clause has been included in this contract. For more information see: http://www.publiccontractsscotland.gov.uk/info/InfoCentre.aspx?ID=2363\nCommunity benefits are included in this requirement. For more information see: https://www.gov.scot/policies/public-sector-procurement/community-benefits-in-procurement/\nA summary of the expected community benefits has been provided as follows:\nDelivery of community benefits is mandatory but is only subject to commencement once a supplier has reached a set threshold of awarded days. These days are cumulative and will be calculated across all Lots a supplier is appointed to.\nThis initial threshold is 10 days. Once this has been met – the below thresholds and community benefit delivery requirements apply;\nFor each day of  work awarded beyond the 10-day threshold, suppliers will be required to deliver 1 hour of Business Mentoring support.\nFor each day of work awarded beyond 70 days, suppliers will be required to deliver 1.5 hours of Business Mentoring support\nFor each day of work awarded beyond 140 days, suppliers will be required to deliver 2 hours of Business Mentoring support.\nPlease refer to the tender documentation for further information.\n(SC Ref:847553)",
+   "initiationType": "tender",
+   "tender": {
+    "id": "GCC006583CPU",
+    "legalBasis": {
+     "id": "32014L0024",
+     "scheme": "CELEX"
+    },
+    "title": "Glasgow Business Growth Framework - Phase 4",
+    "status": "active",
+    "classification": {
+     "scheme": "CPV",
+     "id": "79400000",
+     "description": "Business and management consultancy and related services"
+    },
+    "mainProcurementCategory": "services",
+    "description": "Glasgow City Council (the Council) requires a framework of suppliers to deliver a range of business growth consultancy services to eligible organisations across the city to aide a sustainable growth agenda and improve business start-up and survival rates.\nAs the organisations accessing support via this Framework have different needs, the services provided must be offered flexibly. This includes, but is not limited to, face to face, digitally, by phone and one to one at suitable times and locations.\nThe Framework is made up of 10 Lots as detailed below and aligned to the specialist area of business support to be provided.\nPlease note funding is currently confirmed for the first two years of the Framework. This therefore represents the estimated minimum total Framework value.\nShould funding equal to this initial value be subsequently secured this will be used to deliver years three and four respectively and aligns with the higher maximum value noted in II.1.5\nLot 1- Business Structuring, Business Governance, Legal & IP\nLot 2 - Business Growth, Sustainable Growth and Productivity\nLot 3 - Upskilling, Leadership & Resource\nLot 4 - Financial readiness & Planning\nLot 5 - Design & System Processing\nLot 6 - Sales and Digital Marketing\nLot 7 - Preparing for Global Growth\nLot 8 - Digital Transformation\nLot 9 - Sustainable & Net Zero Support\nLot 10 - Business Acceleration",
+    "value": {
+     "amount": 3800000,
+     "currency": "GBP"
+    },
+    "lotDetails": {
+     "maximumLotsBidPerSupplier": null
+    },
+    "lots": [
+     {
+      "id": "2",
+      "title": "Business Growth, Sustainable Growth and Productivity",
+      "description": "The Lot will provide specialist consultancy support to identify areas of improvement processes which help to improve some measure of an organisations success.\nSpecific sub-categories services to be delivered under this Lot include but are not limited to-\nStrategic Planning\nChange Management\nPitching and Procurement\nOperations Management\nTurnaround\nMergers and Acquisition",
+      "awardCriteria": {
+       "criteria": [
+        {
+         "name": "Service Delivery and Approach",
+         "type": "quality",
+         "description": "40"
+        },
+        {
+         "name": "Team and Account Management",
+         "type": "quality",
+         "description": "20"
+        },
+        {
+         "name": "Knowledge of SMEs and Social Enterprise",
+         "type": "quality",
+         "description": "15"
+        },
+        {
+         "name": "Community Wealth Building",
+         "type": "quality",
+         "description": "10"
+        },
+        {
+         "name": "Sustainability",
+         "type": "quality",
+         "description": "5"
+        },
+        {
+         "name": "Fair Work First",
+         "type": "quality",
+         "description": "5"
+        },
+        {
+         "type": "price",
+         "description": "5"
+        }
+       ]
+      },
+      "contractPeriod": {
+       "durationInDays": 1440
+      },
+      "hasRenewal": true,
+      "renewal": {
+       "description": "If funding arrangements are extended, the Framework term will be extended accordingly.\nThe Framework is therefore expected to run for an an initial period of 2 years with the council retaining the option to extend for 2 further periods of 12 months each"
+      },
+      "submissionTerms": {
+       "variantPolicy": "notAllowed"
+      },
+      "hasOptions": false,
+      "status": "active"
+     },
+     {
+      "id": "3",
+      "title": "Upskilling, Leadership and Resources",
+      "description": "This Lot will provide specialist consultancy support that may involve reviewing existing leadership development processes and preparing a report on their future suitability and/or making recommendations for future actions. This also includes capacity building and comprehensive HR support.\nSpecific sub-category services to be delivered under this Lot include, but are not limited to -\nOrganisational Development and Succession Planning\nLeadership and Management\nAccreditation\nCapacity Building and HR Support\nHybrid Working / Remote Leadership Skills",
+      "awardCriteria": {
+       "criteria": [
+        {
+         "name": "Service Delivery and Approach",
+         "type": "quality",
+         "description": "40"
+        },
+        {
+         "name": "Team and Account Management",
+         "type": "quality",
+         "description": "20"
+        },
+        {
+         "name": "Knowledge of SMEs and Social Enterprise",
+         "type": "quality",
+         "description": "15"
+        },
+        {
+         "name": "Community Wealth Building",
+         "type": "quality",
+         "description": "10"
+        },
+        {
+         "name": "Sustainability",
+         "type": "quality",
+         "description": "5"
+        },
+        {
+         "name": "Fair Work First",
+         "type": "quality",
+         "description": "5"
+        },
+        {
+         "type": "price",
+         "description": "5"
+        }
+       ]
+      },
+      "contractPeriod": {
+       "durationInDays": 1440
+      },
+      "hasRenewal": true,
+      "renewal": {
+       "description": "If funding arrangements are extended, the Framework term will be extended accordingly.\nThe Framework is therefore expected to run for an an initial period of 2 years with the council retaining the option to extend for 2 further periods of 12 months each"
+      },
+      "submissionTerms": {
+       "variantPolicy": "notAllowed"
+      },
+      "hasOptions": false,
+      "status": "active"
+     }
+    ],
+    "items": [
+     {
+      "id": "2",
+      "additionalClassifications": [
+       {
+        "scheme": "CPV",
+        "id": "72221000",
+        "description": "Business analysis consultancy services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "72224000",
+        "description": "Project management consultancy services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "79411100",
+        "description": "Business development consultancy services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "79411000",
+        "description": "General management consultancy services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "79418000",
+        "description": "Procurement consultancy services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "79410000",
+        "description": "Business and management consultancy services"
+       }
+      ],
+      "deliveryAddresses": [
+       {
+        "region": "UKM82"
+       }
+      ],
+      "relatedLot": "2"
+     },
+     {
+      "id": "3",
+      "additionalClassifications": [
+       {
+        "scheme": "CPV",
+        "id": "79411000",
+        "description": "General management consultancy services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "79414000",
+        "description": "Human resources management consultancy services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "79411100",
+        "description": "Business development consultancy services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "79410000",
+        "description": "Business and management consultancy services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "79400000",
+        "description": "Business and management consultancy and related services"
+       }
+      ],
+      "deliveryAddresses": [
+       {
+        "region": "UKM82"
+       }
+      ],
+      "relatedLot": "3"
+     }
+    ],
+    "submissionMethod": [
+     "electronicSubmission"
+    ],
+    "submissionMethodDetails": "http://www.publictendersscotland.publiccontractsscotland.gov.uk",
+    "selectionCriteria": {
+     "criteria": [
+      {
+       "type": "economic",
+       "description": "Please Refer to ITT Document within PCST.",
+       "minimum": "Please Refer to ITT Document within PCST",
+       "appliesTo": [
+        "supplier"
+       ]
+      }
+     ]
+    },
+    "contractTerms": {
+     "performanceTerms": "Please see Document 1 Invitation to Tender, Document 2 - Scope of Services and Document 3 - Terms and Conditions uploaded in the Suppliers Attachment Area of PCS-T for full details.",
+     "hasElectronicOrdering": true,
+     "electronicInvoicingPolicy": "allowed",
+     "hasElectronicPayment": true
+    },
+    "procurementMethod": "open",
+    "procurementMethodDetails": "Open procedure",
+    "techniques": {
+     "hasFrameworkAgreement": true,
+     "frameworkAgreement": {
+      "maximumParticipants": 70
+     }
+    },
+    "coveredBy": [
+     "GPA"
+    ],
+    "tenderPeriod": {
+     "endDate": "2026-12-15T12:00:00Z"
+    },
+    "submissionTerms": {
+     "languages": [
+      "en"
+     ],
+     "bidValidityPeriod": {
+      "durationInDays": 150
+     }
+    },
+    "awardPeriod": {
+     "startDate": "2026-12-15T12:00:00Z"
+    },
+    "bidOpening": {
+     "date": "2026-12-15T12:00:00Z"
+    },
+    "hasRecurrence": true,
+    "reviewDetails": "Precise information on deadline(s) for review procedures:\nGlasgow City Council must, by notice in writing as soon as possible after the decision has been made, inform all tenderers and candidates\nconcerned of its decision to award the contract. The Council must allow a period of at least the relevant standstill period (where the notice\nis sent by facsimile or electronic means the period is 10 days ending at midnight at the end of the 10th day after that on which the last\nnotice is sent, when sent by other means the period is 15 days) to elapse between the date of despatch of the notice referred to in Regulation\n86 of The Public Contract (Scotland) Regulations 2015 (“the Regulations”). The Council is obliged to comply with the Regulations and any\neligible economic operator can bring an action in the Sheriff Court or the Court of Session where as a consequence of a breach by the\nCouncil, suffers or risks suffering loss or damage. The bringing of court proceedings during the standstill period means that the Council\nmust not enter into the contract unless the proceedings are determined, discontinued or disposed of;\nor the court, by interim order, brings to an end the prohibition. The bringing of court proceedings after the standstill period has elapsed and\nthe remedies that are available to the courts are detailed in the Regulations. Economic Operators can write to the Council seeking further\nclarification on the notice, to which the Council must respond within 15 days. Economic Operators should be mindful to seek their own\nindependent legal advice when they consider appropriate to do so.",
+    "recurrence": {
+     "description": "The Framework is expected to run for an an initial period of 2 years as funding is confirmed for this period. The council has also retained the option to extend for 2 further periods of 12 months each should further funding become available.\nFurther notices concerning any future procurements should funding become available could therefore be published between 2024 - 2026."
+    }
+   },
+   "parties": [
+    {
+     "name": "Glasgow City Council",
+     "id": "GB-FTS-203",
+     "identifier": {
+      "legalName": "Glasgow City Council"
+     },
+     "address": {
+      "streetAddress": "Chief Executives Department, City Chambers",
+      "locality": "Glasgow",
+      "region": "UKM82",
+      "postalCode": "G2 1DU",
+      "countryName": "United Kingdom"
+     },
+     "contactPoint": {
+      "telephone": "+44 20 7946 0000",
+      "email": "procurement@example.org",
+      "url": "http://www.publictendersscotland.publiccontractsscotland.gov.uk"
+     },
+     "roles": [
+      "buyer"
+     ],
+     "details": {
+      "url": "http://www.glasgow.gov.uk",
+      "buyerProfile": "https://www.publiccontractsscotland.gov.uk/search/Search_AuthProfile.aspx?ID=AA00196",
+      "classifications": [
+       {
+        "scheme": "TED_CA_TYPE",
+        "id": "REGIONAL_AUTHORITY",
+        "description": "Regional or local authority"
+       },
+       {
+        "scheme": "COFOG",
+        "id": "01",
+        "description": "General public services"
+       }
+      ]
+     }
+    },
+    {
+     "name": "Glasgow Sheriff Court and Justice of the Peace Court",
+     "id": "GB-FTS-9474",
+     "identifier": {
+      "legalName": "Glasgow Sheriff Court and Justice of the Peace Court"
+     },
+     "address": {
+      "streetAddress": "PO Box 23 1 Carlton Place",
+      "locality": "Glasgow",
+      "postalCode": "G2 9DA",
+      "countryName": "United Kingdom"
+     },
+     "contactPoint": {
+      "email": "procurement@example.org"
+     },
+     "roles": [
+      "reviewBody"
+     ],
+     "details": {
+      "url": "http://www.glasgow.gov.uk"
+     }
+    }
+   ],
+   "buyer": {
+    "id": "GB-FTS-203",
+    "name": "Glasgow City Council"
+   },
+   "links": [
+    {
+     "rel": "canonical",
+     "href": "https://api.publiccontractsscotland.gov.uk/v1/Notice?id=ocds-r6ebe6-0000847553"
+    }
+   ],
+   "language": "en"
+  },
+  {
+   "ocid": "ocds-h6vhtk-07b9e3",
+   "id": "108105-2026",
+   "date": "2026-11-13T15:11:58Z",
+   "tag": [
+    "tender"
+   ],
+   "description": "NOTE: To register your interest in this notice and obtain any additional information please visit the Public Contracts Scotland Web Site at https://www.publiccontractsscotland.gov.uk/Search/Search_Switch.aspx?ID=848229.\nThe buyer has indicated that it will accept electronic responses to this notice via the Postbox facility. A user guide is available at https://www.publiccontractsscotland.gov.uk/sitehelp/help_guides.aspx.\nSuppliers are advised to allow adequate time for uploading documents and to dispatch the electronic response well in advance of the closing time to avoid any last minute problems.\n(SC Ref:848229)\nDownload the ESPD document here: https://www.publiccontractsscotland.gov.uk/ESPD/ESPD_Download.aspx?id=848229",
+   "initiationType": "tender",
+   "tender": {
+    "id": "ocds-h6vhtk-07b9e3",
+    "legalBasis": {
+     "id": "32014L0024",
+     "scheme": "CELEX"
+    },
+    "title": "Insurance and risk related services associated with Property, legal liability and other general (non-life) insurable risks as required by Lochfield Park Housing Association Limited",
+    "status": "active",
+    "classification": {
+     "scheme": "CPV",
+     "id": "66510000",
+     "description": "Insurance services"
+    },
+    "mainProcurementCategory": "services",
+    "description": "The scope of the Contract includes the provision of insurance cover, brokerage services (where applicable), professional advice, claims management and loss control services for property, legal liabilities and other general insurances as required by Lochfield Park Housing Association Limited for a period of three years commencing 01.04.2027, with the option to extend by up to a further two years at Lochfield Park Housing Association Limited’s sole discretion. Bids are invited from suitably qualified and experienced insurance brokers and direct insurers. The Contract will follow the Competitive Flexible Procedure with bidders being selected on the basis of the responses contained in the pre qualifying SPD. Bidders will be expected have the capability, capacity, financial and economic standing and experience to perform the contract. SPDs must be completed in full with all relevant information supplied. The Contract will be awarded on the basis of Most Economically Advantageous Tender, with specific evaluation criteria detailed within the Invitation To Tender and contract documents.",
+    "lotDetails": {
+     "maximumLotsBidPerSupplier": null
+    },
+    "lots": [
+     {
+      "id": "1",
+      "title": "Insurance and risk related services associated with Property, legal liability and other general (non-life) insurable risks as required by Lochfield Park Housing Association Limited",
+      "description": "The scope of the Contract includes the provision of insurance cover, brokerage services (where applicable), professional advice, claims management and loss control services for property, legal liabilities and other general insurances as required by Lochfield Park Housing Association Limited for a period of three years commencing 01.04.2027, with the option to extend by up to a further two years at Lochfield Park Housing Association Limited’s sole discretion. Bids are invited from suitably qualified and experienced insurance brokers and direct insurers. The Contract will follow the Competitive Flexible Procedure with bidders being selected on the basis of the responses contained in the pre qualifying SPD. Bidders will be expected have the capability, capacity, financial and economic standing and experience to perform the contract. SPDs must be completed in full with all relevant information supplied. The Contract will be awarded on the basis of Most Economically Advantageous Tender, with specific evaluation criteria detailed within the Invitation To Tender and contract documents.",
+      "awardCriteria": {
+       "criteria": [
+        {
+         "name": "Quality",
+         "type": "quality",
+         "description": "60"
+        },
+        {
+         "type": "price",
+         "description": "40"
+        }
+       ]
+      },
+      "contractPeriod": {
+       "durationInDays": 1080
+      },
+      "hasRenewal": true,
+      "renewal": {
+       "description": "Lochfield Park Housing Association Limited will consider entering into Long term agreements with the bidder and/or the risk carriers proposed by the bidder, for 3 years (or 3 periods of insurance), with the option to extend the award period by up to 2 further years (or 2 periods of insurance), subject to satisfactory service, performance and cost."
+      },
+      "secondStage": {
+       "minimumCandidates": 4,
+       "maximumCandidates": 4
+      },
+      "submissionTerms": {
+       "variantPolicy": "notAllowed"
+      },
+      "hasOptions": true,
+      "options": {
+       "description": "See SPD."
+      },
+      "status": "active"
+     },
+     {
+      "id": "2",
+      "title": "Insurance and risk related services associated with Cyber insurable risks as required by Lochfield Park Housing Association Limited",
+      "description": "The scope of the Contract includes the provision of insurance cover, brokerage services (where applicable), professional advice, claims management and loss control services for cyber insurances as required by Lochfield Park Housing Association Limited for a period of three years commencing 01.04.2027, with the option to extend by up to a further two years at Lochfield Park Housing Association Limited’s sole discretion. Bids are invited from suitably qualified and experienced insurance brokers and direct insurers. The Contract will follow the Competitive Flexible Procedure with bidders being selected on the basis of the responses contained in the pre qualifying SPD. Bidders will be expected have the capability, capacity, financial and economic standing and experience to perform the contract. SPDs must be completed in full with all relevant information supplied. The Contract will be awarded on the basis of Most Economically Advantageous Tender, with specific evaluation criteria detailed within the Invitation To Tender and contract documents.",
+      "awardCriteria": {
+       "criteria": [
+        {
+         "name": "Quality",
+         "type": "quality",
+         "description": "60"
+        },
+        {
+         "type": "price",
+         "description": "40"
+        }
+       ]
+      },
+      "contractPeriod": {
+       "durationInDays": 1080
+      },
+      "hasRenewal": true,
+      "renewal": {
+       "description": "Lochfield Park Housing Association Limited will consider entering into Long term agreements with the bidder and/or the risk carriers proposed by the bidder, for 3 years (or 3 periods of insurance), with the option to extend the award period by up to 2 further years (or 2 periods of insurance), subject to satisfactory service, performance and cost."
+      },
+      "secondStage": {
+       "minimumCandidates": 4,
+       "maximumCandidates": 4
+      },
+      "submissionTerms": {
+       "variantPolicy": "notAllowed"
+      },
+      "hasOptions": true,
+      "options": {
+       "description": "See SPD"
+      },
+      "status": "active"
+     }
+    ],
+    "items": [
+     {
+      "id": "1",
+      "additionalClassifications": [
+       {
+        "scheme": "CPV",
+        "id": "66510000",
+        "description": "Insurance services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66000000",
+        "description": "Financial and insurance services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66513100",
+        "description": "Legal expenses insurance services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66513200",
+        "description": "Contractor's all-risk insurance services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66515000",
+        "description": "Damage or loss insurance services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66515200",
+        "description": "Property insurance services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66515410",
+        "description": "Financial loss insurance services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66515411",
+        "description": "Pecuniary loss insurance services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66516000",
+        "description": "Liability insurance services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66516400",
+        "description": "General liability insurance services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66516500",
+        "description": "Professional liability insurance services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66517300",
+        "description": "Risk management insurance services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66518100",
+        "description": "Insurance brokerage services"
+       }
+      ],
+      "deliveryAddresses": [
+       {
+        "region": "UKM82"
+       }
+      ],
+      "relatedLot": "1"
+     },
+     {
+      "id": "2",
+      "additionalClassifications": [
+       {
+        "scheme": "CPV",
+        "id": "66510000",
+        "description": "Insurance services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66515000",
+        "description": "Damage or loss insurance services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66515410",
+        "description": "Financial loss insurance services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66518100",
+        "description": "Insurance brokerage services"
+       },
+       {
+        "scheme": "CPV",
+        "id": "66517300",
+        "description": "Risk management insurance services"
+       }
+      ],
+      "deliveryAddresses": [
+       {
+        "region": "UKM82"
+       }
+      ],
+      "relatedLot": "2"
+     }
+    ],
+    "participationFees": [
+     {
+      "id": "1",
+      "type": [
+       "document"
+      ]
+     }
+    ],
+    "submissionMethod": [
+     "electronicSubmission"
+    ],
+    "submissionMethodDetails": "http://www.publiccontractsscotland.gov.uk",
+    "documents": [
+     {
+      "documentType": "technicalSelectionCriteria",
+      "id": "technical"
+     }
+    ],
+    "contractTerms": {
+     "performanceTerms": "See SPD"
+    },
+    "procurementMethod": "selective",
+    "procurementMethodDetails": "Competitive procedure with negotiation",
+    "coveredBy": [
+     "GPA"
+    ],
+    "tenderPeriod": {
+     "endDate": "2026-12-17T17:00:00Z"
+    },
+    "secondStage": {
+     "invitationDate": "2026-12-22T00:00:00Z"
+    },
+    "submissionTerms": {
+     "languages": [
+      "en"
+     ]
+    },
+    "hasRecurrence": false
+   },
+   "parties": [
+    {
+     "name": "Lochfield Park Housing Association Limited",
+     "id": "GB-FTS-188305",
+     "identifier": {
+      "legalName": "Lochfield Park Housing Association Limited"
+     },
+     "address": {
+      "streetAddress": "37 Drumlanrig Avenue",
+      "locality": "Glasgow",
+      "region": "UK",
+      "postalCode": "G34 0JF",
+      "countryName": "United Kingdom"
+     },
+     "contactPoint": {
+      "email": "procurement@example.org",
+      "url": "https://www.publiccontractsscotland.gov.uk/"
+     },
+     "roles": [
+      "buyer",
+      "centralPurchasingBody"
+     ],
+     "details": {
+      "url": "https://www.lochfield.co.uk/",
+      "buyerProfile": "https://www.publiccontractsscotland.gov.uk/search/Search_AuthProfile.aspx?ID=AA30717",
+      "classifications": [
+       {
+        "scheme": "TED_CA_TYPE",
+        "id": "BODY_PUBLIC",
+        "description": "Body governed by public law"
+       },
+       {
+        "scheme": "COFOG",
+        "id": "06",
+        "description": "Housing and community amenities"
+       }
+      ]
+     }
+    },
+    {
+     "name": "Glasgow Sheriff Court",
+     "id": "GB-FTS-220",
+     "identifier": {
+      "legalName": "Glasgow Sheriff Court"
+     },
+     "address": {
+      "locality": "Glasgow",
+      "countryName": "United Kingdom"
+     },
+     "roles": [
+      "reviewBody"
+     ]
+    }
+   ],
+   "buyer": {
+    "id": "GB-FTS-188305",
+    "name": "Lochfield Park Housing Association Limited"
+   },
+   "links": [
+    {
+     "rel": "canonical",
+     "href": "https://api.publiccontractsscotland.gov.uk/v1/Notice?id=ocds-r6ebe6-0000848229"
+    }
+   ],
+   "language": "en"
+  },
+  {
+   "ocid": "ocds-h6vhtk-07bbe2",
+   "id": "108104-2026",
+   "date": "2026-11-13T15:11:33Z",
+   "tag": [
+    "tender"
+   ],
+   "description": "The buyer is using PCS-Tender to conduct this ITT exercise. The Project code is 33135. For more information see: http://www.publiccontractsscotland.gov.uk/info/InfoCentre.aspx?ID=2343\n(SC Ref:848228)",
+   "initiationType": "tender",
+   "tender": {
+    "id": "PROC 26-3596",
+    "legalBasis": {
+     "id": "32014L0024",
+     "scheme": "CELEX"
+    },
+    "title": "Provision of Vacuum Metal Deposition",
+    "status": "active",
+    "classification": {
+     "scheme": "CPV",
+     "id": "33950000",
+     "description": "Clinical forensics equipment and supplies"
+    },
+    "mainProcurementCategory": "goods",
+    "description": "The Scottish Police Authority is seeking to establish a contract for the supply, delivery, installation, commissioning, and maintenance of a new Vacuum Metal Deposition Instrument for the Forensic Service",
+    "lots": [
+     {
+      "id": "1",
+      "description": "The Scottish Police Authority is seeking to establish a contract for the supply, delivery, installation, commissioning, and maintenance of a new Vacuum Metal Deposition Instrument for Forensic Services.",
+      "contractPeriod": {
+       "durationInDays": 1080
+      },
+      "hasRenewal": true,
+      "renewal": {
+       "description": "3 Year contract with option to extend the contract for a further 2 periods of up to 12 months per period at the sole discretion of the Authority."
+      },
+      "submissionTerms": {
+       "variantPolicy": "notAllowed"
+      },
+      "hasOptions": false,
+      "status": "active"
+     }
+    ],
+    "items": [
+     {
+      "id": "1",
+      "additionalClassifications": [
+       {
+        "scheme": "CPV",
+        "id": "33950000",
+        "description": "Clinical forensics equipment and supplies"
+       },
+       {
+        "scheme": "CPV",
+        "id": "51430000",
+        "description": "Installation services of laboratory equipment"
+       }
+      ],
+      "deliveryAddresses": [
+       {
+        "region": "UKM"
+       }
+      ],
+      "relatedLot": "1"
+     }
+    ],
+    "participationFees": [
+     {
+      "id": "1",
+      "type": [
+       "document"
+      ]
+     }
+    ],
+    "submissionMethod": [
+     "electronicSubmission"
+    ],
+    "submissionMethodDetails": "https://www.publictendersscotland.publiccontractsscotland.gov.uk",
+    "selectionCriteria": {
+     "criteria": [
+      {
+       "minimum": "Employer's Liability Insurance: 10 Million GBP (Mandatory) - this would be any one claim\nPublic Liability: 5 Million GBP (Mandatory) - this would be any one claim\nProduct Liability: 5 Million GBP agreed - this would be in the aggregate\nProfessional Liability Insurance: 2 Million GBP - this would be in aggregate"
+      }
+     ]
+    },
+    "otherRequirements": {
+     "requiresStaffNamesAndQualifications": true
+    },
+    "procurementMethod": "open",
+    "procurementMethodDetails": "Open procedure",
+    "coveredBy": [
+     "GPA"
+    ],
+    "tenderPeriod": {
+     "endDate": "2026-12-14T12:00:00Z"
+    },
+    "submissionTerms": {
+     "languages": [
+      "en"
+     ]
+    },
+    "awardPeriod": {
+     "startDate": "2026-12-14T12:00:00Z"
+    },
+    "bidOpening": {
+     "date": "2026-12-14T12:00:00Z"
+    },
+    "hasRecurrence": false
+   },
+   "parties": [
+    {
+     "name": "Scottish Police Authority",
+     "id": "GB-FTS-163120",
+     "identifier": {
+      "legalName": "Scottish Police Authority"
+     },
+     "address": {
+      "streetAddress": "2 French Street, Dalmarnock",
+      "locality": "Glasgow",
+      "region": "UKM",
+      "postalCode": "G40 4EH",
+      "countryName": "United Kingdom"
+     },
+     "contactPoint": {
+      "telephone": "+44 20 7946 0000",
+      "email": "procurement@example.org",
+      "url": "https://www.publictendersscotland.publiccontractsscotland.gov.uk"
+     },
+     "roles": [
+      "buyer"
+     ],
+     "details": {
+      "url": "http://www.spa.police.uk",
+      "buyerProfile": "https://www.publiccontractsscotland.gov.uk/search/Search_AuthProfile.aspx?ID=AA19762",
+      "classifications": [
+       {
+        "scheme": "TED_CA_TYPE",
+        "id": "BODY_PUBLIC",
+        "description": "Body governed by public law"
+       },
+       {
+        "scheme": "COFOG",
+        "id": "03",
+        "description": "Public order and safety"
+       }
+      ]
+     }
+    },
+    {
+     "name": "Glasgow Sheriff Court",
+     "id": "GB-FTS-220",
+     "identifier": {
+      "legalName": "Glasgow Sheriff Court"
+     },
+     "address": {
+      "locality": "Glasgow",
+      "countryName": "United Kingdom"
+     },
+     "roles": [
+      "reviewBody"
+     ]
+    }
+   ],
+   "buyer": {
+    "id": "GB-FTS-163120",
+    "name": "Scottish Police Authority"
+   },
+   "links": [
+    {
+     "rel": "canonical",
+     "href": "https://api.publiccontractsscotland.gov.uk/v1/Notice?id=ocds-r6ebe6-0000848228"
+    }
+   ],
+   "language": "en"
+  }
+ ],
+ "links": {
+  "next": "https://www.find-tender.service.gov.uk/api/1.0/ocdsReleasePackages?stages=tender&limit=3&updatedFrom=2026-11-12T00:00:00&updatedTo=2026-11-15T09:34:02&cursor=dXBkYXRlZEZyb209MjAyNi0xMS0xMlQwMDowMDowMHx1cGRhdGVkVG89MjAyNi0xMS0xNVQwOTozNDowMnxuZXh0Q3Vyc29yPTc2MDA4Mw=="
+ }
+}

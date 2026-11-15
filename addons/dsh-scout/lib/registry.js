@@ -47,6 +47,9 @@ export const SEED = [
   { id: 'greenhouse', name: 'Greenhouse company boards', url: 'https://boards.greenhouse.io', markets: [ALL], workTypes: ['employee', 'contract', 'internship'], kind: 'company boards', access: 'api', adapter: 'greenhouse', key: 'none', about: 'Each company\'s own job board on Greenhouse, read through its public board interface. Give the company\'s board name (as in boards.greenhouse.io/NAME); find companies with web_search site:boards.greenhouse.io.' },
   { id: 'lever', name: 'Lever company boards', url: 'https://jobs.lever.co', markets: [ALL], workTypes: ['employee', 'contract', 'internship'], kind: 'company boards', access: 'api', adapter: 'lever', key: 'none', about: 'Each company\'s own job board on Lever. Give the board name (jobs.lever.co/NAME); find companies with web_search site:jobs.lever.co.' },
   { id: 'ashby', name: 'Ashby company boards', url: 'https://jobs.ashbyhq.com', markets: [ALL], workTypes: ['employee', 'contract', 'internship'], kind: 'company boards', access: 'api', adapter: 'ashby', key: 'none', about: 'Each company\'s own job board on Ashby, often with pay. Give the board name (jobs.ashbyhq.com/NAME); find companies with web_search site:jobs.ashbyhq.com.' },
+  { id: 'contractsfinder', name: 'Contracts Finder (UK)', url: 'https://www.contractsfinder.service.gov.uk', markets: ['UK'], workTypes: ['tender', 'freelance'], kind: 'tender', access: 'api', adapter: 'contractsfinder', key: 'none', about: 'UK public contracts, small ones included, from its open data interface (no key). Scout reads the newest notices (up to 500, about a week; set days for up to 30) and keeps those that match your words.' },
+  { id: 'findatender', name: 'Find a Tender (UK)', url: 'https://www.find-tender.service.gov.uk', markets: ['UK'], workTypes: ['tender', 'freelance'], kind: 'tender', access: 'api', adapter: 'findatender', key: 'none', about: 'The UK\'s service for higher-value public contracts, from its open data interface (no key). Newest notices, matched here like Contracts Finder.' },
+  { id: 'sam', name: 'SAM.gov contract opportunities', url: 'https://sam.gov', markets: ['USA'], workTypes: ['tender', 'freelance'], kind: 'tender', access: 'api', adapter: 'sam', key: 'required', keyHint: 'Free key from your SAM.gov account (Account Details, public API key). A personal key allows only a few requests a day.', about: 'US federal contract opportunities still open to bids (solicitations, presolicitations, sources sought), searched by title. A personal key allows few requests a day: search it with care.' },
   { id: 'govuk', name: 'Find a job (GOV.UK)', url: 'https://www.gov.uk/find-a-job', markets: ['UK'], workTypes: ['employee', 'internship'], kind: 'government', access: 'page', about: 'The UK government\'s job service. Single pages may be read.' },
   { id: 'eures', name: 'EURES', url: 'https://eures.europa.eu', markets: ['Germany', 'Spain', 'France', 'Netherlands', 'Austria', 'Italy', 'Poland', 'Belgium', 'Ireland', 'Portugal'], workTypes: ['employee'], kind: 'government', access: 'page', about: 'The EU\'s job mobility portal, with postings from the public job services of member states.' },
   { id: 'ted', name: 'TED public tenders', url: 'https://ted.europa.eu', markets: ['Germany', 'Spain', 'France', 'Netherlands', 'Austria', 'Italy', 'Poland', 'Belgium', 'Ireland', 'Portugal'], workTypes: ['tender', 'freelance'], kind: 'tender', access: 'page', about: 'Public procurement notices across the EU. For services work, search by the service and the country.' },
@@ -64,6 +67,11 @@ export const SEED = [
   { id: 'wellfound', name: 'Wellfound', url: 'https://wellfound.com', markets: ['USA', 'Remote'], workTypes: ['employee'], kind: 'board', access: 'search', about: 'Start-up jobs, often with pay and equity. Search engine results only.' },
   { id: 'infojobs', name: 'InfoJobs', url: 'https://www.infojobs.net', markets: ['Spain'], workTypes: ['employee', 'contract'], kind: 'board', access: 'search', about: 'Spain\'s largest job board. Search engine results only (it has an interface for registered apps, not added yet).' },
   { id: 'tecnoempleo', name: 'Tecnoempleo', url: 'https://www.tecnoempleo.com', markets: ['Spain'], workTypes: ['employee', 'contract'], kind: 'board', access: 'search', about: 'Spanish tech jobs. Search engine results only.' },
+  { id: 'upwork', name: 'Upwork', url: 'https://www.upwork.com', markets: ['USA', 'UK', 'Remote'], workTypes: ['freelance'], kind: 'freelance', access: 'search', about: 'The largest freelance marketplace. Its terms forbid automated reading and its job pages need a sign-in: search engine results only (site:upwork.com/freelance-jobs).' },
+  { id: 'peopleperhour', name: 'PeoplePerHour', url: 'https://www.peopleperhour.com', markets: ['UK', 'Remote'], workTypes: ['freelance'], kind: 'freelance', access: 'search', about: 'A UK freelance marketplace. Search engine results only.' },
+  { id: 'yunojuno', name: 'YunoJuno', url: 'https://www.yunojuno.com', markets: ['UK'], workTypes: ['freelance', 'contract'], kind: 'freelance', access: 'search', about: 'UK freelance and contract work in tech and creative fields; briefs are for signed-in members. Search engine results only.' },
+  { id: 'freelancer', name: 'Freelancer.com', url: 'https://www.freelancer.com', markets: [ALL], workTypes: ['freelance'], kind: 'freelance', access: 'search', about: 'A worldwide freelance marketplace with many small projects. Search engine results only.' },
+  { id: 'guru', name: 'Guru', url: 'https://www.guru.com', markets: ['USA', 'Remote'], workTypes: ['freelance'], kind: 'freelance', access: 'search', about: 'A US freelance marketplace. Search engine results only.' },
   { id: 'malt', name: 'Malt', url: 'https://www.malt.es', markets: ['Spain', 'France', 'Germany', 'Netherlands', 'Belgium'], workTypes: ['freelance'], kind: 'freelance', access: 'search', about: 'Freelance platform. Clients post projects to signed-in freelancers; search engine results only.' },
 ];
 
@@ -143,6 +151,27 @@ export function inUse(registry, { markets = [], workTypes = [] } = {}) {
   return registry.filter((source) => source.on && !source.hidden
     && (markets.length === 0 || markets.some((market) => covers(source, market)))
     && (workTypes.length === 0 || workTypes.some((type) => source.workTypes.includes(type))));
+}
+
+/** Kinds of source that help research the field but do not list work. */
+export const REFERENCE = ['pay and titles'];
+
+/**
+ * Where the registry has no source that lists work: each market and work type with nothing ready.
+ * @param {object[]} registry - from readRegistry.
+ * @param {{markets: string[], workTypes: string[], ready: (source: object) => boolean}} want - `ready` says whether a source can be used now.
+ * @returns {{market: string, workType: string, waiting: string[]}[]} the gaps; `waiting` names sources that would cover it once their key is set.
+ */
+export function gaps(registry, { markets = [], workTypes = [], ready = () => true }) {
+  const out = [];
+  for (const market of markets) {
+    for (const workType of workTypes) {
+      const covering = registry.filter((source) => source.on && !source.hidden && !REFERENCE.includes(source.kind) && covers(source, market) && source.workTypes.includes(workType));
+      if (covering.some(ready)) continue;
+      out.push({ market, workType, waiting: covering.map((source) => source.name) });
+    }
+  }
+  return out;
 }
 
 /** Host names of sources whose pages must not be fetched. */

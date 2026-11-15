@@ -1,6 +1,6 @@
 # DeepSeek Harness Plus: the guide
 
-Plus is a set of 35 add-ons for the DeepSeek Harness desktop app. This guide says what each part does, where to find it, how to use it, and what its settings are.
+Plus is a set of 41 add-ons for the DeepSeek Harness desktop app. This guide says what each part does, where to find it, how to use it, and what its settings are.
 
 - **Part 1** is for using it: the tabs, the chat box, projects, and the main features, in the order you meet them.
 - **Part 2** lists every slash command.
@@ -14,10 +14,10 @@ Installing, updating and removing are in the [README](../README.md). The history
 
 | Place | What is there |
 |---|---|
-| **Top of the sidebar** | The tabs: Chat, Cowork, Code, and Finance and Data once you switch them on. With more than three they sit in rows of three. |
+| **Top of the sidebar** | The tabs: Chat, Cowork, Code, and Finance, Data, Research, Scout and Recon once you switch them on. With more than three they sit in rows of three. How many of your own modes get a tab is set in Settings → Modes. |
 | **Sidebar, under the tabs** | The tab's own pages (Automation tasks, Connectors, Skills, Plugins…), then its projects and conversations, then the Trash. |
 | **Bottom of the sidebar** | Your DeepSeek balance, and **More** (Settings, look options). |
-| **Chat box, left** | Web, the models chip, Tools (in a Research conversation: Depth and Focus instead of Web). |
+| **Chat box, left** | Web, the models chip, Tools (in a Research conversation: Depth and Focus instead of Web; in a Finance conversation: its selection too). |
 | **Chat box, right** | The model button: model, effort, tier. |
 | **Above the chat box** | The activity line, with the arrow that folds the chat box away. |
 | **Under an answer** | Copy, Rerun, Branch, usage, and pictures the assistant drew. |
@@ -33,20 +33,26 @@ A tab is a way of working. Clicking a tab returns you to the conversation you la
 | Tab | For | What is special |
 |---|---|---|
 | **Chat** | Plain conversation. | No tools. Pick a Web level other than Off and it may search the web and read pages. No projects. |
-| **Cowork** | Any work in a folder. | All tools. Projects with types (see 4). |
+| **Cowork** | Any work in a folder. | All tools, and a working method: understand the task first, keep a step list, ask before changing your files, check the result, report plainly. Projects with types (see 4). |
 | **Code** | Programming. | All tools, and a working method: read first, small changes, run the tests, report plainly. |
 | **Finance** | Companies, markets, economies. | Its own data tools and drop-downs for subject, market, focus and period. Off until you switch it on in Settings → Finance. |
-| **Data** | Analysing data files in a folder. | Its own table, chart and Python tools. Off until you switch it on in Settings → Data. |
+| **Data** | Analysing data files in a folder. | Its own table, chart and Python tools. Runs Read Only. Off until you switch it on in Settings → Data. |
+| **Research** | A question that needs many sources. | Helper agents search and read in rounds and write a report with numbered sources. Runs Read Only. Off until you switch it on in Settings → Research (see 8). |
+| **Scout** | Finding work: jobs, freelance projects, contracts, public tenders. | Its own job sources and checks; a scored report with draft messages, and nothing is sent. Off until you switch it on in Settings → Scout (see 9). |
+| **Recon** | Research on .onion sites and Usenet text newsgroups. | Isolated: only its own tools (.onion sites through Tor); nothing from other conversations comes in or goes out. Needs the `tor` program. Off until you switch it on in Settings → Recon (see 10). |
 
-- Change what a tab's mode allows in **Settings → Modes** (tools, file sandbox, tier, instructions).
-- `/mode` shows or switches the mode of a conversation.
+- Change what a tab's mode allows in **Settings → Modes** (tools, file sandbox, tier, instructions). The same page sets the Web level new conversations start with, the mode for scheduled tasks, how many of your modes get a sidebar tab (1 to 5), and switches for the built-in working methods of Code and Cowork.
+- A mode's tier applies to a new conversation from its first message.
+- **The access level** (file sandbox): Chat, Data, Research and Recon set Read Only and Code sets Workspace Write, only when a conversation starts in the mode or is moved into it. A level you pick by hand in the chat box is kept, also after a restart. Moving to a tab that sets none (Cowork, Finance, Scout) puts back the earlier level, unless you changed it by hand.
+- `/mode` shows or switches the mode of a conversation. With the sidebar on, before the first message the selected tab decides: `/mode` then only names the tabs.
 
 ### 3. The chat box
 
 | Control | What it does | How to use it |
 |---|---|---|
-| **Web** | How much the assistant may use the internet in this conversation. | Click and pick: **Off** (no web at all), **Quick**, **Standard**, **Thorough** or **Deep** (at least ten searches and ten pages read, facts cross-checked). The level you pick is also where new conversations start. Not shown in Research and Scout, which always have the web. |
+| **Web** | How much the assistant may use the internet in this conversation. | Click and pick: **Off**, **Quick**, **Standard**, **Thorough** or **Deep** (at least ten searches and ten pages read, facts cross-checked). Off takes away web search, page reading and other tools that go online (an outside image service too), and stops commands and programs that go online; connectors you added stay on and can still reach the internet. The level you pick is also where new conversations start (also set in Settings → Modes). Not shown in Research and Scout, which always have the web. |
 | **Depth** and **Focus** (Research tab) | How long a research run may take and where it looks first. | Pick in the chat box of a Research conversation. A research run works in rounds with helper agents and ends in a cited report. |
+| **Selection** (Finance tab) | What a Finance conversation is about: kind, subject, market, focus, period. | Shown once the conversation has started. Press a part to change it, for this conversation only. |
 | **Models chip** | Shows whether helper agents use this conversation's model (**One model**) or others as well (an amber **3 models**). | Click to switch for this conversation. One model is the default and needs the least memory. |
 | **Tools** | Shows what the assistant can and cannot call right now, with one switch for all tools. | Click to see the list. |
 | **Model button** | Model, effort and tier for this conversation. | Click to pick. Saved model versions come first. |
@@ -100,6 +106,7 @@ In a conversation that has a folder, type `/mission` and the goal: `/mission mak
 - If you are away when a worker needs your yes, the item is set aside after 3 minutes and the run carries on. `/mission resume` takes it up again.
 - Checkpoints live in a hidden `.dsh-mission` folder in the project and need git.
 - Models, limits and the default mode: **Settings → Mission**.
+- Not in Recon conversations. On a tier with Sub-agents switched off, a run cannot start or resume (its planner, workers and reviewer are helpers); the permission modes and checkpoints still work.
 
 ### 6. Data
 
@@ -107,28 +114,61 @@ Switch it on in **Settings → Data**, open the Data tab, and pick the folder th
 
 - Ask in plain words. After a number, a mark like `[Q7]` names the query that produced it.
 - Tables: CSV, TSV, JSON, Excel. Documents: Word and text. PDFs through the PDF reader.
-- Charts are drawn from the data and shown under the answer.
-- For statistics, cleaning and combining files the assistant runs Python in a sandbox: no internet, it reads your folder and nothing else in your home folder, and it writes only into a `data-output` folder there. Your files are never changed.
+- Bar, line and scatter charts are drawn from the data and shown under the answer, and each is also saved as an SVG file in a `data-output` folder in your folder. Pie and area charts are drawn with Python.
+- For statistics, cleaning and combining files the assistant runs Python in a sandbox: no internet, it reads your folder and nothing else in your home folder, and it writes only into the `data-output` folder.
+- Data conversations run Read Only: the app's file and command tools cannot change your files without asking you first. (Those started before 0.57.0 keep their permission.)
 - "Save this analysis as …" keeps it; "run … again" reports what moved.
-- With Web set to Off in the chat box it works from your files alone. Any other Web level lets it search the web and run deep research.
+- A new Data conversation starts with Web on, so it can search the web and run deep research. The words it searches for then go to the app's web search provider. Data's own tools never send your files, and the assistant is told to keep private details from them out of searches (an instruction, not a check). With Web set to Off in the chat box it works from your files alone.
+- It starts with the core tools plus the data and PDF tools; others are added when needed (Settings → Modes → Load tools as needed).
 
 ### 7. Finance
 
-Switch it on in **Settings → Finance** and open the Finance tab. Pick subject, market, focus and period on the start page, then ask.
+Switch it on in **Settings → Finance** and open the Finance tab. Pick subject, market, focus and period on the start page, then ask. Once the conversation has started, its chat box shows the same selection; change a part there for this conversation only.
 
 - It puts reported figures, news and what people say side by side, with sources and dates, and draws charts.
 - **Adviser** (Settings → Finance → Adviser, off by default): it then ends with a clear call and adds no disclaimer, and keeps a profile of you that you can edit there.
 - **Watchlist**, **your own markets**, **your own data sources** (with keys kept in the app's secret store) and **scheduled briefs** are on the same page.
+- With Tools off it has no data tools: it may give figures from memory, each marked as from memory and possibly out of date, never with a source.
 - It is an AI model working from what it could fetch. It is not a licensed adviser and can be wrong.
 
-### 8. Models and helpers
+### 8. Research
+
+Switch it on in **Settings → Research** (it needs the Deep research add-on) and open the Research tab. A question that needs outside facts gets a full run; a quick fact that one or two pages settle is looked up directly.
+
+- Pick **Depth** (Quick, about 10 minutes; Standard, about 25; Thorough, about 45) and **Focus** (Web, News, Academic) in the chat box.
+- Helper agents plan, search and read in rounds; progress shows above the chat box. The report cites its sources by number and ends with three follow-up questions as buttons.
+- Each source is marked **read**, **seen only in search results, not read**, or **not read, and not seen in search results**. Findings from pages no helper read stay in the report, labelled in the sentence. The check makes sure every citation is in the source list; it does not compare claims with the pages.
+- A Research conversation runs Read Only. Reports are saved; Settings → Research lists them, with **Show in Finder**.
+
+### 9. Scout
+
+Switch it on in **Settings → Scout** and open the Scout tab. Fill in the work, place, pay target and work type, pick the markets, and ask. **+ Files** adds a resume or notes.
+
+- A run researches the field, searches its sources, reads the promising postings, and scores each opportunity on fit, freshness, pay and legitimacy, each with a reason.
+- Likely ghost jobs and scams are flagged with the signs behind them. These are hints, not proof.
+- For the best ones it plans who to contact, how and when, with a short draft message. Drafts only: nothing is sent.
+- The report is saved as Markdown and a table (CSV). A later run says what is new since the last report. **Settings → Scout → Saved reports** lists them.
+- Sources include US and UK public tenders (Contracts Finder, Find a Tender, SAM.gov with a free key) and freelance boards found through search engines only. Switch sources on or off in Settings → Scout.
+- A search that holds an email address or a phone number is refused.
+
+### 10. Recon
+
+Install the `tor` program (`brew install tor`), switch Recon on in **Settings → Recon**, and start with the **New** button in the Recon tab.
+
+- The start page has starter chips (Search .onion sites, Search Usenet, News coverage, Old web page, Check a claim) and a status bar: Tor, Usenet, the Internet Archive's route, the model, and whether findings may go to it.
+- A model on this Mac or your own network gets what Recon finds. A cloud model gets it only after you type `/recon cloud`.
+- **Settings → Recon → More sources:** the Internet Archive and GDELT news, off until you switch them on. **Read Internet Archive copies directly (not through Tor)** is on by default: copies are then read straight from the Archive, which sees this Mac's internet address. Through Tor the Archive refuses most reads.
+- Every source gets a number like [S3]. Citations, links and `/recon export` still work after a restart.
+- Recon conversations never show in Global Search and are never synced. `/recon end` ends one and deletes it.
+
+### 11. Models and helpers
 
 - **Settings → Model Tiers:** tiers (ways of working: effort, web access, sub-agents, instructions), saved model versions (a model with its own effort and temperature), and role models (plan, implement, review, fast).
 - **The models chip** decides per conversation whether helpers use the conversation's model or the role models.
 - **Settings → Swarm:** named groups of helper agents that work side by side, in order, or in debate.
 - **Settings → Mission → Models for a run:** models for planner, workers and reviewer, also per project.
 
-### 9. Everyday helpers
+### 12. Everyday helpers
 
 | Feature | What it does | Where |
 |---|---|---|
@@ -144,8 +184,9 @@ Switch it on in **Settings → Finance** and open the Finance tab. Pick subject,
 | **Balance** | Your DeepSeek balance at the bottom of the sidebar. | Sidebar |
 | **Usage** | Counts model requests and tokens per day, provider and model. Stores no prompt text. | Settings → Usage, `/usage` |
 | **Archive and Trash** | Archive a conversation, or delete it into a 30-day trash. | The ⋯ menu on a conversation |
+| **Global Search** | Finds conversations by title and message text in every tab, and projects by name. Never shows Recon conversations. | Cmd-K, or the search icon at the top of the sidebar |
 
-### 10. The model lab
+### 13. The model lab
 
 | Feature | What it does | Where |
 |---|---|---|
@@ -157,7 +198,7 @@ Switch it on in **Settings → Finance** and open the Finance tab. Pick subject,
 | **Sampling presets** | Named sampling settings chosen per kind of task, mode or conversation. | Settings → Sampling, `/sampling` |
 | **Role prompts** | Adds your own instruction sections to what the assistant is told, optionally only for chosen tiers. | configuration file |
 
-### 11. Housekeeping
+### 14. Housekeeping
 
 | Feature | What it does | Where |
 |---|---|---|
@@ -166,8 +207,8 @@ Switch it on in **Settings → Finance** and open the Finance tab. Pick subject,
 | **Look** | Hide the logos, show the date as the title, wide chat. | Sidebar → More |
 | **Context saver** | Shortens large tool results before the model sees them and keeps the original for retrieval. Off until configured. | configuration file, `/saved` |
 | **Notify** | Runs a command you choose when a turn ends or the app needs your approval. | configuration file, `/notify` |
-| **Media tools** | Image generation and editing tools, and an approval gate for browser and computer-use tools. | configuration file |
-| **Sync, Shared settings** | Keep a second Mac in step. | README, "Using it on a second Mac" |
+| **Media tools** | Image generation and editing tools, and an approval gate for browser and computer-use tools. With Web Off the image tools go, unless the image service is on this Mac or your own network. | configuration file |
+| **Sync, Shared settings** | Keep a second Mac in step. Recon conversations are never synced. | README, "Using it on a second Mac" |
 
 Where a row says "configuration file": that add-on has no settings page. Open **Settings → Open configuration file** and change its values there.
 

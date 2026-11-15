@@ -45,15 +45,18 @@ export function marked(text, words) {
  * The results for a query: conversations whose title matches, then conversations whose text
  * matches, each once, grouped by tab; and projects whose name or folder matches.
  * @param {object} input - `query`, `sessions` ([{id, title, updatedAt, tab}]), `hits` ([{sessionId, snippet}] from the
- *   app's text search), `projects` ([{id, title, path}]), `tabs` ([{id, label}] in the sidebar's order).
+ *   app's text search), `projects` ([{id, title, path}]), `tabs` ([{id, label}] in the sidebar's order), `hidden`
+ *   (whether a conversation is never shown: an isolated one; neither its title nor its text is matched).
  * @returns {{groups: {tab: string, label: string, items: object[]}[], projects: object[], total: number}}
  */
-export function results({ query, sessions = [], hits = [], projects = [], tabs = [] }) {
+export function results({ query, sessions = [], hits = [], projects = [], tabs = [], hidden = () => false }) {
   const words = wordsOf(query);
   if (words.length === 0) return { groups: [], projects: [], total: 0 };
-  const byId = new Map(sessions.map((session) => [session.id, session]));
+  const shown = (Array.isArray(sessions) ? sessions : []).filter((session) => !hidden(session?.id));
+  // A text hit counts only for a conversation that is shown, so a hidden one is not found by its text either.
+  const byId = new Map(shown.map((session) => [session.id, session]));
   const found = new Map();
-  for (const session of sessions) if (holds(session.title, words)) found.set(session.id, { ...session, by: 'title', snippet: '' });
+  for (const session of shown) if (holds(session.title, words)) found.set(session.id, { ...session, by: 'title', snippet: '' });
   for (const hit of hits) {
     const session = byId.get(hit.sessionId);
     if (!session) continue;

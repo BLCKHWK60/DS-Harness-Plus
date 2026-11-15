@@ -1,9 +1,11 @@
 // lib/policy.mjs — dsh-sync addition: the service the commands and auto modes call.
 // It adds, around the engine: the encryption policy (optional with a loud warning, or required so nothing is sent
-// without encryption), the project manifests, and the state file.
+// without encryption), isolated conversations (Recon) left out of every push and pull, the project manifests, and the
+// state file.
 import { promises as fs } from 'node:fs'
 import { renderStatus } from './render.mjs'
 import { messageOf } from './errors.mjs'
+import { UNKNOWN_REASON, askIsolation } from './isolation.mjs'
 import { applyProjects, planProjects, readManifests, renderPlan, writeManifest } from './projects.mjs'
 
 export const PLAINTEXT_WARNING =
@@ -20,11 +22,21 @@ export const PLAINTEXT_WARNING =
  * @param {{sync: boolean, autoCreate: boolean, folderMap: Array<{from: string, to: string}>}} deps.projects - project settings.
  * @param {string} deps.deviceLabel - label written into this device's manifest.
  * @param {() => object | undefined} deps.registry - returns dsh's workspace registry when available.
+ * @param {() => Promise<{known: boolean, reason?: string, ids: Set<string>, exclude: (rel: string) => boolean}>} [deps.isolation] -
+ *   which conversations are isolated now (lib/isolation.mjs `readIsolation`). Without it nothing is known, so nothing is sent.
  * @param {{warn: Function, info: Function}} deps.logger - logger.
  * @returns {object} service.
  */
 export function createSyncService(deps) {
   const { engine, backend, encryption, state, repoDir, projects, logger } = deps
+
+  /**
+   * Which conversations are isolated now. The engine asks this inside its lock, right after it lists the session
+   * store, so a conversation that begins while another sync operation runs is never copied with an old answer; when
+   * the answer is not known, the engine stops there and nothing is copied, removed or sent.
+   * @returns {Promise<{known: boolean, reason?: string, ids: Set<string>, exclude: (rel: string) => boolean}>} the answer.
+   */
+  const isolation = () => askIsolation(deps.isolation)
 
   /** @returns {Promise<{mode: 'plaintext' | 'encrypted', warnings: string[]}>} how session text would travel. */
   async function transport() {
@@ -74,9 +86,10 @@ export function createSyncService(deps) {
 
     /** @returns {Promise<object>} engine status plus state, warnings and the encryption mode. */
     async status() {
-      const [base, selection] = [await engine.status(), await transport()]
+      // Without knowing which conversations are isolated, status does not copy anything into the worktree either.
+      const [{ isolation: fence = { known: false, reason: UNKNOWN_REASON, count: 0 }, ...base }, selection] = [await engine.status({ isolation }), await transport()]
       const meta = state.read()
-      return { ...base, warnings: [...new Set([...(base.warnings ?? []), ...selection.warnings])], mode: selection.mode, encryption, lastPullAt: meta.lastPullAt, lastPushAt: meta.lastPushAt, lastError: meta.lastError || base.error }
+      return { ...base, warnings: [...new Set([...(base.warnings ?? []), ...selection.warnings])], mode: selection.mode, encryption, isolated: fence.known ? fence.count : undefined, isolatedWhy: fence.known ? '' : String(fence.reason ?? '').replace(/^Sync did not run: /, ''), lastPullAt: meta.lastPullAt, lastPushAt: meta.lastPushAt, lastError: meta.lastError || base.error }
     },
 
     /** @returns {Promise<string>} status as text. */
@@ -84,6 +97,7 @@ export function createSyncService(deps) {
       const status = await service.status()
       const lines = [renderStatus(status)]
       lines.push(`      transport: ${status.mode === 'encrypted' ? 'encrypted (age)' : 'PLAINTEXT'} · encryption policy: ${encryption}`)
+      lines.push(status.isolated === undefined ? `      isolated conversations (Recon): unknown, so push and pull wait: ${status.isolatedWhy}` : `      isolated conversations (Recon): ${status.isolated}, never synced`)
       lines.push(`      last pull ${status.lastPullAt ? new Date(status.lastPullAt).toISOString() : '-'} · last push ${status.lastPushAt ? new Date(status.lastPushAt).toISOString() : '-'}`)
       return lines.join('\n')
     },
@@ -92,8 +106,9 @@ export function createSyncService(deps) {
     async push(options = {}) {
       const gate = await checkPolicy()
       if (gate.blocked) return { ok: false, error: gate.blocked, warnings: gate.warnings }
-      await exportProjects()
-      const result = await engine.push(options)
+      // Isolated conversations are never sent: when nobody can say which they are, nothing is. The engine asks inside
+      // its lock, and writes the project manifest there too, once the answer is known.
+      const result = await engine.push({ ...options, isolation, beforeCommit: exportProjects })
       remember('push', result)
       return { ...result, warnings: [...new Set([...(result.warnings ?? []), ...gate.warnings])] }
     },
@@ -102,7 +117,8 @@ export function createSyncService(deps) {
     async pull(options = {}) {
       const gate = await checkPolicy()
       if (gate.blocked) return { ok: false, error: gate.blocked, warnings: gate.warnings }
-      const result = await engine.pull(options)
+      // A pull commits this machine's sessions first, and that commit is pushed later: the same rule as push.
+      const result = await engine.pull({ ...options, isolation })
       remember('pull', result)
       let projectPlan
       if (result.ok && projects.sync) {

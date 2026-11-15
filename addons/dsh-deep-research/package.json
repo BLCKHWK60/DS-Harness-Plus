@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A deep_research tool: plan sub-questions, research them in parallel with child agents, and write a report whose citations are checked against what the children actually fetched.",
+  "description": "A deep_research tool: plan sub-questions, research them in parallel with child agents, and write a report whose citations are checked against the source list, each source labelled by whether a helper read it.",
   "exports": {
     ".": "./index.js",
     "./locale/*.json": "./locale/*.json",

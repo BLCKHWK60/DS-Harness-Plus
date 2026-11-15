@@ -172,12 +172,12 @@ window.__ModuleLoader__.load({
 
         h('div', { className: 'dsh-dt-group' }, 'How to use it'),
         h('ul', { className: 'dsh-dt-list' },
-          h('li', null, 'Open the Data tab and pick the folder that holds your files on the start page, as you do in Cowork or Code. The assistant only reads files inside that folder.'),
+          h('li', null, 'Open the Data tab and pick the folder that holds your files on the start page, as you do in Cowork or Code. The assistant works with the files in that folder: its data tools read nothing outside it.'),
           h('li', null, `Tables it can query: ${(data.reads?.tables ?? []).join(', ')}. Documents it can read: ${(data.reads?.text ?? []).join(', ')}. PDFs are read with the PDF reader add-on.`),
           h('li', null, 'Ask in plain words. In the answer, a mark like [Q7] after a number is the query that produced it. Open that step in the conversation to see the query itself.'),
-          h('li', null, 'Charts are drawn from the data itself and shown under the answer. Ask for one whenever you want to see something: "chart revenue by month".'),
-          h('li', null, 'For statistics, cleaning or combining files, the assistant writes and runs a small Python program. New files it makes (cleaned tables, charts) go into a data-output folder inside your folder; your own files are never changed.'),
-          h('li', null, 'Set Web to Off in the chat box and the assistant works from your files alone. Any other level lets it search the web and run deep research.'),
+          h('li', null, 'Charts are drawn from the data itself and shown under the answer. In a Data conversation each one is also saved as an SVG file in a data-output folder inside your folder, ready for a report. Ask for one whenever you want to see something: "chart revenue by month". Pie and area charts are drawn with Python.'),
+          h('li', null, 'For statistics, cleaning or combining files, the assistant writes and runs a small Python program. New files it makes (cleaned tables, charts) go into the data-output folder; a program cannot write anywhere else.'),
+          h('li', null, 'Web is on in a new Data conversation, so the assistant can look up outside facts, such as what a term means, a benchmark or why something moved. Set Web to Off in the chat box to stop searches, pages, and commands that look like they go online (see Good to know).'),
           h('li', null, 'Say "save this analysis as …" to keep it. Later, say "run … again" and the assistant reports what moved.'),
           h('li', null, 'An AGENTS.md or CLAUDE.md file in the folder is read by the app, as in every tab. Use it to explain your data: what the columns mean, which rows to leave out.')),
 
@@ -194,8 +194,10 @@ window.__ModuleLoader__.load({
 
         h('div', { className: 'dsh-dt-group' }, 'Good to know'),
         h('ul', { className: 'dsh-dt-list' },
-          h('li', null, 'Your files are never changed. Queries run on a copy held in memory, and only reading is allowed.'),
-          h('li', null, 'Everything stays on this Mac, except what the assistant writes into the conversation, which goes to your model like any message. Results are kept small for that reason.'),
+          h('li', null, 'A conversation that starts in Data, or is moved into it, runs Read Only, so the assistant cannot change your files with the app\'s file and command tools without asking you first. Data conversations started before version 0.57.0 keep their permission. You can change it in the chat box. Moving the conversation to a tab that does not set its own permission, such as Cowork, gives back the one it had before, unless you changed it by hand. Queries run on a copy held in memory, and only reading is allowed.'),
+          h('li', null, 'What the assistant reads (profiles, query results, document text) goes to your model like any message. Results are kept small for that reason.'),
+          h('li', null, 'With Web on, the words the assistant searches for (also in deep research) go to the app\'s web search provider, and the pages it opens are fetched from the web. Data\'s own tools never send your files anywhere, and its Python programs have no internet. The assistant is told not to put private details from your files (people\'s or customers\' names, account numbers, rows, exact figures) into a search or a web address. That is an instruction, not a check. Read Only does not keep the app\'s command tool off the internet.'),
+          h('li', null, 'With Web Off there are no searches, no pages and no deep research, and commands and programs that look like they go online are stopped. That is a check on their text, which catches the usual ways (curl, web addresses, code that fetches), not every way. Your model still gets the conversation, and connectors you added stay on and can still reach the internet.'),
           h('li', null, 'A model can still write a wrong query or misread a result. The query numbers are there so you can check.'),
           h('li', null, 'Files up to 200 MB and 2 million rows. A query that runs longer than 90 seconds is stopped.'),
           h('li', null, 'Numbers written with a currency sign or a percent sign are read as text; the assistant is told to convert them.')));

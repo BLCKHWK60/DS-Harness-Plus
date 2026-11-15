@@ -1,6 +1,7 @@
 /**
  * Recon, browser half: the Settings > Recon page, with the switch for the Recon tab and a plain
- * account of what the isolation does and does not do.
+ * account of what the isolation does and does not do; and the status bar on the Recon tab's start
+ * page (Tor, Usenet, the conversation's model and whether it may receive what Recon finds).
  */
 window.__ModuleLoader__.load({
   id: '@local/dsh-recon',
@@ -47,10 +48,29 @@ window.__ModuleLoader__.load({
 .dsh-rc-list { margin: 6px 0 0; padding-left: 18px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 .dsh-rc-sql { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; font: 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
   color: var(--dsw-alias-label-secondary); background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent); }
+
+/* The status bar on the start page: only while the Recon tab is selected. */
+.dsh-rc-bar { display: none; }
+html[data-cws-tab="recon"] .dsh-rc-bar {
+  position: absolute; top: 100%; left: 0; right: 0; margin-top: 20px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px;
+}
+html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) { position: relative; }
+html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips { margin-top: calc(var(--dsh-rc-bar, 60px) + 36px); }
+.dsh-rc-pill { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px; font-size: 12px; white-space: nowrap;
+  color: var(--dsw-alias-label-secondary); background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); }
+.dsh-rc-pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--dsw-alias-label-secondary); }
+.dsh-rc-pill[data-state="ok"]::before { background: var(--dsw-alias-state-success-primary); }
+.dsh-rc-pill[data-state="warn"]::before { background: var(--dsw-alias-state-warn-primary); }
+.dsh-rc-pill[data-state="error"]::before { background: var(--dsw-alias-state-error-primary); }
+.dsh-rc-hint { flex-basis: 100%; text-align: center; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.dsh-rc-hint[data-error="true"] { color: var(--dsw-alias-state-warn-primary); }
 `;
 
-    async function call(body) {
-      const response = await fetch(new URL('dsh-recon/state', document.baseURI), {
+    /** The add-on's route. `session` names the start page's conversation, for the status bar. */
+    async function call(body, session) {
+      const address = new URL('dsh-recon/state', document.baseURI);
+      if (session) address.searchParams.set('session', String(session));
+      const response = await fetch(address, {
         method: body ? 'POST' : 'GET', cache: 'no-store', credentials: 'same-origin',
         headers: body ? { accept: 'application/json', 'content-type': 'application/json' } : { accept: 'application/json' },
         body: body ? JSON.stringify(body) : undefined,
@@ -134,6 +154,92 @@ window.__ModuleLoader__.load({
         account.hasLogin
           ? h('div', null, h('div', { className: 'dsh-rc-rowdesc' }, 'To remove this account\'s login from the Keychain, type this in the Terminal:'), h('div', { className: 'dsh-rc-sql' }, account.removeCommand ?? ''))
           : h('div', null, h('div', { className: 'dsh-rc-rowdesc' }, 'To store this account\'s login, type this in the Terminal with your user name in place of YOUR_USERNAME. It asks for the password, which stays hidden:'), h('div', { className: 'dsh-rc-sql' }, account.storeCommand ?? '')));
+    }
+
+    /**
+     * What the start page's status bar says, from the route's data: Tor, Usenet, the Internet
+     * Archive's route while it is on, and the conversation's model and whether it may receive what
+     * Recon finds ("not known yet" while the app has not loaded the conversation, "No model picked"
+     * when it has none). Agreeing to a cloud model stays typed (/recon cloud): there is no button for it.
+     * @param {object} data - the route's answer for one conversation.
+     * @returns {{pills: {key: string, text: string, state: string, title: string}[], hint: string, warn: boolean}}
+     */
+    function barOf(data) {
+      const tor = data?.tor ?? {};
+      const usenet = data?.usenet ?? {};
+      const more = data?.more ?? {};
+      const talk = data?.conversation ?? {};
+      const pills = [];
+      if (!tor.path) pills.push({ key: 'tor', text: 'Tor not installed', state: 'error', title: 'Recon needs the tor program. In the Terminal: brew install tor' });
+      else if (tor.state === 'ready') pills.push({ key: 'tor', text: 'Tor connected', state: 'ok', title: 'Recon\'s own Tor is running.' });
+      else if (tor.state === 'starting') pills.push({ key: 'tor', text: `Tor connecting ${tor.percent || 0}%`, state: 'warn', title: 'Recon\'s own Tor is connecting to its network.' });
+      else if (tor.state === 'failed') pills.push({ key: 'tor', text: 'Tor did not connect', state: 'error', title: 'Settings → Recon → Test Tor shows why.' });
+      else pills.push({ key: 'tor', text: 'Tor starts with the first search', state: 'ok', title: 'Recon starts its own Tor when a search or a page needs it.' });
+      const accounts = Array.isArray(usenet.accounts) ? usenet.accounts : [];
+      if (usenet.route !== 'direct') pills.push({ key: 'usenet', text: 'Usenet off', state: 'none', title: 'Switch it on in Settings → Recon → Usenet.' });
+      else if (accounts.length === 0) pills.push({ key: 'usenet', text: 'Usenet on, no account yet', state: 'warn', title: 'Add an account in Settings → Recon → Usenet.' });
+      else pills.push({ key: 'usenet', text: `Usenet on, ${accounts.length} account${accounts.length === 1 ? '' : 's'}`, state: 'ok', title: 'Direct encrypted connections to your news servers, not through Tor.' });
+      if (more.archive === true) pills.push({ key: 'archive', text: more.archiveDirect ? 'Internet Archive read directly' : 'Internet Archive through Tor', state: 'none', title: more.archiveDirect ? 'Copies are read straight from the Archive, which sees this Mac\'s internet address. Settings → Recon → More sources.' : 'Copies are read through Tor; the Archive refuses most such reads. Settings → Recon → More sources.' });
+      let hint = 'Isolated: nothing from other conversations comes in, and nothing of it goes to them. Type /recon for details.';
+      let warn = false;
+      if (!talk.known) {
+        // The app has not loaded this conversation yet, so its model cannot be asked: not the same as none picked.
+        pills.push({ key: 'model', text: 'Model not known yet', state: 'none', title: 'Shown once the app has loaded this conversation.' });
+        hint = 'The model shows here once the app has loaded this conversation. A model on this Mac or in your own network gets what Recon finds; a cloud model only after you agree.';
+      } else if (!talk.model) {
+        pills.push({ key: 'model', text: 'No model picked', state: 'warn', title: 'Pick a model in the chat box.' });
+        hint = 'Pick a model in the chat box. A model on this Mac or in your own network gets what Recon finds; a cloud model only after you agree.';
+      } else {
+        const where = talk.where === 'local' ? 'on this Mac' : talk.where === 'network' ? 'in your network' : talk.where === 'cloud' ? 'in the cloud' : 'place unknown';
+        pills.push({ key: 'model', text: `${talk.model}, ${where}`, state: talk.may ? 'ok' : 'warn', title: talk.provider ? `Provider: ${talk.provider}` : '' });
+        pills.push({ key: 'findings', text: talk.may ? 'Findings go to this model' : 'Findings held back', state: talk.may ? 'ok' : 'warn', title: talk.may ? (talk.agreed ? 'You agreed with /recon cloud, for this conversation and this model.' : 'This model runs on your own machines.') : 'Type /recon cloud to agree for this conversation.' });
+        if (!talk.may) {
+          hint = 'What Recon finds is not sent to this model. Type /recon cloud to agree for this conversation, or pick a model on this Mac or in your own network.';
+          warn = true;
+        }
+      }
+      if (talk.known && talk.inRoom === false) {
+        hint = 'This conversation is not in Recon\'s own folder, so its tools are off. Start one with the New button in the Recon tab.';
+        warn = true;
+      }
+      return { pills, hint, warn };
+    }
+
+    /** The status bar under the chat box on the Recon tab's start page. */
+    function ReconBar({ sessionId }) {
+      const [data, setData] = useState(null);
+      const alive = useRef(true);
+      const bar = useRef(null);
+      useEffect(() => {
+        alive.current = true;
+        const look = () => {
+          // The bar sits on every tab's start page and shows only on the Recon tab: ask only there.
+          if (document.hidden || document.documentElement?.getAttribute?.('data-cws-tab') !== 'recon') return;
+          call(undefined, sessionId).then((next) => { if (alive.current) setData(next); }, () => {});
+        };
+        look();
+        const timer = setInterval(look, 4000);
+        // Ask at once when the Recon tab is picked, not at the next round.
+        const picked = typeof MutationObserver === 'function' ? new MutationObserver(look) : null;
+        picked?.observe(document.documentElement, { attributes: true, attributeFilter: ['data-cws-tab'] });
+        return () => { alive.current = false; clearInterval(timer); picked?.disconnect(); };
+      }, [sessionId]);
+      const shown = Boolean(data && data.enabled === true);
+      // Before the first return, so the hook order never changes.
+      useEffect(() => {
+        const node = bar.current;
+        if (!node || typeof ResizeObserver !== 'function') return undefined;
+        const root = document.documentElement;
+        const watch = new ResizeObserver(() => root.style.setProperty('--dsh-rc-bar', `${Math.round(node.getBoundingClientRect().height)}px`));
+        watch.observe(node);
+        return () => { watch.disconnect(); root.style.removeProperty('--dsh-rc-bar'); };
+      }, [shown]);
+      if (!shown) return h('style', null, CSS);
+      const { pills, hint, warn } = barOf(data);
+      return h('div', { ref: bar, className: 'dsh-rc-bar', role: 'status', 'aria-label': 'Recon status' },
+        h('style', null, CSS),
+        pills.map((pill) => h('span', { key: pill.key, className: 'dsh-rc-pill', 'data-state': pill.state, title: pill.title }, pill.text)),
+        h('div', { className: 'dsh-rc-hint', 'data-error': String(warn) }, hint));
     }
 
     function ReconPage({ appCtx }) {
@@ -295,12 +401,17 @@ window.__ModuleLoader__.load({
           : null,
 
         h('div', { className: 'dsh-rc-group' }, 'More sources'),
-        h('p', { className: 'dsh-rc-desc' }, 'Two services on the normal web. Recon reaches them only through its own Tor and only at their own addresses, as text. Both limit automated use, and more so through Tor: expect "asked to slow down" or "refused" now and then. Recon does not try another way.'),
+        h('p', { className: 'dsh-rc-desc' }, 'Two services on the normal web, reached only at their own addresses and as text. GDELT always goes through Recon\'s own Tor; the Internet Archive goes directly or through Tor, as set below. Both limit automated use, and more so through Tor: expect "asked to slow down" or "refused" now and then. Recon does not try another way.'),
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },
             h('div', { className: 'dsh-rc-rowtitle' }, 'Internet Archive'),
-            h('div', { className: 'dsh-rc-rowdesc' }, `Dated copies of web pages (${more.archiveHost ?? ''}). The assistant can list the copies of a page and read one as text. This is the only way a page from the normal web is read in Recon. The Archive sees the request come from Tor, and which page was asked for.`)),
+            h('div', { className: 'dsh-rc-rowdesc' }, `Dated copies of web pages (${more.archiveHost ?? ''}). The assistant can list the copies of a page and read one as text. This is the only way a page from the normal web is read in Recon. The Archive sees which page was asked for.`)),
           h('button', { type: 'button', role: 'switch', className: 'dsh-rc-switch', 'aria-checked': String(more.archive === true), 'aria-label': 'Internet Archive', disabled: busy || !data.enabled, onClick: () => void save({ archiveOn: more.archive !== true }, more.archive === true ? 'The Internet Archive is off.' : 'The Internet Archive is on.') })),
+        h('div', { className: 'dsh-rc-row' },
+          h('div', { className: 'dsh-rc-rowtext' },
+            h('div', { className: 'dsh-rc-rowtitle' }, 'Read Internet Archive copies directly (not through Tor)'),
+            h('div', { className: 'dsh-rc-rowdesc' }, 'On: the Archive\'s list of copies and the copies themselves are fetched straight from the Archive, as text only, with the same filters and limits. The Archive then sees this Mac\'s internet address. Off: through Recon\'s Tor, where the Archive refuses most reads. GDELT and .onion sites always go through Tor.')),
+          h('button', { type: 'button', role: 'switch', className: 'dsh-rc-switch', 'aria-checked': String(more.archiveDirect === true), 'aria-label': 'Read Internet Archive copies directly (not through Tor)', disabled: busy || !data.enabled, onClick: () => void save({ archiveDirect: more.archiveDirect !== true }, more.archiveDirect === true ? 'Internet Archive copies are read through Tor.' : 'Internet Archive copies are read directly, not through Tor.') })),
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },
             h('div', { className: 'dsh-rc-rowtitle' }, 'GDELT news index'),
@@ -312,7 +423,7 @@ window.__ModuleLoader__.load({
           item(`/recon export writes one text file with the research log, every source with its citation and text, and the assistant's notes. Everything from sources and from the assistant is quoted and marked as untrusted, so it cannot act as instructions if you give the file to another tab. Exports go to: ${data.exportFolder ?? ''}`),
           item('/recon end ends a conversation for good: what it read is forgotten, Tor is stopped and its folder deleted, the conversation is closed and its files are deleted. They do not go to the trash. An open conversation is held by the app, so its files go as soon as the app lets go, at the latest at the next start.'),
           item(data.waitingToWipe > 0 ? `Waiting to be deleted: ${data.waitingToWipe} ended conversation${data.waitingToWipe === 1 ? '' : 's'}.` : 'No ended conversation is waiting to be deleted.'),
-          item('Export first if you want to keep anything: what Recon reads is held in memory only, and is gone when the app is closed.'),
+          item('Recon keeps no copy of its own. After a restart it rebuilds a conversation\'s sources, the addresses it was shown and the assistant\'s notes from the saved conversation, so earlier [S3] numbers, links and exports keep working. /recon end deletes the conversation, and with it all of this.'),
           item(`Every Recon conversation runs in Recon's own empty folder (${data.room ?? ''}), not in a folder of yours, so the model is told no path of yours. Start one with the New button in the Recon tab. A Recon conversation in another folder has its tools switched off.`)),
 
         h('div', { className: 'dsh-rc-group' }, 'What a Recon conversation has'),
@@ -329,7 +440,7 @@ window.__ModuleLoader__.load({
           item('Only .onion addresses, and only ones that came from a search result, from a page already read, or from your own message.'),
           item('Filters: the filtered index, its blocklist of banned sites, and a word screen on searches, results, addresses and pages. A match is left out: not shown, not kept, not tried again. Only the count is reported. No filter is perfect.'),
           item('Every source gets a number like [S3], with its address, the time it was retrieved and a fingerprint of its text. Ask the assistant to cite a source, or type /recon log for every search and source.'),
-          item('What was read is kept in memory until the app is closed, and in the conversation itself. /recon stop stops Tor.')),
+          item('What was read is kept in memory while the app runs, and in the conversation itself. After a restart, Recon rebuilds the sources from the conversation the first time it is used; a source whose whole text is no longer in the conversation is read again when more of it is needed. /recon stop stops Tor.')),
 
         h('div', { className: 'dsh-rc-group' }, 'Models'),
         h('ul', { className: 'dsh-rc-list' },
@@ -355,6 +466,8 @@ window.__ModuleLoader__.load({
         ctx.effect(() =>
           ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'recon', order: 114, label: () => t('section.title') }, (props) => h(ReconPage, { ...props, appCtx: ctx }))),
         );
+        // The start page's status bar; it shows only while the Recon tab is selected.
+        ctx.effect(() => ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({ name: 'conversation.hero.options', id: 'recon-bar', order: 43 }, (props) => h(ReconBar, { sessionId: props?.sessionId }))));
       },
     };
   },

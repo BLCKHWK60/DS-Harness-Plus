@@ -88,6 +88,20 @@ test('the note carries the profile and forbids disclaimers', () => {
   assert.ok(!/\n\n\n/.test(adviserNote('', false)));
 });
 
+test('with Tools off, the note saves nothing and says figures are from memory', () => {
+  const on = adviserNote('Goals: retire at 60.', true);
+  assert.match(on, /Figures still come only from sources you fetched, with dates\./);
+  const off = adviserNote('Goals: retire at 60.', true, true);
+  // Even with the tool registered, it cannot be called with Tools off.
+  assert.ok(!off.includes('finance_profile_save'), off);
+  assert.ok(!/sources you fetched/.test(off), off);
+  assert.match(off, /Tools are off, so nothing can be fetched: every figure is from memory and is marked as such/);
+  // The rest of the note is unchanged.
+  assert.match(off, /Never open or close with a disclaimer/);
+  assert.match(off, /The client's profile:\nGoals: retire at 60\./);
+  assert.ok(!/\n\n\n/.test(off));
+});
+
 test('the profile tool saves a fact and refuses account numbers', async () => {
   const profile = openProfile('');
   let on = true;

@@ -136,6 +136,51 @@ export function readSelection(raw = {}) {
 }
 
 /**
+ * A selection with some of its fields changed (the chat box of a Finance conversation). A choice
+ * that is not on its list leaves that field as it was; an empty subject clears it. A market must be
+ * one of `markets` (the built-in ones and the owner's own) or the conversation's market now, matched
+ * without regard to case and stored as listed. 'brief' marks a conversation a scheduled task
+ * opened: it is kept, but cannot be chosen.
+ * @param {object} current - the selection now.
+ * @param {object} values - the fields to change.
+ * @param {string[]} [markets] - the markets on offer; the built-in list when left out.
+ * @returns {{kind: string, subject: string, market: string, focus: string, period: string}} the new selection.
+ */
+export function changeSelection(current, values, markets = MARKETS) {
+  const base = readSelection(current);
+  const next = { ...base };
+  const given = values && typeof values === 'object' ? values : {};
+  const has = (field) => Object.hasOwn(given, field);
+  const market = () => {
+    const wanted = cleanName(given.market).toLowerCase();
+    if (!wanted) return undefined;
+    return [...(Array.isArray(markets) ? markets : []), base.market].map(cleanName).find((name) => name && name.toLowerCase() === wanted);
+  };
+  if (has('kind') && KINDS.some((item) => item.id === given.kind)) next.kind = given.kind;
+  if (has('subject')) next.subject = cleanName(given.subject);
+  if (has('market')) next.market = market() ?? base.market;
+  if (has('focus') && FOCUSES.some((item) => item.id === given.focus)) next.focus = given.focus;
+  if (has('period') && PERIODS.some((item) => item.id === given.period)) next.period = given.period;
+  return readSelection(next);
+}
+
+/**
+ * Added to a Finance conversation while its tools are switched off. The Modes add-on then leaves
+ * the Finance method out and says only "answer from what you know", so the rule on figures (and,
+ * without the adviser, the one on advice) is given here.
+ * @param {boolean} [adviser] - whether the adviser's note goes with it (it then sets the voice).
+ * @returns {string} the note.
+ */
+export function toolsOffNote(adviser = false) {
+  return [
+    'Tools are off in this Finance conversation, so you have no data tools now: no figure can be fetched or checked, and no data source, web search or Library can be used.',
+    'You may still give figures from memory, but only marked as such: after every figure (a price, revenue, a margin, growth, a valuation, a rate) say that it is from memory and may be out of date, for example "(from memory, may be out of date)". Never present a figure as current or as coming from a source. Say which period a remembered figure is for (for example FY2023) when you know it, but never give it a source or an "as of" date you did not check. If you do not remember a figure well enough, say so instead of guessing.',
+    'For sourced, current figures the user can switch Tools on in the chat box.',
+    adviser ? '' : 'This is research, not advice: do not tell the user to buy, sell or hold.',
+  ].filter(Boolean).join(' ');
+}
+
+/**
  * The selection as a note for the assistant.
  * @param {object} selection - from `readSelection`.
  * @returns {string} the note.
@@ -152,7 +197,7 @@ export function selectionNote(selection) {
   else subject = `not chosen yet (a ${kind.label.toLowerCase()}): take it from the user's message, and ask if it is unclear`;
   const market = sel.market === MARKETS[0] ? 'Global (all markets; no single country)' : `${sel.market} only`;
   return [
-    'The user\'s selection for this Finance conversation, made with the drop-downs. "The selected subject" or "the selected market" in a message means these:',
+    'The user\'s selection for this Finance conversation, made with the drop-downs (on the start page, or for this conversation in its chat box). "The selected subject" or "the selected market" in a message means these:',
     `- Subject: ${subject}`,
     `- Market: ${market}`,
     `- Focus: ${focus.text}`,
@@ -191,7 +236,7 @@ export function withFinance(current, on, adviser = false) {
  * Which selection each conversation was started with, so a later change of the drop-downs does
  * not change what an earlier conversation is about.
  * @param {string} file - JSON file; '' keeps everything in memory.
- * @returns {{get: (id: string) => object | undefined, pin: (id: string, selection: object) => object}} the record.
+ * @returns {{get: (id: string) => object | undefined, pin: (id: string, selection: object) => object, set: (id: string, selection: object) => object}} the record.
  */
 export function openPins(file) {
   /** @type {Map<string, object>} */
@@ -204,6 +249,19 @@ export function openPins(file) {
       pins = new Map();
     }
   }
+  const keep = (key, value) => {
+    // The newest goes last, so the oldest is the one dropped.
+    pins.delete(key);
+    pins.set(key, value);
+    while (pins.size > PINS_MAX) pins.delete(pins.keys().next().value);
+    if (file) {
+      mkdirSync(dirname(file), { recursive: true });
+      const temp = `${file}.${process.pid}.tmp`;
+      writeFileSync(temp, JSON.stringify(Object.fromEntries(pins)));
+      renameSync(temp, file);
+    }
+    return value;
+  };
   return {
     get: (id) => pins.get(String(id)),
     /** Remember a conversation's selection the first time; later calls keep the first. */
@@ -211,16 +269,11 @@ export function openPins(file) {
       const key = String(id);
       const kept = pins.get(key);
       if (kept) return kept;
-      const value = readSelection(selection);
-      pins.set(key, value);
-      while (pins.size > PINS_MAX) pins.delete(pins.keys().next().value);
-      if (file) {
-        mkdirSync(dirname(file), { recursive: true });
-        const temp = `${file}.${process.pid}.tmp`;
-        writeFileSync(temp, JSON.stringify(Object.fromEntries(pins)));
-        renameSync(temp, file);
-      }
-      return value;
+      return keep(key, readSelection(selection));
+    },
+    /** Replace a conversation's selection: the user changed it in that conversation's chat box. */
+    set(id, selection) {
+      return keep(String(id), readSelection(selection));
     },
   };
 }

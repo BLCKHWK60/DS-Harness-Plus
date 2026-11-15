@@ -9,14 +9,19 @@
  *   - tools that only Scout conversations get: the source registry, search, posting text, research,
  *     and (never for the helpers they start) the user's files, the profile, and saving the report;
  *   - a guard that stops web_fetch on sources whose terms allow search engine results only;
+ *   - a guard that refuses any search from a Scout conversation that holds an email address or a
+ *     phone number (Scout's own searches, web search, page reading, Deep research, Finance's tools);
  *   - `/scout`: which model the conversation uses.
  *
  * Scout works with any model, local or cloud (unlike Recon). Route: `/dsh-scout/data`.
  */
 import z from '@deepseek-ai/schemastery';
 import { execFile } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { MODE_ID, OWN_TOOLS, TOP_ONLY, withScout } from './lib/mode.js';
+import { MODE_ID, OWN_TOOLS, SEARCHES, TOP_ONLY, withScout } from './lib/mode.js';
+import { contactIn, masked } from './lib/contact.js';
+import { countReports, listReports, reportsOf } from './lib/report.js';
 import { DEFAULT_MARKETS, KINDS, MARKETS, WORK_TYPES, addressProblem, cleanExtra, isSearchOnly, keyRef, readRegistry, searchOnlyHosts } from './lib/registry.js';
 import { openPins, readSelection, selectionNote } from './lib/selection.js';
 import { openStore } from './lib/store.js';
@@ -233,7 +238,9 @@ export function apply(ctx, config) {
               const count = currentFolder().list().length;
               const files = `${count} file${count === 1 ? '' : 's'} in the Scout folder (scout_files)`;
               const profileText = profile.read().trim() ? 'saved (scout_profile)' : 'none yet';
-              return selectionNote(pins.get(root) ?? now.selection, { files, profile: profileText, model: placeText(agent) });
+              const saved = countReports(folderPath());
+              const reports = saved ? `${saved} saved (scout_reports): compare this run with the last one` : 'none yet';
+              return selectionNote(pins.get(root) ?? now.selection, { files, profile: profileText, reports, model: placeText(agent) });
             } catch {
               return '';
             }
@@ -296,7 +303,7 @@ export function apply(ctx, config) {
         keyOf,
         hasKey: (id) => keys[id]?.set === true,
         store,
-        folder: { list: () => currentFolder().list(), read: (file) => currentFolder().read(file), ensure: () => currentFolder().ensure() },
+        folder: { list: () => currentFolder().list(), read: (file) => currentFolder().read(file), ensure: () => currentFolder().ensure(), root: () => currentFolder().root },
         profile,
         gate,
         idOf: (exec) => rootOf(exec?.agent),
@@ -333,6 +340,23 @@ export function apply(ctx, config) {
     'scout: search engine only sources',
   );
 
+  // No search from a Scout conversation carries an email address or a phone number: not Scout's own
+  // searches, not web search or page reading, not Deep research. The user's resume and profile are
+  // open to the model, so this holds whatever the model does.
+  ctx.effect(
+    () => ctx.tools.guard((exec) => {
+      try {
+        if (!SEARCHES.includes(exec?.name) || !settings().enabled || !inScout(exec.agent)) return undefined;
+        const found = contactIn(exec.arguments);
+        if (!found) return undefined;
+        return `Scout does not search with contact details: this ${exec.name} call holds ${found.kind} (${masked(found.text)}). Search by titles, skills and places only, and leave out names, email addresses and phone numbers.`;
+      } catch {
+        return undefined;
+      }
+    }),
+    'scout: no contact details in searches',
+  );
+
   // ---- /scout -----------------------------------------------------------------------------------
 
   const status = (agent) => {
@@ -342,6 +366,7 @@ export function apply(ctx, config) {
       `Model: ${placeText(agent)}.`,
       `Your files: ${currentFolder().list().length} in the Scout folder, readable by this model.`,
       `Your profile: ${profile.read().trim() ? 'saved, available to this model' : 'none yet'}.`,
+      `Saved reports: ${countReports(folderPath())}, which this conversation can read and compare with.`,
       `Folder: ${folderPath()}`,
     ].join('\n');
   };
@@ -397,6 +422,12 @@ export function apply(ctx, config) {
     } catch {
       files = [];
     }
+    let reports = [];
+    try {
+      reports = listReports(folderPath()).slice(0, 20).map(({ name, title, saved, rows }) => ({ name, title, saved, rows }));
+    } catch {
+      reports = [];
+    }
     return {
       at: Date.now(),
       enabled: now.enabled,
@@ -404,6 +435,8 @@ export function apply(ctx, config) {
       problem,
       folder: folderPath(),
       files,
+      reports,
+      reportsFolder: reportsOf(folderPath()),
       profile: profile.read(),
       knownMarkets: Object.keys(MARKETS),
       workTypes: WORK_TYPES,
@@ -467,7 +500,11 @@ export function apply(ctx, config) {
         currentFolder().save(body.name, body.data);
         break;
       case 'reveal': {
-        const path = currentFolder().ensure();
+        let path = currentFolder().ensure();
+        if (body.which === 'reports') {
+          path = reportsOf(path);
+          mkdirSync(path, { recursive: true, mode: 0o700 });
+        }
         if (process.platform !== 'darwin') throw new Error(`The folder is ${path}`);
         await new Promise((done) => execFile('/usr/bin/open', [path], () => done()));
         break;

@@ -276,6 +276,7 @@ input.dsh-ms-field { width: 76px; cursor: text; text-align: right; }
           h('li', null, 'In a run, "PASSED" means a command was really run and passed. "REVIEWED" means no command could prove the item and the reviewer model judged it done. Nothing counts as done on a worker\'s word alone.'),
           h('li', null, 'A run works on one item at a time, so two models never change the same files at once. Each run keeps its log and every model\'s answer in .dsh-mission/runs inside the folder.'),
           h('li', null, 'While a run is on, the conversation\'s own model only keeps the run moving. Pause the run to work with it yourself.'),
+          h('li', null, 'Mission is not available in an isolated conversation (Recon). A run needs helper models: on a tier with Sub-agents off (Settings → Model Tiers), a run does not start or carry on, and one under way is paused. The modes and checkpoints still work there.'),
           h('li', null, 'Changes you make yourself in an editor are never undone by Mission, but a later "go back" returns the folder to the checkpoint, including your changes since then.')));
     }
 

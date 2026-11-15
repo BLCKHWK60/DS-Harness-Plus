@@ -40,7 +40,7 @@ bash scripts/install.sh
 
 - **Cowork sidebar:** Chat, Cowork and Code tabs at the top of the left sidebar. Each tab lists only its own conversations and projects, and has its own sections: Model Arena under Chat, and Automation tasks, Connectors (your MCP servers, with on/off switches) and Skills under Cowork and Code. The start page gets a greeting and suggestion chips. A tab picks the mode of new conversations, so the chat box no longer needs a mode drop-down. To get the normal sidebar back, switch **Cowork sidebar** off on the **Plugins** page.
 - **Colours:** pick a colour scheme in **Settings → Colours**: DeepSeek Harness (the stock colours, the default), MindsHub Cowork, Graphite or Forest, each in light and dark.
-- **Modes:** Chat, Cowork and Code modes, switchable per conversation, plus a **Web** button in the chat box (Off, Quick, Standard, Thorough, Deep) and a **Tools** button that lists what the assistant can call.
+- **Modes:** Chat, Cowork and Code modes, switchable per conversation, plus a **Web** button in the chat box (Off, Quick, Standard, Thorough, Deep) and a **Tools** button that lists what the assistant can call. **Settings → Modes** also sets the Web level new conversations start with, the mode for scheduled tasks, how many of your modes get a sidebar tab, and the built-in working methods for Code and Cowork. An access level you pick by hand in the chat box is kept, also after a restart.
 - **Model Tiers:** one model button in the chat box: pick any model and drag the effort slider. Five starter tiers (Fast, Balanced, Deep, Creative, Code review) work at once on whatever model you use. No model is preconfigured.
 - **Code map:** a compact map of the project a conversation works in, so the assistant looks things up instead of reading whole files. Plus four "reverse engineer" skills. Nothing to install.
 - **Privacy:** switches off the app's usage reporting and the upload of a conversation when you rate an answer. `/privacy` shows the state.
@@ -74,7 +74,7 @@ Double-click **`Uninstall.command`**. It removes all the add-ons and their files
 2. Run **`Install.command`** there too.
 3. Add your models in **Settings → Models**.
 4. Optional: to keep the same **settings** on both Macs, use iCloud Drive (below).
-5. Optional: to see the same **conversations** on both Macs, set up the **Sync** add-on (see [docs/ADD-ONS.md](docs/ADD-ONS.md#sync)). It needs a private git repository that both Macs can reach. Neither Mac has to be switched on for the other to sync.
+5. Optional: to see the same **conversations** on both Macs, set up the **Sync** add-on (see [docs/ADD-ONS.md](docs/ADD-ONS.md#sync)). It needs a private git repository that both Macs can reach. Neither Mac has to be switched on for the other to sync. Recon conversations are never synced.
 
 ### Same settings on both Macs, through iCloud Drive
 
@@ -124,9 +124,10 @@ Send them the link to this project, https://github.com/BLCKHWK60/DS-Harness-Plus
 
 ## Status
 
-Release 0.49.0 (the version in `VERSION`). Tested so far:
+Release 0.57.0 (the version in `VERSION`). Tested so far:
 
 - **Install, update and uninstall:** run on a fresh setup and on a copy of a real, long-used setup.
 - **Live start:** the app starts with every add-on loaded.
 - **Add-ons:** each has its own automated tests, and each settings page was checked in the app's web version.
+- **The 0.57.0 changes** (the 26 decisions from the audit) were checked with automated tests and stand-ins for the app only. They have not yet been tried in the desktop app.
 - **Not yet tested on another person's Mac.** Each add-on's `README.md` lists what was and was not verified for it.

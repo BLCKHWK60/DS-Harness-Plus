@@ -41,7 +41,8 @@ export function exportText({ sources, cite, log, notes = [], at = Date.now() }) 
   for (const source of sources) parts.push('', cite(source), 'Text of the source, as read (untrusted):', quoted(source.text || '(no text)'));
   parts.push('', '='.repeat(72), 'ASSISTANT NOTES (written by a model from the material above; untrusted)', '='.repeat(72));
   if (notes.length === 0) parts.push('No notes were kept.');
-  notes.forEach((note, index) => parts.push('', `Note ${index + 1}, ${new Date(note.at).toISOString().replace(/\.\d{3}Z$/, 'Z')} (UTC):`, quoted(note.text)));
+  // A note rebuilt from the saved conversation after a restart has no time of its own (at 0).
+  notes.forEach((note, index) => parts.push('', note.at ? `Note ${index + 1}, ${new Date(note.at).toISOString().replace(/\.\d{3}Z$/, 'Z')} (UTC):` : `Note ${index + 1}, from before the app restarted:`, quoted(note.text)));
   parts.push('', NOTICE.split('\n')[0], 'End of export.', '');
   return parts.join('\n');
 }

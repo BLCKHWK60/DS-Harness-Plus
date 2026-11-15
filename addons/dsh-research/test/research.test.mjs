@@ -8,6 +8,7 @@ import { DEPTHS, FOCUSES, METHOD, MODE, MODE_ID, TOOLS, listReports, saveReport,
 
 test('the mode and its method', () => {
   assert.ok(METHOD.length <= 4000, `method is ${METHOD.length} characters`);
+  assert.match(METHOD, /keep every citation \[n\], every "not read" label/, 'labels of sources no helper read survive the presentation');
   assert.equal(MODE.label, 'Research');
   assert.ok(TOOLS.includes('deep_research') && TOOLS.includes('web_search'));
   for (const forbidden of ['bash', 'write', 'edit', 'run_code']) assert.ok(!TOOLS.includes(forbidden), forbidden);
@@ -19,6 +20,36 @@ test('the mode and its method', () => {
   assert.deepEqual(DEPTHS.map((depth) => depth.id), ['quick', 'standard', 'thorough']);
   assert.match(selectionNote({ focus: 'news', depth: 'thorough' }), /focus News .*depth Thorough/);
   assert.match(selectionNote({ focus: 'odd', depth: 'odd' }), /focus Web .*depth Standard/);
+});
+
+test('Research runs Read Only, and a Research mode stored before that is replaced', () => {
+  assert.equal(MODE.sandbox, 'read-only');
+  // An install from before 0.57.0 stored Research with `inherit`: the next sync writes the new mode.
+  const older = JSON.stringify({ scout: { label: 'Scout' }, [MODE_ID]: { ...MODE, sandbox: 'inherit' } });
+  const next = JSON.parse(withResearch(older, true));
+  assert.equal(next[MODE_ID].sandbox, 'read-only');
+  assert.deepEqual(next.scout, { label: 'Scout' }, 'other modes are left as they are');
+  assert.equal(withResearch(JSON.stringify(next), true), undefined, 'nothing to write once it is current');
+});
+
+test('Settings → Research and its search entry say what the check really does', () => {
+  const client = readFileSync(join(import.meta.dirname, '..', 'client.js'), 'utf8');
+  const description = /'(A tab for researching a question in depth\.[^']*)'/.exec(client)?.[1];
+  assert.ok(description, 'the page description is found');
+  assert.match(description, /writes a report that cites its sources by number\./);
+  assert.match(description, /Every citation is checked to be in the source list/);
+  // All three labels, so no source label in a report is a surprise.
+  assert.match(description, /marked "read", "seen only in search results, not read" or "not read, and not seen in search results"/);
+  assert.match(description, /claims are not compared with the pages/);
+  assert.doesNotMatch(description, /every claim cites|when a helper opened the page/, 'no promise the check does not keep');
+  const goodToKnow = /'(Sources are pages from the web\.[^']*)'/.exec(client)?.[1];
+  assert.ok(goodToKnow, 'the Good to know item about sources is found');
+  assert.match(goodToKnow, /Claims are not compared with the pages, so check the important ones yourself\./);
+  assert.doesNotMatch(client, /word for word/, 'no hint that claims are compared with the pages in some other way');
+  const index = JSON.parse(readFileSync(join(import.meta.dirname, '..', '..', 'dsh-settings-plus', 'settings-index.json'), 'utf8'));
+  const section = index.find((entry) => entry.page === 'research' && entry.kind === 'section' && entry.label === 'Research');
+  assert.match(section.description, /the report cites its sources by number and marks which ones a helper read\./);
+  assert.doesNotMatch(section.description, /cites every claim|checks every claim/);
 });
 
 test('reports are saved as Markdown and listed newest first', () => {

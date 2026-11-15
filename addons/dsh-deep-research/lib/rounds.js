@@ -3,6 +3,7 @@
  * findings become the next round's questions. Kept apart from the plugin so it can be tested
  * without the app.
  */
+import { SEARCH_ONLY, SOURCE_LABELS, UNSEEN, notRead, sourceLabel } from './sources.js';
 
 /**
  * The three depths. `rounds` is how many times helpers are sent out; `runners` how many work at
@@ -224,22 +225,37 @@ export function roundLeft({ round, depth, startedAt, deadline, now }) {
 }
 
 /**
+ * A finding as the writer sees it: number, claim, date, quote, and a label when its helper did not read the page.
+ * @param {{n: number, claim: string, quote?: string, date?: string, status?: string}} finding - one finding.
+ * @returns {string} one line.
+ */
+function findingLine(finding) {
+  const unread = finding.status !== undefined && notRead(finding.status) ? ` [${sourceLabel(finding.status)}]` : '';
+  return `[${finding.n}] ${finding.claim}${finding.date ? ` (${finding.date})` : ''}${finding.quote ? ` — "${finding.quote}"` : ''}${unread}`;
+}
+
+/**
  * What the writer is told.
  * @param {object} spec - what the research produced.
  * @param {string} spec.question - the overall question.
- * @param {{n: number, claim: string, quote: string, date: string}[]} spec.findings - numbered findings.
+ * @param {{n: number, claim: string, quote: string, date: string, status?: string}[]} spec.findings - numbered findings;
+ *   `status` is what the finding's own helper did with the page (see lib/sources.js), and a finding whose helper did not read the page is labelled.
  * @param {string[]} spec.conflicts - contradictions the analyst noted.
  * @param {string[]} spec.gaps - what could not be found.
  * @param {string} spec.today - today's date.
  * @returns {string} the instruction.
  */
 export function writePrompt({ question, findings, conflicts, gaps, today, followups = false }) {
+  const shown = findings.slice(0, WRITER_FINDINGS_MAX);
+  const anyUnread = shown.some((finding) => finding.status !== undefined && notRead(finding.status));
   return [
     'RESEARCH_WRITE',
     `Write the report that answers the question, using ONLY the numbered findings below. Today is ${today}.`,
     '- Start with the answer itself in a short paragraph. Then the detail under a few plain headings.',
     '- Cite every claim inline as [n], and several sources for one claim as [n][m]. Do not cite a number that is not listed, and do not add facts of your own.',
     '- Give figures and dates exactly as the findings give them. Where a finding has a date, prefer the newer one and say when it is from.',
+    // Findings whose helper did not read the page stay in the report (the owner's choice), but the reader must see which they are.
+    anyUnread ? `- A finding labelled [${SOURCE_LABELS[SEARCH_ONLY]}] or [${SOURCE_LABELS[UNSEEN]}] comes from a page its helper did not read, most often only a search result's short summary. Prefer findings from pages that were read. Where a claim rests only on findings that were not read, keep it, but say so in the same sentence with that finding's own label in brackets, either "(${SOURCE_LABELS[SEARCH_ONLY]})" or "(${SOURCE_LABELS[UNSEEN]})", and never present it as confirmed.` : '',
     '- Where sources disagree, say so and set out both sides. Do not pick one silently.',
     '- End with a short section on what could not be established.',
     followups ? '- After that, a last section headed exactly "## Follow-up questions" with three short questions the user might ask next, each on its own line starting with "- ". Make them specific to what was found.' : '',
@@ -251,7 +267,7 @@ export function writePrompt({ question, findings, conflicts, gaps, today, follow
     conflicts.length > 0 ? `\nContradictions noted during the research:\n${conflicts.map((item) => `- ${item}`).join('\n')}` : '',
     gaps.length > 0 ? `\nLooked for and not found:\n${gaps.slice(0, 20).map((item) => `- ${item}`).join('\n')}` : '',
     '',
-    `Findings:\n${findings.slice(0, WRITER_FINDINGS_MAX).map((finding) => `[${finding.n}] ${finding.claim}${finding.date ? ` (${finding.date})` : ''}${finding.quote ? ` — "${finding.quote}"` : ''}`).join('\n')}`,
+    `Findings:\n${shown.map(findingLine).join('\n')}`,
   ].filter((part) => part !== '').join('\n');
 }
 

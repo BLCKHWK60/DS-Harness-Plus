@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -298,7 +298,8 @@ test('the tools, end to end: profile, query with an id, save, change the file, r
   const pictures = [];
   const show = (_exec, picture) => { pictures.push(picture); return { ok: true, id: 'abc', outline: 'Bar chart over 2 categories.' }; };
   const python = { execute: async ({ code }) => ({ ok: !code.includes('boom'), output: code.includes('boom') ? 'Traceback: boom' : 'mean 150.0', seconds: 0.2, files: code.includes('savefig') ? [{ name: 'plot.png', path: join(dir, 'data-output', 'plot.png'), size: 1234, picture: true }] : [] }) };
-  const tools = Object.fromEntries(buildTools({ enabled: () => on, rootOf: (exec) => exec.root, conversationOf: () => 'c1', engine, store, python, show }).map((tool) => [tool.name, tool]));
+  const svgOf = (description) => `<svg><!-- dsh-diagram --><title>${description.title}</title></svg>`;
+  const tools = Object.fromEntries(buildTools({ enabled: () => on, rootOf: (exec) => exec.root, conversationOf: () => 'c1', engine, store, python, show, svgOf }).map((tool) => [tool.name, tool]));
   assert.deepEqual(Object.keys(tools), ['data_files', 'data_profile', 'data_query', 'data_chart', 'data_python', 'data_text', 'data_save_analysis', 'data_rerun_analysis', 'data_analyses']);
   // Without Python there is no Python tool.
   assert.ok(!buildTools({ enabled: () => on, rootOf: (exec) => exec.root, conversationOf: () => 'c1', engine, store }).some((tool) => tool.name === 'data_python'));
@@ -353,10 +354,17 @@ test('the tools, end to end: profile, query with an id, save, change the file, r
   assert.equal(pictures[0].description.chart, 'bar');
   assert.equal(pictures[0].description.categories.length, 3);
   assert.match(pictures[0].title, /^Revenue by region \[Q\d+\]$/);
+  // Every chart is also saved as an SVG file in data-output, and the file goes to Diagrams with the description.
+  const chartId = /^Chart "Revenue by region" drawn from query (Q\d+)/.exec(chart)[1];
+  const chartFile = join(dir, 'data-output', `revenue-by-region-${chartId.toLowerCase()}.svg`);
+  assert.match(chart, new RegExp(`It is also saved as data-output/revenue-by-region-${chartId.toLowerCase()}\\.svg\\.`));
+  assert.equal(readFileSync(chartFile, 'utf8'), '<svg><!-- dsh-diagram --><title>Revenue by region</title></svg>');
+  assert.equal(pictures[0].file, chartFile);
   assert.match(await call('data_chart', { files: ['sales.csv'], sql: 'SELECT region FROM sales', title: 'x' }), /It did not work: A chart needs a result with at least two columns/);
   const ran = await call('data_python', { code: 'print(1); plt.savefig("x")', purpose: 'Mean revenue' });
   assert.match(ran, /^Run (Q\d+) \(Python, 0\.2 s\): finished\.\nFiles written:\n- data-output\/plot\.png, 1,234 bytes \(shown to the user in the chat\)\n\nPrinted output:\nmean 150\.0/);
   assert.equal(pictures[1].file, join(dir, 'data-output', 'plot.png'));
+  assert.equal(pictures[1].description, undefined);
   const pyId = /^Run (Q\d+)/.exec(ran)[1];
   assert.match(await call('data_python', { code: 'boom' }), /ended with an error[\s\S]*Traceback: boom/);
   // A chart the check complained about is kept on disk but not put in front of the user.
@@ -426,4 +434,276 @@ test('every Python program gets the chart check in front of it', async () => {
   // Whatever goes wrong inside the check, the program's own save still runs.
   assert.match(text, /except Exception:\n\s+pass\n\s+return _dsh_savefig\(self, fname, \*args, \*\*kwargs\)/);
   assert.match(text, /except Exception:\n {4}pass$/);
+});
+
+// ---- 0.57.0: Read Only, Web, the first tools, charts with Python, chart files -----------------------
+
+import { CHART_KINDS, chartName, saveChart } from '../lib/charts.js';
+
+test('Data runs Read Only, keeps Web on, and starts with the data and PDF tools (data-1, data-7, data-9)', async () => {
+  // Read Only: the app's file and command tools cannot change the user's files; data_python has its own sandbox.
+  assert.equal(MODE.sandbox, 'read-only');
+  // Web on by default: the Modes add-on gives Web to a mode with all tools, and Data names no Web default of its own.
+  assert.equal(MODE.tools, 'all');
+  assert.ok(!Object.hasOwn(MODE, 'web'));
+  // The families are there from the first step where tools are loaded as needed, and both exist in Modes.
+  assert.deepEqual(MODE.startFamilies, ['data', 'pdf']);
+  const { FAMILIES } = await import('../../dsh-modes/lib/trim.js');
+  for (const family of MODE.startFamilies) assert.ok(FAMILIES.some((entry) => entry.id === family), family);
+  // A Data entry stored by an older version is brought up to date when the add-on starts.
+  const old = JSON.stringify({ finance: { label: 'Finance' }, [MODE_ID]: { label: 'Data', tools: 'all', sandbox: 'inherit', defaultTier: '', prompt: 'old' } });
+  const updated = JSON.parse(withData(old, true));
+  assert.deepEqual(updated[MODE_ID], MODE);
+  assert.deepEqual(updated.finance, { label: 'Finance' });
+  // The method keeps private details out of web searches, and still lets public names in when a question needs them.
+  assert.match(METHOD, /Put only what the question needs into a search or a web address\./);
+  assert.match(METHOD, /Public names are fine when the question needs them \(a country, a market, an industry, a listed company, a public product, or a term to explain\)\./);
+  assert.match(METHOD, /Never put in private details from the files: people's names, the names of customers, clients or suppliers, account or customer numbers, rows, or exact figures\./);
+  // "Why something moved" is still a use of the web, and nothing forbids every name from the files any more.
+  assert.match(METHOD, /Outside context \(what a term means, a benchmark, why something moved\)/);
+  assert.doesNotMatch(METHOD, /general terms only|never put the files' contents/);
+  // The method stays within the Modes add-on's limit for a mode's own text.
+  assert.ok(METHOD.length <= 4000, `${METHOD.length} characters`);
+});
+
+test('the method and the tools agree on which charts data_chart draws: pie and area go to Python (data-2)', () => {
+  const tools = buildTools({ enabled: () => true, rootOf: () => '', conversationOf: () => 'c', engine: { run: async () => ({}) }, store: openStore('', ''), python: { execute: async () => ({}) }, show: () => ({ ok: true }) });
+  const chartTool = tools.find((tool) => tool.name === 'data_chart');
+  const pythonTool = tools.find((tool) => tool.name === 'data_python');
+  const kinds = chartTool.parameters.properties.chart.enum;
+  assert.deepEqual(kinds, CHART_KINDS);
+  // Every kind the method sends to data_chart is one it can draw.
+  const forChart = /([A-Z][\w ,]*?) charts are data_chart/.exec(METHOD);
+  assert.ok(forChart, 'the method names the charts for data_chart');
+  const named = forChart[1].toLowerCase().split(/,\s*|\s+and\s+/).map((word) => word.trim()).filter(Boolean);
+  assert.deepEqual(named, ['bar', 'line', 'scatter']);
+  for (const kind of named) assert.ok(kinds.includes(kind), kind);
+  // Pie and area are Python's, in the method and in both tool descriptions; neither is in data_chart's list.
+  assert.match(METHOD, /Pie, area and other charts are data_python/);
+  assert.match(METHOD, /the charts data_chart cannot draw \(pie, area,/);
+  for (const kind of ['pie', 'area']) assert.ok(!kinds.includes(kind), kind);
+  assert.match(chartTool.description, /Pie, area and other charts: use data_python/);
+  assert.match(pythonTool.description, /For a plain bar, line or scatter chart use data_chart, not this tool; pie, area and other charts are drawn here/);
+  assert.doesNotMatch(METHOD, /area and pie charts are always data_chart/);
+});
+
+test('bars over dates stay bars, one per date; without a wish dates still give a line (data-2)', () => {
+  const result = { columns: ['month', 'revenue'], rows: [['2026-01', 10], ['2026-02', 12], [' 2026-03 ', 9]] };
+  const bars = chartSpec(result, { chart: 'bar', title: 'Revenue by month' });
+  assert.equal(bars.chart, 'bar');
+  assert.deepEqual(bars.categories, ['2026-01', '2026-02', '2026-03']);
+  assert.deepEqual(bars.series, [{ name: 'revenue', values: [10, 12, 9] }]);
+  assert.equal(bars.xLabel, '');
+  assert.equal(chartSpec(result, {}).chart, 'line');
+  assert.equal(chartSpec(result, { chart: 'scatter' }).chart, 'scatter');
+  // Dates with midnight as their time are labelled with the date alone; other times are kept.
+  const stamped = (values) => chartSpec({ columns: ['day', 'n'], rows: values.map((value, i) => [value, i]) }, { chart: 'bar' }).categories;
+  assert.deepEqual(stamped(['2026-03-30 00:00:00', '2026-03-31 00:00:00']), ['2026-03-30', '2026-03-31']);
+  assert.deepEqual(stamped(['2026-03-30T00:00:00Z', '2026-03-31T00:00:00.000+02:00', '2026-04-01T00:00', '2026-04-02']), ['2026-03-30', '2026-03-31', '2026-04-01', '2026-04-02']);
+  assert.deepEqual(stamped(['2026-3-5 00:00:00', '2026-3-6 00:00:00']), ['2026-3-5', '2026-3-6']);
+  assert.deepEqual(stamped(['2026-03-31 00:00:00', '2026-03-31 12:00:00']), ['2026-03-31 00:00:00', '2026-03-31 12:00:00']);
+  assert.equal(chartSpec({ columns: ['day', 'n'], rows: Array.from({ length: 30 }, (_, i) => [`2026-03-${String(i + 1).padStart(2, '0')} 00:00:00`, i]) }, { chart: 'bar' }).categories.every((label) => label.length === 10), true);
+  // Days as bars: at most 30, with a hint to group by a longer period.
+  const days = { columns: ['day', 'n'], rows: Array.from({ length: 31 }, (_, i) => [`2026-01-${String(i + 1).padStart(2, '0')}`, i]) };
+  assert.throws(() => chartSpec(days, { chart: 'bar' }), /at most 30 bars\. Group by a longer period/);
+  assert.equal(chartSpec(days, {}).chart, 'line');
+  // Numbers as bars work as before; too many of them get their own hint.
+  assert.equal(chartSpec({ columns: ['year', 'n'], rows: [[2024, 1], [2025, 2]] }, { chart: 'bar' }).chart, 'bar');
+  assert.throws(() => chartSpec({ columns: ['price', 'n'], rows: Array.from({ length: 31 }, (_, i) => [i, i]) }, { chart: 'bar' }), /at most 30 bars\. Group the values in the query, or leave out "chart" to get points/);
+});
+
+test('a chart file is named after its title and query, and never replaces a file (data-6)', () => {
+  assert.equal(chartName('Revenue by région!', 'Q7'), 'revenue-by-region-q7');
+  assert.equal(chartName('', 'Q1'), 'chart-q1');
+  assert.equal(chartName('***', 'Q12'), 'chart-q12');
+  assert.equal(chartName('x'.repeat(80), 'Q3'), `${'x'.repeat(48)}-q3`);
+  const dir = folder();
+  const first = saveChart(dir, 'data-output', 'sales-q1', '<svg>1</svg>');
+  assert.equal(first, join(dir, 'data-output', 'sales-q1.svg'));
+  assert.equal(readFileSync(first, 'utf8'), '<svg>1</svg>');
+  // A file of that name, the user's or an earlier chart's, is left alone.
+  const second = saveChart(dir, 'data-output', 'sales-q1', '<svg>2</svg>');
+  assert.equal(second, join(dir, 'data-output', 'sales-q1-2.svg'));
+  assert.equal(readFileSync(first, 'utf8'), '<svg>1</svg>');
+  // A data-output that is a link to somewhere outside the folder is not written into.
+  const other = folder();
+  const linked = folder();
+  symlinkSync(other, join(linked, 'data-output'));
+  assert.throws(() => saveChart(linked, 'data-output', 'x-q1', '<svg/>'), /leads outside this conversation's folder/);
+  assert.deepEqual(readdirSync(other), []);
+  // A link with the chart's own name is not followed either.
+  const target = join(other, 'secret.txt');
+  writeFileSync(target, 'keep');
+  const third = folder();
+  mkdirSync(join(third, 'data-output'));
+  symlinkSync(target, join(third, 'data-output', 'y-q1.svg'));
+  assert.equal(saveChart(third, 'data-output', 'y-q1', '<svg/>'), join(third, 'data-output', 'y-q1-2.svg'));
+  assert.equal(readFileSync(target, 'utf8'), 'keep');
+});
+
+test('data_chart: a chart that is not shown leaves no file; a chart that cannot be saved is still shown (data-6)', async () => {
+  const dir = folder();
+  writeFileSync(join(dir, 'sales.csv'), 'month,revenue\n2026-01,100\n2026-02,120\n');
+  const engine = {
+    async run(job) {
+      const tables = [];
+      for (const file of job.files) tables.push(...(await fileTables(file.path, file.name)).map((table) => ({ ...table, file: file.shown })));
+      const result = runQuery(build(DatabaseSync, tables), job.sql, job.limit);
+      return { tables: tables.map((table) => ({ name: table.name, file: table.file, rows: table.rows.length })), result, text: resultText(result) };
+    },
+  };
+  const sql = 'SELECT month, revenue FROM sales ORDER BY month';
+  const make = (show, svgOf) => buildTools({ enabled: () => true, rootOf: () => dir, conversationOf: () => 'c1', engine, store: openStore('', ''), show, svgOf }).find((tool) => tool.name === 'data_chart');
+  // Diagrams switched off: nothing is shown, and the file just written is taken away again.
+  const refused = await make(() => ({ ok: false, errors: ['The diagram builder is switched off in Settings → Diagrams.'] }), () => '<svg/>').execute({ files: ['sales.csv'], sql, title: 'Monthly' }, {});
+  assert.match(refused.text, /^It did not work: The chart could not be drawn: The diagram builder is switched off/);
+  assert.deepEqual(existsSync(join(dir, 'data-output')) ? readdirSync(join(dir, 'data-output')) : [], []);
+  // Drawing the file fails: the chart is still shown, and the answer says it was not saved.
+  const pictures = [];
+  const shown = await make((_exec, picture) => { pictures.push(picture); return { ok: true, outline: 'Bar chart.' }; }, () => { throw new Error('the Diagrams add-on is not running'); }).execute({ files: ['sales.csv'], sql, title: 'Monthly', chart: 'bar' }, {});
+  assert.match(shown.text, /It is shown to the user in the chat, under your answer\. It could not be saved as a file \(the Diagrams add-on is not running\)\./);
+  assert.equal(pictures[0].file, undefined);
+  assert.equal(pictures[0].description.chart, 'bar');
+  // Without a drawing function there is no file and no note.
+  const plain = await make(() => ({ ok: true, outline: '' })).execute({ files: ['sales.csv'], sql, title: 'Monthly' }, {});
+  assert.doesNotMatch(plain.text, /saved/);
+});
+
+test('the Diagrams add-on draws bars over dates, and the saved file carries its mark (data-2, data-6)', async () => {
+  // The real drawing code, without the add-on: the same function `ctx.get('diagrams').draw` calls.
+  const { draw } = await import('../../dsh-diagram/lib/draw.js');
+  const spec = chartSpec({ columns: ['month', 'revenue'], rows: [['2026-01', 10], ['2026-02', 12], ['2026-03', 9]] }, { chart: 'bar', title: 'Revenue by month' });
+  const drawn = draw(spec);
+  assert.equal(drawn.ok, true, String(drawn.errors));
+  assert.match(drawn.outline, /^Bar chart over 3 categories/);
+  assert.match(drawn.outline, /revenue: 2026-01 = 10, 2026-02 = 12, 2026-03 = 9/);
+  // Diagrams shows a saved file again after a restart only when it holds this mark.
+  assert.ok(drawn.svg({ theme: 'auto' }).slice(0, 600).includes('<!-- dsh-diagram -->'));
+});
+
+test('apply(): the Data tab is written Read Only with its first tools, and data_chart saves through Diagrams in its file colours', async () => {
+  const { apply } = await import('../index.js');
+  const home = folder();
+  const work = folder();
+  writeFileSync(join(work, 'sales.csv'), 'region,revenue\nNorth,100\nSouth,200\n');
+  const registered = [];
+  const disposers = [];
+  const mutations = [];
+  const themes = [];
+  const shown = [];
+  const services = {
+    dshHomePath: (name) => join(home, name),
+    tools: { register: (tool) => { registered.push(tool); return () => {}; } },
+    settings: {
+      describe: () => [{ ns: 'modes', value: { extraModes: '{}', defaultMode: 'cowork' } }, { ns: 'diagram', value: { theme: 'light' } }],
+      mutate: async (ns, ops) => { mutations.push({ ns, ops }); },
+    },
+    diagrams: {
+      draw: (description) => ({ ok: true, svg: (options) => { themes.push(options.theme); return `<svg><!-- dsh-diagram --><title>${description.title}</title></svg>`; } }),
+      show: (_agent, picture) => { shown.push(picture); return { ok: true, outline: 'Bar chart over 2 categories.' }; },
+    },
+    // The Modes add-on: a1 is a Data conversation, a2 a Cowork one, a3 a Finance one.
+    modes: { get: (id) => ({ a1: 'data', a2: 'cowork', a3: 'finance' })[id] ?? 'cowork', isolated: () => false },
+  };
+  const ctx = { get: (name) => services[name], effect: (make) => { const dispose = make(); disposers.push(dispose); return dispose; }, on: () => {}, inject: () => {}, logger: { warn() {}, info() {} } };
+  try {
+    apply(ctx, { enabled: true, pythonSetup: false });
+    await new Promise((resolve) => setImmediate(resolve));
+    // The mode goes into Modes' extra modes as it is now: Read Only, all tools, the data and PDF tools first.
+    const written = JSON.parse(mutations.find((entry) => entry.ns === 'modes').ops.find((op) => op.path[0] === 'extraModes').value);
+    assert.deepEqual(written[MODE_ID], MODE);
+    assert.equal(written[MODE_ID].sandbox, 'read-only');
+    // A chart through the real query engine: drawn in Diagrams' file colours, saved, and handed over with its file.
+    const chartTool = registered.find((tool) => tool.name === 'data_chart');
+    const out = await chartTool.execute({ files: ['sales.csv'], sql: 'SELECT region, revenue FROM sales ORDER BY region', title: 'By region' }, { agent: { id: 'a1', header: { cwd: work } } });
+    assert.match(out.text, /^Chart "By region" drawn from query Q1 over sales\.csv \(2 rows\)\. It is shown to the user in the chat, under your answer\. It is also saved as data-output\/by-region-q1\.svg\./);
+    assert.deepEqual(themes, ['light']);
+    assert.equal(readFileSync(join(work, 'data-output', 'by-region-q1.svg'), 'utf8'), '<svg><!-- dsh-diagram --><title>By region</title></svg>');
+    assert.equal(shown[0].file, join(work, 'data-output', 'by-region-q1.svg'));
+    assert.equal(shown[0].description.chart, 'bar');
+    // Only Data conversations keep their charts as files: in Cowork and Finance the chart is shown, and no file is written.
+    for (const [index, id] of [[1, 'a2'], [2, 'a3']]) {
+      const other = await chartTool.execute({ files: ['sales.csv'], sql: 'SELECT region, revenue FROM sales ORDER BY region', title: 'Elsewhere' }, { agent: { id, header: { cwd: work } } });
+      assert.match(other.text, /^Chart "Elsewhere" drawn from query Q1 over sales\.csv \(2 rows\)\. It is shown to the user in the chat, under your answer\.\n/, id);
+      assert.doesNotMatch(other.text, /saved/, id);
+      assert.equal(shown[index].file, undefined, id);
+      assert.equal(shown[index].description.chart, 'bar', id);
+    }
+    assert.deepEqual(readdirSync(join(work, 'data-output')), ['by-region-q1.svg']);
+    assert.deepEqual(themes, ['light'], 'no file was drawn for the other conversations');
+  } finally {
+    for (const dispose of disposers) if (typeof dispose === 'function') dispose();
+  }
+});
+
+test('data_chart: a file only where the conversation keeps its charts as files (Data), never when that cannot be told', async () => {
+  const dir = folder();
+  writeFileSync(join(dir, 'sales.csv'), 'region,revenue\nNorth,100\nSouth,200\n');
+  const engine = {
+    async run(job) {
+      const tables = [];
+      for (const file of job.files) tables.push(...(await fileTables(file.path, file.name)).map((table) => ({ ...table, file: file.shown })));
+      const result = runQuery(build(DatabaseSync, tables), job.sql, job.limit);
+      return { tables: tables.map((table) => ({ name: table.name, file: table.file, rows: table.rows.length })), result, text: resultText(result) };
+    },
+  };
+  const pictures = [];
+  const drawn = [];
+  const make = (saves) => buildTools({ enabled: () => true, rootOf: () => dir, conversationOf: (exec) => exec.agent.id, engine, store: openStore('', ''), show: (_exec, picture) => { pictures.push(picture); return { ok: true, outline: 'Bar chart.' }; }, svgOf: (spec) => { drawn.push(spec.title); return '<svg/>'; }, saves }).find((tool) => tool.name === 'data_chart');
+  const args = { files: ['sales.csv'], sql: 'SELECT region, revenue FROM sales', title: 'Sales' };
+  const asked = [];
+  // Not a Data conversation: shown, not drawn as a file, not saved, and the answer says nothing about a file.
+  const cowork = await make((exec) => { asked.push(exec.agent.id); return false; }).execute(args, { agent: { id: 'cowork-1' } });
+  assert.deepEqual(asked, ['cowork-1']);
+  assert.doesNotMatch(cowork.text, /saved/);
+  assert.equal(pictures[0].file, undefined);
+  // The check failing counts as "no file".
+  const broken = await make(() => { throw new Error('Modes is gone'); }).execute(args, { agent: { id: 'x-1' } });
+  assert.doesNotMatch(broken.text, /saved|Modes is gone/);
+  assert.equal(pictures[1].file, undefined);
+  assert.deepEqual(drawn, []);
+  assert.equal(existsSync(join(dir, 'data-output')), false);
+  // A Data conversation gets its file.
+  const data = await make(() => true).execute(args, { agent: { id: 'data-1' } });
+  assert.match(data.text, /It is also saved as data-output\/sales-q1\.svg\./);
+  assert.equal(pictures[2].file, join(dir, 'data-output', 'sales-q1.svg'));
+  assert.deepEqual(drawn, ['Sales']);
+  // The tool's description says the file is Data's.
+  assert.match(make(() => true).description, /In a Data conversation the chart is also saved as an SVG file in data-output\./);
+});
+
+test('the privacy and Read Only texts say only what is true (data-1, data-7)', () => {
+  const here = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
+  const page = here('../client.js');
+  const readme = here('../README.md');
+  const index = JSON.parse(here('../../dsh-settings-plus/settings-index.json')).filter((entry) => entry.page === 'data');
+  const entries = JSON.stringify(index);
+  // Nothing promises that files are never sent, that Web Off keeps everything offline, or that no name from the files is ever searched.
+  for (const [where, text] of [['Settings → Data', page], ['README', readme], ['settings index', entries]]) {
+    assert.doesNotMatch(text, /files (themselves )?are never sent|stays offline|keeps? (a conversation|it) offline|never to search for names|leaving Data gives back/, where);
+  }
+  // What is true: Data's own tools never send files; keeping private details out of a search is an instruction, not a check;
+  // Read Only does not keep the command tool off the internet; Web Off stops what looks like it goes online, by a check on the text.
+  for (const [where, text] of [['Settings → Data', page], ['README', readme]]) {
+    assert.match(text, /Data(\\)?'s own tools never send your files anywhere/, where);
+    assert.match(text, /private details from (your|the) files/, where);
+    assert.match(text, /[Tt]hat is an instruction, not a check/, where);
+    assert.match(text, /Read Only does not keep the app(\\)?'s command tool off the internet/, where);
+    assert.match(text, /commands and programs that look like they go online/, where);
+    assert.match(text, /not every way/, where);
+    assert.match(text, /connectors you added stay on and can still reach the internet/, where);
+  }
+  const entry = (label) => index.find((item) => item.label === label)?.description ?? '';
+  assert.match(entry('With Web on, the words the assistant searches for'), /Data's own tools never send your files anywhere\. The assistant is told not to put private details from your files .* into a search or a web address; that is an instruction, not a check\./);
+  assert.match(entry('With Web Off there are no searches, no pages and no deep research'), /commands and programs that look like they go online are stopped \(a check on their text: it catches the usual ways, not every way\)/);
+  // Read Only: only conversations that start in Data or move into it; older ones keep theirs; a tab without its own permission gives the earlier one back.
+  assert.match(page, /A conversation that starts in Data, or is moved into it, runs Read Only/);
+  assert.match(page, /Data conversations started before version 0\.57\.0 keep their permission/);
+  assert.match(page, /a tab that does not set its own permission, such as Cowork, gives back the one it had before, unless you changed it by hand/);
+  assert.match(entry('A conversation that starts in Data, or is moved into it, runs Read Only'), /Data conversations started before 0\.57\.0 keep their permission\. .*such as Cowork, gives back the one it had before, unless you changed it by hand\./);
+  assert.match(readme, /under Read Only that tool asks you first, and with the "never ask" approval setting it is refused/);
+  assert.doesNotMatch(readme, /which Read Only refuses/);
+  // Chart files are a Data conversation's.
+  assert.match(page, /In a Data conversation each one is also saved as an SVG file/);
+  assert.match(entry('How to use it'), /in a Data conversation each also saved as an SVG file in data-output/);
 });

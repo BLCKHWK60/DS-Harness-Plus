@@ -127,6 +127,67 @@ export function isolatedMask({ tools, off, child, webOff }) {
   return { allow: tools.filter((name) => !online.includes(name)) };
 }
 
+/** The image tools of the Media tools add-on: they call the image service set there. */
+export const IMAGE_TOOLS = ['generate_image', 'edit_image'];
+
+/**
+ * The numbers of a dotted IPv4 address.
+ * @param {string} host - a host name.
+ * @returns {number[] | null} the four numbers, or null when it is not one.
+ */
+function ipv4(host) {
+  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (!match) return null;
+  const parts = match.slice(1).map(Number);
+  return parts.every((part) => part <= 255) ? parts : null;
+}
+
+/**
+ * Whether an address is on this Mac or on a private network: localhost, a `.local` name,
+ * 127.0.0.0/8, ::1, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 or fc00::/7.
+ * @param {unknown} address - a web address (http or https).
+ * @returns {boolean} true for such an address; false for any other, and for one that cannot be read.
+ */
+export function privateAddress(address) {
+  let url;
+  try {
+    url = new URL(String(address ?? '').trim());
+  } catch {
+    return false;
+  }
+  if (!/^https?:$/.test(url.protocol)) return false;
+  let host = url.hostname.toLowerCase();
+  if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
+  if (!host) return false;
+  if (host === 'localhost' || host.endsWith('.local')) return true;
+  // An IPv4 address written as IPv6 (::ffff:7f00:1) counts as the IPv4 address.
+  const mapped = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host);
+  if (mapped) {
+    const [high, low] = [parseInt(mapped[1], 16), parseInt(mapped[2], 16)];
+    host = `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
+  }
+  const four = ipv4(host);
+  if (four) {
+    const [a, b] = four;
+    return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  }
+  if (host === '::1') return true;
+  // fc00::/7: the first group is four digits, fc.. or fd.. ("fc::" is 00fc, outside it).
+  return /^f[cd][0-9a-f]{2}:/.test(host);
+}
+
+/**
+ * The image tools to take away while Web is Off: all of them, unless the image service they call is
+ * on this Mac or on a private network.
+ * @param {object} want - the image service.
+ * @param {unknown} [want.baseUrl] - its address (Media tools' `images.baseUrl`); unknown counts as outside.
+ * @param {string[]} [want.names] - the image tools' names.
+ * @returns {string[]} the names to take away; empty when the service is local.
+ */
+export function imageToolsOffline({ baseUrl, names = IMAGE_TOOLS } = {}) {
+  return privateAddress(baseUrl) ? [] : [...new Set(names.filter((name) => typeof name === 'string' && name))];
+}
+
 /**
  * The tool mask of one agent, from everything that applies to it.
  * Names are not filtered against a visible list: in this dsh version many tools (web_fetch, read,
@@ -143,10 +204,11 @@ export function isolatedMask({ tools, off, child, webOff }) {
  * @param {boolean} [want.child] - the agent is a helper.
  * @param {string[]} [want.fenced] - the tools of isolated modes, which no other conversation is offered.
  * @param {boolean} [want.webOff] - an isolated conversation's Web button is on Off.
+ * @param {string[]} [want.online] - other tools that go online here (the image tools of an outside service).
  * @returns {{allow?: string[], deny?: string[]} | null} the mask, or null for no restriction.
  */
-export function toolMaskFor({ mode, trimmed = false, known = [], added = [], web = false, research = false, off = false, child = false, fenced = [], webOff = false }) {
-  const offline = webReaching(known);
+export function toolMaskFor({ mode, trimmed = false, known = [], added = [], web = false, research = false, off = false, child = false, fenced = [], webOff = false, online = [] }) {
+  const offline = [...new Set([...webReaching(known), ...online.filter((name) => known.includes(name))])];
   if (trimmed) {
     const listed = trimAllowed(known, added);
     const mask = maskFor({ tools: listed, web, research, off: false, child, offline });
@@ -217,5 +279,40 @@ export function goesOnline(command) {
   const text = String(command ?? '');
   if (!text.trim()) return false;
   return ONLINE_PROGRAMS.test(text) || ONLINE_SIGNS.some((sign) => sign.test(text));
+}
+
+/** Network modules a program can load: Node's own and the usual web libraries. */
+const NETWORK_MODULES = '(?:node:)?(?:https?|http2|net|tls|dgram|dns(?:/promises)?|undici|axios|node-fetch|got|ws|superagent)';
+/** What a program uses to go online by itself. */
+const PROGRAM_SIGNS = [
+  // fetch(...), and fetch handed on (fetch.call, globalThis.fetch, globalThis['fetch']).
+  /\bfetch\s*(?:\(|\.(?:call|apply|bind)\b)/,
+  /\b(?:globalThis|window|self)\s*(?:\.\s*fetch\b|\[\s*['"`]fetch['"`]\s*\])/,
+  /\b(?:XMLHttpRequest|WebSocket|WebSocketStream|EventSource|WebTransport|RTCPeerConnection)\b/,
+  /\bsendBeacon\s*\(/,
+  // require('https'), import('node:net'), import x from 'undici', import 'tls'.
+  new RegExp(`(?:\\brequire\\s*\\(\\s*|\\bimport\\s*\\(\\s*|\\bfrom\\s+|\\bimport\\s+)(['"\`])${NETWORK_MODULES}\\1`),
+  /\b(?:Deno\.(?:connect|connectTls|listen)|Bun\.(?:connect|listen))\s*\(/,
+];
+/** A program that starts other programs. */
+const STARTS_PROGRAMS = /\bchild_process\b|\b(?:Bun\.spawn(?:Sync)?|Deno\.(?:Command|run))\b/;
+/** The text inside quotes, backticks included. */
+const QUOTED = /(['"`])((?:\\.|(?!\1)[^\\])*)\1/g;
+
+/**
+ * Whether a program (the code of a `run_code` call) goes online: it fetches, opens a web socket,
+ * loads a network module, or starts a program that goes online (curl, wget and the like). A barrier,
+ * not a wall: it catches the usual ways, not every possible one.
+ * @param {unknown} source - the program's code.
+ * @returns {boolean} true when it should not run while the web is off.
+ */
+export function programGoesOnline(source) {
+  const text = String(source ?? '');
+  if (!text.trim()) return false;
+  if (PROGRAM_SIGNS.some((sign) => sign.test(text))) return true;
+  if (!STARTS_PROGRAMS.test(text)) return false;
+  // The commands it starts are in its strings: execSync('curl …'), spawn('wget', […]).
+  for (const [, , inner] of text.matchAll(QUOTED)) if (goesOnline(inner)) return true;
+  return false;
 }
 

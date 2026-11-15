@@ -199,6 +199,28 @@ function viaSocks({ proxyPort, host, port, user, timeoutMs }) {
   });
 }
 
+/**
+ * Open the one local port this process may reach, where the app passes the connection straight
+ * on to one fixed service (lib/forward.js). Used for the Internet Archive's direct route.
+ */
+function viaForward({ port, timeoutMs }) {
+  return new Promise((resolve, reject) => {
+    const socket = net.connect({ host: '127.0.0.1', port });
+    const timer = setTimeout(() => {
+      socket.destroy();
+      reject(new Error('the connection did not open in time'));
+    }, timeoutMs);
+    socket.on('connect', () => {
+      clearTimeout(timer);
+      resolve(socket);
+    });
+    socket.on('error', (error) => {
+      clearTimeout(timer);
+      reject(new Error(`could not reach the connection (${error.code ?? error.message})`));
+    });
+  });
+}
+
 /** Take a chunked body apart. Stops quietly at a broken chunk. */
 function dechunk(body) {
   const parts = [];
@@ -216,8 +238,10 @@ function dechunk(body) {
 }
 
 /**
- * One GET through the proxy.
- * @param {object} req - `url`, `proxyPort`, `user` (keeps conversations on separate circuits), `maxBytes`, `timeoutMs`.
+ * One GET through the proxy, or, with `via: 'forward'`, through the app's forwarder to one fixed
+ * service (an https address only, its certificate checked).
+ * @param {object} req - `url`, `proxyPort` (the proxy's or the forwarder's local port), `via` ('socks', the default, or 'forward'),
+ *   `user` (keeps conversations on separate circuits), `verify`, `maxBytes`, `timeoutMs`.
  * @returns {Promise<object>} `{ok: true, status, type, title, text, links, bytes, cut}`, `{ok: true, status, redirect}`, or `{ok: false, why}`.
  */
 export async function get(req) {
@@ -227,7 +251,12 @@ export async function get(req) {
   const port = Number(url.port) || (secure ? 443 : 80);
   const maxBytes = Math.min(Math.max(Number(req.maxBytes) || 1_000_000, 10_000), 4_000_000);
   const timeoutMs = Math.min(Math.max(Number(req.timeoutMs) || 60_000, 2_000), 180_000);
-  let socket = await viaSocks({ proxyPort: Number(req.proxyPort), host: url.hostname, port, user: req.user, timeoutMs });
+  const forward = req.via === 'forward';
+  // Outside Tor, only an encrypted connection whose certificate is checked is used.
+  if (forward && (!secure || req.verify !== true)) return { ok: false, why: 'a direct connection is made only to an https address whose certificate is checked' };
+  let socket = forward
+    ? await viaForward({ port: Number(req.proxyPort), timeoutMs })
+    : await viaSocks({ proxyPort: Number(req.proxyPort), host: url.hostname, port, user: req.user, timeoutMs });
   if (secure) {
     // An .onion address is its own proof of identity; its certificate is usually self-signed.
     socket = await new Promise((resolve, reject) => {

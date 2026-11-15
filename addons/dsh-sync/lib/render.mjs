@@ -70,8 +70,10 @@ export function renderPull(result) {
   const lines = ['sync: pull ok']
   if (!result.pulled) {
     lines.push('  already up to date (no remote changes or remote never fetched)')
+    lines.push(...isolatedLines(result))
     return lines.join('\n')
   }
+  lines.push(...isolatedLines(result))
   lines.push(`  remote changes merged${result.merged === true ? ' (merge commit)' : ''} → head ${result.head ?? ''}`)
   if ((result.adopted ?? 0) > 0) lines.push(`  adopted ${result.adopted} remote-only append(s) (local side was unchanged)`)
   if ((result.appended ?? 0) > 0) lines.push(`  both sides appended in ${result.appended} file(s): local version kept, remote version preserved as fork file(s)`)
@@ -80,6 +82,18 @@ export function renderPull(result) {
   if ((result.forks ?? []).length > 20) lines.push(`    … ${result.forks.length - 20} more`)
   for (const warning of (result.warnings ?? [])) lines.push(`    warning: ${warning}`)
   return lines.join('\n')
+}
+
+/**
+ * dsh-sync addition: what was left out of the sync for isolated conversations (Recon).
+ * @param {{isolatedLeftOut?: number, isolatedRemoved?: number}} result - push or pull result.
+ * @returns {string[]} lines; none when nothing was left out.
+ */
+function isolatedLines(result) {
+  const lines = []
+  if ((result.isolatedLeftOut ?? 0) > 0) lines.push(`  left out ${result.isolatedLeftOut} file(s) of isolated conversations (Recon): they are never synced`)
+  if ((result.isolatedRemoved ?? 0) > 0) lines.push(`  took ${result.isolatedRemoved} file(s) of isolated conversations out of the sync repository (its git history still holds them)`)
+  return lines
 }
 
 /**
@@ -94,6 +108,7 @@ export function renderPush(result) {
     'sync: push ok',
     `  mirrored ${result.mirrored ?? 0} file(s)${(result.deleted ?? 0) > 0 ? `, deleted ${result.deleted} (removed locally)` : ''}`,
     `  pushed to ${result.remote ?? 'remote'} → head ${result.head ?? ''}`,
+    ...isolatedLines(result),
   ]
   for (const warning of (result.warnings ?? [])) lines.push(`  warning: ${warning}`)
   return lines.join('\n')

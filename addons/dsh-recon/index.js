@@ -17,12 +17,17 @@
  * Off until switched on in Settings > Recon. Needs the Modes add-on and the Cowork sidebar.
  * The connection layer: lib/tor.js (Recon's own Tor, state in a throwaway folder), lib/sandbox.js
  * and lib/fetch-child.mjs (one locked process per page: one local port, no files, text only),
- * lib/address.js (only .onion addresses the conversation was shown).
- * Route: `GET/POST /dsh-recon/state`.
+ * lib/address.js (only .onion addresses the conversation was shown). The Internet Archive is read
+ * directly or through Tor (`archiveDirect`, lib/web.js); GDELT always through Tor.
+ * After a restart, a conversation's sources and the addresses it was shown are rebuilt from its
+ * saved history (lib/restore.js), in memory only.
+ * Route: `GET/POST /dsh-recon/state`; `GET ?session=<id>` adds that conversation's model and
+ * whether it may receive findings, for the status bar on the Recon tab's start page.
  */
 import z from '@deepseek-ai/schemastery';
-import { chmodSync, existsSync, mkdirSync, readdirSync, realpathSync, rmSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { nameOf, readAccounts, removeCommandFor, serviceOf, storeCommandFor } from './lib/accounts.js';
 import { onionAddressesIn, openTrail } from './lib/address.js';
 import { MODE_ID, TOOLS, withRecon } from './lib/mode.js';
@@ -34,6 +39,7 @@ import { AHMIA, createOnion } from './lib/onion.js';
 import { runLocked } from './lib/sandbox.js';
 import { openBlocklist } from './lib/screen.js';
 import { openSources } from './lib/sources.js';
+import { findingsIn } from './lib/restore.js';
 import { withoutMentions } from './lib/mentions.js';
 import { buildTools, holdsFindings, wasCompacted } from './lib/tools.js';
 import { createUsenet } from './lib/usenet.js';
@@ -46,11 +52,50 @@ export const name = 'dsh-recon';
 /** `GET` gives the page its data; `POST {action: 'tor-test'}` starts Tor once to see that it connects, then stops it. */
 export const STATE_PATH = '/dsh-recon/state';
 const MODES_NS = 'modes';
+/** The folder every Recon conversation runs in, unless a test moves it (roomFrom). */
+export const DEFAULT_ROOM = '/private/tmp/dsh-recon-room';
+
+/**
+ * The room a test asks for through the environment variable DSH_RECON_ROOM, so a test never
+ * empties the real room while the app uses it. Recon empties its room, so only a throwaway folder
+ * is taken: an absolute path whose name starts with "dsh-recon-", directly inside /tmp or the
+ * system's temporary folder, and not the real room's name in any spelling (/tmp is a link to
+ * /private/tmp, and the Mac's disk does not tell capitals from small letters, so
+ * "/tmp/dsh-recon-Room" is the real room). Anything else is ignored and the usual room is used.
+ * @param {unknown} value - the variable's value.
+ * @returns {string} the room's path.
+ */
+export function roomFrom(value) {
+  const text = String(value ?? '').trim();
+  if (!text || !isAbsolute(text)) return DEFAULT_ROOM;
+  const path = resolve(text);
+  if (path !== text.replace(/\/+$/, '') || !/^dsh-recon-[\w.-]{1,80}$/.test(basename(path))) return DEFAULT_ROOM;
+  if (basename(path).toLowerCase() === basename(DEFAULT_ROOM).toLowerCase()) return DEFAULT_ROOM;
+  const real = (where) => {
+    try {
+      return realpathSync(where);
+    } catch {
+      return '';
+    }
+  };
+  const parent = real(dirname(path));
+  const temporary = [real('/tmp'), real(tmpdir())].filter(Boolean);
+  if (!parent || !temporary.includes(parent)) return DEFAULT_ROOM;
+  // A link to another folder is never taken: emptying it would empty that folder.
+  try {
+    const seen = lstatSync(path);
+    if (seen.isSymbolicLink() || !seen.isDirectory()) return DEFAULT_ROOM;
+  } catch {
+    /* not there yet: it is made when Recon starts */
+  }
+  return path;
+}
+
 /**
  * The folder every Recon conversation runs in. The app tells a model the path of its conversation's
  * folder, so this one is outside the user's home and says nothing about them. It is kept empty.
  */
-export const ROOM = '/private/tmp/dsh-recon-room';
+export const ROOM = roomFrom(process.env.DSH_RECON_ROOM);
 
 export const Config = z.object({
   /** The Recon mode and tab. Off leaves nothing of it in the app. */
@@ -70,10 +115,17 @@ export const Config = z.object({
    */
   usenetRoute: z.union([z.const('off'), z.const('direct')]).default('off').volatile(),
   /**
-   * The Internet Archive: dated copies of web pages, read as text through Recon's Tor. On lets
-   * recon_archive_find and recon_archive_read work.
+   * The Internet Archive: dated copies of web pages, read as text. On lets recon_archive_find and
+   * recon_archive_read work.
    */
   archiveOn: z.boolean().default(false).volatile(),
+  /**
+   * Read the Internet Archive directly, not through Tor: its list of copies and the copies
+   * themselves, still GET only, text only, with the same filters and limits. The Archive then sees
+   * this Mac's internet address. Off: through Recon's Tor, where the Archive refuses most reads.
+   * GDELT and .onion sites always go through Tor.
+   */
+  archiveDirect: z.boolean().default(true).volatile(),
   /** The GDELT Project's index of news coverage, asked through Recon's Tor. On lets recon_news_search work. */
   newsOn: z.boolean().default(false).volatile(),
   /**
@@ -129,7 +181,9 @@ export function apply(ctx, config) {
   const usenetAccounts = () => readAccounts(plain(config?.usenetAccounts), { host: plain(config?.usenetHost), port: plain(config?.usenetPort) });
   /** The account used when a request names none. */
   const usenetDefault = () => String(plain(config?.usenetDefaultAccount) ?? '');
-  const web = createWeb({ port: () => onion.port(), run: runLocked, sources, on: () => ({ archive: plain(config?.archiveOn) === true, news: plain(config?.newsOn) === true }) });
+  /** Whether the Internet Archive is read directly (the default) rather than through Tor. */
+  const archiveDirect = () => plain(config?.archiveDirect) !== false;
+  const web = createWeb({ port: () => onion.port(), run: runLocked, sources, on: () => ({ archive: plain(config?.archiveOn) === true, news: plain(config?.newsOn) === true }), archiveDirect });
   const usenet = createUsenet({ run: runLocked, route: usenetRoute, accounts: usenetAccounts, defaultAccount: usenetDefault, login, forward: openForward, sources });
   /** Whether each account has a login in the Keychain, looked up now and then for the page. Only the fact, never a login. */
   const hasLogin = new Map();
@@ -156,10 +210,18 @@ export function apply(ctx, config) {
     }
   };
 
-  /** Make sure the room is there, belongs to the user alone, and is empty. */
+  /**
+   * Make sure the room is there, belongs to the user alone, and is empty. A room that is a link,
+   * not a folder, or someone else's is left alone: emptying it could delete files elsewhere.
+   */
   const prepareRoom = () => {
     try {
       mkdirSync(ROOM, { recursive: true, mode: 0o700 });
+      const seen = lstatSync(ROOM);
+      if (seen.isSymbolicLink() || !seen.isDirectory() || (typeof process.getuid === 'function' && seen.uid !== process.getuid())) {
+        warn(`the Recon folder ${ROOM} is a link, not a folder, or not yours, so it was not emptied`);
+        return;
+      }
       chmodSync(ROOM, 0o700);
       for (const name of readdirSync(ROOM)) rmSync(join(ROOM, name), { recursive: true, force: true });
     } catch (error) {
@@ -213,6 +275,47 @@ export function apply(ctx, config) {
     return mayReceive({ place, route, id: agent?.id, consent });
   };
 
+  /** Conversations whose record was rebuilt from their saved history since Recon started. */
+  const rebuilt = new Set();
+  /** Conversations ended with /recon end since Recon started: what they read stays forgotten. */
+  const ended = new Set();
+  /** "1 source", "2 sources". */
+  const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  /**
+   * After a restart, put back what a Recon conversation was shown, from its saved history: the
+   * numbered sources and the addresses it may open (lib/restore.js). Once per conversation, in
+   * memory only; nothing is written. An ended conversation gets back only its numbering, so a new
+   * source never takes the number of one in its history.
+   */
+  const restore = (agent) => {
+    const id = agent?.id ? String(agent.id) : '';
+    if (!id || rebuilt.has(id)) return;
+    let messages;
+    try {
+      messages = agent.session?.deriveMessages?.();
+    } catch (error) {
+      warn(`could not read a conversation's history: ${String(error?.message ?? error)}`);
+      return;
+    }
+    if (!Array.isArray(messages)) return;
+    rebuilt.add(id);
+    try {
+      const found = findingsIn(messages);
+      if (ended.has(id) || wipeList.has(id)) {
+        sources.restore(id, { floor: found.floor });
+        return;
+      }
+      const added = sources.restore(id, found);
+      // Only what was missing counts: an address the user wrote since the start is already known.
+      const before = trail.count(id);
+      if (found.shown.length > 0) trail.add(id, found.shown);
+      const opened = trail.count(id) - before;
+      if (added > 0 || opened > 0) sources.note(id, 'restored', `rebuilt from the saved conversation after the app started: ${count(added, 'source', 'sources')}${found.sources.length > added ? ` (${found.sources.length - added} already known)` : ''}, ${count(opened, 'address', 'addresses')} it was shown`);
+    } catch (error) {
+      warn(`could not rebuild a conversation's sources: ${String(error?.message ?? error)}`);
+    }
+  };
+
   // ---- the mode: kept in step with the switch ------------------------------------------------
 
   let problem = '';
@@ -254,7 +357,7 @@ export function apply(ctx, config) {
     if (on && !toolsOff) {
       const tools = ctx.get('tools');
       if (!tools?.register) return;
-      toolsOff = buildTools({ enabled, inRecon: (exec) => inRecon(exec?.agent), inRoom: (exec) => inRoom(exec?.agent), gate: (exec) => gate(exec?.agent), onion, usenet, web, sources, idOf: (exec) => String(exec?.agent?.id ?? '') }).map((tool) => tools.register(tool));
+      toolsOff = buildTools({ enabled, inRecon: (exec) => inRecon(exec?.agent), inRoom: (exec) => inRoom(exec?.agent), gate: (exec) => gate(exec?.agent), onion, usenet, web, sources, idOf: (exec) => String(exec?.agent?.id ?? ''), restore: (exec) => restore(exec?.agent) }).map((tool) => tools.register(tool));
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
       toolsOff = undefined;
@@ -280,8 +383,12 @@ export function apply(ctx, config) {
   }, 'recon: follow the switch');
   ctx.on('agent/disposed', ({ agent }) => {
     consent.forget(agent?.id);
-    // A conversation that never read anything leaves no entry behind.
-    if (agent?.id && sources.empty(agent.id)) sources.forget(agent.id);
+    // A conversation that never read anything leaves no entry behind; loaded again, its history is
+    // read again, so the numbers it used are known again.
+    if (agent?.id && sources.empty(agent.id)) {
+      sources.forget(agent.id);
+      rebuilt.delete(String(agent.id));
+    }
   });
 
   // ---- what Recon found stays where it may go ----------------------------------------------------
@@ -368,6 +475,7 @@ export function apply(ctx, config) {
     const model = route ? `${route.model} (${place.name || route.provider})` : 'no model picked';
     const where = !route ? '' : staysHome(place) ? (place.where === 'local' ? 'on this computer' : `in your own network (${place.host})`) : place.where === 'cloud' ? `in the cloud${place.host ? ` (${place.host})` : ''}` : 'at a place Recon cannot tell, treated as cloud';
     const allowed = gate(agent);
+    restore(agent);
     return [
       'Recon conversation: isolated.',
       inRoom(agent) ? 'Folder: Recon\'s own empty folder. The model is told no path of yours.' : 'Folder: a folder of yours, so the tools are OFF in this conversation. Start a new one with the New button in the Recon tab.',
@@ -375,7 +483,7 @@ export function apply(ctx, config) {
       `Model: ${model}${where ? `, ${where}` : ''}.`,
       allowed.ok ? (staysHome(place) ? 'What Recon finds stays on your own machines.' : 'You agreed that what Recon finds goes to this cloud model, for this conversation.') : 'What Recon finds is NOT sent to this model. Type /recon cloud to agree for this conversation, or pick a local model.',
       `Network: .onion sites through Recon's own Tor (${tor.status().state}). Usenet: ${usenetRoute() === 'direct' ? `direct encrypted connections; accounts: ${usenetAccounts().map((account) => `${nameOf(account)} (${account.host || 'no server yet'}:${account.port})`).join(', ') || '(none set yet)'}` : 'off (Settings → Recon → Usenet)'}.`,
-      `More sources, through Tor: Internet Archive ${plain(config?.archiveOn) === true ? 'on' : 'off'}, GDELT news ${plain(config?.newsOn) === true ? 'on' : 'off'} (Settings → Recon → More sources).`,
+      `More sources (Settings → Recon → More sources): Internet Archive ${plain(config?.archiveOn) !== true ? 'off' : archiveDirect() ? 'on, read directly, not through Tor (the Archive sees this Mac\'s internet address)' : 'on, through Tor'}; GDELT news ${plain(config?.newsOn) === true ? 'on, through Tor' : 'off'}.`,
       `Blocklist of banned sites: ${blocklist.ready() ? `${blocklist.info().size} sites, fetched ${new Date(blocklist.info().at).toISOString().slice(0, 16).replace('T', ' ')} UTC` : 'not fetched yet; it is fetched before the first search or page'}.`,
       `Read so far: ${sources.list(agent.id).length} sources. /recon log shows every search and source.`,
     ].join('\n');
@@ -395,8 +503,13 @@ export function apply(ctx, config) {
     sources.forget(id);
     trail.forget(id);
     consent.forget(id);
+    // Not rebuilt from its history again while Recon runs (only its numbering is), also when it
+    // cannot be deleted. After the app restarts, only a conversation still waiting on the wipe
+    // list is kept from it; one that could not be deleted still holds what it read.
+    ended.add(id);
+    rebuilt.delete(id);
     await tor.stop();
-    if (!wiper) return 'What this conversation read is forgotten and Tor is stopped. The conversation itself could not be deleted: this version of the app does not offer what that needs. Archive it yourself, then delete it from the list.';
+    if (!wiper) return 'What this conversation read is forgotten and Tor is stopped. The conversation itself could not be deleted: this version of the app does not offer what that needs. Its saved history still holds what it read until you delete it: archive it yourself, then delete it from the list.';
     wipeList.add(id);
     let closed = true;
     try {
@@ -471,12 +584,17 @@ export function apply(ctx, config) {
                 consent.agree(agent.id, route);
                 return { kind: 'success', text: `Agreed: what Recon finds in this conversation is sent to ${route.model} (${place.name || route.provider}). This holds for this conversation and this model until the app is closed.` };
               }
-              if (word === 'log') return enabled() && inRecon(agent) ? { kind: 'success', text: `Research log of this conversation\n\n${sources.log(agent.id)}` } : { kind: 'error', text: status(agent) };
+              if (word === 'log') {
+                if (!enabled() || !inRecon(agent)) return { kind: 'error', text: status(agent) };
+                restore(agent);
+                return { kind: 'success', text: `Research log of this conversation\n\n${sources.log(agent.id)}` };
+              }
               if (word === 'export') {
                 if (!enabled() || !inRecon(agent)) return { kind: 'error', text: status(agent) };
+                restore(agent);
                 const found = sources.full(agent.id);
                 const notes = sources.notes(agent.id);
-                if (found.length === 0 && notes.length === 0) return { kind: 'error', text: 'There is nothing to export: nothing was read in this conversation since the app was started. What Recon reads is kept in memory only.' };
+                if (found.length === 0 && notes.length === 0) return { kind: 'error', text: 'There is nothing to export: nothing was read in this conversation, and nothing the assistant wrote was kept since the app was started.' };
                 const file = writeExport(exportFolder(), exportText({ sources: found, cite: (source) => sources.cite(source), log: sources.log(agent.id), notes }));
                 sources.note(agent.id, 'export', `written (${found.length} sources, ${notes.length} notes)`);
                 return { kind: 'success', text: `Exported ${found.length} sources and ${notes.length} notes to:\n${file}\n\nEverything from sources and from the assistant is quoted and marked as untrusted material in that file. If you give the file to another tab or tool, leave the marks in.` };
@@ -501,16 +619,44 @@ export function apply(ctx, config) {
 
   // ---- the page's data ---------------------------------------------------------------------------
 
-  const view = () => {
+  /**
+   * One conversation as the Recon start page's status bar shows it: its model, where that runs,
+   * and whether what Recon finds may go to it. Agreeing to a cloud model stays typed (/recon cloud).
+   * @param {string} id - the conversation's id.
+   */
+  const conversationView = (id) => {
+    let agent;
+    try {
+      agent = ctx.get('agents')?.get?.(id);
+    } catch {
+      agent = undefined;
+    }
+    if (!agent) return { known: false };
+    const { route, place } = modelOf(agent);
+    const allowed = gate(agent);
+    return {
+      known: true,
+      recon: enabled() && inRecon(agent),
+      inRoom: inRoom(agent),
+      model: route?.model ?? '',
+      provider: route ? place.name || route.provider : '',
+      where: !route ? '' : staysHome(place) ? place.where : place.where === 'cloud' ? 'cloud' : 'unknown',
+      may: allowed.ok,
+      agreed: allowed.ok && Boolean(route) && !staysHome(place),
+    };
+  };
+
+  /** @param {object} [options] - `light`: leave out the Keychain look-up (the start page asks often and needs no logins). */
+  const view = ({ light = false } = {}) => {
     const path = torBin();
     if (path !== torSeen.path) {
       torSeen = { path, version: '' };
       if (path) void torVersion(path).then((version) => { if (torSeen.path === path) torSeen = { path, version }; });
     }
-    lookForLogins();
+    if (!light) lookForLogins();
     const accounts = usenetAccounts();
     return {
-      more: { archive: plain(config?.archiveOn) === true, news: plain(config?.newsOn) === true, archiveHost: ARCHIVE, newsHost: NEWS },
+      more: { archive: plain(config?.archiveOn) === true, archiveDirect: archiveDirect(), news: plain(config?.newsOn) === true, archiveHost: ARCHIVE, newsHost: NEWS },
       room: ROOM,
       exportFolder: exportFolder(),
       waitingToWipe: wipeList.list().length,
@@ -571,7 +717,9 @@ export function apply(ctx, config) {
                 // Runs in the background; the page asks again to see how far it is.
                 void runTorTest();
               }
-              res.end(JSON.stringify(view()));
+              // The start page's status bar names its conversation: `?session=<id>`.
+              const asked = req.method === 'GET' ? String(new URL(String(req.url ?? ''), 'http://recon.invalid').searchParams.get('session') ?? '').slice(0, 200) : '';
+              res.end(JSON.stringify(asked ? { ...view({ light: true }), conversation: conversationView(asked) } : view()));
               follow();
             } catch (error) {
               res.statusCode = 400;

@@ -338,7 +338,7 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
       return h('div', { className: 'dsh-rs-page' },
         h('style', null, CSS),
         h('h2', { className: 'dsh-rs-title' }, 'Research'),
-        h('p', { className: 'dsh-rs-desc' }, 'A tab for researching a question in depth. The assistant plans sub-questions, searches and reads many sources with helpers working at once, reviews what is missing and searches again, then writes a report in which every claim is cited and checked against the pages that were read. You see each stage as it happens, and the report ends with follow-up questions you can ask with one click.'),
+        h('p', { className: 'dsh-rs-desc' }, 'A tab for researching a question in depth. The assistant plans sub-questions, searches and reads many sources with helpers working at once, reviews what is missing and searches again, then writes a report that cites its sources by number. Every citation is checked to be in the source list, and each source is marked "read", "seen only in search results, not read" or "not read, and not seen in search results"; claims are not compared with the pages. You see each stage as it happens, and the report ends with follow-up questions you can ask with one click.'),
         note.text ? h('p', { className: 'dsh-rs-desc', 'data-error': String(note.error), role: 'status' }, note.text) : null,
         data.problem ? h('p', { className: 'dsh-rs-desc', 'data-error': 'true' }, data.problem) : null,
         h('div', { className: 'dsh-rs-group' }, 'The tab'),
@@ -360,7 +360,8 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
         h('ul', { className: 'dsh-rs-list' },
           h('li', null, 'The helpers search with your web search provider. In other tabs, the Web button in the chat box sets how much the assistant searches by itself; in-depth research with helpers is here.'),
           h('li', null, 'A Thorough run can start more than 25 helper runs. With a cloud model that costs tokens; with a local one it takes time.'),
-          h('li', null, 'Sources are pages from the web. The report marks which ones were really opened; check the important claims yourself.')));
+          h('li', null, 'Sources are pages from the web. The report marks which ones a helper read and which were seen only in search results. Claims are not compared with the pages, so check the important ones yourself.'),
+          h('li', null, 'Research conversations run Read Only: the assistant cannot change your files without asking you first. Leaving Research puts back the access level the conversation had before. Reports and diagrams are still saved.')));
     }
 
     return {

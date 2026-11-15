@@ -7,8 +7,13 @@
  * switched off; this add-on's patch switches it on, in memory only (see cordis.patch.yml).
  * lib/text.js asks it for more than the app's own endpoint does and leaves out the notes the app
  * adds to every conversation. Nothing is given to a model.
+ *
+ * Isolated conversations (Recon) are never shown, neither by their title nor by the text of their
+ * messages (lib/hidden.js). The ids of text hits (`hitIds`) stay complete: the Cowork sidebar's
+ * search inside one tab uses them, and keeps only the conversations of that tab.
  */
 import z from '@deepseek-ai/schemastery';
+import { isolatedCheck } from './lib/hidden.js';
 import { results } from './lib/match.js';
 import { searchText } from './lib/text.js';
 
@@ -39,6 +44,24 @@ function plain(value) {
  * @param {object} config - live Config.
  */
 export function apply(ctx, config) {
+  /** @returns {(id: string) => boolean} whether a conversation is isolated, as the Modes add-on has it now. */
+  const isolatedNow = () => {
+    let modes;
+    try {
+      modes = ctx.get('settings')?.describe?.().find((entry) => entry.ns === 'modes')?.value;
+    } catch {
+      modes = undefined;
+    }
+    const service = ctx.get('modes');
+    const agents = ctx.get('agents');
+    return isolatedCheck({
+      modes,
+      isolated: (id) => service?.isolated?.(id) === true,
+      modeOf: (id) => service?.get?.(id),
+      loaded: (id) => Boolean(agents?.get?.(id)),
+    });
+  };
+
   ctx.inject(['webServer', 'connection'], (inner) => {
     inner.effect(
       () =>
@@ -84,7 +107,7 @@ export function apply(ctx, config) {
                   text = { hits: [], more: false, note: error?.code === 'SESSION_QUERY_SEARCH_DISABLED' ? 'The app\'s search of message text is switched off, so only titles were searched.' : 'The text of messages could not be searched just now; titles were.' };
                 }
               }
-              res.end(JSON.stringify({ ...results({ ...body, hits: text.hits }), more: text.more, note: text.note, hitIds: text.hits.map((hit) => hit.sessionId) }));
+              res.end(JSON.stringify({ ...results({ ...body, hits: text.hits, hidden: isolatedNow() }), more: text.more, note: text.note, hitIds: text.hits.map((hit) => hit.sessionId) }));
             } catch (error) {
               res.statusCode = 400;
               res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 200) }));

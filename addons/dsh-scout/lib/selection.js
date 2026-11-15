@@ -34,7 +34,7 @@ export function readSelection(raw = {}) {
 }
 
 /** The note a Scout conversation gets. */
-export function selectionNote(selection, { profile, files, model } = {}) {
+export function selectionNote(selection, { profile, files, reports, model } = {}) {
   const given = [
     selection.title && `Work: ${selection.title}`,
     selection.location && `Where: ${selection.location}`,
@@ -48,6 +48,7 @@ export function selectionNote(selection, { profile, files, model } = {}) {
     model ? `Model: ${model}` : '',
     files ? `User's files: ${files}` : '',
     profile ? `Profile: ${profile}` : '',
+    reports ? `Earlier reports: ${reports}` : '',
   ].filter(Boolean).join('\n');
 }
 

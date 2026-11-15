@@ -21,6 +21,7 @@ import path from 'node:path'
 import { BACKENDS, ENC_DIR, ENC_EXT, FORK_NAME_RE, MERGE_KINDS, MIRROR_DIR } from './constants.mjs'
 import { SyncEngine } from './engine.mjs'
 import { mirrorSessionRoot, restoreSessionRoot, pruneRestoredSessions } from './mirror.mjs'
+import { askIsolation, isolationSummary } from './isolation.mjs'
 import { classifyPath } from './merge.mjs'
 import { detectAge, ageEncrypt, ageDecrypt } from './age.mjs'
 import { selectEncryptionMode, BACKEND_MODES } from './backend.mjs'
@@ -340,12 +341,25 @@ export class EncryptedBackend {
     }
   }
 
-  /** 镜像 sessionRoot → 明文工作树 sessions/（encrypted 后端不写 device.txt）。 */
-  async #mirrorOnly() {
+  /**
+   * 镜像 sessionRoot → 明文工作树 sessions/（encrypted 后端不写 device.txt）。
+   * dsh-sync addition: isolated conversations are left out, as in SyncEngine: `opts.isolation` is asked inside the lock
+   * right after the listing (an unknown answer throws before the worktree is touched); `opts.exclude` is a fixed rule.
+   * `seen.answer` receives the answer.
+   */
+  async #mirrorOnly(opts = {}, seen = {}) {
+    const fence = typeof opts.isolation === 'function'
+      ? async () => {
+        seen.answer = await askIsolation(opts.isolation)
+        return seen.answer
+      }
+      : undefined
     return mirrorSessionRoot({
       sessionRoot: this.#sessionRoot,
       repoDir: this.#repoDir,
       mirrorDir: MIRROR_DIR,
+      exclude: opts.exclude,
+      fence,
     })
   }
 
@@ -418,29 +432,32 @@ export class EncryptedBackend {
   /**
    * 状态：先本地初始化 + 镜像（不提交），再收集 git 状态；fork 清单改从明文
    * 树读取（密文树里的 fork 文件名带 .age 后缀，不是面向用户的形态）。
+   * @param {{isolation?: Function, exclude?: (rel: string) => boolean}} [opts] - dsh-sync addition, as SyncEngine.status.
    * @returns {Promise<object>}
    */
-  async status() {
+  async status(opts = {}) {
     const selection = await this.probeMode()
     if (selection.mode === BACKEND_MODES.PLAINTEXT) {
-      return { ...(await this.#plain.status()), warnings: this.#warnings }
+      return { ...(await this.#plain.status(opts)), warnings: this.#warnings }
     }
     return this.#schedule(async () => {
+      const seen = {}
       try {
         await fs.mkdir(this.#repoDir, { recursive: true })
         await this.#ensureEncryptedRepo()
-        await this.#mirrorOnly()
+        await this.#mirrorOnly(opts, seen)
       } catch {
         // 初始化/镜像失败不阻断状态：collectStatus 返回带 error 的快照。
       }
       const snapshot = await collectStatus(this.#git, { branch: this.#branch, remote: this.#remote ?? '' })
-      return { ...snapshot, forks: await this.#plainForkFiles(), warnings: this.#warnings }
+      const isolation = typeof opts.isolation === 'function' ? { isolation: await isolationSummary(seen.answer, opts.isolation) } : {}
+      return { ...snapshot, forks: await this.#plainForkFiles(), warnings: this.#warnings, ...isolation }
     })
   }
 
   /**
    * 推送：镜像 → 加密 → 提交 → push；被拒时拉取调和后重推一次。
-   * @param {object} [opts] - {signal?: AbortSignal}。
+   * @param {object} [opts] - {signal?: AbortSignal, isolation?, exclude?, beforeCommit?}（dsh-sync addition，见 SyncEngine.push）。
    * @returns {Promise<object>}
    */
   async push(opts = {}) {
@@ -453,7 +470,10 @@ export class EncryptedBackend {
         this.#requireRemote()
         await fs.mkdir(this.#repoDir, { recursive: true })
         await this.#ensureEncryptedRepo()
-        const mirror = await this.#mirrorOnly()
+        // The plaintext of an isolated conversation leaves the worktree here, and its ciphertext with the encryption.
+        const mirror = await this.#mirrorOnly(opts)
+        // dsh-sync addition: the project manifest is written inside the lock, once the isolated conversations are known.
+        if (typeof opts.beforeCommit === 'function') await opts.beforeCommit()
         await this.#encryptMirror()
         await this.#git.commitAll('dsh-sync: push snapshot (encrypted)')
         try {
@@ -461,7 +481,7 @@ export class EncryptedBackend {
         } catch (error) {
           if (!(error instanceof SyncError && error.code === 'PUSH_REJECTED')) throw error
           this.#logger.info('push rejected (remote moved); pulling and reconciling before one retry')
-          const pulled = await this.#pullInternal(opts)
+          const pulled = await this.#pullInternal({ ...opts, exclude: mirror.exclude })
           if (!pulled.ok) throw error
           await this.#git.push({ signal: opts.signal })
         }
@@ -475,6 +495,8 @@ export class EncryptedBackend {
           head,
           mirrored: mirror.mirrored,
           deleted: mirror.deleted.length,
+          isolatedLeftOut: mirror.isolatedSkipped,
+          isolatedRemoved: mirror.isolatedRemoved.length,
           remote: sanitizeRemote(this.#remote),
           warnings: this.#warnings,
         }
@@ -486,7 +508,7 @@ export class EncryptedBackend {
 
   /**
    * 拉取：本地提交检查点 → fetch → 明文三方合并 → 重新加密 → 提交。
-   * @param {object} [opts] - {signal?: AbortSignal}。
+   * @param {object} [opts] - {signal?: AbortSignal, isolation?, exclude?}（dsh-sync addition，见 SyncEngine.push）。
    * @returns {Promise<object>}
    */
   async pull(opts = {}) {
@@ -499,10 +521,12 @@ export class EncryptedBackend {
         this.#requireRemote()
         await fs.mkdir(this.#repoDir, { recursive: true })
         await this.#ensureEncryptedRepo()
-        await this.#mirrorOnly()
+        const mirror = await this.#mirrorOnly(opts)
         await this.#encryptMirror()
         await this.#git.commitAll('dsh-sync: local checkpoint before pull (encrypted)')
-        return await this.#pullInternal(opts)
+        // dsh-sync addition: the merge and the restore leave out the same isolated conversations as the checkpoint.
+        const pulled = await this.#pullInternal({ ...opts, exclude: mirror.exclude })
+        return { ...pulled, isolatedLeftOut: mirror.isolatedSkipped, isolatedRemoved: mirror.isolatedRemoved.length + (pulled.isolatedRemoved ?? 0) }
       } catch (error) {
         return this.#fail(error)
       }
@@ -538,9 +562,19 @@ export class EncryptedBackend {
     const theirs = await this.#treeAtRev(remoteHead)
     const stamp = new Date().toISOString().replace(/[-:T]/gu, '').slice(0, 14)
     const { merged, forks: rawForks, adopted, appended, diverged } = mergeTrees(base, ours, theirs, stamp, this.deviceShort)
+    // dsh-sync addition: what the remote holds of an isolated conversation does not stay in the merge.
+    let stripped = 0
+    if (typeof opts.exclude === 'function') {
+      for (const rel of [...merged.keys()]) {
+        if (opts.exclude(rel)) {
+          merged.delete(rel)
+          stripped += 1
+        }
+      }
+    }
     // fork 路径统一加 sessions/ 前缀，与 git 后端的 ls-files 约定一致（handleForks
     // 与展示都依赖该前缀）。
-    const forks = rawForks.map(rel => `${MIRROR_DIR}/${rel}`)
+    const forks = rawForks.filter(rel => merged.has(rel)).map(rel => `${MIRROR_DIR}/${rel}`)
     // dsh-sync fix: record the remote head as a second parent. Without it the pull commit is not a
     // descendant of the remote, so every later push was rejected as "remote moved".
     const merging = await this.#git.beginOursMerge(remoteHead)
@@ -549,8 +583,8 @@ export class EncryptedBackend {
       // dsh-sync fix: the original encrypted backend merged into the worktree but never copied the result into the live
       // session store, so sessions pulled from another device never appeared. Same step as the plaintext engine.
       const mirrorRoot = path.join(this.#repoDir, MIRROR_DIR)
-      const pruned = await pruneRestoredSessions({ repoDir: this.#repoDir, mirrorRoot, sessionRoot: this.#sessionRoot })
-      const restored = await restoreSessionRoot({ repoDir: this.#repoDir, mirrorRoot, sessionRoot: this.#sessionRoot })
+      const pruned = await pruneRestoredSessions({ repoDir: this.#repoDir, mirrorRoot, sessionRoot: this.#sessionRoot, exclude: opts.exclude })
+      const restored = await restoreSessionRoot({ repoDir: this.#repoDir, mirrorRoot, sessionRoot: this.#sessionRoot, exclude: opts.exclude })
       await this.#encryptMirror()
       let newHead
       if (merging) {
@@ -573,6 +607,7 @@ export class EncryptedBackend {
         forks,
         restored: restored.restored,
         restoredSkipped: restored.skippedChanged,
+        isolatedRemoved: stripped,
         head: newHead ?? undefined,
         warnings: this.#warnings,
       }

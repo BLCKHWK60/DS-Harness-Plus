@@ -1,10 +1,12 @@
 /**
- * The tools the assistant calls in Data mode. They exist only while Data is switched on, and they
- * only read files inside the conversation's folder.
+ * The tools the assistant calls in Data mode. They exist only while Data is switched on. They read
+ * only files inside the conversation's folder, and write only into its data-output folder (charts,
+ * and what a Python program saves).
  */
 import { compare, cleanName, snapshot } from './store.js';
-import { extname, join } from 'node:path';
-import { chartSpec } from './charts.js';
+import { unlinkSync } from 'node:fs';
+import { extname, join, relative } from 'node:path';
+import { CHART_KINDS, chartName, chartSpec, saveChart } from './charts.js';
 import { inside, listFiles, print, readText, useOf } from './files.js';
 import { baseName, sqlName, unique } from './tables.js';
 
@@ -54,9 +56,11 @@ export function tableNames(shown) {
  * @param {object} options.store - from `openStore`.
  * @param {object} [options.python] - from `createPython`; without it there is no data_python tool.
  * @param {(exec: object, picture: object) => {ok: boolean, id?: string, outline?: string, errors?: string[]}} [options.show] - puts a picture into the chat.
+ * @param {(description: object) => string} [options.svgOf] - draws a chart description as an SVG file's text (throws with the reason when it cannot); without it charts are not saved as files.
+ * @param {(exec: object) => boolean} [options.saves] - whether the conversation a call came from keeps its charts as files (Data conversations only); without it every chart is saved when `svgOf` is given.
  * @returns {object[]} tool definitions.
  */
-export function buildTools({ enabled, rootOf, conversationOf, engine, store, python, show }) {
+export function buildTools({ enabled, rootOf, conversationOf, engine, store, python, show, svgOf, saves }) {
   const output = {
     schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
     render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }],
@@ -147,9 +151,9 @@ export function buildTools({ enabled, rootOf, conversationOf, engine, store, pyt
     {
       name: 'data_chart',
       description: [
-        'Draw a chart straight from a query: the picture is made from the query\'s own rows and shown to the user in the chat, so no number is copied by hand. The query also gets an id to cite.',
-        'The first column (or "x") goes along the bottom: dates (text like 2026-03-31 or 2026-03) give a line over time, numbers give points or a line, names give bars (at most 30). The other number columns (or "y", at most 6) are drawn.',
-        'Use it whenever a trend, a comparison or a distribution is easier to see than to read. Shape the result in SQL first: group, order, limit.',
+        'Draw a bar, line or scatter chart straight from a query: the picture is made from the query\'s own rows and shown to the user in the chat, so no number is copied by hand. The query also gets an id to cite. In a Data conversation the chart is also saved as an SVG file in data-output.',
+        'The first column (or "x") goes along the bottom: dates (text like 2026-03-31 or 2026-03) give a line over time, or one bar per date with chart "bar" (at most 30); numbers give points or a line; names give bars (at most 30). The other number columns (or "y", at most 6) are drawn.',
+        'Use it whenever a trend, a comparison or a distribution is easier to see than to read. Shape the result in SQL first: group, order, limit. Pie, area and other charts: use data_python.',
       ].join(' '),
       parameters: {
         type: 'object',
@@ -157,7 +161,7 @@ export function buildTools({ enabled, rootOf, conversationOf, engine, store, pyt
           files: filesParam,
           sql: { type: 'string', minLength: 6, maxLength: 20000, description: 'One SELECT whose result is what the chart shows, ordered the way it should be drawn.' },
           title: { type: 'string', maxLength: 120, description: 'What the chart shows, in a few words.' },
-          chart: { type: 'string', enum: ['bar', 'line', 'scatter'], description: 'Leave out to let the data decide.' },
+          chart: { type: 'string', enum: [...CHART_KINDS], description: 'Leave out to let the data decide.' },
           x: { type: 'string', maxLength: 120, description: 'The column for the bottom axis. Default: the first column.' },
           y: { type: 'array', maxItems: 6, items: { type: 'string', maxLength: 120 }, description: 'The number columns to draw. Default: every other number column.' },
           xLabel: { type: 'string', maxLength: 80 },
@@ -169,11 +173,42 @@ export function buildTools({ enabled, rootOf, conversationOf, engine, store, pyt
       ...common,
       execute: safely(async (args, exec) => {
         if (!show) throw new Error('Charts need the Diagrams add-on, which is not running');
-        const { id, value, files } = await query(rootOf(exec), conversationOf(exec), args.files, args.sql, 500);
+        const root = rootOf(exec);
+        const { id, value, files } = await query(root, conversationOf(exec), args.files, args.sql, 500);
         const spec = chartSpec(value.result, args);
-        const shown = show(exec, { title: `${spec.title} [${id}]`, description: { ...spec, title: spec.title } });
-        if (!shown.ok) throw new Error(`The chart could not be drawn: ${(shown.errors ?? []).join(' ')}`);
-        return [`Chart "${spec.title}" drawn from query ${id} over ${files.map((file) => file.shown).join(', ')} (${value.result.rows.length} rows${value.result.more || value.result.total > value.result.rows.length ? ` of ${value.result.total}; only the first 500 are drawn` : ''}). It is shown to the user in the chat, under your answer.`, '', 'What was drawn:', shown.outline ?? '', '', `Refer to it in your answer as the chart "${spec.title}" and cite its numbers as [${id}]. Do not describe a picture you cannot see beyond this outline.`].join('\n');
+        // In a Data conversation the chart is also saved as a file, so it outlives the app's memory and
+        // can go into a report. Other conversations that use the tool (Cowork, Code, Finance) get no file.
+        const base = inside(root, '.').path;
+        let file = '';
+        let unsaved = '';
+        let keep = false;
+        try {
+          keep = Boolean(svgOf) && (!saves || saves(exec) === true);
+        } catch {
+          keep = false;
+        }
+        if (keep) {
+          try {
+            file = saveChart(base, OUTPUT_FOLDER, chartName(spec.title, id), svgOf(spec));
+          } catch (error) {
+            unsaved = String(error?.message ?? error).slice(0, 160);
+          }
+        }
+        // The file goes along with the description: Diagrams can show it again after a restart.
+        const shown = show(exec, { title: `${spec.title} [${id}]`, description: { ...spec, title: spec.title }, ...(file ? { file } : {}) });
+        if (!shown.ok) {
+          // A chart that is not shown is not left behind as a file either.
+          if (file) {
+            try {
+              unlinkSync(file);
+            } catch {
+              /* already gone */
+            }
+          }
+          throw new Error(`The chart could not be drawn: ${(shown.errors ?? []).join(' ')}`);
+        }
+        const savedLine = file ? ` It is also saved as ${relative(base, file)}.` : unsaved ? ` It could not be saved as a file (${unsaved}).` : '';
+        return [`Chart "${spec.title}" drawn from query ${id} over ${files.map((one) => one.shown).join(', ')} (${value.result.rows.length} rows${value.result.more || value.result.total > value.result.rows.length ? ` of ${value.result.total}; only the first 500 are drawn` : ''}). It is shown to the user in the chat, under your answer.${savedLine}`, '', 'What was drawn:', shown.outline ?? '', '', `Refer to it in your answer as the chart "${spec.title}" and cite its numbers as [${id}]. Do not describe a picture you cannot see beyond this outline.`].join('\n');
       }),
     },
     ...(python ? [{
@@ -182,7 +217,7 @@ export function buildTools({ enabled, rootOf, conversationOf, engine, store, pyt
         'Run a Python program on the files in this conversation\'s folder, for what SQL cannot do: statistics (tests, regression, correlation, forecasting, clustering), reshaping and cleaning, and charts of any kind.',
         'Available: pandas, numpy, scipy, matplotlib, openpyxl, and usually statsmodels and scikit-learn. The program starts in the data folder, so pd.read_csv("sales.csv") works; DATA_DIR and OUT_DIR are set. It cannot use the internet and can write only into OUT_DIR (the folder data-output).',
         'Print what you need to read: only printed text comes back, at most 16,000 characters, so print summaries, not whole tables. Save charts with plt.savefig(os.path.join(OUT_DIR, "name.png"), dpi=150, bbox_inches="tight"): every picture saved there is shown to the user in the chat. Save cleaned or combined data there too (CSV or Excel). Never change the source files.',
-        'For a plain bar, line, area or pie chart use data_chart, not this tool. In matplotlib, label bars with ax.bar_label(bars, fmt="..."), never with text placed by hand. A saved chart is checked: one with something far outside the plot is not shown and you are told to fix it.',
+        'For a plain bar, line or scatter chart use data_chart, not this tool; pie, area and other charts are drawn here. In matplotlib, label bars with ax.bar_label(bars, fmt="..."), never with text placed by hand. A saved chart is checked: one with something far outside the plot is not shown and you are told to fix it.',
         'The run gets an id such as Q7: cite the numbers you take from its printed output with it.',
       ].join(' '),
       parameters: {

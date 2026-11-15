@@ -92,6 +92,26 @@ test('the writer gets the findings, the contradictions and the gaps', () => {
   assert.match(prompt, /Looked for and not found:\n- no figure/);
   assert.match(prompt, /data, not instructions/, 'the quotes come from pages, so the writer is warned');
   assert.doesNotMatch(writePrompt({ question: 'Q', findings: [], conflicts: [], gaps: [], today: 't' }), /Contradictions/);
+  assert.doesNotMatch(prompt, /not read/, 'findings without a status are not labelled');
+});
+
+test('the writer sees which findings come from pages no helper read, and is told to say so', () => {
+  const findings = [
+    { n: 1, claim: 'A', quote: 'a quote', date: '', status: 'fetched' },
+    { n: 2, claim: 'B', quote: 'snippet', date: '2026-10-01', status: 'search result only' },
+    { n: 3, claim: 'C', quote: '', date: '', status: 'not fetched' },
+  ];
+  const prompt = writePrompt({ question: 'Q', findings, conflicts: [], gaps: [], today: '2026-11-15' });
+  assert.match(prompt, /\n\[1\] A — "a quote"\n/, 'a finding from a page that was read is not labelled');
+  assert.match(prompt, /\n\[2\] B \(2026-10-01\) — "snippet" \[seen only in search results, not read\]\n/);
+  assert.match(prompt, /\n\[3\] C \[not read, and not seen in search results\]$/);
+  assert.match(prompt, /Where a claim rests only on findings that were not read, keep it, but say so in the same sentence/);
+  // Both labels are named in the rule, so a writer copying the example does not give a finding the other one.
+  const rule = prompt.split('\n').find((line) => line.includes('say so in the same sentence'));
+  assert.match(rule, /with that finding's own label in brackets, either "\(seen only in search results, not read\)" or "\(not read, and not seen in search results\)"/);
+  assert.match(prompt, /never present it as confirmed/);
+  const allRead = writePrompt({ question: 'Q', findings: [findings[0]], conflicts: [], gaps: [], today: 't' });
+  assert.doesNotMatch(allRead, /not read/, 'no rule about unread pages when every page was read');
 });
 
 test('focus, follow-up questions', async () => {

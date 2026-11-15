@@ -1,8 +1,9 @@
 /**
- * The direct route to the news server. The locked process may reach one local port and nothing
- * else, so the app opens that port for the length of one request and passes what arrives straight
- * on to the server. It passes ciphertext: the encryption runs from the locked process to the
- * server, and this forwarder never sees a word of an article or the login.
+ * The direct route to one fixed server: a Usenet account's news server, or the Internet Archive
+ * when it is read directly. The locked process may reach one local port and nothing else, so the
+ * app opens that port for the length of one request and passes what arrives straight on to that
+ * server and no other. It passes ciphertext: the encryption runs from the locked process to the
+ * server, and this forwarder never sees a word of an article, a page or a login.
  */
 import net from 'node:net';
 

@@ -3,7 +3,8 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { FOCUSES, KINDS, MARKETS, METHOD, MODE, MODE_ID, PERIODS, PINS_MAX, cleanList, cleanName, openPins, readSelection, selectionNote, withFinance } from '../lib/finance.js';
+import * as finance from '../lib/finance.js';
+import { FOCUSES, KINDS, MARKETS, METHOD, MODE, MODE_ID, PERIODS, PINS_MAX, changeSelection, cleanList, cleanName, openPins, readSelection, selectionNote, toolsOffNote, withFinance } from '../lib/finance.js';
 import { SKILLS } from '../skills.js';
 import { readSettings } from '../index.js';
 
@@ -132,4 +133,83 @@ test('the skills are complete and all carry the rules', () => {
   }
   assert.match(SKILLS.find((skill) => skill.name === 'finance-news-and-mood').content, /finance_news[\s\S]*finance_social/);
   assert.match(SKILLS.find((skill) => skill.name === 'finance-economy-brief').content, /finance_economy/);
+});
+
+test('a change from the chat box keeps the rest of the selection and refuses what is not on a list', () => {
+  const start = { kind: 'company', subject: 'NVIDIA', market: 'United States', focus: 'news', period: 'quarter' };
+  // The list of fields that nothing read is gone: changeSelection names its fields itself.
+  assert.equal(Object.hasOwn(finance, 'SELECTION_FIELDS'), false);
+  assert.deepEqual(changeSelection(start, { subject: ' ASML\n', market: 'Europe' }), { kind: 'company', subject: 'ASML', market: 'Europe', focus: 'news', period: 'quarter' });
+  // A choice not on its list leaves the field as it was.
+  assert.deepEqual(changeSelection(start, { kind: 'stocks', focus: 'gossip', period: 'decade' }), start);
+  // An empty market keeps the market; an empty subject clears the subject.
+  assert.equal(changeSelection(start, { market: '  ' }).market, 'United States');
+  assert.equal(changeSelection(start, { subject: '' }).subject, '');
+  // A market must be on the list: the built-in one when no list is given.
+  assert.equal(changeSelection(start, { market: 'Atlantis' }).market, 'United States');
+  assert.equal(changeSelection(start, { market: 'Mexico' }).market, 'United States');
+  // A market of the owner's own counts once it is on the list given; it is stored as listed.
+  const mine = [...MARKETS, 'Mexico'];
+  assert.equal(changeSelection(start, { market: ' mexico ' }, mine).market, 'Mexico');
+  assert.equal(changeSelection(start, { market: 'europe' }, mine).market, 'Europe');
+  assert.equal(changeSelection(start, { market: 'Mexico <b>' }, mine).market, 'United States');
+  assert.equal(changeSelection(start, { market: 'Atlantis' }, mine).market, 'United States');
+  // The conversation's market now stays a valid choice, even when it is on no list any more.
+  const gone = { ...start, market: 'Peru' };
+  assert.equal(changeSelection(gone, { market: 'peru', focus: 'mood' }, MARKETS).market, 'Peru');
+  assert.equal(changeSelection(gone, { market: 'Atlantis' }, MARKETS).market, 'Peru');
+  assert.equal(changeSelection(gone, { market: 'Japan' }, MARKETS).market, 'Japan');
+  // A list that is not a list counts as empty: only the market now is accepted.
+  assert.equal(changeSelection(start, { market: 'Europe' }, 'nope').market, 'United States');
+  // A scheduled brief's mark is kept, can be changed away, but cannot be chosen.
+  const brief = { kind: 'brief', subject: 'ASML', market: 'Europe' };
+  assert.equal(changeSelection(brief, { period: 'five' }).kind, 'brief');
+  assert.equal(changeSelection(brief, { kind: 'company' }).kind, 'company');
+  assert.equal(changeSelection(start, { kind: 'brief' }).kind, 'company');
+  // Fields that are not part of a selection are ignored; nothing given changes nothing.
+  assert.deepEqual(changeSelection(start, { other: 'x', __proto__: { subject: 'Z' } }), start);
+  assert.deepEqual(changeSelection(start, null), start);
+  assert.deepEqual(changeSelection(undefined, { subject: 'Apple' }), { kind: 'company', subject: 'Apple', market: 'Global', focus: 'full', period: 'year' });
+});
+
+test('a conversation\'s selection can be replaced, and is kept over a restart as the newest', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-finance-'));
+  const file = join(dir, 'conversations.json');
+  try {
+    const pins = openPins(file);
+    pins.pin('old', { subject: 'Old' });
+    pins.pin('s1', { subject: 'Apple', market: 'United States' });
+    pins.pin('s2', { subject: 'Kept' });
+    // pin keeps the first; set replaces it.
+    assert.equal(pins.pin('old', { subject: 'Other' }).subject, 'Old');
+    assert.equal(pins.set('old', { subject: 'Changed', focus: 'mood' }).subject, 'Changed');
+    assert.equal(pins.get('old').focus, 'mood');
+    assert.equal(openPins(file).get('old').subject, 'Changed');
+    // The changed one now counts as the newest, so the oldest untouched one goes first.
+    assert.deepEqual(Object.keys(JSON.parse(readFileSync(file, 'utf8'))), ['s1', 's2', 'old']);
+    for (let i = 0; i < PINS_MAX - 2; i += 1) pins.pin(`x${i}`, {});
+    assert.equal(pins.get('s1'), undefined);
+    assert.equal(pins.get('old').subject, 'Changed');
+    // What is stored is always a valid selection.
+    assert.deepEqual(pins.set('s9', { kind: 'nonsense', focus: 3 }), { kind: 'company', subject: '', market: 'Global', focus: 'full', period: 'year' });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the note for Tools off: figures only from memory, marked, never as sourced', () => {
+  const research = toolsOffNote(false);
+  assert.match(research, /no data tools now/);
+  assert.match(research, /\(from memory, may be out of date\)/);
+  assert.match(research, /Never present a figure as current or as coming from a source/);
+  // The period a remembered figure is for is wanted; a source or an "as of" date that was not checked is not.
+  assert.match(research, /Say which period a remembered figure is for \(for example FY2023\) when you know it/);
+  assert.match(research, /never give it a source or an "as of" date you did not check/);
+  assert.ok(!/or a date you did not check/.test(research), research);
+  assert.match(research, /switch Tools on in the chat box/);
+  assert.match(research, /This is research, not advice: do not tell the user to buy, sell or hold\./);
+  // With the adviser on, its own note sets the voice.
+  assert.ok(!/research, not advice/.test(toolsOffNote(true)));
+  assert.match(toolsOffNote(true), /from memory/);
+  assert.equal(toolsOffNote(), research);
 });

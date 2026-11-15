@@ -12,5 +12,5 @@
         #   maxMinutes: 60
         #   searchToolNames: [web_search]     # other tool names if you use another search backend
         #   fetchToolNames: [web_fetch]
-        #   requireFetched: false             # true drops findings whose page was not fetched
+        #   requireFetched: false             # true drops a finding when its own helper did not read the page (even if another helper did); false keeps it, labelled
         enabled: true

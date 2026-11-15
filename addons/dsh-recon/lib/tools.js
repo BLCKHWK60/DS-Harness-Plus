@@ -18,12 +18,6 @@ const NOT_RUN = [
   'The model of this conversation could not be told',
 ];
 
-/**
- * Whether a conversation's history holds something a recon tool found: an answer of a recon tool
- * that ran. A copy of a Recon conversation (Rerun) carries these too, under another id.
- * @param {object[] | undefined} messages - the conversation's messages, as the app derives them.
- * @returns {boolean}
- */
 /** The marker the app's compaction puts around its summary of earlier history. */
 export const SUMMARY_MARK = '<compacted-summary>';
 
@@ -46,26 +40,43 @@ export function wasCompacted(messages) {
   return false;
 }
 
+/**
+ * Whether a conversation's history holds something a recon tool found: an answer of a recon tool
+ * that ran. A copy of a Recon conversation (Rerun) carries these too, under another id.
+ * @param {object[] | undefined} messages - the conversation's messages, as the app derives them.
+ * @returns {boolean}
+ */
 export function holdsFindings(messages) {
-  const calls = new Set();
-  for (const message of messages ?? []) {
-    const content = Array.isArray(message?.content) ? message.content : [];
-    if (message?.role === 'assistant') {
-      for (const block of content) if (block?.type === 'tool-call' && TOOLS.includes(block.name)) calls.add(block.id);
-    } else if (message?.role === 'tool' && message.isError !== true && calls.has(message.toolCallId ?? message.source?.callId)) {
-      const text = content.map((block) => (block?.type === 'text' ? block.text : '')).join('').trimStart();
-      if (!NOT_RUN.some((start) => text.startsWith(start))) return true;
-    }
-  }
+  for (const _answer of answersOf(messages)) return true;
   return false;
 }
 
 /**
+ * The answers of recon tools that ran, in the order of the history: what the conversation was
+ * shown by Recon. Refusals and failed calls are left out; so is every other tool's answer.
+ * @param {object[] | undefined} messages - the conversation's messages, as the app derives them.
+ * @yields {{name: string, text: string}} the tool's name and its answer's text.
+ */
+export function* answersOf(messages) {
+  const calls = new Map();
+  for (const message of messages ?? []) {
+    const content = Array.isArray(message?.content) ? message.content : [];
+    if (message?.role === 'assistant') {
+      for (const block of content) if (block?.type === 'tool-call' && TOOLS.includes(block.name)) calls.set(block.id, block.name);
+    } else if (message?.role === 'tool' && message.isError !== true && calls.has(message.toolCallId ?? message.source?.callId)) {
+      const text = content.map((block) => (block?.type === 'text' ? block.text : '')).join('').trimStart();
+      if (!NOT_RUN.some((start) => text.startsWith(start))) yield { name: calls.get(message.toolCallId ?? message.source?.callId), text };
+    }
+  }
+}
+
+/**
  * @param {object} deps - `enabled()`, `inRecon(exec)` (is this an isolated Recon conversation), `gate(exec)` ({ok, why}),
- *   `inRoom(exec)` (does the conversation run in Recon's throwaway folder), `onion` (lib/onion.js), `usenet` (lib/usenet.js), `sources` (lib/sources.js), `idOf(exec)` (the conversation's id).
+ *   `inRoom(exec)` (does the conversation run in Recon's throwaway folder), `onion` (lib/onion.js), `usenet` (lib/usenet.js), `sources` (lib/sources.js), `idOf(exec)` (the conversation's id),
+ *   `restore(exec)` (rebuild the conversation's record from its saved history, once after a restart; lib/restore.js).
  * @returns {object[]} the tool definitions.
  */
-export function buildTools({ enabled, inRecon, inRoom, gate, onion, usenet, web, sources, idOf }) {
+export function buildTools({ enabled, inRecon, inRoom, gate, onion, usenet, web, sources, idOf, restore }) {
   const output = {
     schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
     render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }],
@@ -77,6 +88,8 @@ export function buildTools({ enabled, inRecon, inRoom, gate, onion, usenet, web,
       if (!inRoom(exec)) return { text: 'This Recon conversation runs in a folder of the user\'s, so its tools are off: the model would be told that folder\'s path. Nothing was sent. Tell the user to start a new conversation with the New button in the Recon tab; it then runs in Recon\'s own empty folder.' };
       const allowed = gate(exec);
       if (!allowed.ok) return { text: allowed.why };
+      // After a restart, earlier sources and shown addresses come back before the first tool runs.
+      restore?.(exec);
       return { text: await work(args ?? {}, exec) };
     } catch (error) {
       return { text: `It did not work: ${String(error?.message ?? error).slice(0, 300)}` };
@@ -108,7 +121,7 @@ export function buildTools({ enabled, inRecon, inRoom, gate, onion, usenet, web,
       const source = sources.find(idOf(exec), args.source);
       if (source) return sources.cite(source);
       const have = sources.list(idOf(exec));
-      return have.length === 0 ? 'Nothing was read in this conversation yet, so there is nothing to cite.' : `That source was not read in this conversation. Read so far: ${have.map((one) => `S${one.n} ${one.url}`).join('; ').slice(0, 1500)}`;
+      return have.length === 0 ? 'Nothing was read in this conversation yet, so there is nothing to cite. Sources read before the app restarted count only while their tool answers are still in the conversation.' : `That source was not read in this conversation. Read so far: ${have.map((one) => `S${one.n} ${one.url}`).join('; ').slice(0, 1500)}`;
     },
   };
   return TOOLS.map((name) => {

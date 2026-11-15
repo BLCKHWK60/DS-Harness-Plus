@@ -13,6 +13,10 @@ const CONVERSATIONS = 50;
 const REQUESTS = 400;
 /** Files kept on disk: the newest ones; older conversations start their numbering afresh. */
 const FILES = 200;
+/** Report names a conversation saved, remembered so they are not its own "earlier reports". */
+const REPORTS = 50;
+/** Other posting dates kept for one job found again. */
+const DATES = 10;
 
 const norm = (text) => String(text ?? '').toLowerCase().normalize('NFKD').replace(/\(?[mwfd]\s*\/\s*[mwfd](\s*\/\s*[mwfd])?\)?/g, ' ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
@@ -30,7 +34,8 @@ function fromSaved(saved) {
     if (posting.url) byKey.set(posting.url, posting);
     if (norm(posting.title)) byKey.set(sameJob(posting), posting);
   }
-  return { list, byKey, requests: Number.isInteger(saved?.requests) ? saved.requests : 0 };
+  const reports = Array.isArray(saved?.reports) ? saved.reports.filter((name) => typeof name === 'string').slice(-REPORTS) : [];
+  return { list, byKey, requests: Number.isInteger(saved?.requests) ? saved.requests : 0, reports };
 }
 
 /**
@@ -48,7 +53,7 @@ export function openStore(folder = '') {
     } catch {
       /* a damaged file: start afresh */
     }
-    return { list: [], byKey: new Map(), requests: 0 };
+    return { list: [], byKey: new Map(), requests: 0, reports: [] };
   };
   const save = (id, entry) => {
     const file = fileOf(id);
@@ -57,7 +62,7 @@ export function openStore(folder = '') {
       mkdirSync(folder, { recursive: true, mode: 0o700 });
       // Written beside it and then moved over it, so a crash mid-write never leaves a broken file.
       const part = `${file}.part`;
-      writeFileSync(part, JSON.stringify({ list: entry.list, requests: entry.requests }), { mode: 0o600 });
+      writeFileSync(part, JSON.stringify({ list: entry.list, requests: entry.requests, reports: entry.reports }), { mode: 0o600 });
       renameSync(part, file);
     } catch {
       /* the numbers still hold for this run */
@@ -92,7 +97,8 @@ export function openStore(folder = '') {
     },
     /**
      * Keep postings and give each its number. A posting already known (same address, or same
-     * title, company and town) keeps its number and gains the other source.
+     * title, company and town) keeps its number and gains the other source; another posting date
+     * it is found with is kept in `dates`, so a real repost can be told.
      * @returns {{posting: object, fresh: boolean}[]} in the given order.
      */
     add(id, source, postings) {
@@ -102,6 +108,8 @@ export function openStore(folder = '') {
         const known = entry.byKey.get(raw.url) ?? entry.byKey.get(key);
         if (known) {
           if (!known.sources.includes(source)) known.sources.push(source);
+          const date = typeof raw.posted === 'string' ? raw.posted.slice(0, 30) : '';
+          if (date && date !== known.posted && !(known.dates ?? []).includes(date)) known.dates = [...(known.dates ?? []), date].slice(-DATES);
           return { posting: known, fresh: false };
         }
         if (entry.list.length >= PER_CONVERSATION) return undefined;
@@ -119,6 +127,29 @@ export function openStore(folder = '') {
       const n = Number(String(ref ?? '').replace(/^p/i, ''));
       return Number.isInteger(n) && n > 0 ? of(id).list[n - 1] : undefined;
     },
+    /** Add what was learned about a posting (for example the checks on its text) and keep it. */
+    note(id, ref, fields) {
+      const posting = this.get(id, ref);
+      if (!posting) return undefined;
+      Object.assign(posting, fields);
+      save(id, of(id));
+      return posting;
+    },
+    /** The same fields for several postings, kept with one write. @returns {number} how many were found. */
+    noteAll(id, refs, fields) {
+      const found = refs.map((ref) => this.get(id, ref)).filter(Boolean);
+      for (const posting of found) Object.assign(posting, fields);
+      if (found.length > 0) save(id, of(id));
+      return found.length;
+    },
+    /** Remember a report this conversation saved. */
+    saved(id, name) {
+      const entry = of(id);
+      entry.reports = [...entry.reports.filter((item) => item !== name), String(name)].slice(-REPORTS);
+      save(id, entry);
+    },
+    /** The reports this conversation saved: never its own "earlier reports". */
+    reports: (id) => [...of(id).reports],
     count: (id) => of(id).list.length,
     /** Every posting found in a conversation, in order. */
     all: (id) => [...of(id).list],
@@ -134,7 +165,7 @@ export function line(posting, today = Date.now()) {
   const first = posting.firstPosted && posting.firstPosted !== posting.posted ? `, first posted ${posting.firstPosted}` : '';
   return [
     `P${posting.n} · ${posting.title || '(no title)'}${posting.company ? ` — ${posting.company}` : ''}`,
-    `   ${[posting.location, posting.remote, posting.type, posting.pay ? `pay: ${posting.pay}` : 'no pay given', `${when}${first}`].filter(Boolean).join(' · ')}`,
+    `   ${[posting.location, posting.remote, posting.type, posting.pay ? `pay: ${posting.pay}` : posting.value ? `contract value: ${posting.value}` : 'no pay given', `${when}${first}`, posting.closes ? `closes ${posting.closes}` : ''].filter(Boolean).join(' · ')}`,
     `   ${posting.url}${posting.sources.length > 1 ? `  (also on: ${posting.sources.slice(1).join(', ')})` : ''}`,
     posting.snippet ? `   ${posting.snippet}` : '',
   ].filter(Boolean).join('\n');

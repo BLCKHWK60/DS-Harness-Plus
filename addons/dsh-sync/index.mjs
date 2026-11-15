@@ -14,6 +14,8 @@
  *   - the encrypted backend now copies pulled sessions into the live store (the original did not);
  *   - writes into the live session store are atomic and skip a file that changed after it was mirrored;
  *   - the project list is carried as one manifest per device, with a per-machine folder mapping;
+ *   - isolated conversations (Recon) are never pushed or pulled, and push and pull wait while the Modes add-on, which
+ *     says which conversations are isolated, cannot be asked (lib/isolation.mjs);
  *   - no model tools, no session-level forks, no storage-domain or other dsh package imports (plain child processes
  *     for git and age, a JSON state file), and nothing configured by default.
  * Nothing is configured by default: with no `remote` the plugin only reports status.
@@ -29,6 +31,7 @@ import { EncryptedBackend } from './lib/encrypted.mjs'
 import { makeAgeRunner, makeGitRunner } from './lib/runner.mjs'
 import { SyncState } from './lib/state.mjs'
 import { createSyncService } from './lib/policy.mjs'
+import { readIsolation } from './lib/isolation.mjs'
 import { checkFolderMap } from './lib/projects.mjs'
 import { renderPull, renderPush } from './lib/render.mjs'
 
@@ -236,6 +239,8 @@ export function apply(ctx, config) {
     projects: settings.projects,
     deviceLabel: settings.deviceLabel,
     registry: () => ctx.get('workspaceRegistry'),
+    // Isolated conversations (Recon) are never pushed or pulled; the Modes add-on says which they are.
+    isolation: () => readIsolation({ settings: ctx.get('settings'), modes: ctx.get('modes'), agents: ctx.get('agents'), sessionPersistence: ctx.get('sessionPersistence') }),
     logger,
   })
 

@@ -346,6 +346,7 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
       const visible = sources.filter((source) => !source.hidden && (filter === 'all' || source.markets.includes('*') || source.markets.some((name) => markets.includes(name))));
       const hidden = sources.filter((source) => source.hidden);
       const files = Array.isArray(data.files) ? data.files : [];
+      const reports = Array.isArray(data.reports) ? data.reports : [];
       const addMarket = () => {
         const name = market.trim();
         if (!name) return;
@@ -377,6 +378,16 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
           h('button', { type: 'button', className: 'dsh-sc-btn', disabled: busy || upload.busy, onClick: upload.pick }, upload.busy ? 'Adding…' : 'Add files'),
           h('button', { type: 'button', className: 'dsh-sc-btn', disabled: busy, onClick: () => void act({ action: 'reveal' }) }, 'Show in Finder'),
           upload.element),
+
+        h('div', { className: 'dsh-sc-group' }, 'Saved reports'),
+        h('p', { className: 'dsh-sc-desc' }, 'Every run ends with a report: Markdown and a table (CSV) you can open in a spreadsheet. Scout also notes every posting the run found, ranked or not, so a later run can say what is new since then. Newest first.'),
+        reports.length === 0 ? h('p', { className: 'dsh-sc-desc' }, 'No reports yet.') : null,
+        reports.map((report) => h('div', { key: report.name, className: 'dsh-sc-row' },
+          h('div', { className: 'dsh-sc-rowtext' },
+            h('div', { className: 'dsh-sc-rowtitle' }, report.title || report.name),
+            h('div', { className: 'dsh-sc-rowdesc' }, `${report.saved ? `Saved ${report.saved}` : report.name} · ${report.rows} opportunit${report.rows === 1 ? 'y' : 'ies'}`)))),
+        h('div', { className: 'dsh-sc-form' },
+          h('button', { type: 'button', className: 'dsh-sc-btn', disabled: busy, onClick: () => void act({ action: 'reveal', which: 'reports' }) }, 'Show reports in Finder')),
 
         h('div', { className: 'dsh-sc-group' }, 'Your profile'),
         h('p', { className: 'dsh-sc-desc' }, 'A short summary: titles, years, skills, languages, pay, what you want. Write it here, or ask Scout to write it from your files: Scout is told to show you the draft and save it only after you agree, and the old one is kept as profile.md.bak. A Scout conversation reads it when it needs it (scout_profile); the helpers it starts cannot.'),
@@ -416,9 +427,10 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
 
         h('div', { className: 'dsh-sc-group' }, 'Good to know'),
         h('ul', { className: 'dsh-sc-list' },
-          h('li', null, 'Scout conversations get only these tools: Scout\'s own nine (sources, search, posting text, titles, demand, pay, your files, your profile, the report), web search and page reading, Deep research (Scout always has the web; there is no Web button in its chat box), the Finance news, filings and figures tools when Finance is on, charts, a step list and questions. No file, shell or program tools. Helpers started by Scout get no access to your files, profile or reports.'),
-          h('li', null, 'Search queries carry titles, skills and places, never your name or contact details. Web search goes through your web search provider; the job sources get only the search itself.'),
-          h('li', null, 'Every run ends with a report saved as Markdown and a table (CSV) in the reports folder inside your Scout folder.'),
+          h('li', null, 'Scout conversations get only these tools: Scout\'s own eleven (sources, search, posting text, titles, demand, pay, checks on postings, your files, your profile, the report, earlier reports), web search and page reading, Deep research (Scout always has the web; there is no Web button in its chat box), the Finance news, filings and figures tools when Finance is on, charts, a step list and questions. No file or shell tools. Under the app\'s PTC preset the model calls these tools from programs (run_code), which the app offers in every mode. Helpers started by Scout get no access to your files, profile or reports.'),
+          h('li', null, 'Scout is told to search by titles, skills and places, never your name or contact details. A search that holds an email address or a phone number is refused: Scout\'s own searches, web search, page reading, Deep research and the Finance tools, also for the helpers Scout starts. Under the app\'s PTC preset a program\'s own requests are not checked; the tools a program calls are. Web search goes through your web search provider; the job sources get only the search itself.'),
+          h('li', null, 'Scout scores each opportunity on fit, freshness, pay and legitimacy, each with a reason, and flags likely ghost jobs and scams with the signs behind them: old or reposted postings, no pay, pay far above a typical pay from a source, asking the applicant for money or documents, contact only through a personal address or a chat app. Only computed facts (age, reposts, pay, a very short text) lower the legitimacy Scout suggests; signs found by wording in the text are hints to verify, and things to check, such as pay well above the other postings found, are shown but do not lower it. The legitimacy score and its reason are the model\'s judgement.'),
+          h('li', null, 'Every run ends with a report saved as Markdown and a table (CSV) in the reports folder inside your Scout folder. Messages in it are drafts: nothing is sent.'),
           h('li', null, 'Results depend on what each source lists and on the model. Check a posting on its own page before you act on it.')));
     }
 

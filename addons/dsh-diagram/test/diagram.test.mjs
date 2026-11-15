@@ -307,3 +307,71 @@ test('a line over dates: the axis shows dates and the outline gives the ends and
   assert.equal(mixed.ok, false);
   assert.match(mixed.errors.join(' '), /Do not mix dates and numbers/);
 });
+
+test('show(): an SVG file saved with a description is recorded, so the picture shows again after a restart', async (t) => {
+  const { apply } = await import('../index.js');
+  const home = mkdtempSync(join(tmpdir(), 'dsh-diagram-home-'));
+  const work = mkdtempSync(join(tmpdir(), 'dsh-diagram-work-'));
+  t.after(() => {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(work, { recursive: true, force: true });
+  });
+  // A stand-in app: what apply() asks for, and the routes it registers.
+  const load = () => {
+    const routes = {};
+    let service;
+    const ctx = {
+      get: (name) => (name === 'dshHomePath' ? (part) => join(home, part) : undefined),
+      logger: { warn() {}, info() {} },
+      effect: (make) => make(),
+      tools: { register: () => () => {} },
+      provide: (name, value) => {
+        if (name === 'diagrams') service = value;
+        return () => {};
+      },
+      inject: (_names, use) => use({ webServer: { register: ({ path, handler }) => { routes[path] = handler; return () => {}; } }, connection: { requestRejection: () => undefined }, effect: (make) => make() }),
+    };
+    apply(ctx, { enabled: true, theme: 'auto', folder: 'diagrams', save: false, skills: false });
+    const call = (path, headers) => {
+      const res = { statusCode: 200, headers: {}, body: '', setHeader(key, value) { this.headers[key] = value; }, end(body) { this.body = body === undefined ? '' : String(body); } };
+      routes[path]({ method: 'GET', headers }, res);
+      return res;
+    };
+    return { service, call };
+  };
+  const spec = { kind: 'chart', title: 'Revenue', chart: 'bar', categories: ['North', 'South'], series: [{ name: 'revenue', values: [100, 200] }] };
+  const ours = join(work, 'revenue-q1.svg');
+  writeFileSync(ours, draw(spec).svg({ theme: 'light' }));
+  const foreign = join(work, 'someone-elses.svg');
+  writeFileSync(foreign, '<svg xmlns="http://www.w3.org/2000/svg">not drawn by Diagrams</svg>');
+  const from = Date.now() - 1;
+  const first = load();
+  const kept = first.service.show({ id: 'conv1' }, { title: 'Revenue [Q1]', description: spec, file: ours });
+  assert.equal(kept.ok, true);
+  assert.match(kept.outline, /^Bar chart over 2 categories/);
+  const other = first.service.show({ id: 'conv1' }, { title: 'Other [Q2]', description: { ...spec, title: 'Other' }, file: foreign });
+  // Only an SVG path is recorded; anything else is left out.
+  const notSvg = first.service.show({ id: 'conv1' }, { title: 'Third [Q3]', description: { ...spec, title: 'Third' }, file: join(work, 'notes.txt') });
+  const plainShow = first.service.show({ id: 'conv1' }, { title: 'Fourth [Q4]', description: { ...spec, title: 'Fourth' } });
+  const index = JSON.parse(readFileSync(join(home, 'diagrams', 'index.json'), 'utf8'));
+  const fileOf = (id) => index.find((row) => row.id === id)?.file;
+  assert.equal(fileOf(kept.id), ours);
+  assert.equal(fileOf(other.id), foreign);
+  assert.equal(fileOf(notSvg.id), '');
+  assert.equal(fileOf(plainShow.id), '');
+  // Before the restart every drawing is in memory and listed.
+  const turn = { 'x-dsh-session': 'conv1', 'x-dsh-from': String(from), 'x-dsh-to': String(Date.now() + 1) };
+  assert.equal(JSON.parse(first.call('/dsh-diagram/list', turn).body).items.length, 4);
+
+  // After a restart the memory is empty: the chart with its own file is still listed and served from that file.
+  const second = load();
+  const items = JSON.parse(second.call('/dsh-diagram/list', turn).body).items;
+  assert.deepEqual(items.map((row) => row.id), [kept.id]);
+  assert.equal(items[0].file, ours);
+  const picture = second.call('/dsh-diagram/svg', { 'x-dsh-diagram': kept.id });
+  assert.equal(picture.statusCode, 200);
+  assert.equal(picture.headers['content-type'], 'image/svg+xml; charset=utf-8');
+  assert.equal(picture.body, readFileSync(ours, 'utf8'));
+  // A file without the add-on's mark is never served, and drawings without a file are gone.
+  for (const id of [other.id, notSvg.id, plainShow.id]) assert.equal(second.call('/dsh-diagram/svg', { 'x-dsh-diagram': id }).statusCode, 404, id);
+});

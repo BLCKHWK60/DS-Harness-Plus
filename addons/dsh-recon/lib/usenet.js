@@ -98,7 +98,7 @@ export function createUsenet({ run, route, accounts, defaultAccount, login, forw
       const name = String(group ?? '').trim().toLowerCase();
       const key = String(messageId ?? '').trim();
       const again = sources.find(id, key);
-      if (again && again.kind === 'usenet' && Number(part) > 1) return show(again, part);
+      if (again && again.kind === 'usenet' && !again.partial && Number(part) > 1) return show(again, part);
       if (dropsShort(name.replace(/\./g, ' '))) {
         sources.dropped(id);
         sources.note(id, 'left out', 'a newsgroup was left out by the filters and not opened');

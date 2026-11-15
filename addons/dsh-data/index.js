@@ -9,10 +9,11 @@
  *   data_save_analysis    keep a set of queries under a name
  *   data_rerun_analysis   run it again and report what moved
  *   data_analyses         what is saved, and whose files changed
- *   data_chart            a chart drawn straight from a query
+ *   data_chart            a bar, line or scatter chart drawn straight from a query; in Data conversations also saved as an SVG in data-output
  *   data_python           a small Python program in macOS's sandbox (no internet, writes only data-output)
  * and a method that says: profile first, every number carries its query id, say what the data
  * cannot tell. Queries run in a helper process on an in-memory copy of the files, read-only.
+ * The mode runs Read Only (see MODE in lib/method.js); Web stays on by default.
  *
  * Off until switched on in Settings > Data. Needs the Modes add-on and the Cowork sidebar.
  * Route: `GET/POST /dsh-data/data`.
@@ -30,6 +31,8 @@ export const name = 'dsh-data';
 
 export const DATA_PATH = '/dsh-data/data';
 const MODES_NS = 'modes';
+/** The Diagrams add-on's settings: its `theme` is used for the chart files too. */
+const DIAGRAMS_NS = 'diagram';
 /** Modes whose conversations get the note about their data folder: Data itself, and Finance, which works on the user's own files the same way. */
 const FOLDER_MODES = [MODE_ID, 'finance'];
 
@@ -77,6 +80,23 @@ export function apply(ctx, config) {
       return { ok: false, errors: [String(error?.message ?? error).slice(0, 200)] };
     }
   };
+  /** The colours Diagrams gives its saved files (Settings → Diagrams): auto, light or dark. */
+  const diagramTheme = () => {
+    try {
+      const theme = ctx.get('settings')?.describe?.().find((entry) => entry.ns === DIAGRAMS_NS)?.value?.theme;
+      return ['auto', 'light', 'dark'].includes(plain(theme)) ? plain(theme) : 'auto';
+    } catch {
+      return 'auto';
+    }
+  };
+  /** A chart as an SVG file's text, drawn by Diagrams in the colours of its saved files. */
+  const svgOf = (description) => {
+    const diagrams = ctx.get('diagrams');
+    if (typeof diagrams?.draw !== 'function') throw new Error('the Diagrams add-on is not running');
+    const result = diagrams.draw(description);
+    if (!result?.ok || typeof result.svg !== 'function') throw new Error((result?.errors ?? ['it could not be drawn']).join(' ').slice(0, 160));
+    return result.svg({ theme: diagramTheme() });
+  };
   // Set Python up once, in the background, the first time Data is on. A failed set-up is not retried by itself.
   let pythonAsked = false;
   const preparePython = () => {
@@ -96,6 +116,16 @@ export function apply(ctx, config) {
   };
   /** A helper's queries are numbered with the conversation that started it. */
   const conversationOf = (agent) => String(agent?.header?.parentSession ?? agent?.session?.header?.parentSession ?? agent?.id ?? '');
+  /** A conversation's mode, from the Modes add-on (a helper gets its conversation's). */
+  const modeOf = (agentId) => {
+    try {
+      return ctx.get('modes')?.get?.(agentId);
+    } catch {
+      return undefined;
+    }
+  };
+  /** Only Data conversations keep their charts as files: other modes that use data_chart get none. */
+  const savesCharts = (exec) => Boolean(exec?.agent?.id) && modeOf(exec.agent.id) === MODE_ID;
 
   // ---- the mode: kept in step with the switch ------------------------------------------------
 
@@ -139,7 +169,7 @@ export function apply(ctx, config) {
     if (on && !toolsOff) {
       const tools = ctx.get('tools');
       if (!tools?.register) return;
-      toolsOff = buildTools({ enabled, rootOf: (exec) => folderOf(exec?.agent), conversationOf: (exec) => conversationOf(exec?.agent), engine, store, python, show }).map((tool) => tools.register(tool));
+      toolsOff = buildTools({ enabled, rootOf: (exec) => folderOf(exec?.agent), conversationOf: (exec) => conversationOf(exec?.agent), engine, store, python, show, svgOf, saves: savesCharts }).map((tool) => tools.register(tool));
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
       toolsOff = undefined;
@@ -166,13 +196,6 @@ export function apply(ctx, config) {
 
   // ---- a note in every Data conversation: its folder, and saved analyses whose files changed ----
 
-  const modeOf = (agentId) => {
-    try {
-      return ctx.get('modes')?.get?.(agentId);
-    } catch {
-      return undefined;
-    }
-  };
   const pythonLine = () => {
     const state = python?.status().state;
     if (state === 'ready') return 'data_python is ready (pandas, numpy, scipy, matplotlib and more).';
@@ -187,7 +210,7 @@ export function apply(ctx, config) {
       return [`The folder of this conversation is ${folder}. When the user's own files matter (a portfolio, exported statements, a spreadsheet of figures), work on them with the data tools: data_files, data_profile, data_query, data_chart (a chart straight from a query), data_python (statistics and special charts) and data_text. Cite each run's id, like [Q7]. New files go into ${OUTPUT_FOLDER}; never change the user's files.`, pythonLine()].join('\n');
     }
     if (!folder) return 'This Data conversation has no folder, so there are no files to analyse. Tell the user to start a conversation in the folder that holds their data (the folder is picked on the start page).';
-    const lines = [`The data folder of this conversation is ${folder}. Paths you give the data tools are relative to it. Files you make go into ${OUTPUT_FOLDER} inside it.`, pythonLine()];
+    const lines = [`The data folder of this conversation is ${folder}. Paths you give the data tools are relative to it. Files you make go into ${OUTPUT_FOLDER} inside it: write them with data_python (data_chart saves its charts there by itself).`, pythonLine()];
     const mine = store.analyses().filter((analysis) => analysis.folder === folder).slice(0, 12);
     if (mine.length > 0) {
       lines.push('Saved analyses for this folder:');

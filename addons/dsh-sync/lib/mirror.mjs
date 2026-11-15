@@ -12,6 +12,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { FORK_NAME_RE, HOST_ARTIFACT_NAME_RE, RESERVED_DIR } from './constants.mjs'
+import { IsolationUnknownError } from './isolation.mjs'
 
 /** 递归枚举 root 下全部常规文件（POSIX 相对路径；符号链接跳过并回报）。 */
 async function listFiles(root) {
@@ -131,12 +132,25 @@ async function writeSourceSnapshot(repoDir, sourcePaths, sizes = new Map()) {
  * 把 sessionRoot 镜像进 <repoDir>/<mirrorDir>/…。
  * 宿主私有会话产物（租约/迁移暂存，HOST_ARTIFACT_NAME_RE）既不复制、也不删除：
  * 它们是运行时状态，同步它们只会把某设备的瞬时状态变成另一侧的删除/噪音。
- * @param {object} deps - {sessionRoot, repoDir, mirrorDir, forkNameRe?}。
- * @returns {Promise<{mirrored: number, unchanged: number, skippedLinks: string[], deleted: string[], remotePreserved: string[], snapshotUnknown: boolean, forkedPreserved: string[], hostArtifactsSkipped: number, hostArtifactsPreserved: string[]}>}
+ * dsh-sync addition: `exclude(rel)` names the files of isolated conversations (Recon, lib/isolation.mjs). They are
+ * never copied in, and whatever the worktree holds of them is removed, fork files included (git history keeps it).
+ * `fence()`, when given, is asked which conversations are isolated right after the session store is listed and before
+ * anything is copied or removed, and its answer replaces `exclude`: every file copied then belongs to a conversation
+ * that already existed when it was asked (a file created later is not in the listing and waits for the next run). When
+ * its answer is not known, IsolationUnknownError is thrown before the worktree is touched.
+ * @param {object} deps - {sessionRoot, repoDir, mirrorDir, forkNameRe?, exclude?, fence?: () => Promise<{known: boolean, reason?: string, exclude: (rel: string) => boolean}>}。
+ * @returns {Promise<{mirrored: number, unchanged: number, skippedLinks: string[], deleted: string[], remotePreserved: string[], snapshotUnknown: boolean, forkedPreserved: string[], hostArtifactsSkipped: number, hostArtifactsPreserved: string[], isolatedSkipped: number, isolatedRemoved: string[], exclude: (rel: string) => boolean}>}
+ *   `exclude` is the rule that was used, for the rest of the same operation.
  */
 export async function mirrorSessionRoot(deps) {
   const forkRe = deps.forkNameRe ?? FORK_NAME_RE
+  let exclude = typeof deps.exclude === 'function' ? deps.exclude : () => false
   const source = await listFiles(deps.sessionRoot)
+  if (typeof deps.fence === 'function') {
+    const answer = await deps.fence()
+    if (answer?.known !== true || typeof answer.exclude !== 'function') throw new IsolationUnknownError(answer?.reason)
+    exclude = answer.exclude
+  }
   const mirrorRoot = path.join(deps.repoDir, deps.mirrorDir)
   const targets = new Set()
   const previous = await readSourceSnapshot(deps.repoDir)
@@ -144,10 +158,16 @@ export async function mirrorSessionRoot(deps) {
   let mirrored = 0
   let unchanged = 0
   let hostArtifactsSkipped = 0
+  let isolatedSkipped = 0
   const sizes = new Map()
   for (const file of source.files) {
     if (HOST_ARTIFACT_NAME_RE.test(path.posix.basename(file.rel))) {
       hostArtifactsSkipped += 1
+      continue
+    }
+    // dsh-sync addition: an isolated conversation is never copied into the sync worktree.
+    if (exclude(file.rel)) {
+      isolatedSkipped += 1
       continue
     }
     const target = path.join(mirrorRoot, ...file.rel.split('/'))
@@ -182,9 +202,17 @@ export async function mirrorSessionRoot(deps) {
   } catch {
     // 镜像根尚不存在 → 无删除可做。
   }
+  const isolatedRemoved = []
   for (const absolute of targetFiles) {
     const rel = path.relative(mirrorRoot, absolute).split(path.sep).join('/')
     const basename = path.posix.basename(rel)
+    // dsh-sync addition: what the worktree holds of an isolated conversation goes, wherever it came from (an earlier
+    // push, or a pull), fork files included, so the next commit takes it off the remote's branch.
+    if (exclude(rel)) {
+      await fs.unlink(absolute)
+      isolatedRemoved.push(rel)
+      continue
+    }
     if (forkRe.test(basename)) {
       forkedPreserved.push(rel)
       continue
@@ -205,7 +233,42 @@ export async function mirrorSessionRoot(deps) {
   }
   await writeSourceSnapshot(deps.repoDir, targets, sizes)
 
-  return { mirrored, unchanged, skippedLinks: source.skipped, deleted, remotePreserved, snapshotUnknown: previous === undefined, forkedPreserved, hostArtifactsSkipped, hostArtifactsPreserved }
+  return { mirrored, unchanged, skippedLinks: source.skipped, deleted, remotePreserved, snapshotUnknown: previous === undefined, forkedPreserved, hostArtifactsSkipped, hostArtifactsPreserved, isolatedSkipped, isolatedRemoved, exclude }
+}
+
+/**
+ * dsh-sync addition: remove from a mirror tree every file of an isolated conversation (after a pull merged the remote
+ * in). Never follows symbolic links.
+ * @param {string} root - the mirror tree.
+ * @param {(rel: string) => boolean} [exclude] - the files of isolated conversations.
+ * @returns {Promise<string[]>} the files removed (POSIX, relative to root).
+ */
+export async function removeExcluded(root, exclude) {
+  if (typeof exclude !== 'function') return []
+  const removed = []
+  const walk = async (dir) => {
+    let entries
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const absolute = path.join(dir, entry.name)
+      if (entry.isSymbolicLink()) continue
+      if (entry.isDirectory()) {
+        await walk(absolute)
+        continue
+      }
+      const rel = path.relative(root, absolute).split(path.sep).join('/')
+      if (entry.isFile() && exclude(rel)) {
+        await fs.unlink(absolute)
+        removed.push(rel)
+      }
+    }
+  }
+  await walk(root)
+  return removed
 }
 
 /** 恢复状态文件：本地、不进提交、不随仓库同步。 */
@@ -260,7 +323,7 @@ async function mirrorRelSet(root) {
  * Remove live-store copies that this plugin restored from a previous pull and
  * that the remote has now deleted, but only while the live bytes still match
  * the restored hash. A user-edited copy is kept (and will push normally).
- * @param {{repoDir: string, mirrorRoot: string, sessionRoot: string}} deps
+ * @param {{repoDir: string, mirrorRoot: string, sessionRoot: string, exclude?: (rel: string) => boolean}} deps
  * @returns {Promise<{pruned: string[], keptEdited: string[]}>}
  */
 export async function pruneRestoredSessions(deps) {
@@ -270,6 +333,11 @@ export async function pruneRestoredSessions(deps) {
   const pruned = []
   const keptEdited = []
   for (const [rel, expected] of [...state]) {
+    // dsh-sync addition: the live files of an isolated conversation are never touched by Sync, and no longer tracked.
+    if (typeof deps.exclude === 'function' && deps.exclude(rel)) {
+      state.delete(rel)
+      continue
+    }
     if (mirror.has(rel)) continue
     const target = path.join(deps.sessionRoot, ...rel.split('/'))
     try {
@@ -295,8 +363,8 @@ export async function pruneRestoredSessions(deps) {
  * Copy the merged mirror back into the live session store. Pull used to merge only
  * into the mirror; the next push then saw those files as "missing locally" and
  * unlinked them. This writes new/changed regular files back, never deletes, never
- * follows symlinks, and never writes fork files or host-private artifacts.
- * @param {object} deps - {repoDir, mirrorRoot, sessionRoot, forkNameRe?}.
+ * follows symlinks, and never writes fork files, host-private artifacts or the files of isolated conversations.
+ * @param {object} deps - {repoDir, mirrorRoot, sessionRoot, forkNameRe?, exclude?}.
  * @returns {Promise<{restored: number, unchanged: number, skipped: number, tracked: number, skippedChanged: string[]}>}
  */
 /**
@@ -336,6 +404,8 @@ export async function restoreSessionRoot(deps) {
     if (forkRe.test(basename) || HOST_ARTIFACT_NAME_RE.test(basename)) { skipped += 1; continue }
     // dsh-sync addition: the plugin's own files never go into the live store.
     if (rel === RESERVED_DIR || rel.startsWith(`${RESERVED_DIR}/`)) { skipped += 1; continue }
+    // dsh-sync addition: nothing is ever written into an isolated conversation (Recon) from the remote.
+    if (typeof deps.exclude === 'function' && deps.exclude(rel)) { skipped += 1; continue }
     const target = path.join(deps.sessionRoot, ...rel.split('/'))
     // dsh-sync addition: a session that is open in the app holds a session.lock beside its files. The app keeps
     // that session in memory, so a file replaced underneath it would be overwritten or ignored. Leave it for the
