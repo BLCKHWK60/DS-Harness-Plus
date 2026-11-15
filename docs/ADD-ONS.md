@@ -44,6 +44,7 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Sync](#sync) | after setup | | `/sync` |
 | [Shared settings](#shared-settings) | after setup (installer asks) | | `/shared-settings` |
 | [Context saver](#context-saver) | after setup, needs Python | | `/saved` |
+| [Settings helper](#settings-helper) | yes | the Settings window itself | |
 
 ---
 
@@ -119,7 +120,7 @@ On a project's page, under the instructions, **Generate with a model…** lets a
 ### Since 0.39: Data and Finance tools in Cowork projects
 
 - A project of a type that uses them (Research, Paperwork, Plan) is pointed at the Data tools for tables and, for Research, the Finance tools. The Type card says whether they are available and where to switch them on.
-- **Paperwork** conversations start with Search and Deep research off, so your papers do not turn into web queries. You can switch them on in the chat box.
+- **Paperwork** conversations start with Web set to Off, so your papers do not turn into web queries. You can pick another Web level in the chat box.
 
 
 Pick the colours of the whole app in **Settings → Colours**:
@@ -136,10 +137,12 @@ Each has a light and a dark version and follows **Settings → General → Appea
 Chat, Cowork and Code modes, chosen per conversation with the selector in the chat box or `/mode`.
 
 The chat box also gets three buttons for the open conversation:
-- **Search** switches the web tools on or off. It starts off in Chat and on in Cowork and Code.
+- **Web** sets how much the assistant may use the internet in this conversation: **Off**, **Quick**, **Standard**, **Thorough** or **Deep**. It starts Off in Chat and at Standard in Cowork and Code. The level you pick is also where new conversations start. Off also stops shell commands that go online. Research and Scout have no Web button: they always have the web.
 - **Tools** says whether the assistant has any tools ("Tools on" or "Tools off"). Click it for one switch that turns every tool off or back on for this conversation, and for the list of what the assistant can and cannot call. With tools off, the assistant is offered nothing, so it does not try and you see no failed attempts. In a conversation started in the app's PTC mode, the panel says so: there the assistant reaches tools from inside small programs it writes, and "Tools off" stops those programs too.
-- **The small arrow beside Search and beside Deep research** opens a slider with three steps: Quick, Standard, Thorough. The step applies to all conversations. For Search it tells the assistant how hard to search (one search; as it sees fit; or several searches with at least five pages read and facts cross-checked). For Deep research it sets the rounds and helpers (see Deep research).
-- **Deep research** has the assistant research questions thoroughly and answer with a cited report. With the Cowork sidebar on, the sidebar tabs choose instead, and the chat-box selector is hidden. A mode decides which tools the assistant may use, how its sandbox is set, a default tier, and a short instruction. The default mode, Cowork, allows every tool, so nothing is restricted until you choose otherwise. Edit or add modes on **Settings → Modes**.
+- **The models chip** says whether helper agents use this conversation's model (**One model for everything**) or the role models (**Different models**).
+- Research with helper agents and a cited report is in the **Research** tab (see Deep research).
+
+With the Cowork sidebar on, the sidebar tabs choose instead, and the chat-box selector is hidden. A mode decides which tools the assistant may use, how its sandbox is set, a default tier, and a short instruction. The default mode, Cowork, allows every tool, so nothing is restricted until you choose otherwise. Edit or add modes on **Settings → Modes**.
 
 ### Since 0.33: a working method for Code
 
@@ -289,7 +292,7 @@ A tab for analysing the data files in a folder. Switch it on in **Settings → D
 - **Saved analyses.** Say "save this analysis as …". Later say "run … again" and it reports what moved since the last run. Settings → Data lists them.
 - Your files are never changed, and only files inside the conversation's folder are read.
 - An AGENTS.md or CLAUDE.md file in the folder is read by the app, as in every tab: use it to explain your data.
-- It runs SQL, not Python. Reruns happen when you ask, not by themselves.
+- Reruns happen when you ask, not by themselves.
 
 Details: `addons/dsh-data/README.md`.
 
@@ -298,7 +301,7 @@ Details: `addons/dsh-data/README.md`.
 - **Charts from the data.** Ask for a chart, or let the assistant decide: it draws one straight from a query (the tool `data_chart`), so no number is copied by hand. The chart shows under the answer and carries its query's id.
 - **Python for statistics.** For what a query cannot do (tests, regression, correlation, forecasts, cleaning, combining files, special charts) the assistant writes a small Python program and runs it (`data_python`). Plus keeps its own private Python folder with pandas, numpy, scipy, matplotlib, openpyxl, statsmodels and scikit-learn. It is set up by itself the first time Data is on (a download of about 450 MB; Settings → Data shows how far it is, and has **Set up again** if it failed). It needs a Python 3 on the Mac (Homebrew's or python.org's).
 - **What a program may do.** It runs inside macOS's own sandbox: no internet, it can read the conversation's folder and nothing else in your home folder, and it can write only into a folder named `data-output` inside the conversation's folder. Your own files are never changed. Charts it saves there are shown in the chat.
-- **Search on or off.** With the Search and Deep research buttons off, the assistant works from your files alone.
+- **Web on or off.** Set Web to Off in the chat box and the assistant works from your files alone. Any other level lets it search the web and run deep research.
 
 ### Since 0.35: broken charts are caught
 
@@ -447,10 +450,10 @@ Counts requests and tokens per day, provider and model. It never stores what you
 
 ## Deep research
 
-Gives the assistant a `deep_research` tool. Switch on the **Deep research** button in the chat box, or ask for it in plain words ("do deep research on ...").
+Gives the assistant a `deep_research` tool. Use the **Research** tab, where every question gets a full run, or ask for it in plain words ("do deep research on ...") in a conversation whose Web button is not Off. (The Web button's **Deep** level is not deep research: it only asks the assistant to search and read more itself.)
 
 - **How it works:** it plans sub-questions with search queries, sends out helpers that search and read pages at the same time, then **reviews what was found**: what is still missing, where sources contradict each other, what needs the original document. It writes sharper queries from that and sends helpers out again. At the end it writes a report in which every claim is cited, and it checks the citations and whether each cited page was really opened.
-- **Three depths**, with the slider behind the small arrow beside the button:
+- **Three depths**, chosen with the **Depth** dropdown in a Research conversation's chat box or in Settings → Research:
 
   | Depth | Rounds | Helpers at once | Time limit |
   | --- | --- | --- | --- |
@@ -458,8 +461,8 @@ Gives the assistant a `deep_research` tool. Switch on the **Deep research** butt
   | Standard | 2 | up to 6 | 25 minutes |
   | Thorough | 3 | up to 8 | 45 minutes |
 
-- **Which model the helpers use** is chosen in the same panel: **Same as this conversation** (the default) or **Role models**, which are set in Settings → Model Tiers → Role models (the planner, reviewer and writer use "Plan", the searchers use "Fast").
-- **To really get 8 helpers at once**, the sub-agent limit in **Settings → Model Tiers** must be 8. The lower of the two numbers wins.
+- **Which model the helpers use:** Settings → Research → **Model for the helpers** sets it for all conversations: **This conversation's model** (the default) or **Role models**, set in Settings → Model Tiers → Role models (the planner, reviewer and writer use "Plan", the searchers use "Fast"). One conversation can choose its own with the models chip in its chat box (**One model for everything** or **Different models**).
+- **Helpers at once:** when the conversation is on a tier, that tier's sub-agent limit (Settings → Model Tiers) also applies, and the lower number wins.
 - Deeper runs take longer and use many more tokens.
 - Use Standard mode, not PTC mode, for research.
 - **How good is it?** The method is the one the well-known research products use, but they have their own search engines and tuned models. Here the result depends on your model and on the app's web search. A small local model gives thin results at any depth. Quality has not been measured against those products.
@@ -617,3 +620,12 @@ Keeps the settings you change in the app's pages the same on two Macs, through o
 ## Context saver
 
 Shortens very large tool results before the model reads them and keeps the full text so the assistant can look it up. Off until switched on, and it needs the optional Python tools in `extras/dsh-intel-mcp` installed first. Setup is in `addons/dsh-context-saver/README.md`.
+
+## Settings helper
+
+Sorts the Plus pages of the Settings window into groups with headings (Tabs and modes, Models, Cost and limits, Agents and runs, Knowledge and files, Look and this Mac), gives every page an icon, and adds a **search field** at the top of the window.
+
+- **Cmd-F** (Ctrl-F) jumps to the field. Type any word: a page, a setting, or what it does ("trim", "budget", "Tor"). **Enter** opens the result, scrolls to the setting and outlines it.
+- It also finds settings that have no control on any page; those are marked **configuration file only**, and **Open configuration file** at the top of the window is where to change them.
+- Works right away. To switch it off, use the Plugins panel. Details: `addons/dsh-settings-plus/README.md`.
+

@@ -37,7 +37,7 @@ The selection belongs to the conversation you start with it. Changing the contro
   - No buy, sell or hold.
 - **A note with your selection**, in every Finance conversation.
 - **Seven skills**, loaded only when used: `finance-company-deep-dive`, `finance-earnings-review`, `finance-news-and-mood`, `finance-compare`, `finance-sector-scan`, `finance-economy-brief`, `finance-what-changed`.
-- **Three data tools** that need no key and no account (since 0.28.0):
+- **Six data tools** that need no key and no account: the three below (since 0.28.0), and `finance_prices`, `finance_news` and `finance_social` for share prices, news and social posts (since 0.33.0, described further down):
 
   | Tool | What it gives | From |
   | --- | --- | --- |
@@ -50,7 +50,7 @@ The selection belongs to the conversation you start with it. Changing the contro
 
 ## What it uses
 
-Beyond its three data tools, the assistant works with what the app and the other add-ons already give it:
+Beyond its data tools, the assistant works with what the app and the other add-ons already give it:
 
 - the app's web search and page fetching, and the Deep research add-on, for filings, news and what people are saying;
 - the Library, when your own reports or notes are in it;
@@ -127,10 +127,10 @@ A connector (MCP) needs none of this to work: any connector you add on the Conne
 ## What the data tools cover and do not
 
 - **Companies:** those that file with the US regulator. That is every US-listed company and many foreign ones (a Dutch or Taiwanese company listed in New York is there, in its own currency). A company listed only elsewhere is not; the tool says so and the assistant falls back to web search.
-- **Not included:** share prices, valuations, analysts' estimates, forecasts, and anything a company has not yet filed.
+- **Not included:** valuations, analysts' estimates, forecasts, and anything a company has not yet filed. Share prices come from `finance_prices` (since 0.33.0).
 - **Economies:** yearly figures only, which arrive late: the newest is usually last year's. No monthly or quarterly data, interest rates, exchange rates or forecasts.
 - **Quarterly company figures** usually lack the fourth quarter, which companies report only as part of the year.
-- **What is sent:** the company or country asked about goes to the regulator's or the World Bank's public service, with the add-on's name as the sender. No account, no key, nothing about you.
+- **What is sent:** what the assistant looks up goes to that tool's public service: the company or country to the regulator or the World Bank, with the add-on's name as the sender; share symbols to Yahoo Finance; news search words to GDELT; social search words or a hashtag to Hacker News (Algolia), mastodon.social and lemmy.world. No account, no key, nothing about you.
 - A service that does not answer in 12 seconds is tried once more. Answers are kept for 10 minutes.
 
 ## Good to know
@@ -183,7 +183,7 @@ Setting `adviser` (default off; Settings → Finance → Adviser). On:
 
 - **The mode's instructions** become `ADVISER_METHOD` (`lib/finance.js`, 3,993 of 4,000 characters): rule 7 changes from "research, not advice" to "advise, and never add a disclaimer", and a full answer gets a "My call" part. `withFinance(current, on, adviser)` writes it into the Modes add-on; the 3-second sync picks a flip up, so it applies from the next message.
 - **A note** (`adviserNote` in `lib/adviser.js`) joins the selection note in every Finance conversation (prompt section `finance:selection`): speak as an adviser, no disclaimer at the start or the end, what an adviser does before recommending (know the client, research, judge fit, recommend, be straight when the evidence is thin), and the profile. It says it replaces any "research, not advice" line in a skill, a scheduled task or a tool result, so briefs scheduled earlier follow it too.
-- **The skills** are registered again with that sentence replaced (`adviserSkills`); new briefs are worded for the adviser (`briefPrompt(…, adviser)`).
+- **The skills** are registered again with that sentence replaced (`adviserSkills`); briefs keep their research-only wording, and the note overrides it at run time. (Before, a brief made with the adviser on was saved with the adviser's wording and kept advising after the switch went off; such briefs are reworded once when the add-on starts, `researchOnly` in `lib/briefs.js`.)
 - **The profile** is one text file, `<home>/finance/profile.md` (mode 600, at most 8,000 characters). The page saves it with POST `{ action: 'profile', text }`; the tool `finance_profile_save { note }` adds one dated line, exists only while the adviser is on, refuses anything that looks like an account or card number, and refuses when the file is full instead of pushing older lines out.
 - **Answer first (0.34.1).** In 0.34.0 the note told the assistant to ask for a missing fact, and with an empty profile to ask "early in the conversation". In the owner's app a real model answered a question with an `ask_user_question` card ("How much loss can you comfortably withstand?") and no answer. The note now says: every reply is the full answer; assume the usual case where a fact is missing and say so; never use `ask_user_question` to collect facts about the user; at most one question, as the last line after the call. An empty profile means "advise anyway on stated assumptions".
 - The assistant is told not to claim a named licence, firm or registration. That limit was the builder's choice, not asked for.

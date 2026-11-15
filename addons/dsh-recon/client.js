@@ -335,6 +335,7 @@ window.__ModuleLoader__.load({
         h('ul', { className: 'dsh-rc-list' },
           item('A model on this Mac or in your own network gets what Recon finds without a question.'),
           item('Any other model counts as cloud. Recon then hands over nothing until you type /recon cloud in that conversation. The agreement holds for that conversation and that model, and is forgotten when the app is closed.'),
+          item('A conversation that already holds what Recon found takes no step on a cloud model you did not agree to, also after switching models, in a Rerun copy, or once its history was condensed. The step stops with a message; nothing is sent. Condensing a long conversation itself sends the history to the model the app uses for condensing, which Recon does not check: use a local one for it.'),
           item('Your own questions go to whichever model you picked, as in every tab.'),
           item('Type /recon in a Recon conversation to see its model and what is allowed.')),
 
@@ -352,7 +353,7 @@ window.__ModuleLoader__.load({
         ctx.effect(() => ctx.locale.register(NS, DICT));
         const t = ctx.locale.bind(NS);
         ctx.effect(() =>
-          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'recon', order: 26, label: () => t('section.title') }, (props) => h(ReconPage, { ...props, appCtx: ctx }))),
+          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'recon', order: 114, label: () => t('section.title') }, (props) => h(ReconPage, { ...props, appCtx: ctx }))),
         );
       },
     };

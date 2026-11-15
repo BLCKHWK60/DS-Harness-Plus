@@ -212,7 +212,7 @@ window.__ModuleLoader__.load({
         ctx.effect(() => ctx.locale.register(NS, DICT));
         const t = ctx.locale.bind(NS);
         ctx.effect(() =>
-          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'mac', order: 22, label: () => t('section.title') }, (props) => h(MacPage, { ...props, appCtx: ctx }))),
+          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'mac', order: 620, label: () => t('section.title') }, (props) => h(MacPage, { ...props, appCtx: ctx }))),
         );
       },
     };

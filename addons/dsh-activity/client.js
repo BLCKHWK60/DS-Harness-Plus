@@ -1112,7 +1112,7 @@ input.dsh-ac-field { width: 260px; }
         const t = ctx.locale.bind('activity');
         ctx.effect(() =>
           ctx.slots.inject('settings.section', () =>
-            ctx.slots.register({ name: 'settings.section', id: 'activity', order: 21, label: () => t('section.title') }, (props) => h(SettingsPage, { ...props, appCtx: ctx })),
+            ctx.slots.register({ name: 'settings.section', id: 'activity', order: 610, label: () => t('section.title') }, (props) => h(SettingsPage, { ...props, appCtx: ctx })),
           ),
         );
         // Above the chat box.

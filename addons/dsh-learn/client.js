@@ -383,7 +383,7 @@ window.__ModuleLoader__.load({
         ctx.effect(() => ctx.locale.register('learn', DICT));
         const t = ctx.locale.bind('learn');
         ctx.effect(() =>
-          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'learn', order: 24, label: () => t('section.title') }, (props) => h(SettingsPage, { ...props, appCtx: ctx }))),
+          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'learn', order: 550, label: () => t('section.title') }, (props) => h(SettingsPage, { ...props, appCtx: ctx }))),
         );
         // Above the chat box, under the activity indicator.
         ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'learn', order: 8 }, (props) => h(StudyBar, props))));

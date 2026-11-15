@@ -54,6 +54,14 @@ const LEGACY_TIER_LABELS = {
 };
 
 /** Built-in guidance of each starter tier, used while the tier has no instructions of its own. */
+/** The same behaviour for a conversation with no tools (Chat, or the Tools switch Off): nothing to edit or run. */
+const STARTER_GUIDANCE_BARE = {
+  haiku: 'prefer fast, direct answers. Answer the question asked, briefly, without broad detours.',
+  sonnet: 'plan briefly, answer, then check the answer once. Balance speed against completeness.',
+  opus: 'take the harder reasoning path. State assumptions, weigh alternatives, and check edge cases before answering.',
+  fable: 'explore broadly. Connect the parts of the question and give a coherent synthesis.',
+};
+
 const STARTER_GUIDANCE = {
   haiku:
     'prefer fast, narrow actions. Locate the relevant code, make the smallest correct change, and avoid broad refactors unless the user asks for them.',
@@ -1102,8 +1110,9 @@ function tierForRoute(
  * @param {number} maxSubagents - current global cap.
  * @param {boolean} ultraAutoDelegate - whether Ultra Code should push delegation.
  * @param {Record<string, Record<string, {provider: string, model: string}>>} [roles] - role routes.
- * @param {{skillText?: (name: string) => string | undefined, version?: {name: string, texts: string[], replace: boolean}}} [extras] -
- *   loaded skill text by skill name, and the instructions of the model version in use.
+ * @param {{skillText?: (name: string) => string | undefined, version?: {name: string, texts: string[], replace: boolean}, bare?: boolean, webOff?: boolean}} [extras] -
+ *   loaded skill text by skill name, the instructions of the model version in use, and `bare` when the
+ *   conversation has no tools at all (Chat mode, or the Tools switch Off), `webOff` when its Web is Off.
  * @returns {string} prompt section text, or an empty string.
  */
 function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = {}) {
@@ -1117,17 +1126,22 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
     lines[1] += ` Role: ${ROLE_META[tier.role].label}.`;
   }
   if (typeof tier.maxTokens === 'number') lines.push(`Max output tokens: ${tier.maxTokens}.`);
+  // With no tools, the lines about web access, connectors, skills to load, sub-agents and checks to
+  // run would contradict the mode's "no tools are available"; only the tier's behaviour stays.
+  const bare = extras.bare === true;
 
   const internet = [
     tier.webSearch ? 'web search' : null,
     tier.webFetch ? 'web fetch' : null,
     tier.browser ? 'browser (ego-browser)' : null,
   ].filter(Boolean);
-  lines.push(
-    internet.length > 0
-      ? `Internet access for this tier: ${internet.join(', ')}.`
-      : 'Internet access for this tier: none. Do not attempt web search, web fetch, or browser automation.',
-  );
+  if (!bare && extras.webOff !== true) {
+    lines.push(
+      internet.length > 0
+        ? `Internet access for this tier: ${internet.join(', ')}.`
+        : 'Internet access for this tier: none. Do not attempt web search, web fetch, or browser automation.',
+    );
+  }
 
   // A model version that stands alone leaves out the tier's own wording; the rules above and below stay.
   const alone = extras.version?.replace === true;
@@ -1142,6 +1156,13 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
     if (own) lines.push(own);
   } else if (own) {
     lines.push(`Instructions for the ${tierLabel(tier)} tier:`, own);
+  } else if (tier.id === 'code' && bare) {
+    // No tools: nothing can be run here, so the checks become reading and reasoning.
+    lines.push(
+      `This is the ${tierLabel(tier)} tier. Its sole purpose is to review, check, and fix code. Do not plan features or start new product scope.`,
+      'Work from the code the user shows you. Report findings first, ordered by severity, each with the place in the code and a concrete failure mode, then give the fixes.',
+      'Say which checks the user should run to confirm them. If nothing is wrong, say so plainly.',
+    );
   } else if (tier.id === 'code') {
     lines.push(
       `This is the ${tierLabel(tier)} tier. Its sole purpose is to review, check, and fix code. Do not plan features or start new product scope.`,
@@ -1150,14 +1171,14 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
       'If nothing is wrong, say so plainly and name the checks you ran.',
     );
   } else if (STARTER_GUIDANCE[tier.id]) {
-    lines.push(`${tierLabel(tier)} behavior: ${STARTER_GUIDANCE[tier.id]}`);
+    lines.push(`${tierLabel(tier)} behavior: ${(bare ? STARTER_GUIDANCE_BARE : STARTER_GUIDANCE)[tier.id]}`);
   } else {
     lines.push(
       'This is a custom model selection. Use the selected model at the depth requested; do not silently switch to a configured tier.',
     );
   }
 
-  if (Array.isArray(tier.connectors)) {
+  if (Array.isArray(tier.connectors) && !bare) {
     lines.push(
       tier.connectors.length > 0
         ? `Connectors available in this tier: ${tier.connectors.join(', ')}. Tools of other connectors are switched off.`
@@ -1167,6 +1188,7 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
 
   for (const name of tier.skills ?? []) {
     const text = extras.skillText?.(name);
+    if (!text && bare) continue;
     lines.push(
       text
         ? `### Skill loaded for this tier: ${name}\n${text}`
@@ -1185,18 +1207,25 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
   } else if (tier.effort === 'low') {
     lines.push('Keep reasoning brief and act on the first sound approach.');
   } else if (tier.effort === 'medium') {
-    lines.push('Plan briefly, implement, then verify the touched path.');
+    lines.push(bare ? 'Plan briefly, answer, then check the answer once.' : 'Plan briefly, implement, then verify the touched path.');
   } else if (tier.effort === 'high') {
     lines.push(
-      'Reason carefully, state assumptions, and verify the result before finishing. Run the narrowest relevant checks.',
+      bare
+        ? 'Reason carefully, state assumptions, and check the result before finishing.'
+        : 'Reason carefully, state assumptions, and verify the result before finishing. Run the narrowest relevant checks.',
     );
-  } else if (tier.effort === 'extra-high') {
+  } else if (tier.effort === 'extra-high' || (bare && tier.effort === 'ultra')) {
+    // Ultra's own block below needs tools; with none, it asks for the deepest reasoning instead.
     lines.push(
-      'Reason exhaustively: check edge cases, failure paths, and the relevant tests. Run typecheck/tests and review the final diff; prefer one more verification pass over a plausible guess.',
+      bare
+        ? 'Reason exhaustively: check edge cases and failure paths; prefer one more pass over your answer to a plausible guess.'
+        : 'Reason exhaustively: check edge cases, failure paths, and the relevant tests. Run typecheck/tests and review the final diff; prefer one more verification pass over a plausible guess.',
     );
   }
 
-  if (!tier.subagents) {
+  if (bare) {
+    // No sub-agents, workflows or roles to talk about.
+  } else if (!tier.subagents) {
     lines.push('Sub-agent delegation is disabled for this tier; do all work in this Session.');
   } else {
     lines.push(
@@ -1210,7 +1239,7 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
     }
   }
 
-  if (tier.effort === 'ultra' && !alone) {
+  if (tier.effort === 'ultra' && !alone && !bare) {
     if (tier.subagents && ultraAutoDelegate) {
       lines.push(
         '**Ultra Code.** Decompose the task before acting. When two or more pieces are genuinely independent, start them as sub-agents together in one assistant message and keep doing useful work while they run.',
@@ -1238,7 +1267,7 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
     }
   }
 
-  if (tier.subagents) {
+  if (tier.subagents && !bare) {
     lines.push(
       `The same ${maxSubagents}-child cap applies to \`workflow\` agent() calls and to any team members you spawn.`,
     );
@@ -1521,7 +1550,12 @@ export function apply(ctx, config) {
             // The section carries user text (custom tier prompts); a stray {{...}} must not break prompt assembly.
             interpolate: false,
             text: () => {
-              if (ctx.get('modes')?.isolated?.(agent.id) === true) return '';
+              const modes = ctx.get('modes');
+              if (modes?.isolated?.(agent.id) === true) return '';
+              // Chat mode or the Tools switch Off: the Modes add-on says so, when it is new enough to.
+              const bare = modes?.noTools?.(agent.id) === true;
+              // Web Off: the Modes add-on tells the model so; the tier's own internet line would contradict it.
+              const webOff = modes?.webOff?.(agent.id) === true;
               // The route is only recorded at the first request, so a new Session
               // resolves its tier from the Agent's current selection until then.
               const tier = resolveTierOf(agent.id);
@@ -1530,7 +1564,7 @@ export function apply(ctx, config) {
                 readMaxSubagents(config, tier),
                 plain(config.ultraAutoDelegate) !== false,
                 readRoleModels(config),
-                { skillText: (name) => skillTexts.get(skillKey(agent, name))?.text, version: versionExtras(agent, tier) },
+                { skillText: (name) => skillTexts.get(skillKey(agent, name))?.text, version: versionExtras(agent, tier), bare, webOff },
               );
             },
           }),
@@ -2443,6 +2477,8 @@ export function apply(ctx, config) {
    * @returns {Promise<{tierId: string, from: object, to: object} | null>} the move, or null when there is no next route.
    */
   async function advanceFallbackFor(agent, skip) {
+    // An isolated conversation keeps the model it was given: what it read goes to that model only.
+    if (ctx.get('modes')?.isolated?.(agent?.id) === true) return null;
     const current = agent.model?.current?.();
     if (!current) return null;
     const tier = tierForRoute(agent.id, current.provider, current.model, config);
@@ -2468,6 +2504,8 @@ export function apply(ctx, config) {
    * @returns {Promise<{from: object, to: object} | null>} the move, or null when already there.
    */
   async function restorePrimaryFor(agent, tierId) {
+    // Nor is it moved back: an isolated conversation never changes model from here.
+    if (ctx.get('modes')?.isolated?.(agent?.id) === true) return null;
     const current = agent.model?.current?.();
     const primary = primaryRouteOf(agent.id, tierId);
     if (!current || !primary) return null;
@@ -2513,6 +2551,9 @@ export function apply(ctx, config) {
      */
     instructionsReplaced(sessionId) {
       try {
+        // An isolated conversation gets no version text from here (the prompt section is empty for
+        // it), so its own mode's rules must never be left out either.
+        if (ctx.get('modes')?.isolated?.(sessionId) === true) return false;
         const agent = ctx.get('agents')?.get(sessionId);
         return agent ? versionExtras(agent, resolveTierOf(sessionId))?.replace === true : false;
       } catch {

@@ -87,8 +87,8 @@ The list reads the app's own project and conversation data in the browser. If th
   The greeting sits in the start page's logo seat, and the stock title next to it is hidden only while a greeting shows. A tab with an empty greeting shows the stock title.
 - **Suggestion chips** under the chat box, each with an icon: Create slides, Build website, Develop apps, Spreadsheet, Visualization, Wide research, Create games (Cowork and Code tabs). A chip fills the chat box with a starter prompt to finish and send. Chip icons: `slides`, `website`, `app`, `spreadsheet`, `chart`, `research`, `game`, `spark`.
 - **New chat / task / code task** is drawn in the scheme's accent colour, with the app's own New Session shortcut as a badge (shown only when the app exposes one).
-- In narrow windows the greeting wraps, and the chat-box Search and Deep research buttons shrink to icons.
-- The **Search** and **Deep research** buttons in the chat box come from the Modes add-on.
+- In narrow windows the greeting wraps, and the chat-box buttons shrink to icons.
+- The **Web**, models and **Tools** buttons in the chat box come from the Modes add-on.
 
 **Logos, date and width.** The sidebar's **More** menu ends with three switches, saved with your settings:
 
@@ -225,7 +225,7 @@ A Cowork project can have a **type**: ready-made instructions for a kind of work
 - **A type is a starting point.** Choosing one copies its instructions into the project's own instructions, which the user edits freely. The project remembers the type (`preset` in `projects.json`); the instructions that reach the assistant are still the project's own, through the same prompt section as before.
 - **The project page** has a Type card for projects under the Cowork tab. For a project without a type and without instructions it is headed "What kind of project is this?", with Blank selected, so a new project behaves as before unless a type is picked. Picking a type when nothing of the user's would be lost applies it at once; otherwise the type's instructions are shown first, with "Replace mine with these", "Keep mine, only change the type" and "Cancel".
 - **The user's own types:** "Save as my preset…" under the instructions keeps the current text as a type of their own (`<home>/cowork-shell/presets/my-<name>.md`, at most 40). They are listed after the shipped ones, marked "yours", and can be removed; a project that used one keeps its instructions. A file in the user's folder cannot replace a shipped type.
-- `tools` names the shared tools a type can use (`data`, `finance`); `search: off` makes new conversations start with Search off. Both act since 0.39.0, see below.
+- `tools` names the shared tools a type can use (`data`, `finance`); `search: off` makes new conversations start with Web set to Off. Both act since 0.39.0, see below.
 - **Route:** `GET /dsh-cowork-shell/projects` also returns `presets`; POST actions `preset-save { name, description, tools, instructions }` and `preset-remove { id }`; `save` takes `preset`.
 - Not planned in this build: interfaces of their own for Learn and Plan.
 - **Tested (0.38.0):** 4 unit tests (13 in the add-on): the shipped files are complete, in order and free of anything personal; strict reading of a preset file; own presets saved, replaced, listed last, removed, and unable to shadow a shipped one; the project record keeps its type. In the test setup: a new project showed the card with Blank selected; Research and then Paperwork applied at once; after an edit, Plan showed the preview and "Keep mine" left the text; "Save as my preset" listed it as "yours" and set the project to it; removing it left the project's instructions; an older project with instructions showed the preview and Cancel changed nothing. Not tested: the folder chooser of "+ New" in the Mac app; a real model working under any of the five instructions.
@@ -262,7 +262,7 @@ When instructions written by a model are saved, a mark of the folder (file names
 ### Shared tools and Search
 
 - A project whose type names `data` or `finance` gets a short pointer to those tools in its prompt section, while the Data or Finance add-on is switched on. The Type card says whether they are available and where to switch them on. The tools themselves are the same ones the Data and Finance tabs use; nothing is duplicated.
-- A type with `search: off` (Paperwork) makes a **new** conversation in the project start with Search off: on `agent/created`, for a conversation that has never run and whose switch was never set, `sessionWeb[id] = false` is written to the Modes settings. Deep research is off unless switched on, as everywhere. The user can switch both on in the chat box.
+- A type with `search: off` (Paperwork) makes a **new** conversation in the project start with Web set to Off: on `agent/created`, for a conversation that has never run and whose Web choice was never set, `sessionWeb[id] = false` is written to the Modes settings. The user can pick another Web level in the chat box.
 
 ### Route
 

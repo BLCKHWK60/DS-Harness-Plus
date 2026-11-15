@@ -3,9 +3,10 @@
  * only read files inside the conversation's folder.
  */
 import { compare, cleanName, snapshot } from './store.js';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
 import { chartSpec } from './charts.js';
 import { inside, listFiles, print, readText, useOf } from './files.js';
+import { baseName, sqlName, unique } from './tables.js';
 
 /** Where programs and exports may write, inside the conversation's folder. */
 export const OUTPUT_FOLDER = 'data-output';
@@ -27,6 +28,21 @@ export function changedFiles(analysis) {
     }
   }
   return out;
+}
+
+/**
+ * The table name for each file of one call. A file is named after itself; files that would share
+ * a name (sales.csv in two subfolders, or sales.csv beside sales.xlsx) are named after their path
+ * instead, and with their ending when that is still not enough. The names follow from the list
+ * alone, so a saved analysis gets the same names each time it runs.
+ * @param {string[]} shown - the files, as paths inside the conversation's folder.
+ * @returns {string[]} one SQL name per file, never repeated.
+ */
+export function tableNames(shown) {
+  const repeated = (names, index) => names.indexOf(names[index]) !== names.lastIndexOf(names[index]);
+  const bases = shown.map((file) => baseName(file));
+  const pathed = bases.map((name, index) => (repeated(bases, index) ? sqlName(shown[index].slice(0, shown[index].length - extname(shown[index]).length), name) : name));
+  return unique(pathed.map((name, index) => (repeated(pathed, index) ? sqlName(shown[index], name) : name)));
 }
 
 /**
@@ -59,11 +75,14 @@ export function buildTools({ enabled, rootOf, conversationOf, engine, store, pyt
   const specs = (root, files) => {
     const list = (Array.isArray(files) ? files : [files]).map((file) => String(file ?? '').trim()).filter(Boolean).slice(0, 8);
     if (list.length === 0) throw new Error('Name at least one file.');
-    return list.map((file) => {
-      const found = inside(root, file);
-      if (useOf(found.path) !== 'table') throw new Error(`${found.shown} is not a table file. Tables are CSV, TSV, JSON, JSON Lines and Excel files; use data_text or the PDF tools for documents.`);
-      return { path: found.path, shown: found.shown, print: print(found.path) };
+    const found = list.map((file) => {
+      const one = inside(root, file);
+      if (useOf(one.path) !== 'table') throw new Error(`${one.shown} is not a table file. Tables are CSV, TSV, JSON, JSON Lines and Excel files; use data_text or the PDF tools for documents.`);
+      return one;
     });
+    // Two files with the same name (last year's and this year's export) can still be compared.
+    const names = tableNames(found.map((one) => one.shown));
+    return found.map((one, index) => ({ path: one.path, shown: one.shown, name: names[index], print: print(one.path) }));
   };
   const tablesLine = (tables) => `Tables: ${tables.map((table) => `${table.name} (${table.rows.toLocaleString('en-US')} rows, from ${table.file}${table.sheet ? `, sheet "${table.sheet}"` : ''})`).join('; ')}.`;
   /** Run one query, record it, and hand back its id with the result. */
@@ -106,7 +125,7 @@ export function buildTools({ enabled, rootOf, conversationOf, engine, store, pyt
       name: 'data_query',
       description: [
         'Run one read-only SQL query (SQLite dialect) against table files in this conversation\'s folder, and get the result with a query id such as Q7.',
-        'The files are loaded as tables named after the file (an Excel workbook with several sheets gives file__sheet tables); data_profile tells the exact names. Several files can be joined.',
+        'The files are loaded as tables named after the file (an Excel workbook with several sheets gives file__sheet tables; files that share a name are named after their path); data_profile tells the exact names. Several files can be joined.',
         'Every number in your answer must come from such a result and carry its id in square brackets, like [Q7]. Aggregate, filter and limit in the query: at most 500 rows come back.',
       ].join(' '),
       parameters: {
@@ -224,7 +243,7 @@ export function buildTools({ enabled, rootOf, conversationOf, engine, store, pyt
     },
     {
       name: 'data_save_analysis',
-      description: 'Save an analysis so it can be run again later: give it a name and the ids of the queries from this conversation that make it up (for example ["Q3", "Q5"]). The queries and their current results are kept. Saving under an existing name replaces it.',
+      description: 'Save an analysis so it can be run again later: give it a name and the ids of the queries from this conversation that make it up (for example ["Q3", "Q5"]). The queries and their current results are kept. Saving under an existing name of this folder replaces it; a name another folder uses is refused.',
       parameters: {
         type: 'object',
         properties: {
@@ -240,6 +259,9 @@ export function buildTools({ enabled, rootOf, conversationOf, engine, store, pyt
         const root = rootOf(exec);
         const conversation = conversationOf(exec);
         const name = cleanName(args.name);
+        // Names are shared by all folders: saving over another folder's analysis would lose it for good.
+        const existing = store.analysis(name);
+        if (existing && existing.folder !== root) throw new Error(`"${existing.name}" is already saved for the folder ${existing.folder}. Pick another name.`);
         const steps = [];
         const prints = {};
         for (const [index, id] of args.queries.entries()) {

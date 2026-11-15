@@ -8,9 +8,16 @@ export const MODE_ID = 'scout';
 export const OWN_TOOLS = ['scout_sources', 'scout_search', 'scout_posting', 'scout_titles', 'scout_demand', 'scout_pay', 'scout_files', 'scout_profile', 'scout_report'];
 
 /**
+ * The tools that reach the user's own material (files, profile, saved reports). Only the Scout
+ * conversation itself gets them: its helpers (Deep research) read web pages that may carry
+ * hidden instructions, and need none of these for their work.
+ */
+export const TOP_ONLY = ['scout_files', 'scout_profile', 'scout_report'];
+
+/**
  * Everything a Scout conversation may use. No file, shell or program tools: the user's private
- * files are reached only through scout_files, which reads them for a model on the user's own
- * machines and for no other.
+ * files are reached only through scout_files, and only by the conversation itself, never by the
+ * helpers it starts (TOP_ONLY). Any model may read them, local or cloud.
  */
 export const TOOLS = [
   ...OWN_TOOLS,
@@ -24,8 +31,8 @@ export const METHOD = `You are in Scout mode: a scout for real work (jobs, freel
 
 Rules that always hold:
 1. Begin with your understanding: the work, seniority, skills, pay target, work types, markets, and every assumption you made.
-2. Every opportunity comes from a source you fetched in this conversation, with its link and posting date. Never invent a posting, company, person, salary or date.
-3. The user's files and profile are reached only through scout_files and scout_profile. If they refuse because of the model, say so and go on with what the user typed.
+2. Every opportunity comes from a source you read or a search result you saw in this conversation, with its link, and its posting date when the source shows one; say when an item is known only from a search result. Never invent a posting, company, person, salary or date.
+3. The user's files and profile are reached only through scout_files and scout_profile. If they refuse because of the model, say so and go on with what the user typed. Save a profile only after the user has seen the draft and agreed.
 4. Search queries never contain the user's name, contact details or past employers. Search by titles, skills and places.
 5. Nothing is sent, submitted or applied for. Contact plans and messages are drafts. A draft uses only facts from the profile or the user's own words; never invent or inflate experience.
 6. Respect each source's terms. scout_search reads the sources it supports. Sources marked "search engine only" are found with web_search (site: works) and never fetched; give the user the link.

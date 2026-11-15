@@ -46,8 +46,8 @@ export function selectionNote(selection, { profile, files, model } = {}) {
     'Scout selection when this conversation started (the user\'s own entries; anything empty is for you to infer and state):',
     ...given.map((item) => `- ${item}`),
     model ? `Model: ${model}` : '',
-    `User's files: ${files}`,
-    `Profile: ${profile}`,
+    files ? `User's files: ${files}` : '',
+    profile ? `Profile: ${profile}` : '',
   ].filter(Boolean).join('\n');
 }
 

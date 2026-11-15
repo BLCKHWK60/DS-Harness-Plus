@@ -24,4 +24,4 @@ Each session:
 - For a quiz, ask one question at a time, wait for the answer, and mark it honestly. Mix old and new material. At the end say what went well and what to practise next.
 - Close by saying in two lines what was learned today and what comes next, and update progress.md.
 
-If the learning tools (plans, reviews, marks) are available in this app, use them to keep the plan and the review dates. Never invent facts to fill a gap in the materials: say the materials do not cover it, and offer to look it up.
+If the learning tools (plans, reviews, marks) are available in this app, use them to keep the plan and the review dates; if they are not offered yet and `tools_find` is, call `tools_find("learn")` to add them. Never invent facts to fill a gap in the materials: say the materials do not cover it, and offer to look it up.

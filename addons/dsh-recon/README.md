@@ -15,9 +15,13 @@ Off until you switch it on at **Settings → Recon**. Needs the Modes add-on and
 ## What a Recon conversation has
 
 - **Only its own tools:** `recon_onion_search`, `recon_onion_read`, `recon_usenet_groups`,
-  `recon_usenet_search`, `recon_usenet_read`, `recon_cite`.
+  `recon_usenet_search`, `recon_usenet_read`, `recon_news_search`, `recon_archive_find`,
+  `recon_archive_read`, `recon_cite`.
 - **Nothing else of the app:** no programs, no shell, no files, no memory, no skills, no helpers,
   no web search, no Deep research. A call to any other tool is refused, also in the PTC preset.
+- **Standard preset only:** in the PTC preset the app offers tools only through programs
+  (`run_code`), which Recon refuses, so a Recon conversation there can do nothing. The model is
+  told to ask you to start it again in the Standard preset.
 - **No notes from elsewhere:** no project instructions, no `AGENTS.md` (of the folder or of the
   app's home, where Memory writes), no skill list, no notes from other Plus add-ons.
 - **No way in, no way out:** a conversation that began in the Recon tab stays isolated for good.
@@ -31,7 +35,15 @@ Off until you switch it on at **Settings → Recon**. Needs the Modes add-on and
 - Any other model counts as cloud, and so does one whose place cannot be told. The tools then hand
   over nothing until you type `/recon cloud` in that conversation. That holds for that
   conversation and that model, and is forgotten when the app is closed.
-- No tier, no router and no fallback moves an isolated conversation to another model.
+- What Recon already found is in the conversation's history, and every step sends the history
+  to the model picked at that moment. So a conversation that holds Recon findings takes no step
+  on a cloud model you did not agree to: switched to another model, copied with Rerun, or with
+  its history condensed. The step stops with a message that says why; nothing is sent.
+  One exception: condensing a long conversation sends its history to the model the app uses
+  for condensing, and Recon does not check that model. Use a model on this Mac or your own
+  network for it, or keep Recon conversations short.
+- No tier, no router, no fallback and no route-health switch moves an isolated conversation to
+  another model.
 - `/recon` shows a conversation's isolation, its model and what is allowed.
 
 ## Searching and reading
@@ -171,7 +183,8 @@ Usenet provider; you can have up to eight.
   program. It gets none of the app's environment.
 - **Text only, by never asking.** One GET for the page itself: no pictures, scripts, styles or
   frames are requested, no cookies are kept, nothing is posted. An address that is not text is
-  refused before its content is read. A redirect is reported, not followed.
+  refused before its content is read. A redirect to another site is reported, not followed; one
+  inside the same site is followed, at most three times.
 - **What comes back is plain text:** scripts, styles, frames, comments and hidden characters are
   gone; only links to .onion addresses are kept.
 - **Addresses:** only current .onion addresses, and only ones the conversation was shown (by a
@@ -214,7 +227,7 @@ Usenet provider; you can have up to eight.
 
 - **Unit tests (9, plus the 3 below):** the mode, where a model runs, the agreement for cloud models, the tool gate.
 - **Lab run with a stand-in model**, reading exactly what the model was sent:
-  the tool list is the six tools; project `AGENTS.md` and Memory do not arrive; a shell call is
+  the tool list was the six tools of that version (nine now); project `AGENTS.md` and Memory do not arrive; a shell call is
   refused; a Cowork conversation is not offered the tools; a conversation moved in or out is locked.
 - **Connection tests (6), against stand-ins on this Mac only** (a local web server as the .onion
   site, a script as the tor program): text arrives; the site is asked for the page and nothing it

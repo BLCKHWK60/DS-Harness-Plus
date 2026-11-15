@@ -167,7 +167,7 @@ window.__ModuleLoader__.load({
           h('div', { className: 'dsh-dt-rowtext' },
             h('div', { className: 'dsh-dt-rowtitle' }, 'Private Python folder'),
             h('div', { className: 'dsh-dt-rowdesc', 'data-error': String(py.state === 'failed') }, pyText),
-            h('div', { className: 'dsh-dt-rowdesc' }, 'Plus keeps its own copy of the analysis packages in the app\'s data folder (about 450 MB, downloaded once). Nothing else on the Mac changes. A program cannot use the internet, can read only the conversation\'s folder, and can write only into its data-output folder.')),
+            h('div', { className: 'dsh-dt-rowdesc' }, 'Plus keeps its own copy of the analysis packages in the app\'s data folder (about 450 MB, downloaded once). Nothing else on the Mac changes. A program cannot use the internet, can read the conversation\'s folder and nothing else in your home folder, and can write only into its data-output folder.')),
           py.state === 'ready' || py.state === 'installing' ? null : h('button', { type: 'button', className: 'dsh-dt-btn', disabled: busy, onClick: () => void setupPython() }, py.state === 'failed' ? 'Set up again' : 'Set up now')),
 
         h('div', { className: 'dsh-dt-group' }, 'How to use it'),
@@ -177,7 +177,7 @@ window.__ModuleLoader__.load({
           h('li', null, 'Ask in plain words. In the answer, a mark like [Q7] after a number is the query that produced it. Open that step in the conversation to see the query itself.'),
           h('li', null, 'Charts are drawn from the data itself and shown under the answer. Ask for one whenever you want to see something: "chart revenue by month".'),
           h('li', null, 'For statistics, cleaning or combining files, the assistant writes and runs a small Python program. New files it makes (cleaned tables, charts) go into a data-output folder inside your folder; your own files are never changed.'),
-          h('li', null, 'Search and Deep research are yours to switch on or off in the chat box. With both off, the assistant works from your files alone.'),
+          h('li', null, 'Set Web to Off in the chat box and the assistant works from your files alone. Any other level lets it search the web and run deep research.'),
           h('li', null, 'Say "save this analysis as …" to keep it. Later, say "run … again" and the assistant reports what moved.'),
           h('li', null, 'An AGENTS.md or CLAUDE.md file in the folder is read by the app, as in every tab. Use it to explain your data: what the columns mean, which rows to leave out.')),
 
@@ -207,7 +207,7 @@ window.__ModuleLoader__.load({
         ctx.effect(() => ctx.locale.register(NS, DICT));
         const t = ctx.locale.bind(NS);
         ctx.effect(() =>
-          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'data', order: 24, label: () => t('section.title') }, (props) => h(DataPage, { ...props, appCtx: ctx }))),
+          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'data', order: 112, label: () => t('section.title') }, (props) => h(DataPage, { ...props, appCtx: ctx }))),
         );
       },
     };

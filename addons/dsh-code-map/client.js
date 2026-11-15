@@ -417,7 +417,7 @@ textarea.dsh-cm-field { width: 100%; height: auto; min-height: 84px; padding: 9p
         ctx.effect(() =>
           ctx.slots.inject('settings.section', () =>
             ctx.slots.register(
-              { name: 'settings.section', id: 'code-map', order: 19, label: () => t('section.title') },
+              { name: 'settings.section', id: 'code-map', order: 530, label: () => t('section.title') },
               (props) => h(CodeMapPage, { ...props, appCtx: ctx }),
             ),
           ),

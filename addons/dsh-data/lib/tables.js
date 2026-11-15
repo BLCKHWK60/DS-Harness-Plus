@@ -152,14 +152,20 @@ export function parseCsv(text, delimiter = sniffDelimiter(text.slice(0, 20000)),
 const INTEGER = /^[+-]?\d{1,15}$/;
 const DECIMAL = /^[+-]?(\d+\.\d*|\.\d+|\d+)([eE][+-]?\d+)?$/;
 const THOUSANDS = /^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/;
+/** A decimal comma, as in `0,125` or `1.234,5`: how numbers are written in semicolon files. */
+const DECIMAL_COMMA = /^[+-]?(\d{1,3}(\.\d{3})+|\d+),\d+$/;
+/** Comma thousands with a decimal point, as in `1,234.5`. */
+const THOUSANDS_POINT = /^[+-]?\d{1,3}(,\d{3})+\.\d+$/;
 const EMPTY = new Set(['', 'null', 'NULL', 'NA', 'N/A', 'n/a', 'NaN', '#N/A']);
 
 /**
  * A text cell as a number when it is one, else as text; empty markers become null.
  * @param {unknown} raw - the cell.
+ * @param {string} [delimiter] - the CSV separator the cell came from. In a semicolon file a
+ *   comma is the decimal point, not a thousands separator, so `1,250` is 1.25 and not 1250.
  * @returns {number | string | null} the value.
  */
-export function cell(raw) {
+export function cell(raw, delimiter) {
   if (raw === null || raw === undefined) return null;
   if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
   if (typeof raw === 'boolean') return raw ? 1 : 0;
@@ -168,6 +174,7 @@ export function cell(raw) {
   // A leading zero means an identifier (a postcode, a phone number), not a number.
   if (/^[+-]?0\d/.test(text)) return text;
   if (INTEGER.test(text) || DECIMAL.test(text)) return Number(text);
+  if (delimiter === ';') return DECIMAL_COMMA.test(text) ? Number(text.replace(/\./g, '').replace(',', '.')) : text;
   if (THOUSANDS.test(text)) return Number(text.replace(/,/g, ''));
   return text;
 }
@@ -199,13 +206,18 @@ export function columnType(rows, index) {
  * @param {string} name - the table's name.
  * @param {unknown[]} header - the column titles.
  * @param {unknown[][]} records - the rows, as raw cells.
+ * @param {string} [delimiter] - the CSV separator, for reading numbers; left out for other files.
  * @returns {{name: string, columns: {name: string, title: string, type: string}[], rows: any[][]}} the table.
  */
-export function tableOf(name, header, records) {
+export function tableOf(name, header, records, delimiter) {
   const width = Math.min(MAX_COLUMNS, Math.max(header.length, ...records.slice(0, 200).map((record) => record.length)));
   const titles = Array.from({ length: width }, (_, index) => String(header[index] ?? '').trim() || `column_${index + 1}`);
   const names = unique(titles.map((title, index) => sqlName(title, `column_${index + 1}`)));
-  const rows = records.map((record) => Array.from({ length: width }, (_, index) => cell(record[index])));
+  // In a semicolon file the comma is the decimal point, unless a column writes its numbers the US
+  // way: one value with both marks, the comma first (`1,234.5`), settles it for the whole column,
+  // so a column is never read half one way and half the other.
+  const separatorOf = Array.from({ length: width }, (_, index) => (delimiter === ';' && records.some((record) => THOUSANDS_POINT.test(String(record[index] ?? '').trim())) ? ',' : delimiter));
+  const rows = records.map((record) => Array.from({ length: width }, (_, index) => cell(record[index], separatorOf[index])));
   const columns = names.map((columnName, index) => ({ name: columnName, title: titles[index], type: columnType(rows, index) }));
   // A column that is text overall keeps its numbers as text too, so comparisons behave.
   columns.forEach((column, index) => {
@@ -222,9 +234,11 @@ export function tableOf(name, header, records) {
  * @returns {object} the table.
  */
 export function csvTable(text, name) {
-  const records = parseCsv(text);
+  // Found once and used twice: to split the fields, and to know what a comma inside a number means.
+  const delimiter = sniffDelimiter(text.slice(0, 20000));
+  const records = parseCsv(text, delimiter);
   if (records.length > MAX_ROWS + 1) throw new Error(`it has more than ${MAX_ROWS.toLocaleString('en-US')} rows`);
-  return tableOf(name, records[0] ?? [], records.slice(1));
+  return tableOf(name, records[0] ?? [], records.slice(1), delimiter);
 }
 
 const flat = (value) => (value !== null && typeof value === 'object' ? JSON.stringify(value) : value);

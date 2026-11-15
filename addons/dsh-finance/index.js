@@ -9,8 +9,9 @@
  *   - seven skills, one for each common research task.
  * Switched off, it takes all of that away again.
  *
- * It also adds three data tools that need no key: a company's reported figures and its filings
- * from the US securities regulator, and yearly readings for economies from the World Bank. For
+ * It also adds six data tools that need no key: a company's reported figures and its filings
+ * from the US securities regulator, yearly readings for economies from the World Bank, and share
+ * prices, news and social posts (lib/market.js). For
  * everything else the assistant uses the app's web search, the Deep research add-on, the Library
  * and the chart tools. It is research, not advice, unless the adviser is switched on (lib/adviser.js).
  *
@@ -19,7 +20,7 @@
 import z from '@deepseek-ai/schemastery';
 import { join } from 'node:path';
 import { FOCUSES, KINDS, MARKETS, MODE_ID, PERIODS, WATCHLIST_MAX, cleanList, openPins, readSelection, selectionNote, withFinance } from './lib/finance.js';
-import { BRIEF_PREFIX, OWN_MAX, RHYTHMS, briefPrompt, briefRule, briefTitle, briefsOf, ownTasksOf, scheduledIn } from './lib/briefs.js';
+import { BRIEF_PREFIX, OWN_MAX, RHYTHMS, briefPrompt, briefRule, briefTitle, briefsOf, ownTasksOf, researchOnly, scheduledIn } from './lib/briefs.js';
 import { PRESETS, addressProblem, keyRef, readSources, sourceGet, sourcesNote } from './lib/sources.js';
 import { buildSourceTool, buildTools } from './lib/tools.js';
 import { buildMarketTools } from './lib/market.js';
@@ -196,7 +197,10 @@ export function apply(ctx, config) {
                 const root = agent.header?.parentSession ?? agent.session?.header?.parentSession;
                 const note = selectionNote(pins.get(agent.id) ?? (root ? pins.get(root) : undefined) ?? now.selection);
                 const extra = sourcesNote(now.sources, (id) => keys[id]?.set === true);
-                const advice = now.adviser ? adviserNote(profile.read(), Boolean(profileToolOff)) : '';
+                // The adviser's voice and the user's profile are for the conversation itself. A helper
+                // only researches for it, and may run on another model or provider.
+                const helper = Boolean(root) || isHelper(agent) || isHelper(agent.session);
+                const advice = now.adviser && !helper ? adviserNote(profile.read(), Boolean(profileToolOff)) : '';
                 return [note, extra, advice].filter(Boolean).join('\n\n');
               } catch {
                 return '';
@@ -234,7 +238,8 @@ export function apply(ctx, config) {
       if (event?.type !== 'turn/start' || isHelper(session)) return;
       const id = session?.id;
       const now = settings();
-      if (!id || !now.enabled || pins.get(id) || modeOf(id) !== MODE_ID) return;
+      // A conversation a scheduled task opened gets the task's name instead, once it is looked up.
+      if (!id || !now.enabled || pins.get(id) || adopting.has(id) || modeOf(id) !== MODE_ID) return;
       pins.pin(id, now.selection);
     } catch (error) {
       warn(`could not remember a conversation's selection: ${String(error?.message ?? error)}`);
@@ -318,6 +323,7 @@ export function apply(ctx, config) {
   };
   const skillTimer = setInterval(() => {
     void refreshKeys().catch(() => {});
+    void rewordBriefs().catch((error) => warn(`could not reword the briefs: ${String(error?.message ?? error)}`));
     try {
       syncTools();
       syncSkills();
@@ -361,7 +367,7 @@ export function apply(ctx, config) {
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     const result = await scheduler().create({
       title,
-      prompt: briefPrompt(subject, settings().selection.market, rhythm, settings().adviser),
+      prompt: briefPrompt(subject, settings().selection.market, rhythm),
       timing: { kind: 'rrule', rrule: briefRule(rhythm, hour, zone) },
       target: { kind: 'new' },
     });
@@ -372,6 +378,36 @@ export function apply(ctx, config) {
     if (!brief) throw new Error('That brief is gone.');
     const result = await scheduler().edit({ id, action: 'delete' });
     if (result?.code) throw new Error(`The scheduler refused: ${result.message ?? result.code}`);
+  };
+
+  // Briefs made while the adviser was on used to carry the adviser's wording in their own
+  // instruction, so they kept advising after the switch went off. They are reworded once, as soon
+  // as the scheduler is there; while the adviser is on, its note still makes them recommend.
+  // A pass that fails (the scheduler still starting, or a brief that ran or changed at that
+  // moment) is tried again from the same timer, up to five times in one app run.
+  let briefsReworded = false;
+  let rewordTries = 0;
+  let rewording = false;
+  const rewordBriefs = async () => {
+    const service = ctx.get('schedule');
+    if (briefsReworded || rewording || rewordTries >= 5 || !service?.catalog || !service.edit) return;
+    rewording = true;
+    rewordTries += 1;
+    try {
+      let left = 0;
+      for (const task of await service.catalog()) {
+        const prompt = String(task?.title ?? '').startsWith(BRIEF_PREFIX) ? researchOnly(task.prompt) : undefined;
+        if (!prompt) continue;
+        const result = await service.edit({ id: task.id, action: 'update', patch: { prompt }, expectedUpdatedAt: task.updatedAt ?? null });
+        if (result?.code) {
+          left += 1;
+          warn(`could not reword the brief "${task.title}": ${result.message ?? result.code}`);
+        }
+      }
+      if (left === 0) briefsReworded = true;
+    } finally {
+      rewording = false;
+    }
   };
 
   const listOwn = async () => {
@@ -385,16 +421,45 @@ export function apply(ctx, config) {
   // A conversation that a Finance brief opens belongs in Finance: it gets the Finance mode (and so
   // the Finance tab) instead of the mode the app gives scheduled conversations. The same goes for
   // a task of the owner's own that they marked on the Finance page.
+  /** Conversations moved to Finance whose task name is still being looked up for their note. */
+  const adopting = new Set();
   const adopt = async (sessionId, found) => {
     const now = settings();
     if (!now.enabled) return;
-    const catalog = await scheduler().catalog();
-    const task = catalog.find((entry) => found.ids.includes(String(entry.id)) && (String(entry.title ?? '').startsWith(BRIEF_PREFIX) || now.financeTasks.includes(String(entry.id))));
-    if (!task) return;
-    const title = String(task.title ?? '');
-    pins.pin(sessionId, { kind: 'brief', subject: title.startsWith(BRIEF_PREFIX) ? title.slice(BRIEF_PREFIX.length) : title || 'Scheduled task', market: found.market || 'Global' });
+    const own = found.ids.find((id) => now.financeTasks.includes(id));
+    if (!found.subject && !own) {
+      // A Finance brief whose instruction was edited no longer names its subject in the text: it is
+      // still known by its title in the scheduler. This lookup waits, so the move may come late;
+      // meanwhile the first turn must not pin the drop-down selection in the brief's place.
+      adopting.add(sessionId);
+      try {
+        const task = (await scheduler().catalog()).find((entry) => found.ids.includes(String(entry.id)) && String(entry.title ?? '').startsWith(BRIEF_PREFIX));
+        if (!task || !settings().enabled) return;
+        pins.pin(sessionId, { kind: 'brief', subject: String(task.title).slice(BRIEF_PREFIX.length) || 'Scheduled task', market: found.market || 'Global' });
+        const modes = ctx.get('modes');
+        if (modes?.set) await modes.set(sessionId, MODE_ID, { claim: true });
+      } finally {
+        adopting.delete(sessionId);
+      }
+      return;
+    }
+    // Everything up to the move runs before the first await, so the move lands while the
+    // conversation is still idle and its first turn already gets Finance's tools.
+    const market = found.market || 'Global';
+    if (found.subject) pins.pin(sessionId, { kind: 'brief', subject: found.subject, market });
+    else adopting.add(sessionId);
     const modes = ctx.get('modes');
-    if (modes?.set && modes.get?.(sessionId) !== MODE_ID) await modes.set(sessionId, MODE_ID);
+    // Always with the claim, even when Modes already reports Finance: before the conversation is
+    // known to come from the scheduler, that may only be the selected tab speaking.
+    if (modes?.set) void modes.set(sessionId, MODE_ID, { claim: true }).catch((error) => warn(`could not move a brief to Finance: ${String(error?.message ?? error)}`));
+    if (found.subject) return;
+    // A task of the owner's own is named in the scheduler only; its name is looked up afterwards.
+    try {
+      const task = (await scheduler().catalog()).find((entry) => String(entry.id) === own);
+      pins.pin(sessionId, { kind: 'brief', subject: String(task?.title ?? '') || 'Scheduled task', market });
+    } finally {
+      adopting.delete(sessionId);
+    }
   };
   ctx.on('session/event', (session, event) => {
     try {

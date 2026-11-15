@@ -85,6 +85,13 @@ export function openSources() {
     full: (id) => [...of(id).sources],
     /** @returns {boolean} whether anything is kept for the conversation. */
     known: (id) => all.has(String(id)),
+    /** @returns {number} how many sources the conversation read; adds no entry for an unknown one. (`count` is the request counter.) */
+    readCount: (id) => all.get(String(id))?.sources.length ?? 0,
+    /** @returns {boolean} whether the conversation has an entry with nothing in it (no source, log, note or fetch). */
+    empty: (id) => {
+      const entry = all.get(String(id));
+      return Boolean(entry) && entry.sources.length === 0 && entry.log.length === 0 && entry.notes.length === 0 && !entry.fetches && !entry.dropped;
+    },
     list: (id) => of(id).sources.map((source) => ({ n: source.n, kind: source.kind, url: source.url, title: source.title, retrieved: source.retrieved })),
     forget: (id) => all.delete(String(id)),
   };

@@ -2,7 +2,7 @@
  * Research: a mode and tab for researching a question in depth, built on the Deep research
  * add-on's engine. Switched on, it adds:
  *   - the Research mode (through the Modes add-on) with its method and tool list;
- *   - the Research tab, with depth and focus on the start page;
+ *   - the Research tab, with Depth and Focus dropdowns in its chat box;
  *   - for Deep research runs in its conversations: the tab's focus, three follow-up questions at
  *     the end of the report, and the report saved as Markdown in the Research folder;
  *   - the live progress of a run, with the follow-up questions as buttons (browser half).
@@ -188,6 +188,15 @@ export function apply(ctx, config) {
   );
 
   // ---- the pages' data -----------------------------------------------------------------------
+  /** Minutes a run started from a program (the PTC preset) gets whatever the depth, from Deep research; undefined when unknown. */
+  const programMinutes = () => {
+    try {
+      const minutes = ctx.get('deepResearch')?.programMinutes?.();
+      return Number.isFinite(minutes) ? minutes : undefined;
+    } catch {
+      return undefined;
+    }
+  };
   const view = () => ({
     at: Date.now(),
     enabled: enabled(),
@@ -195,6 +204,7 @@ export function apply(ctx, config) {
     depth: depthNow(),
     focuses: FOCUSES,
     depths: DEPTHS,
+    programMinutes: programMinutes(),
     helperModel: String(plain(settingsOf(MODES_NS)?.researchModel) ?? '') === 'roles' ? 'roles' : 'same',
     helperModels: HELPER_MODELS,
     folder: folder(),

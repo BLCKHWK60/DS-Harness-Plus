@@ -6,8 +6,8 @@
  * Switched on, it adds:
  *   - the Scout mode (through the Modes add-on) with its method and a fixed tool list;
  *   - the Scout tab, with title, place, pay, work type and markets on the start page;
- *   - six tools that only Scout conversations get: the source registry, search, posting text,
- *     the user's files, the anonymous profile, and saving the report;
+ *   - tools that only Scout conversations get: the source registry, search, posting text, research,
+ *     and (never for the helpers they start) the user's files, the profile, and saving the report;
  *   - a guard that stops web_fetch on sources whose terms allow search engine results only;
  *   - `/scout`: which model the conversation uses.
  *
@@ -16,7 +16,7 @@
 import z from '@deepseek-ai/schemastery';
 import { execFile } from 'node:child_process';
 import { join } from 'node:path';
-import { MODE_ID, OWN_TOOLS, withScout } from './lib/mode.js';
+import { MODE_ID, OWN_TOOLS, TOP_ONLY, withScout } from './lib/mode.js';
 import { DEFAULT_MARKETS, KINDS, MARKETS, WORK_TYPES, addressProblem, cleanExtra, isSearchOnly, keyRef, readRegistry, searchOnlyHosts } from './lib/registry.js';
 import { openPins, readSelection, selectionNote } from './lib/selection.js';
 import { openStore } from './lib/store.js';
@@ -89,7 +89,7 @@ export function apply(ctx, config) {
   const folderPath = () => settings().folder || (scoutHome ? join(scoutHome, 'files') : '');
   const pins = openPins(scoutHome ? join(scoutHome, 'conversations.json') : '');
   const profile = openProfile(scoutHome ? join(scoutHome, 'profile.md') : '');
-  const store = openStore();
+  const store = openStore(scoutHome ? join(scoutHome, 'postings') : '');
   const pdf = async (path, root) => {
     const reader = ctx.get('pdfReader');
     if (typeof reader?.read !== 'function') throw new Error('reading PDFs needs the PDF reader add-on: switch it on in Settings → PDF reader');
@@ -177,6 +177,8 @@ export function apply(ctx, config) {
   };
   /** The conversation an agent works for: itself, or the one that started it. */
   const rootOf = (agent) => String(agent?.header?.parentSession ?? agent?.session?.header?.parentSession ?? agent?.id ?? '');
+  /** A helper (for example Deep research's) started by a conversation, rather than the conversation itself. */
+  const isHelper = (agent) => Boolean(agent?.header?.parentSession ?? agent?.session?.header?.parentSession);
   const inScout = (agent) => {
     const id = rootOf(agent);
     try {
@@ -226,6 +228,8 @@ export function apply(ctx, config) {
               const now = settings();
               if (!now.enabled || !inScout(agent)) return '';
               const root = rootOf(agent);
+              // Helpers do not get the user's files or profile, so their note does not mention them.
+              if (isHelper(agent)) return selectionNote(pins.get(root) ?? now.selection, { model: placeText(agent) });
               const count = currentFolder().list().length;
               const files = `${count} file${count === 1 ? '' : 's'} in the Scout folder (scout_files)`;
               const profileText = profile.read().trim() ? 'saved (scout_profile)' : 'none yet';
@@ -287,7 +291,8 @@ export function apply(ctx, config) {
       const built = buildTools({
         enabled: () => settings().enabled,
         registry: () => settings().registry,
-        selection: () => settings().selection,
+        // The selection the conversation started with, so the tools' defaults match its note.
+        selection: (exec) => pins.get(rootOf(exec?.agent)) ?? settings().selection,
         keyOf,
         hasKey: (id) => keys[id]?.set === true,
         store,
@@ -296,7 +301,8 @@ export function apply(ctx, config) {
         gate,
         idOf: (exec) => rootOf(exec?.agent),
       });
-      toolsOff = built.map((tool) => tools.register(tool, { when: ({ agent }) => settings().enabled && inScout(agent) }));
+      const offered = (tool, agent) => settings().enabled && inScout(agent) && !(TOP_ONLY.includes(tool.name) && isHelper(agent));
+      toolsOff = built.map((tool) => tools.register(tool, { when: ({ agent }) => offered(tool, agent) }));
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
       toolsOff = undefined;

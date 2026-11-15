@@ -6,6 +6,61 @@
 import { TOOLS } from './mode.js';
 
 /**
+ * How a tool's answer starts when the tool did not run (below, and mayReceive in lib/model.js).
+ * Such an answer holds nothing found. Keep in step with those texts.
+ */
+const NOT_RUN = [
+  'Recon is switched off',
+  'This tool works only in a conversation of the Recon tab',
+  'This Recon conversation runs in a folder of the user',
+  'It did not work:',
+  'This conversation uses ',
+  'The model of this conversation could not be told',
+];
+
+/**
+ * Whether a conversation's history holds something a recon tool found: an answer of a recon tool
+ * that ran. A copy of a Recon conversation (Rerun) carries these too, under another id.
+ * @param {object[] | undefined} messages - the conversation's messages, as the app derives them.
+ * @returns {boolean}
+ */
+/** The marker the app's compaction puts around its summary of earlier history. */
+export const SUMMARY_MARK = '<compacted-summary>';
+
+/**
+ * Whether a conversation's history was condensed by the app's compaction. The summary keeps what
+ * the removed tool answers said, so the tool answers themselves can no longer be found. The app
+ * puts the summary in a user message whose source is `compact-checkpoint`
+ * (`app/dsh-compaction/src/checkpoint.ts`), framed by `<compacted-summary>`
+ * (`app/dsh-compaction-basic/src/summarizer.ts`); either sign counts.
+ * @param {object[]} messages - the conversation's derived messages.
+ * @returns {boolean} true when a summary is among them.
+ */
+export function wasCompacted(messages) {
+  for (const message of messages ?? []) {
+    if (message?.source?.kind === 'compact-checkpoint') return true;
+    if (message?.role !== 'user') continue;
+    const content = Array.isArray(message?.content) ? message.content : [{ type: 'text', text: message?.content }];
+    for (const block of content) if (typeof block?.text === 'string' && block.text.includes(SUMMARY_MARK)) return true;
+  }
+  return false;
+}
+
+export function holdsFindings(messages) {
+  const calls = new Set();
+  for (const message of messages ?? []) {
+    const content = Array.isArray(message?.content) ? message.content : [];
+    if (message?.role === 'assistant') {
+      for (const block of content) if (block?.type === 'tool-call' && TOOLS.includes(block.name)) calls.add(block.id);
+    } else if (message?.role === 'tool' && message.isError !== true && calls.has(message.toolCallId ?? message.source?.callId)) {
+      const text = content.map((block) => (block?.type === 'text' ? block.text : '')).join('').trimStart();
+      if (!NOT_RUN.some((start) => text.startsWith(start))) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * @param {object} deps - `enabled()`, `inRecon(exec)` (is this an isolated Recon conversation), `gate(exec)` ({ok, why}),
  *   `inRoom(exec)` (does the conversation run in Recon's throwaway folder), `onion` (lib/onion.js), `usenet` (lib/usenet.js), `sources` (lib/sources.js), `idOf(exec)` (the conversation's id).
  * @returns {object[]} the tool definitions.

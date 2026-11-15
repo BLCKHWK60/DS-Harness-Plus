@@ -293,7 +293,7 @@ window.__ModuleLoader__.load({
         ctx.effect(() => ctx.locale.register('diagram', DICT));
         const t = ctx.locale.bind('diagram');
         ctx.effect(() =>
-          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'diagram', order: 23, label: () => t('section.title') }, (props) => h(SettingsPage, { ...props, appCtx: ctx }))),
+          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'diagram', order: 540, label: () => t('section.title') }, (props) => h(SettingsPage, { ...props, appCtx: ctx }))),
         );
         // Under each finished turn: the diagrams drawn in it.
         ctx.effect(() => ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({ name: 'conversation.chat.turnTail', id: 'dsh-diagram' }, (props) => h(TurnDiagrams, props))));

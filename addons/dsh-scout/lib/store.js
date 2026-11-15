@@ -1,12 +1,18 @@
 /**
  * What a conversation found: every posting gets a short number (P1, P2, ...) so the model can
- * read, compare and cite it. Duplicates from different sources are merged. Kept in memory only;
- * the report file is what stays.
+ * read, compare and cite it. Duplicates from different sources are merged. Each conversation's
+ * list is also kept in a small file, so a conversation reopened after a restart goes on with the
+ * same numbers instead of giving P1 to a different job.
  */
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const PER_CONVERSATION = 1500;
 const CONVERSATIONS = 50;
 const REQUESTS = 400;
+/** Files kept on disk: the newest ones; older conversations start their numbering afresh. */
+const FILES = 200;
 
 const norm = (text) => String(text ?? '').toLowerCase().normalize('NFKD').replace(/\(?[mwfd]\s*\/\s*[mwfd](\s*\/\s*[mwfd])?\)?/g, ' ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
@@ -16,14 +22,61 @@ export function sameJob(posting) {
   return `${norm(posting.title)}|${norm(posting.company)}|${city}`;
 }
 
-export function openStore() {
+/** The postings a conversation found, as kept in its file, with the lookup rebuilt. */
+function fromSaved(saved) {
+  const list = Array.isArray(saved?.list) ? saved.list.filter((posting) => posting && Number.isInteger(posting.n)).slice(0, PER_CONVERSATION) : [];
+  const byKey = new Map();
+  for (const posting of list) {
+    if (posting.url) byKey.set(posting.url, posting);
+    if (norm(posting.title)) byKey.set(sameJob(posting), posting);
+  }
+  return { list, byKey, requests: Number.isInteger(saved?.requests) ? saved.requests : 0 };
+}
+
+/**
+ * @param {string} [folder] - where each conversation's postings are kept. Empty: memory only.
+ */
+export function openStore(folder = '') {
   /** conversation id -> { list, byKey, requests } */
   const all = new Map();
+  // The file name is a hash of the conversation id, so no id can point outside the folder.
+  const fileOf = (id) => (folder ? join(folder, `${createHash('sha256').update(String(id)).digest('hex').slice(0, 32)}.json`) : '');
+  const load = (id) => {
+    try {
+      const file = fileOf(id);
+      if (file && existsSync(file)) return fromSaved(JSON.parse(readFileSync(file, 'utf8')));
+    } catch {
+      /* a damaged file: start afresh */
+    }
+    return { list: [], byKey: new Map(), requests: 0 };
+  };
+  const save = (id, entry) => {
+    const file = fileOf(id);
+    if (!file) return;
+    try {
+      mkdirSync(folder, { recursive: true, mode: 0o700 });
+      // Written beside it and then moved over it, so a crash mid-write never leaves a broken file.
+      const part = `${file}.part`;
+      writeFileSync(part, JSON.stringify({ list: entry.list, requests: entry.requests }), { mode: 0o600 });
+      renameSync(part, file);
+    } catch {
+      /* the numbers still hold for this run */
+    }
+  };
+  // Only the newest files are kept.
+  try {
+    if (folder && existsSync(folder)) {
+      const files = readdirSync(folder).filter((name) => name.endsWith('.json')).map((name) => ({ path: join(folder, name), at: statSync(join(folder, name)).mtimeMs })).sort((a, b) => b.at - a.at);
+      for (const old of files.slice(FILES)) unlinkSync(old.path);
+    }
+  } catch {
+    /* tidying is a convenience */
+  }
   const of = (id) => {
     let entry = all.get(id);
     if (!entry) {
       if (all.size >= CONVERSATIONS) all.delete(all.keys().next().value);
-      entry = { list: [], byKey: new Map(), requests: 0 };
+      entry = load(id);
       all.set(id, entry);
     }
     return entry;
@@ -34,6 +87,8 @@ export function openStore() {
       const entry = of(id);
       if (entry.requests >= REQUESTS) throw new Error(`this conversation made ${REQUESTS} requests, which is its limit. Start a new Scout conversation to go on`);
       entry.requests += 1;
+      // Saved at once, so the count holds after a restart even when nothing new was kept.
+      save(id, entry);
     },
     /**
      * Keep postings and give each its number. A posting already known (same address, or same
@@ -42,7 +97,7 @@ export function openStore() {
      */
     add(id, source, postings) {
       const entry = of(id);
-      return postings.map((raw) => {
+      const kept = postings.map((raw) => {
         const key = sameJob(raw);
         const known = entry.byKey.get(raw.url) ?? entry.byKey.get(key);
         if (known) {
@@ -56,6 +111,8 @@ export function openStore() {
         if (norm(raw.title)) entry.byKey.set(key, posting);
         return { posting, fresh: true };
       }).filter(Boolean);
+      if (kept.length > 0) save(id, entry);
+      return kept;
     },
     /** A posting by its number ("P12", "12"). */
     get(id, ref) {
@@ -65,6 +122,7 @@ export function openStore() {
     count: (id) => of(id).list.length,
     /** Every posting found in a conversation, in order. */
     all: (id) => [...of(id).list],
+    /** Drop a conversation from memory; its file stays, for when it is reopened. */
     forget: (id) => all.delete(id),
   };
 }

@@ -164,16 +164,20 @@ test('a conversation opened by a brief is recognised and gets a note of its own'
   const from = (text, kind = 'schedule') => ({ source: { kind }, content: [{ type: 'text', text }] });
   const prompt = briefPrompt('NVIDIA', 'United States', 'weekly');
   const one = from(`[SCHEDULE REMINDER]\nThis is a scheduled message from the user\nschedule_id_json: "task-a"\noccurrence_at: x\nreminder_prompt_json: ${JSON.stringify(prompt)}`);
-  assert.deepEqual(scheduledIn([one]), { ids: ['task-a'], market: 'United States' });
+  assert.deepEqual(scheduledIn([one]), { ids: ['task-a'], market: 'United States', subject: 'NVIDIA' });
   // The same message wrapped, as some events carry it, and a batch.
   assert.deepEqual(scheduledIn([{ message: one }]).ids, ['task-a']);
   const batch = from('[SCHEDULE REMINDER BATCH]\nreminders_json: [{"schedule_id":"a"},{"schedule_id":"b"}]');
-  assert.deepEqual(scheduledIn([batch]), { ids: ['a', 'b'], market: '' });
-  assert.deepEqual(scheduledIn([from(`[SCHEDULE REMINDER]\nschedule_id_json: "g"\nreminder_prompt_json: ${JSON.stringify(briefPrompt('Banks', 'Global', 'weekly'))}`)]), { ids: ['g'], market: '' });
+  assert.deepEqual(scheduledIn([batch]), { ids: ['a', 'b'], market: '', subject: '' });
+  assert.deepEqual(scheduledIn([from(`[SCHEDULE REMINDER]\nschedule_id_json: "g"\nreminder_prompt_json: ${JSON.stringify(briefPrompt('Banks', 'Global', 'weekly'))}`)]), { ids: ['g'], market: '', subject: 'Banks' });
+  // The brief's subject is read from the message itself, in a batch too; another task has none.
+  const briefs = from(`[SCHEDULE REMINDER BATCH]\nreminders_json: ${JSON.stringify([{ schedule_id: 'x', reminder_prompt: 'Water the plants' }, { schedule_id: 'y', reminder_prompt: briefPrompt('ASML "NL"', 'Global', 'weekly') }])}`);
+  assert.deepEqual(scheduledIn([briefs]), { ids: ['x', 'y'], market: '', subject: 'ASML "NL"' });
+  assert.equal(scheduledIn([from('[SCHEDULE REMINDER]\nschedule_id_json: "o"\nreminder_prompt_json: "Summarise my inbox"')]).subject, '');
   // Typed by a person, or a change notice: not a run.
   assert.deepEqual(scheduledIn([from('[SCHEDULE REMINDER]\nschedule_id_json: "task-a"', 'user')]).ids, []);
   assert.deepEqual(scheduledIn([from('A task changed.\nschedule_id_json: "task-a"')]).ids, []);
-  assert.deepEqual(scheduledIn(undefined), { ids: [], market: '' });
+  assert.deepEqual(scheduledIn(undefined), { ids: [], market: '', subject: '' });
 
   const pinned = readSelection({ kind: 'brief', subject: 'NVIDIA', market: 'United States' });
   assert.equal(pinned.kind, 'brief');

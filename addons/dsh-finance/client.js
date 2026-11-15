@@ -434,7 +434,7 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
         h(NameList, { items: data.moreMarkets ?? [], placeholder: 'A market, for example Mexico', label: 'Add a market', empty: 'No market of your own yet.', busy, onChange: (moreMarkets) => save({ moreMarkets }) }),
 
         h('div', { className: 'dsh-fn-group' }, 'Data sources'),
-        h('p', { className: 'dsh-fn-desc' }, 'Built in, with no key: reported company figures and filings from the US securities regulator, and yearly economy readings from the World Bank. Add your own below, for share prices, estimates, news with sentiment or anything else a data service offers. The assistant can only read from a source, never send or change anything, and only at that source\'s own address.'),
+        h('p', { className: 'dsh-fn-desc' }, 'Built in, with no key: reported company figures and filings from the US securities regulator, yearly economy readings from the World Bank, daily share prices from Yahoo Finance, news from GDELT, and social posts from Hacker News, Mastodon and Lemmy. Add your own below, for estimates, forecasts, news with sentiment or anything else a data service offers. The assistant can only read from a source, never send or change anything, and only at that source\'s own address.'),
         sources.map((source) => h(SourceRow, {
           key: source.id, source, busy,
           onKey: (value) => act({ action: 'key', id: source.id, value }, 'Key saved in the app\'s secret store.').then(Boolean),
@@ -468,7 +468,7 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
         h('ul', { className: 'dsh-fn-list' },
           h('li', null, `A method: figures only from sources it fetched, each with its date; facts, claims, opinions and its own reading kept apart; always a look ahead; always both sides; what it could not find; ${data.adviser === true ? 'then a clear recommendation, with no disclaimer' : 'no buy or sell advice'}.`),
           h('li', null, 'Your selection from the drop-downs, as it was when the conversation started.'),
-          h('li', null, 'Three data tools that need no key or account: a company\'s reported figures and its filings, from the US securities regulator (US-listed companies and many foreign ones), and yearly readings for economies from the World Bank.'),
+          h('li', null, 'Six data tools that need no key or account: a company\'s reported figures and its filings, from the US securities regulator (US-listed companies and many foreign ones); yearly readings for economies from the World Bank; share prices from Yahoo Finance; news from GDELT; and posts from Hacker News, Mastodon and Lemmy.'),
           h('li', null, `${(data.skills ?? []).length} skills, one for each common task: ${(data.skills ?? []).map((skill) => skill.name.replace(/^finance-/, '').replace(/-/g, ' ')).join(', ')}.`)),
 
         h('div', { className: 'dsh-fn-group' }, 'Good to know'),
@@ -476,8 +476,8 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
           h('li', null, data.adviser === true
             ? 'The adviser is on, so the assistant recommends and adds no disclaimer. It is still an AI model working from what it could fetch: it is not a licensed financial adviser and it can be wrong. Decisions are yours.'
             : 'It is research, not advice. The assistant is not a licensed financial adviser, and it is told not to say buy, sell or hold. Decisions are yours. The Adviser switch above changes this.'),
-          h('li', null, 'Its own data covers reported company figures and yearly economy readings. It has no share prices, no estimates and no forecasts: those, and anything about companies that do not file in the United States, come from what the assistant finds with web search and Deep research, which can be delayed or misread. Each figure should come with its source and date so you can check it.'),
-          h('li', null, 'When the assistant uses the data tools, the company or country you asked about is sent to the regulator\'s or the World Bank\'s public service. Nothing else is sent, and no account is involved.'),
+          h('li', null, 'Its own data covers reported company figures, yearly economy readings, daily share prices, news and social posts. It has no estimates and no forecasts: those, and the figures of companies that do not file in the United States, come from what the assistant finds with web search and Deep research, which can be delayed or misread. Each figure should come with its source and date so you can check it.'),
+          h('li', null, 'When the assistant uses the data tools, what it looks up is sent to that tool\'s public service: the company or country to the US regulator or the World Bank, share symbols to Yahoo Finance, news search words to GDELT, and social search words or a hashtag to Hacker News (through Algolia), mastodon.social and lemmy.world. No account, no key and nothing about you is sent.'),
           h('li', null, 'What people say online is a signal, not a fact, and can be manipulated.'),
           h('li', null, 'Charts come from the Diagram builder, and your own reports can be searched if they are in the Library.'),
           h('li', null, 'A key you paste is kept in the app\'s own secret store on this Mac, not in a settings file. It is sent only to that service, and it is removed from anything the assistant is shown.'),
@@ -490,7 +490,7 @@ input.dsh-fn-pick { cursor: text; width: 200px; max-width: 200px; }
         ctx.effect(() => ctx.locale.register(NS, DICT));
         const t = ctx.locale.bind(NS);
         ctx.effect(() =>
-          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'finance', order: 23, label: () => t('section.title') }, (props) => h(FinancePage, { ...props, appCtx: ctx }))),
+          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'finance', order: 111, label: () => t('section.title') }, (props) => h(FinancePage, { ...props, appCtx: ctx }))),
         );
         ctx.effect(() => ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({ name: 'conversation.hero.options', id: 'finance-bar', order: 40 }, () => h(FinanceBar, { appCtx: ctx }))));
       },

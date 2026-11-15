@@ -11,17 +11,18 @@
  * the numbered sources and against what each searcher actually fetched.
  *
  * How deep a run goes (rounds, helpers at once, sub-questions, time) comes from
- * the depth chosen with the slider beside the Deep research button (kept by the
+ * the depth chosen in the Research tab's Depth dropdown or Settings → Research (kept by the
  * Modes add-on): Quick, Standard or Thorough. See `lib/rounds.js`.
  *
  * Helpers at once are also held to the Tier plugin's sub-agent limit (Settings → Model Tiers).
  * Children run on the model of the conversation that started the research, or, when the
- * owner chose "role models" beside the Deep research button, on the Tier plugin's role
+ * owner chose "role models" for the helpers (Settings → Research, or the One model button), on the Tier plugin's role
  * routes (planner, analyst and writer: `plan`, searchers: `fast` by default).
  * Writing files is left to the model's own tools, so the sandbox applies.
  */
 import z from '@deepseek-ai/schemastery';
-import { insideProgram, researchMinutes } from './lib/budget.js';
+import { insideProgram, programMinutes, researchMinutes } from './lib/budget.js';
+import { searchProblem } from './lib/ready.js';
 import { FOCUS, analysisOf, analyzePrompt, capped, depthOf, followupsOf, planPrompt, roundLeft, searchAnswer, searchPrompt, tasksOf, writePrompt } from './lib/rounds.js';
 
 /**
@@ -211,7 +212,16 @@ export function apply(ctx, config) {
     return { question, depth, focus, stage, round, rounds, helpers, searches, pages, sources, queries: queries.slice(-6), hosts: hosts.slice(-6), followups, file, error, startedAt, endedAt, minutes, now: Date.now() };
   }
 
-  /** @returns {'same' | 'roles'} which model the helpers run on: the choice beside the Deep research button, else the setting. */
+  /** An app service, or undefined when it is not there. */
+  function serviceOf(key) {
+    try {
+      return ctx.get(key);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** @returns {'same' | 'roles'} which model the helpers run on: the conversation's own choice (the One model button), else the setting. */
   function helperModel(parent) {
     let chosen;
     try {
@@ -414,7 +424,7 @@ export function apply(ctx, config) {
       } catch {
         programMaxMs = undefined;
       }
-      // How deep to go: the slider beside the Deep research button, held to the settings' and the model version's limits.
+      // How deep to go: the Depth setting, held to the settings' and the model version's limits.
       let chosen;
       try {
         chosen = ctx.get('modes')?.researchDepth?.();
@@ -439,6 +449,13 @@ export function apply(ctx, config) {
       const today = new Date().toISOString().slice(0, 10);
       const searchTools = plain(config.searchToolNames);
       const fetchTools = plain(config.fetchToolNames);
+
+      // Stop now, not after minutes of helpers, when the searchers' model has no working web search.
+      // Only when the app's own web_search is their sole search tool: another tool (an MCP search,
+      // say) searches on its own terms, and the app's answer says nothing about it.
+      const appSearchOnly = Array.isArray(searchTools) && searchTools.length > 0 && searchTools.every((tool) => tool === 'web_search');
+      const problem = appSearchOnly ? await searchProblem(serviceOf('web'), routeFor(parent, roles.searcher), parent.model?.current?.()) : '';
+      if (problem) throw new Error(problem);
 
       if (wide) return runWide({ args, exec, parent, question, deadline, parallel, roles, startedAt, signalFor });
 
@@ -675,7 +692,14 @@ export function apply(ctx, config) {
   ctx.effect(() => ctx.tools.register(deepResearchTool));
 
   // The latest run of a conversation, for the progress strip above the message box.
-  ctx.effect(() => ctx.provide('deepResearch', Object.freeze({ progress: (sessionId) => runView(runs.get(String(sessionId))) })), 'deep-research: progress service');
+  // And about how long a run started from a program (the PTC preset) may take, for the Research tab to say.
+  ctx.effect(
+    () => ctx.provide('deepResearch', Object.freeze({
+      progress: (sessionId) => runView(runs.get(String(sessionId))),
+      programMinutes: () => programMinutes(serviceOf('ptcRuntime')?.timeout?.maxMs),
+    })),
+    'deep-research: progress service',
+  );
   ctx.inject(['webServer', 'connection'], (inner) => {
     inner.effect(
       () => inner.webServer.register({

@@ -1,6 +1,6 @@
 /**
  * Scout's tools. Registered while Scout is on; a model step gets them only in a Scout
- * conversation (or a helper working for one).
+ * conversation (or a helper working for one, which gets no files, profile or report tool).
  */
 import { ADAPTERS } from './adapters.js';
 import { WORK_TYPES, covers, inUse } from './registry.js';
@@ -15,7 +15,7 @@ const text = (max, description) => ({ type: 'string', maxLength: max, descriptio
  * @param {object} deps
  * @param {() => boolean} deps.enabled - Scout is on.
  * @param {() => object[]} deps.registry - the sources.
- * @param {() => {markets: string[], workType: string}} deps.selection - what the user chose.
+ * @param {(exec?: object) => {markets: string[], workType: string}} deps.selection - what the user chose for the conversation a call belongs to.
  * @param {(id: string) => Promise<string>} deps.keyOf - a source's key from the secret store.
  * @param {(id: string) => boolean} deps.hasKey - whether a source's key is set.
  * @param {object} deps.store - from openStore.
@@ -55,8 +55,8 @@ export function buildTools({ enabled, registry, selection, keyOf, hasKey, store,
         additionalProperties: false,
       },
       ...common,
-      execute: safely(async (args) => {
-        const chosen = selection();
+      execute: safely(async (args, exec) => {
+        const chosen = selection(exec);
         const markets = Array.isArray(args.markets) && args.markets.length > 0 ? args.markets : chosen.markets;
         const workTypes = Array.isArray(args.work_types) && args.work_types.length > 0 ? args.work_types : chosen.workType === 'any' ? [] : [chosen.workType];
         const list = inUse(registry(), { markets, workTypes });
@@ -106,7 +106,7 @@ export function buildTools({ enabled, registry, selection, keyOf, hasKey, store,
         if (source.key === 'required' && !key) return `${source.name} needs a key, and none is set. Skip it; tell the user it can be added in Settings → Scout (${source.keyHint ?? 'see the source'}).`;
         const id = idOf(exec);
         store.request(id);
-        const want = { what: args.what, where: args.where, radius: args.radius_km, days: args.days, workType: args.work_type, market: market || selection().markets.find((name) => covers(source, name)), company: args.company, page: args.page };
+        const want = { what: args.what, where: args.where, radius: args.radius_km, days: args.days, workType: args.work_type, market: market || selection(exec).markets.find((name) => covers(source, name)), company: args.company, page: args.page };
         const found = await ADAPTERS[source.adapter].search(want, key);
         const kept = store.add(id, source.id, (found.postings ?? []).map((posting) => ({ ...posting, adapter: source.adapter })));
         const fresh = kept.filter((entry) => entry.fresh).length;
@@ -136,7 +136,7 @@ export function buildTools({ enabled, registry, selection, keyOf, hasKey, store,
       ...common,
       execute: safely(async (args, exec) => {
         store.request(idOf(exec));
-        const fromMarkets = [...new Set(selection().markets.flatMap((market) => MARKETS[market]?.languages ?? []))].filter((name) => LANG[name]);
+        const fromMarkets = [...new Set(selection(exec).markets.flatMap((market) => MARKETS[market]?.languages ?? []))].filter((name) => LANG[name]);
         return titles(args.title, { from: args.from ?? 'English', languages: Array.isArray(args.languages) && args.languages.length ? args.languages : fromMarkets });
       }),
     },
@@ -225,7 +225,7 @@ export function buildTools({ enabled, registry, selection, keyOf, hasKey, store,
     },
     {
       name: 'scout_profile',
-      description: 'The user\'s profile: titles, skills, seniority, years, pay level and preferences. Without arguments: read it. With text: replace it (write it from the user\'s files or words, then show it to them).',
+      description: 'The user\'s profile: titles, skills, seniority, years, pay level and preferences. Without arguments: read it. With text: replace it. First show the draft to the user and save only after they agree; the old profile is kept as profile.md.bak.',
       parameters: { type: 'object', properties: { save: text(6000, 'The new profile, in full.') }, additionalProperties: false },
       ...common,
       execute: safely(async (args, exec) => {

@@ -47,13 +47,13 @@ Built in (until you supply your own `modes`): **chat** (no tools, read-only, a s
 
 ## Settings page
 
-Settings > **Modes** edits the mode list without touching YAML: one card per mode (id, label, tools All / None / Only these with a list of tool names, file sandbox, default tier, prompt with a 4,000-character counter), the default mode, add / remove, and "Restore built-in modes". It reads and writes the plugin's own `modes` and `defaultMode` fields through the settings channel (the same one Tier and the composer selector use), in one save, and retries once on a revision conflict. It refuses ids that are not lower-case letters, digits and dashes, duplicate ids, an empty tool list under "Only these", and a default that is not one of the modes. Fields the editor does not know about are kept on save. The default-tier box suggests tier ids when the Tier plugin is loaded. Needs a restart of the app once to load (client half).
+Settings > **Modes** edits the mode list without touching YAML: one card per mode (id, label, tools All / None / Only these with a list of tool names, file sandbox, default tier, prompt with a 4,000-character counter), the default mode, add / remove, and "Restore built-in modes". It reads and writes the plugin's own `modes` and `defaultMode` fields through the settings channel (the same one Tier and the composer selector use), in one save, and retries once on a revision conflict. It refuses ids that are not lower-case letters, digits and dashes, duplicate ids, an empty tool list under "Only these", and a default that is not one of the modes. A mode another add-on adds (Finance, Research, Scout, Recon, Data) is not edited here, but it is offered as the default too, marked "(add-on)", because selecting its sidebar tab makes it the default. Fields the editor does not know about are kept on save. The default-tier box suggests tier ids when the Tier plugin is loaded. Needs a restart of the app once to load (client half).
 
 Tested in a throwaway web profile: add a mode, validation messages, save (written to the profile patch as the same JSON string), the composer selector picked the new mode within 3 seconds, dark and light. Not tested in the desktop app.
 
 ## Limits
 
-- The lists in the Tools panel show what the app registered for the conversation. A tool the app only offers under a condition can be listed as callable and still be left out of a request: `web_search` is offered only while a search backend is ready for the model in use.
+- The lists in the Tools panel show what the app registered for the conversation. A tool the app only offers under a condition can be listed as callable and still be left out of a request. The web tools are the exception: `web_search` is offered only while a search backend is ready for the model in use, so the panel asks the app and lists a web tool that is not ready under "Cannot call", with a line saying so. Where tools load as needed, the tools the model can still add are listed apart, under "Loaded when needed", not as "Cannot call".
 
 - The default tier applies when you switch modes, not when a session is first created (a new session keeps whatever tier it has).
 - A conversation opened by an Automation task starts in `scheduledMode`, not in the tab last looked at (which, in Chat, gave it no tools). It is recognised by its first inbox message (`agent/inbox/spliced` with `source.kind: 'schedule'`). There is no Settings control for it yet; a task delivering to an existing conversation keeps that conversation's mode.
@@ -104,7 +104,7 @@ Earlier versions filtered a mode's tool list against the tools visible to plugin
 
 ## Since 0.33.0: a method for Code
 
-`CODE_METHOD` in `index.js` is used as the Code mode's instructions while that mode's own `prompt` is empty and the setting `codeMethod` (default on) is on. It is applied when the prompt section is built, not stored in the mode table, so the Modes page still shows an empty box (with a line saying what is used). A model version that "stands alone" leaves it out like any mode text.
+`CODE_METHOD` in `lib/prompt.js` is used as the Code mode's instructions while that mode's own `prompt` is empty and the setting `codeMethod` (default on) is on. It is applied when the prompt section is built, not stored in the mode table, so the Modes page still shows an empty box (with a line saying what is used). A model version that "stands alone" leaves it out like any mode text.
 
 ## Since 0.34.0: Rerun, and hiding the thumbs
 
@@ -150,7 +150,12 @@ exactly the tools the mode lists and nothing else: no web search, no Deep resear
 no helpers. The app's own notes (instruction files, the skill list) are not handed to them, and
 Plus's other add-ons leave them alone. A conversation that begins in an isolated mode is isolated
 for good; one that began elsewhere can never become isolated. Other add-ons ask
-`modes.isolated(sessionId)`.
+`modes.isolated(sessionId)`. The rules are in `lib/isolation.js` and tested there.
+
+With Tools Off an isolated conversation keeps its mode's own instructions (its rules on untrusted
+text hold), and so does a model version that stands alone. Under the app's PTC preset an isolated
+conversation is told that its tab works only in the Standard preset: its guard refuses `run_code`
+on purpose, so it could not reach its tools there.
 
 - **Tested (0.41.0):** lab runs with a stand-in model, reading what the model was sent.
 - **Not verified:** with real models.
@@ -161,12 +166,12 @@ Every request carries the description of every tool the model may call. In a mod
 
 With **Load tools as needed** (Settings → Modes, one switch per mode with all tools; on for Cowork and Code), a conversation starts with:
 
-- **The core tools:** `read`, `write`, `edit`, `glob`, `grep`, `bash` and its jobs, `todo_write`, `ask_user_question`, `skill`, `read_image`, `working_directory`, and the web tools when Search is on.
-- **`tools_find`:** lists the other families and adds the ones asked for, by family (`pdf`, `data`, `finance`, `visual`, `schedule`, `helpers`, `goals`, `library`, `memory`, `mac`, `code`, `learn`, `mission`, `connectors`, `app`), by tool name, or by what is to be done ("read a PDF"). Added tools are there from the model's next step on.
+- **The core tools:** `read`, `write`, `edit`, `glob`, `grep`, `bash` and its jobs, `todo_write`, `ask_user_question`, `skill`, `read_image`, `working_directory`, `exit_plan_mode` (the app offers it only while /plan is on), and the web tools when Search is on.
+- **`tools_find`:** lists the other families and adds the ones asked for, by family (`pdf`, `data`, `finance`, `visual`, `schedule`, `helpers`, `goals`, `library`, `memory`, `mac`, `code`, `learn`, `mission`, `connectors`, `app`, `office`), by tool name, or by what is to be done ("read a PDF"). Names and descriptions are matched against every tool the app has, not only those already offered, so a single tool outside the families (`generate_image`, for example) can be added too. A family or tool that brings nothing here (its add-on is off, or Web is Off) is not added, and the reply says so. Added tools are there from the model's next step on.
 
-The user's message adds families too, before the first step: "read this PDF" brings the PDF tools, "make a chart from this spreadsheet" the data tools. Added families stay for the rest of the conversation (setting `sessionToolSets`), and helpers get their conversation's tools.
+The user's message adds families too, before the first step: "read this PDF" brings the PDF tools, "make a chart from this spreadsheet" the data tools. Loading one of the app's Office skills (by the model, or by the user with /office-pptx and the like) brings the `office` family, whose tools the skill says appear next step. Added families stay for the rest of the conversation (setting `sessionToolSets`), and helpers get their conversation's tools.
 
-Modes with their own tool list (Chat, Finance, Data, Recon, Scout, or a Code mode set to a list) keep that list. Isolated modes are never trimmed.
+Modes with their own tool list (Chat, Research, Recon, Scout, or a Code mode set to a list) keep that list. Isolated modes are never trimmed. A mode another add-on adds with all tools (Finance, Data) gets its own switch on the page while its tab is on, off until you switch it on.
 
 **Measured in the lab:** "hello" in Cowork went from 82 tools (about 18,700 tokens) to 16 (about 3,000); the whole request to about 6,400 tokens. A family added with `tools_find` was in the very next step. Switched off, the next message carried all 82 again.
 
@@ -184,7 +189,7 @@ The **Search** and **Deep research** buttons in the chat box are replaced by one
 | Thorough | Several searches, at least five pages from different sites, cross-checked and cited. |
 | Deep | At least ten searches, at least ten pages read, every key fact checked in two independent sources, disagreements stated, each source cited with its date. |
 
-The level is kept per conversation (`sessionWeb`, `sessionSearchDepth`); picking a level also sets where new conversations start (`searchDepth`). Off applies only to the conversation it is set in. The button is not shown in the Research tab (it researches with the web always; Depth and Focus are its own dropdowns in the chat box). In an isolated mode such as Recon (since 0.55.0) it sets how hard the mode searches with its own tools, in words that fit any search tool (`ISOLATED_LEVEL_PROMPTS`); Off there takes away the mode's tools that go online (Recon keeps only `recon_cite`) and says so (`ISOLATED_OFF_PROMPT`).
+The level is kept per conversation (`sessionWeb`, `sessionSearchDepth`); picking a level also sets where new conversations start (`searchDepth`). Off applies only to the conversation it is set in. The button is not shown in the Research tab (it researches with the web always; Depth and Focus are its own dropdowns in the chat box). Research-style tabs (those whose mode lists `deep_research`: Research, Scout) get no Web-level words and no web note in their instructions either, since they work by their own method and have no button to change the level with. Elsewhere the web note names only the web tools the step really offers, and a Web level is added only while `web_search` is offered. With Web Off in a mode that could go online, the model is told what went. `finance_profile_save` only writes a local line and stays with Web Off. In an isolated mode such as Recon (since 0.55.0) it sets how hard the mode searches with its own tools, in words that fit any search tool (`ISOLATED_LEVEL_PROMPTS`); Off there takes away the mode's tools that go online (Recon keeps only `recon_cite`) and says so (`ISOLATED_OFF_PROMPT`).
 
 In-depth research with helpers lives in the Research tab. A conversation is a research one when its mode lists `deep_research`; its helpers get the web tools. The old per-conversation Deep research switch (`sessionResearch`) is no longer offered or read. In Cowork and Code `deep_research` stays available as a tool while the web is not Off.
 

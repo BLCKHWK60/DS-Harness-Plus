@@ -7,21 +7,21 @@
  *   - `search`: found through a search engine only; its pages are never fetched.
  */
 
-/** Known markets: country code (for sources that take one), languages, and Adzuna's code. */
+/** Known markets: languages, and for Adzuna's markets its country code and the currency its pay figures are in. */
 export const MARKETS = {
-  USA: { languages: ['English'], adzuna: 'us' },
-  UK: { languages: ['English'], adzuna: 'gb' },
-  Germany: { languages: ['German', 'English'], adzuna: 'de' },
-  Spain: { languages: ['Spanish', 'English'], adzuna: 'es' },
-  France: { languages: ['French', 'English'], adzuna: 'fr' },
-  Netherlands: { languages: ['Dutch', 'English'], adzuna: 'nl' },
-  Austria: { languages: ['German', 'English'], adzuna: 'at' },
-  Switzerland: { languages: ['German', 'French', 'Italian', 'English'], adzuna: 'ch' },
-  Italy: { languages: ['Italian', 'English'], adzuna: 'it' },
-  Poland: { languages: ['Polish', 'English'], adzuna: 'pl' },
-  Belgium: { languages: ['Dutch', 'French', 'English'], adzuna: 'be' },
-  Canada: { languages: ['English', 'French'], adzuna: 'ca' },
-  Australia: { languages: ['English'], adzuna: 'au' },
+  USA: { languages: ['English'], adzuna: 'us', currency: 'USD' },
+  UK: { languages: ['English'], adzuna: 'gb', currency: 'GBP' },
+  Germany: { languages: ['German', 'English'], adzuna: 'de', currency: 'EUR' },
+  Spain: { languages: ['Spanish', 'English'], adzuna: 'es', currency: 'EUR' },
+  France: { languages: ['French', 'English'], adzuna: 'fr', currency: 'EUR' },
+  Netherlands: { languages: ['Dutch', 'English'], adzuna: 'nl', currency: 'EUR' },
+  Austria: { languages: ['German', 'English'], adzuna: 'at', currency: 'EUR' },
+  Switzerland: { languages: ['German', 'French', 'Italian', 'English'], adzuna: 'ch', currency: 'CHF' },
+  Italy: { languages: ['Italian', 'English'], adzuna: 'it', currency: 'EUR' },
+  Poland: { languages: ['Polish', 'English'], adzuna: 'pl', currency: 'PLN' },
+  Belgium: { languages: ['Dutch', 'French', 'English'], adzuna: 'be', currency: 'EUR' },
+  Canada: { languages: ['English', 'French'], adzuna: 'ca', currency: 'CAD' },
+  Australia: { languages: ['English'], adzuna: 'au', currency: 'AUD' },
   Ireland: { languages: ['English'] },
   Portugal: { languages: ['Portuguese', 'English'] },
   Remote: { languages: ['English'] },

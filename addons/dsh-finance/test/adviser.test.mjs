@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { PROFILE_MAX, adviserNote, adviserSkills, buildProfileTool, forAdviser, openProfile } from '../lib/adviser.js';
 import { ADVISER_METHOD, METHOD, MODE_ID, withFinance } from '../lib/finance.js';
-import { briefPrompt } from '../lib/briefs.js';
+import { briefPrompt, researchOnly } from '../lib/briefs.js';
 import { SKILLS } from '../skills.js';
 
 test('the adviser method fits the Modes limit and drops the research-only rule', () => {
@@ -28,7 +28,7 @@ test('the stored mode follows the adviser switch', () => {
   assert.equal(JSON.parse(withFinance(advised, true, false))[MODE_ID].prompt, METHOD);
 });
 
-test('skills and briefs are reworded for the adviser', () => {
+test('skills are reworded for the adviser; briefs stay research only', () => {
   const skills = adviserSkills(SKILLS);
   assert.equal(skills.length, SKILLS.length);
   for (const skill of skills) {
@@ -36,8 +36,18 @@ test('skills and briefs are reworded for the adviser', () => {
     assert.match(skill.content, /add no disclaimer/);
   }
   assert.ok(SKILLS.every((skill) => /research, not advice/.test(skill.content)));
-  assert.match(briefPrompt('NVIDIA', 'Global', 'weekdays'), /research, not advice/);
-  assert.ok(!/research, not advice/.test(briefPrompt('NVIDIA', 'Global', 'weekdays', true)));
+  // A brief is saved once and outlives the switch, so it never carries the adviser's wording;
+  // the adviser note overrides its research-only line while the adviser is on.
+  const brief = briefPrompt('NVIDIA', 'Global', 'weekdays');
+  assert.match(brief, /research, not advice/);
+  assert.ok(!/add no disclaimer/.test(brief));
+  assert.match(adviserNote(''), /replaces any line elsewhere \(in a skill, a scheduled task/);
+  // A brief saved with the adviser's wording before is reworded; a current one is left alone.
+  const old = brief.replace('This is research, not advice: do not say buy, sell or hold.', "End with your recommendation as the user's adviser, and add no disclaimer.");
+  assert.notEqual(old, brief);
+  assert.equal(researchOnly(old), brief);
+  assert.equal(researchOnly(brief), undefined);
+  assert.equal(researchOnly(undefined), undefined);
   assert.equal(forAdviser('plain text'), 'plain text');
 });
 

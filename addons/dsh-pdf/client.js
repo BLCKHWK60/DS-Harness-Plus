@@ -178,7 +178,7 @@ textarea.dsh-pd-field { width: 100%; height: auto; min-height: 72px; padding: 9p
         ctx.effect(() => ctx.locale.register('pdf', DICT));
         const t = ctx.locale.bind('pdf');
         ctx.effect(() =>
-          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'pdf', order: 22, label: () => t('section.title') }, (props) => h(SettingsPage, { ...props, appCtx: ctx }))),
+          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'pdf', order: 520, label: () => t('section.title') }, (props) => h(SettingsPage, { ...props, appCtx: ctx }))),
         );
       },
     };

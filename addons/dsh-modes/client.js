@@ -17,7 +17,7 @@ window.__ModuleLoader__.load({
       en: {
         'composer.mode': 'Mode',
         'composer.failed': 'Could not switch mode',
-        'toggle.search': 'Search',
+        'toggle.search': 'Web',
         'toggle.search.on': 'Web search is on for this conversation. Click to switch it off.',
         'toggle.search.off': 'Web search is off for this conversation. Click to switch it on.',
         'toggle.research': 'Deep research',
@@ -32,6 +32,9 @@ window.__ModuleLoader__.load({
         'tools.viaCode': 'This conversation is in PTC mode: the model reaches these tools from inside small programs it writes. The app stops such a program after a few minutes, so long jobs like Deep research suit Standard mode better.',
         'tools.can': 'Can call',
         'tools.cannot': 'Cannot call',
+        'tools.later': 'Loaded when needed',
+        'tools.later.hint': 'The model adds these itself when a task needs them, and naming them in your message adds them too. Settings → Modes.',
+        'tools.notReady': 'Not set up for this conversation\'s model, so not offered: {names}.',
         'tools.none': 'Nothing',
         'tools.next': 'A change applies from your next message.',
         'tools.unknown': 'The list appears once this conversation has started.',
@@ -82,6 +85,7 @@ window.__ModuleLoader__.load({
         'section.title': 'Modes',
         'head.hint': 'A mode narrows the tools the model sees, can set the file sandbox, can move the conversation to a tier and adds a short prompt. A conversation picks a mode in the chat box or with /mode. Changes apply from the next message.',
         'default.label': 'Mode for conversations that have not chosen one',
+        'default.extra': '{label} (add-on)',
         'add': 'Add mode',
         'remove': 'Remove',
         'save': 'Save',
@@ -116,16 +120,17 @@ window.__ModuleLoader__.load({
         'web.standard': 'Standard',
         'web.thorough': 'Thorough',
         'web.deep': 'Deep',
-        'web.off.hint': 'No web access. The model answers from what it knows and from your files.',
+        'web.off.hint': 'No web access, and no other tools that go online, such as Finance\'s data tools. The model answers from what it knows and from your files.',
         'web.quick.hint': 'One search, answer from the results. Fastest.',
         'web.standard.hint': 'A few searches; opens the pages that matter.',
         'web.thorough.hint': 'Several searches; reads at least 5 pages from different sites and cites each.',
         'web.deep.hint': '10+ searches, at least 10 pages read, facts cross-checked between sources. Slower.',
         'web.note': 'For this conversation. The level you pick is also where new conversations start; Off applies only here. In-depth research with many helpers is in the Research tab.',
         'trim.group': 'Load tools as needed',
-        'trim.hint': 'A mode with all tools starts each conversation with the core tools only (files, shell, step list, questions, skills, web) and a tool that adds the others when needed: PDF, data, finance, diagrams, scheduling, helpers and more. Your message adds them too when it names them ("read this PDF"). Requests are far smaller, so local models answer sooner. Added tools stay for the rest of the conversation.',
+        'trim.hint': 'A mode switched on below starts each conversation with the core tools only (files, shell, step list, questions, skills, web) and a tool that adds the others when needed: PDF, data, finance, diagrams, scheduling, helpers and more. Your message adds them too when it names them ("read this PDF"). Requests are far smaller, so local models answer sooner. Added tools stay for the rest of the conversation.',
         'trim.mode': '{mode}: load tools as needed',
         'trim.none': 'No mode has all tools; modes with their own tool list keep that list.',
+        'trim.extra': '{mode} (add-on): load tools as needed',
         'answer.rerun': 'Rerun button',
         'answer.rerun.hint': 'Asks the same question again in a fresh copy of the conversation, with the model selected in the chat box. The new model does not see the old answer. The old answer stays in the original conversation.',
         'answer.thumbs': 'Hide thumbs up and thumbs down',
@@ -144,7 +149,7 @@ window.__ModuleLoader__.load({
       zh: {
         'composer.mode': '模式',
         'composer.failed': '无法切换模式',
-        'toggle.search': '搜索',
+        'toggle.search': '联网',
         'toggle.search.on': '此对话已开启网页搜索。点击关闭。',
         'toggle.search.off': '此对话已关闭网页搜索。点击开启。',
         'toggle.research': '深度研究',
@@ -159,6 +164,9 @@ window.__ModuleLoader__.load({
         'tools.viaCode': '此对话处于 PTC 模式：模型在它编写的小程序中调用这些工具。应用会在几分钟后停止这样的程序，因此深度研究等耗时任务更适合标准模式。',
         'tools.can': '可以调用',
         'tools.cannot': '不能调用',
+        'tools.later': '按需加载',
+        'tools.later.hint': '任务需要时模型会自行添加这些工具，消息中提到它们也会添加。设置 → 模式。',
+        'tools.notReady': '此对话的模型未配置，因此不提供：{names}。',
         'tools.none': '无',
         'tools.next': '更改从你的下一条消息开始生效。',
         'tools.unknown': '此对话开始后会显示列表。',
@@ -209,6 +217,7 @@ window.__ModuleLoader__.load({
         'section.title': '模式',
         'head.hint': '模式会限制模型可见的工具，可设置文件沙箱、切换档位并附加一小段提示词。会话在输入框或用 /mode 选择模式，修改在下一轮开始时生效。',
         'default.label': '尚未选择模式的会话使用',
+        'default.extra': '{label}（插件）',
         'add': '添加模式',
         'remove': '删除',
         'save': '保存',
@@ -243,16 +252,17 @@ window.__ModuleLoader__.load({
         'web.standard': '标准',
         'web.thorough': '深入',
         'web.deep': '深度',
-        'web.off.hint': '不联网。模型根据已有知识和你的文件回答。',
+        'web.off.hint': '不联网，其他联网工具（例如财经的数据工具）也会关闭。模型根据已有知识和你的文件回答。',
         'web.quick.hint': '一次搜索，根据结果回答。最快。',
         'web.standard.hint': '几次搜索；打开关键页面。',
         'web.thorough.hint': '多次搜索；阅读至少 5 个不同网站的页面并逐一注明出处。',
         'web.deep.hint': '10 次以上搜索，至少阅读 10 个页面，在不同来源间交叉核实事实。较慢。',
         'web.note': '仅对本对话生效。你选择的级别也是新对话的起始级别；"关闭"只对本对话生效。多助手的深入研究请使用"研究"标签页。',
         'trim.group': '按需加载工具',
-        'trim.hint': '拥有全部工具的模式在每次对话开始时只加载核心工具（文件、终端、步骤列表、提问、技能、网页），并提供一个按需添加其他工具的工具：PDF、数据、财经、图表、日程、助手等。消息中提到时也会自动添加。请求小得多，本地模型响应更快。添加的工具在对话剩余部分保留。',
+        'trim.hint': '在下方开启的模式在每次对话开始时只加载核心工具（文件、终端、步骤列表、提问、技能、网页），并提供一个按需添加其他工具的工具：PDF、数据、财经、图表、日程、助手等。消息中提到时也会自动添加。请求小得多，本地模型响应更快。添加的工具在对话剩余部分保留。',
         'trim.mode': '{mode}：按需加载工具',
         'trim.none': '没有拥有全部工具的模式；有自己工具列表的模式保留其列表。',
+        'trim.extra': '{mode}（插件）：按需加载工具',
         'answer.rerun': '重新运行按钮',
         'answer.rerun.hint': '在对话的新副本中用聊天框所选的模型再问一次同样的问题。新模型看不到旧回答，旧回答保留在原对话中。',
         'answer.thumbs': '隐藏点赞和点踩',
@@ -460,10 +470,16 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         const cwd = typeof values.workingDirectory === 'string' ? values.workingDirectory : values.workingDirectory?.cwd ?? values.workingDirectory?.path;
         child = await sessions.create(cwd ? { cwd } : {});
       }
+      // The copy keeps the conversation's own choices too, so the same question runs the same way
+      // (with Web Off it stays off): its mode, Web choice and level, Tools switch, helpers' model
+      // and the tools it added.
+      // A copy that carries earlier turns of an isolated conversation (Recon) is isolated for good
+      // too: it holds what that conversation read. A copy of the first question carries none.
+      const CARRIED = ['sessionModes', 'sessionWeb', 'sessionSearchDepth', 'sessionTools', 'sessionHelpers', 'sessionToolSets', ...(plan.cut !== undefined ? ['sessionIsolated'] : [])];
       const fresh = await load(appCtx);
-      const mode = readObject(fresh.value.sessionModes)[sessionId];
-      if (mode) {
-        const build = (value) => [{ op: 'set', path: ['sessionModes'], value: JSON.stringify({ ...readObject(value.sessionModes), [child]: mode }) }];
+      const carried = CARRIED.filter((field) => (field === 'sessionIsolated' ? readObject(fresh.value[field])[sessionId] === true : readObject(fresh.value[field])[sessionId] !== undefined));
+      if (carried.length > 0) {
+        const build = (value) => carried.map((field) => ({ op: 'set', path: [field], value: JSON.stringify({ ...readObject(value[field]), [child]: readObject(fresh.value[field])[sessionId] }) }));
         let saved = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
         if (!saved.ok && saved.error.code === 'settings/conflict') {
           const again = await load(appCtx);
@@ -1017,8 +1033,16 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
                       list.viaCode ? h('p', { className: 'hint' }, t('tools.viaCode')) : null,
                       h('div', { className: 'head' }, `${t('tools.can')} (${list.can.length})`),
                       names(list.can, false),
+                      // Where tools load as needed, those the model can still add are not "cannot".
+                      list.trimmed && Array.isArray(list.later) && list.later.length > 0
+                        ? h(React.Fragment, null,
+                            h('div', { className: 'head' }, `${t('tools.later')} (${list.later.length})`),
+                            h('p', { className: 'hint', style: { margin: '0 0 4px' } }, t('tools.later.hint')),
+                            names(list.later, false))
+                        : null,
                       h('div', { className: 'head' }, `${t('tools.cannot')} (${list.cannot.length})`),
-                      names(list.cannot, true))
+                      names(list.cannot, true),
+                      Array.isArray(list.notReady) && list.notReady.length > 0 ? h('p', { className: 'hint' }, t('tools.notReady', { names: list.notReady.join(', ') })) : null)
                   : h('p', { className: 'hint' }, t('tools.unknown')),
                 h('p', { className: 'hint' }, t('tools.next'))),
               document.body,
@@ -1033,7 +1057,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         sandbox: 'read-only',
         defaultTier: '',
         prompt:
-          'You are in Chat mode: answer directly in one reply. No tools are available. If a task needs files, commands or the web, say so and suggest switching to Cowork or Code mode.',
+          'You are in Chat mode: answer directly in one reply. You cannot read or change files or run commands. If a task needs those, say so and suggest switching to Cowork or Code mode.',
       },
       cowork: { label: 'Cowork', tools: 'all', sandbox: 'inherit', defaultTier: '', prompt: '' },
       code: { label: 'Code', tools: 'all', sandbox: 'workspace-write', defaultTier: '', prompt: '' },
@@ -1103,12 +1127,28 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
     }
 
     /**
+     * The modes other add-ons add (Finance, Research, Scout...). They are not edited here, but a
+     * sidebar tab of theirs can be the default mode, and those with all tools can load them as needed.
+     * @param {object} view - settings namespace value.
+     * @returns {Array<{id: string, label: string, all: boolean, isolated: boolean}>} the extra modes.
+     */
+    function extraModesOf(view) {
+      return Object.entries(readObject(view?.extraModes)).filter(([id, value]) => ID_RE.test(id) && value && typeof value === 'object').map(([id, value]) => ({
+        id,
+        label: typeof value.label === 'string' && value.label.trim() ? value.label.trim() : id,
+        all: value.tools !== 'none' && !Array.isArray(value.tools),
+        isolated: value.isolated === true,
+      }));
+    }
+
+    /**
      * Problems that block a save, as dictionary keys per row id and for the whole form.
      * @param {object[]} rows - editable rows.
      * @param {string} defaultMode - chosen default.
+     * @param {string[]} [extraIds] - ids of the modes other add-ons add, which may be the default too.
      * @returns {{rows: Record<string, string>, form: string[]}} problems.
      */
-    function validate(rows, defaultMode) {
+    function validate(rows, defaultMode, extraIds = []) {
       const byRow = {};
       const form = [];
       const seen = new Set();
@@ -1118,7 +1158,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         seen.add(row.id);
       }
       if (rows.length === 0) form.push('e.none');
-      else if (!rows.some((row) => row.id === defaultMode)) form.push('e.default');
+      else if (!rows.some((row) => row.id === defaultMode) && !extraIds.includes(defaultMode)) form.push('e.default');
       return { rows: byRow, form };
     }
 
@@ -1154,6 +1194,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       const [message, setMessage] = useState(null);
       const [answer, setAnswer] = useState({ rerun: true, thumbs: false });
       const [trim, setTrim] = useState(['cowork', 'code']);
+      const [extraModes, setExtraModes] = useState([]);
       const nextKey = React.useRef(1);
 
       const adopt = useCallback((view) => {
@@ -1165,6 +1206,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         setDefaultMode(typeof view.defaultMode === 'string' ? view.defaultMode : 'cowork');
         setAnswer({ rerun: view.rerunButton !== false, thumbs: view.hideFeedback === true });
         setTrim(Array.isArray(view.trimModes) ? view.trimModes : ['cowork', 'code']);
+        setExtraModes(extraModesOf(view));
         setDirty(false);
       }, []);
 
@@ -1211,7 +1253,9 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         setMessage(null);
       };
 
-      const problems = validate(rows, defaultMode);
+      // As on the server: a mode an add-on adds counts only where no mode of the list has its id.
+      const extras = extraModes.filter((extra) => !rows.some((row) => row.id === extra.id));
+      const problems = validate(rows, defaultMode, extras.map((extra) => extra.id));
       const blocked = problems.form.length > 0 || Object.keys(problems.rows).length > 0;
 
       const save = async () => {
@@ -1311,6 +1355,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
               },
             },
             rows.map((row) => h('option', { key: row.key, value: row.id }, row.label.trim() || row.id)),
+            extras.map((extra) => h('option', { key: `extra-${extra.id}`, value: extra.id }, t('default.extra', { label: extra.label }))),
           ),
         ),
         h('div', { className: 'dsh-me-group' }, t('answer.group')),
@@ -1320,10 +1365,15 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         h('div', { className: 'dsh-me-group' }, t('trim.group')),
         h('div', { className: 'dsh-me-note' }, t('trim.hint')),
         h('div', null,
-          rows.filter((row) => row.toolsKind === 'all').length === 0
+          rows.filter((row) => row.toolsKind === 'all').length === 0 && extras.filter((extra) => extra.all && !extra.isolated).length === 0
             ? h('div', { className: 'dsh-me-note' }, t('trim.none'))
-            : rows.filter((row) => row.toolsKind === 'all').map((row) => h(React.Fragment, { key: `trim-${row.key}` },
-              Toggle(t('trim.mode', { mode: row.label.trim() || row.id }), '', trim.includes(row.id), (on) => void flipTrim(row.id, on))))),
+            : [
+                ...rows.filter((row) => row.toolsKind === 'all').map((row) => h(React.Fragment, { key: `trim-${row.key}` },
+                  Toggle(t('trim.mode', { mode: row.label.trim() || row.id }), '', trim.includes(row.id), (on) => void flipTrim(row.id, on)))),
+                // An add-on's mode with all tools (Finance) can load them as needed too; an isolated one keeps its own list.
+                ...extras.filter((extra) => extra.all && !extra.isolated).map((extra) => h(React.Fragment, { key: `trim-extra-${extra.id}` },
+                  Toggle(t('trim.extra', { mode: extra.label }), '', trim.includes(extra.id), (on) => void flipTrim(extra.id, on)))),
+              ]),
         rows.map((row) => {
           const bad = problems.rows[row.key];
           return h(
@@ -1439,7 +1489,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         ctx.effect(() =>
           ctx.slots.inject('settings.section', () =>
             ctx.slots.register(
-              { name: 'settings.section', id: 'modes', order: 20, label: () => t('section.title') },
+              { name: 'settings.section', id: 'modes', order: 100, label: () => t('section.title') },
               (props) => h(ModesPage, { ...props, appCtx: ctx }),
             ),
           ),

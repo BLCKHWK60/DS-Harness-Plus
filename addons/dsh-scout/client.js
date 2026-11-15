@@ -379,7 +379,7 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
           upload.element),
 
         h('div', { className: 'dsh-sc-group' }, 'Your profile'),
-        h('p', { className: 'dsh-sc-desc' }, 'A short summary: titles, years, skills, languages, pay, what you want. Write it here, or ask Scout to write it from your files. It is read in every Scout conversation.'),
+        h('p', { className: 'dsh-sc-desc' }, 'A short summary: titles, years, skills, languages, pay, what you want. Write it here, or ask Scout to write it from your files: Scout is told to show you the draft and save it only after you agree, and the old one is kept as profile.md.bak. A Scout conversation reads it when it needs it (scout_profile); the helpers it starts cannot.'),
         h(Profile, { text: typeof data.profile === 'string' ? data.profile : '', busy, onSave: (text) => act({ action: 'profile', text }, 'Profile saved.') }),
 
         h('div', { className: 'dsh-sc-group' }, 'Markets'),
@@ -416,7 +416,7 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
 
         h('div', { className: 'dsh-sc-group' }, 'Good to know'),
         h('ul', { className: 'dsh-sc-list' },
-          h('li', null, 'Scout conversations get only these tools: Scout\'s own nine (sources, search, posting text, titles, demand, pay, your files, your profile, the report), web search and page reading (with the Search switch), Deep research (with its switch), the Finance news and filings tools when Finance is on, charts, a step list and questions. No file, shell or program tools.'),
+          h('li', null, 'Scout conversations get only these tools: Scout\'s own nine (sources, search, posting text, titles, demand, pay, your files, your profile, the report), web search and page reading, Deep research (Scout always has the web; there is no Web button in its chat box), the Finance news, filings and figures tools when Finance is on, charts, a step list and questions. No file, shell or program tools. Helpers started by Scout get no access to your files, profile or reports.'),
           h('li', null, 'Search queries carry titles, skills and places, never your name or contact details. Web search goes through your web search provider; the job sources get only the search itself.'),
           h('li', null, 'Every run ends with a report saved as Markdown and a table (CSV) in the reports folder inside your Scout folder.'),
           h('li', null, 'Results depend on what each source lists and on the model. Check a posting on its own page before you act on it.')));
@@ -428,7 +428,7 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
         ctx.effect(() => ctx.locale.register(NS, DICT));
         const t = ctx.locale.bind(NS);
         ctx.effect(() =>
-          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'scout', order: 24, label: () => t('section.title') }, (props) => h(ScoutPage, { ...props, appCtx: ctx }))),
+          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'scout', order: 113, label: () => t('section.title') }, (props) => h(ScoutPage, { ...props, appCtx: ctx }))),
         );
         ctx.effect(() => ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({ name: 'conversation.hero.options', id: 'scout-bar', order: 41 }, () => h(ScoutBar, { appCtx: ctx }))));
       },

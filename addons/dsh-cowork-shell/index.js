@@ -476,7 +476,7 @@ export function apply(ctx) {
     }
   };
   /**
-   * A new conversation in a project whose type says so starts with Search switched off (Paperwork:
+   * A new conversation in a project whose type says so starts with Web set to Off (Paperwork:
    * private papers should not turn into web queries by default). The user can switch it on in the
    * chat box as always; a conversation that has run, or whose switch was set, is left alone.
    */

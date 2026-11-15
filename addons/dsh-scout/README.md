@@ -20,7 +20,7 @@ Work, place, pay target, work type, and the markets as chips (USA, UK, Germany a
 ## Your files and your profile
 
 - **Files** stay in the Scout folder (`scout/files` in the app's home unless you set `folder`). Scout reads them with whichever model the conversation uses, local or cloud (since 0.51.2; only Recon keeps cloud models out).
-- **The profile** is a short summary: titles, years, skills, languages, pay and what you want. Write it in Settings → Scout, or ask Scout to write it from your files.
+- **The profile** is a short summary: titles, years, skills, languages, pay and what you want. Write it in Settings → Scout, or ask Scout to write it from your files; Scout is told to show you the draft and save it only after you agree (the tool itself does not ask). Each save keeps the profile before it as `profile.md.bak` next to it.
 - `/scout` shows which model the conversation uses.
 
 ## Sources
@@ -40,8 +40,8 @@ Also listed: GOV.UK Find a job, EURES, TED, IT Jobs Watch, ESCO and O*NET (singl
 ## What the assistant is given
 
 - The method (under 4,000 characters) and the start-page selection.
-- These tools, and no others: `scout_sources`, `scout_search`, `scout_posting`, `scout_titles`, `scout_demand`, `scout_pay`, `scout_files`, `scout_profile`, `scout_report`; `web_search` and `web_fetch` (with the Search switch), `deep_research` (with its switch), Finance's news, filings and figures tools when Finance is on, `diagram_draw`, `todo_write`, `ask_user_question`. No file, shell or program tools.
-- Scout's own tools exist only in Scout conversations (and helpers working for them); other modes do not see them.
+- These tools, and no others: `scout_sources`, `scout_search`, `scout_posting`, `scout_titles`, `scout_demand`, `scout_pay`, `scout_files`, `scout_profile`, `scout_report`; `web_search` and `web_fetch`, `deep_research` (Scout always has the web: there is no Web button in its chat box), Finance's news, filings and figures tools when Finance is on, `diagram_draw`, `todo_write`, `ask_user_question`. No file, shell or program tools.
+- Scout's own tools exist only in Scout conversations; other modes do not see them. Helpers a Scout conversation starts (Deep research) get the search and research tools, but never `scout_files`, `scout_profile` or `scout_report`: they read web pages that may carry hidden instructions.
 
 ## Settings
 
@@ -65,7 +65,8 @@ The Bundesagentur's pay statistics (Entgeltatlas) are not read directly: their i
 
 ## Limits
 
-- Each conversation may make 400 requests to the sources.
+- Each conversation may make 400 requests to the sources, counted across restarts.
+- Each conversation's postings, their numbers (P1, P2, ...) and its request count are kept in `scout/postings` in the app's home, so a conversation reopened after a restart goes on with the same numbers. The newest 200 conversations are kept; a deleted conversation's file stays until it falls out of those 200.
 - Results depend on what each source lists and on the model. Check a posting on its own page before acting on it.
 - Adzuna, USAJOBS and Reed were built from their documentation and tested with stand-in answers; they are untested against the real services until a key is added.
 
@@ -74,3 +75,5 @@ The Bundesagentur's pay statistics (Entgeltatlas) are not read directly: their i
 Step 2: 2 more tests (ESCO from saved answers, demand, pay reading, Adzuna's spread); a live run against ESCO and the Bundesagentur ("Data Engineer" 851 postings in Germany, "Dateningenieur" 0, "Analytics Engineer" 233). Not run in the app with a real model yet.
 
 Step 1: 11 tests (`test/scout.test.mjs`): the mode, the registry and its terms, every source reader (Bundesagentur, Arbeitnow, Greenhouse, Lever and Ashby from answers saved from the real services; Hacker News, Adzuna, USAJOBS and Reed from their documented shapes), the store, the private folder and profile, the report, and the tools with a local and a cloud model. In the lab app with a stand-in model: the tab, start page and Settings page; the tool list of a Scout conversation; a Cowork conversation getting none of Scout's tools; the `web_fetch` guard; and one real search of the Bundesagentur (123 postings).
+
+Audit fixes: 3 more tests. `test/index.test.mjs` runs the add-on against a stand-in for the app: the mode added and taken out with the switch, which tools a Scout conversation, its helpers and a Cowork conversation get, the `web_fetch` guard, the selection a conversation started with, and the Settings page's actions. In `test/scout.test.mjs`: postings kept across a restart, and `scout_pay` with Adzuna's key.

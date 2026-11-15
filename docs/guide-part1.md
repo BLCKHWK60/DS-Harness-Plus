@@ -17,7 +17,7 @@ Installing, updating and removing are in the [README](../README.md). The history
 | **Top of the sidebar** | The tabs: Chat, Cowork, Code, and Finance and Data once you switch them on. With more than three they sit in rows of three. |
 | **Sidebar, under the tabs** | The tab's own pages (Automation tasks, Connectors, Skills, Plugins…), then its projects and conversations, then the Trash. |
 | **Bottom of the sidebar** | Your DeepSeek balance, and **More** (Settings, look options). |
-| **Chat box, left** | Search, Deep research, the models chip, Tools. |
+| **Chat box, left** | Web, the models chip, Tools (in a Research conversation: Depth and Focus instead of Web). |
 | **Chat box, right** | The model button: model, effort, tier. |
 | **Above the chat box** | The activity line, with the arrow that folds the chat box away. |
 | **Under an answer** | Copy, Rerun, Branch, usage, and pictures the assistant drew. |
@@ -32,7 +32,7 @@ A tab is a way of working. Clicking a tab returns you to the conversation you la
 
 | Tab | For | What is special |
 |---|---|---|
-| **Chat** | Plain conversation. | No tools unless you switch Search or Deep research on. No projects. |
+| **Chat** | Plain conversation. | No tools. Pick a Web level other than Off and it may search the web and read pages. No projects. |
 | **Cowork** | Any work in a folder. | All tools. Projects with types (see 4). |
 | **Code** | Programming. | All tools, and a working method: read first, small changes, run the tests, report plainly. |
 | **Finance** | Companies, markets, economies. | Its own data tools and drop-downs for subject, market, focus and period. Off until you switch it on in Settings → Finance. |
@@ -45,8 +45,8 @@ A tab is a way of working. Clicking a tab returns you to the conversation you la
 
 | Control | What it does | How to use it |
 |---|---|---|
-| **Search** | Lets the assistant search the web. | Click to switch on or off for this conversation. The small arrow sets how hard it searches: Quick, Standard, Thorough. |
-| **Deep research** | A research run in rounds with helper agents, ending in a cited report. | Switch on, then ask. The arrow sets the depth (1, 2 or 3 rounds). |
+| **Web** | How much the assistant may use the internet in this conversation. | Click and pick: **Off** (no web at all), **Quick**, **Standard**, **Thorough** or **Deep** (at least ten searches and ten pages read, facts cross-checked). The level you pick is also where new conversations start. Not shown in Research and Scout, which always have the web. |
+| **Depth** and **Focus** (Research tab) | How long a research run may take and where it looks first. | Pick in the chat box of a Research conversation. A research run works in rounds with helper agents and ends in a cited report. |
 | **Models chip** | Shows whether helper agents use this conversation's model (**One model**) or others as well (an amber **3 models**). | Click to switch for this conversation. One model is the default and needs the least memory. |
 | **Tools** | Shows what the assistant can and cannot call right now, with one switch for all tools. | Click to see the list. |
 | **Model button** | Model, effort and tier for this conversation. | Click to pick. Saved model versions come first. |
@@ -67,7 +67,7 @@ A project is a folder with a name, its own instructions, its files and its conve
 | **Blank** | Nothing. Cowork as it has always been. |
 | **Research** | Research from many sources, written up as cited reports kept in the folder. |
 | **Learn** | A tutor that teaches from your materials and keeps `progress.md` and `flashcards.md`. |
-| **Paperwork** | Letters, bills, contracts and deadlines. Keeps `deadlines.md`. Conversations start with Search off. |
+| **Paperwork** | Letters, bills, contracts and deadlines. Keeps `deadlines.md`. Conversations start with Web set to Off. |
 | **Plan** | Tasks, owners, dates, status and risks, kept in `plan.md`, `risks.md`, `decisions.md`. |
 | **Write** | Long-form writing with an outline, a style guide and revision passes. |
 
@@ -108,9 +108,9 @@ Switch it on in **Settings → Data**, open the Data tab, and pick the folder th
 - Ask in plain words. After a number, a mark like `[Q7]` names the query that produced it.
 - Tables: CSV, TSV, JSON, Excel. Documents: Word and text. PDFs through the PDF reader.
 - Charts are drawn from the data and shown under the answer.
-- For statistics, cleaning and combining files the assistant runs Python in a sandbox: no internet, it reads only your folder, and it writes only into a `data-output` folder there. Your files are never changed.
+- For statistics, cleaning and combining files the assistant runs Python in a sandbox: no internet, it reads your folder and nothing else in your home folder, and it writes only into a `data-output` folder there. Your files are never changed.
 - "Save this analysis as …" keeps it; "run … again" reports what moved.
-- With Search and Deep research off it works from your files alone.
+- With Web set to Off in the chat box it works from your files alone. Any other Web level lets it search the web and run deep research.
 
 ### 7. Finance
 

@@ -27,7 +27,9 @@ async function open(files) {
   }
   const names = new Set();
   for (const table of tables) {
-    if (names.has(table.name)) throw new Error(`Two files give a table named "${table.name}". Query them one at a time, or rename one file.`);
+    // Files are named apart before they get here; this catches what is left, such as a workbook's
+    // file__sheet table meeting a file of that name. The user's files are never to be renamed.
+    if (names.has(table.name)) throw new Error(`Two tables are named "${table.name}". Query these files one at a time.`);
     names.add(table.name);
   }
   const entry = { db: build(DatabaseSync, tables), tables: tables.map(({ rows, ...rest }) => ({ ...rest, rowCount: rows.length })) };

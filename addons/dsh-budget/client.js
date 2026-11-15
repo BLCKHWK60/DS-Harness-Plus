@@ -202,7 +202,7 @@ window.__ModuleLoader__.load({
         ctx.effect(() => ctx.locale.register(NS, DICT));
         const t = ctx.locale.bind(NS);
         ctx.effect(() =>
-          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'budget', order: 20, label: () => t('section.title') }, (props) => h(BudgetPage, { ...props, appCtx: ctx }))),
+          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'budget', order: 300, label: () => t('section.title') }, (props) => h(BudgetPage, { ...props, appCtx: ctx }))),
         );
         ctx.effect(() => ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({ name: 'conversation.chat.turnTail', id: 'dsh-budget' }, (props) => h(TurnStop, props))));
       },

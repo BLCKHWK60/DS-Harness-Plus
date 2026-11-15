@@ -127,5 +127,9 @@ test('the skills are complete and all carry the rules', () => {
     assert.match(skill.content, /never say buy, sell or hold/);
     assert.match(skill.content, /What you could not find|what you could not find/);
     assert.ok(skill.content.length < 3500, `${skill.name} is ${skill.content.length} characters`);
+    // Outside Finance mode the method is not loaded, so each skill points to its own data tools.
+    assert.match(skill.content, /\bfinance_(company_figures|company_filings|economy|prices|news|social)\b/, skill.name);
   }
+  assert.match(SKILLS.find((skill) => skill.name === 'finance-news-and-mood').content, /finance_news[\s\S]*finance_social/);
+  assert.match(SKILLS.find((skill) => skill.name === 'finance-economy-brief').content, /finance_economy/);
 });

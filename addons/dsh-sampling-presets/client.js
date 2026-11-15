@@ -595,7 +595,7 @@ window.__ModuleLoader__.load({
         ctx.effect(() =>
           ctx.slots.inject('settings.section', () =>
             ctx.slots.register(
-              { name: 'settings.section', id: 'sampling-presets', order: 22, label: () => t('section.title') },
+              { name: 'settings.section', id: 'sampling-presets', order: 210, label: () => t('section.title') },
               (props) => h(SamplingPage, { ...props, appCtx: ctx }),
             ),
           ),

@@ -29,6 +29,8 @@ window.__ModuleLoader__.load({
         'new.cowork': 'New task',
         'new.code': 'New code task',
         'new.other': 'New conversation',
+        'new.research': 'New research',
+        'new.scout': 'New search',
         'pages.label': '{tab} sections',
         'more': 'More',
         'look.logos.hide': 'Hide DeepSeek logos',
@@ -188,7 +190,7 @@ window.__ModuleLoader__.load({
         'type.tool.data.off': 'This type can use the Data tools for tables (CSV, Excel). They are switched off: Settings → Data → Show the Data tab.',
         'type.tool.finance.on': 'This type uses the Finance tools for company and economy figures. They are available.',
         'type.tool.finance.off': 'This type can use the Finance tools for company and economy figures. They are switched off: Settings → Finance → Show the Finance tab.',
-        'type.search.off': 'New conversations in this project start with Search and Deep research off, so your papers do not turn into web queries. You can switch them on in the chat box.',
+        'type.search.off': 'New conversations in this project start with Web set to Off, so your papers do not turn into web queries. You can pick another Web level in the chat box.',
         'gen.open': 'Generate with a model…',
         'gen.title': 'Write the instructions with a model',
         'gen.hint': 'A model reads a summary of this folder and the project\'s type, and writes instructions for this project. It gets no tools: it cannot open, change or delete anything. You see the result before anything is saved.',
@@ -250,6 +252,8 @@ window.__ModuleLoader__.load({
         'new.cowork': '新任务',
         'new.code': '新编码任务',
         'new.other': '新会话',
+        'new.research': '新研究',
+        'new.scout': '新搜索',
         'pages.label': '{tab} 分区',
         'more': '更多',
         'look.logos.hide': '隐藏 DeepSeek 标志',
@@ -409,7 +413,7 @@ window.__ModuleLoader__.load({
         'type.tool.data.off': '此类型可使用数据工具处理表格（CSV、Excel）。工具已关闭：设置 → 数据 → 显示数据标签页。',
         'type.tool.finance.on': '此类型使用财经工具获取公司和经济数据。工具可用。',
         'type.tool.finance.off': '此类型可使用财经工具获取公司和经济数据。工具已关闭：设置 → 财经 → 显示财经标签页。',
-        'type.search.off': '此项目中的新对话默认关闭搜索和深度研究，以免你的文件内容变成网络查询。可在聊天框中开启。',
+        'type.search.off': '此项目中的新对话默认将联网设为关闭，以免你的文件内容变成网络查询。可在聊天框中选择其他联网级别。',
         'gen.open': '用模型生成…',
         'gen.title': '用模型撰写指令',
         'gen.hint': '模型会阅读此文件夹的摘要和项目类型，为该项目撰写指令。它没有任何工具，无法打开、修改或删除任何内容。保存前你会先看到结果。',
@@ -2231,10 +2235,11 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
      * folder, never in one of the user's, so the model is told no path of theirs. The add-on names
      * its folder at `<tab id>/state` as `room`. Falls back to the usual start when it has none.
      */
-    async function startInRoom(appCtx, library, tabId) {
+    async function startInRoom(appCtx, library, tabId, options) {
       const response = await fetch(new URL(`dsh-${tabId}/state`, document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
       const room = response.ok ? String((await response.json()).room ?? '') : '';
       if (!room) return false;
+      rooms.add(roomKey(room));
       const same = (path) => String(path ?? '').replace(/^\/private(?=\/tmp\/)/, '').replace(/\/+$/, '') === room.replace(/^\/private(?=\/tmp\/)/, '').replace(/\/+$/, '');
       let ws = (library.get().workspaces ?? []).find((entry) => entry && same(entry.path));
       if (!ws) {
@@ -2242,8 +2247,60 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         try { await appCtx.get('workspaces').rename(ws.workspaceId, 'Recon room'); } catch { /* the folder's own name is fine */ }
       }
       if (!ws?.workspaceId) return false;
-      appCtx.uiWorkspace.startSession(ws.workspaceId);
+      appCtx.uiWorkspace.startSession(ws.workspaceId, options);
       return true;
+    }
+
+    /**
+     * Folders of isolated tabs (Recon's room). The app empties them at every start, so no other tab
+     * may start a conversation there. Recon's room is known up front, so it is skipped even before
+     * the Recon tab is opened in this window; startInRoom adds any other room it is told about.
+     */
+    const roomKey = (path) => String(path ?? '').replace(/^\/private(?=\/tmp\/)/, '').replace(/\/+$/, '');
+    const rooms = new Set([roomKey('/tmp/dsh-recon-room')]);
+
+    /**
+     * The project a new conversation of an ordinary tab starts in. The app's own choice is the open
+     * conversation's project, else the most recently used one; this makes the same choice but skips
+     * isolated rooms, so files of a Cowork or Code conversation are never put where they get deleted.
+     * Chat keeps its default workspace. Returns null when the app may choose (nothing is ready yet).
+     */
+    function homeFor(lib, tabId) {
+      if (tabId === 'chat') return defaultWorkspace(lib?.workspaces);
+      if (!lib || !lib.ok) return null;
+      const workspaces = (Array.isArray(lib.workspaces) ? lib.workspaces : []).filter((ws) => ws && ws.workspaceId);
+      const usable = workspaces.filter((ws) => !rooms.has(roomKey(ws.path)));
+      if (usable.length === workspaces.length) return null; // no room among them: the app's own choice is safe
+      const current = lib.currentId ? usable.find((ws) => (ws.sessionIds ?? []).includes(lib.currentId)) : null;
+      if (current) return current;
+      // The most recently used project, timed the way the app times it.
+      let best = null;
+      let bestTime = Number.NEGATIVE_INFINITY;
+      for (const ws of usable) {
+        let latest = Number.NEGATIVE_INFINITY;
+        for (const id of ws.sessionIds ?? []) {
+          const at = Number(lib.byId?.[id]?.updatedAt);
+          if (Number.isFinite(at)) latest = Math.max(latest, at);
+        }
+        if (latest === Number.NEGATIVE_INFINITY) latest = Date.parse(ws.createdAt);
+        if (!Number.isFinite(latest)) latest = Number.NEGATIVE_INFINITY;
+        if (best === null || latest > bestTime) { best = ws; bestTime = latest; }
+      }
+      return best ?? defaultWorkspace(workspaces);
+    }
+
+    /**
+     * The New button's text: the saved layout's own, else the app's translated text for its own
+     * tabs, else the built-in copy for a tab another add-on brings (Research, Scout), else the
+     * generic text. The saved layout may lack such a tab, as tabEntry allows for the greeting.
+     */
+    function newLabelFor(layout, tabId, t, defaults) {
+      const own = layout?.[tabId]?.newLabel;
+      if (typeof own === 'string' && own.trim()) return own.trim();
+      if (['chat', 'cowork', 'code', 'research', 'scout'].includes(tabId)) return t('new.' + tabId);
+      const builtIn = defaults?.[tabId]?.newLabel;
+      if (typeof builtIn === 'string' && builtIn.trim()) return builtIn.trim();
+      return t('new.other');
     }
 
     function startNew(appCtx, library, tabId) {
@@ -2253,7 +2310,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         return;
       }
       let home = null;
-      if (tabId === 'chat') { try { home = defaultWorkspace(library.get().workspaces); } catch { home = null; } }
+      try { home = homeFor(library.get(), tabId); } catch { home = null; }
       appCtx.uiWorkspace.startSession(home ? home.workspaceId : undefined);
     }
 
@@ -2298,8 +2355,9 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         .map((id) => allPages.find((p) => p.id === id)).filter(Boolean);
       const shared = allPages.filter((p) => !claimed.has(p.id));
       const rows = [...own, ...shared];
-      const newLabel = (typeof layout[selected.id]?.newLabel === 'string' && layout[selected.id].newLabel.trim())
-        || (['chat', 'cowork', 'code'].includes(selected.id) ? t('new.' + selected.id) : t('new.other'));
+      // The saved layout may lack a tab another add-on brings (Research, Scout): fall back to the
+      // built-in copy before the generic text, as tabEntry does for the greeting and chips.
+      const newLabel = newLabelFor(layout, selected.id, t, DEFAULT_TABS);
       const toggleLabel = collapsed ? t('toggle.open') : t('toggle.collapse');
 
       const startSession = () => startNew(appCtx, library, selected.id);
@@ -2447,7 +2505,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const t = appCtx.locale.bind(NS);
       const state = useSyncExternalStore(model.subscribe, model.get);
       useSyncExternalStore(library.subscribe, library.get); // keeps the project list fresh for the New button
-      const key = ['chat', 'cowork', 'code'].includes(state.selected) ? 'new.' + state.selected : 'new.other';
+      const key = ['chat', 'cowork', 'code', 'research', 'scout'].includes(state.selected) ? 'new.' + state.selected : 'new.other';
       return h('div', { className: 'cws-lead' },
         h('button', { type: 'button', className: 'cws-icon', 'data-sidebar-opener': '', 'aria-label': t('toggle.open'), onClick: () => appCtx.layout.toggleSidebar() }, h(Glyph, { name: 'panel', size: 16 })),
         h('button', { type: 'button', className: 'cws-icon', 'aria-label': t(key), onClick: () => startNew(appCtx, library, state.selected) }, h(Glyph, { name: 'plus', size: 16 })),
@@ -2711,9 +2769,15 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         chips.map((chip) => h('button', {
           key: chip.label, type: 'button', className: 'cws-chip-btn',
           onClick: () => {
+            const options = { prompt: String(chip.prompt ?? chip.label), whenDraftExists: 'replace' };
+            // Recon's chips start in its room, like its New button.
+            if (selected.id === 'recon') {
+              startInRoom(appCtx, library, selected.id, options).then((done) => { if (!done) appCtx.uiWorkspace.startSession(undefined, options); }, () => appCtx.uiWorkspace.startSession(undefined, options));
+              return;
+            }
             let home = null;
-            if (selected.id === 'chat') { try { home = defaultWorkspace(library.get().workspaces); } catch { home = null; } }
-            appCtx.uiWorkspace.startSession(home ? home.workspaceId : undefined, { prompt: String(chip.prompt ?? chip.label), whenDraftExists: 'replace' });
+            try { home = homeFor(library.get(), selected.id); } catch { home = null; }
+            appCtx.uiWorkspace.startSession(home ? home.workspaceId : undefined, options);
           },
         }, h(ChipIcon, { name: typeof chip.icon === 'string' ? chip.icon : 'spark' }), chip.label)));
     }

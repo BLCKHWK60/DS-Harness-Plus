@@ -15,6 +15,18 @@ export function insideProgram(callId) {
 }
 
 /**
+ * About how many minutes a run started from inside a program has, whatever the depth; for the screen.
+ * Whole minutes, rounded down, so the screen never promises more than the run gets.
+ * @param {unknown} programMaxMs - the longest a program may run.
+ * @returns {number | undefined} minutes, at least 1; undefined when the limit is not known.
+ */
+export function programMinutes(programMaxMs) {
+  const max = Number(programMaxMs);
+  if (!(max > 0)) return undefined;
+  return Math.max(1, Math.floor((max - REPORT_RESERVE_MS) / 60000));
+}
+
+/**
  * The time budget of a run, in minutes.
  * The app stops a program after a fixed time, with everything in it. Inside one, searching ends
  * early enough to leave time for the report, so a long run ends with a report instead of nothing.

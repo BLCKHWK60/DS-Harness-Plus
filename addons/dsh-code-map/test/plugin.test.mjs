@@ -29,7 +29,7 @@ const FILES = {
  * @param {object} options - folders and switches.
  * @returns {object} the fake context and what was registered.
  */
-function fakeApp({ home, folder, rejection, config = {} }) {
+function fakeApp({ home, folder, rejection, config = {}, modes }) {
   const seen = { tools: [], routes: new Map(), commands: [], skills: [], sections: [], listeners: {}, warnings: [], provided: {} };
   const agent = {
     id: 'agent-1',
@@ -49,6 +49,7 @@ function fakeApp({ home, folder, rejection, config = {} }) {
     workingDirectory: { defaultDirectory: folder, ensure: async () => folder },
     skills: { register: (skill) => seen.skills.push(skill) },
     agents: { list: () => [agent] },
+    ...(modes ? { modes } : {}),
   };
   const inner = {
     effect: (fn) => fn(),
@@ -277,4 +278,18 @@ test('nothing user-specific ships in the add-on', () => {
   for (const file of ['index.js', 'client.js', 'skills.js', 'lib/manager.js', 'lib/scan.js']) {
     assert.doesNotMatch(readFileSync(new URL(file, here), 'utf8'), /\/Users\/[a-z]/);
   }
+});
+
+test('no hint where the code_map tools cannot be called: Chat, tools off, an isolated conversation', () => {
+  const root = project(FILES);
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'code-map-home-')));
+  let noTools = true;
+  let isolated = false;
+  const { seen } = fakeApp({ home, folder: root, modes: { noTools: () => noTools, isolated: () => isolated } });
+  const section = seen.sections[0];
+  assert.equal(section.text(), '', 'Chat or Tools off');
+  noTools = false;
+  assert.equal(section.text(), HINT, 'Cowork or Code');
+  isolated = true;
+  assert.equal(section.text(), '');
 });

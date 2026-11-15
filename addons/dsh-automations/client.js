@@ -415,7 +415,7 @@ window.__ModuleLoader__.load({
         ctx.effect(() => ctx.locale.register(NS, DICT));
         const t = ctx.locale.bind(NS);
         ctx.effect(() =>
-          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'alerts', order: 22, label: () => t('section.title') }, (props) => h(AlertsPage, { ...props, appCtx: ctx }))),
+          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'alerts', order: 430, label: () => t('section.title') }, (props) => h(AlertsPage, { ...props, appCtx: ctx }))),
         );
         // A full page with its own sidebar row (the Cowork sidebar lists it under the Cowork tab).
         ctx.effect(() => ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'automations' }, () => h(RunsPanel, { appCtx: ctx }))));

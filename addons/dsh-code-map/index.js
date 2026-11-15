@@ -67,7 +67,7 @@ function plain(value) {
 /** The hint added to the model's instructions in a code project. Kept short on purpose. */
 export const HINT =
   '## Code map\n' +
-  'This folder has a code map. If the `code_map_*` tools are available, use them before reading whole files: ' +
+  'This folder has a code map. Use the `code_map_*` tools before reading whole files (if they are not offered yet and `tools_find` is, call `tools_find("code")` to add them): ' +
   '`code_map_overview` first, then `code_map_find`, `code_map_file` and `code_map_related`, and `code_map_read` to read one function instead of a file. ' +
   'The map holds names and structure, not file contents: use grep for text inside files.';
 
@@ -313,6 +313,8 @@ export function apply(ctx, config) {
             text: () => {
               try {
                 if (ctx.get('modes')?.isolated?.(agent.id) === true) return '';
+                // Chat, or tools switched off: the code_map_* tools cannot be called there.
+                if (ctx.get('modes')?.noTools?.(agent.id) === true) return '';
                 if (!enabled() || plain(config.promptHint) === false) return '';
                 const folder = folders.get(agent.id) ?? headerFolder(agent);
                 return folder && manager.looksLikeProject(folder) ? HINT : '';

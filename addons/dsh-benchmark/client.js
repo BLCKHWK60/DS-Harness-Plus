@@ -1050,7 +1050,7 @@ textarea.dsh-bm-field { height: auto; min-height: 60px; padding: 8px 14px; line-
         ctx.effect(() =>
           ctx.slots.inject('settings.section', () =>
             ctx.slots.register(
-              { name: 'settings.section', id: 'benchmark', order: 24, label: () => t('section.title') },
+              { name: 'settings.section', id: 'benchmark', order: 230, label: () => t('section.title') },
               (props) => h(BenchmarkPage, { ...props, appCtx: ctx }),
             ),
           ),

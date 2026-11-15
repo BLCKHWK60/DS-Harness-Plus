@@ -7,6 +7,9 @@ import { cleanName } from './finance.js';
 /** Every brief's task name starts with this, which is how briefs are told apart from other tasks. */
 export const BRIEF_PREFIX = 'Finance brief: ';
 
+/** Every brief's instruction starts like this, followed by the subject in quotes. */
+const BRIEF_OPENING = /^Write a short Finance brief on "(.+?)": what has changed /;
+
 /** How often a brief can run. */
 export const RHYTHMS = [
   { id: 'weekdays', label: 'Every weekday', rule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR', window: 'since the previous working day' },
@@ -38,36 +41,62 @@ export function briefRule(rhythm, hour, zone, now = new Date()) {
   return `DTSTART;TZID=${zone}:${day}T${two(Number.isFinite(at) ? at : 8)}0000\nRRULE:${found.rule}`;
 }
 
+/** The sentence a brief ends its rules with. The adviser note overrides it while the adviser is on. */
+const RESEARCH_LINE = 'This is research, not advice: do not say buy, sell or hold.';
+/** What briefs made while the adviser was on used to say instead; it kept advising after the switch went off. */
+const OLD_ADVISER_LINE = "End with your recommendation as the user's adviser, and add no disclaimer.";
+
 /**
  * What the scheduler hands the assistant each time the brief is due. The conversation is moved to
  * Finance mode when it opens; the instruction still carries the rules that matter, in case Finance
- * is switched off by then.
+ * is switched off by then. It is always worded for research only: the instruction is saved once and
+ * outlives the adviser switch, while the adviser note (lib/adviser.js) turns it into a
+ * recommendation at run time for as long as the adviser is on.
  * @param {unknown} subject - what the brief is about.
  * @param {unknown} market - the market to stay in.
  * @param {string} rhythm - an id of `RHYTHMS`.
- * @param {boolean} [adviser] - whether the adviser is switched on; the brief then ends with a recommendation.
  * @returns {string} the instruction.
  */
-export function briefPrompt(subject, market, rhythm, adviser = false) {
+export function briefPrompt(subject, market, rhythm) {
   const found = RHYTHMS.find((item) => item.id === rhythm) ?? RHYTHMS[0];
   const where = cleanName(market) && cleanName(market) !== 'Global' ? ` Market: ${cleanName(market)} only.` : ' Market: global.';
   return [
     `Write a short Finance brief on "${cleanName(subject)}": what has changed ${found.window}.${where}`,
-    'Use the finance-what-changed skill. If the finance_company_figures, finance_company_filings or finance_source_get tools are available, use them before web search for what they cover.',
-    `Rules: every figure must come from a source you fetched now, with its source and date, never from memory. Keep reported facts, management's claims, other people's opinions and your own reading apart. Say what you could not find. ${adviser ? "End with your recommendation as the user's adviser, and add no disclaimer." : 'This is research, not advice: do not say buy, sell or hold.'}`,
+    'Use the finance-what-changed skill. If the finance_company_figures, finance_company_filings, finance_prices, finance_news or finance_source_get tools are available, use them before web search for what they cover.',
+    `Rules: every figure must come from a source you fetched now, with its source and date, never from memory. Keep reported facts, management's claims, other people's opinions and your own reading apart. Say what you could not find. ${RESEARCH_LINE}`,
     'Keep it short: the three to six things that changed, most important first, then what to watch next with dates, then the sources. If nothing of note changed, say so in one line.',
   ].join('\n');
 }
 
 /**
- * The scheduler's tasks that messages put into a conversation's inbox belong to, and the market
- * their instruction names.
+ * A saved brief's instruction reworded for research only, when it still carries the adviser's wording.
+ * @param {unknown} prompt - the instruction the scheduler keeps.
+ * @returns {string | undefined} the new instruction, or undefined when nothing needs to change.
+ */
+export function researchOnly(prompt) {
+  const text = String(prompt ?? '');
+  return text.includes(OLD_ADVISER_LINE) ? text.replace(OLD_ADVISER_LINE, RESEARCH_LINE) : undefined;
+}
+
+/**
+ * The subject of a brief, read from the instruction the scheduler hands over.
+ * @param {unknown} prompt - a task's instruction.
+ * @returns {string} the subject, or '' when the instruction is not a brief's.
+ */
+const briefSubject = (prompt) => cleanName(BRIEF_OPENING.exec(String(prompt ?? ''))?.[1]);
+
+/**
+ * The scheduler's tasks that messages put into a conversation's inbox belong to, the market
+ * their instruction names, and the subject when the instruction is a brief's. The subject is
+ * read from the message itself so a brief can be moved to Finance without asking the scheduler
+ * first, which would let the conversation's first turn start in the wrong mode.
  * @param {unknown} inserted - the `inserted` list of an `agent/inbox/spliced` event.
- * @returns {{ids: string[], market: string}} task ids (empty when none came from the scheduler) and the market.
+ * @returns {{ids: string[], market: string, subject: string}} task ids (empty when none came from the scheduler), the market and the brief's subject ('' when none).
  */
 export function scheduledIn(inserted) {
   const ids = [];
   let market = '';
+  let subject = '';
   for (const item of Array.isArray(inserted) ? inserted : []) {
     const message = item?.message ?? item;
     if (message?.source?.kind !== 'schedule') continue;
@@ -81,10 +110,21 @@ export function scheduledIn(inserted) {
         /* not a task id */
       }
     }
+    const prompt = /^reminder_prompt_json: (.+)$/m.exec(text);
+    if (prompt) {
+      try {
+        subject ||= briefSubject(JSON.parse(prompt[1]));
+      } catch {
+        /* not an instruction */
+      }
+    }
     const many = /^reminders_json: (.+)$/m.exec(text);
     if (many) {
       try {
-        for (const entry of JSON.parse(many[1])) if (entry?.schedule_id) ids.push(String(entry.schedule_id));
+        for (const entry of JSON.parse(many[1])) {
+          if (entry?.schedule_id) ids.push(String(entry.schedule_id));
+          subject ||= briefSubject(entry?.reminder_prompt);
+        }
       } catch {
         /* not a list */
       }
@@ -92,7 +132,7 @@ export function scheduledIn(inserted) {
     const named = /Market: ([^.\\"]{1,80}) only\./.exec(text);
     if (named) market = named[1].trim();
   }
-  return { ids: [...new Set(ids)], market };
+  return { ids: [...new Set(ids)], market, subject };
 }
 
 /** Most tasks of your own that can be marked to run in Finance. */

@@ -637,7 +637,7 @@ window.__ModuleLoader__.load({
         ctx.effect(() =>
           ctx.slots.inject('settings.section', () =>
             ctx.slots.register(
-              { name: 'settings.section', id: 'color-schemes', order: 4, label: () => t('section.title') },
+              { name: 'settings.section', id: 'color-schemes', order: 600, label: () => t('section.title') },
               (props) => h(ColoursPage, { ...props, appCtx: ctx, applier }),
             ),
           ),

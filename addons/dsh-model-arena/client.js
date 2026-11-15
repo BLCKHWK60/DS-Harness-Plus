@@ -769,7 +769,7 @@ textarea.dsh-ar-field { height: auto; min-height: 76px; padding: 10px 14px; line
         ctx.effect(() =>
           ctx.slots.inject('settings.section', () =>
             ctx.slots.register(
-              { name: 'settings.section', id: 'model-arena', order: 26, label: () => t('section.title') },
+              { name: 'settings.section', id: 'model-arena', order: 220, label: () => t('section.title') },
               (props) => h(ArenaPage, { ...props, appCtx: ctx }),
             ),
           ),

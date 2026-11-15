@@ -14,7 +14,7 @@ Host plugin `@local/dsh-deep-research` (dsh 0.2.2-rc.2). It adds one tool, `deep
 
 ## Depth: Quick, Standard, Thorough
 
-Chosen on the Research tab's start page or in Settings → Research (since 0.54.0; before, with a slider beside a Deep research button in the chat box). It is one setting for all conversations (kept by the Modes add-on as `researchDepth`).
+Chosen with the **Depth** dropdown in a Research conversation's chat box or in Settings → Research (since 0.55.0; from 0.54.0 on the Research tab's start page; before that, with a slider beside a Deep research button). It is one setting for all conversations (kept by the Modes add-on as `researchDepth`).
 
 | Depth | Rounds | Helpers at once | Sub-questions | Follow-ups per later round | Findings per helper | Time limit | Sources |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -29,14 +29,18 @@ Chosen on the Research tab's start page or in Settings → Research (since 0.54.
 
 `requireFetched: true` drops any finding whose page the searcher did not fetch. If every searcher fails the tool errors; if time runs out the report covers what finished and says so.
 
+Before any helper starts, the tool asks the app whether web search works on the model the searchers run on (`searchReady`, no network call). It asks only when the app's own `web_search` is the searchers' only search tool (`searchToolNames`); another search tool, such as a connector's, is not checked. If it does not, for example because the search provider has no API key for that model's provider, the tool stops at once with a reason that names the model, instead of failing minutes later with "found no usable sources".
+
+Inside a program (the app's PTC preset) a run ends early enough to finish before the app's program time limit, keeping 3 minutes for the report: with the app's default limit of 10 minutes that is about 7 minutes at any depth. The Research tab shows this number (`deepResearch.programMinutes()`).
+
 **Wide mode** (`mode: "wide"`, with `items` and `columns`): one searcher per item returns one row; the tool returns CSV text (RFC 4180) with `Sources` (only pages that were fetched) and `Notes` columns. It does not write a file: save the text with your own file tool (so the sandbox applies) and use `present`. Wide mode has no rounds; the depth only sets how many helpers work at once.
 
 ## Models
 
-Which model the helpers run on is chosen on the Research tab's start page (**Helpers**) or in Settings → Research (**Model for the helpers**). It is one setting for all conversations (kept by the Modes add-on as `researchModel`).
+Which model the helpers run on is chosen in Settings → Research (**Model for the helpers**), kept by the Modes add-on as `researchModel` for all conversations; one conversation can choose its own with the models chip in its chat box ("One model for everything" or "Different models", kept as `sessionHelpers`).
 
-- **Same as this conversation** (the default since 0.31.2): every helper runs on the model the conversation is on when the research starts.
-- **Role models**: helpers run on the Tier add-on's role models for the conversation's tier (Settings → Model Tiers → Role models): the planner, the reviewer and the writer on `plan`, the searchers on `fast` (configurable `roles`). A role that has no model set uses the conversation's model. This lets a strong model plan and write while a fast one searches.
+- **This conversation's model** ("One model for everything" on the chip; the default since 0.31.2): every helper runs on the model the conversation is on when the research starts.
+- **Role models** ("Different models" on the chip): helpers run on the Tier add-on's role models for the conversation's tier (Settings → Model Tiers → Role models): the planner, the reviewer and the writer on `plan`, the searchers on `fast` (configurable `roles`). A role that has no model set uses the conversation's model. This lets a strong model plan and write while a fast one searches.
 
 Before 0.31.2 the role models were always used when they were set, which is why helpers could run on a model other than the one picked in the chat box.
 

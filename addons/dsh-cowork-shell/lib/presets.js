@@ -10,7 +10,7 @@
  *   name: Research
  *   description: one line
  *   tools: data, finance      (optional: the shared tools this kind of work can use)
- *   search: off               (optional: new conversations start with Search switched off)
+ *   search: off               (optional: new conversations start with Web set to Off)
  *   ---
  *   the instructions
  */

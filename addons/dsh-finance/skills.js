@@ -21,13 +21,13 @@ Confirm the exact company, its listing and its currency. If the name is ambiguou
 In a few sentences: what it sells, to whom, where, and what the money mostly comes from. Name the two or three things that drive its results.
 
 ## 3. Figures
-From the latest annual and quarterly reports: revenue and its growth, margins, profit, cash flow, debt and cash, and the measures that matter in its industry. Give each with its period and source. Show the direction over the selected period, not one number alone.
+Use finance_company_figures and finance_company_filings first where they cover the company, and finance_prices for the share price; web search for the rest. From the latest annual and quarterly reports: revenue and its growth, margins, profit, cash flow, debt and cash, and the measures that matter in its industry. Give each with its period and source. Show the direction over the selected period, not one number alone.
 
 ## 4. News
 The developments of the last weeks and months that change the picture: results, guidance, deals, products, management changes, legal and regulatory matters. Date each.
 
 ## 5. Mood
-What investors, customers and employees are saying on social media and forums. Say where you looked, how recent it is, whether it is a few voices or many, and whether it is changing. Treat it as a signal.
+Use finance_news and finance_social first, then web search. What investors, customers and employees are saying on social media and forums. Say where you looked, how recent it is, whether it is a few voices or many, and whether it is changing. Treat it as a signal.
 
 ## 6. What is ahead
 Guidance and stated plans; the next dated events; order book or pipeline; what competitors, suppliers, customers and regulators are doing that will matter.
@@ -39,7 +39,7 @@ The specific things that could go wrong, most serious first. Avoid generic lists
 The case for and the case against, each with its evidence and what would have to be true.
 
 ## 9. Close
-What you could not find or could not verify, then the sources with dates. If a chart would help (revenue and margin over time, against peers), make one from the sourced figures.`,
+What you could not find or could not verify, then the sources with dates. If a chart would help (revenue and margin over time, against peers), make one from the sourced figures with diagram_draw.`,
   },
   {
     name: 'finance-earnings-review',
@@ -49,12 +49,12 @@ What you could not find or could not verify, then the sources with dates. If a c
 
 ${RULES}
 
-1. Find the latest results release and, if available, the call transcript or a reliable summary of it. State the period and the date reported.
+1. Use finance_company_filings for the latest results filings and finance_company_figures for the reported figures, then web search. Find the latest results release and, if available, the call transcript or a reliable summary of it. State the period and the date reported.
 2. Reported: the headline figures and the ones that matter for this business, each against the same period a year ago and the previous period.
 3. Against expectations: only if you can find what was expected, from a named source. Otherwise say expectations could not be sourced.
 4. Guidance: what management said about the next period and the year, and whether that is up, down or unchanged from before.
 5. What management stressed, and what it avoided or was pressed on in questions.
-6. Reaction: the share price move if you can source it, and what analysts, journalists and social media took from it. Label opinions as opinions.
+6. Reaction: the share price move if you can source it (finance_prices), and what analysts, journalists and social media took from it. Label opinions as opinions.
 7. What it changes: the two or three things that are different now, for better and for worse.
 8. What you could not find, then sources with dates.`,
   },
@@ -66,8 +66,8 @@ ${RULES}
 
 ${RULES}
 
-1. News first: the main stories of the selected period from established outlets and primary sources. Date each and say what is fact and what is commentary.
-2. Then mood: search social media and forums (for example X, Reddit, StockTwits, industry forums, app and employer reviews where relevant). Note where you could look and where you could not.
+1. News first, with finance_news before web search: the main stories of the selected period from established outlets and primary sources. Date each and say what is fact and what is commentary.
+2. Then mood: finance_social first (Hacker News, Mastodon, Lemmy), then web search for X, Reddit, StockTwits, industry forums, and app and employer reviews where relevant. Note where you could look and where you could not.
 3. Describe the mood in plain words: mostly positive, negative, split or quiet; the two or three themes behind it; a few representative posts, each with its source and date.
 4. Say how wide and how fresh it is: a handful of accounts or many; today, this week or older. Say whether it has shifted and after what.
 5. Check the mood against the facts: where does the talk match the figures and news, and where does it run ahead of them or contradict them?
@@ -84,9 +84,9 @@ ${RULES}
 
 1. Agree the set: the companies named, or the three to five closest competitors in the selected market. Say why these.
 2. Choose measures that fit the industry (growth, margins, cash flow, debt, market share, valuation and the industry's own measures). Use the same period and, where possible, the same currency for all; say when a figure is not like for like.
-3. Put the figures in one table, each cell sourced. Leave a cell empty rather than guess.
+3. Get each company's figures with finance_company_figures and its share price with finance_prices where they cover it; web search for the rest. Put the figures in one table, each cell sourced. Leave a cell empty rather than guess.
 4. Beyond the table: where each one is gaining or losing, what each is betting on, and what the news and the mood say about each.
-5. Make a chart when it shows the difference more clearly than the table.
+5. Make a chart with diagram_draw when it shows the difference more clearly than the table.
 6. Summarise who leads on what. Do not name a "best" company to own; set out the trade-offs.
 7. What you could not find, then sources with dates.`,
   },
@@ -102,7 +102,7 @@ ${RULES}
 2. Size and direction: what can be sourced about its size, growth and where demand comes from.
 3. Drivers: the three or four forces moving it now (technology, prices and costs, regulation, interest rates, supply, consumer habits).
 4. Who is gaining and who is losing, with the evidence, and why.
-5. News and mood across the sector for the selected period.
+5. News and mood across the sector for the selected period (finance_news and finance_social first, then web search).
 6. What is ahead: dated events, rule changes, capacity coming on line, new entrants.
 7. Risks to the whole sector, and the case for and against it.
 8. What you could not find, then sources with dates.`,
@@ -116,7 +116,7 @@ ${RULES}
 ${RULES}
 
 1. State the economy or region and the date of the brief.
-2. The main readings, each with its latest value, its date and its source (statistical office, central bank, IMF, OECD, World Bank): growth, inflation, unemployment, policy interest rate, currency, government deficit and debt, trade balance. Say which way each is moving.
+2. Use finance_economy first for the yearly readings; take newer monthly or quarterly ones from the official sources with web search. The main readings, each with its latest value, its date and its source (statistical office, central bank, IMF, OECD, World Bank): growth, inflation, unemployment, policy interest rate, currency, government deficit and debt, trade balance. Say which way each is moving.
 3. Policy: what the central bank and the government have done recently and have said they will do.
 4. News: the events of the selected period that matter (elections, budgets, trade measures, shocks).
 5. Mood: business and consumer confidence surveys where they exist, and what commentators and markets are saying.
@@ -133,7 +133,7 @@ ${RULES}
 ${RULES}
 
 1. Fix the window: the period the user gave or selected. State its start and end dates.
-2. List only what is new inside the window, most important first: results and guidance, news, price and valuation moves if they can be sourced, changes in mood, new dates on the calendar.
+2. Use finance_company_filings, finance_prices and finance_news first where they cover the subject (finance_economy for an economy), then web search. List only what is new inside the window, most important first: results and guidance, news, price and valuation moves if they can be sourced, changes in mood, new dates on the calendar.
 3. For each item: what happened, when, the source, and why it matters.
 4. Say what did not change that the user might expect to hear about.
 5. If an earlier brief or note is available in the conversation or in the user's Library, compare against it and say what is different from then.

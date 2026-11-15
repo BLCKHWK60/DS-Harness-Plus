@@ -243,7 +243,7 @@ window.__ModuleLoader__.load({
         ctx.effect(() =>
           ctx.slots.inject('settings.section', () =>
             ctx.slots.register(
-              { name: 'settings.section', id: 'usage-ledger', order: 18, label: () => t('section.title') },
+              { name: 'settings.section', id: 'usage-ledger', order: 310, label: () => t('section.title') },
               (props) => h(UsagePage, { ...props, appCtx: ctx }),
             ),
           ),

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fieldDigests, mergeSection, parseFieldList, resolveFolder, secretPaths, withoutPaths } from '../lib/core.mjs';
 import { SharedSettingsEngine } from '../lib/engine.mjs';
-import { DEFAULT_SKIP, pickFolder, shareRule } from '../index.mjs';
+import { DEFAULT_SKIP, pickFolder, shareRule, skipList } from '../index.mjs';
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'dsh-shared-'));
 
@@ -48,7 +48,7 @@ function mac(folder, entries, extra = {}) {
     folder,
     dataDir: tmp(),
     share: shareRule(extra),
-    skip: parseFieldList(DEFAULT_SKIP),
+    skip: parseFieldList(extra.skip ?? DEFAULT_SKIP),
   });
   return { app, engine };
 }
@@ -263,4 +263,34 @@ test('an entry the app refuses is reported and left out of the sync record', asy
   assert.match(status.problems[0], /not volatile/);
   assert.equal(JSON.parse(readFileSync(b.engine.stateFile, 'utf8')).sections.modes, undefined);
   assert.equal(readFile(folder).settings.modes.defaultMode, 'code', 'the file keeps the shared value');
+});
+
+test('per-Mac Modes fields are never written to or taken from the file, even with your own skipFields', async () => {
+  const own = skipList(['color-schemes.custom']);
+  assert.ok(own.includes('color-schemes.custom') && own.includes('modes.sessionIsolated') && own.includes('modes.extraModes'));
+  assert.ok(!own.includes('modes.sessionModes'), 'your own list replaces the default for the other fields');
+  assert.deepEqual(skipList(undefined), DEFAULT_SKIP);
+
+  const perMac = (tag) => ({
+    extraModes: `{"${tag}":{}}`,
+    sessionIsolated: `{"${tag}":true}`,
+    sessionSearchDepth: `{"${tag}":"deep"}`,
+    sessionTools: `{"${tag}":false}`,
+    sessionHelpers: `{"${tag}":"same"}`,
+    sessionToolSets: `{"${tag}":["web"]}`,
+  });
+  const folder = tmp();
+  const a = mac(folder, plusEntries(), { skip: own });
+  a.app.rows.get('modes').user = { defaultMode: 'code', ...perMac('a1') };
+  await a.engine.run();
+  assert.deepEqual(readFile(folder).settings.modes, { defaultMode: 'code' });
+
+  // A file that holds them anyway (an older copy, a hand edit) does not change this Mac's own.
+  const data = readFile(folder);
+  data.settings.modes = { defaultMode: 'chat', ...perMac('from-file') };
+  writeFileSync(join(folder, 'settings.json'), JSON.stringify(data));
+  const b = mac(folder, plusEntries(), { skip: own });
+  b.app.rows.get('modes').user = { defaultMode: 'code', ...perMac('b1') };
+  await b.engine.run();
+  assert.deepEqual(b.app.rows.get('modes').user, { defaultMode: 'chat', ...perMac('b1') });
 });

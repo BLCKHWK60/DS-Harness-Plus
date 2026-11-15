@@ -285,7 +285,7 @@ input.dsh-ms-field { width: 76px; cursor: text; text-align: right; }
         ctx.effect(() => ctx.locale.register(NS, DICT));
         const t = ctx.locale.bind(NS);
         ctx.effect(() =>
-          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'mission', order: 25, label: () => t('section.title') }, (props) => h(MissionPage, { ...props, appCtx: ctx }))),
+          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'mission', order: 400, label: () => t('section.title') }, (props) => h(MissionPage, { ...props, appCtx: ctx }))),
         );
       },
     };

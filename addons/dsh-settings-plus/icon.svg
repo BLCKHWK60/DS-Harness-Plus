@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Settings helper">
+  <rect x="6" y="6" width="52" height="52" rx="14" fill="#4a5568"/>
+  <path d="M18 22h28M18 32h18M18 42h22" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="44" cy="40" r="6" fill="none" stroke="#ffffff" stroke-width="3.5"/>
+  <path d="M48.5 44.5l4 4" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>
+</svg>

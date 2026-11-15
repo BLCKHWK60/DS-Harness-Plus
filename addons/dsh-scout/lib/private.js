@@ -5,7 +5,7 @@
  * profile is a short summary: titles, skills, seniority, pay level and what the user wants.
  */
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 
 const TEXT = ['.txt', '.md', '.markdown', '.csv', '.json'];
@@ -91,7 +91,7 @@ export function profileProblem(text) {
   return undefined;
 }
 
-/** The profile file. */
+/** The profile file. Saving keeps the one before as `<file>.bak`, so a replaced profile can be got back. */
 export function openProfile(file) {
   return {
     read() {
@@ -107,6 +107,7 @@ export function openProfile(file) {
       if (problem) throw new Error(problem);
       if (!file) throw new Error('There is nowhere to keep the profile.');
       mkdirSync(join(file, '..'), { recursive: true, mode: 0o700 });
+      if (existsSync(file)) copyFileSync(file, `${file}.bak`);
       writeFileSync(file, `${value}\n`, { mode: 0o600 });
       return value;
     },

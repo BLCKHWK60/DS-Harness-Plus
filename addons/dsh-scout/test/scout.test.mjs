@@ -3,12 +3,12 @@
 // the store, the private folder and profile, the tools and the report.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { METHOD, MODE, MODE_ID, OWN_TOOLS, TOOLS, withScout } from '../lib/mode.js';
-import { SEED, addressProblem, cleanExtra, inUse, isSearchOnly, keyRef, readRegistry, searchOnlyHosts } from '../lib/registry.js';
+import { METHOD, MODE, MODE_ID, OWN_TOOLS, TOOLS, TOP_ONLY, withScout } from '../lib/mode.js';
+import { MARKETS, SEED, addressProblem, cleanExtra, inUse, isSearchOnly, keyRef, readRegistry, searchOnlyHosts } from '../lib/registry.js';
 import { hooks, forget, plainText } from '../lib/net.js';
 import { ADAPTERS, matches } from '../lib/adapters.js';
 import { openStore, sameJob } from '../lib/store.js';
@@ -38,7 +38,11 @@ test('the mode and its method', () => {
   assert.ok(METHOD.length <= 4000, `method is ${METHOD.length} characters`);
   assert.equal(MODE.label, 'Scout');
   assert.ok(OWN_TOOLS.every((tool) => TOOLS.includes(tool)));
-  for (const forbidden of ['read_file', 'write_file', 'bash', 'run_code', 'edit_file']) assert.ok(!TOOLS.includes(forbidden), forbidden);
+  // The app's own file and shell tools, by their real names.
+  for (const forbidden of ['read', 'write', 'edit', 'apply_patch', 'read_image', 'grep', 'glob', 'bash', 'str_replace_editor']) assert.ok(!TOOLS.includes(forbidden), forbidden);
+  assert.ok(TOP_ONLY.every((tool) => OWN_TOOLS.includes(tool)));
+  assert.match(METHOD, /search result you saw/, 'a search-engine-only find can be reported');
+  assert.match(METHOD, /Save a profile only after the user has seen the draft/);
   const added = JSON.parse(withScout('{"finance":{"label":"Finance"}}', true));
   assert.deepEqual(Object.keys(added), ['finance', MODE_ID]);
   assert.equal(withScout(JSON.stringify(added), true), undefined, 'nothing to change');
@@ -138,7 +142,8 @@ test('Hacker News, Adzuna, USAJOBS and Reed: shaped from their documentation', a
   await assert.rejects(ADAPTERS.adzuna.search({ what: 'x', market: 'Ireland' }, 'a:b'), /no data for Ireland/);
   const az = await ADAPTERS.adzuna.search({ what: 'data engineer', where: 'Berlin', market: 'Germany', days: 14 }, 'myid:mykey');
   assert.equal(az.postings[0].title, 'Data Engineer');
-  assert.equal(az.postings[0].pay, '70,000–85,000');
+  assert.equal(az.postings[0].pay, 'EUR 70,000–85,000', 'Adzuna\'s pay carries the market\'s currency');
+  for (const [name, market] of Object.entries(MARKETS)) if (market.adzuna) assert.match(market.currency ?? '', /^[A-Z]{3}$/, name);
   const usa = await ADAPTERS.usajobs.search({ what: 'data' }, 'someone@example.org:secret');
   assert.equal(usa.postings[0].pay, 'USD 99,000–128,000 per year');
   const usaAsk = asked.find((request) => /usajobs/.test(request.url));
@@ -163,6 +168,48 @@ test('the store numbers postings and merges the same job from two sources', () =
   assert.equal(sameJob({ title: 'Data Engineer (m/w/d)', company: 'Beta', location: 'Berlin' }), sameJob({ title: 'data engineer', company: 'BETA', location: 'Berlin, Germany' }));
   for (let n = 0; n < 400; n += 1) store.request('c3');
   assert.throws(() => store.request('c3'), /limit/);
+});
+
+test('the store keeps a conversation\'s numbers across a restart', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'scout-store-'));
+  try {
+    const first = openStore(dir);
+    first.add('s1', 'ba', [{ title: 'Data Engineer', company: 'Beta', location: 'Berlin', url: 'https://a/1' }, { title: 'Analyst', company: 'X', location: 'Bonn', url: 'https://a/2' }]);
+    first.forget('s1');
+    const again = openStore(dir);
+    assert.equal(again.get('s1', 'P2').title, 'Analyst', 'an earlier number still points to the same job');
+    const next = again.add('s1', 'reed', [{ title: 'Data Engineer', company: 'Beta', location: 'Berlin', url: 'https://b/9' }, { title: 'Architect', company: 'Y', location: 'Köln', url: 'https://a/3' }]);
+    assert.deepEqual(next.map((entry) => entry.posting.n), [1, 3], 'known jobs keep their number, new ones go on from there');
+    assert.equal(again.all('s1').length, 3);
+    assert.equal(openStore(dir).get('other', 'P1'), undefined, 'conversations are kept apart');
+    assert.equal(openStore('').count('s1'), 0, 'no folder: memory only');
+    // The request count holds across a restart too, also with no posting kept since.
+    const counted = openStore(dir);
+    for (let i = 0; i < 399; i += 1) counted.request('busy');
+    const reopened = openStore(dir);
+    reopened.request('busy');
+    assert.throws(() => reopened.request('busy'), /400 requests/, 'the 400-request limit is not reset by a restart');
+    // No half-written file is left behind.
+    assert.ok(readdirSync(dir).every((name) => !name.endsWith('.part')));
+    // A damaged file starts the conversation afresh instead of failing.
+    const broken = openStore(dir);
+    broken.add('d1', 'ba', [{ title: 'T', company: 'C', location: 'L', url: 'https://d/1' }]);
+    for (const name of readdirSync(dir)) writeFileSync(join(dir, name), '{"list": [');
+    assert.equal(openStore(dir).count('d1'), 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the store keeps only the newest 200 conversation files', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'scout-store-'));
+  try {
+    for (let i = 0; i < 203; i += 1) writeFileSync(join(dir, `${String(i).padStart(32, '0')}.json`), '{"list":[],"requests":1}');
+    openStore(dir);
+    assert.equal(readdirSync(dir).filter((name) => name.endsWith('.json')).length, 200);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('the private folder and the profile', async () => {
@@ -190,6 +237,9 @@ test('the private folder and the profile', async () => {
     assert.equal(profile.read(), '');
     profile.save('Titles: data engineer');
     assert.equal(profile.read().trim(), 'Titles: data engineer');
+    assert.equal(existsSync(join(dir, 'profile.md.bak')), false, 'nothing to keep the first time');
+    profile.save('Titles: analyst');
+    assert.equal(readFileSync(join(dir, 'profile.md.bak'), 'utf8').trim(), 'Titles: data engineer', 'the replaced profile is kept');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -262,6 +312,7 @@ test('the tools: files and profile for any model, terms held, a run saved', asyn
     assert.match(await run('scout_posting', { id: 'P99' }), /no posting P99/);
     const saved = await run('scout_report', { title: 'Data engineer Germany', markdown: '## Understanding\nA run in Germany for data engineering work.', opportunities: [{ rank: 1, title: 'Data Engineer', fit: 4 }] });
     assert.match(saved, /reports\/.*data-engineer-germany\.md/);
+    assert.match(tools.scout_profile.description, /save only after they agree/);
     const off = buildTools({ enabled: () => false, registry: () => registry, selection: () => readSelection({}), keyOf: async () => '', hasKey: () => false, store: openStore(), folder, profile, gate, idOf: () => 'c1' });
     assert.match((await off[0].execute({}, local)).text, /switched off/);
   } finally {
@@ -303,12 +354,17 @@ test('step 2, research: titles from ESCO, demand by title, and pay', async () =>
   assert.deepEqual(readPay('GBP 60,000–70,000'), { currency: 'GBP', low: 60000, high: 70000, per: 'year' });
   assert.deepEqual(readPay('USD 99,000–128,000 per year'), { currency: 'USD', low: 99000, high: 128000, per: 'year' });
   assert.deepEqual(readPay('€650 per day'), { currency: 'EUR', low: 650, high: 650, per: 'day' });
+  assert.equal(readPay('CHF 110,000–130,000').currency, 'CHF');
+  assert.equal(readPay('CAD $90,000–110,000').currency, 'CAD', 'a Canadian dollar is not a US one');
+  assert.equal(readPay('AUD 120,000').currency, 'AUD');
+  assert.equal(readPay('PLN 15,000 per month').currency, 'PLN');
   assert.equal(readPay('competitive'), undefined);
   const summary = payFromPostings([
     { n: 1, title: 'Data Engineer', pay: '€80K - €100K' }, { n: 2, title: 'Data Engineer', pay: '€60K - €70K' }, { n: 3, title: 'Analyst', pay: '' }, { n: 4, title: 'Data Engineer', pay: 'GBP 60,000–70,000' },
   ]);
   assert.match(summary, /EUR per year: 2 postings; middle of the ranges from 65,000 to 90,000, median 77,500 \(P1, P2\)/);
   assert.match(summary, /GBP per year: 1 posting/);
+  assert.match(payFromPostings([{ n: 7, title: 'Data Engineer', pay: 'CHF 110,000–130,000 (estimated by Adzuna)' }]), /CHF per year: 1 posting.*\(P7\)/, 'Adzuna postings are counted');
   assert.equal(await adzunaPay({ market: 'UK', what: 'x', key: '' }), '');
   assert.match(await adzunaPay({ market: 'UK', what: 'data engineer', key: 'id:secret' }), /100 postings across UK: lower quarter from 40,000, middle from 60,000, upper quarter from 60,000/);
 });
@@ -337,6 +393,34 @@ test('step 2, the research tools in a conversation', async () => {
     assert.match(pay, /No posting found in this conversation/);
     assert.match(pay, /Adzuna's pay statistics for Germany need its free key/);
     assert.match(pay, /Entgeltatlas/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('step 2, scout_pay with Adzuna\'s key, and the conversation\'s own selection', async () => {
+  const asked = network([
+    [/api\.adzuna\.com\/v1\/api\/jobs\/de\/search\/1/, { status: 200, text: JSON.stringify({ count: 1, results: [{ id: '42', title: 'Data Engineer', company: { display_name: 'Beta GmbH' }, location: { display_name: 'Berlin' }, salary_min: 70000, salary_max: 85000, created: '2026-11-10T08:00:00Z', redirect_url: 'https://www.adzuna.de/land/ad/42' }] }) }],
+    [/adzuna\.com\/v1\/api\/jobs\/de\/histogram/, { status: 200, text: JSON.stringify({ histogram: { 40000: 10, 60000: 50, 80000: 30, 100000: 10 } }) }],
+  ]);
+  const dir = mkdtempSync(join(tmpdir(), 'scout-pay-'));
+  try {
+    const registry = readRegistry('{}', '[]');
+    // Two conversations that started with different markets; a call uses its own one.
+    const chosen = { s1: readSelection({ markets: ['Germany'] }), s2: readSelection({ markets: ['France'] }) };
+    const tools = Object.fromEntries(buildTools({
+      enabled: () => true, registry: () => registry, selection: (exec) => chosen[exec?.agent?.id] ?? readSelection({}),
+      keyOf: async () => 'id:secret', hasKey: (id) => id === 'adzuna', store: openStore(), folder: openFolder(join(dir, 'f')), profile: openProfile(join(dir, 'p.md')),
+      gate: () => ({ files: { ok: true, why: '' }, profile: { ok: true, why: '' } }), idOf: (exec) => exec?.agent?.id ?? '',
+    }).map((tool) => [tool.name, tool]));
+    const run = async (name, args, id = 's1') => (await tools[name].execute(args, { agent: { id } })).text;
+    assert.match(await run('scout_search', { source: 'adzuna', what: 'data engineer' }), /P1 · Data Engineer[\s\S]*pay: EUR 70,000–85,000/, 'the market comes from the conversation\'s selection');
+    const pay = await run('scout_pay', { what: 'Data Engineer', market: 'Germany' });
+    assert.match(pay, /EUR per year: 1 posting; .*\(P1\)/, 'the Adzuna posting is counted');
+    assert.match(pay, /Adzuna, advertised yearly pay of 100 postings across Germany: lower quarter from 60,000/);
+    assert.ok(asked.some((request) => /\/de\/histogram/.test(request.url)));
+    assert.match(await run('scout_sources', {}, 's1'), /^\d+ sources for Germany/);
+    assert.match(await run('scout_sources', {}, 's2'), /^\d+ sources for France/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

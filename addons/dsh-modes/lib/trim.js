@@ -8,10 +8,13 @@
 /** The tool that lists and adds the other families. */
 export const FIND_TOOL = 'tools_find';
 
-/** Always there: files, the shell and its jobs, the step list, questions, skills, images. */
+/**
+ * Always there: files, the shell and its jobs, the step list, questions, skills, images, and the
+ * end of plan mode (the app offers that one only while /plan is on).
+ */
 export const CORE = [
   'read', 'write', 'edit', 'glob', 'grep', 'bash', 'job_output', 'job_list', 'job_kill',
-  'todo_write', 'ask_user_question', 'skill', 'read_image', 'working_directory', FIND_TOOL,
+  'todo_write', 'ask_user_question', 'skill', 'read_image', 'working_directory', 'exit_plan_mode', FIND_TOOL,
 ];
 
 /**
@@ -34,7 +37,11 @@ export const FAMILIES = [
   { id: 'mission', about: 'Missions: long multi-step runs with checkpoints', prefixes: ['mission_'], words: /\bmissions?\b/i },
   { id: 'connectors', about: 'Connectors (MCP): their tools and resources', names: ['list_mcp_resources', 'list_mcp_resource_templates', 'read_mcp_resource'], prefixes: ['mcp__'], words: /\b(mcp|connectors?)\b/i },
   { id: 'app', about: 'The app itself: plugins and workflows', names: ['plugin_manager', 'workflow'], words: /\b(plugins?|workflows?)\b/i },
+  { id: 'office', about: 'Office files: render, convert, recalculate; bundled Python for documents; presenting the file', names: ['load_workspace_dependencies', 'present'], prefixes: ['office_'], words: /\b(slides?|slide deck|powerpoint|pptx|docx|word document|xlsx|excel (?:files?|sheets?|workbooks?)|spreadsheets?)\b/i },
 ];
+
+/** Skills whose loading brings a family: the app's Office skills say their tools appear next step. */
+const SKILL_FAMILIES = [{ skill: /^office(?:-|$)/, family: 'office' }];
 
 const byId = new Map(FAMILIES.map((family) => [family.id, family]));
 /** Words too common to say which tools are meant. */
@@ -69,6 +76,30 @@ export function allowed(known, added) {
 /** Tools the app knows that are neither core nor in a family: listed by name in the catalog. */
 export function others(known) {
   return known.filter((name) => !CORE.includes(name) && !familyOf(name) && !['web_search', 'web_fetch', 'run_code'].includes(name));
+}
+
+/** Whether a tool is one of a family's. */
+export function inFamily(id, name) {
+  const family = byId.get(id);
+  const tool = String(name ?? '');
+  return Boolean(family) && (family.names?.includes(tool) || family.prefixes?.some((prefix) => tool.startsWith(prefix)) === true);
+}
+
+/**
+ * Whether adding a family or a single tool brings anything: a tool of its own among those it would
+ * offer. A family whose add-on is off, or a tool the conversation's switches take away, brings nothing.
+ * @param {string} entry - a family id or a tool name.
+ * @param {string[]} offered - the tools the conversation would be offered with it added.
+ * @returns {boolean}
+ */
+export function brings(entry, offered) {
+  return offered.some((name) => !CORE.includes(name) && (name === entry || inFamily(entry, name)));
+}
+
+/** The families a loaded skill brings with it. */
+export function skillFamilies(skill) {
+  const name = String(skill ?? '');
+  return SKILL_FAMILIES.filter((entry) => entry.skill.test(name)).map((entry) => entry.family);
 }
 
 /** The families whose words a text mentions. */

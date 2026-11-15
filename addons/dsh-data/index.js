@@ -1,7 +1,7 @@
 /**
  * Data: a mode and tab for analysing the data files in a conversation's folder.
  *
- * The assistant never loads raw data into the conversation. It gets seven tools:
+ * The assistant never loads raw data into the conversation. It gets nine tools:
  *   data_files            what is in the folder
  *   data_profile          a table file's columns, types, gaps and ranges
  *   data_query            one read-only SQL query against the real files; every result has an id (Q7)
@@ -9,6 +9,8 @@
  *   data_save_analysis    keep a set of queries under a name
  *   data_rerun_analysis   run it again and report what moved
  *   data_analyses         what is saved, and whose files changed
+ *   data_chart            a chart drawn straight from a query
+ *   data_python           a small Python program in macOS's sandbox (no internet, writes only data-output)
  * and a method that says: profile first, every number carries its query id, say what the data
  * cannot tell. Queries run in a helper process on an in-memory copy of the files, read-only.
  *

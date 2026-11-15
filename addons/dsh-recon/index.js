@@ -8,7 +8,7 @@
  * export (lib/export.js), the throwaway folder all Recon conversations run in (ROOM), and End and
  * wipe (lib/wipe.js).
  * The isolation:
- *   - the mode is marked isolated, so the Modes add-on gives its conversations exactly the six
+ *   - the mode is marked isolated, so the Modes add-on gives its conversations exactly the nine
  *     recon tools, no programs, no helpers, no web search, and never lets them change mode;
  *   - every other add-on leaves an isolated conversation alone;
  *   - research content goes to a model on this computer or in the user's own network without a
@@ -34,7 +34,8 @@ import { AHMIA, createOnion } from './lib/onion.js';
 import { runLocked } from './lib/sandbox.js';
 import { openBlocklist } from './lib/screen.js';
 import { openSources } from './lib/sources.js';
-import { buildTools } from './lib/tools.js';
+import { withoutMentions } from './lib/mentions.js';
+import { buildTools, holdsFindings, wasCompacted } from './lib/tools.js';
 import { createUsenet } from './lib/usenet.js';
 import { ARCHIVE, NEWS, createWeb } from './lib/web.js';
 import { openWipeList, wipeFiles } from './lib/wipe.js';
@@ -277,7 +278,63 @@ export function apply(ctx, config) {
     for (const dispose of toolsOff ?? []) if (typeof dispose === 'function') dispose();
     toolsOff = undefined;
   }, 'recon: follow the switch');
-  ctx.on('agent/disposed', ({ agent }) => consent.forget(agent?.id));
+  ctx.on('agent/disposed', ({ agent }) => {
+    consent.forget(agent?.id);
+    // A conversation that never read anything leaves no entry behind.
+    if (agent?.id && sources.empty(agent.id)) sources.forget(agent.id);
+  });
+
+  // ---- what Recon found stays where it may go ----------------------------------------------------
+
+  /**
+   * Whether a conversation's history holds something Recon found: a Recon tool answer in it, a
+   * source read since the app started, or, for an isolated conversation, a compaction summary (it
+   * keeps what the removed tool answers said, also in a Rerun copy or after a restart).
+   */
+  const holdsRecon = (agent) => {
+    if (!agent?.id) return false;
+    if (sources.readCount(agent.id) > 0) return true;
+    try {
+      const messages = agent.session?.deriveMessages?.();
+      if (holdsFindings(messages)) return true;
+      let isolated = false;
+      try {
+        isolated = modes()?.isolated?.(agent.id) === true;
+      } catch {
+        isolated = false;
+      }
+      return isolated && wasCompacted(messages);
+    } catch (error) {
+      warn(`could not read a conversation's history: ${String(error?.message ?? error)}`);
+      return false;
+    }
+  };
+  // The tools check the model before they fetch, but what they found earlier is in the history, and
+  // every step sends the history to the model picked at that moment. So a conversation holding
+  // Recon findings (switched to another model, a Rerun copy, or one moved to another tab) takes no
+  // step on a model they may not go to. The step fails with a message the user sees; a silent
+  // refusal would leave them guessing.
+  ctx.on('agent/pre-step', async (payload, next) => {
+    const agent = payload?.agent;
+    const chosen = payload?.modelSelection;
+    const route = chosen?.provider && chosen?.model ? { provider: String(chosen.provider), model: String(chosen.model) } : undefined;
+    const place = providerPlace(settingsOf('llm-pi-ai')?.providers, route?.provider);
+    if (mayReceive({ place, route, id: agent?.id, consent }).ok || !holdsRecon(agent)) return next();
+    const who = !route ? 'not known' : `${route.model} (${place.name || route.provider}), ${place.where === 'cloud' ? 'in the cloud' : 'at a place Recon cannot tell, treated as cloud'}`;
+    const agree = enabled() && inRecon(agent) ? ', or type /recon cloud to agree to this model for this conversation' : '';
+    throw new Error(`This conversation holds what Recon found, and its model is ${who}. Nothing was sent. Pick a model on this computer or in your own network${agree}, then send your message again.`);
+  });
+  // Mentions of other conversations: an isolated conversation takes in none, and none takes in an
+  // isolated one. The app's own handler runs outside this one, so it never sees what is taken out.
+  ctx.on('agent/pre-step', async (payload, next) => {
+    const decision = await next();
+    if (decision?.kind === 'reject' || !Array.isArray(decision?.messages)) return decision;
+    const service = modes();
+    if (typeof service?.isolated !== 'function') return decision;
+    const sealed = service.isolated(payload?.agent?.id) === true;
+    const messages = withoutMentions(decision.messages, (id) => sealed || (id !== undefined && service.isolated(id) === true));
+    return messages === decision.messages ? decision : { ...decision, messages };
+  });
   // What the assistant writes in a Recon conversation is kept for the export.
   ctx.on('session/event', (session, event) => {
     try {

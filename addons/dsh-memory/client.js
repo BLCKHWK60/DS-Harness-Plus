@@ -257,7 +257,7 @@ input.dsh-mm-field { flex: 1; }
         ctx.effect(() => ctx.locale.register(NS, DICT));
         const t = ctx.locale.bind(NS);
         ctx.effect(() =>
-          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'memory', order: 21, label: () => t('section.title') }, (props) => h(MemoryPage, { ...props, appCtx: ctx }))),
+          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'memory', order: 500, label: () => t('section.title') }, (props) => h(MemoryPage, { ...props, appCtx: ctx }))),
         );
         ctx.effect(() => ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({ name: 'conversation.chat.turnTail', id: 'dsh-memory' }, (props) => h(TurnSuggestions, props))));
       },

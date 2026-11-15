@@ -84,3 +84,19 @@ test('End and wipe deletes a conversation folder and nothing else', () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('the request counter and the count of sources read are kept apart', () => {
+  const sources = openSources();
+  assert.equal(sources.readCount('r'), 0, 'an unknown conversation has read nothing');
+  assert.equal(sources.known('r'), false, 'and asking adds no entry for it');
+  assert.equal(sources.count('r'), 1, 'each request counts, for the 400-request limit');
+  assert.equal(sources.count('r'), 2);
+  assert.equal(sources.readCount('r'), 0, 'requests are not sources');
+  assert.equal(sources.empty('r'), false, 'a conversation that made requests is not empty');
+  sources.keep('r', { kind: 'onion', url: `http://${'b'.repeat(56)}.onion/`, title: 'T', text: 'x', bytes: 1 });
+  assert.equal(sources.readCount('r'), 1);
+  assert.equal(sources.count('r'), 3, 'reading a source leaves the request count alone');
+  sources.keep('e', { kind: 'onion', url: `http://${'c'.repeat(56)}.onion/`, title: 'T', text: 'x', bytes: 1 });
+  assert.equal(sources.empty('e'), false);
+  assert.equal(sources.empty('nobody'), false, 'no entry is not an empty entry');
+});

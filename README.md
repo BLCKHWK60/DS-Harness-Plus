@@ -1,6 +1,6 @@
 # DeepSeek Harness Plus
 
-Extra features for the **DeepSeek Harness** desktop app on the Mac: a MindsHub-style sidebar with Chat, Cowork and Code tabs, colour schemes (including MindsHub's navy and teal), work modes, model tiers, a blind model arena, agent swarms, deep research, a usage counter, benchmarks, syncing between Macs and more. Twenty-six add-ons in all, listed in [docs/ADD-ONS.md](docs/ADD-ONS.md).
+Extra features for the **DeepSeek Harness** desktop app on the Mac: a MindsHub-style sidebar with Chat, Cowork and Code tabs, colour schemes (including MindsHub's navy and teal), work modes, model tiers, a blind model arena, agent swarms, deep research, a usage counter, benchmarks, syncing between Macs, a searchable Settings window and more. Forty-one add-ons in all, described in [docs/ADD-ONS.md](docs/ADD-ONS.md). Every mode, its tools, its instructions and its settings are described in [docs/MODES-AND-SETTINGS.md](docs/MODES-AND-SETTINGS.md).
 
 The add-ons plug into the normal app. Nothing in the app itself is changed, so app updates do not wipe them, and you can remove them at any time.
 
@@ -40,7 +40,7 @@ bash scripts/install.sh
 
 - **Cowork sidebar:** Chat, Cowork and Code tabs at the top of the left sidebar. Each tab lists only its own conversations and projects, and has its own sections: Model Arena under Chat, and Automation tasks, Connectors (your MCP servers, with on/off switches) and Skills under Cowork and Code. The start page gets a greeting and suggestion chips. A tab picks the mode of new conversations, so the chat box no longer needs a mode drop-down. To get the normal sidebar back, switch **Cowork sidebar** off on the **Plugins** page.
 - **Colours:** pick a colour scheme in **Settings → Colours**: DeepSeek Harness (the stock colours, the default), MindsHub Cowork, Graphite or Forest, each in light and dark.
-- **Modes:** Chat, Cowork and Code modes, switchable per conversation, plus **Search** and **Deep research** buttons in the chat box.
+- **Modes:** Chat, Cowork and Code modes, switchable per conversation, plus a **Web** button in the chat box (Off, Quick, Standard, Thorough, Deep) and a **Tools** button that lists what the assistant can call.
 - **Model Tiers:** one model button in the chat box: pick any model and drag the effort slider. Five starter tiers (Fast, Balanced, Deep, Creative, Code review) work at once on whatever model you use. No model is preconfigured.
 - **Code map:** a compact map of the project a conversation works in, so the assistant looks things up instead of reading whole files. Plus four "reverse engineer" skills. Nothing to install.
 - **Privacy:** switches off the app's usage reporting and the upload of a conversation when you rate an answer. `/privacy` shows the state.
@@ -51,7 +51,7 @@ Everything else stays switched off until you set it up.
 
 ## Changing an add-on's settings
 
-Some add-ons have their own page in **Settings** (Tiers, Modes, Sampling). The rest are set up in the app's settings file. To edit it:
+Many add-ons have their own page in **Settings**, sorted into groups; the search field at the top of the Settings window (Cmd-F) finds any page or setting. The rest are set up in the app's settings file. To edit it:
 
 1. Quit DeepSeek Harness.
 2. In Finder press **⌘ Shift G**, paste `~/.dsh/profiles/desktop/` and press Return.
@@ -66,7 +66,7 @@ Download the newer version and double-click **`Install.command`** again. It repl
 
 ## Removing
 
-Double-click **`Uninstall.command`**. It removes all twenty-two add-ons and their files. Your conversations and your models are not touched. Any settings you wrote for the add-ons stay in the settings file and do nothing; if you install again, they come back into effect.
+Double-click **`Uninstall.command`**. It removes all the add-ons and their files. Your conversations and your models are not touched. Any settings you wrote for the add-ons stay in the settings file and do nothing; if you install again, they come back into effect.
 
 ## Using it on a second Mac
 
@@ -114,6 +114,7 @@ Send them the link to this project, https://github.com/BLCKHWK60/DS-Harness-Plus
 | `Install.command`, `Uninstall.command` | Double-click to install or remove. |
 | `addons/` | The add-ons. Each has a `README.md` with its full technical notes. |
 | `docs/ADD-ONS.md` | What each add-on does and how to set it up. |
+| `docs/MODES-AND-SETTINGS.md` | Every mode (tab): what it is for, its instructions, its tools, its settings; the Settings window's groups and search; the gaps found, fixed and still open. |
 | `docs/HOW-IT-WORKS.md` | For technical readers: how the install works, how to test, how to change an add-on. |
 | `templates/` | Optional ready-to-fill examples: model servers, memory, MCP tool servers, backups. |
 | `extras/dsh-intel-mcp/` | Optional Python tools (code map, reverse engineering, context store). Needs Python; not installed automatically. |

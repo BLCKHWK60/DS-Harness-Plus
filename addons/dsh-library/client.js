@@ -261,7 +261,7 @@ window.__ModuleLoader__.load({
         ctx.effect(() => ctx.locale.register(NS, DICT));
         const t = ctx.locale.bind(NS);
         ctx.effect(() =>
-          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'library', order: 21, label: () => t('section.title') }, (props) => h(LibraryPage, { ...props, appCtx: ctx }))),
+          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'library', order: 510, label: () => t('section.title') }, (props) => h(LibraryPage, { ...props, appCtx: ctx }))),
         );
       },
     };

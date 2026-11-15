@@ -1,5 +1,6 @@
 /**
- * Research, browser half: depth and focus on the Research tab's start page, the Settings >
+ * Research, browser half: the Depth and Focus dropdowns in a Research conversation's chat box, a
+ * start-page line that shows problems only, the Settings >
  * Research page, and the live progress of a Deep research run above the message box, with its
  * follow-up questions as buttons once it is done.
  */
@@ -57,6 +58,7 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
 .dsh-rs-pop .opts button[aria-current='true'] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 14%, transparent); }
 .dsh-rs-pop .opts b { display: block; font-size: 13px; line-height: 18px; font-weight: 600; }
 .dsh-rs-pop .opts small { display: block; font-size: 12px; line-height: 17px; color: var(--dsw-alias-label-secondary); }
+.dsh-rs-pop .note { margin-top: 8px; color: var(--dsw-alias-label-secondary); }
 
 /* The progress strip above the message box. */
 .dsh-rs-dock { margin: 0 0 8px; padding: 10px 12px; border-radius: 12px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1, transparent); font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
@@ -72,6 +74,9 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
 .dsh-rs-x { float: right; border: 0; background: transparent; cursor: pointer; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 14px; line-height: 14px; }
 `;
 
+    /** What the depth cannot change: a run started from a program stops at the app's program time limit. */
+    const programNote = (minutes) => (minutes ? `In conversations that run tools through programs (the app's PTC preset), searching stops after about ${minutes} minute${minutes === 1 ? '' : 's'} and the report is written in the time left before the app\'s program limit, so a longer depth may do fewer rounds there.` : '');
+
     const STEPS = [['planning', 'Plan'], ['searching', 'Search'], ['reviewing', 'Review'], ['writing', 'Write'], ['done', 'Done']];
 
     async function readData() {
@@ -79,8 +84,8 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
       if (!response.ok) throw new Error(`error ${response.status}`);
       return response.json();
     }
-    async function post(body) {
-      const response = await fetch(new URL('dsh-research/data', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    async function post(body, query = '') {
+      const response = await fetch(new URL(`dsh-research/data${query}`, document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || `error ${response.status}`);
       return data;
@@ -120,7 +125,7 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
         items.map((item) => h('button', { key: item.id, type: 'button', 'aria-pressed': value === item.id, title: item.hint, onClick: () => onPick(item.id) }, item.label)));
     }
 
-    /** Depth and focus under the message box on the Research tab's start page. */
+    /** The Research tab's start-page line: shown only when something is wrong (the engine missing, the mode not added). */
     function ResearchBar({ appCtx }) {
       const { data, setData } = useData();
       const [failed, setFailed] = useState('');
@@ -143,7 +148,7 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
     }
 
     /** One dropdown in the chat box: a button with its value, and a list with a line on each choice. */
-    function DropButton({ label, items, value, busy, onPick }) {
+    function DropButton({ label, items, value, busy, note, onPick }) {
       const [open, setOpen] = useState(false);
       const [place, setPlace] = useState({ left: 12, bottom: 80 });
       const button = useRef(null);
@@ -176,7 +181,8 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
                 h('div', { className: 'title' }, label),
                 h('div', { className: 'opts', role: 'listbox', 'aria-label': label },
                   items.map((item) => h('button', { key: item.id, type: 'button', role: 'option', 'aria-selected': item.id === value, 'aria-current': String(item.id === value), onClick: () => { setOpen(false); onPick(item.id); } },
-                    h('b', null, item.label), h('small', null, item.about))))),
+                    h('b', null, item.label), h('small', null, item.about)))),
+                note ? h('div', { className: 'note' }, note) : null),
               document.body,
             )
           : null);
@@ -196,6 +202,8 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
           } catch {
             /* tried again shortly */
           }
+          // tick also runs when another control calls tell(): restart the one chain, never start a second.
+          clearTimeout(timer);
           if (alive) timer = setTimeout(tick, document.hidden ? 15000 : 4000);
         };
         void tick();
@@ -219,7 +227,8 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
         setBusy(true);
         setView((v) => ({ ...v, focus: id, session: { ...v.session, focus: id } }));
         try {
-          setView(await post({ action: 'focus', sessionId, focus: id }));
+          // With the conversation in the query the reply says it is a Research one, so the controls stay.
+          setView(await post({ action: 'focus', sessionId, focus: id }, `?session=${encodeURIComponent(sessionId)}`));
           tell();
         } catch {
           /* the next refresh shows what is saved */
@@ -229,7 +238,7 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
       };
       return h('span', { className: 'dsh-rs-ctls' },
         h('style', null, CSS),
-        h(DropButton, { label: 'Depth', items: view.depths ?? [], value: view.depth, busy, onPick: (id) => void pickDepth(id) }),
+        h(DropButton, { label: 'Depth', items: view.depths ?? [], value: view.depth, busy, note: programNote(view.programMinutes), onPick: (id) => void pickDepth(id) }),
         h(DropButton, { label: 'Focus', items: view.focuses ?? [], value: view.session.focus ?? view.focus, busy, onPick: (id) => void pickFocus(id) }));
     }
 
@@ -337,7 +346,7 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
           h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Show the Research tab'), h('div', { className: 'dsh-rs-rowdesc' }, 'Needs the Deep research add-on. Off takes the tab away; saved reports are kept.')),
           h(Switch, { on: data.enabled === true, label: 'Show the Research tab', onChange: (on) => void save(NS, { enabled: on }, on ? 'Switched on. The Research tab appears in the sidebar in a moment.' : 'Switched off.') })),
         h('div', { className: 'dsh-rs-group' }, 'Depth and focus'),
-        h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Depth'), h('div', { className: 'dsh-rs-rowdesc' }, 'How long a run may take and how many helpers work at once.')),
+        h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Depth'), h('div', { className: 'dsh-rs-rowdesc' }, `How long a run may take and how many helpers work at once.${data.programMinutes ? ` ${programNote(data.programMinutes)}` : ''}`)),
           h(Segments, { items: data.depths ?? [], value: data.depth, label: 'Depth', onPick: (id) => void save('modes', { researchDepth: id }, 'Depth saved.') })),
         h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Focus'), h('div', { className: 'dsh-rs-rowdesc' }, 'Where a run looks first. A conversation keeps the focus it started with.')),
           h(Segments, { items: data.focuses ?? [], value: data.focus, label: 'Focus', onPick: (id) => void save(NS, { focus: id }, 'Focus saved.') })),
@@ -359,7 +368,7 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, DICT));
         const t = ctx.locale.bind(NS);
-        ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'research', order: 25, label: () => t('section.title') }, (props) => h(ResearchPage, { ...props, appCtx: ctx }))));
+        ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'research', order: 110, label: () => t('section.title') }, (props) => h(ResearchPage, { ...props, appCtx: ctx }))));
         ctx.effect(() => ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({ name: 'conversation.hero.options', id: 'research-bar', order: 42 }, () => h(ResearchBar, { appCtx: ctx }))));
         ctx.effect(() => ctx.slots.inject('conversation.input.left', () => ctx.slots.register({ name: 'conversation.input.left', id: 'research-controls', order: -20, label: () => 'Depth and focus' }, (props) => h(ResearchControls, { ...props, appCtx: ctx }))));
         ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'research-progress', order: 4 }, (props) => h(ProgressDock, { ...props, appCtx: ctx }))));

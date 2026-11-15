@@ -403,7 +403,7 @@ window.__ModuleLoader__.load({
         ctx.effect(() =>
           ctx.slots.inject('settings.section', () =>
             ctx.slots.register(
-              { name: 'settings.section', id: 'agent-swarm', order: 28, label: () => t('section.title') },
+              { name: 'settings.section', id: 'agent-swarm', order: 410, label: () => t('section.title') },
               (props) => h(SwarmPage, { ...props, appCtx: ctx }),
             ),
           ),

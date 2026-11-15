@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Settings helper",
+    "description": "Groups the Plus pages in Settings under headings, gives each its own icon, and adds a search for every setting."
+  }
+}

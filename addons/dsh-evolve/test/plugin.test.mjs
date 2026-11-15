@@ -1,8 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Readable } from 'node:stream';
-import { readSettings, readBody } from '../index.js';
+import { apply, readSettings, readBody } from '../index.js';
+import { openStore } from '../lib/store.js';
+import { applyEdit, validateEdit } from '../lib/policy.js';
 
 test('nothing is preconfigured', () => {
   const settings = readSettings({});
@@ -33,4 +37,23 @@ test('request bodies must be small JSON objects', async () => {
   assert.equal(await readBody(Readable.from([Buffer.from('[1,2]')])), undefined);
   assert.equal(await readBody(Readable.from([Buffer.from('not json')])), undefined);
   assert.equal(await readBody(Readable.from([Buffer.alloc(70 * 1024, 0x61)])), undefined);
+});
+
+test('a lesson for a mode reaches conversations in that mode', () => {
+  const dataDir = mkdtempSync(join(tmpdir(), 'evolve-plugin-'));
+  const store = openStore(dataDir);
+  const first = store.active();
+  store.savePolicy(applyEdit(first, validateEdit({ op: 'add_entry', family: 'code', text: 'A lesson for Code.' }, first).edit, 'v0002'));
+  store.activate('v0002');
+
+  // Modes answers get() with the mode id as a plain string.
+  let section;
+  const agent = { id: 's1', ctx: { effect: (fn) => fn(), systemPrompt: { section: (options) => ((section = options), () => {}) } } };
+  const services = { modes: { get: () => 'code', isolated: () => false }, agents: { list: () => [agent] } };
+  const noop = () => {};
+  const ctx = { get: (name) => services[name], on: noop, effect: noop, provide: noop, inject: noop, logger: { warn: noop, info: noop } };
+  apply(ctx, { dataDir, commandName: '' });
+  assert.match(section.text(), /A lesson for Code\./);
+  services.modes.get = () => 'chat';
+  assert.doesNotMatch(section.text(), /A lesson for Code\./);
 });

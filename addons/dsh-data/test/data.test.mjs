@@ -9,7 +9,7 @@ import { build, fileTables, profileTable, profileText, resultText, runQuery, val
 import { compare, openStore, snapshot } from '../lib/store.js';
 import { inside, listFiles, print, readText, useOf } from '../lib/files.js';
 import { METHOD, MODE, MODE_ID, withData } from '../lib/method.js';
-import { buildTools, changedFiles } from '../lib/tools.js';
+import { buildTools, changedFiles, tableNames } from '../lib/tools.js';
 
 const folder = () => realpathSync(mkdtempSync(join(tmpdir(), 'dsh-data-')));
 
@@ -53,6 +53,26 @@ test('a CSV becomes a typed table; a mixed column is text all the way down', () 
   const table = csvTable('Region,Revenue,Code,Note\nNorth,1200.5,01,7\nSouth,"2,000",02,n/a\nEast,,03,ok\n', 'sales');
   assert.deepEqual(table.columns.map((column) => `${column.name}:${column.type}`), ['region:text', 'revenue:real', 'code:text', 'note:text']);
   assert.deepEqual(table.rows, [['North', 1200.5, '01', '7'], ['South', 2000, '02', null], ['East', null, '03', 'ok']]);
+});
+
+test('a semicolon CSV reads the comma as the decimal point, unless a column is written the US way', () => {
+  assert.equal(cell('0,125', ';'), 0.125);
+  assert.equal(cell('1.234,5', ';'), 1234.5);
+  assert.equal(cell('1,250', ';'), 1.25);
+  assert.equal(cell('-12,75', ';'), -12.75);
+  assert.equal(cell('1,2,3', ';'), '1,2,3');
+  assert.equal(cell('1,234.5', ';'), '1,234.5', 'one cell alone is not read the US way');
+  // A whole column decides: one US-style value makes every comma in that column a thousands mark.
+  assert.deepEqual(csvTable('a;b;c\nx;1,234.5;0,5\ny;1,250;2,5\n', 't').rows, [['x', 1234.5, 0.5], ['y', 1250, 2.5]]);
+  // A column that mixes both ways is left as text, so nothing is silently rescaled.
+  const mixed = csvTable('a;b\nx;1,234.5\ny;1.234,5\n', 't');
+  assert.equal(mixed.columns[1].type, 'text');
+  assert.equal(cell('1,250'), 1250);
+  const table = csvTable('Item;Weight;Price\nx;0,125;1.234,5\ny;1,5;2,500\nz;12,75;3\n', 'items');
+  assert.deepEqual(table.columns.map((column) => `${column.name}:${column.type}`), ['item:text', 'weight:real', 'price:real']);
+  assert.deepEqual(table.rows, [['x', 0.125, 1234.5], ['y', 1.5, 2.5], ['z', 12.75, 3]]);
+  // A comma file keeps reading 1,250 as one thousand two hundred and fifty.
+  assert.deepEqual(csvTable('a,b\nx,"1,250"\n', 't').rows, [['x', 1250]]);
 });
 
 test('JSON: a list of objects, an object of lists, nested objects, JSON Lines', () => {
@@ -180,6 +200,34 @@ test('the folder: only files inside it, listed newest first, with what each is f
   assert.deepEqual(part, { text: 'Line one\n\nLine two', from: 0, to: 18, length: 18 });
 });
 
+test('files that share a name get table names of their own, the same on every run', () => {
+  assert.deepEqual(tableNames(['sales.csv', 'customers.xlsx']), ['sales', 'customers']);
+  assert.deepEqual(tableNames([join('2024', 'sales.csv'), join('2025', 'sales.csv')]), ['_2024_sales', '_2025_sales']);
+  assert.deepEqual(tableNames(['sales.csv', 'sales.xlsx', 'other.csv']), ['sales_csv', 'sales_xlsx', 'other']);
+  assert.deepEqual(tableNames(['Sales 2024.csv', 'sales-2024.csv']), ['sales_2024_csv', 'sales_2024_csv_2']);
+});
+
+test('two files with the same name in different subfolders can be queried together', async () => {
+  const dir = folder();
+  mkdirSync(join(dir, '2024'));
+  mkdirSync(join(dir, '2025'));
+  writeFileSync(join(dir, '2024', 'sales.csv'), 'region,revenue\nNorth,100\n');
+  writeFileSync(join(dir, '2025', 'sales.csv'), 'region,revenue\nNorth,130\n');
+  const engine = {
+    async run(job) {
+      const tables = [];
+      for (const file of job.files) tables.push(...(await fileTables(file.path, file.name)).map((table) => ({ ...table, file: file.shown })));
+      const result = runQuery(build(DatabaseSync, tables), job.sql, job.limit);
+      return { tables: tables.map((table) => ({ name: table.name, file: table.file, rows: table.rows.length })), result, text: resultText(result) };
+    },
+  };
+  const tools = buildTools({ enabled: () => true, rootOf: () => dir, conversationOf: () => 'c1', engine, store: openStore('', '') });
+  const query = tools.find((tool) => tool.name === 'data_query');
+  const text = (await query.execute({ files: ['2024/sales.csv', '2025/sales.csv'], sql: 'SELECT b.revenue - a.revenue AS growth FROM _2024_sales a JOIN _2025_sales b USING (region)' }, {})).text;
+  assert.match(text, /Tables: _2024_sales \(1 rows, from 2024\/sales\.csv\); _2025_sales \(1 rows, from 2025\/sales\.csv\)\./);
+  assert.match(text, /growth\n---\n30\n/);
+});
+
 test('the store: queries are numbered per conversation, analyses are kept by name', () => {
   const dir = folder();
   const store = openStore(join(dir, 'q.json'), join(dir, 'a.json'));
@@ -238,7 +286,7 @@ test('the tools, end to end: profile, query with an id, save, change the file, r
   const engine = {
     async run(job) {
       const tables = [];
-      for (const file of job.files) tables.push(...(await fileTables(file.path)).map((table) => ({ ...table, file: file.shown })));
+      for (const file of job.files) tables.push(...(await fileTables(file.path, file.name)).map((table) => ({ ...table, file: file.shown })));
       const db = build(DatabaseSync, tables);
       const meta = tables.map((table) => ({ name: table.name, file: table.file, sheet: table.sheet, rows: table.rows.length, columns: table.columns.map((column) => column.name) }));
       if (job.op === 'profile') return { tables: meta, text: tables.map((table) => profileText(profileTable(db, table))).join('\n\n') };
@@ -291,6 +339,13 @@ test('the tools, end to end: profile, query with an id, save, change the file, r
   assert.match(await call('data_rerun_analysis', { name: 'Revenue check' }), /By region \[Q7\]: no change\./);
   assert.match(await call('data_rerun_analysis', { name: 'Revenue check' }, other), /belongs to the folder/);
   assert.match(await call('data_rerun_analysis', { name: 'Nope' }), /There is no saved analysis "Nope"/);
+  // Another folder cannot save over this folder's analysis, so it is not lost.
+  writeFileSync(join(other, 'sales.csv'), 'region,revenue\nWest,5\n');
+  assert.match(await call('data_query', { files: ['sales.csv'], sql: 'SELECT SUM(revenue) AS total FROM sales' }, other), /^Query Q\d+ /);
+  const otherId = /^Query (Q\d+)/.exec(await call('data_query', { files: ['sales.csv'], sql: 'SELECT 1 AS one FROM sales' }, other))[1];
+  assert.match(await call('data_save_analysis', { name: 'revenue CHECK', queries: [otherId] }, other), /"Revenue check" is already saved for the folder .*\. Pick another name\./);
+  assert.equal(store.analysis('revenue check').folder, dir);
+  assert.match(await call('data_rerun_analysis', { name: 'Revenue check' }), /By region \[Q\d+\]: no change\./);
 
   // A chart straight from a query, and a Python run: both get an id, pictures go to the chat.
   const chart = await call('data_chart', { files: ['sales.csv'], sql: 'SELECT region, revenue FROM sales ORDER BY region', title: 'Revenue by region' });

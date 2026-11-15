@@ -5130,7 +5130,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
               {
                 name: 'settings.section',
                 id: 'model-tiers',
-                order: 17,
+                order: 200,
                 label: () => t('section.title'),
               },
               (props) => h(SettingsPage, { ...props, appCtx: ctx }),

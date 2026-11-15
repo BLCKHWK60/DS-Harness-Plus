@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { insideProgram, researchMinutes } from '../lib/budget.js';
+import { insideProgram, programMinutes, researchMinutes } from '../lib/budget.js';
 
 test('a run inside a program ends early enough to write its report', () => {
   assert.equal(insideProgram('call_1:ptc:2'), true);
@@ -16,4 +16,12 @@ test('a run inside a program ends early enough to write its report', () => {
   assert.equal(researchMinutes({ configured: 20, inProgram: false, programMaxMs: 600000 }), 20, 'direct calls keep the full budget');
   assert.equal(researchMinutes({ configured: 20, inProgram: true }), 20, 'an unknown limit changes nothing');
   assert.equal(researchMinutes({ configured: 20, inProgram: true, programMaxMs: 60000 }), 1, 'never less than a minute');
+});
+
+test('the screen is told the same program limit the run keeps to', () => {
+  assert.equal(programMinutes(600000), 7, 'the app\'s default program limit');
+  assert.equal(programMinutes(630000), 7, 'rounded down');
+  assert.equal(programMinutes(60000), 1);
+  assert.equal(programMinutes(undefined), undefined);
+  assert.equal(programMinutes(0), undefined);
 });

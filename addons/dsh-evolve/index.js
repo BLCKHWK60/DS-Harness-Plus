@@ -240,7 +240,8 @@ export function apply(ctx, config) {
     // Lessons learned on an example set (reasoning, writing, ...) are general lessons too.
     const families = ['general', ...PACKS.map((item) => item.id)];
     try {
-      const mode = ctx.get('modes')?.get?.(agent.id)?.id;
+      // Modes answers with the mode id itself (a string such as 'code'), not an object.
+      const mode = ctx.get('modes')?.get?.(agent.id);
       if (mode) families.push(String(mode));
     } catch {
       // Without the Modes add-on, only the general lessons apply.

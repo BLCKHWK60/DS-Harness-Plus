@@ -101,7 +101,9 @@ export async function demand({ titles: list, market, where, days, registry, keyO
 export function readPay(text) {
   const value = String(text ?? '');
   if (!value) return undefined;
-  const currency = /€|EUR/i.test(value) ? 'EUR' : /£|GBP/i.test(value) ? 'GBP' : /\$|USD/i.test(value) ? 'USD' : '';
+  // The other codes come before the bare "$", so Canadian and Australian dollars are not read as US ones.
+  const code = value.match(/\b(CHF|PLN|CAD|AUD)\b/i)?.[1]?.toUpperCase();
+  const currency = /€|EUR/i.test(value) ? 'EUR' : /£|GBP/i.test(value) ? 'GBP' : code ?? (/\$|USD/i.test(value) ? 'USD' : '');
   const numbers = [...value.matchAll(/(\d{1,3}(?:[,.]\d{3})+|\d+(?:\.\d+)?)\s*([kK])?/g)]
     .map((match) => Number(match[1].replace(/[,.](?=\d{3}\b)/g, '')) * (match[2] ? 1000 : 1))
     .filter((n) => Number.isFinite(n) && n > 0);

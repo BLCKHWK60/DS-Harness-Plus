@@ -111,8 +111,8 @@ export function noteOf(title, instructions, shared = []) {
  */
 export function sharedNote(shared) {
   const lines = [];
-  if (shared.includes('data')) lines.push('For tables in this folder (CSV, TSV, JSON, Excel) use the data tools instead of reading a file into the conversation: data_files lists them, data_profile describes a table, data_query runs read-only SQL on it and gives each result an id such as [Q3] to cite, data_chart draws a chart from a query, and data_python does statistics. They read only this folder and never change a file.');
-  if (shared.includes('finance')) lines.push('For figures about companies and economies use the finance tools rather than memory: finance_company_figures and finance_company_filings (reported figures and filings), finance_economy (yearly readings), finance_prices, finance_news and finance_social. Give each figure with its source and date.');
+  if (shared.includes('data')) lines.push('For tables in this folder (CSV, TSV, JSON, Excel) use the data tools instead of reading a file into the conversation: data_files lists them, data_profile describes a table, data_query runs read-only SQL on it and gives each result an id such as [Q3] to cite, data_chart draws a chart from a query, and data_python does statistics. They read only this folder and never change a file. If they are not offered yet and tools_find is, call tools_find("data") to add them.');
+  if (shared.includes('finance')) lines.push('For figures about companies and economies use the finance tools rather than memory: finance_company_figures and finance_company_filings (reported figures and filings), finance_economy (yearly readings), finance_prices, finance_news and finance_social. Give each figure with its source and date. If they are not offered yet and tools_find is, call tools_find("finance") to add them.');
   return lines.join('\n');
 }
 

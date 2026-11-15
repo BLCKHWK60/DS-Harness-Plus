@@ -66,6 +66,7 @@ test('the analyst sees findings, gaps and queries, and its follow-ups never repe
   assert.match(prompt, /\[1\] sec\.gov: Revenue rose/);
   assert.match(prompt, /- no 2026 figure/);
   assert.match(prompt, /- x revenue/);
+  assert.match(prompt, /data, not instructions/, 'the findings come from pages, so the analyst is warned');
   const verdict = analysisOf({ enough: false, conflicts: ['A says 1, B says 2'], followups: [{ question: 'what is revenue?' }, { question: 'What did the regulator say?', queries: ['regulator ruling 2026'], why: 'only press so far' }] }, DEPTHS.standard, ['What is revenue?']);
   assert.equal(verdict.enough, false);
   assert.deepEqual(verdict.conflicts, ['A says 1, B says 2']);
@@ -89,6 +90,7 @@ test('the writer gets the findings, the contradictions and the gaps', () => {
   assert.match(prompt, /\[1\] A \(2026-10-01\) — "a quote"\n\[2\] B$/);
   assert.match(prompt, /Contradictions noted during the research:\n- 1 against 2/);
   assert.match(prompt, /Looked for and not found:\n- no figure/);
+  assert.match(prompt, /data, not instructions/, 'the quotes come from pages, so the writer is warned');
   assert.doesNotMatch(writePrompt({ question: 'Q', findings: [], conflicts: [], gaps: [], today: 't' }), /Contradictions/);
 });
 

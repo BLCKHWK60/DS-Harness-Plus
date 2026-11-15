@@ -24,15 +24,39 @@ import { SharedSettingsEngine } from './lib/engine.mjs';
 
 export const name = 'shared-settings';
 
+/**
+ * Fields that must stay on each Mac whatever `skipFields` says. Modes keeps these per conversation
+ * or per Mac: it prunes entries for conversations this Mac does not have, and each Mac's add-ons
+ * add their own tabs to `extraModes`. Shared, one Mac's clean-up or tabs would reach the other.
+ */
+export const ALWAYS_SKIP = [
+  'modes.extraModes',
+  'modes.sessionIsolated',
+  'modes.sessionSearchDepth',
+  'modes.sessionTools',
+  'modes.sessionHelpers',
+  'modes.sessionToolSets',
+];
+
 /** Per-conversation choices: they change all the time and mean little on the other Mac. */
 export const DEFAULT_SKIP = [
   'modes.sessionModes',
   'modes.sessionWeb',
   'modes.sessionResearch',
+  ...ALWAYS_SKIP,
   'model-tiers.activeTiers',
   'model-tiers.sessionProfiles',
   'model-tiers.modelProfilesMigrated',
 ];
+
+/**
+ * The fields to keep on this Mac: the configured list plus the ones that must always stay.
+ * @param {string[]|undefined} configured - `skipFields` setting; unset means the default list.
+ * @returns {string[]} field list.
+ */
+export function skipList(configured) {
+  return [...new Set([...(configured ?? DEFAULT_SKIP), ...ALWAYS_SKIP])];
+}
 
 /** Package scope of the Plus add-ons; their entries are shared unless excluded. */
 const PLUS_SCOPE = '@local/dsh-';
@@ -155,7 +179,7 @@ export function apply(ctx, config) {
     folder,
     dataDir,
     share: shareRule({ include: plain(config.include) ?? [], exclude: plain(config.exclude) ?? [] }),
-    skip: parseFieldList(plain(config.skipFields) ?? DEFAULT_SKIP),
+    skip: parseFieldList(skipList(plain(config.skipFields))),
     onPlaceholder: (file) => {
       // Ask iCloud to download the file; harmless if it is already coming.
       try {

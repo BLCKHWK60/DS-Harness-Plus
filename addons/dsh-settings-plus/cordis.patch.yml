@@ -1,0 +1,6 @@
+- insert:
+    - id: settings-plus
+      name: '@local/dsh-settings-plus'
+      config:
+        # Groups, icons and a search field in the Settings window. Switch off under Plugins to go back to the plain list.
+        enabled: true

@@ -191,3 +191,93 @@ test('a version that stands alone leaves out the tier wording but keeps the rule
   assert.match(alone, /Internet access for this tier: web fetch, browser/);
   assert.match(alone, /at most 3 concurrent children/);
 });
+
+// ---- isolated conversations and conversations without tools ---------------------------------
+
+/** Run the add-on on a stand-in host and give back its service, with one conversation on `prov-a/model-x`. */
+async function running(config, { isolated = false, noTools = false } = {}) {
+  const { apply } = await import('../index.js');
+  let current = { provider: 'prov-a', model: 'model-x' };
+  const agent = { id: 's1', session: {}, model: { current: () => current, select: (route) => { current = { provider: route.provider, model: route.model }; } } };
+  const services = {
+    agents: { get: (id) => (id === agent.id ? agent : undefined), list: () => [] },
+    modes: { isolated: () => isolated, noTools: () => noTools },
+  };
+  let service;
+  const ctx = {
+    on: () => () => {},
+    effect: (make) => { const undo = make(); return typeof undo === 'function' ? undo : () => {}; },
+    provide: (_name, value) => { service = value; },
+    get: (name) => services[name],
+    inject: () => {},
+    logger: { warn: () => {}, info: () => {}, debug: () => {} },
+    loader: {},
+    tools: { register: () => () => {} },
+  };
+  apply(ctx, config);
+  return { service, now: () => current };
+}
+
+const STANDING_ALONE = { modelVersions: INSTRUCTED, tiers: { opus: { version: 'solo' } } };
+
+test('a version that stands alone never removes an isolated conversation\'s own rules', async () => {
+  assert.equal((await running(STANDING_ALONE)).service.instructionsReplaced('s1'), true);
+  assert.equal((await running(STANDING_ALONE, { isolated: true })).service.instructionsReplaced('s1'), false);
+});
+
+test('an isolated conversation is never moved to another model', async () => {
+  const config = { ...STANDING_ALONE, fallbackChains: JSON.stringify({ opus: [{ provider: 'prov-a', model: 'model-x' }, { provider: 'prov-far', model: 'model-far' }] }) };
+  const open = await running(config);
+  assert.equal((await open.service.advanceFallback('s1'))?.to.provider, 'prov-far');
+  assert.equal(open.now().provider, 'prov-far');
+  const kept = await running(config, { isolated: true });
+  assert.equal(await kept.service.advanceFallback('s1'), null);
+  assert.equal(kept.now().provider, 'prov-a');
+  assert.equal(await kept.service.restorePrimary('s1', 'opus'), null);
+});
+
+test('with no tools the prompt says nothing of the web, sub-agents, workflows or checks', () => {
+  const tier = { ...readDeck({ tiers: { haiku: { instructions: 'TIER-TEXT', skills: '["alpha","beta"]', connectors: '["files"]', minSubagents: 2 } } }).tiers.haiku, provider: 'p', model: 'm', effort: 'ultra' };
+  const roles = { haiku: { review: { provider: 'p', model: 'r' } } };
+  const full = tierPrompt(tier, 3, true, roles, { skillText: (name) => (name === 'alpha' ? 'ALPHA-BODY' : undefined) });
+  assert.match(full, /Internet access|sub-agents|workflow|review_lanes|typecheck/);
+  const bare = tierPrompt(tier, 3, true, roles, { skillText: (name) => (name === 'alpha' ? 'ALPHA-BODY' : undefined), version: { name: 'Writer', texts: ['VERSION-TEXT'], replace: false }, bare: true });
+  assert.doesNotMatch(bare, /Internet access|Connectors|sub-agent|workflow|delegate_role|review_lanes|run_pipeline|typecheck|skill tool|`beta`/);
+  // The tier's own behaviour, a skill already loaded and the version's text stay.
+  assert.match(bare, /Active model tier: Fast/);
+  assert.match(bare, /TIER-TEXT/);
+  assert.match(bare, /ALPHA-BODY/);
+  assert.match(bare, /Instructions for Writer:\nVERSION-TEXT/);
+});
+
+test('with no tools no tier, effort level or Code tier asks to change code or run checks', () => {
+  const deck = readDeck({});
+  for (const id of TIER_IDS) {
+    for (const effort of ['off', 'low', 'medium', 'high', 'extra-high', 'ultra']) {
+      const tier = { ...deck.tiers[id], provider: 'p', model: 'm', effort };
+      const text = tierPrompt(tier, 3, true, {}, { bare: true });
+      assert.doesNotMatch(text, /typecheck|tests\b|Run the|implement|diff|edit|smallest correct change|re-run/i, `${id} at ${effort}`);
+    }
+  }
+  for (const effort of ['medium', 'high', 'extra-high']) {
+    const tier = { ...deck.tiers.haiku, provider: 'p', model: 'm', effort };
+    assert.match(tierPrompt(tier, 3, true, {}, {}), /verify|Run/, `${effort} keeps its checks with tools`);
+  }
+  const ultra = tierPrompt({ ...deck.tiers.code, provider: 'p', model: 'm', effort: 'ultra' }, 3, true, {}, { bare: true });
+  assert.match(ultra, /Reason exhaustively/, 'Ultra without tools still asks for the deepest reasoning');
+  const code = { ...deck.tiers.code, provider: 'p', model: 'm', effort: 'extra-high' };
+  const bare = tierPrompt(code, 3, true, {}, { bare: true });
+  assert.doesNotMatch(bare, /typecheck|re-run|run the narrowest|lint/i);
+  assert.match(bare, /review, check, and fix code/);
+  assert.match(tierPrompt(code, 3, true, {}, {}), /typecheck/);
+});
+
+test('with Web Off the tier does not claim internet access; the rest stays', () => {
+  const deck = readDeck({});
+  const tier = { ...deck.tiers.haiku, provider: 'p', model: 'm', effort: 'high' };
+  const on = tierPrompt(tier, 3, true, {}, {});
+  assert.match(on, /Internet access for this tier/);
+  const off = tierPrompt(tier, 3, true, {}, { webOff: true });
+  assert.doesNotMatch(off, /Internet access/);
+  assert.match(off, /Run the narrowest relevant checks/, 'the tools are still there, only the web is off');
+});

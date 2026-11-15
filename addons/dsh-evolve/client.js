@@ -677,7 +677,7 @@ textarea.dsh-ev-field { width: 100%; height: auto; min-height: 72px; padding: 9p
         ctx.effect(() =>
           ctx.slots.inject('settings.section', () =>
             ctx.slots.register(
-              { name: 'settings.section', id: 'evolve', order: 20, label: () => t('section.title') },
+              { name: 'settings.section', id: 'evolve', order: 420, label: () => t('section.title') },
               (props) => h(EvolvePage, { ...props, appCtx: ctx }),
             ),
           ),

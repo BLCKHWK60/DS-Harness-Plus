@@ -142,19 +142,23 @@ export const ADAPTERS = {
       const list = Array.isArray(answer?.results) ? answer.results : [];
       return {
         total: Number(answer?.count) || list.length,
-        postings: list.map((item) => ({
-          ref: clip(item.id, 40),
-          title: plainText(item.title).slice(0, 200),
-          company: clip(item.company?.display_name, 120),
-          location: clip(item.location?.display_name, 100),
-          pay: `${money(item.salary_min, item.salary_max)}${money(item.salary_min, item.salary_max) && item.salary_is_predicted === '1' ? ' (estimated by Adzuna)' : ''}`,
-          posted: day(item.created),
-          type: [item.contract_type, item.contract_time].filter(Boolean).map((part) => clip(part, 20)).join(', '),
-          remote: '',
-          url: clip(item.redirect_url, 400),
-          snippet: '',
-          text: plainText(item.description).slice(0, 2000),
-        })),
+        postings: list.map((item) => {
+          // Adzuna gives bare numbers; the market says which currency, so scout_pay can count them.
+          const pay = money(item.salary_min, item.salary_max, MARKETS[want.market]?.currency);
+          return {
+            ref: clip(item.id, 40),
+            title: plainText(item.title).slice(0, 200),
+            company: clip(item.company?.display_name, 120),
+            location: clip(item.location?.display_name, 100),
+            pay: `${pay}${pay && item.salary_is_predicted === '1' ? ' (estimated by Adzuna)' : ''}`,
+            posted: day(item.created),
+            type: [item.contract_type, item.contract_time].filter(Boolean).map((part) => clip(part, 20)).join(', '),
+            remote: '',
+            url: clip(item.redirect_url, 400),
+            snippet: '',
+            text: plainText(item.description).slice(0, 2000),
+          };
+        }),
       };
     },
     async detail(posting) {
