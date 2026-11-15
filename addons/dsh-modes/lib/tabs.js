@@ -17,14 +17,35 @@ export function tabCount(value) {
 }
 
 /**
+ * The tabs in the owner's own order (the Cowork sidebar's `tabOrder`): those it names first, in that
+ * order; a tab it does not name follows, in the usual order; names of tabs not here are skipped. The
+ * same rule as `orderTabs` in the Cowork sidebar's client.js.
+ * @param {Array<{id: string}>} tabs - the tabs in the usual order.
+ * @param {unknown} order - the saved order (tab ids).
+ * @returns {Array<{id: string}>} the same tabs, reordered.
+ */
+export function orderTabs(tabs, order) {
+  const list = Array.isArray(tabs) ? tabs : [];
+  const seen = new Set();
+  for (const id of Array.isArray(order) ? order : []) {
+    if (typeof id === 'string' && /^[A-Za-z0-9][\w-]{0,127}$/.test(id) && seen.size < 50) seen.add(id);
+  }
+  if (seen.size === 0) return list;
+  const rank = new Map([...seen].map((id, i) => [id, i]));
+  const named = list.filter((tab) => rank.has(tab.id)).sort((a, b) => rank.get(a.id) - rank.get(b.id));
+  return [...named, ...list.filter((tab) => !rank.has(tab.id))];
+}
+
+/**
  * The modes that have a tab in the sidebar, in its order.
  * @param {Array<{id: string, label: string, extra?: boolean}>} modes - every mode; `extra` marks one an add-on adds.
  * @param {unknown} maxTabs - the sidebar's tab count.
+ * @param {unknown} [order] - the sidebar's own tab order (`tabOrder`), if any.
  * @returns {Array<{id: string, label: string}>} the modes with a tab.
  */
-export function sidebarTabs(modes, maxTabs) {
+export function sidebarTabs(modes, maxTabs, order) {
   const list = Array.isArray(modes) ? modes : [];
-  return [...list.filter((mode) => !mode.extra).slice(0, tabCount(maxTabs)), ...list.filter((mode) => mode.extra)];
+  return orderTabs([...list.filter((mode) => !mode.extra).slice(0, tabCount(maxTabs)), ...list.filter((mode) => mode.extra)], order);
 }
 
 /**

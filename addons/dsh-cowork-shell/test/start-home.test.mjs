@@ -59,3 +59,378 @@ test('the New button: saved text first, then translated text, then the built-in 
   assert.equal(newLabelFor({}, 'cowork', t, defaults), 'zh:new.cowork', 'the app\'s own tabs stay translated');
   assert.equal(newLabelFor({}, 'finance', t, defaults), 'zh:new.other');
 });
+
+const stopQuestion = new Function(`${functionText('stopQuestion')}\nreturn stopQuestion;`)();
+
+test('the question before stopping names the automation that would be deleted, and says so plainly', () => {
+  const t = (key, values = {}) => `${key}|${values.names ?? ''}|${values.n ?? ''}`;
+  const plain = 'This conversation is still working. Stop it and delete it?';
+  assert.equal(stopQuestion(undefined, plain, t), plain, 'no details: the plain question');
+  assert.equal(stopQuestion([{ kind: 'turn', items: [] }], plain, t), plain, 'only still working: the plain question');
+  // What the app sends (checked in the lab): kind "schedule" with the automation's id and title.
+  const one = [{ kind: 'schedule', items: [{ id: 'schedule-1', label: 'Lab daily  market note' }] }];
+  assert.equal(stopQuestion(one, plain, t), 'stop.automation.one|“Lab daily market note”|1');
+  const two = [{ kind: 'schedule', items: [{ id: 'a', label: 'Morning brief' }, { id: 'b', label: 'Weekly sum' }] }];
+  assert.equal(stopQuestion(two, plain, t), 'stop.automation.many|“Morning brief”, “Weekly sum”|2');
+  assert.equal(stopQuestion([{ kind: 'schedule', items: [{ id: 'x' }] }], plain, t), 'stop.automation.unnamed||1', 'no title: no name, still the warning');
+  assert.equal(stopQuestion([...one, { kind: 'subagent', items: [] }], plain, t), `stop.automation.one|“Lab daily market note”|1\n\n${plain}`, 'also still working: both');
+});
+
+test('the warning texts say the automation is deleted for good and cannot be put back', () => {
+  for (const key of ['stop.automation.one', 'stop.automation.many', 'stop.automation.unnamed']) {
+    const line = source.split('\n').find((text) => text.includes(`'${key}':`) && /[a-z]/.test(text.split(':').slice(1).join(':')));
+    assert.match(line, /for good/, key);
+    assert.match(line, /cannot be put back/, key);
+  }
+});
+
+test('the Delete permanently question says it cannot be put back and where copies may remain', () => {
+  const lines = source.split('\n').filter((text) => text.includes("'trash.erase.confirm':"));
+  assert.equal(lines.length, 2, 'English and Chinese');
+  const en = lines.find((text) => /[a-z]{4}/.test(text.split(':').slice(1).join(':')));
+  assert.match(en, /\{title\}/);
+  assert.match(en, /cannot be put back/);
+  assert.match(en, /Time Machine/);
+  assert.match(en, /Sync/);
+  assert.match(lines.find((text) => text !== en), /\{title\}/);
+  // A row being erased offers no Put back and no second delete.
+  assert.match(source, /item\.erasing\s*\?\s*\[dot\('d1'\), h\('span', \{ key: 'erasing'/);
+  // Two lines: the title alone on the first, so a narrow sidebar does not cut it to one letter.
+  assert.match(source, /h\('span', \{ className: 'cws-conv-main cws-trashed', title \},\s*h\('span', \{ className: 'cws-label' \}, title\)\),\s*h\('div', \{ className: 'cws-trash-meta' \}/);
+});
+
+const trashTab = new Function(`${functionText('trashTab')}\nreturn trashTab;`)();
+
+test('each tab\'s Trash list shows only what was deleted from it; nothing deleted is out of reach', () => {
+  const tabs = ['chat', 'cowork', 'code', 'recon'];
+  const state = { sessionModes: { 'session-old': 'recon', 'session-both': 'chat' } };
+  assert.equal(trashTab({ id: 'session-r', tab: 'recon' }, state, tabs), 'recon');
+  assert.equal(trashTab({ id: 'session-both', tab: 'code' }, state, tabs), 'code', 'the tab kept at delete time wins');
+  assert.equal(trashTab({ id: 'session-old' }, state, tabs), 'recon', 'deleted before 0.58.0: its recorded tab');
+  assert.equal(trashTab({ id: 'session-unknown' }, state, tabs), null, 'tab cannot be told: every tab');
+  assert.equal(trashTab({ id: 'session-x', tab: 'finance' }, state, tabs), 'chat', 'its tab is not shown now: the first tab, as Archived does');
+  assert.equal(trashTab({ id: 'session-x', tab: 'finance' }, {}, []), null);
+  assert.equal(trashTab({ id: 'session-x' }, undefined, tabs), null);
+});
+
+test('both ways to delete keep the tab, and the Trash list counts and lists only this tab\'s', () => {
+  assert.equal((source.match(/trash\.remove\(id, (?:title|titleOf\(id\)), tabOf\(id\)\)/g) ?? []).length, 2, 'Delete and the right-click Delete');
+  assert.equal((source.match(/trash\.remove\(/g) ?? []).length, 2, 'no other delete call');
+  assert.match(source, /t\('trash\.title', \{ n: binHere\.length \}\)/);
+  assert.match(source, /shown \? binHere\.map\(/);
+  // Hiding a deleted conversation from the lists still uses the whole trash.
+  assert.match(source, /const deleted = new Set\(bin\.items\.map/);
+});
+
+const trashLists = new Function(`${functionText('trashTab')}\n${functionText('inTabTrash')}\n${functionText('guessTab')}\nreturn { trashTab, inTabTrash, guessTab };`)();
+
+test('while a conversation\'s tab is not shown, its Trash row goes where the Archived list puts it', () => {
+  const { trashTab, guessTab } = trashLists;
+  assert.equal(guessTab(null), 'chat');
+  assert.equal(guessTab({ path: '/Users/someone/Documents/deepseek-harness/default-workspace' }), 'cowork');
+  assert.equal(guessTab({ path: '/private/tmp/dsh-recon-room' }), 'code');
+  // Recon switched off: a Recon conversation's row goes to Code, like its archived conversations.
+  assert.equal(trashTab({ id: 's', tab: 'recon', fallbackTab: 'code' }, {}, ['chat', 'cowork', 'code']), 'code');
+  assert.equal(trashTab({ id: 's', tab: 'recon', fallbackTab: 'code' }, {}, ['chat', 'cowork']), 'chat', 'neither shown: the first tab');
+  assert.equal(trashTab({ id: 's', tab: 'recon', fallbackTab: 'code' }, {}, ['chat', 'code', 'recon']), 'recon', 'shown again: back under Recon');
+});
+
+test('every deleted conversation is in at least one tab\'s Trash list, and in only its own when its tab is known', () => {
+  const { inTabTrash } = trashLists;
+  const tabs = ['chat', 'cowork', 'code', 'recon'];
+  const state = { sessionModes: { 'session-old': 'recon' } };
+  const items = [{ id: 'session-r', tab: 'recon' }, { id: 'session-c', tab: 'chat' }, { id: 'session-old' }, { id: 'session-unknown' }, { id: 'session-hidden', tab: 'finance' }];
+  for (const item of items) assert.ok(tabs.some((tab) => inTabTrash(item, state, tabs, tab)), `${item.id} is reachable`);
+  assert.deepEqual(tabs.filter((tab) => inTabTrash(items[0], state, tabs, tab)), ['recon'], 'a Recon one only under Recon');
+  assert.deepEqual(tabs.filter((tab) => inTabTrash(items[2], state, tabs, tab)), ['recon']);
+  assert.deepEqual(tabs.filter((tab) => inTabTrash(items[3], state, tabs, tab)), tabs, 'tab unknown: every tab');
+  assert.match(source, /bin\.items\.filter\(\(item\) => inTabTrash\(item, state, tabIds, selected\.id\)\)/, 'the list uses it');
+});
+
+test('the right-click menu offers neither Restore nor Delete for a Recon conversation being wiped', () => {
+  assert.match(source, /const usable = ids\.filter\(\(id\) => !wipingIds\.has\(id\)\)/);
+  assert.match(source, /restoreMany\(usable\)/);
+  assert.match(source, /removeMany\(usable\)/);
+  assert.doesNotMatch(source, /restoreMany\(ids\)|removeMany\(ids\)\s*}/);
+});
+
+const emptying = new Function(`${functionText('trashTab')}\n${functionText('emptyIds')}\nasync ${functionText('runEmpty')}\nreturn { emptyIds, runEmpty };`)();
+
+test('Empty trash takes only this tab\'s own rows (not those being deleted, not those listed in every tab), after one question naming how many', async () => {
+  const { emptyIds, runEmpty } = emptying;
+  const tabs = ['chat', 'cowork', 'code', 'recon'];
+  const state = { sessionModes: { 'old-recon': 'recon' } };
+  const items = [
+    { id: 'chat-1', tab: 'chat' }, { id: 'chat-2', tab: 'chat' }, { id: 'chat-busy', tab: 'chat', erasing: true },
+    { id: 'recon-1', tab: 'recon' }, { id: 'old-recon' }, { id: 'untold-1' }, { id: 'untold-2' }, null,
+  ];
+  assert.deepEqual(emptyIds(items, state, tabs, 'chat'), ['chat-1', 'chat-2']);
+  assert.deepEqual(emptyIds(items, state, tabs, 'recon'), ['recon-1', 'old-recon']);
+  const t = (key, vars) => `${key}|${vars?.n ?? ''}`;
+  const sent = [];
+  const asked = [];
+  let started = 0;
+  const done = await runEmpty({ items, state, tabIds: tabs, selectedId: 'chat', t, ask: (q) => { asked.push(q); return true; }, send: async (ids) => { sent.push(ids); return { emptied: { erased: ids.length, marked: 0, failed: 0 } }; }, start: () => { started += 1; } });
+  assert.deepEqual(sent, [['chat-1', 'chat-2']], 'never another tab\'s, never one listed in every tab');
+  assert.equal(asked.length, 1);
+  assert.match(asked[0], /^trash\.empty\.confirm\|2/);
+  assert.match(asked[0], /trash\.empty\.untold\|2/, 'says how many older rows it leaves');
+  assert.equal(started, 1);
+  assert.deepEqual(done, { asked: true, sent: ['chat-1', 'chat-2'], failed: 0 });
+
+  // One row: the singular question; no older rows: no extra sentence.
+  const one = [];
+  await runEmpty({ items: [{ id: 'x', tab: 'code' }], state: {}, tabIds: tabs, selectedId: 'code', t, ask: (q) => { one.push(q); return true; }, send: async () => ({}) });
+  assert.equal(one[0], 'trash.empty.confirm.one|1');
+
+  // No: nothing sent, the button never says "Emptying…".
+  let calls = 0;
+  started = 0;
+  const no = await runEmpty({ items, state, tabIds: tabs, selectedId: 'chat', t, ask: () => false, send: async () => { calls += 1; }, start: () => { started += 1; } });
+  assert.deepEqual([no.sent, calls, started], [[], 0, 0]);
+
+  // Only rows listed in every tab: nothing to empty, no question.
+  const none = await runEmpty({ items: [{ id: 'untold-1' }], state: {}, tabIds: tabs, selectedId: 'chat', t, ask: () => { throw new Error('asked'); }, send: async () => {} });
+  assert.deepEqual(none, { asked: false, sent: [], failed: 0 });
+});
+
+test('Empty trash sends a long list in parts, adds up what failed, and stops at a part that fails', async () => {
+  const { runEmpty } = emptying;
+  const items = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, tab: 'chat' }));
+  const t = (key) => key;
+  const parts = [];
+  let done = await runEmpty({ items, state: {}, tabIds: ['chat'], selectedId: 'chat', t, batch: 2, ask: () => true, send: async (ids) => { parts.push(ids); return { emptied: { failed: ids.includes('c') ? 1 : 0 } }; } });
+  assert.deepEqual(parts, [['a', 'b'], ['c', 'd'], ['e']]);
+  assert.equal(done.failed, 1, 'the server\'s own count');
+  done = await runEmpty({ items, state: {}, tabIds: ['chat'], selectedId: 'chat', t, batch: 2, ask: () => true, send: async (ids) => { if (ids.includes('c')) throw new Error('refused'); return {}; } });
+  assert.deepEqual(done.sent, ['a', 'b']);
+  assert.equal(done.failed, 3, 'the failed part and the one never sent');
+});
+
+test('Empty trash texts: true in English and Chinese, and the sidebar wires them to this tab\'s list', () => {
+  for (const key of ['trash.empty.confirm', 'trash.empty.confirm.one', 'trash.empty.untold', 'trash.empty.untold.one']) {
+    const lines = source.split('\n').filter((text) => text.includes(`'${key}':`));
+    assert.equal(lines.length, 2, `${key}: English and Chinese`);
+  }
+  for (const key of ['trash.empty.confirm', 'trash.empty.confirm.one']) {
+    const en = source.split('\n').find((text) => text.includes(`'${key}':`) && /[a-z]{4}/.test(text.split(':').slice(1).join(':')));
+    assert.match(en, /cannot be put back/);
+    assert.match(en, /other tabs is not touched/);
+    assert.match(en, /Time Machine/);
+  }
+  assert.match(source, /items: binHere, state, tabIds, selectedId: selected\.id, t,/);
+  assert.match(source, /shown && emptyIds\(binHere, state, tabIds, selected\.id\)\.length > 0/);
+  // While it runs: the Empty button and every row's Put back and Delete permanently wait.
+  assert.equal((source.match(/className: 'cws-link', disabled: emptying,/g) ?? []).length, 3);
+});
+
+test('every tab shows its full name when pointed at: to the right in the folded rail, above it in the wide sidebar', () => {
+  const made = [];
+  const h = (type, props, child) => { made.push({ type, props }); return child; };
+  const UI = { Tooltip: 'AppTooltip' };
+  const Tooltip = new Function('UI', 'h', `${functionText('Tooltip')}\nreturn Tooltip;`)(UI, h);
+  Tooltip({ label: 'Research', show: true, children: 'tab' });
+  assert.deepEqual(made.pop(), { type: 'AppTooltip', props: { label: 'Research', delayMs: 500, side: 'right' } }, 'the rail, as before');
+  Tooltip({ label: 'Research', show: true, side: 'top', portal: true, children: 'tab' });
+  assert.deepEqual(made.pop(), { type: 'AppTooltip', props: { label: 'Research', delayMs: 500, side: 'top', portal: true } });
+  assert.equal(Tooltip({ label: 'x', show: false, children: 'tab' }), 'tab', 'not shown: the tab alone');
+  const noKit = new Function('UI', 'h', `${functionText('Tooltip')}\nreturn Tooltip;`)({}, h);
+  assert.equal(noKit({ label: 'x', show: true, children: 'tab' }), 'tab', 'an app without the tooltip: the tab alone');
+  // The tab list: always shown; above the tab when wide, so it never covers the tabs below.
+  assert.match(source, /shownTabs\.map\(\(m\) => h\(Tooltip, \{ key: m\.id, label: m\.label, show: true, disabled: arranging, side: wide \? 'top' : 'right', portal: wide \}/, 'shown except while arranging the tabs (kept around the tab, silent)');
+  Tooltip({ label: 'Research', show: true, side: 'top', portal: true, disabled: true, children: 'tab' });
+  assert.deepEqual(made.pop(), { type: 'AppTooltip', props: { label: 'Research', delayMs: 500, side: 'top', portal: true, disabled: true } }, 'silenced, not removed: the tab is not replaced and keeps focus');
+});
+
+const fitting = new Function(`${functionText('nameFits')}\n${functionText('glyphFor')}\n${functionText('iconOnlyIds')}\nreturn { nameFits, glyphFor, iconOnlyIds };`)();
+
+test('a tab whose name does not fit shows its icon alone, measured as if selected; your own modes keep their name', () => {
+  const { nameFits, glyphFor, iconOnlyIds } = fitting;
+  // Measured in the lab: "Research" is 56.2 px wide, 57.5 px when selected; icon 15, gap 5, padding 4 + 4.
+  // A tab is (sidebar - 28) / 3 wide with eight tabs.
+  const research = (room, name = 57.5) => nameFits({ room, name, icon: 15, gap: 5, padding: 8 });
+  assert.equal(research(78.67), false, '264 px: icon alone');
+  assert.equal(research(84), false, '280 px: icon alone');
+  assert.equal(research(84.67), false, '282 px: it would read "Researc…" once selected');
+  assert.equal(research(85.67), false, '285 px: still a fraction too narrow');
+  assert.equal(research(86), true, '286 px and up: icon and name');
+  assert.equal(glyphFor('my-own-mode'), 'dot', 'own modes have no icon of their own');
+
+  // The per-tab decision, with stand-in buttons and a stand-in canvas.
+  const fonts = [];
+  const widths = { Research: 56.2, Chat: 28, 'My long own mode name': 140 };
+  const pen = {
+    set font(value) { fonts.push(value); this.bold = / (5|6|7|8|9)00 /.test(` ${value} `); },
+    measureText(text) { return { width: (widths[text] ?? 40) * (this.bold ? 57.5 / 56.2 : 1) }; },
+  };
+  const button = (width) => ({ getBoundingClientRect: () => ({ width }), firstElementChild: { getBoundingClientRect: () => ({ width: 15 }) } });
+  const css = { fontStyle: 'normal', fontWeight: '400', fontSize: '13px', fontFamily: 'system-ui', columnGap: '5px', paddingLeft: '4px', paddingRight: '4px' };
+  const tabs = [{ id: 'chat', label: 'Chat' }, { id: 'research', label: 'Research' }, { id: 'mine', label: 'My long own mode name' }, { id: 'code', label: 'Code' }];
+  const at = (room) => iconOnlyIds(tabs, [button(room), button(room), button(room)], () => css, pen);
+  assert.deepEqual(at(84.67), ['research'], 'only Research; an own mode never; a tab without a button is left alone');
+  assert.deepEqual(at(85.67), ['research'], '285 px: the exact width counts, not a rounded one (86 would let it through)');
+  assert.deepEqual(at(86), []);
+  assert.ok(fonts.every((font) => / 500 /.test(font)), 'measured at the selected weight');
+  assert.deepEqual(iconOnlyIds(tabs, [button(10), button(10)], () => css, null), [], 'no canvas: nothing changes');
+
+  // Wiring in the sidebar.
+  assert.match(source, /keep\(iconOnlyIds\(shownTabs, list\.querySelectorAll\('\[role=tab\]'\), \(el\) => getComputedStyle\(el\), pen\)\)/);
+  assert.match(source, /watch\.observe\(list\);/);
+  assert.match(source, /\}, \[wide, tabsKey\]\);/);
+  assert.match(source, /'aria-label': arranging \? t\('tabs\.arrange\.move', \{ tab: m\.label \}\) : \(wide && !iconOnly\.ids\.has\(m\.id\) \? undefined : m\.label\)/);
+  assert.match(source, /wide && !iconOnly\.ids\.has\(m\.id\) \? h\('span', null, m\.label\) : null/);
+});
+
+const ordering = new Function(`${functionText('readOrder')}\n${functionText('orderTabs')}\n${functionText('mergeOrder')}\n${functionText('moveId')}\nreturn { readOrder, orderTabs, mergeOrder, moveId };`)();
+
+test('your own tab order: named tabs first, new ones after, missing ones skipped; which tabs show never changes', () => {
+  const { orderTabs, readOrder } = ordering;
+  const tabs = ['chat', 'cowork', 'code', 'finance', 'research'].map((id) => ({ id }));
+  const ids = (order) => orderTabs(tabs, order).map((tab) => tab.id);
+  assert.deepEqual(ids(undefined), ['chat', 'cowork', 'code', 'finance', 'research'], 'no order: as today');
+  assert.deepEqual(ids(['research', 'code']), ['research', 'code', 'chat', 'cowork', 'finance'], 'the rest follow in the usual order');
+  assert.deepEqual(ids(['recon', 'research', 'automations', 'chat']), ['research', 'chat', 'cowork', 'code', 'finance'], 'tabs not here (switched off, another Mac) are skipped');
+  assert.equal(orderTabs(tabs, ['finance']).length, tabs.length, 'never adds or drops a tab');
+  assert.deepEqual(readOrder(['a', 'a', '../x', '', 7, 'b c', 'ok-1']), ['a', 'ok-1'], 'checked: ids only, each once');
+  assert.equal(readOrder(Array.from({ length: 80 }, (_, i) => `t${i}`)).length, 50);
+});
+
+test('rearranging keeps the place of a tab not shown now, so it comes back where it was', () => {
+  const { orderTabs, mergeOrder, moveId } = ordering;
+  // Saved: Research, Chat, Finance, Code. Finance is switched off; you move Code before Chat.
+  const saved = ['research', 'chat', 'finance', 'code'];
+  const visible = moveId(['research', 'chat', 'code'], 'code', 1);
+  assert.deepEqual(visible, ['research', 'code', 'chat']);
+  const next = mergeOrder(visible, saved);
+  assert.deepEqual(next, ['research', 'code', 'chat', 'finance'], 'Finance stays right after Chat');
+  // Finance is switched on again: it shows in its place.
+  const back = orderTabs(['chat', 'code', 'finance', 'research'].map((id) => ({ id })), next).map((tab) => tab.id);
+  assert.deepEqual(back, ['research', 'code', 'chat', 'finance']);
+  assert.deepEqual(mergeOrder(['b', 'c'], ['x', 'b', 'c']), ['x', 'b', 'c'], 'one that was first stays first');
+  assert.deepEqual(mergeOrder(['a', 'b'], []), ['a', 'b']);
+  assert.deepEqual(moveId(['a', 'b', 'c'], 'a', 9), ['b', 'c', 'a'], 'clamped');
+  assert.deepEqual(moveId(['a', 'b'], 'z', 0), ['a', 'b'], 'unknown id: unchanged');
+});
+
+test('the Cowork sidebar, /mode and Global Search order tabs the same way', async () => {
+  const { orderTabs } = ordering;
+  const modes = await import('../../dsh-modes/lib/tabs.js');
+  const searchSource = readFileSync(new URL('../../dsh-search/client.js', import.meta.url), 'utf8');
+  const start = searchSource.indexOf('function orderTabs(');
+  let depth = 0;
+  let end = -1;
+  for (let i = searchSource.indexOf('{', searchSource.indexOf(')', start)); i < searchSource.length; i += 1) {
+    if (searchSource[i] === '{') depth += 1;
+    else if (searchSource[i] === '}' && (depth -= 1) === 0) { end = i + 1; break; }
+  }
+  const searchOrder = new Function(`${searchSource.slice(start, end)}\nreturn orderTabs;`)();
+  const tabs = ['chat', 'cowork', 'code', 'finance', 'recon', 'research'].map((id) => ({ id }));
+  const long = 'quarterly-board-reporting-and-forecasting-for-the-whole-group';
+  tabs.push({ id: long });
+  const cases = [undefined, [], ['research'], ['recon', 'chat', 'gone'], ['x', '../y', 'code', 'code', 'finance'], 'not a list', [long, 'chat']];
+  assert.deepEqual(orderTabs(tabs, [long, 'chat']).map((tab) => tab.id).slice(0, 2), [long, 'chat'], 'a long mode id can be arranged too');
+  for (const order of cases) {
+    const want = orderTabs(tabs, order).map((tab) => tab.id);
+    assert.deepEqual(modes.orderTabs(tabs, order).map((tab) => tab.id), want, `/mode: ${JSON.stringify(order)}`);
+    assert.deepEqual(searchOrder(tabs, order).map((tab) => tab.id), want, `Global Search: ${JSON.stringify(order)}`);
+  }
+});
+
+test('arranging: an edit button in the wide sidebar, pointer dragging (not the page\'s drag and drop), arrow keys, Reset order', () => {
+  assert.match(source, /const tabsOf = \(state\) => orderTabs\(usualTabsOf\(state\), state\.tabOrder\);/);
+  assert.match(source, /const usualTabsOf = \(state\) => \[\.\.\.state\.modes\.slice\(0, state\.maxTabs\), \.\.\.\(state\.extra \?\? \[\]\)\];/);
+  assert.match(source, /const arrange = wide && tabs\.length > 1 \?/);
+  assert.match(source, /onClick: \(\) => \{ if \(!arranging && m\.id !== selected\.id\) switchTab\(m\); \}/, 'no tab switch while arranging');
+  assert.match(source, /if \(arranging\) \{ onArrangeKey\(event\); return; \}/);
+  assert.match(source, /void model\.setOption\('tabOrder', mergeOrder\(ids, state\.tabOrder\)\)/);
+  assert.match(source, /void model\.setOption\('tabOrder', \[\]\)/, 'Reset order');
+  assert.doesNotMatch(source, /draggable: true|onDragStart/, 'no HTML drag and drop: it would bring up the app\'s file-drop cover');
+  for (const key of ['tabs.arrange', 'tabs.arrange.hint', 'tabs.arrange.move', 'tabs.arrange.reset', 'tabs.arrange.done']) {
+    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+  }
+  const server = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  assert.match(server, /tabOrder: z\.array\(z\.string\(\)\)\.default\(\[\]\)\.volatile\(\),/);
+});
+
+test('arranging changes only the order: which tab a conversation or Trash row belongs to stays on the usual order', () => {
+  const pick = new Function(`${functionText('readOrder')}\n${functionText('orderTabs')}\n${constLine('usualTabsOf')}\n${constLine('tabsOf')}\n${functionText('tabOfSession')}\n${functionText('guessTab')}\n${functionText('trashTab')}\nreturn { usualTabsOf, tabsOf, tabOfSession, trashTab };`)();
+  const state = { modes: [{ id: 'write' }, { id: 'build' }, { id: 'ask' }], maxTabs: 3, extra: [], tabOrder: ['build', 'write', 'ask'], sessionModes: {} };
+  assert.deepEqual(pick.tabsOf(state).map((m) => m.id), ['build', 'write', 'ask'], 'shown in your order');
+  const usual = pick.usualTabsOf(state).map((m) => m.id);
+  assert.deepEqual(usual, ['write', 'build', 'ask']);
+  // A conversation whose own tab and folder tab are not shown falls to the first tab of the usual order.
+  assert.equal(pick.tabOfSession('s', {}, { path: '/projects/x' }, state, usual), 'write');
+  assert.equal(pick.trashTab({ id: 's', tab: 'finance' }, state, usual), 'write');
+  // The sidebar passes the usual order wherever it decides membership.
+  assert.match(source, /const tabIds = usualTabsOf\(state\)\.map\(\(m\) => m\.id\);/);
+  assert.match(source, /tabOfSession\(id, sess, ws, now, usualTabsOf\(now\)\.map\(\(m\) => m\.id\)\)/);
+});
+
+test('a drag lives only while arranging, follows the pointer on the window, and saves only a changed order', () => {
+  assert.doesNotMatch(source, /setPointerCapture/, 'no pointer capture: it is lost when the moving tab is put elsewhere in the list');
+  assert.match(source, /window\.addEventListener\('pointermove', move, true\);/);
+  assert.match(source, /window\.addEventListener\('pointerup', up, true\);/);
+  assert.match(source, /if \(e\.buttons === 0\) \{ cancel\(\); return; \}/, 'a release the page never saw ends it unsaved');
+  assert.match(source, /if \(drag\.moved && drag\.order\.join\('\\u0000'\) !== drag\.start\.join\('\\u0000'\)\) saveOrder\(drag\.order\);/, 'a wobble saves nothing');
+  assert.match(source, /if \(arranging\) return undefined;\s*stopDrag\(\);\s*setPreview\(null\);/, 'arranging ends: the drag ends');
+  assert.match(source, /setTimeout\(\(\) => document\.querySelector\('\[data-cws-arrange\]'\)\?\.focus\(\), 0\)/, 'Done hands focus to the Arrange button');
+});
+
+/** The sidebar's settings model, run against a stand-in settings service that refuses stale writes. */
+function modelWith({ readDelay = 5, writeDelay = 20 } = {}) {
+  const make = new Function('window', `const NS = 'coworkShell'; const SETTINGS_NS = 'cowork-shell'; const MODES_NS = 'modes'; const LOCAL_KEY = 'k';
+    const FALLBACK_MODES = [{ id: 'chat', label: 'Chat' }]; const DEFAULT_TABS = {};
+    ${functionText('readObject')}\n${functionText('readOrder')}\n${functionText('createModel')}\nreturn createModel;`)({ localStorage: { getItem: () => null, setItem() {} } });
+  const store = { revision: 1, value: { tabOrder: [] } };
+  const wait = (ms) => new Promise((done) => setTimeout(done, ms));
+  let writing = Promise.resolve();
+  const ctx = {
+    locale: { bind: () => (key) => key },
+    remote: {
+      settings: {
+        describe: async () => {
+          const snap = { ok: true, value: { namespaces: [{ ns: 'cowork-shell', revision: store.revision, value: structuredClone(store.value) }] } };
+          await wait(readDelay);
+          return snap;
+        },
+        // One write at a time, refused when the revision is stale (as the app's settings do).
+        mutate: (ns, ops, revision) => (writing = writing.then(async () => {
+          await wait(writeDelay);
+          if (revision !== store.revision) return { ok: false, error: { code: 'settings/conflict' } };
+          for (const op of ops) store.value[op.path[0]] = op.value;
+          store.revision += 1;
+          return { ok: true };
+        })),
+      },
+    },
+  };
+  return { model: make(ctx), store };
+}
+
+test('fast arrow presses while arranging: every move is saved, in order, with no error', async () => {
+  const { model, store } = modelWith();
+  const orders = [['b', 'a', 'c'], ['b', 'c', 'a'], ['c', 'b', 'a']];
+  const saves = [];
+  for (const order of orders) {
+    saves.push(model.setOption('tabOrder', order));
+    await new Promise((done) => setTimeout(done, 5));
+  }
+  await Promise.all(saves);
+  assert.deepEqual(store.value.tabOrder, ['c', 'b', 'a'], 'the last move is stored');
+  assert.deepEqual(model.get().tabOrder, ['c', 'b', 'a'], 'and shown');
+  assert.equal(model.get().error, '');
+});
+
+test('a refresh that began before a save does not put the old order back', async () => {
+  const { model, store } = modelWith({ readDelay: 60 });
+  const refresh = model.refresh();
+  await new Promise((done) => setTimeout(done, 5));
+  const save = model.setOption('tabOrder', ['b', 'a']);
+  await Promise.all([refresh, save]);
+  assert.deepEqual(model.get().tabOrder, ['b', 'a']);
+  assert.deepEqual(store.value.tabOrder, ['b', 'a']);
+  // A refresh after the save reads the stored order as usual.
+  store.value.tabOrder = ['a', 'b'];
+  await model.refresh();
+  assert.deepEqual(model.get().tabOrder, ['a', 'b']);
+});

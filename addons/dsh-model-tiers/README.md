@@ -231,7 +231,7 @@ Listener errors are logged and do not reach the caller. The per-session override
 ## Housekeeping (T4, part 1)
 
 - `engines.dsh` is `>=0.2.2-rc.1 <0.3.0`. dsh refuses an incompatible bundle at profile start and skips it, so on a dsh bump Tier stays off until this range is updated after re-reading the upgrade guides.
-- `pruneStaleSessions` (default on): when the first Agent exists after start, Tier removes `activeTiers` and `sessionProfiles` entries whose Session is no longer stored (`sessionPersistence.stat` returns nothing). Live Agents and Sessions whose existence cannot be confirmed are kept. It writes once through Settings.
+- `pruneStaleSessions` (default on): when the first Agent exists after start, Tier removes `activeTiers` and `sessionProfiles` entries whose Session is no longer stored (`sessionPersistence.stat` returns nothing). Live Agents and Sessions whose existence cannot be confirmed are kept. It writes once through Settings. A conversation in the Cowork sidebar's trash (`<home>/trash/conversations`, read by `lib/trashed.js`) keeps its entries until the trash erases it, so Put back after a restart brings its tier back (since 0.58.0); when the trash cannot be read, nothing is pruned.
 - `registerSubagentTool` (the tool-gate registration API) shipped with the T3 service.
 - Decision (owner): per-session state (`activeTiers`, `sessionProfiles`) stays in Settings, written through the revision-checked Settings API. It is not moved to `dsh-storage`; pruning bounds its growth. Revisit only if write races are observed.
 

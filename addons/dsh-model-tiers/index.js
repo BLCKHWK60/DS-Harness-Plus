@@ -15,6 +15,7 @@
  * routing path.
  */
 import z from '@deepseek-ai/schemastery';
+import { trashedIds } from './lib/trashed.js';
 
 /**
  * Start a helper agent. App 0.2.2-rc.2 takes the task's fields (prompt, parent, agentOptions) at
@@ -2145,6 +2146,12 @@ export function apply(ctx, config) {
     if (!persistence || !settings) return;
     try {
       const live = new Set((ctx.get('agents')?.list() ?? []).map((agent) => agent.id));
+      // A conversation in the Cowork sidebar's trash is not listed by the app, but can be put back:
+      // its tier and profile stay. When the trash cannot be read, nothing goes.
+      const home = ctx.get('dshHomePath');
+      // Without an app home there is no trash (the Cowork sidebar keeps it there).
+      const trashed = typeof home === 'function' ? trashedIds(home('trash', 'conversations')) : new Set();
+      if (trashed === null) return;
       const fields = {
         activeTiers: readPersistedActiveTiers(config),
         sessionProfiles: readJsonObject(config.sessionProfiles),
@@ -2156,7 +2163,7 @@ export function apply(ctx, config) {
         let dropped = 0;
         for (const [sessionId, value] of Object.entries(map)) {
           let missing = false;
-          if (!live.has(sessionId)) {
+          if (!live.has(sessionId) && !trashed.has(sessionId)) {
             try {
               missing = (await persistence.stat(sessionId)) === undefined;
             } catch {

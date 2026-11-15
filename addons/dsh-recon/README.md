@@ -154,6 +154,12 @@ The app holds an open conversation in memory, so its files are deleted as soon a
 of it, at the latest when the app next starts. Until then only its id is kept on a list
 (`recon/wipe.json`). An export made earlier is yours to delete.
 
+Until then the Cowork sidebar's Archived list shows it as "Being deleted", without Restore or
+Delete, and its trash refuses it: Recon offers its list as the `reconWipe` service (`has`, `list`).
+If it reached the trash some other way (deleted from the Archived list before 0.58.0), the wipe takes
+it out of the trash and the trash's waiting list too (`wipeTrashed` in `lib/wipe.js`), so an ended
+conversation can never be put back.
+
 Until its files are gone, an ended conversation is not rebuilt from its history (see "After a
 restart" under "Searching and reading"): `/recon log`, `/recon export` and the tools find nothing
 it read. Only its numbering is

@@ -490,6 +490,10 @@ test('the sidebar\'s tabs, and what /mode says before the first message', async 
   assert.deepEqual(sidebarTabs(modes, 3).map((mode) => mode.id), ['chat', 'cowork', 'code', 'finance']);
   assert.deepEqual(sidebarTabs(modes, 5).map((mode) => mode.id), ['chat', 'cowork', 'code', 'review', 'finance']);
   assert.deepEqual(sidebarTabs(modes, 'nonsense').map((mode) => mode.id), ['chat', 'cowork', 'code', 'finance'], 'unknown: 3');
+  // The sidebar's own tab order: /mode names the tabs in it; which tabs show does not change.
+  assert.deepEqual(sidebarTabs(modes, 3, ['finance', 'code']).map((mode) => mode.id), ['finance', 'code', 'chat', 'cowork']);
+  assert.deepEqual(sidebarTabs(modes, 3, ['review', 'finance']).map((mode) => mode.id), ['finance', 'chat', 'cowork', 'code'], 'a mode past the tab count gets no tab by being named');
+  assert.deepEqual(sidebarTabs(modes, 3, 'nonsense').map((mode) => mode.id), ['chat', 'cowork', 'code', 'finance']);
   assert.equal(tabCount(1), 1);
   assert.equal(tabCount(6), 3);
   assert.equal(tabCount(2.5), 3);

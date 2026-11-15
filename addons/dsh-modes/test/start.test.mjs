@@ -8,6 +8,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { COWORK_METHOD } from '../index.js';
 import { CORE, FIND_TOOL } from '../lib/trim.js';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { trashedIds } from '../lib/trashed.js';
 import { boot, makeWorld, maskNow, sessionOf, settle } from './app.mjs';
 
 const levelOf = (world, id) => world.sessions.get(id).level ?? world.defaultLevel;
@@ -523,4 +527,52 @@ test('once, data is added to a stored "load tools as needed" list; switched off 
   await settle();
   assert.deepEqual([...read(world.config.trimModes)], ['cowork']);
   app.stop();
+});
+
+test('the trash: moved conversations with their helpers, waiting ones, and an unreadable trash', () => {
+  const home = mkdtempSync(join(tmpdir(), 'modes-trash-'));
+  try {
+    const dir = join(home, 'trash', 'conversations');
+    assert.deepEqual([...trashedIds(dir)], [], 'no trash folder: nothing in the trash');
+    assert.equal(trashedIds(''), null, 'no folder known: unsure');
+    mkdirSync(join(dir, 'recon-1'), { recursive: true });
+    writeFileSync(join(dir, 'recon-1', 'info.json'), JSON.stringify({ id: 'recon-1', parts: [{ id: 'recon-1' }, { id: 'helper-9' }] }));
+    mkdirSync(join(dir, 'moving-2'), { recursive: true });
+    writeFileSync(join(dir, 'pending.json'), JSON.stringify([{ id: 'open-3' }, { id: '../x' }]));
+    assert.deepEqual([...trashedIds(dir)].sort(), ['helper-9', 'moving-2', 'open-3', 'recon-1'], 'a folder without its record is kept, an unsafe id is not');
+    writeFileSync(join(dir, 'recon-1', 'info.json'), '{ broken');
+    assert.equal(trashedIds(dir), null, 'a record that cannot be read: unsure, so nothing may be treated as gone');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a conversation in the trash keeps its tab, Web, Tools and Recon isolation across a restart; one erased for good does not', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'modes-trash-'));
+  try {
+    const dir = join(home, 'trash', 'conversations');
+    mkdirSync(join(dir, 'recon-1'), { recursive: true });
+    writeFileSync(join(dir, 'recon-1', 'info.json'), JSON.stringify({ id: 'recon-1', parts: [{ id: 'recon-1' }] }));
+    writeFileSync(join(dir, 'pending.json'), JSON.stringify([{ id: 'code-2' }]));
+    const world = makeWorld({
+      sessionModes: JSON.stringify({ 'recon-1': 'recon', 'code-2': 'code', 'erased-3': 'code' }),
+      sessionIsolated: JSON.stringify({ 'recon-1': true }),
+      sessionWeb: JSON.stringify({ 'code-2': false, 'erased-3': false }),
+      sessionTools: JSON.stringify({ 'code-2': false }),
+    });
+    // After a restart the app lists none of the three: two are in the trash, one was erased.
+    const app = boot(world, { home, persisted: new Set(['n1']) });
+    await app.open('n1');
+    await settle();
+    const modes = JSON.parse(read(world.config.sessionModes) || '{}');
+    assert.equal(modes['recon-1'], 'recon');
+    assert.equal(modes['code-2'], 'code');
+    assert.equal(modes['erased-3'], undefined, 'erased for good: its entries go');
+    assert.deepEqual(JSON.parse(read(world.config.sessionIsolated) || '{}'), { 'recon-1': true }, 'Recon\'s isolation mark survives');
+    assert.deepEqual(JSON.parse(read(world.config.sessionWeb) || '{}'), { 'code-2': false });
+    assert.deepEqual(JSON.parse(read(world.config.sessionTools) || '{}'), { 'code-2': false });
+    app.stop();
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });

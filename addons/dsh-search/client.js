@@ -64,22 +64,41 @@ window.__ModuleLoader__.load({
       return days <= 0 ? new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : days < 7 ? `${days}d` : new Date(time).toLocaleDateString([], { month: 'short', day: 'numeric' });
     };
 
+    /**
+     * The tabs in the owner's own order (the Cowork sidebar's `tabOrder`): those it names first, in
+     * that order; others follow as usual; names of tabs not here are skipped. The same rule as
+     * `orderTabs` in the Cowork sidebar's client.js.
+     */
+    function orderTabs(tabs, order) {
+      const seen = new Set();
+      for (const id of Array.isArray(order) ? order : []) {
+        if (typeof id === 'string' && /^[A-Za-z0-9][\w-]{0,127}$/.test(id) && seen.size < 50) seen.add(id);
+      }
+      if (seen.size === 0) return tabs;
+      const rank = new Map([...seen].map((id, i) => [id, i]));
+      const named = tabs.filter((tab) => rank.has(tab.id)).sort((a, b) => rank.get(a.id) - rank.get(b.id));
+      return [...named, ...tabs.filter((tab) => !rank.has(tab.id))];
+    }
+
     /** Everything the box searches in, read from the app as it is now. */
     async function gather(appCtx) {
       const get = (name) => { try { return appCtx.get(name); } catch { return undefined; } };
       const listed = get('sessions')?.list?.getSnapshot?.() ?? {};
       const byId = listed.byId ?? {};
       let modes = {};
+      let tabOrder = [];
       try {
         const settings = await appCtx.remote.settings.describe();
         modes = settings.ok ? settings.value.namespaces.find((entry) => entry.ns === 'modes')?.value ?? {} : {};
+        // The Cowork sidebar's own tab order, so results are grouped in the order the tabs show.
+        tabOrder = settings.ok ? settings.value.namespaces.find((entry) => entry.ns === 'cowork-shell')?.value?.tabOrder ?? [] : [];
       } catch {
         modes = {};
       }
       const chosen = readObject(modes.sessionModes);
       const own = readObject(modes.modes);
-      const tabs = [...(Object.keys(own).length > 0 ? Object.entries(own) : [['chat', { label: 'Chat' }], ['cowork', { label: 'Cowork' }], ['code', { label: 'Code' }]]), ...Object.entries(readObject(modes.extraModes))]
-        .map(([id, mode]) => ({ id, label: String(mode?.label ?? id) }));
+      const tabs = orderTabs([...(Object.keys(own).length > 0 ? Object.entries(own) : [['chat', { label: 'Chat' }], ['cowork', { label: 'Cowork' }], ['code', { label: 'Code' }]]), ...Object.entries(readObject(modes.extraModes))]
+        .map(([id, mode]) => ({ id, label: String(mode?.label ?? id) })), tabOrder);
       const sessions = (listed.ids ?? Object.keys(byId)).map((id) => byId[id]).filter((session) => session && session.origin !== 'subagent' && !session.blank)
         .map((session) => ({ id: session.id ?? session.sessionId, title: String(session.displayTitle ?? session.title ?? '').trim() || 'Untitled', updatedAt: session.updatedAt, tab: chosen[session.id ?? session.sessionId] ?? '' }))
         .filter((session) => session.id);

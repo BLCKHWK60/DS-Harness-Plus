@@ -100,3 +100,25 @@ test('the request counter and the count of sources read are kept apart', () => {
   assert.equal(sources.empty('e'), false);
   assert.equal(sources.empty('nobody'), false, 'no entry is not an empty entry');
 });
+
+test('End and wipe also takes the conversation out of the Cowork sidebar\'s trash and its waiting list', async () => {
+  const { wipeTrashed } = await import('../lib/wipe.js');
+  const root = mkdtempSync(join(tmpdir(), 'recon-trash-'));
+  try {
+    const trashDir = join(root, 'trash', 'conversations');
+    const id = 'session-ended';
+    mkdirSync(join(trashDir, id, id, 'session'), { recursive: true });
+    writeFileSync(join(trashDir, id, 'info.json'), JSON.stringify({ id, parts: [{ id }] }));
+    writeFileSync(join(trashDir, 'pending.json'), JSON.stringify([{ id }, { id: 'session-other' }]));
+    mkdirSync(join(trashDir, 'session-other'), { recursive: true });
+    assert.deepEqual(wipeTrashed(trashDir, id), { removed: true, unlisted: true });
+    assert.equal(existsSync(join(trashDir, id)), false);
+    assert.deepEqual(JSON.parse(readFileSync(join(trashDir, 'pending.json'), 'utf8')), [{ id: 'session-other' }]);
+    assert.equal(existsSync(join(trashDir, 'session-other')), true, 'another conversation in the trash is left alone');
+    assert.deepEqual(wipeTrashed(trashDir, id), { removed: false, unlisted: false }, 'nothing left to take out');
+    assert.deepEqual(wipeTrashed('', id), { removed: false, unlisted: false });
+    assert.deepEqual(wipeTrashed(trashDir, '../x'), { removed: false, unlisted: false }, 'an id that could leave the trash folder is refused');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

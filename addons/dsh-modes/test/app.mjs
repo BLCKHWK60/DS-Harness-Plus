@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 /**
  * A stand-in app for Modes: just enough of the app's services to run the add-on whole (apply())
  * and to restart it on the same stored settings and conversations. Not a test file itself.
@@ -53,7 +54,7 @@ export async function settle() {
  * @param {number} [options.writeDelay] - milliseconds a settings write of Modes takes.
  * @returns {object} the running app.
  */
-export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0 } = {}) {
+export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0, home } = {}) {
   const { config } = world;
   const handlers = new Map();
   const agents = new Map();
@@ -91,6 +92,8 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
       instructionsReplaced: () => alone,
     },
     sessionPersistence: { stat: async (id) => (persisted?.has(id) ? {} : undefined) },
+    // The app's home folder, when a test gives one (the Cowork sidebar's trash lives there).
+    ...(home ? { dshHomePath: (...parts) => join(home, ...parts) } : {}),
     loader: { entries: () => loader },
     ...(tabs ? { coworkShell: {} } : {}),
     ...(world.presets

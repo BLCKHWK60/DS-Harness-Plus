@@ -12,6 +12,7 @@
  */
 import z from '@deepseek-ai/schemastery';
 import { IMAGE_TOOLS, WEB_TOOLS, goesOnline, imageToolsOffline, oldWebMarks, parentIdOf, programGoesOnline, researchTab, rootOf, toolMaskFor, webFor, webReaching } from './lib/mask.js';
+import { trashedIds } from './lib/trashed.js';
 import { fromScheduler, scheduledModeId } from './lib/scheduled.js';
 import { PROGRAM_TOOL, programNote, programOnly, SLOW_TOOLS } from './lib/ptc.js';
 import { helpersBelow, onlyStopNotes, stoppedByUser } from './lib/stop.js';
@@ -364,6 +365,14 @@ export function apply(ctx, config) {
       return Boolean(ctx.get('coworkShell'));
     } catch {
       return false;
+    }
+  }
+  /** @returns {unknown} the Cowork sidebar's own tab order (`tabOrder`), or nothing. */
+  function shellTabOrder() {
+    try {
+      return plain(ctx.get('settings')?.describe?.().find((entry) => entry.ns === 'cowork-shell')?.value?.tabOrder);
+    } catch {
+      return undefined;
     }
   }
   /** @returns {number} how many of the modes get a sidebar tab (the Cowork sidebar's `maxTabs`; 3 when unknown). */
@@ -1360,11 +1369,17 @@ export function apply(ctx, config) {
     if (!persistence || !settings) return;
     try {
       const live = new Set((ctx.get('agents')?.list() ?? []).map((agent) => agent.id));
+      // A conversation in the Cowork sidebar's trash is not listed by the app, but can be put back:
+      // its choices stay (Recon's isolation mark above all). When the trash cannot be read, nothing goes.
+      const home = ctx.get('dshHomePath');
+      // Without an app home there is no trash (the Cowork sidebar keeps it there).
+      const trashed = typeof home === 'function' ? trashedIds(home('trash', 'conversations')) : new Set();
+      if (trashed === null) return;
       const fields = ['sessionModes', 'sessionWeb', 'sessionResearch', 'sessionSearchDepth', 'sessionTools', 'sessionHelpers', 'sessionIsolated', 'sessionToolSets', 'sessionSandboxBase'];
       const ids = new Set(fields.flatMap((field) => Object.keys(readObject(config[field]))));
       const gone = new Set();
       for (const sessionId of ids) {
-        if (live.has(sessionId)) continue;
+        if (live.has(sessionId) || trashed.has(sessionId)) continue;
         try {
           if ((await persistence.stat(sessionId)) === undefined) gone.add(sessionId);
         } catch {
@@ -1704,7 +1719,7 @@ export function apply(ctx, config) {
                 const all = Object.values(readModes(config));
                 return beforeFirstMessage({
                   current: all.find((mode) => mode.id === current)?.label ?? current,
-                  tabs: sidebarTabs(all, shellTabCount()).map((mode) => mode.label),
+                  tabs: sidebarTabs(all, shellTabCount(), shellTabOrder()).map((mode) => mode.label),
                   command: commandName,
                 });
               };

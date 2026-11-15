@@ -281,3 +281,43 @@ test('with Web Off the tier does not claim internet access; the rest stays', () 
   assert.doesNotMatch(off, /Internet access/);
   assert.match(off, /Run the narrowest relevant checks/, 'the tools are still there, only the web is off');
 });
+
+test('a conversation in the Cowork sidebar\'s trash keeps its tier across a restart; one erased for good does not', async () => {
+  const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { apply } = await import('../index.js');
+  const home = mkdtempSync(join(tmpdir(), 'tiers-trash-'));
+  try {
+    const dir = join(home, 'trash', 'conversations');
+    mkdirSync(join(dir, 'trashed-1'), { recursive: true });
+    writeFileSync(join(dir, 'trashed-1', 'info.json'), JSON.stringify({ id: 'trashed-1', parts: [{ id: 'trashed-1' }] }));
+    const listeners = {};
+    const writes = [];
+    const config = { activeTiers: JSON.stringify({ 'trashed-1': { tier: 'opus' }, 'erased-2': { tier: 'opus' } }), sessionProfiles: '{}' };
+    const services = {
+      agents: { get: () => undefined, list: () => [] },
+      settings: { mutate: async (ns, ops) => { writes.push(...ops); for (const op of ops) config[op.path[0]] = op.value; } },
+      sessionPersistence: { stat: async () => undefined },
+      dshHomePath: (...parts) => join(home, ...parts),
+    };
+    const ctx = {
+      on: (name, handler) => { (listeners[name] ??= []).push(handler); return () => {}; },
+      effect: (make) => { const undo = make(); return typeof undo === 'function' ? undo : () => {}; },
+      provide: () => {},
+      get: (name) => services[name],
+      inject: () => {},
+      logger: { warn: () => {}, info: () => {}, debug: () => {} },
+      loader: {},
+      tools: { register: () => () => {} },
+    };
+    apply(ctx, config);
+    for (const handler of listeners['agent/created'] ?? []) { try { handler({ agent: { id: 'new-9', session: {}, model: { current: () => undefined } } }); } catch { /* other listeners need more of a real agent */ } }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const kept = JSON.parse(String(config.activeTiers));
+    assert.ok(kept['trashed-1'], 'in the trash: its tier stays');
+    assert.equal(kept['erased-2'], undefined, 'erased for good: its tier goes');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});

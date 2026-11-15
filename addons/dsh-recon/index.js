@@ -44,7 +44,7 @@ import { withoutMentions } from './lib/mentions.js';
 import { buildTools, holdsFindings, wasCompacted } from './lib/tools.js';
 import { createUsenet } from './lib/usenet.js';
 import { ARCHIVE, NEWS, createWeb } from './lib/web.js';
-import { openWipeList, wipeFiles } from './lib/wipe.js';
+import { openWipeList, wipeFiles, wipeTrashed } from './lib/wipe.js';
 import { createTor, findTor, torVersion } from './lib/tor.js';
 
 export const name = 'dsh-recon';
@@ -492,6 +492,10 @@ export function apply(ctx, config) {
 
   const exportFolder = () => String(plain(config?.exportFolder) ?? '').trim() || (typeof home === 'function' ? home('recon', 'exports') : join(ROOM, '..', 'dsh-recon-exports'));
   const wipeList = openWipeList(typeof home === 'function' ? join(home('recon'), 'wipe.json') : '');
+  const trashDir = typeof home === 'function' ? home('trash', 'conversations') : '';
+  // Which conversations End and wipe is deleting: the Cowork sidebar's trash refuses them, and its
+  // Archived list offers no Restore or Delete for them.
+  if (typeof ctx.provide === 'function') ctx.effect(() => ctx.provide('reconWipe', Object.freeze({ has: (id) => wipeList.has(String(id)), list: () => wipeList.list() })), 'recon: wipe list');
   /** Set once the app's conversation services are there. */
   let wiper;
   /**
@@ -542,6 +546,9 @@ export function apply(ctx, config) {
         try {
           if (inMemory(id)) continue;
           const snap = stored.find((entry) => entry.header?.id === id);
+          // Deleted from the Archived list after /recon end, its files may be in the Cowork
+          // sidebar's trash: they go too, and it leaves the trash's waiting list.
+          wipeTrashed(trashDir, id);
           if (!snap) {
             wipeList.done(id);
             continue;

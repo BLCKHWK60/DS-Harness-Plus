@@ -8,7 +8,7 @@
  */
 import { dirname } from 'node:path';
 import z from '@deepseek-ai/schemastery';
-import { KEEP_MS, openTrash, safeId } from './lib/trash.js';
+import { KEEP_MS, openTrash, safeId, safeTab, tidyPending } from './lib/trash.js';
 import { UPLOAD_MAX, addFile, canonical, listFiles, noteOf, openProjects } from './lib/projects.js';
 import { openPresets } from './lib/presets.js';
 import { buildDigest, drift } from './lib/digest.js';
@@ -236,6 +236,8 @@ export const SKILLS_PATH = '/dsh-cowork-shell/skills';
 export const PROJECTS_PATH = '/dsh-cowork-shell/projects';
 export const CONNECTORS_PATH = '/dsh-cowork-shell/connectors';
 export const TRASH_PATH = '/dsh-cowork-shell/trash';
+/** The most conversations one Empty trash request may name. */
+export const EMPTY_MAX = 2000;
 const MCP_CLIENT = '@deepseek-ai/dsh-mcp-client';
 
 /**
@@ -297,6 +299,8 @@ export const Config = z.object({
   tabs: z.string().default(JSON.stringify(DEFAULT_TABS)).volatile(),
   /** At most this many tabs (the first modes in order). */
   maxTabs: z.natural().min(1).max(5).default(3).volatile(),
+  /** Your own tab order (tab ids, set by arranging the tabs). Only the order: which tabs show is unchanged. */
+  tabOrder: z.array(z.string()).default([]).volatile(),
   /** Hide the DeepSeek logo and name at the top of the sidebar and the logo on the start page. */
   hideLogos: z.boolean().default(false).volatile(),
   /** Show today's date as the start page title instead of the tab's greeting. */
@@ -654,7 +658,15 @@ export function apply(ctx) {
       ctx.logger?.warn?.('cowork-shell: no data folder is available; Delete is off');
       return;
     }
-    const trash = openTrash(dir);
+    // Recon's End and wipe list, when Recon runs: those conversations never go to the trash.
+    const reconWipe = () => {
+      try {
+        return ctx.get('reconWipe');
+      } catch {
+        return undefined;
+      }
+    };
+    const trash = openTrash(dir, { wiping: (id) => reconWipe()?.has?.(id) === true });
     const cacheOf = (id) => ctx.get('dshHomePath')('storages', 'session_projcache', 'sessions', `${id}.json`);
     const inMemory = (id) => {
       try {
@@ -693,34 +705,124 @@ export function apply(ctx) {
       return parts;
     };
 
-    const remove = async (id, title, deletedAt) => {
+    /**
+     * `tab`: the sidebar tab it is deleted from, so only that tab's Trash list shows it; `fallbackTab`:
+     * the tab its folder gives, used while that tab is not shown. `stillWaiting` (the tidy-up): checked
+     * right before anything moves, so one put back or taken out of the archive meanwhile stays put.
+     */
+    const remove = async (id, title, deletedAt, tab, fallbackTab, stillWaiting) => {
       if (!inner.workspaceRegistry.archivedSessionIds.includes(id)) throw new Error('archive the conversation first');
       const parts = inMemory(id) ? undefined : await partsOf(id);
+      if (stillWaiting && !stillWaiting()) return 'cancelled';
       if (parts === undefined) {
-        trash.addPending({ id, title, deletedAt });
+        trash.addPending({ id, title, deletedAt, tab, fallbackTab });
         return 'pending';
       }
-      trash.add({ id, title, parts, deletedAt });
+      trash.add({ id, title, parts, deletedAt, tab, fallbackTab });
       return 'moved';
     };
 
-    // At start: move what was waiting, then drop what is older than 30 days. Repeated a few times a day.
-    const tidy = async () => {
-      for (const item of trash.pending()) {
+    /**
+     * Conversations erased for good leave the app's archived list (the app checks nothing there), but
+     * only once the app no longer stores them: otherwise unarchiving would bring them back to the list.
+     * One look at the store for all of them.
+     */
+    const forgetMany = async (ids) => {
+      let stored;
+      try {
+        stored = new Set((await inner.sessionPersistence.list()).map((snap) => snap.header?.id));
+      } catch (error) {
+        ctx.logger?.warn?.(`cowork-shell: erased conversations stay in the archived list: ${String(error?.message ?? error)}`);
+        return;
+      }
+      for (const id of ids) {
+        if (stored.has(id)) {
+          ctx.logger?.warn?.(`cowork-shell: "${id}" was erased from the trash but the app still stores it, so it stays archived`);
+          continue;
+        }
         try {
-          if (!inner.workspaceRegistry.archivedSessionIds.includes(item.id)) trash.restore(item.id);
-          else await remove(item.id, item.title, item.deletedAt);
+          await inner.workspaceRegistry.unarchiveSession?.(id);
         } catch (error) {
-          ctx.logger?.warn?.(`cowork-shell: could not move "${item.id}" to the trash: ${String(error?.message ?? error)}`);
+          ctx.logger?.warn?.(`cowork-shell: "${id}" was erased but stays in the archived list: ${String(error?.message ?? error)}`);
         }
       }
+    };
+    const forget = (id) => forgetMany([id]);
+
+    /**
+     * Empty trash: delete permanently every conversation the open tab's Trash list showed. One still
+     * waiting to move is marked (with its file's change token) and erased when it moves. Unknown ids
+     * (put back meanwhile) are skipped; one that cannot be erased is counted and left as it was.
+     * @param {string[]} ids - the ids the list showed.
+     * @returns {Promise<{erased: number, marked: number, failed: number}>} what happened.
+     */
+    const emptyTrash = async (ids) => {
+      const out = { erased: 0, marked: 0, failed: 0 };
+      const erased = [];
+      for (const id of ids) {
+        try {
+          const stamp = trash.isWaiting(id) ? await stampOf(id) : undefined;
+          const result = trash.erase(id, { stamp });
+          if (result === 'erased') {
+            out.erased += 1;
+            erased.push(id);
+          } else if (result === 'marked') out.marked += 1;
+        } catch (error) {
+          out.failed += 1;
+          ctx.logger?.warn?.(`cowork-shell: Empty trash could not erase "${id}": ${String(error?.message ?? error)}`);
+        }
+        // Many at once: let the app answer other requests in between.
+        await new Promise((done) => setImmediate(done));
+      }
+      await forgetMany(erased);
+      return out;
+    };
+
+    /** The app's change token of a stored conversation's file (its identity, size and times), if any. */
+    const stampOf = async (id) => {
       try {
+        const snap = typeof inner.sessionPersistence.stat === 'function'
+          ? await inner.sessionPersistence.stat(id)
+          : (await inner.sessionPersistence.list()).find((item) => item.header?.id === id);
+        return typeof snap?.revision === 'string' && snap.revision ? snap.revision : undefined;
+      } catch {
+        return undefined;
+      }
+    };
+
+    // At start: move what was waiting, then drop what is older than 30 days. Repeated a few times a day.
+    // Never rejects: the app stops on an unhandled rejection.
+    const tidy = async () => {
+      try {
+        const done = await tidyPending(trash, {
+          isArchived: (id) => inner.workspaceRegistry.archivedSessionIds.includes(id),
+          inMemory,
+          isStored: async (id) => (await inner.sessionPersistence.list()).some((snap) => snap.header?.id === id),
+          move: (item) => remove(item.id, item.title, item.deletedAt, item.tab, item.fallbackTab, () => trash.isWaiting(item.id)),
+          stampOf,
+        });
+        for (const id of done.erased) await forget(id);
+        for (const id of done.kept) ctx.logger?.info?.(`cowork-shell: "${id}" changed after Delete permanently (it was taken back at some point), so it went to the trash with Put back instead`);
+        for (const id of done.unmarked) ctx.logger?.warn?.(`cowork-shell: "${id}" could not be deleted permanently; it is back in the Trash list with Put back`);
+        for (const id of done.dropped) ctx.logger?.info?.(`cowork-shell: "${id}" left the trash list: its files are gone, so there is nothing to put back`);
+        for (const { id, error } of done.failed) ctx.logger?.warn?.(`cowork-shell: could not move "${id}" to the trash: ${error}`);
         trash.purge();
       } catch (error) {
-        ctx.logger?.warn?.(`cowork-shell: could not empty old trash: ${String(error?.message ?? error)}`);
+        ctx.logger?.warn?.(`cowork-shell: the trash tidy-up stopped: ${String(error?.message ?? error)}`);
       }
     };
     void tidy();
+    // Taken out of the archive (here or in the app's own list) while it waited to move: it is not deleted
+    // after all, and a "delete permanently" mark goes with it, at once rather than at the next tidy-up.
+    // Never throws: the app waits for this before it unarchives.
+    inner.on('workspace/session-unarchiving', (request) => {
+      try {
+        const id = request?.sessionId;
+        if (safeId(id) && trash.isWaiting(id) && trash.dropPending(id)) ctx.logger?.info?.(`cowork-shell: "${id}" was taken out of the archive, so it is no longer deleted`);
+      } catch (error) {
+        ctx.logger?.warn?.(`cowork-shell: could not update the trash after an unarchive: ${String(error?.message ?? error)}`);
+      }
+    });
     inner.effect(() => {
       const timer = setInterval(() => void tidy(), 6 * 60 * 60 * 1000);
       timer.unref?.();
@@ -732,23 +834,46 @@ export function apply(ctx) {
       path: TRASH_PATH,
       handler: async (req, res) => {
         if (!guard(inner, req, res, ['GET', 'POST'])) return;
+        let emptied;
         try {
           if (req.method === 'POST') {
             const chunks = [];
             let size = 0;
             for await (const chunk of req) {
               size += chunk.length;
-              if (size > 4096) throw new Error('request too large');
+              // Empty trash sends the ids of a whole list (up to EMPTY_MAX of about 50 characters each).
+              if (size > 262144) throw new Error('request too large');
               chunks.push(chunk);
             }
             const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-            const id = body?.sessionId;
-            if (!safeId(id)) throw new Error('not a conversation id');
-            if (body.action === 'delete') await remove(id, body.title);
-            else if (body.action === 'restore') trash.restore(id);
-            else throw new Error('unknown action');
+            if (body?.action === 'empty') {
+              // Empty trash: the ids the open tab's Trash list showed.
+              const ids = Array.isArray(body.sessionIds) ? body.sessionIds : null;
+              if (!ids || ids.length === 0 || ids.length > EMPTY_MAX || !ids.every(safeId)) throw new Error('not a list of conversation ids');
+              emptied = await emptyTrash([...new Set(ids)]);
+            } else {
+              const id = body?.sessionId;
+              if (!safeId(id)) throw new Error('not a conversation id');
+              if (body.action === 'delete') await remove(id, body.title, undefined, safeTab(body.tab) ? body.tab : undefined, safeTab(body.fallbackTab) ? body.fallbackTab : undefined);
+              else if (body.action === 'restore') {
+                // Nothing to put back (erased meanwhile, for example by Empty trash): say so, not "done".
+                if (!trash.restore(id)) throw new Error('It is no longer in the trash.');
+              }
+              else if (body.action === 'erase') {
+                // Delete permanently: once its files are gone the app's archived list may forget it too.
+                // One still waiting keeps its file's change token: erased only if unchanged when it moves.
+                const stamp = trash.isWaiting(id) ? await stampOf(id) : undefined;
+                if (trash.erase(id, { stamp }) === 'erased') await forget(id);
+              } else throw new Error('unknown action');
+            }
           }
-          res.end(JSON.stringify({ at: Date.now(), keepMs: KEEP_MS, items: trash.list() }));
+          let wiping = [];
+          try {
+            wiping = (reconWipe()?.list?.() ?? []).filter(safeId);
+          } catch {
+            wiping = [];
+          }
+          res.end(JSON.stringify({ at: Date.now(), keepMs: KEEP_MS, items: trash.list(), wiping, ...(emptied ? { emptied } : {}) }));
         } catch (error) {
           res.statusCode = req.method === 'POST' ? 400 : 500;
           res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 300) }));

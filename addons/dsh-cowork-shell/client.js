@@ -8,6 +8,8 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const h = React.createElement;
     const { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } = React;
+    // Before the first paint where the page has it (tab names), so a cut name never flashes.
+    const useLayoutEffectSafe = React.useLayoutEffect ?? useEffect;
 
     /** The app's UI library when the page exposes it; every use has a plain fallback. */
     let UI = {};
@@ -40,6 +42,11 @@ window.__ModuleLoader__.load({
         'look.chat.wide': 'Wide chat area',
         'look.chat.normal': 'Normal chat area',
         'look.failed': 'Could not save that setting.',
+        'tabs.arrange': 'Arrange tabs',
+        'tabs.arrange.hint': 'Drag a tab to move it, or use the arrow keys on it.',
+        'tabs.arrange.move': 'Move {tab}',
+        'tabs.arrange.reset': 'Reset order',
+        'tabs.arrange.done': 'Done',
         'toggle.open': 'Open sidebar',
         'toggle.collapse': 'Collapse sidebar',
         'brand': 'DeepSeek Harness',
@@ -124,10 +131,30 @@ window.__ModuleLoader__.load({
         'delete.label': 'Delete "{title}"',
         'delete.confirm': 'Delete "{title}"?\n\nIt goes to the trash. You can put it back for 30 days. After that it is gone for good.',
         'delete.running': 'This conversation is still working. Stop it and delete it?',
+        'stop.automation.one': 'An automation delivers into this conversation: {names}. To go on, the app deletes that automation and its list of past runs for good. It cannot be put back, even if the conversation is. Go on?',
+        'stop.automation.many': '{n} automations deliver into this conversation: {names}. To go on, the app deletes them and their lists of past runs for good. They cannot be put back, even if the conversation is. Go on?',
+        'stop.automation.unnamed': 'An automation delivers into this conversation. To go on, the app deletes it and its list of past runs for good. It cannot be put back, even if the conversation is. Go on?',
         'delete.failed': 'Could not delete the conversation.',
         'trash.title': 'Trash ({n})',
         'trash.left': '{n}d left',
         'trash.back': 'Put back',
+        'trash.erase': 'Delete permanently',
+        'trash.erase.label': 'Delete "{title}" permanently',
+        'trash.erase.confirm': 'Delete "{title}" permanently?\n\nIt is erased from this Mac and cannot be put back. A copy may remain in a backup, such as Time Machine, or, if you use Sync, in your sync repository\'s history.',
+        'trash.erase.failed': 'It could not be deleted permanently.',
+        'trash.empty': 'Empty trash',
+        'trash.empty.label': 'Empty this tab\'s trash: delete its {n} conversations permanently',
+        'trash.empty.label.one': 'Empty this tab\'s trash: delete its 1 conversation permanently',
+        'trash.empty.confirm': 'Delete all {n} conversations in this tab\'s Trash permanently?\n\nThey are erased from this Mac and cannot be put back. Any the app still holds open are erased as soon as it lets go of them, at the latest at the next start. The Trash of other tabs is not touched. A copy may remain in a backup, such as Time Machine, or, if you use Sync, in your sync repository\'s history.',
+        'trash.empty.confirm.one': 'Delete the 1 conversation in this tab\'s Trash permanently?\n\nIt is erased from this Mac and cannot be put back. If the app still holds it open, it is erased as soon as it lets go of it, at the latest at the next start. The Trash of other tabs is not touched. A copy may remain in a backup, such as Time Machine, or, if you use Sync, in your sync repository\'s history.',
+        'trash.empty.busy': 'Emptying…',
+        'trash.empty.untold': '{n} older conversations, deleted before their tab was kept, show in every tab\'s Trash: Empty trash leaves them. Delete them one at a time if you want them gone now.',
+        'trash.empty.untold.one': '1 older conversation, deleted before its tab was kept, shows in every tab\'s Trash: Empty trash leaves it. Delete it on its own if you want it gone now.',
+        'trash.empty.failed': '{n} could not be deleted permanently and stay in the Trash.',
+        'trash.erasing': 'Being deleted',
+        'trash.erasing.hint': 'Deleted permanently while it was still open: it is erased as soon as the app lets go of it, at the latest at the next start.',
+        'archived.wiping': 'Being deleted',
+        'archived.wiping.hint': 'Ended with /recon end: it is deleted for good as soon as the app lets go of it, at the latest at the next start. It cannot be restored or put in the trash.',
         'trash.back.label': 'Put "{title}" back',
         'trash.back.failed': 'Could not put the conversation back.',
         'promote.to': 'Promote to {tab}',
@@ -263,6 +290,11 @@ window.__ModuleLoader__.load({
         'look.chat.wide': '加宽对话区域',
         'look.chat.normal': '恢复对话区域宽度',
         'look.failed': '无法保存该设置。',
+        'tabs.arrange': '排列标签',
+        'tabs.arrange.hint': '拖动标签即可移动，或在标签上使用方向键。',
+        'tabs.arrange.move': '移动“{tab}”',
+        'tabs.arrange.reset': '恢复默认顺序',
+        'tabs.arrange.done': '完成',
         'toggle.open': '打开侧边栏',
         'toggle.collapse': '收起侧边栏',
         'brand': 'DeepSeek Harness',
@@ -347,10 +379,30 @@ window.__ModuleLoader__.load({
         'delete.label': '删除“{title}”',
         'delete.confirm': '删除“{title}”？\n\n它会进入废纸篓，30 天内可以放回，之后将永久删除。',
         'delete.running': '该对话仍在运行。要停止并删除吗？',
+        'stop.automation.one': '有一个自动化任务向此对话发送结果：{names}。继续的话，应用会永久删除该自动化任务及其运行记录，即使对话被放回也无法恢复。要继续吗？',
+        'stop.automation.many': '有 {n} 个自动化任务向此对话发送结果：{names}。继续的话，应用会永久删除它们及其运行记录，即使对话被放回也无法恢复。要继续吗？',
+        'stop.automation.unnamed': '有一个自动化任务向此对话发送结果。继续的话，应用会永久删除它及其运行记录，即使对话被放回也无法恢复。要继续吗？',
         'delete.failed': '无法删除该对话。',
         'trash.title': '废纸篓（{n}）',
         'trash.left': '剩 {n} 天',
         'trash.back': '放回',
+        'trash.erase': '永久删除',
+        'trash.erase.label': '永久删除“{title}”',
+        'trash.erase.confirm': '要永久删除“{title}”吗？\n\n它会从这台 Mac 上清除，无法放回。备份（如 Time Machine）中，或使用同步时同步仓库的历史中，可能仍有副本。',
+        'trash.erase.failed': '无法永久删除。',
+        'trash.empty': '清空废纸篓',
+        'trash.empty.label': '清空此标签的废纸篓：永久删除其中 {n} 个对话',
+        'trash.empty.label.one': '清空此标签的废纸篓：永久删除其中 1 个对话',
+        'trash.empty.confirm': '要永久删除此标签废纸篓中的全部 {n} 个对话吗？\n\n它们会从这台 Mac 上清除，无法放回。应用仍打开的对话会在应用释放后清除，最迟在下次启动时。其他标签的废纸篓不受影响。备份（如 Time Machine）中，或使用同步时同步仓库的历史中，可能仍有副本。',
+        'trash.empty.confirm.one': '要永久删除此标签废纸篓中的这 1 个对话吗？\n\n它会从这台 Mac 上清除，无法放回。如果应用仍打开它，会在应用释放后清除，最迟在下次启动时。其他标签的废纸篓不受影响。备份（如 Time Machine）中，或使用同步时同步仓库的历史中，可能仍有副本。',
+        'trash.empty.busy': '正在清空…',
+        'trash.empty.untold': '有 {n} 个较早的对话（删除时尚未记录所属标签）显示在每个标签的废纸篓中：清空废纸篓不会删除它们。如需立即删除，请逐个删除。',
+        'trash.empty.untold.one': '有 1 个较早的对话（删除时尚未记录所属标签）显示在每个标签的废纸篓中：清空废纸篓不会删除它。如需立即删除，请单独删除。',
+        'trash.empty.failed': '有 {n} 个无法永久删除，仍在废纸篓中。',
+        'trash.erasing': '正在删除',
+        'trash.erasing.hint': '在仍打开时被永久删除：应用释放后即清除，最迟在下次启动时。',
+        'archived.wiping': '正在删除',
+        'archived.wiping.hint': '已用 /recon end 结束：应用释放后即永久删除，最迟在下次启动时。无法恢复，也不会进入回收站。',
         'trash.back.label': '放回“{title}”',
         'trash.back.failed': '无法放回该对话。',
         'promote.to': '升级为 {tab}',
@@ -471,8 +523,67 @@ window.__ModuleLoader__.load({
       },
     };
 
-    /** The tabs: the first modes up to the limit, then the modes other add-ons added. */
-    const tabsOf = (state) => [...state.modes.slice(0, state.maxTabs), ...(state.extra ?? [])];
+    /** The tabs in the usual order: the first modes up to the limit, then the modes other add-ons added. */
+    const usualTabsOf = (state) => [...state.modes.slice(0, state.maxTabs), ...(state.extra ?? [])];
+    /**
+     * The tabs as they show: the usual tabs in your own order. Which tab a conversation belongs to
+     * (its fallback is the first tab) is decided on the usual order, so arranging changes only the order.
+     */
+    const tabsOf = (state) => orderTabs(usualTabsOf(state), state.tabOrder);
+
+    /** A saved tab order, checked: tab ids only, each once, at most 50. */
+    function readOrder(value) {
+      const seen = new Set();
+      for (const id of Array.isArray(value) ? value : []) {
+        if (typeof id === 'string' && /^[A-Za-z0-9][\w-]{0,127}$/.test(id) && seen.size < 50) seen.add(id);
+      }
+      return [...seen];
+    }
+
+    /**
+     * The tabs in your own order: those the saved order names come first, in that order; a tab it does
+     * not name (new since) follows, in the usual order. Names of tabs not here (switched off, or only
+     * on another Mac) are skipped. Which tabs there are never changes.
+     * @param {{id: string}[]} tabs - the tabs in the usual order.
+     * @param {unknown} order - the saved order (tab ids).
+     * @returns {{id: string}[]} the same tabs, reordered.
+     */
+    function orderTabs(tabs, order) {
+      const list = Array.isArray(tabs) ? tabs : [];
+      const ids = readOrder(order);
+      if (ids.length === 0) return list;
+      const rank = new Map(ids.map((id, i) => [id, i]));
+      const named = list.filter((tab) => rank.has(tab.id)).sort((a, b) => rank.get(a.id) - rank.get(b.id));
+      return [...named, ...list.filter((tab) => !rank.has(tab.id))];
+    }
+
+    /**
+     * The order to save after you rearrange the tabs: the order you see, with every tab not shown now
+     * (an add-on switched off, a tab only another Mac has) kept right after the tab it followed before,
+     * so it comes back in its place.
+     * @param {string[]} visible - the tab ids in the order you see.
+     * @param {unknown} previous - the saved order before.
+     * @returns {string[]} the order to save.
+     */
+    function mergeOrder(visible, previous) {
+      const out = readOrder(visible);
+      const before = readOrder(previous);
+      before.forEach((id, i) => {
+        if (out.includes(id)) return;
+        let j = i - 1;
+        while (j >= 0 && !out.includes(before[j])) j -= 1;
+        out.splice(j < 0 ? 0 : out.indexOf(before[j]) + 1, 0, id);
+      });
+      return out.slice(0, 50);
+    }
+
+    /** The ids with one moved to a new place (clamped to the list). */
+    function moveId(ids, id, to) {
+      const rest = ids.filter((other) => other !== id);
+      if (rest.length === ids.length) return ids;
+      const at = Math.max(0, Math.min(rest.length, to));
+      return [...rest.slice(0, at), id, ...rest.slice(at)];
+    }
 
     const FALLBACK_MODES = [
       { id: 'chat', label: 'Chat' },
@@ -763,6 +874,13 @@ html[data-cws-wide] [class*='_composerStack']:not([class*='_composerHero'] *) [c
 /* More than three tabs: rows of three, so every name has room. */
 .cws-tabs[data-many='true']{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
 .cws-tabs[data-many='true'] .cws-tab{gap:5px;padding:0 4px}
+.cws-tabs[data-editing='true']{border-style:dashed}
+.cws-tabs[data-editing='true'] .cws-tab{cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none;outline:1px dashed var(--dsw-alias-border-l3);outline-offset:-3px}
+.cws-tabs[data-editing='true'] .cws-tab[data-dragging='true']{cursor:grabbing;opacity:.55}
+.cws-arrange{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:-6px 0 10px;padding:0 4px;font-size:11px;color:var(--dsw-alias-label-secondary)}
+.cws-arrange-hint{flex:1 1 100%}
+.cws-arrange .cws-link{font-size:11px;padding:1px 4px}
+.cws-icon[data-on='true']{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .cws-tab[aria-selected='true']{background:var(--dsw-alias-button-elevated-fill);color:var(--dsw-alias-label-primary);font-weight:500}
 .cws-new{display:flex;align-items:center;gap:8px;width:100%;min-height:36px;margin:0 0 8px;padding:0 8px 0 12px;box-sizing:border-box;border:1px solid color-mix(in srgb,var(--dsw-alias-state-business-primary) 45%,transparent);border-radius:var(--dsw-radius-md);background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 10%,transparent);color:var(--dsw-alias-state-business-primary);cursor:pointer;font:inherit;font-weight:500;text-align:left}
 .cws-new .cws-glyph{color:inherit}
@@ -907,6 +1025,13 @@ html[data-cws-wide] [class*='_composerStack']:not([class*='_composerHero'] *) [c
 .cws-movelist .cws-moveitem{overflow:hidden;text-overflow:ellipsis}
 .cws-archived .cws-label{color:var(--dsw-alias-label-secondary)}
 .cws-trashed{cursor:default}
+.cws-trash-row{flex-direction:column;align-items:stretch;padding-bottom:4px}
+.cws-trash-row .cws-conv-main{min-height:24px;padding-bottom:0}
+.cws-trash-meta{display:flex;align-items:center;flex-wrap:wrap;gap:2px;padding:0 6px 0 12px}
+.cws-trash-meta .cws-link{font-size:11px;padding:1px 3px}
+.cws-trash-dot{color:var(--dsw-alias-label-secondary);font-size:11px}
+.cws-trash-empty{display:flex;justify-content:flex-end;padding:2px 8px 6px}
+.cws-trash-empty .cws-link[disabled],.cws-trash-meta .cws-link[disabled]{opacity:.6;cursor:default}
 .cws-dot-wait{background:var(--dsw-alias-state-warn-primary,#d9822b) !important;animation:none !important}
 .cws-needs{margin-bottom:6px;border-radius:var(--dsw-radius-sm);background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#d9822b) 9%,transparent)}
 .cws-needs-head{color:var(--dsw-alias-label-primary);padding-top:8px}
@@ -939,6 +1064,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       panel: 'M4 5h16v14H4zM9 5v14',
       grid: 'M5 5h5v5H5zM14 5h5v5h-5zM5 14h5v5H5zM14 14h5v5h-5z',
       dot: 'M12 11.5a.5.5 0 1 0 0 1 .5.5 0 1 0 0-1',
+      edit: 'M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4',
       link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
       sparkle: 'M12 4l1.8 5.2L19 11l-5.2 1.8L12 18l-1.8-5.2L5 11l5.2-1.8z',
       folder: 'M3 7h6l2 2h10v10H3z',
@@ -956,6 +1082,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         sparkle: 'IconSparkleRegular',
         folder: 'IconFolderCloseRegular',
         folderOpen: 'IconFolderOpenRegular',
+        edit: 'IconEditOutlineRegular',
       };
       const Native = UI[map[name]];
       if (typeof Native === 'function' || (Native && typeof Native === 'object')) return h(Native, { size });
@@ -974,6 +1101,45 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       }
     }
 
+    /**
+     * Whether a tab's name fits beside its icon: the room the button gives against the name's width,
+     * the icon, the gap between them and the button's padding (all in pixels).
+     */
+    function nameFits(sizes) {
+      const { room, name, icon, gap, padding } = sizes;
+      // On the safe side: a name a fraction too wide would already be cut ("Researc…").
+      return name + icon + gap + padding <= room - 0.25;
+    }
+
+    /**
+     * Which tabs show their icon alone in the wide sidebar: those with an icon of their own whose name
+     * does not fit. Each name is measured as if its tab were selected (weight 500 or more), so selecting
+     * a tab never changes its look.
+     * @param {{id: string, label: string}[]} tabs - the tabs, in order.
+     * @param {ArrayLike<Element>} buttons - their buttons, in the same order.
+     * @param {(el: Element) => CSSStyleDeclaration} styleOf - the computed style of a button.
+     * @param {CanvasRenderingContext2D | null} pen - a canvas to measure text with.
+     * @returns {string[]} the ids that show their icon alone.
+     */
+    function iconOnlyIds(tabs, buttons, styleOf, pen) {
+      const ids = [];
+      tabs.forEach((m, i) => {
+        const button = buttons[i];
+        if (!button || !pen || glyphFor(m.id) === 'dot') return;
+        const css = styleOf(button);
+        pen.font = `${css.fontStyle} ${Math.max(500, Number(css.fontWeight) || 400)} ${css.fontSize} ${css.fontFamily}`;
+        const fits = nameFits({
+          room: button.getBoundingClientRect().width,
+          name: pen.measureText(m.label).width,
+          icon: button.firstElementChild?.getBoundingClientRect().width || 15,
+          gap: parseFloat(css.columnGap) || 0,
+          padding: (parseFloat(css.paddingLeft) || 0) + (parseFloat(css.paddingRight) || 0),
+        });
+        if (!fits) ids.push(m.id);
+      });
+      return ids;
+    }
+
     function glyphFor(modeId) {
       return modeId === 'chat' || modeId === 'code' || modeId === 'cowork' || modeId === 'finance' || modeId === 'data' || modeId === 'recon' || modeId === 'scout' || modeId === 'research' ? modeId : 'dot';
     }
@@ -983,7 +1149,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
      * tab layout. One store for the whole page, refreshed on demand and every 10 seconds.
      */
     function createModel(ctx) {
-      let state = { modes: FALLBACK_MODES, extra: [], selected: readLocal(), tabs: DEFAULT_TABS, maxTabs: 3, hideLogos: false, dateTitle: false, wideChat: false, modesOn: false, error: '', sessionModes: {} };
+      let state = { modes: FALLBACK_MODES, extra: [], selected: readLocal(), tabs: DEFAULT_TABS, maxTabs: 3, hideLogos: false, dateTitle: false, wideChat: false, tabOrder: [], modesOn: false, error: '', sessionModes: {} };
       const listeners = new Set();
       const emit = () => { for (const l of listeners) l(); };
       const set = (patch) => { state = { ...state, ...patch }; emit(); };
@@ -1006,8 +1172,14 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       // While a tab click is being saved, the stored tab is still the old one: a refresh must not read it.
       let selecting = 0;
       let saving = Promise.resolve();
+      // The same for this add-on's own settings (setOption): saves in order, and a refresh that began
+      // before or during a save keeps the value shown.
+      let optionSaving = Promise.resolve();
+      let optionWrites = 0;
+      let optionPending = 0;
       async function refresh() {
         const started = clicks;
+        const startedWrites = optionWrites;
         try {
           const spaces = await describe();
           const modesNs = spaces.find((item) => item.ns === MODES_NS);
@@ -1017,9 +1189,12 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             const tabs = readObject(mine.value?.tabs);
             if (Object.keys(tabs).length > 0) patch.tabs = tabs;
             if (Number.isFinite(mine.value?.maxTabs)) patch.maxTabs = mine.value.maxTabs;
-            patch.hideLogos = mine.value?.hideLogos === true;
-            patch.dateTitle = mine.value?.dateTitle === true;
-            patch.wideChat = mine.value?.wideChat === true;
+            if (optionPending === 0 && startedWrites === optionWrites) {
+              patch.hideLogos = mine.value?.hideLogos === true;
+              patch.dateTitle = mine.value?.dateTitle === true;
+              patch.wideChat = mine.value?.wideChat === true;
+              patch.tabOrder = readOrder(mine.value?.tabOrder);
+            }
           }
           if (modesNs) {
             const defined = Object.entries(readObject(modesNs.value?.modes)).map(([id, value]) => ({
@@ -1117,8 +1292,17 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       /** Switch one of this add-on's own on/off settings (`hideLogos`, `dateTitle`, `wideChat`). */
       async function setOption(key, value) {
         const before = state[key];
+        optionWrites += 1;
+        optionPending += 1;
         set({ [key]: value, error: '' });
+        // One save at a time and in order (fast arrow presses while arranging the tabs), each with a
+        // fresh revision; a save that a later change of the same setting replaced is skipped.
+        const turn = optionSaving;
+        let done;
+        optionSaving = new Promise((resolve) => { done = resolve; });
+        await turn;
         try {
+          if (state[key] !== value) return;
           const op = [{ op: 'set', path: [key], value }];
           let entry = (await describe()).find((item) => item.ns === SETTINGS_NS);
           let result = await ctx.remote.settings.mutate(SETTINGS_NS, op, entry.revision);
@@ -1128,7 +1312,13 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           }
           if (!result.ok) throw new Error(result.error.code);
         } catch {
-          set({ [key]: before, error: ctx.locale.bind(NS)('look.failed') });
+          // Put back only this change, not a later one.
+          if (state[key] === value) set({ [key]: before, error: ctx.locale.bind(NS)('look.failed') });
+        } finally {
+          done();
+          optionPending -= 1;
+          // Refreshes that began before the save finished carry the old value.
+          optionWrites += 1;
         }
       }
 
@@ -1162,8 +1352,15 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       };
     }
 
-    function Tooltip({ label, show, children }) {
-      if (show && UI.Tooltip) return h(UI.Tooltip, { label, delayMs: 500, side: 'right' }, children);
+    /**
+     * The app's own tooltip (half a second after pointing). `side` is where it opens; `portal` lets it
+     * leave the sidebar instead of being cut off at its edge.
+     */
+    function Tooltip(props) {
+      const { label, show, side = 'right', portal = false, disabled = false, children } = props;
+      // `disabled` keeps the app's tooltip around the element but silent, so the element is not
+      // replaced (and does not lose keyboard focus) when the tooltip is switched off for a while.
+      if (show && UI.Tooltip) return h(UI.Tooltip, { label, delayMs: 500, side, ...(portal ? { portal: true } : {}), ...(disabled ? { disabled: true } : {}) }, children);
       return children;
     }
 
@@ -1671,10 +1868,10 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     /** The trash of deleted conversations, read from and changed through this add-on's host route. */
     function createTrash() {
       const url = () => new URL('dsh-cowork-shell/trash', document.baseURI);
-      let snapshot = { items: [], keepMs: 0 };
+      let snapshot = { items: [], keepMs: 0, wiping: [] };
       const listeners = new Set();
       const install = (data) => {
-        snapshot = { items: Array.isArray(data?.items) ? data.items : [], keepMs: Number(data?.keepMs) || 0 };
+        snapshot = { items: Array.isArray(data?.items) ? data.items : [], keepMs: Number(data?.keepMs) || 0, wiping: Array.isArray(data?.wiping) ? data.wiping.map(String) : [] };
         for (const listener of listeners) listener();
       };
       const call = async (init) => {
@@ -1682,8 +1879,9 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(String(data?.error ?? response.status));
         install(data);
+        return data;
       };
-      const post = (action, sessionId, title) => call({ method: 'POST', body: JSON.stringify({ action, sessionId, title }) });
+      const post = (action, sessionId, title, where) => call({ method: 'POST', body: JSON.stringify({ action, sessionId, title, ...(where?.tab ? { tab: where.tab } : {}), ...(where?.fallbackTab ? { fallbackTab: where.fallbackTab } : {}) }) });
       let timer;
       return {
         get: () => snapshot,
@@ -1692,8 +1890,14 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           if (listeners.size === 1) { void call().catch(() => {}); timer = setInterval(() => void call().catch(() => {}), 60000); }
           return () => { listeners.delete(listener); if (listeners.size === 0) clearInterval(timer); };
         },
-        remove: (id, title) => post('delete', id, title),
+        /** `where`: `{tab, fallbackTab}`, the tab it is deleted from (only that tab's Trash list shows it) and the tab its folder gives. */
+        remove: (id, title, where) => post('delete', id, title, where),
         restore: (id) => post('restore', id),
+        erase: (id) => post('erase', id),
+        /** Empty trash: delete permanently the conversations one tab's list showed. */
+        empty: (ids) => call({ method: 'POST', body: JSON.stringify({ action: 'empty', sessionIds: ids }) }),
+        /** Ask again now, for example when a conversation was just archived (Recon's End and wipe). */
+        refresh: () => call(),
       };
     }
 
@@ -1732,11 +1936,76 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const recorded = state.sessionModes?.[id];
       if (typeof recorded === 'string' && tabIds.includes(recorded)) return recorded;
       if (session?.blank) return state.selected;
-      let guess;
-      if (!workspace) guess = 'chat';
-      else if (/(^|\/)default-workspace\/?$/.test(String(workspace.path ?? '')) || workspace.title === 'default-workspace') guess = 'cowork';
-      else guess = 'code';
+      const guess = guessTab(workspace);
       return tabIds.includes(guess) ? guess : tabIds[0];
+    }
+
+    /** The tab a conversation's folder suggests: no project = Chat, the app's default workspace = Cowork, any other = Code. */
+    function guessTab(workspace) {
+      if (!workspace) return 'chat';
+      if (/(^|\/)default-workspace\/?$/.test(String(workspace.path ?? '')) || workspace.title === 'default-workspace') return 'cowork';
+      return 'code';
+    }
+
+    /**
+     * Which tab's Trash list shows a deleted conversation: the tab it was deleted from (or, for one
+     * deleted before 0.58.0, its recorded tab). While that tab is not shown, the tab its folder gives,
+     * else the first tab, as the Archived list does. Every tab (null) when its tab cannot be told, so
+     * nothing deleted is out of reach.
+     */
+    function trashTab(item, state, tabIds) {
+      const known = [item?.tab, state?.sessionModes?.[item?.id]].find((tab) => typeof tab === 'string' && tab !== '');
+      if (known === undefined) return null;
+      if (tabIds.includes(known)) return known;
+      if (typeof item?.fallbackTab === 'string' && tabIds.includes(item.fallbackTab)) return item.fallbackTab;
+      return tabIds[0] ?? null;
+    }
+
+    /**
+     * What Empty trash erases from a tab's Trash list: the rows that belong to this tab, except those
+     * already being deleted. Rows whose tab is not known show in every tab and are left (one at a time).
+     */
+    function emptyIds(items, state, tabIds, selectedId) {
+      return (Array.isArray(items) ? items : [])
+        .filter((item) => item && item.erasing !== true && typeof item.id === 'string' && trashTab(item, state, tabIds) === selectedId)
+        .map((item) => item.id);
+    }
+
+    /**
+     * Empty trash for one tab: one question that names how many (and how many older rows, listed in
+     * every tab, it leaves), then the ids in parts of at most `batch`. Never throws.
+     * @returns {Promise<{asked: boolean, sent: string[], failed: number}>} what happened.
+     */
+    async function runEmpty(options) {
+      const { items, state, tabIds, selectedId, ask, send, start, t, batch = 2000 } = options;
+      const ids = emptyIds(items, state, tabIds, selectedId);
+      if (ids.length === 0) return { asked: false, sent: [], failed: 0 };
+      const untold = (Array.isArray(items) ? items : []).filter((item) => item && item.erasing !== true && trashTab(item, state, tabIds) === null).length;
+      let question = t(ids.length === 1 ? 'trash.empty.confirm.one' : 'trash.empty.confirm', { n: ids.length });
+      if (untold > 0) question += '\n\n' + t(untold === 1 ? 'trash.empty.untold.one' : 'trash.empty.untold', { n: untold });
+      if (!ask(question)) return { asked: true, sent: [], failed: 0 };
+      start?.();
+      const sent = [];
+      let failed = 0;
+      for (let at = 0; at < ids.length; at += batch) {
+        const part = ids.slice(at, at + batch);
+        try {
+          const data = await send(part);
+          sent.push(...part);
+          failed += Number(data?.emptied?.failed) || 0;
+        } catch {
+          // This part and the rest were not erased.
+          failed += ids.length - at;
+          break;
+        }
+      }
+      return { asked: true, sent, failed };
+    }
+
+    /** Whether the open tab's Trash list shows this deleted conversation (one with no known tab shows everywhere). */
+    function inTabTrash(item, state, tabIds, selectedId) {
+      const tab = trashTab(item, state, tabIds);
+      return tab === null || tab === selectedId;
     }
 
     /** The app's default workspace (the folder Chat lives in), or null when there is none. */
@@ -1819,10 +2088,16 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const state = useSyncExternalStore(model.subscribe, model.get);
       const lib = useSyncExternalStore(library.subscribe, library.get);
       const bin = useSyncExternalStore(trash.subscribe, trash.get);
+      // When the archived list changes (Recon's End and wipe archives the conversation it ends), ask the
+      // trash again at once, so that conversation shows "Being deleted" instead of Restore and Delete.
+      const archivedKey = (lib.archived ?? []).join(',');
+      useEffect(() => { void trash.refresh?.().catch(() => {}); }, [archivedKey]);
       // A deleted conversation is hidden at once, also while its files have not moved yet.
       const deleted = new Set(bin.items.map((item) => item.id));
       const [open, setOpen] = useState({});
       const [more, setMore] = useState({});
+      // Empty trash is running (the button waits).
+      const [emptying, setEmptying] = useState(false);
       // Search inside this tab: titles as the user types, and the text of messages after Enter.
       const [find, setFind] = useState('');
       const [textHits, setTextHits] = useState(null);
@@ -1850,7 +2125,8 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const findWords = find.toLowerCase().split(/\s+/).filter(Boolean);
       const titleOfId = (id) => String(lib.byId[id]?.displayTitle ?? '').toLowerCase();
       const shows = (id) => findWords.length === 0 || findWords.every((word) => titleOfId(id).includes(word)) || (textHits ? textHits.has(id) : false);
-      const tabIds = tabs.map((m) => m.id);
+      // Which tab a conversation belongs to is decided on the usual order (see usualTabsOf).
+      const tabIds = usualTabsOf(state).map((m) => m.id);
       const uw = (() => { try { return appCtx.get('uiWorkspace'); } catch { return null; } })();
 
       const archived = new Set(lib.archived);
@@ -1864,6 +2140,10 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       /** Each conversation's project, for Show in Finder. */
       const homeOf = {};
       for (const ws of lib.workspaces) for (const id of ws.sessionIds ?? []) homeOf[id] = ws;
+      /** The tab a conversation shows in now and the tab its folder gives: kept with it when it is deleted. */
+      const tabOf = (id) => ({ tab: tabOfSession(id, lib.byId[id], homeOf[id] ?? null, state, tabIds), fallbackTab: guessTab(homeOf[id] ?? null) });
+      // This tab's own Trash list (each tab lists only what was deleted from it).
+      const binHere = bin.items.filter((item) => inTabTrash(item, state, tabIds, selected.id));
       const projects = [];
       for (const ws of lib.workspaces) {
         const ids = sortRows(ws.sessionIds ?? []);
@@ -1930,14 +2210,34 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         }
       };
 
-      /** Archive a conversation the app's own way. One that is still working asks first. */
+      /**
+     * The question before the app stops a conversation's work to archive or delete it. When an
+     * automation delivers into the conversation, stopping deletes that automation for good (the
+     * app's scheduler does so), so the question names it and says so; otherwise the plain question.
+     * @param {unknown} activity - the refusal's `details.activity`: [{kind, items: [{id, label}]}].
+     * @param {string} plain - the question for a conversation that is only still working.
+     * @param {(key: string, values?: object) => string} t - the texts.
+     * @returns {string} the question.
+     */
+    function stopQuestion(activity, plain, t) {
+      const list = Array.isArray(activity) ? activity : [];
+      const tasks = list.filter((entry) => entry?.kind === 'schedule').flatMap((entry) => (Array.isArray(entry.items) ? entry.items : []));
+      if (tasks.length === 0) return plain;
+      const names = tasks.map((item) => String(item?.label ?? '').replace(/\s+/g, ' ').trim().slice(0, 80)).filter(Boolean);
+      const key = names.length === 0 ? 'stop.automation.unnamed' : tasks.length === 1 ? 'stop.automation.one' : 'stop.automation.many';
+      const about = t(key, { names: names.map((name) => `\u201c${name}\u201d`).join(', '), n: tasks.length });
+      // Its own turn, a helper or a job may be running too.
+      return list.some((entry) => entry?.kind !== 'schedule') ? `${about}\n\n${plain}` : about;
+    }
+
+    /** Archive a conversation the app's own way. One that is still working asks first. */
       const archiveQuietly = async (id, question) => {
         const service = (() => { try { return appCtx.get('workspaces'); } catch { return null; } })();
         try {
           await service.archiveSession(id);
         } catch (error) {
           if (error?.rpcError?.code !== 'workspace/session-active') throw error;
-          if (!window.confirm(question)) return false;
+          if (!window.confirm(stopQuestion(error?.rpcError?.details?.activity, question, t))) return false;
           await service.archiveSession(id, { stopActivity: true });
         }
         if (id === lib.currentId) startNew(appCtx, library, selected.id);
@@ -1957,7 +2257,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           if (archived.has(id)) {
             if (id === lib.currentId) startNew(appCtx, library, selected.id);
           } else if (!(await archiveQuietly(id, t('delete.running')))) return;
-          await trash.remove(id, title);
+          await trash.remove(id, title, tabOf(id));
         } catch {
           model.fail(t('delete.failed'));
         }
@@ -1967,6 +2267,33 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           await trash.restore(id);
         } catch {
           model.fail(t('trash.back.failed'));
+        }
+      };
+      /**
+       * Empty trash: every conversation this tab's Trash list shows (not those already being deleted),
+       * after one question that names how many. Other tabs' lists are not touched.
+       */
+      const emptyHere = async () => {
+        if (emptying) return;
+        try {
+          const done = await runEmpty({
+            items: binHere, state, tabIds, selectedId: selected.id, t,
+            ask: (question) => window.confirm(question),
+            send: (ids) => trash.empty(ids),
+            start: () => setEmptying(true),
+          });
+          if (done.failed > 0) model.fail(t('trash.empty.failed', { n: done.failed }));
+        } finally {
+          setEmptying(false);
+        }
+      };
+      /** Delete permanently: no way back, so it always asks first. */
+      const erase = async (id, title) => {
+        if (!window.confirm(t('trash.erase.confirm', { title }))) return;
+        try {
+          await trash.erase(id);
+        } catch {
+          model.fail(t('trash.erase.failed'));
         }
       };
       const restore = async (id) => {
@@ -2025,7 +2352,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             if (archived.has(id)) {
               if (id === lib.currentId) startNew(appCtx, library, selected.id);
             } else if (!(await archiveQuietly(id, t('delete.running')))) continue;
-            await trash.remove(id, titleOf(id));
+            await trash.remove(id, titleOf(id), tabOf(id));
           } catch {
             model.fail(t('delete.failed'));
             break;
@@ -2076,6 +2403,9 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         const one = ids.length === 1 ? ids[0] : null;
         const allArchived = ids.every((id) => archived.has(id));
         const noneArchived = ids.every((id) => !archived.has(id));
+        // Ended with Recon's End and wipe: neither restored nor put in the trash, from this menu either.
+        const wipingIds = new Set(bin.wiping ?? []);
+        const usable = ids.filter((id) => !wipingIds.has(id));
         return h('div', { className: 'cws-ctx', role: 'menu', style: { left: menu.x, top: menu.y } },
           menu.rename !== null
             ? h('form', { onSubmit: (event) => { event.preventDefault(); void renameOne(one, menu.rename); } },
@@ -2087,8 +2417,9 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
               one && homeOf[one]?.path ? h('button', { type: 'button', role: 'menuitem', title: homeOf[one].path, onClick: () => void reveal(homeOf[one].path) }, t('ctx.reveal')) : null,
               one ? h('hr') : null,
               noneArchived ? h('button', { type: 'button', role: 'menuitem', onClick: () => void archiveMany(ids) }, one ? t('archive') : t('ctx.archive.n', { n: ids.length })) : null,
-              allArchived ? h('button', { type: 'button', role: 'menuitem', onClick: () => void restoreMany(ids) }, one ? t('ctx.restore') : t('ctx.restore.n', { n: ids.length })) : null,
-              h('button', { type: 'button', role: 'menuitem', 'data-danger': 'true', onClick: () => void removeMany(ids) }, one ? t('delete') : t('ctx.delete.n', { n: ids.length }))));
+              allArchived && usable.length > 0 ? h('button', { type: 'button', role: 'menuitem', onClick: () => void restoreMany(usable) }, usable.length === 1 ? t('ctx.restore') : t('ctx.restore.n', { n: usable.length })) : null,
+              usable.length > 0 ? h('button', { type: 'button', role: 'menuitem', 'data-danger': 'true', onClick: () => void removeMany(usable) }, usable.length === 1 ? t('delete') : t('ctx.delete.n', { n: usable.length })) : null,
+              usable.length < ids.length ? h('span', { className: 'cws-time', role: 'note', title: t('archived.wiping.hint') }, t('archived.wiping')) : null));
       };
       /** The tab's own search field, the search-everything button, and the count of picked conversations. */
       const searchText = async () => {
@@ -2151,20 +2482,35 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           }));
       };
       const trashSection = () => {
-        if (bin.items.length === 0) return null;
+        if (binHere.length === 0) return null;
         const shown = !!open.__trash;
         return h(React.Fragment, null,
           h('button', { type: 'button', className: 'cws-more-btn cws-archived-head', 'aria-expanded': shown, onClick: () => setOpen((o) => ({ ...o, __trash: !shown })) },
-            (shown ? '▾ ' : '▸ ') + t('trash.title', { n: bin.items.length })),
-          shown ? bin.items.map((item) => {
+            (shown ? '▾ ' : '▸ ') + t('trash.title', { n: binHere.length })),
+          shown ? binHere.map((item) => {
             const title = item.title || t('untitled');
             const left = Math.max(0, Math.ceil((item.deletedAt + bin.keepMs - Date.now()) / 86400000));
-            return h('div', { key: item.id, className: 'cws-conv cws-archived' },
+            // Two lines: the whole width for the title, then the days left and the buttons below it.
+            const dot = (key) => h('span', { key, className: 'cws-trash-dot', 'aria-hidden': true }, '·');
+            return h('div', { key: item.id, className: 'cws-conv cws-archived cws-trash-row' },
               h('span', { className: 'cws-conv-main cws-trashed', title },
-                h('span', { className: 'cws-label' }, title),
-                h('span', { className: 'cws-time' }, t('trash.left', { n: left }))),
-              h('button', { type: 'button', className: 'cws-link', 'aria-label': t('trash.back.label', { title }), onClick: () => void putBack(item.id) }, t('trash.back')));
-          }) : null);
+                h('span', { className: 'cws-label' }, title)),
+              h('div', { className: 'cws-trash-meta' },
+                h('span', { className: 'cws-time' }, t('trash.left', { n: left })),
+                ...(item.erasing
+                  ? [dot('d1'), h('span', { key: 'erasing', className: 'cws-time', title: t('trash.erasing.hint') }, t('trash.erasing'))]
+                  : [
+                    dot('d1'),
+                    // While Empty trash runs, a row may be erased any moment: no Put back or erase then.
+                    h('button', { key: 'back', type: 'button', className: 'cws-link', disabled: emptying, 'aria-label': t('trash.back.label', { title }), onClick: () => void putBack(item.id) }, t('trash.back')),
+                    dot('d2'),
+                    h('button', { key: 'erase', type: 'button', className: 'cws-link', disabled: emptying, 'aria-label': t('trash.erase.label', { title }), onClick: () => void erase(item.id, title) }, t('trash.erase')),
+                  ])));
+          }) : null,
+          shown && emptyIds(binHere, state, tabIds, selected.id).length > 0
+            ? h('div', { className: 'cws-trash-empty' },
+              h('button', { type: 'button', className: 'cws-link', disabled: emptying, 'aria-label': ((n) => t(n === 1 ? 'trash.empty.label.one' : 'trash.empty.label', { n }))(emptyIds(binHere, state, tabIds, selected.id).length), onClick: () => void emptyHere() }, emptying ? t('trash.empty.busy') : t('trash.empty')))
+            : null);
       };
       const archivedSection = () => {
         if (archivedIds.length === 0) return trashSection();
@@ -2180,8 +2526,13 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
               h('button', { type: 'button', className: 'cws-conv-main', onClick: (event) => clickRow(event, id), title },
                 h('span', { className: 'cws-label' }, title),
                 h('span', { className: 'cws-time' }, ago(t, sess.updatedAt))),
-              h('button', { type: 'button', className: 'cws-link', 'aria-label': t('archived.restore.label', { title }), onClick: () => void restore(id) }, t('archived.restore')),
-              h('button', { type: 'button', className: 'cws-link', 'aria-label': t('delete.label', { title }), onClick: () => void remove(id, title) }, t('delete')));
+              // Ended with Recon's End and wipe: it is being deleted for good, so it can be neither restored nor put in the trash.
+              ...((bin.wiping ?? []).includes(id)
+                ? [h('span', { key: 'wiping', className: 'cws-time', title: t('archived.wiping.hint') }, t('archived.wiping'))]
+                : [
+                  h('button', { key: 'restore', type: 'button', className: 'cws-link', 'aria-label': t('archived.restore.label', { title }), onClick: () => void restore(id) }, t('archived.restore')),
+                  h('button', { key: 'delete', type: 'button', className: 'cws-link', 'aria-label': t('delete.label', { title }), onClick: () => void remove(id, title) }, t('delete')),
+                ]));
           }) : null,
           trashSection());
       };
@@ -2380,6 +2731,43 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const darwin = document.documentElement.getAttribute('data-platform') === 'darwin';
       const tabs = tabsOf(state);
       const selected = tabs.find((m) => m.id === state.selected) ?? tabs[0];
+      // Arranging the tabs (wide sidebar only): `preview` is the order while a tab is being dragged.
+      const [editing, setEditing] = useState(false);
+      const [preview, setPreview] = useState(null);
+      const dragRef = useRef(null);
+      const endDragRef = useRef(null);
+      const arranging = editing && wide;
+      /** End a drag at once: its window listeners go, nothing is saved. */
+      const stopDrag = () => {
+        endDragRef.current?.();
+        endDragRef.current = null;
+        dragRef.current = null;
+      };
+      // Arranging ended (Escape, Done, the sidebar folded): any drag ends with it, unsaved.
+      useEffect(() => {
+        if (arranging) return undefined;
+        stopDrag();
+        setPreview(null);
+        return undefined;
+      }, [arranging]);
+      useEffect(() => () => stopDrag(), []);
+      const shownTabs = arranging && preview ? orderTabs(tabs, preview) : tabs;
+      // Wide sidebar: tabs with an icon of their own whose name does not fit show the icon alone (the
+      // name shows on pointing). A tab's width does not depend on its text, so this cannot flicker.
+      const [iconOnly, setIconOnly] = useState(() => ({ key: '', ids: new Set() }));
+      const tabsKey = shownTabs.map((m) => `${m.id}:${m.label}`).join('|');
+      useLayoutEffectSafe(() => {
+        const list = tabsRef.current;
+        const keep = (ids) => setIconOnly((prev) => (prev.key === ids.join(',') ? prev : { key: ids.join(','), ids: new Set(ids) }));
+        if (!wide || !list || typeof ResizeObserver !== 'function') { keep([]); return undefined; }
+        const pen = document.createElement('canvas').getContext('2d');
+        const measure = () => keep(iconOnlyIds(shownTabs, list.querySelectorAll('[role=tab]'), (el) => getComputedStyle(el), pen));
+        measure();
+        const watch = new ResizeObserver(() => measure());
+        watch.observe(list);
+        void document.fonts?.ready?.then(measure, () => {});
+        return () => watch.disconnect();
+      }, [wide, tabsKey]);
       const layout = state.tabs;
       const claimed = new Set(Object.values(layout).flatMap((tab) => (Array.isArray(tab?.pages) ? tab.pages : [])));
       const own = (Array.isArray(layout[selected.id]?.pages) ? layout[selected.id].pages : [])
@@ -2428,7 +2816,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         if (!sess || sess.origin === 'subagent') return;
         const ws = libSnap.workspaces.find((item) => (item.sessionIds ?? []).includes(id)) ?? null;
         const now = model.get();
-        const tab = tabOfSession(id, sess, ws, now, tabs.map((m) => m.id));
+        const tab = tabOfSession(id, sess, ws, now, usualTabsOf(now).map((m) => m.id));
         // A conversation opened from another tab's list (Needs you, Show all) is remembered for its own tab.
         writeLast(sess.blank ? selectedRef.current : tab, id);
       }, [libSnap.currentId, libSnap.ok]);
@@ -2445,7 +2833,77 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         }
         if (gone) startNew(appCtx, library, m.id);
       };
+      /** Save a new order (the order you see, keeping the places of tabs not shown now). */
+      const saveOrder = (ids) => {
+        setPreview(null);
+        void model.setOption('tabOrder', mergeOrder(ids, state.tabOrder));
+      };
+      const focusTab = (id) => setTimeout(() => tabsRef.current?.querySelector(`[data-tab-id="${CSS.escape(id)}"]`)?.focus(), 0);
+      /** While arranging: arrow keys move the focused tab; Escape ends arranging. */
+      const onArrangeKey = (event) => {
+        const id = event.target?.closest?.('[role=tab]')?.getAttribute('data-tab-id');
+        if (event.key === 'Escape') { event.preventDefault(); setPreview(null); setEditing(false); return; }
+        const ids = shownTabs.map((m) => m.id);
+        const index = ids.indexOf(id);
+        if (index < 0) return;
+        let next = -1;
+        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = index + 1;
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = index - 1;
+        if (event.key === 'Home') next = 0;
+        if (event.key === 'End') next = ids.length - 1;
+        if (next < 0 || next >= ids.length || next === index) return;
+        event.preventDefault();
+        saveOrder(moveId(ids, id, next));
+        focusTab(id);
+      };
+      /**
+       * While arranging: a tab follows the pointer. Pointer events on the window (not the page's drag
+       * and drop, which brings up the app's file-drop cover; not pointer capture, which is lost when
+       * the moving tab's button is put elsewhere in the list). A release the page never sees (outside
+       * the window) ends the drag unsaved; it is saved only when the order really changed.
+       */
+      const onTabPointerDown = (event, id) => {
+        if (!arranging || event.button !== 0) return;
+        event.preventDefault();
+        stopDrag();
+        const start = shownTabs.map((m) => m.id);
+        const drag = { id, x: event.clientX, y: event.clientY, moved: false, start, order: start };
+        dragRef.current = drag;
+        const cancel = () => {
+          if (dragRef.current !== drag) return;
+          stopDrag();
+          setPreview(null);
+        };
+        const move = (e) => {
+          if (dragRef.current !== drag) return;
+          if (e.buttons === 0) { cancel(); return; }
+          if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 4) return;
+          drag.moved = true;
+          const over = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('[role=tab]');
+          const target = over && tabsRef.current?.contains(over) ? over.getAttribute('data-tab-id') : null;
+          if (!target || target === drag.id) return;
+          drag.order = moveId(drag.order, drag.id, drag.order.indexOf(target));
+          setPreview(drag.order);
+        };
+        const up = () => {
+          if (dragRef.current !== drag) return;
+          stopDrag();
+          if (drag.moved && drag.order.join('\u0000') !== drag.start.join('\u0000')) saveOrder(drag.order);
+          else setPreview(null);
+        };
+        window.addEventListener('pointermove', move, true);
+        window.addEventListener('pointerup', up, true);
+        window.addEventListener('pointercancel', cancel, true);
+        window.addEventListener('blur', cancel);
+        endDragRef.current = () => {
+          window.removeEventListener('pointermove', move, true);
+          window.removeEventListener('pointerup', up, true);
+          window.removeEventListener('pointercancel', cancel, true);
+          window.removeEventListener('blur', cancel);
+        };
+      };
       const onTabKey = (event) => {
+        if (arranging) { onArrangeKey(event); return; }
         const index = tabs.findIndex((m) => m.id === selected.id);
         let next = -1;
         if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (index + 1) % tabs.length;
@@ -2461,7 +2919,10 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const searchAll = hasGlobal ? h(Tooltip, { key: 'search', label: `${t('find.global')} (⌘K)`, show: true },
         h('button', { type: 'button', className: 'cws-icon', 'aria-label': t('find.global'), onClick: () => window.dispatchEvent(new Event('dsh-search:open')) },
           h(Glyph, { name: 'search', size: wide ? 16 : 18 }))) : null;
-      const toggle = h(React.Fragment, null, searchAll, h(Tooltip, { key: 'toggle', label: toggleLabel, show: true },
+      const arrange = wide && tabs.length > 1 ? h(Tooltip, { key: 'arrange', label: t('tabs.arrange'), show: true },
+        h('button', { type: 'button', className: 'cws-icon', 'data-cws-arrange': '', 'aria-label': t('tabs.arrange'), 'aria-pressed': arranging, 'data-on': arranging ? 'true' : undefined, onClick: () => { setPreview(null); setEditing(!arranging); } },
+          h(Glyph, { name: 'edit', size: 16 }))) : null;
+      const toggle = h(React.Fragment, null, arrange, searchAll, h(Tooltip, { key: 'toggle', label: toggleLabel, show: true },
         h('button', { type: 'button', className: 'cws-icon', 'data-sidebar-toggle': '', 'aria-label': toggleLabel, onClick: () => appCtx.layout.toggleSidebar() },
           h(Glyph, { name: 'panel', size: wide ? 16 : 18 }))));
 
@@ -2473,13 +2934,26 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         h('span', { className: 'cws-glyph', 'aria-hidden': true }, renderFactorySlot('sidebar.panel.icon', { id: p.id, size: wide ? 16 : 18, active: active === p.id })),
         wide ? h('span', { className: 'cws-label' }, p.label) : null));
 
-      const tabList = h('div', { ref: tabsRef, className: 'cws-tabs', 'data-many': wide && tabs.length > 3 ? 'true' : undefined, role: 'tablist', 'aria-label': t('tabs.label'), 'aria-orientation': wide ? 'horizontal' : 'vertical', onKeyDown: onTabKey },
-        tabs.map((m) => h(Tooltip, { key: m.id, label: m.label, show: !wide },
+      const tabList = h('div', { ref: tabsRef, className: 'cws-tabs', 'data-many': wide && tabs.length > 3 ? 'true' : undefined, 'data-editing': arranging ? 'true' : undefined, role: 'tablist', 'aria-label': t('tabs.label'), 'aria-orientation': wide ? 'horizontal' : 'vertical', 'aria-describedby': arranging ? 'cws-arrange-hint' : undefined, onKeyDown: onTabKey },
+        // Every tab shows its full name when pointed at: in the folded rail to its right, in the wide
+        // sidebar above it, so it never covers the tabs below (rows of three). Not while arranging.
+        shownTabs.map((m) => h(Tooltip, { key: m.id, label: m.label, show: true, disabled: arranging, side: wide ? 'top' : 'right', portal: wide },
           h('button', {
-            type: 'button', role: 'tab', className: 'cws-tab', 'aria-selected': m.id === selected.id,
-            tabIndex: m.id === selected.id ? 0 : -1, 'aria-label': wide ? undefined : m.label,
-            onClick: () => { if (m.id !== selected.id) switchTab(m); },
-          }, h(Glyph, { name: glyphFor(m.id), size: wide ? 15 : 18 }), wide ? h('span', null, m.label) : null))));
+            type: 'button', role: 'tab', className: 'cws-tab', 'aria-selected': m.id === selected.id, 'data-tab-id': m.id,
+            tabIndex: arranging || m.id === selected.id ? 0 : -1,
+            'aria-label': arranging ? t('tabs.arrange.move', { tab: m.label }) : (wide && !iconOnly.ids.has(m.id) ? undefined : m.label),
+            'data-icon-only': wide && iconOnly.ids.has(m.id) ? 'true' : undefined,
+            'data-dragging': arranging && preview && dragRef.current?.id === m.id ? 'true' : undefined,
+            // While arranging, a click does not switch tabs (a drag ends with one).
+            onClick: () => { if (!arranging && m.id !== selected.id) switchTab(m); },
+            onPointerDown: (event) => onTabPointerDown(event, m.id),
+          }, h(Glyph, { name: glyphFor(m.id), size: wide ? 15 : 18 }), wide && !iconOnly.ids.has(m.id) ? h('span', null, m.label) : null))));
+      const arrangeBar = arranging
+        ? h('div', { className: 'cws-arrange' },
+          h('span', { id: 'cws-arrange-hint', className: 'cws-arrange-hint' }, t('tabs.arrange.hint')),
+          (state.tabOrder ?? []).length > 0 ? h('button', { type: 'button', className: 'cws-link', onClick: () => { setPreview(null); void model.setOption('tabOrder', []); } }, t('tabs.arrange.reset')) : null,
+          h('button', { type: 'button', className: 'cws-link', onClick: () => { setPreview(null); setEditing(false); setTimeout(() => document.querySelector('[data-cws-arrange]')?.focus(), 0); } }, t('tabs.arrange.done')))
+        : null;
 
       const more = entryActions
         ? h(MoreMenu, {
@@ -2510,6 +2984,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           renderSlot('sidebar.brand.mark', { size: 20 }, { fallback: UI.FishLogo ? h(UI.FishLogo, { size: 20 }) : null }),
           renderSlot('sidebar.brand.name', {}, { fallback: h('span', null, t('brand')) })),
         tabList,
+        arrangeBar,
         state.error ? h('div', { className: 'cws-error', role: 'status' }, state.error) : null,
         h('button', { type: 'button', className: 'cws-new', onClick: startSession, 'aria-keyshortcuts': shortcut?.aria },
           h('span', { className: 'cws-glyph', 'aria-hidden': true }, h(Glyph, { name: 'plus', size: 16 })), h('span', { className: 'cws-label' }, newLabel),
