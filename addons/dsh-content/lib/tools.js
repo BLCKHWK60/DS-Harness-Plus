@@ -3,6 +3,7 @@
  * only inside the conversation's folder, and write only into Content's own parts of it (see folder.js).
  */
 import { BRING_MAX, transcript } from './conversations.js';
+import { ASSISTANT_NOTE } from './piece-tools.js';
 import { PARTS, inventory, makeLayout, saveFile, slugOf } from './folder.js';
 
 /**
@@ -75,7 +76,10 @@ export function buildTools({ enabled, rootOf, conversationOf, hasOf, conversatio
       },
       ...common,
       execute: safely(async (args, exec) => {
-        const file = saveFile(rootOf(exec), { part: String(args.part ?? ''), name: String(args.name ?? ''), text: String(args.text ?? ''), ending: `.${args.format ?? 'md'}` });
+        // A note the assistant saves is marked as its own: it never counts as the user's own words.
+        const part = String(args.part ?? '');
+        const body = String(args.text ?? '');
+        const file = saveFile(rootOf(exec), { part, name: String(args.name ?? ''), text: part === 'notes' && body.trim() ? `${ASSISTANT_NOTE}\n${body}` : body, ending: `.${args.format ?? 'md'}` });
         const words = String(args.text ?? '').trim().split(/\s+/).filter(Boolean).length;
         return `Saved as ${file} (${words.toLocaleString('en-US')} words).`;
       }),

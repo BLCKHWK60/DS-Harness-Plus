@@ -3,13 +3,14 @@
  * reads the Mac's device list; the others read and write only the Bench folder. None of them opens a
  * port or sends anything to a device.
  */
-import { ASKS, FIELDS, LEVELS } from './cards.js';
+import { ASKS, FIELDS, LEVELS, linkedText } from './cards.js';
+import { lookOnlyFamily } from './gate.js';
 
 /**
  * @param {object} options - what the tools need.
  * @param {() => boolean} options.enabled - whether Bench is switched on.
  * @param {object} options.bench - from `openBench`.
- * @param {() => Promise<string>} options.identify - the USB report (`identifyUsb`).
+ * @param {(exec: object) => Promise<string>} options.identify - the USB report (`identifyUsb`), for the conversation that asked.
  * @returns {object[]} tool definitions.
  */
 export function buildTools({ enabled, bench, identify }) {
@@ -38,7 +39,7 @@ export function buildTools({ enabled, bench, identify }) {
       parameters: { type: 'object', properties: {}, additionalProperties: false },
       ...common,
       isConcurrencySafe: () => true,
-      execute: safely(async () => identify()),
+      execute: safely(async (_args, exec) => identify(exec)),
     },
     {
       name: 'bench_devices',
@@ -54,6 +55,9 @@ export function buildTools({ enabled, bench, identify }) {
           const lines = [`Card: ${card.name} (folder devices/${card.slug} in ${bench.where()})`];
           for (const field of FIELDS) if (card[field.id]) lines.push(`- ${field.label}: ${card[field.id]}`);
           lines.push(`- Permissions, set by the user: highest level ${label(LEVELS, card.permissions?.level)}, asks ${label(ASKS, card.permissions?.asks)}`);
+          lines.push(`- Linked to: ${linkedText(card)}`);
+          const family = lookOnlyFamily(card);
+          if (family) lines.push(`- Look-only: one of the ${family}. Bench reads it and changes nothing on it.`);
           lines.push('', last.length > 0 ? `Newest logbook entries (${last.length}):` : 'The logbook has no entries yet.', ...last.map((entry) => entry.trim()));
           return lines.join('\n');
         }

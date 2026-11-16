@@ -329,7 +329,7 @@ test('without the Modes add-on nothing is listed or read: it cannot be told whic
 });
 
 /** The add-on on a stand-in app. */
-function plugin({ extraModes = '{}', enabled = true, folder, modeOf = () => MODE_ID, query, isolated = () => false } = {}) {
+function plugin({ extraModes = '{}', enabled = true, folder, modeOf = () => MODE_ID, query, isolated = () => false, extra = {} } = {}) {
   const home = scratch();
   const registered = new Map();
   const disposers = [];
@@ -352,7 +352,7 @@ function plugin({ extraModes = '{}', enabled = true, folder, modeOf = () => MODE
     },
     definitions: () => [...registered.values(), { name: 'data_text' }],
   };
-  const services = { dshHomePath: (name) => join(home, name), settings, tools, modes: { get: modeOf, isolated }, sessionQuery: query, agents: { list: () => [] } };
+  const services = { dshHomePath: (name) => join(home, name), settings, tools, modes: { get: modeOf, isolated }, sessionQuery: query, agents: { list: () => [] }, ...extra };
   const config = { enabled };
   const ctx = {
     get: (key) => services[key],
@@ -465,6 +465,56 @@ test('the folder note is given only in Content conversations that are not isolat
     app.handlers['agent/created']({ agent: agentFor('w1') });
     assert.match(sections.get('c1').text(), /subject folder of this conversation is/);
     assert.equal(sections.get('w1').text(), '');
+  } finally {
+    app.close();
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+
+test('the writer runs as a helper of the conversation, on its model, and every tool call it makes is refused', async () => {
+  const folder = scratch();
+  const started = [];
+  const said = [{ role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'Approve the brief.' }] }];
+  const extra = {
+    subagents: {
+      startActivation: async (spec) => {
+        started.push(spec);
+        return { childId: 'writer-1', result: Promise.resolve({ output: [{ type: 'text', text: 'It began [C1].' }], stopReason: 'end' }) };
+      },
+    },
+    agents: { list: () => [], get: (id) => (id === 'self' ? { id, session: { deriveMessages: () => said } } : undefined) },
+  };
+  const app = plugin({ folder, extra });
+  try {
+    await settle();
+    const self = { id: 'self', header: { cwd: folder }, model: { current: () => ({ provider: 'local', model: 'home-model' }) } };
+    const call = async (name, args) => (await app.registered.get(name).execute(args, { agent: self })).text;
+    await call('content_ledger', { action: 'add', claims: [{ text: 'It began' }] });
+    await call('content_plan', { action: 'brief', title: 'Start' });
+    assert.match(await call('content_rule', { action: 'brief', piece: 'P1', quote: 'Approve the brief' }), /approved the brief/);
+    await call('content_plan', { action: 'outline', piece: 'P1', points: [{ text: 'Begin', claims: ['C1'] }] });
+    assert.match(await call('content_draft', { piece: 'P1' }), /Draft saved as drafts\/001-start\.md/);
+    assert.equal(started.length, 1);
+    assert.equal(started[0].label, 'Content: writer of P1');
+    assert.deepEqual(started[0].request.agentOptions, { provider: 'local', model: 'home-model' });
+    assert.match(started[0].request.prompt[0].text, /^CONTENT_WRITER/);
+    const allow = async () => ({ kind: 'allow' });
+    assert.equal((await app.handlers['tools/pre-execute']({ agent: { id: 'writer-1' }, name: 'web_fetch', arguments: {} }, allow)).kind, 'deny');
+    assert.equal((await app.handlers['tools/pre-execute']({ agent: { id: 'self' }, name: 'web_fetch', arguments: {} }, allow)).kind, 'allow', 'the conversation itself as before');
+    // Decided before any other add-on: an inner "ask" (an approval card) does not let a writer's call through.
+    const ask = async () => ({ kind: 'ask', reason: 'Run this Shortcut?' });
+    assert.equal((await app.handlers['tools/pre-execute']({ agent: { id: 'writer-1' }, name: 'mac_shortcut', arguments: {} }, ask)).kind, 'deny');
+    // Known by its own task too, before its id is marked.
+    const early = { id: 'writer-early', header: { parentSession: 'self' }, session: { deriveMessages: () => [{ role: 'user', content: [{ type: 'text', text: 'CONTENT_CHECKER\nYou check a draft' }] }] } };
+    assert.equal((await app.handlers['tools/pre-execute']({ agent: early, name: 'read', arguments: {} }, allow)).kind, 'deny');
+    const other = { id: 'run-helper', header: { parentSession: 'self' }, session: { deriveMessages: () => [{ role: 'user', content: [{ type: 'text', text: 'MISSION_WORK do item 2' }] }] } };
+    assert.equal((await app.handlers['tools/pre-execute']({ agent: other, name: 'read', arguments: {} }, allow)).kind, 'allow', 'a Long run helper is not refused');
+    // The app may put a note of its own (the time) before the task.
+    const noted = { id: 'writer-noted', header: { parentSession: 'self' }, session: { deriveMessages: () => [{ role: 'user', content: [{ type: 'text', text: 'Time sampled while preparing turn 1, step 1: 2026-11-16T21:15:14+01:00' }, { type: 'text', text: 'CONTENT_WRITER\nYou write a draft' }] }] } };
+    assert.equal((await app.handlers['tools/pre-execute']({ agent: noted, name: 'read', arguments: {} }, allow)).kind, 'deny');
+    const mentions = { id: 'run-helper-2', header: { parentSession: 'self' }, session: { deriveMessages: () => [{ role: 'user', content: [{ type: 'text', text: 'MISSION_WORK check the CONTENT_WRITER prompt' }] }] } };
+    assert.equal((await app.handlers['tools/pre-execute']({ agent: mentions, name: 'read', arguments: {} }, allow)).kind, 'allow', 'naming it inside a line is not its task');
   } finally {
     app.close();
     rmSync(folder, { recursive: true, force: true });

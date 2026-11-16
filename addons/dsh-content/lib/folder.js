@@ -114,12 +114,12 @@ export function realRoot(root) {
  * One of Content's parts as a real folder inside the subject folder, made when it is missing.
  * @param {string} root - the real subject folder.
  * @param {string} part - a part id, optionally with one subfolder (`research/conversations`).
- * @param {{make?: boolean}} [options] - make it when missing (default true).
+ * @param {{make?: boolean, allow?: string[]}} [options] - make it when missing (default true); `allow` lets Content's own code use a later part (final), which content_save cannot.
  * @returns {string} the part's path.
  */
-export function partFolder(root, part, { make = true } = {}) {
+export function partFolder(root, part, { make = true, allow = [] } = {}) {
   const pieces = String(part ?? '').split('/');
-  if (!PARTS.some((entry) => entry.id === pieces[0]) || pieces.length > 2 || pieces.some((piece) => !/^[a-z][a-z0-9-]{0,40}$/.test(piece))) {
+  if (!(PARTS.some((entry) => entry.id === pieces[0]) || (allow.includes(pieces[0]) && LATER_PARTS.includes(pieces[0]))) || pieces.length > 2 || pieces.some((piece) => !/^[a-z][a-z0-9-]{0,40}$/.test(piece))) {
     throw new Error(`Content saves only into its own parts: ${PARTS.map((entry) => entry.id).join(', ')}.`);
   }
   let path = root;

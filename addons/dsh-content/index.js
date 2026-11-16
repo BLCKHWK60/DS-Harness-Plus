@@ -15,10 +15,18 @@
  * Route: `GET /dsh-content/data`.
  */
 import z from '@deepseek-ai/schemastery';
-import { createConversations } from './lib/conversations.js';
-import { inReconRoom } from './lib/folder.js';
-import { MODE_ID, folderNote, withContent } from './lib/mode.js';
+import { isAbsolute, join } from 'node:path';
+import { createConversations, textOf } from './lib/conversations.js';
+import { inReconRoom, realRoot } from './lib/folder.js';
+import { openIndex } from './lib/final.js';
+import { openFormats } from './lib/formats.js';
+import { MODE_ID, folderNote, statusOf, withContent } from './lib/mode.js';
+import { buildPieceTools } from './lib/piece-tools.js';
+import { openSubject } from './lib/subject.js';
 import { buildTools } from './lib/tools.js';
+
+/** How long a writer or checker may work. */
+export const HELPER_MS = 15 * 60_000;
 
 export const name = 'dsh-content';
 export const DATA_PATH = '/dsh-content/data';
@@ -89,6 +97,108 @@ export function apply(ctx, config) {
     modes: () => ctx.get('modes'),
     trash: () => ctx.get('coworkTrash'),
   });
+  const home = ctx.get('dshHomePath');
+  const contentHome = typeof home === 'function' ? home('content') : '';
+  const formats = openFormats(() => (contentHome ? join(contentHome, 'formats') : ''));
+  const index = openIndex(() => (contentHome ? join(contentHome, 'where-used.json') : ''));
+  /** Where the Research tab saves its reports: its own setting, else research/reports in the app's home. */
+  const reportsFolder = () => {
+    try {
+      const value = plain(ctx.get('settings')?.describe?.().find((entry) => entry.ns === 'research')?.value?.folder);
+      if (typeof value === 'string' && isAbsolute(value.trim())) return value.trim();
+    } catch {
+      /* the default below */
+    }
+    return typeof home === 'function' ? join(home('research'), 'reports') : '';
+  };
+  /** The user's own messages in the conversation a call belongs to (a helper's: the one that started it). */
+  const ownerMessages = (exec) => {
+    try {
+      const top = ctx.get('agents')?.get?.(conversationOf(exec?.agent)) ?? exec?.agent;
+      const messages = top?.session?.deriveMessages?.() ?? [];
+      return messages.filter((message) => message?.role === 'user' && message?.source?.kind === 'user').map((message) => ({ text: textOf(message.content) }));
+    } catch {
+      return [];
+    }
+  };
+
+  // ---- the writer and the checker: helper models with no tools ---------------------------------
+  /**
+   * Helper ids whose every tool call is refused: marked by the id the app gives back when the helper
+   * starts, as Mission marks its planner and reviewer (never by guessing which helper is created next,
+   * which could catch a Long run's own helper).
+   */
+  const toolless = new Set();
+  /** A writer or checker: marked by its id, or known by its own task (which starts CONTENT_WRITER or CONTENT_CHECKER), so a call made before the mark is in place is refused too. */
+  const notToolless = new Set();
+  const isToolless = (agent) => {
+    if (!agent?.id) return false;
+    if (toolless.has(agent.id)) return true;
+    if (notToolless.has(agent.id) || !(agent.header?.parentSession ?? agent.session?.header?.parentSession)) return false;
+    try {
+      const first = (agent.session?.deriveMessages?.() ?? []).find((message) => message?.role === 'user');
+      // At the start of a line: the app may put a note of its own (the time) before the task.
+      if (/(?:^|\n)\s*CONTENT_(WRITER|CHECKER)\b/.test(textOf(first?.content).slice(0, 4000))) {
+        toolless.add(agent.id);
+        return true;
+      }
+      // Its task is set once, so a helper seen with another task is not looked at again.
+      if (first) notToolless.add(agent.id);
+    } catch {
+      /* not one of Content's */
+    }
+    return false;
+  };
+  // Decided before any other add-on is asked: no other rule (an approval card, a question) can let a
+  // writer's or checker's call through.
+  ctx.on('tools/pre-execute', async (exec, next) => {
+    if (isToolless(exec?.agent)) return { kind: 'deny', reason: 'You are Content\'s writer or checker: you have no tools. Answer with text only.' };
+    return next();
+  });
+  /** One writer or checker at a time per conversation, so the next helper created is the one marked. */
+  const queues = new Map();
+  const helper = (exec, { label, prompt }) => {
+    const parent = exec?.agent;
+    // One at a time per conversation: a Long run's helper and the conversation share one queue.
+    const key = conversationOf(parent);
+    const run = async () => {
+      const subagents = ctx.get('subagents');
+      if (!subagents?.startActivation) throw new Error("The app's helper service is not available here, so the writer and checker cannot run.");
+      let route;
+      try {
+        route = parent?.model?.current?.();
+      } catch {
+        route = undefined;
+      }
+      const limit = new AbortController();
+      const timer = setTimeout(() => limit.abort(new Error(`${label} worked for more than ${HELPER_MS / 60000} minutes and was stopped.`)), HELPER_MS);
+      timer.unref?.();
+      const signal = exec?.signal ? AbortSignal.any([exec.signal, limit.signal]) : limit.signal;
+      let child;
+      try {
+        const request = { prompt: [{ type: 'text', text: `${prompt}\n\n` }], parent, signal, ...(route?.provider && route?.model ? { agentOptions: { provider: route.provider, model: route.model } } : {}) };
+        child = await subagents.startActivation({ ...request, provider: 'spawn', label, request, delivery: 'parent', signal });
+        if (child?.childId) toolless.add(String(child.childId));
+        const result = await Promise.race([
+          child.result,
+          new Promise((_, reject) => {
+            if (signal.aborted) reject(signal.reason ?? new Error('Stopped.'));
+            signal.addEventListener('abort', () => reject(signal.reason ?? new Error('Stopped.')), { once: true });
+          }),
+        ]);
+        if (result?.stopReason === 'error' || result?.stopReason === 'refusal') throw new Error(`${label}: the model ${result.stopReason === 'refusal' ? 'refused' : 'failed'}${result.diagnostic ? ` (${String(result.diagnostic).slice(0, 200)})` : ''}.`);
+        return (result?.output ?? []).filter((block) => block?.type === 'text').map((block) => block.text).join('\n').trim();
+      } catch (error) {
+        Promise.resolve(child?.dispose?.()).catch(() => {});
+        throw error;
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    const next = (queues.get(key) ?? Promise.resolve()).catch(() => {}).then(run);
+    queues.set(key, next);
+    return next;
+  };
 
   // ---- the mode: kept in step with the switch ------------------------------------------------
 
@@ -142,8 +252,11 @@ export function apply(ctx, config) {
           return false;
         }
       };
-      toolsOff = buildTools({ enabled, rootOf: (exec) => folderOf(exec?.agent), conversationOf: (exec) => conversationOf(exec?.agent), hasOf, conversations })
-        .map((tool) => tools.register(tool, { when: ({ agent }) => offered(agent) }));
+      const rootOf = (exec) => folderOf(exec?.agent);
+      toolsOff = [
+        ...buildTools({ enabled, rootOf, conversationOf: (exec) => conversationOf(exec?.agent), hasOf, conversations }),
+        ...buildPieceTools({ enabled, rootOf, ownerMessages, helper, formats, index, reportsFolder }),
+      ].map((tool) => tools.register(tool, { when: ({ agent }) => offered(agent) }));
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
       toolsOff = undefined;
@@ -184,7 +297,16 @@ export function apply(ctx, config) {
                 if (!enabled() || modeOf(agent.id) !== MODE_ID) return '';
                 if (ctx.get('modes')?.isolated?.(agent.id) === true) return '';
                 const folder = folderOf(agent);
-                return folderNote({ folder, scratch: scratchFolderOf(agent) !== '', sealed: Boolean(folder) && inReconRoom(folder) });
+                const sealed = Boolean(folder) && inReconRoom(folder);
+                let status = '';
+                if (folder && !sealed) {
+                  try {
+                    status = statusOf(openSubject(realRoot(folder)).read());
+                  } catch {
+                    status = '';
+                  }
+                }
+                return folderNote({ folder, scratch: scratchFolderOf(agent) !== '', sealed, status });
               } catch {
                 return '';
               }

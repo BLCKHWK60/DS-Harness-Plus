@@ -14,6 +14,7 @@ window.__ModuleLoader__.load({
     const DICT = { en: { 'section.title': 'Bench' }, zh: { 'section.title': '工作台' } };
     const LEVELS = { identify: 'Identify', read: 'Read', adjust: 'Adjust', write: 'Write' };
     const ASKS = { restricted: 'Restricted', 'ask-auto': 'Ask-Auto', 'full-auto': 'Full Auto' };
+    const when = (at) => (at ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
     const CSS = `
 .dsh-bn-page { display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); }
@@ -46,6 +47,9 @@ window.__ModuleLoader__.load({
 .dsh-bn-switch[aria-checked="true"]::after { transform: translateX(16px); background: var(--dsw-alias-bg-base); }
 .dsh-bn-switch:disabled { opacity: .5; cursor: default; }
 .dsh-bn-list { margin: 6px 0 0; padding-left: 18px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
+.dsh-bn-perms { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 8px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.dsh-bn-select { height: 26px; margin-left: 4px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; font: inherit; font-size: 12px; color: var(--dsw-alias-label-primary); background: transparent; }
+.dsh-bn-rowdesc[data-error="true"] { color: var(--dsw-alias-state-error-primary); }
 .dsh-bn-rules { margin: 6px 0 0; display: flex; flex-direction: column; gap: 8px; }
 .dsh-bn-rule { display: flex; gap: 10px; align-items: flex-start; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
 .dsh-bn-rule b { color: var(--dsw-alias-label-primary); font-weight: 500; }
@@ -115,7 +119,7 @@ window.__ModuleLoader__.load({
           h('span', null, 'Bench rules')),
         open
           ? ReactDOM.createPortal(
-              h('div', { ref: panel, className: 'dsh-bn-pop', role: 'dialog', 'aria-label': 'Bench rules', style: { left: place.left, bottom: place.bottom } },
+              h('div', { ref: panel, className: 'dsh-bn-pop', role: 'dialog', 'aria-label': 'Bench rules', style: { left: place.left, bottom: place.bottom, maxHeight: typeof place.bottom === 'number' ? `calc(100vh - ${place.bottom + 12}px)` : 'calc(100vh - 24px)', overflowY: 'auto' } },
                 h('style', null, CSS),
                 h('div', { className: 'title' }, 'What Bench keeps open and closed'),
                 h(RuleList, { rules }),
@@ -150,6 +154,31 @@ window.__ModuleLoader__.load({
       let result = await ctx.remote.settings.mutate(NS, ops, await revision(ctx));
       if (!result.ok && result.error.code === 'settings/conflict') result = await ctx.remote.settings.mutate(NS, ops, await revision(ctx));
       if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+    }
+
+    /** One device on the page, with the user's own settings for it (never set by the model). */
+    function DeviceRow({ device, busy, onSave, onUnlink }) {
+      const [level, setLevel] = useState(device.level);
+      const [asks, setAsks] = useState(device.asks);
+      const [dryRun, setDryRun] = useState(device.dryRun === true);
+      const [ranges, setRanges] = useState(device.ranges ?? '');
+      const changed = level !== device.level || asks !== device.asks || dryRun !== (device.dryRun === true) || ranges !== (device.ranges ?? '');
+      const select = (value, options, set, label) => h('select', { className: 'dsh-bn-select', value, 'aria-label': `${label} for ${device.name}`, disabled: busy, onChange: (event) => set(event.target.value) },
+        Object.entries(options).map(([id, text]) => h('option', { key: id, value: id }, text)));
+      return h('div', { className: 'dsh-bn-row' },
+        h('div', { className: 'dsh-bn-rowtext' },
+          h('div', { className: 'dsh-bn-rowtitle' }, device.name),
+          h('div', { className: 'dsh-bn-rowdesc' }, [[device.maker, device.model].filter(Boolean).join(' '), device.connects, `${device.entries} logbook ${device.entries === 1 ? 'entry' : 'entries'}`, device.backups ? `${device.backups} backup${device.backups === 1 ? '' : 's'}` : '', device.undo ? `${device.undo} change${device.undo === 1 ? '' : 's'} on the undo list` : '', device.portAgreed ? 'serial port: agreed' : '', device.updated ? `changed ${when(device.updated)}` : ''].filter(Boolean).join(' · ')),
+          h('div', { className: 'dsh-bn-rowdesc' }, `Linked to: ${device.linked || 'no device yet'}`),
+          device.lookOnly ? h('div', { className: 'dsh-bn-rowdesc', 'data-error': 'true' }, `Look-only (${device.lookOnly}): Bench reads it and never changes it, whatever is set here.${device.lookOnlyMarked && !device.lookOnlyFromWords ? ' Its card no longer names it so, but the mark stays until you lift it.' : ''}`) : null,
+          h('div', { className: 'dsh-bn-perms' },
+            h('label', null, 'Highest level ', select(level, LEVELS, setLevel, 'Highest level')),
+            h('label', null, 'How it asks ', select(asks, ASKS, setAsks, 'How it asks')),
+            h('label', null, h('input', { type: 'checkbox', checked: dryRun, disabled: busy, onChange: (event) => setDryRun(event.target.checked) }), ' Dry run by default')),
+          h('input', { className: 'dsh-bn-input', type: 'text', spellCheck: false, placeholder: 'Your own protected parts, e.g. 0x9000-0xF000 (the start of an ESP32\'s flash is always protected)', value: ranges, 'aria-label': `Protected parts for ${device.name}`, disabled: busy, onChange: (event) => setRanges(event.target.value) })),
+        h('button', { type: 'button', className: 'dsh-bn-btn', disabled: busy || !changed, onClick: () => onSave({ name: device.name, level, asks, dryRun, ranges }) }, 'Save'),
+        device.isLinked ? h('button', { type: 'button', className: 'dsh-bn-btn', disabled: busy, title: 'For the same device on a new cable or adapter, or a card that should move to another device. Bench asks you again at the next use.', onClick: () => onUnlink(device.name) }, 'Unlink') : null,
+        device.lookOnlyMarked && !device.lookOnlyFromWords ? h('button', { type: 'button', className: 'dsh-bn-btn', disabled: busy, title: 'Only when this device is not one of the look-only families after all.', onClick: () => onSave({ name: device.name, level: device.level, asks: device.asks, dryRun: device.dryRun === true, ranges: device.ranges ?? '', clearLookOnly: true }) }, 'Lift look-only') : null);
     }
 
     function BenchPage({ appCtx }) {
@@ -206,7 +235,6 @@ window.__ModuleLoader__.load({
       };
       const reveal = () => run(async () => { await call({ action: 'reveal' }); });
       const devices = Array.isArray(data.devices) ? data.devices : [];
-      const when = (at) => (at ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
       return h('div', { className: 'dsh-bn-page' },
         h('style', null, CSS),
@@ -219,7 +247,7 @@ window.__ModuleLoader__.load({
         h('div', { className: 'dsh-bn-row' },
           h('div', { className: 'dsh-bn-rowtext' },
             h('div', { className: 'dsh-bn-rowtitle' }, 'Show the Bench tab'),
-            h('div', { className: 'dsh-bn-rowdesc' }, 'On adds the tab, its instructions and its four tools. Off takes them away. Cards and logbooks stay in the Bench folder.')),
+            h('div', { className: 'dsh-bn-rowdesc' }, 'On adds the tab, its instructions and its tools. Off takes them away (a port being watched is closed). Cards and logbooks stay in the Bench folder.')),
           h('button', { type: 'button', role: 'switch', className: 'dsh-bn-switch', 'aria-checked': data.enabled === true, 'aria-label': 'Show the Bench tab', disabled: busy, onClick: () => void flip(data.enabled !== true) })),
 
         h('div', { className: 'dsh-bn-group' }, 'The Bench folder'),
@@ -249,29 +277,32 @@ window.__ModuleLoader__.load({
 
         h('div', { className: 'dsh-bn-group' }, `Devices with a card (${devices.length})`),
         devices.length === 0 ? h('p', { className: 'dsh-bn-desc' }, 'None yet. Plug a device in, open the Bench tab and ask "what is plugged in?"') : null,
-        devices.map((device) => h('div', { key: device.name, className: 'dsh-bn-row' },
-          h('div', { className: 'dsh-bn-rowtext' },
-            h('div', { className: 'dsh-bn-rowtitle' }, device.name),
-            h('div', { className: 'dsh-bn-rowdesc' }, [[device.maker, device.model].filter(Boolean).join(' '), device.connects, `highest level ${LEVELS[device.level] ?? device.level}`, `asks ${ASKS[device.asks] ?? device.asks}`, `${device.entries} logbook ${device.entries === 1 ? 'entry' : 'entries'}`, device.updated ? `changed ${when(device.updated)}` : ''].filter(Boolean).join(' · '))))),
+        devices.length > 0 ? h('p', { className: 'dsh-bn-desc' }, 'Only you set these, never the assistant. A new card starts at Read and Ask-Auto. Restricted: Identify and Read only. Ask-Auto: each change asks you. Full Auto: changes on that device without asking, each one logged. A firmware write asks you every time, whatever is set. Dry run by default: each change is shown first and done only when asked again. Each card is linked to one device the first time it is used; Unlink when the device moves to a new cable or adapter.') : null,
+        devices.map((device) => h(DeviceRow, { key: `${device.name}-${device.updated}`, device, busy, onSave: (values) => run(async () => { await call({ action: 'permissions', ...values }); }, `Saved for ${values.name}.`), onUnlink: (name) => run(async () => { await call({ action: 'unlink', name }); }, `${name} is unlinked. Bench asks you again the next time it is used.`) })),
 
         h('div', { className: 'dsh-bn-group' }, 'How to use it'),
         h('ul', { className: 'dsh-bn-list' },
-          h('li', null, 'Plug the device in with a cable that carries data, open the Bench tab and ask what it is. Bench reads the Mac\'s own list of USB devices and serial ports. It does not open a port or send anything to the device.'),
+          h('li', null, 'Plug the device in with a cable that carries data, open the Bench tab and ask what it is. Bench reads the Mac\'s own list of USB devices and serial ports, and of paired Bluetooth devices.'),
+          h('li', null, 'Watching a board: ask Bench to watch its serial port for some minutes (up to an hour per call; a Long run keeps calling for longer). Every line goes into the device\'s log. Opening a port restarts many boards, so Bench asks you once per device first. It only reads; nothing is sent.'),
+          h('li', null, 'An ESP32: Bench reads its chip, MAC and flash size, and makes a backup of the whole flash, read twice and compared. To flash firmware: set the device to Write below, put the file from the maker\'s or the project\'s page in the device\'s firmware folder, and give Bench that page\'s address. Bench reads the page itself and finds the file\'s checksum there. It asks you every time.'),
+          h('li', null, 'An Android phone (USB debugging on): its details, battery, log and settings. The first time, Bench asks you to link the card to that phone. Only a short list of settings can be changed (brightness, screen timeout, text size, sounds, rotation, animation speed, automatic time), only on a phone you set to Adjust; the old value is saved and "undo last" puts it back exactly. Network, debugging, lock and accessibility settings are never touched. Unlocking and flashing a phone are not done.'),
+          h('li', null, 'Tools Bench uses, which you install yourself if you want them: esptool (`brew install esptool` or `pipx install esptool`) and adb (`brew install android-platform-tools`). Bench never installs anything.'),
           h('li', null, 'Bench names the chip and the boards it usually sits on, and with Web on looks up the maker\'s manual, datasheet and pinout. It says how sure it is.'),
           h('li', null, 'Say "make a card for it" and give the device a name. The card holds what it is, how it connects, where its manual and firmware are, and how it is brought back if an update fails. Every action is added to the device\'s logbook.'),
           h('li', null, 'Web, Depth, Long run and the Run button work as in every tab. A Long run suits a long look into a device\'s documentation.')),
 
         h('div', { className: 'dsh-bn-group' }, 'Good to know'),
         h('ul', { className: 'dsh-bn-list' },
-          h('li', null, 'This first version identifies devices and keeps records. It does not read a device\'s memory, change a setting or flash firmware. Those come later, each with its own safeguard: a checked backup first, a known way back, firmware only from the maker, and your yes every time.'),
-          h('li', null, 'Watching a live signal over a long time (a serial log, sensor readings) needs a port to be opened. It comes with the step that reads devices, together with a warning that opening a port restarts some boards.'),
-          h('li', null, 'A Bench conversation runs Read Only and has no terminal: Bench refuses every command, program and background job in its conversations and their helpers, also during a Long run, whose "Files and commands" switch otherwise gives every tool. A Long run\'s own checks are run by Mission, with the Mac\'s device ports closed to them (switch them off under Long runs above). Bench\'s own tools write only cards and logbooks, only into the Bench folder, and no file tool may write there or into a device\'s port.'),
+          h('li', null, 'A firmware write happens only when all four hold: a checked backup of that chip taken since its last write, the recovery path on its card, firmware from the maker or the official project whose checksum Bench finds published there itself, and your yes on the app\'s own question, every time. After your yes Bench checks again that the file, the chip and the Mac\'s power are as they were. Writing the start of an ESP32\'s flash (its loader, partition table and stored settings) also needs your own message "write protected <device name>". The eFuses, which can never go back, are never touched. After a write Bench reads it back and watches the board start; on a failure it stops and shows the way back, and never tries again by itself.'),
+          h('li', null, 'Backups and logs stay on this Mac, in the device\'s folder. Backups are never shown to a model; log lines are, with passwords and keys masked.'),
+          h('li', null, 'Only one action at a time on a device or a port.'),
+          h('li', null, 'A Bench conversation runs Read Only and has no terminal: Bench refuses every command, program and background job in its conversations and their helpers, and every tool not on its own list, also during a Long run, whose "Files and commands" switch otherwise gives every tool. A Long run\'s own checks are run by Mission, with the Mac\'s device ports closed to them (switch them off under Long runs above). Bench\'s own tools write only cards and logbooks, only into the Bench folder, and no file tool may read or write there or a device\'s port.'),
           h('li', null, 'Start Bench conversations in Standard mode. Under the app\'s PTC preset every tool is called from inside a program, and Bench refuses programs.'),
           h('li', null, 'Only your own devices. A device\'s name, a log line or its admin page is text someone else wrote: the assistant is told never to follow it.'),
           h('li', null, 'Passwords and keys are kept out of cards and logbooks: a named one (password, psk, token, WIFI_PASS and the like) and anything that looks like a key is masked before it is written. Web addresses stay readable. This catches the usual forms, not every one.'),
-          h('li', null, 'A new card starts at the level Read with Ask-Auto. Only you change that; the controls come with the step that adds changing settings.'),
-          h('li', null, 'Look-only where safety is at stake: vehicles and e-bikes, medical devices, batteries and chargers, locks, alarms, smoke detectors, heating, and drone failsafes. Speed limits and radio limits are never changed.'),
-          h('li', null, 'Bluetooth devices and devices on your network come in later steps.')));
+          h('li', null, 'A new card starts at the level Read with Ask-Auto. Only you change that, above, for each device.'),
+          h('li', null, 'Look-only where safety is at stake: vehicles and e-bikes, medical devices, batteries and chargers, locks, alarms, smoke detectors, heating. A card whose words name one of these is marked look-only and stays so, even if its words change later; only you lift the mark, above. The assistant is also told never to change speed limits or radio limits (transmit power, region, frequency); Bench has no tool that sets them.'),
+          h('li', null, 'Not built yet: devices on your network (routers, servers), connecting to a Bluetooth device, unlocking or flashing a phone.')));
     }
 
     return {

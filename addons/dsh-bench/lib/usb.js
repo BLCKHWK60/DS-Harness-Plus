@@ -175,11 +175,28 @@ export function usbReport(devices, ports, at = new Date()) {
 }
 
 /**
+ * The device a port belongs to, as Bench links a card to it: maker and product numbers with the serial
+ * number, or the place it is plugged in when it has none.
+ * @returns {{id: string, label: string}} the device.
+ */
+export function deviceIdentity(device) {
+  const numbers = `${hex(device.vendorId ?? 0, 4)}:${hex(device.productId ?? 0, 4)}`;
+  const id = device.serial ? `usb ${numbers} serial ${device.serial}` : `usb ${numbers} at ${device.location || 'unknown place'}`;
+  const label = `${device.name || 'a USB device'} (${numbers}${device.serial ? `, serial number "${device.serial}"` : device.location ? `, plugged in at ${device.location}` : ''})`;
+  return { id, label };
+}
+
+/** @returns {{port: string, id: string, label: string}[]} the serial ports of the user's own devices (not hubs, not the Mac's parts). */
+export function portsOf(devices) {
+  return devices.filter((device) => !device.hub && !device.builtIn).flatMap((device) => device.ports.map((port) => ({ port, ...deviceIdentity(device) })));
+}
+
+/**
  * Read the Mac's list and /dev.
- * @param {{run?: (file: string, args: string[]) => Promise<string>, dev?: () => string[], now?: () => Date}} [options] - stand-ins for tests.
+ * @param {{run?: (file: string, args: string[]) => Promise<string>, dev?: () => string[], now?: () => Date, onPorts?: (ports: {port: string, id: string, label: string}[]) => void}} [options] - stand-ins for tests, and who is told the ports of the devices listed, with the device each belongs to.
  * @returns {Promise<string>} the report.
  */
-export async function identifyUsb({ run = runFixed, dev = () => readdirSync('/dev'), now = () => new Date() } = {}) {
+export async function identifyUsb({ run = runFixed, dev = () => readdirSync('/dev'), now = () => new Date(), onPorts } = {}) {
   if (!run.standIn && process.platform !== 'darwin') throw new Error('Bench reads USB devices on a Mac only.');
   const text = await run(IOREG, IOREG_ARGS);
   let names = [];
@@ -188,7 +205,10 @@ export async function identifyUsb({ run = runFixed, dev = () => readdirSync('/de
   } catch {
     names = [];
   }
-  return usbReport(parseIoreg(text), serialPorts(names), now());
+  const devices = parseIoreg(text);
+  // The ports of the user's own devices (not hubs, not the Mac's parts): the only ones Bench opens.
+  onPorts?.(portsOf(devices));
+  return usbReport(devices, serialPorts(names), now());
 }
 
 /** Run one of the fixed commands, never through a shell. */

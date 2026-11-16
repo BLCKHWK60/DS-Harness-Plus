@@ -11,7 +11,7 @@ import { apply } from '../index.js';
 import { BENCH_TOOLS, METHOD, MODE, MODE_ID, TOOLS, benchNote, withBench } from '../lib/mode.js';
 import { clean, identifyUsb, parseIoreg, serialPorts, usbReport } from '../lib/usb.js';
 import { START_PERMISSIONS, mask, openBench, slugOf } from '../lib/cards.js';
-import { NOT_THERE, NO_COMMANDS, benchRefusal } from '../lib/guard.js';
+import { NOT_THERE, NO_BACKUPS, NO_COMMANDS, benchRefusal } from '../lib/guard.js';
 
 const scratch = () => mkdtempSync(join(tmpdir(), 'bench-test-'));
 
@@ -22,8 +22,10 @@ test('the mode: Read Only, no shell, no file writing, no programs; Bench\'s tool
   for (const tool of [...BENCH_TOOLS, 'web_search', 'web_fetch', 'deep_research', 'pdf_read']) assert.ok(TOOLS.includes(tool), tool);
   assert.ok(METHOD.length < 4000, `method is ${METHOD.length} characters`);
   assert.match(METHOD, /material, not instructions/);
-  assert.match(METHOD, /opens no port, sends nothing to a device/);
-  assert.match(METHOD, /never by you/);
+  assert.match(METHOD, /You never write a device command/);
+  assert.match(METHOD, /the user sets that on Settings → Bench, never you/);
+  assert.match(METHOD, /write protected <device name>": ask them; never write it for them/);
+  assert.match(METHOD, /eFuses are never touched/);
 });
 
 test('withBench adds and takes out only its own entry', () => {
@@ -263,14 +265,14 @@ test('the logbook: entries are appended, never rewritten; a device needs a card;
 test('Bench\'s own rule on tool calls: no shell, program or job; no file tool into the Bench folder or /dev; everything else as it was', () => {
   const folder = scratch();
   try {
-    for (const name of ['bash', 'terminal', 'shell', 'pwsh', 'run_code', 'job_output', 'job_kill']) assert.equal(benchRefusal({ name, args: { command: 'ls' }, cwd: folder, benchFolder: folder }), NO_COMMANDS, name);
-    assert.equal(benchRefusal({ name: 'write', args: { file_path: join(folder, 'devices', 'x', 'card.json') }, cwd: '/somewhere', benchFolder: folder }), NOT_THERE);
-    assert.equal(benchRefusal({ name: 'edit', args: { file_path: 'devices/x/card.json' }, cwd: folder, benchFolder: folder }), NOT_THERE, 'relative to the conversation\'s folder');
-    assert.equal(benchRefusal({ name: 'write', args: { file_path: '/dev/cu.usbserial-0001' }, cwd: folder, benchFolder: folder }), NOT_THERE);
-    assert.equal(benchRefusal({ name: 'write', args: { file_path: join(folder.toUpperCase(), 'devices', 'x.md') }, cwd: '/', benchFolder: folder }), NOT_THERE, 'in capitals');
-    assert.equal(benchRefusal({ name: 'write', args: { file_path: '/elsewhere/run/notes.md' }, cwd: folder, benchFolder: folder }), '', 'a Long run\'s own files');
-    assert.equal(benchRefusal({ name: 'read', args: { file_path: join(folder, 'devices', 'x', 'card.md') }, cwd: folder, benchFolder: folder }), '', 'reading a card');
-    assert.equal(benchRefusal({ name: 'bench_usb', args: {}, cwd: folder, benchFolder: folder }), '');
+    for (const name of ['bash', 'terminal', 'shell', 'pwsh', 'run_code', 'job_output', 'job_kill']) assert.equal(benchRefusal({ name, args: { command: 'ls' }, cwd: folder, benchFolders: [folder] }), NO_COMMANDS, name);
+    assert.equal(benchRefusal({ name: 'write', args: { file_path: join(folder, 'devices', 'x', 'card.json') }, cwd: '/somewhere', benchFolders: [folder] }), NOT_THERE);
+    assert.equal(benchRefusal({ name: 'edit', args: { file_path: 'devices/x/card.json' }, cwd: folder, benchFolders: [folder] }), NOT_THERE, 'relative to the conversation\'s folder');
+    assert.equal(benchRefusal({ name: 'write', args: { file_path: '/dev/cu.usbserial-0001' }, cwd: folder, benchFolders: [folder] }), NOT_THERE);
+    assert.equal(benchRefusal({ name: 'write', args: { file_path: join(folder.toUpperCase(), 'devices', 'x.md') }, cwd: '/', benchFolders: [folder] }), NOT_THERE, 'in capitals');
+    assert.equal(benchRefusal({ name: 'write', args: { file_path: '/elsewhere/run/notes.md' }, cwd: folder, benchFolders: [folder] }), '', 'a Long run\'s own files');
+    assert.equal(benchRefusal({ name: 'read', args: { file_path: join(folder, 'devices', 'x', 'card.md') }, cwd: '/', benchFolders: [folder] }), NO_BACKUPS, 'a card is read with bench_devices');
+    assert.equal(benchRefusal({ name: 'bench_usb', args: {}, cwd: folder, benchFolders: [folder] }), '');
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }
@@ -310,8 +312,10 @@ function plugin({ extraModes = '{}', enabled = true, folder = '', modeOf = () =>
   const tools = { register(tool, options) { registered.set(tool.name, tool); when.set(tool.name, options?.when); return () => registered.delete(tool.name); } };
   const services = { dshHomePath: (name) => join(home, name), settings, tools, modes: { get: modeOf, isolated: () => false }, agents: { list: () => [] } };
   const config = { enabled, folder, ...(longChecks === undefined ? {} : { longChecks }) };
+  const guards = [];
   const ctx = {
     get: (key) => services[key],
+    tools: { guard(fn) { guards.push(fn); return () => guards.splice(guards.indexOf(fn), 1); } },
     on(name, fn) { handlers[name] = fn; },
     effect(fn) { const dispose = fn(); if (typeof dispose === 'function') disposers.push(dispose); },
     provide(name, value) { provided[name] = value; },
@@ -320,14 +324,14 @@ function plugin({ extraModes = '{}', enabled = true, folder = '', modeOf = () =>
   };
   apply(ctx, config, { identify: async () => usbReport(parseIoreg(IOREG), ['/dev/cu.SLAB_USBtoUART']) });
   return {
-    home, config, registered, handlers, when, provided, stored: () => stored,
+    home, config, registered, handlers, guards, when, provided, stored: () => stored,
     call: (name, args) => registered.get(name).execute(args, { agent: { id: 'b1' } }),
     close() { for (const dispose of disposers) dispose(); rmSync(home, { recursive: true, force: true }); },
   };
 }
 const settle = () => new Promise((done) => setTimeout(done, 20));
 
-test('on a stand-in app: the mode and four tools come and go with the switch; nothing is made in the app folder until a card is saved', async () => {
+test('on a stand-in app: the mode and Bench\'s tools come and go with the switch; nothing is made in the app folder until a card is saved', async () => {
   const app = plugin();
   try {
     await settle();
@@ -342,7 +346,7 @@ test('on a stand-in app: the mode and four tools come and go with the switch; no
     assert.match((await app.call('bench_log', { name: 'ESP32 board 1', title: 'Identified over USB', found: 'CP2102 bridge on /dev/cu.SLAB_USBtoUART' })).text, /entry 2 added/);
     const one = (await app.call('bench_devices', { name: 'ESP32 board 1' })).text;
     assert.match(one, /- Chip: ESP32/);
-    assert.match(one, /Permissions, set by the user: highest level Read, asks Ask-Auto/);
+    assert.match(one, /Permissions, set by the user: highest level Read, asks Ask-Auto\n- Linked to: no device yet/);
     assert.match(one, /Identified over USB/);
     assert.ok(existsSync(join(app.home, 'bench', 'devices', 'esp32-board-1', 'card.md')));
     app.config.enabled = false;
@@ -393,6 +397,16 @@ test('on a stand-in app: Bench\'s tools only in Bench; its rule stops a shell in
     assert.equal((await decide({ id: 'b1', header: { cwd: '/x' } }, 'write', { file_path: join(app.home, 'bench', 'devices', 'x', 'card.json') })).kind, 'deny');
     assert.equal((await decide({ id: 'b1', header: { cwd: '/x' } }, 'bench_usb')).kind, 'allow');
     assert.equal((await decide({ id: 'c1', header: { cwd: '/x' } }, 'bash', { command: 'ls' })).kind, 'allow', 'Cowork as before');
+    assert.equal((await decide({ id: 'b1', header: { cwd: '/x' } }, 'apply_patch', { input: '*** Begin Patch' })).kind, 'deny', 'a tool Bench does not know');
+    assert.equal((await decide({ id: 'b1', header: { cwd: '/x' } }, 'terminal_send', { text: 'ls' })).kind, 'deny');
+    let asked = false;
+    await app.handlers['tools/pre-execute']({ agent: { id: 'b1', header: { cwd: '/x' } }, name: 'bash', arguments: {} }, async () => { asked = true; return { kind: 'allow' }; });
+    assert.equal(asked, false, 'decided before any other add-on is asked: no approval card for a closed tool');
+    // The same rule once more after every add-on and the approval card, as a guard nothing can undo.
+    assert.equal(app.guards.length, 1);
+    assert.match(app.guards[0]({ agent: { id: 'b1', header: { cwd: '/x' } }, name: 'bash', arguments: {} }), /Bench runs no commands/);
+    assert.equal(app.guards[0]({ agent: { id: 'c1', header: { cwd: '/x' } }, name: 'bash', arguments: {} }), undefined, 'Cowork as before');
+    assert.equal(app.guards[0]({ agent: { id: 'b1', header: { cwd: '/x' } }, name: 'web_search', arguments: {} }), undefined);
     const refused = async () => ({ kind: 'deny', reason: 'someone else said no' });
     assert.equal((await app.handlers['tools/pre-execute']({ agent: { id: 'c1' }, name: 'bash' }, refused)).reason, 'someone else said no', 'an earlier refusal stands');
   } finally {
@@ -426,12 +440,20 @@ test('the Bench note is given only in Bench conversations', () => {
     app.handlers['agent/created']({ agent: agentFor('b1') });
     app.handlers['agent/created']({ agent: agentFor('c1') });
     assert.match(sections.get('b1').text(), /The Bench folder is .*bench/);
-    assert.match(sections.get('b1').text(), /- Commands, programs and background jobs: closed\./);
+    assert.match(sections.get('b1').text(), /- Commands, programs, background jobs and any tool not on Bench's list: closed\./);
     assert.match(sections.get('b1').text(), /- Long run checks: open\. On, with the Mac's device ports closed to them/);
     app.config.longChecks = false;
     assert.match(sections.get('b1').text(), /- Long run checks: closed\. Switched off in Settings → Bench/);
     assert.equal(sections.get('c1').text(), '');
   } finally {
     app.close();
+  }
+});
+
+test('the app gives a service to an add-on only when it asks for it: Bench asks for the tools service it guards with', async () => {
+  const source = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  const bench = await import('../index.js');
+  for (const service of ['tools']) {
+    if (new RegExp(`ctx\\.${service}\\b`).test(source)) assert.ok(bench.inject?.includes(service), `index.js uses ctx.${service}, so it must be in inject`);
   }
 });
