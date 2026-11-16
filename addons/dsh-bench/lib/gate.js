@@ -68,7 +68,7 @@ export function powerOf(text) {
 }
 
 /** No write starts on a Mac running on its battery below this charge (plan, "The way back": power first). */
-export const LOW_BATTERY = 50;
+export const LOW_BATTERY = 30;
 
 /** @returns {string} why a write may not start on this power, or ''. */
 export function powerRefusal(power) {

@@ -34,6 +34,9 @@ window.__ModuleLoader__.load({
 .dsh-ct-switch:disabled { opacity: .5; cursor: default; }
 .dsh-ct-list { margin: 6px 0 0; padding-left: 18px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 .dsh-ct-code { font: 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.dsh-ct-input { width: 100%; box-sizing: border-box; margin-top: 8px; padding: 6px 8px; border-radius: 8px; border: 0.5px solid var(--dsw-alias-border-l2); background: transparent; color: inherit; font: 12px/18px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.dsh-ct-btn { flex: none; padding: 5px 12px; border-radius: 8px; border: 0.5px solid var(--dsw-alias-border-l2); background: transparent; color: inherit; font-size: 12px; cursor: pointer; }
+.dsh-ct-btn:disabled { opacity: .5; cursor: default; }
 `;
 
     async function call() {
@@ -63,6 +66,7 @@ window.__ModuleLoader__.load({
       const [error, setError] = useState('');
       const [note, setNote] = useState({ text: '', error: false });
       const [busy, setBusy] = useState(false);
+      const [folderDraft, setFolderDraft] = useState(null);
       const alive = useRef(true);
       const load = useCallback(async () => {
         try {
@@ -96,6 +100,23 @@ window.__ModuleLoader__.load({
           if (alive.current) setBusy(false);
         }
       };
+      const saveFolder = async () => {
+        setBusy(true);
+        try {
+          const value = String(folderDraft ?? '').trim();
+          if (value && !value.startsWith('/')) throw new Error('give a full path, starting with /');
+          await setSettings(appCtx, { voiceLibrary: value });
+          if (!alive.current) return;
+          setFolderDraft(null);
+          setNote({ text: value ? `The ${library.name ?? 'Voice Library'} is now in ${value}.` : `The ${library.name ?? 'Voice Library'} is back in Content's own folder.`, error: false });
+          setTimeout(() => { if (alive.current) void load(); }, 1000);
+        } catch (problem) {
+          if (alive.current) setNote({ text: `Could not save: ${problem.message}`, error: true });
+        } finally {
+          if (alive.current) setBusy(false);
+        }
+      };
+      const library = data.library ?? {};
       const readers = Array.isArray(data.readers) ? data.readers : [];
       const missing = readers.filter((reader) => reader.there === false);
 
@@ -123,13 +144,29 @@ window.__ModuleLoader__.load({
 
         h('div', { className: 'dsh-ct-group' }, 'From material to a final piece'),
         h('ul', { className: 'dsh-ct-list' },
-          h('li', null, 'Material: a saved Research report ("bring in my heat pump report"), other conversations, your notes, or what the assistant researches for you. A report is copied as it is, and its numbered sources go into the ledger.'),
+          h('li', null, 'Material: a saved Research report ("bring in my heat pump report", or the "Continue in Content" button on a Research report), other conversations, your notes, a Recon export, or what the assistant researches for you. A report is copied as it is, and its numbered sources go into the ledger. When Research wrote its packet beside the report (claims, contradictions, timeline, leads), the packet comes too and its claims are in the ledger at once, with proposed standings.'),
           h('li', null, 'The ledger (ledger.md): every claim, who says it, its sources, the passage it rests on, and how sure it is. Seven standings: Established, Reported, Claimed, Unsubstantiated, Disputed, Own experience, Own view. No claim is dropped for being unproven; it is worded as what it is. The assistant proposes a standing, you rule.'),
           h('li', null, 'Angles and brief (brief.md): three to five angles, you pick; then the brief, which you approve. The outline (outline.md) names the claims behind each point, or marks it as your view, your experience, or a gap.'),
           h('li', null, 'The draft is written by a separate writer model that has no tools at all, from the brief, the outline, the claims and your notes. Each sentence carries the id of its claim, such as [C3], so it can be checked. A separate checker model, and Content\'s own code, then flag every sentence that is stronger than its claim, has a number or quote that is not in the material, rests on nothing, or uses a claim you ruled out.'),
           h('li', null, 'Formats: blog post, article, story, talking outline for video or podcast, full script (only when you ask), and your own. Each is a small card file you can edit in Content\'s formats folder.'),
           h('li', null, 'Final: when you say so, and only when nothing is open. You get the piece in final/, a sources page (Markdown and a web page), a corrections log, and a publish kit in publish/ (titles, description, chapters, show notes, a sign-up offer). Nothing is posted or sent.'),
-          h('li', null, 'If a claim\'s standing changes later, the assistant lists every final piece that used it, in any subject, and drafts a correction. The final piece is never changed: a corrected version is saved beside it, and the correction goes into its log.')),
+          h('li', null, 'If a claim\'s standing changes later, the assistant lists every final piece that used it, in any subject, and drafts a correction. The final piece is never changed: a corrected version is saved beside it, and the correction goes into its log.'),
+          h('li', null, 'At approval, each web source the piece uses gets the Internet Archive\'s copy of it on the sources page, when one exists (looked up once; never for Recon sources, never with Web off).'),
+          h('li', null, 'Ultra Code (the switch beside Effort): three writers draft side by side and a judge picks or merges, and two checkers read the draft. Every one of them still has no tools. Off: one writer and one checker, as always.')),
+
+        h('div', { className: 'dsh-ct-group' }, library.name ?? 'Voice Library'),
+        h('p', { className: 'dsh-ct-desc' }, 'Where Content learns your voice, only from what you approved. One folder for all subjects, of plain files you can read and edit. Nothing enters by itself. (Settings → Library is something else: it searches your document folders.)'),
+        h('div', { className: 'dsh-ct-row' },
+          h('div', { className: 'dsh-ct-rowtext' },
+            h('div', { className: 'dsh-ct-rowtitle' }, library.folder || 'Not set'),
+            h('div', { className: 'dsh-ct-rowdesc' }, library.problem ? library.problem : `${library.pieces ?? 0} approved piece${library.pieces === 1 ? '' : 's'}, ${library.rules ?? 0} voice rule${library.rules === 1 ? '' : 's'}, ${library.ownWords ?? 0} of your own texts, ${library.pinned ?? 0} pinned fact${library.pinned === 1 ? '' : 's'}, ${library.wording ?? 0} saved passage${library.wording === 1 ? '' : 's'}, ${library.sources ?? 0} marked source${library.sources === 1 ? '' : 's'}, ${library.signals ?? 0} signal${library.signals === 1 ? '' : 's'}. ${library.own ? 'This is Content\'s own folder in the app\'s data.' : 'This is the folder you set.'} To use another, give its full path and press Save; leave it empty for Content's own.`),
+            h('input', { className: 'dsh-ct-input', type: 'text', spellCheck: false, placeholder: library.folder || '/Users/you/Documents/Voice Library', value: folderDraft ?? '', 'aria-label': 'Voice Library folder', onChange: (event) => setFolderDraft(event.target.value) })),
+          h('button', { type: 'button', className: 'dsh-ct-btn', disabled: busy || folderDraft === null, onClick: () => void saveFolder() }, 'Save')),
+        h('ul', { className: 'dsh-ct-list' },
+          h('li', null, 'When you make a piece final, it goes on the shelf of approved pieces, with how much of it you wrote or changed, and the writer\'s draft goes beside your version under edits/. The assistant then lists what you changed and proposes a few voice rules; each enters only when you say yes to it.'),
+          h('li', null, 'The writer gets the two or three approved pieces closest to the one it writes (a piece you changed more counts for more), your voice rules for that format, wording you saved to reuse word for word, and facts you pinned. With nothing approved yet, it writes plainly and says so.'),
+          h('li', null, 'Your own words: notes and transcripts of you talking. Written and spoken voice are kept apart. Give a transcript of a recording and name its talking outline: the assistant compares them (what you skipped, moved or expanded), and later outlines follow that.'),
+          h('li', null, 'Feedback such as "too formal", or which of two versions you chose, is kept as a signal. Pin a fact, mark a source as trusted or distrusted, save a passage: say so in your own words.')),
 
         h('div', { className: 'dsh-ct-group' }, 'The subject folder'),
         h('ul', { className: 'dsh-ct-list' },
@@ -151,7 +188,9 @@ window.__ModuleLoader__.load({
           h('li', null, 'Your decisions are yours: a ruling, an approval, an override or a new format card only counts with words from your newest message that say that decision ("C3 is reported", "make it final", or a whole short "yes" to the question just asked). A "not" turns them around. The assistant cannot make one up or reuse older words: Content checks them against your messages.'),
           h('li', null, 'Your own experience comes only from your notes or your answers. The assistant asks for it and never invents an event, a date or a feeling.'),
           h('li', null, 'Statements about named people that are not proven (Claimed, Unsubstantiated, Disputed) need your yes, person by person, before a piece is final. For a claim that accuses someone, the assistant looks for their response. Content gives no legal advice.'),
-          h('li', null, 'Not built yet: the Library of your approved pieces and voice (it needs a name: Settings → Library already exists), a "Continue in Content" button on Research reports, and Recon\'s export door. Each is asked about first.')));
+          h('li', null, 'A Recon export arrives as a message marked "[Recon export …]": material, never your words. Its addresses are citations: an onion address is never opened outside Recon, and any other address from it is opened only after you say yes on the app\'s own question. Nothing from it goes into Memory.'),
+          h('li', null, 'Content keeps its web at Open web at most: in a Content conversation the assistant is told to stay off forums, boards and channels, and to send a claim that needs them on to Research or Recon.'),
+          h('li', null, 'Not built yet: the link to a topic watch (there is no topic watch add-on yet).')));
     }
 
     return {

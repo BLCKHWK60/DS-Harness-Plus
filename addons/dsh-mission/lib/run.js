@@ -12,6 +12,8 @@
  * what no command covers.
  */
 
+import { loopLine } from './loop.js';
+
 export const LIMITS = { maxItems: 12, maxTries: 3, maxReviews: 2, maxSteps: 60, waitMinutes: 3 };
 export const LIMIT_RANGE = { maxItems: [1, 30], maxTries: [1, 8], maxReviews: [0, 5], maxSteps: [5, 300], waitMinutes: [0, 60] };
 export const ROLES = ['plan', 'implement', 'review'];
@@ -213,7 +215,7 @@ export function applyPlan(run, plan) {
  * @param {string} [result.failed] - set when the worker itself could not run.
  * @returns {object} the item.
  */
-export function applyWork(run, id, { report = '', check, aside = '', failed = '' } = {}) {
+export function applyWork(run, id, { report = '', check, aside = '', failed = '', loopFail = '', loopFailBy = 'app' } = {}) {
   run.steps += 1;
   if (isLong(run)) run.long.lapEnded = false;
   const item = run.items.find((entry) => entry.id === id);
@@ -239,6 +241,20 @@ export function applyWork(run, id, { report = '', check, aside = '', failed = ''
     // No command proves it: the reviewer decides.
     item.status = 'unverified';
     item.note = '';
+  }
+  // The work loop's checker (only when the loop is on): its no sends the item back with its words, as
+  // often as the Depth allows (Quick never, Standard once). Its yes marks nothing done. A model's no never
+  // reopens an item whose command passed: only the app's own checks may.
+  const mayReopen = item.status === 'unverified' || (item.status === 'verified' && loopFailBy === 'app');
+  if (loopFail && mayReopen) {
+    const used = item.loopRetries ?? 0;
+    if (used < (run.loop?.retries ?? 1)) {
+      item.loopRetries = used + 1;
+      item.status = item.tries >= run.limits.maxTries ? 'stuck' : 'open';
+      item.note = clip(`Checker: ${loopFail}`, 400);
+    } else {
+      item.note = clip(`Checker (no more tries at this Depth): ${loopFail}`, 400);
+    }
   }
   return item;
 }
@@ -474,6 +490,7 @@ export function report(run) {
   lines.push('', 'What the marks mean: PASSED = its command was run and passed. REVIEWED = no command could prove it; the reviewer model judged it done. The rest is not done.');
   if (run.checkResults.length > 0) lines.push('', 'Overall commands, run at the end:', ...run.checkResults.map((result) => `- ${result.ok ? 'passed' : 'FAILED'}: ${result.command}`));
   if (run.reviewNote) lines.push('', `Reviewer's note: ${run.reviewNote}`);
+  if (run.loop) lines.push('', loopLine(run));
   const waiting = run.items.filter((item) => item.status === 'aside');
   if (waiting.length > 0) lines.push('', 'Waiting for your yes:', ...waiting.map((item) => `- Item ${item.id}: ${item.note}`), 'Type /mission resume while you are here: those items are taken up again and you can answer the question.');
   if (run.checkpoint) lines.push('', `To undo everything this run changed: /mission back ${run.checkpoint}`);

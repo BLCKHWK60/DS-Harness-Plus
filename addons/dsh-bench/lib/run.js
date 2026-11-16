@@ -3,7 +3,7 @@
  * with arguments the recipes build from checked values. Bench never installs a program: when one is
  * missing it says how the user can get it.
  */
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { accessSync, constants, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
@@ -20,6 +20,12 @@ export const PROGRAMS = {
     places: ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), 'Library', 'Android', 'sdk', 'platform-tools')],
     get: 'Install Android\'s platform tools yourself, for example with `brew install android-platform-tools` (Google\'s download: https://developer.android.com/tools/releases/platform-tools). Bench never installs anything.',
   },
+  fastboot: {
+    names: ['fastboot'],
+    places: ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), 'Library', 'Android', 'sdk', 'platform-tools')],
+    get: 'Install Android\'s platform tools yourself, for example with `brew install android-platform-tools` (it brings adb and fastboot). Bench never installs anything.',
+  },
+  unzip: { names: ['unzip'], places: ['/usr/bin'], get: 'unzip is part of macOS; it is missing from /usr/bin.' },
   stty: { names: ['stty'], places: ['/bin'], get: 'stty is part of macOS; it is missing from /bin.' },
   cat: { names: ['cat'], places: ['/bin'], get: 'cat is part of macOS; it is missing from /bin.' },
   pmset: { names: ['pmset'], places: ['/usr/bin'], get: 'pmset is part of macOS; it is missing from /usr/bin.' },
@@ -72,17 +78,55 @@ export async function findProgram(id, { places, pathFolders = userPathFolders } 
  * Run one fixed command: no shell, a time limit, output kept small.
  * @param {string} file - the program's full path.
  * @param {string[]} args - its arguments, built by a recipe from checked values.
- * @param {{timeoutMs?: number, maxBuffer?: number}} [options] - limits.
- * @returns {Promise<{code: number | null, stdout: string, stderr: string, timedOut: boolean}>} how it ended.
+ * @param {{timeoutMs?: number, maxBuffer?: number, env?: Record<string, string>, input?: string | Buffer, binary?: boolean}} [options] - limits; `env` is added to the
+ *   app's environment (a name, never a secret), `input` is sent on standard input, `binary` keeps standard output as bytes.
+ * @returns {Promise<{code: number | null, stdout: string | Buffer, stderr: string, timedOut: boolean}>} how it ended.
  */
-export function runFixed(file, args, { timeoutMs = 120_000, maxBuffer = 16 * 1024 * 1024 } = {}) {
+export function runFixed(file, args, { timeoutMs = 120_000, maxBuffer = 16 * 1024 * 1024, env, input, binary = false } = {}) {
   return new Promise((resolve) => {
     if (!isAbsolute(String(file ?? ''))) {
-      resolve({ code: null, stdout: '', stderr: 'not a full path', timedOut: false });
+      resolve({ code: null, stdout: binary ? Buffer.alloc(0) : '', stderr: 'not a full path', timedOut: false });
       return;
     }
-    execFile(file, args.map(String), { timeout: timeoutMs, maxBuffer, shell: false, env: { ...process.env, TERM: 'dumb', NO_COLOR: '1' } }, (error, stdout, stderr) => {
-      resolve({ code: error ? (typeof error.code === 'number' ? error.code : null) : 0, stdout: String(stdout ?? ''), stderr: String(stderr ?? ''), timedOut: Boolean(error?.killed && error?.signal) });
+    let child;
+    try {
+      child = spawn(file, args.map(String), { shell: false, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, TERM: 'dumb', NO_COLOR: '1', ...(env ?? {}) } });
+    } catch (error) {
+      resolve({ code: null, stdout: binary ? Buffer.alloc(0) : '', stderr: String(error?.message ?? error), timedOut: false });
+      return;
+    }
+    const out = [];
+    let outBytes = 0;
+    let err = '';
+    let timedOut = false;
+    let tooMuch = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGKILL');
+    }, timeoutMs);
+    child.stdout.on('data', (chunk) => {
+      outBytes += chunk.length;
+      if (outBytes > maxBuffer) {
+        tooMuch = true;
+        child.kill('SIGKILL');
+        return;
+      }
+      out.push(chunk);
+    });
+    child.stderr.on('data', (chunk) => {
+      if (err.length < 64 * 1024) err += chunk.toString('utf8');
+    });
+    child.stdin.on('error', () => {});
+    if (input !== undefined) child.stdin.end(input);
+    else child.stdin.end();
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      resolve({ code: null, stdout: binary ? Buffer.alloc(0) : '', stderr: String(error?.message ?? error), timedOut });
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      const bytes = Buffer.concat(out);
+      resolve({ code: tooMuch ? null : code, stdout: binary ? bytes : bytes.toString('utf8'), stderr: tooMuch ? `the output was larger than ${maxBuffer} bytes` : err, timedOut });
     });
   });
 }

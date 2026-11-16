@@ -126,6 +126,16 @@ html[data-dsh-long-run] [data-goal-bar] { display: none !important; }
 }
 `;
 
+    /** The tabs where the owner switched the work loop on. */
+    function loopTabsOf(text) {
+      try {
+        const value = JSON.parse(String(text ?? '') || '[]');
+        return Array.isArray(value) ? value.map(String) : [];
+      } catch {
+        return [];
+      }
+    }
+
     async function read(ctx) {
       const result = await ctx.remote.settings.describe();
       if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
@@ -185,6 +195,10 @@ html[data-dsh-long-run] [data-goal-bar] { display: none !important; }
       const [folders, setFolders] = useState([]);
       // A project that was added but has no model picked yet; it is not saved until it has one.
       const [drafts, setDrafts] = useState([]);
+      // The tabs the app has (from the Modes settings), for the work loop's switches.
+      const [tabs, setTabs] = useState([]);
+      // Where Benchmark's scorecard showed the loop pays, as you accepted it there (plan step S7).
+      const [pays, setPays] = useState({});
       const alive = useRef(true);
       const load = useCallback(async () => {
         try {
@@ -204,6 +218,19 @@ html[data-dsh-long-run] [data-goal-bar] { display: none !important; }
             if (alive.current && result?.ok) setCatalog(result.value);
           } catch {
             /* the pickers then show only what is already chosen */
+          }
+          try {
+            const described = await appCtx.remote.settings.describe();
+            const modes = described.ok ? described.value.namespaces.find((entry) => entry.ns === 'modes')?.value : undefined;
+            const table = (text) => { try { const value = JSON.parse(String(text ?? '') || '{}'); return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; } catch { return {}; } };
+            const found = { chat: 'Chat', cowork: 'Cowork', code: 'Code' };
+            // Research is left out: there only Ultra Code puts the loop on (its Long runs).
+            for (const [id, mode] of Object.entries({ ...table(modes?.modes), ...table(modes?.extraModes) })) if (/^[a-z0-9-]{1,40}$/.test(id) && !mode?.isolated && id !== 'research') found[id] = String(mode?.label ?? id).slice(0, 40);
+            if (alive.current) setTabs(Object.entries(found).map(([id, label]) => ({ id, label })));
+            const bench = described.ok ? described.value.namespaces.find((entry) => entry.ns === 'benchmark')?.value : undefined;
+            if (alive.current) setPays(table(bench?.acceptedMethods));
+          } catch {
+            /* no list: the switches already saved still show */
           }
           try {
             const items = appCtx.get('workspaces')?.list?.getSnapshot?.()?.items;
@@ -313,6 +340,23 @@ html[data-dsh-long-run] [data-goal-bar] { display: none !important; }
           field.kind === 'number'
             ? h(NumberField, { value: Number.isFinite(Number(data?.[field.id])) ? Number(data[field.id]) : field.fallback, min: field.min, max: field.max, label: field.label, disabled: busy || !loaded, onCommit: (number) => void save({ [field.id]: number }, 'Saved. It applies to the next long run.') })
             : h('button', { type: 'button', role: 'switch', className: 'dsh-ms-switch', 'aria-checked': loaded ? (data[field.id] ?? field.fallback) === true : field.fallback, 'aria-label': field.label, disabled: busy || !loaded, onClick: () => void save({ [field.id]: !((data[field.id] ?? field.fallback) === true) }, 'Saved. It applies to the next long run.') }))),
+
+        h('div', { className: 'dsh-ms-group' }, 'Work loop (Ultra Code)'),
+        h('p', { className: 'dsh-ms-desc' }, 'Off unless switched on. It is on for a run when Ultra Code is switched on in the conversation\'s model panel (beside Effort), or for every run in a tab you switch on here. With it on, a run follows a recipe for its kind of task (plain files in the app\'s data folder, mission/recipes, which you can edit; five starters are written once), each step ends in a fixed shape, a separate checker checks it (sources really opened for research, a fixed shape for an extraction, separate tries that agree for a question with one answer, a reader for writing; commands for code and data, as always), a step that fails twice goes to the strongest model of the tier\'s team (Settings → Model Tiers), and with Ultra Code several attempts at text work run side by side and a judge picks. Only one helper ever changes files. Slower, and more tokens. Recon runs keep their own model and get only the checks the app runs itself.'),
+        Object.keys(pays).length > 0
+          ? h('p', { className: 'dsh-ms-desc' }, `Benchmark found that the loop pays for: ${Object.entries(pays).map(([kind, way]) => `${kind} (${String(way).replace(/^small-loop-/, '').replace(/-/g, ' ')})`).join(', ')}. You accepted this on Settings → Benchmark; switch the loop on below for the tabs where you do that kind of work.`)
+          : h('p', { className: 'dsh-ms-desc' }, 'Settings → Benchmark → Compare ways of working runs your own tasks three ways and says where the loop pays. Nothing is switched on by itself.'),
+        tabs.map((tab) => {
+          const on = loopTabsOf(data?.loopTabs).includes(tab.id);
+          return h('div', { key: `loop-${tab.id}`, className: 'dsh-ms-row', 'data-center': 'true' },
+            h('div', { className: 'dsh-ms-rowtext' }, h('div', { className: 'dsh-ms-rowtitle' }, `${tab.label}: the loop for every run`), h('div', { className: 'dsh-ms-rowdesc' }, on ? 'On: every run started in this tab uses the work loop, also with Ultra Code off.' : 'Off: only Ultra Code puts it on here.')),
+            h('button', { type: 'button', role: 'switch', className: 'dsh-ms-switch', 'aria-checked': on, 'aria-label': `${tab.label}: the work loop for every run`, disabled: busy || !loaded, onClick: () => { const list = loopTabsOf(data?.loopTabs); void save({ loopTabs: JSON.stringify(on ? list.filter((id) => id !== tab.id) : [...list, tab.id]) }, 'Saved. It applies from the next run.'); } }));
+        }),
+        h('p', { className: 'dsh-ms-desc' }, 'In Research a Long run uses the loop only when Ultra Code is on in that conversation; without it, it runs as before.'),
+        (catalog?.groups ?? []).length > 0 ? h('p', { className: 'dsh-ms-desc' }, 'Calls at once, per model server (1 to 16, 4 unless you change it). A server that runs one request at a time: set it to 1, and side by side means one after another there.') : null,
+        (catalog?.groups ?? []).slice(0, 12).map((group) => h('div', { key: `calls-${group.id}`, className: 'dsh-ms-row', 'data-center': 'true' },
+          h('div', { className: 'dsh-ms-rowtext' }, h('div', { className: 'dsh-ms-rowtitle' }, `${group.name ?? group.id}: calls at once`)),
+          h(NumberField, { value: Number(parse(data?.callsAtOnce)[group.id] ?? 4), min: 1, max: 16, label: `${group.name ?? group.id}: calls at once`, disabled: busy || !loaded, onCommit: (number) => void save({ callsAtOnce: JSON.stringify({ ...parse(data?.callsAtOnce), [group.id]: number }) }, 'Saved. It applies from the next step.') }))),
 
         h('div', { className: 'dsh-ms-group' }, 'How to use it'),
         h('ul', { className: 'dsh-ms-list' },

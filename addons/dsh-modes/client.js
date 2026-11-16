@@ -209,7 +209,35 @@ window.__ModuleLoader__.load({
         'web.deep.hint': '10+ searches, at least 10 pages read, facts cross-checked between sources. Slower.',
         'web.note': 'For this conversation only: whether the model may go online. How much it searches is set by Depth. In-depth research with many helpers is in the Research tab.',
         'web.on': 'On',
-        'web.on.hint': 'The model may search the web, read pages and use other tools and programs that go online. How much it searches is set by Depth.',
+        'web.on.hint': 'As before: the model may search the web, read pages and use other tools and programs that go online, with no limit beyond the tab\'s own. How much it searches is set by Depth.',
+        'web.verified': 'Verified',
+        'web.verified.hint': 'Only pages on the verified list: official bodies, courts and registers, research publishers, wire services and public broadcasters, archives. Edit the list on Settings → Modes.',
+        'web.openweb': 'Open web',
+        'web.openweb.hint': 'Verified sources and ordinary sites. Not forums and boards, public groups and channels, or the Reddit archives.',
+        'web.everything': 'Everything',
+        'web.everything.hint': 'Every kind of source, forums and channels too. Like On, and named as a level.',
+        'web.custom': 'Custom',
+        'web.custom.hint': 'Your own mix: {0}.',
+        'web.levels': 'A level limits which pages a tool may open; searching lists results as usual, and a result of another kind is named as a lead. Your own mixes are made on Settings → Modes.',
+        'wl.group': 'Web levels',
+        'wl.hint': 'The Web button keeps Off and On (On is as before). A conversation can also pick a level: Verified opens only the list below; Open web adds ordinary sites; Everything adds forums, groups and channels and the Reddit archives; or one of your own mixes. A level limits which pages a tool may open; searching lists results as usual. Recon and Research keep their own web.',
+        'wl.list': 'Verified list: one site per line (a line starting with a dot, such as .gov, means every site ending so)',
+        'wl.bad': 'Not a site: {0}. These lines are left out.',
+        'wl.saveList': 'Save list',
+        'wl.listSaved': 'Verified list saved.',
+        'wl.mixes': 'Your own mixes: tick the kinds of source a mix may open.',
+        'wl.name': 'Name',
+        'wl.remove': 'Remove',
+        'wl.add': 'Add a mix',
+        'wl.saveMixes': 'Save mixes',
+        'wl.mixesSaved': 'Mixes saved. Pick one on a conversation\'s Web button.',
+        'wl.noName': 'Give each mix a name.',
+        'wl.sameName': 'Two mixes have the same name.',
+        'lane.verified': 'verified sources',
+        'lane.sites': 'ordinary sites',
+        'lane.forums': 'forums and boards',
+        'lane.channels': 'groups and channels',
+        'lane.archives': 'Reddit archives',
         'web.always': 'Always on',
         'web.always.open': 'Web access: {0}. Fixed in this tab.',
         'web.always.hint': 'Always on in this tab: searching is its work. Only the Tools switch takes the web away. How much it searches is set by Depth.',
@@ -426,7 +454,35 @@ window.__ModuleLoader__.load({
         'web.deep.hint': '10 次以上搜索，至少阅读 10 个页面，在不同来源间交叉核实事实。较慢。',
         'web.note': '仅对本对话生效：模型是否可以联网。搜索多少由细致度决定。多助手的深入研究请使用"研究"标签页。',
         'web.on': '开启',
-        'web.on.hint': '模型可以搜索网页、阅读页面，并使用其他联网的工具和程序。搜索多少由细致度决定。',
+        'web.on.hint': '与以前相同：模型可以搜索网页、阅读页面，并使用其他联网的工具和程序，除本标签页自身的限制外没有其他限制。搜索多少由细致度决定。',
+        'web.verified': '已核实',
+        'web.verified.hint': '只打开已核实列表中的页面：官方机构、法院和登记处、研究出版方、通讯社和公共广播、档案馆。在 设置 → 模式 中编辑列表。',
+        'web.openweb': '开放网络',
+        'web.openweb.hint': '已核实来源和普通网站。不包括论坛、公开群组和频道或 Reddit 存档。',
+        'web.everything': '全部',
+        'web.everything.hint': '所有类型的来源，包括论坛和频道。与"开启"相同，但作为一个级别。',
+        'web.custom': '自定义',
+        'web.custom.hint': '你自己的组合：{0}。',
+        'web.levels': '级别限制工具可以打开哪些页面；搜索照常列出结果，其他类型的结果作为线索列出。自定义组合在 设置 → 模式 中创建。',
+        'wl.group': '联网级别',
+        'wl.hint': '联网按钮保留"关闭"和"开启"（"开启"与以前相同）。对话也可以选择一个级别："已核实"只打开下面列表中的网站；"开放网络"加上普通网站；"全部"再加上论坛、群组和频道以及 Reddit 存档；或者你自己的组合。级别限制工具可以打开哪些页面；搜索照常列出结果。侦察和研究保留各自的联网方式。',
+        'wl.list': '已核实列表：每行一个网站（以点开头的行，例如 .gov，表示所有以此结尾的网站）',
+        'wl.bad': '不是网站：{0}。这些行将被忽略。',
+        'wl.saveList': '保存列表',
+        'wl.listSaved': '已保存核实列表。',
+        'wl.mixes': '你自己的组合：勾选组合可以打开的来源类型。',
+        'wl.name': '名称',
+        'wl.remove': '删除',
+        'wl.add': '添加组合',
+        'wl.saveMixes': '保存组合',
+        'wl.mixesSaved': '组合已保存。在对话的联网按钮上选择。',
+        'wl.noName': '请为每个组合命名。',
+        'wl.sameName': '有两个组合同名。',
+        'lane.verified': '已核实来源',
+        'lane.sites': '普通网站',
+        'lane.forums': '论坛',
+        'lane.channels': '群组和频道',
+        'lane.archives': 'Reddit 存档',
         'web.always': '始终开启',
         'web.always.open': '联网访问：{0}。此标签页中固定。',
         'web.always.hint': '此标签页中始终开启：搜索就是它的工作。只有工具开关能关闭联网。搜索多少由细致度决定。',
@@ -653,7 +709,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       // A copy that carries earlier turns of an isolated conversation (Recon) is isolated for good
       // too: it holds what that conversation read. A copy of the first question carries none.
       // A copy with earlier turns also has their access level, so it keeps the level to go back to.
-      const CARRIED = ['sessionModes', 'sessionWeb', 'sessionSearchDepth', 'sessionDepth', 'sessionLens', 'sessionTools', 'sessionHelpers', 'sessionToolSets', ...(plan.cut !== undefined ? ['sessionIsolated', 'sessionSandboxBase'] : [])];
+      const CARRIED = ['sessionModes', 'sessionWeb', 'sessionWebLevel', 'sessionSearchDepth', 'sessionDepth', 'sessionLens', 'sessionTools', 'sessionHelpers', 'sessionToolSets', ...(plan.cut !== undefined ? ['sessionIsolated', 'sessionSandboxBase'] : [])];
       const fresh = await load(appCtx);
       const carried = CARRIED.filter((field) => (field === 'sessionIsolated' ? readObject(fresh.value[field])[sessionId] === true : readObject(fresh.value[field])[sessionId] !== undefined));
       if (carried.length > 0) {
@@ -1042,7 +1098,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         h('span', { className: 'dsh-mt', ref: root },
           // Research and Scout always have the web (searching is their work): a fixed label, Off only with tools off.
           // A Recon conversation moved into another tab is locked by the host with no tools at all: Off.
-          researchTab ? h(WebAlways, { t, off: off || lockedHere }) : h(WebButton, { t, level: webLevelOf(off, web), disabled: off, busy: state.busy, onPick: (picked) => void pickSetting('web', picked) }),
+          researchTab ? h(WebAlways, { t, off: off || lockedHere }) : h(WebButton, { t, level: webLevelOf(off, web, modeDef.isolated === true ? undefined : readObject(state.view.sessionWebLevel)[sessionId], mixesOf(state.view.webMixes)), mixes: modeDef.isolated === true ? undefined : mixesOf(state.view.webMixes), disabled: off, busy: state.busy, onPick: (picked) => void pickSetting('web', picked) }),
           // Depth: how much work this conversation gets (how much it searches, helpers, planning, checks,
           // reviews; in Research and Scout also the size of a research run). The same in every tab (the
           // owner's rule); only its list texts fit the tab. Not while all tools are off (nothing is sent then).
@@ -1140,9 +1196,28 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       if (mode?.isolated === true) return 'isolated';
       return Array.isArray(mode?.tools) && mode.tools.includes('deep_research') ? 'research' : undefined;
     }
-    /** @returns {'on' | 'off'} what the Web button shows: Off while all tools are off or the web is. */
-    function webLevelOf(off, web) {
-      return off || !web ? 'off' : 'on';
+    /**
+     * What the Web button shows: Off while all tools are off or the web is; a level the conversation
+     * picked (plan step S1); else On, as before.
+     * @returns {string} 'off', 'on', 'verified', 'open', 'everything' or 'custom:<name>'.
+     */
+    function webLevelOf(off, web, picked, mixes) {
+      if (off || !web) return 'off';
+      if (picked === 'verified' || picked === 'open' || picked === 'everything') return picked;
+      if (typeof picked === 'string' && picked.startsWith('custom:') && mixes && Array.isArray(mixes[picked.slice(7)])) return picked;
+      return 'on';
+    }
+    const LANE_LABELS = { verified: 'verified sources', sites: 'ordinary sites', forums: 'forums and boards', channels: 'groups and channels', archives: 'Reddit archives' };
+    /** The owner's saved Custom mixes, from the setting's JSON text. */
+    function mixesOf(text) {
+      const value = readObject(text);
+      const out = {};
+      // The same cleanup as the host's (lib/weblevel.js mixName), so a picked mix is the one the host finds.
+      for (const [name, lanes] of Object.entries(value).slice(0, 20)) {
+        const clean = String(name).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 40);
+        if (clean && Array.isArray(lanes)) out[clean] = [...new Set(lanes.filter((lane) => LANE_LABELS[lane]))];
+      }
+      return out;
     }
     /**
      * The settings a pick writes: Web On or Off for this conversation only (how much it searches is
@@ -1150,8 +1225,16 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
      */
     function settingOps(kind, picked, current, sessionId) {
       if (kind === 'web') {
-        const webs = { ...readObject(current.sessionWeb), [sessionId]: picked === 'on' };
-        return [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify(webs) }];
+        // Off and On as before; a level turns the web on and is kept for this conversation (plan step S1).
+        const webs = { ...readObject(current.sessionWeb), [sessionId]: picked !== 'off' };
+        const ops = [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify(webs) }];
+        if (picked !== 'off') {
+          const levels = { ...readObject(current.sessionWebLevel) };
+          if (picked === 'on') delete levels[sessionId];
+          else levels[sessionId] = picked;
+          ops.push({ op: 'set', path: ['sessionWebLevel'], value: JSON.stringify(levels) });
+        }
+        return ops;
       }
       if (kind === 'lens') {
         // For this conversation only; Default stores nothing.
@@ -1163,11 +1246,13 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       const depths = { ...readObject(current.sessionDepth), [sessionId]: picked };
       return [{ op: 'set', path: ['sessionDepth'], value: JSON.stringify(depths) }, { op: 'set', path: ['searchDepth'], value: picked }];
     }
-    // Since 0.59.0 the Web button is only On or Off; how much the model searches is Depth.
+    // Since 0.59.0 the Web button's Off and On; how much the model searches is Depth. The levels after
+    // them are the plan's (step S1), added beside them: On stays as before.
     const LEVELS = ['off', 'on'];
+    const WEB_LEVELS = [['verified', 'verified'], ['open', 'openweb'], ['everything', 'everything']];
 
-    /** The Web button in the chat box, and its list: Off and On. */
-    function WebButton({ t, level, disabled, busy, onPick }) {
+    /** The Web button in the chat box, and its list: Off, On, the levels and the owner's own mixes. */
+    function WebButton({ t, level, mixes, disabled, busy, onPick }) {
       const [open, setOpen] = useState(false);
       const [place, setPlace] = useState({ left: 12, bottom: 80 });
       const button = useRef(null);
@@ -1189,7 +1274,13 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           document.removeEventListener('keydown', key, true);
         };
       }, [open]);
-      const name = t(`web.${level}`);
+      const levelKey = WEB_LEVELS.find(([id]) => id === level)?.[1];
+      const name = level.startsWith('custom:') ? level.slice(7) : t(`web.${levelKey ?? level}`);
+      const options = [
+        ...LEVELS.map((id) => ({ id, label: t(`web.${id}`), hint: t(`web.${id}.hint`) })),
+        ...(mixes ? WEB_LEVELS.map(([id, key]) => ({ id, label: t(`web.${key}`), hint: t(`web.${key}.hint`) })) : []),
+        ...(mixes ? Object.entries(mixes).map(([mix, lanes]) => ({ id: `custom:${mix}`, label: mix, hint: t('web.custom.hint').replace('{0}', lanes.map((lane) => t(`lane.${lane}`)).join(', ') || '—') })) : []),
+      ];
       return h('span', { className: 'pair', 'data-kind': 'search' },
         h('button', {
           ref: button, type: 'button', 'aria-pressed': level !== 'off', 'aria-expanded': open, 'aria-haspopup': 'dialog', disabled: disabled || busy,
@@ -1201,10 +1292,11 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
               h('div', { ref: panel, className: 'dsh-mt-pop', role: 'dialog', 'aria-label': t('web.title'), style: { left: place.left, bottom: place.bottom } },
                 h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
                 h('div', { className: 'title' }, t('web.title')),
-                h('div', { className: 'opts', role: 'listbox', 'aria-label': t('web.title') },
-                  LEVELS.map((id) => h('button', { key: id, type: 'button', role: 'option', 'aria-selected': id === level, 'aria-current': String(id === level), disabled: busy, onClick: () => { setOpen(false); onPick(id); } },
-                    h('b', null, t(`web.${id}`)), h('small', null, t(`web.${id}.hint`))))),
-                h('p', { className: 'hint' }, t('web.note'))),
+                h('div', { className: 'opts', role: 'listbox', 'aria-label': t('web.title'), style: { maxHeight: 'calc(100vh - 160px)', overflowY: 'auto' } },
+                  options.map((option) => h('button', { key: option.id, type: 'button', role: 'option', 'aria-selected': option.id === level, 'aria-current': String(option.id === level), disabled: busy, onClick: () => { setOpen(false); onPick(option.id); } },
+                    h('b', null, option.label), h('small', null, option.hint)))),
+                h('p', { className: 'hint' }, t('web.note')),
+                mixes ? h('p', { className: 'hint' }, t('web.levels')) : null),
               document.body,
             )
           : null);
@@ -1701,6 +1793,51 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         note ? h('div', { className: 'dsh-me-note', 'data-bad': String(note.bad) }, note.text) : null);
     }
 
+    /**
+     * Web levels on Settings → Modes (plan step S1): the verified list and the owner's own mixes. The
+     * levels are picked on each conversation's Web button; On stays as before.
+     */
+    function WebLevels({ t, saved, mixes, onSaveList, onSaveMixes }) {
+      const [text, setText] = useState(saved ?? '');
+      const [rows, setRows] = useState(() => Object.entries(mixes).map(([name, lanes]) => ({ name, lanes })));
+      const [note, setNote] = useState(null);
+      const mixesKey = JSON.stringify(mixes);
+      useEffect(() => setText(saved ?? ''), [saved]);
+      useEffect(() => setRows(Object.entries(JSON.parse(mixesKey)).map(([name, lanes]) => ({ name, lanes }))), [mixesKey]);
+      const lines = String(text).split('\n').map((line) => line.replace(/#.*/, '').trim()).filter(Boolean);
+      const bad = lines.filter((line) => !/^\.?[a-z0-9.-]{2,253}$/i.test(line));
+      const names = rows.map((row) => String(row.name).trim());
+      const mixProblem = names.some((name) => !name) ? t('wl.noName') : new Set(names.map((name) => name.toLowerCase())).size !== names.length ? t('wl.sameName') : '';
+      const saveMixes = async () => {
+        if (mixProblem) { setNote({ bad: true, text: mixProblem }); return; }
+        const value = {};
+        for (const row of rows.slice(0, 20)) value[String(row.name).trim().slice(0, 40)] = row.lanes;
+        const ok = await onSaveMixes(JSON.stringify(value));
+        setNote(ok ? { bad: false, text: t('wl.mixesSaved') } : null);
+      };
+      return h('div', { className: 'dsh-me-own', 'data-web-levels': '' },
+        h('div', { className: 'dsh-me-note' }, t('wl.hint')),
+        h('label', { className: 'dsh-me-field wide' }, h('span', null, t('wl.list')),
+          h('textarea', { className: 'dsh-me-ta', value: text, rows: 8, spellCheck: false, onChange: (event) => { setText(event.target.value); setNote(null); } })),
+        bad.length > 0 ? h('div', { className: 'dsh-me-note', 'data-bad': 'true' }, t('wl.bad').replace('{0}', bad.slice(0, 3).join(', '))) : null,
+        h('div', { className: 'dsh-me-row' },
+          h('button', { type: 'button', className: 'dsh-me-btn', 'data-main': 'true', disabled: text === (saved ?? ''), onClick: async () => { const ok = await onSaveList(text); setNote(ok ? { bad: false, text: t('wl.listSaved') } : null); } }, t('wl.saveList'))),
+        h('div', { className: 'dsh-me-note' }, t('wl.mixes')),
+        rows.map((row, index) => h('section', { key: index, className: 'dsh-me-card', 'data-web-mix': '' },
+          h('div', { className: 'dsh-me-row' },
+            h('label', { className: 'dsh-me-field' }, h('span', null, t('wl.name')),
+              h('input', { className: 'dsh-me-in', value: row.name, maxLength: 40, onChange: (event) => { const name = event.target.value; setRows((prev) => prev.map((item, at) => (at === index ? { ...item, name } : item))); setNote(null); } })),
+            h('button', { type: 'button', className: 'dsh-me-btn', onClick: () => { setRows((prev) => prev.filter((_, at) => at !== index)); setNote(null); } }, t('wl.remove'))),
+          h('div', { className: 'dsh-me-row' },
+            Object.keys(LANE_LABELS).map((lane) => h('label', { key: lane, className: 'dsh-me-lt' },
+              h('input', { type: 'checkbox', checked: row.lanes.includes(lane), onChange: (event) => { const on = event.target.checked; setRows((prev) => prev.map((item, at) => (at === index ? { ...item, lanes: on ? [...new Set([...item.lanes, lane])] : item.lanes.filter((x) => x !== lane) } : item))); setNote(null); } }),
+              h('span', null, ` ${t(`lane.${lane}`)}`)))))),
+        h('div', { className: 'dsh-me-row' },
+          rows.length >= 20 ? null : h('button', { type: 'button', className: 'dsh-me-btn', onClick: () => { setRows((prev) => [...prev, { name: '', lanes: ['verified'] }]); setNote(null); } }, t('wl.add')),
+          h('button', { type: 'button', className: 'dsh-me-btn', 'data-main': 'true', disabled: JSON.stringify(rows.map((row) => [row.name, row.lanes])) === JSON.stringify(Object.entries(JSON.parse(mixesKey))), onClick: () => void saveMixes() }, t('wl.saveMixes'))),
+        note ? h('div', { className: 'dsh-me-note', 'data-bad': String(note.bad) }, note.text) : null);
+    }
+
     function ModesPage({ appCtx }) {
       const t = appCtx.locale.bind('modes');
       const [loaded, setLoaded] = useState({ status: 'loading' });
@@ -1737,6 +1874,8 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           coworkMethod: view.coworkMethod !== false,
           ownLenses: ownLensesOf(view.ownLenses).map(({ name, text }) => ({ name, text })),
           longTools: typeof view.longTools === 'string' ? view.longTools : '{}',
+          verifiedSources: typeof view.verifiedSources === 'string' ? view.verifiedSources : '',
+          webMixes: typeof view.webMixes === 'string' ? view.webMixes : '{}',
         });
         setDirty(false);
       }, []);
@@ -1990,6 +2129,8 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
                 h('div', null, h('b', null, tab.label), tab.isolated ? h('span', null, t('long.isolated')) : null),
                 h('div', { className: 'dsh-me-lts' }, sw(t('long.files'), files, 'files', false), sw(t('long.web'), web, 'web', tab.isolated)));
             })),
+        h('div', { className: 'dsh-me-group' }, t('wl.group')),
+        h(WebLevels, { t, saved: general.verifiedSources, mixes: mixesOf(general.webMixes), onSaveList: (text) => saveNow('verifiedSources', text), onSaveMixes: (text) => saveNow('webMixes', text) }),
         h('div', { className: 'dsh-me-group' }, t('own.group')),
         h(OwnLenses, { t, saved: general.ownLenses ?? [], onSave: (list) => saveNow('ownLenses', list) }),
         h('div', { className: 'dsh-me-group' }, t('answer.group')),

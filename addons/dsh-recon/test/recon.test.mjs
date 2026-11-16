@@ -6,7 +6,7 @@ import { buildTools } from '../lib/tools.js';
 
 test('the mode is isolated and lists only its own tools', () => {
   assert.equal(MODE.isolated, true);
-  assert.deepEqual(MODE.tools, TOOLS);
+  assert.deepEqual(MODE.tools, [...TOOLS, 'recon_ultra'], 'Recon\'s tools, and Ultra Code\'s recipe (offered only while Ultra Code is on)');
   assert.ok(TOOLS.every((name) => name.startsWith('recon_')));
   assert.ok(METHOD.length <= 4000, 'the method fits the Modes add-on');
   const on = JSON.parse(withRecon('{"data":{"label":"Data"}}', true));

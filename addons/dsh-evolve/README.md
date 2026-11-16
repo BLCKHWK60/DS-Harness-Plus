@@ -167,3 +167,5 @@ Data folder (`$DSH_HOME/evolve`): `tasks.json`, `policies/v0001.json …`, `acti
   - `/evolve` typed in a chat printed the version in use and the last score.
 
 **Not checked:** a real local model and a real reviewer (the gains shown are from a scripted mock, so they prove the machinery, not an improvement); `judge` checks with a real judge; the token allowance stopping a real run (unit-tested); `/evolve measure` and `/evolve improve` typed in a chat; the page in other colour schemes; the Mac desktop app.
+
+**Recon exports (16 November):** Self-improvement reads no conversations and no run logs, only the test tasks you add, so text exported from Recon cannot reach it. Learned skills (Skill architect) leaves such conversations out.

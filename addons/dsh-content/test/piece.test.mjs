@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildPieceTools } from '../lib/piece-tools.js';
+import { openLibrary } from '../lib/library.js';
 import { openFormats, parseCard, BUILT_IN } from '../lib/formats.js';
 import { openIndex, approvalGaps } from '../lib/final.js';
 import { DECISION_WORDS, MARK, openSubject, ownerDecision, ownerSaid, writeOwnCopy } from '../lib/subject.js';
@@ -129,29 +130,40 @@ test('the writer\'s task: the claims with their standing and passages, the ruled
 });
 
 /** Content's piece tools on a throwaway subject, with stand-ins for the user, the writer and the checker. */
-function desk({ said = [], writer = 'Draft.', checker = '{"flags": []}' } = {}) {
+function desk({ said = [], writer = 'Draft.', checker = '{"flags": []}', judge = undefined, ultra = false, archive = {} } = {}) {
   const root = scratch();
   const home = scratch('content-home-');
   const reports = join(home, 'research', 'reports');
   mkdirSync(reports, { recursive: true });
   const messages = [...said];
   const jobs = [];
+  const fetched = [];
   const tools = buildPieceTools({
     enabled: () => true,
     rootOf: () => root,
     ownerMessages: () => messages.map((text) => ({ text })),
     helper: async (_exec, job) => {
       jobs.push(job);
+      if (job.role === 'judge') return typeof judge === 'function' ? judge(job) : judge ?? '';
       return job.role === 'writer' ? (typeof writer === 'function' ? writer(job) : writer) : (typeof checker === 'function' ? checker(job) : checker);
     },
     formats: openFormats(() => join(home, 'content', 'formats')),
     index: openIndex(() => join(home, 'content', 'where-used.json')),
     reportsFolder: () => reports,
+    library: openLibrary(() => join(home, 'content', 'voice-library')),
+    ultra: () => ultra,
+    // The web is a stand-in: nothing goes online in a test.
+    fetchFn: async (url) => {
+      fetched.push(url);
+      const target = decodeURIComponent(String(url).split('?url=')[1] ?? '');
+      const copy = archive[target];
+      return { ok: true, json: async () => (copy ? { archived_snapshots: { closest: { available: true, url: copy, timestamp: '20240101000000' } } } : { archived_snapshots: {} }) };
+    },
     now: () => new Date(Date.UTC(2026, 10, 17, 9)),
   });
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
   const call = async (name, args) => (await byName.get(name).execute(args, { agent: { id: 'c1' } })).text;
-  return { root, home, reports, jobs, call, say: (text) => messages.push(text), state: () => openSubject(root).read(), close: () => { rmSync(root, { recursive: true, force: true }); rmSync(home, { recursive: true, force: true }); } };
+  return { root, home, reports, jobs, fetched, call, say: (text) => messages.push(text), state: () => openSubject(root).read(), close: () => { rmSync(root, { recursive: true, force: true }); rmSync(home, { recursive: true, force: true }); } };
 }
 
 test('end to end: a Research report in, claims, rulings, angles, brief, outline, draft, check, approval, sources page, kit, where-used, correction', async () => {
@@ -211,7 +223,7 @@ test('end to end: a Research report in, claims, rulings, angles, brief, outline,
     assert.match(await app.call('content_rule', { action: 'named', piece: 'P1', person: 'Installer Co', quote: 'Yes for Installer Co', sentences: waiting }), /said yes to 1 unproven statement about Installer Co in P1/);
     app.say('Make it final.');
     const final = await app.call('content_approve', { piece: 'P1', quote: 'Make it final', titles: ['Heat pumps are taking over'], description: 'Why sales are rising.' });
-    assert.match(final, /P1 "Heat pumps are taking over" is final: final\/heat-pumps-are-taking-over\.md\. Sources page: final\/heat-pumps-are-taking-over\.sources\.md and final\/heat-pumps-are-taking-over\.sources\.html \(2 sources\)/);
+    assert.match(final, /P1 "Heat pumps are taking over" is final: final\/heat-pumps-are-taking-over\.md\. Sources page: final\/heat-pumps-are-taking-over\.sources\.md and final\/heat-pumps-are-taking-over\.sources\.html \(2 sources; archived copies found for 0 of 2 looked up\)/);
     const piece = readFileSync(join(app.root, 'final', 'heat-pumps-are-taking-over.md'), 'utf8');
     assert.match(piece, /according to the Agency \(\[Agency\]\(https:\/\/agency\.example\/report\)\)\./, 'a blog post links its sources in the text');
     assert.doesNotMatch(piece, /\[C\d\]/);

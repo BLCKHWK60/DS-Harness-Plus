@@ -6,14 +6,17 @@
  * What is the owner's stays the owner's: a ruling, an approval, an override or a custom card is taken
  * only with words the owner wrote in the conversation (`quote`), checked against his messages.
  */
-import { readFileSync, readdirSync, lstatSync } from 'node:fs';
+import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, writeSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { STANDING_IDS, SOURCE_KINDS, labelOf, proposeStanding, standingOf } from './standing.js';
-import { DECISION_WORDS, nextId, openSubject, ownerDecision, ownerSaid, plainWords } from './subject.js';
+import { DECISION_WORDS, nextId, openSubject, ownerDecision, ownerSaid, plainWords, stateDir } from './subject.js';
 import { partFolder, realRoot, saveFile, slugOf } from './folder.js';
-import { checkerPrompt, finalText, mechanicalCheck, parseChecker, sentencesOf, writerPrompt } from './writing.js';
+import { checkerPrompt, finalText, judgePrompt, mechanicalCheck, parseChecker, sentencesOf, writerPrompt } from './writing.js';
+import { LIBRARY_NAME, VOICES, spokenCompare } from './library.js';
+import { archiveSources } from './archive.js';
+import { addressKey, covers } from './exports.js';
 import { addCorrection, approvalGaps, fingerprint, kitText, sourcesPage, wordingByClaim, writeVersion } from './final.js';
-import { hostOf, listReports, reportSources } from './reports.js';
+import { hostOf, listReports, readPacket, reportSources } from './reports.js';
 
 const CLAIMS_MAX = 30;
 const OWN_MAX = 200_000;
@@ -50,9 +53,14 @@ export function ownWords(root) {
  * @param {object} deps.formats - from openFormats.
  * @param {object} deps.index - from openIndex.
  * @param {() => string} deps.reportsFolder - where the Research tab saves its reports.
+ * @param {object} [deps.library] - the Voice Library (lib/library.js openLibrary); without it, no examples and no shelves.
+ * @param {(exec: object) => boolean} [deps.ultra] - whether Ultra Code is on for the conversation (several writers and a judge, two checkers).
+ * @param {(exec: object) => boolean} [deps.webOff] - whether the conversation's web is off (no archived copies are looked up then).
+ * @param {(exec: object) => {keys: Set<string>, failed: boolean}} [deps.exportKeys] - the addresses of the Recon exports the conversation carries (lib/exports.js keys).
+ * @param {typeof fetch} [deps.fetchFn] - the web, for the archived copies (the app passes it; without it nothing is looked up).
  * @returns {object[]} tool definitions.
  */
-export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, formats, index, reportsFolder, now = () => new Date() }) {
+export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, formats, index, reportsFolder, library, ultra = () => false, webOff = () => false, exportKeys = () => ({ keys: new Set(), failed: false }), fetchFn = undefined, now = () => new Date() }) {
   const output = {
     schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
     render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }],
@@ -99,6 +107,89 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
     return piece;
   };
   const sourceMap = (state) => new Map(state.sources.map((source) => [source.id, source]));
+  /** The writer's own text of a draft, kept in the record before anyone edits the draft file: what the owner changed is measured against it. */
+  const keepOriginal = (root, file, text) => {
+    try {
+      const dir = join(stateDir(root), 'originals');
+      try {
+        if (lstatSync(dir).isSymbolicLink()) return;
+      } catch {
+        mkdirSync(dir, { mode: 0o700 });
+      }
+      const fd = openSync(join(dir, basename(file)), 'wx', 0o600);
+      try {
+        writeSync(fd, text);
+      } finally {
+        closeSync(fd);
+      }
+    } catch {
+      /* measuring the owner's share is a help, never a condition */
+    }
+  };
+  /** An Ultra Code attempt, kept in the record as soon as it is written. @returns {string} its file, or ''. */
+  const keepAttempt = (root, slug, attempt, text) => {
+    try {
+      const dir = join(stateDir(root), 'attempts');
+      try {
+        if (lstatSync(dir).isSymbolicLink()) return '';
+      } catch {
+        mkdirSync(dir, { mode: 0o700 });
+      }
+      const file = join(dir, `${now().toISOString().replace(/[-:.]/g, '').slice(0, 15)}-${slug}-${attempt}.md`);
+      const fd = openSync(file, 'wx', 0o600);
+      try {
+        writeSync(fd, text);
+      } finally {
+        closeSync(fd);
+      }
+      return file;
+    } catch {
+      return '';
+    }
+  };
+  const originalOf = (root, file) => {
+    try {
+      return readFileSync(join(root, '.content', 'originals', basename(file)), 'utf8');
+    } catch {
+      return '';
+    }
+  };
+  /** Whether an address is one of a Recon export's (or below one), for the conversation of a call. */
+  const fromExport = (exec, url) => {
+    const key = addressKey(url);
+    if (!key) return false;
+    const { keys } = exportKeys(exec);
+    return [...keys].some((exportKey) => covers(exportKey, key));
+  };
+  /**
+   * Sources from Recon, however they were recorded: an address of an export the conversation carries, or
+   * one a claim of origin recon cites. They get origin recon (so their addresses stay off the sources page
+   * and are never looked up). @returns {number} how many were marked now.
+   */
+  const markReconSources = (exec, state) => {
+    const { keys } = exportKeys(exec);
+    const cited = new Set(state.claims.filter((claim) => claim.origin === 'recon').flatMap((claim) => claim.sources ?? []));
+    let marked = 0;
+    for (const source of state.sources) {
+      if (source.origin === 'recon') continue;
+      const key = addressKey(source.url) || addressKey(source.archived);
+      if (cited.has(source.id) || (key && [...keys].some((exportKey) => covers(exportKey, key)))) {
+        source.origin = 'recon';
+        marked += 1;
+      }
+    }
+    return marked;
+  };
+  /** What the Voice Library gives the writer of a piece. */
+  const voiceOf = (piece, card) => {
+    if (!library) return undefined;
+    try {
+      const about = [piece.title, piece.brief?.angle, ...(piece.outline?.points ?? []).map((point) => point.text)].filter(Boolean).join(' ');
+      return library.forWriter({ format: piece.format, voice: card?.spoken ? 'spoken' : 'written', about });
+    } catch {
+      return undefined;
+    }
+  };
   const claimLine = (claim) => `${claim.id} [${labelOf(claim.standing)}${claim.ruled ? '' : ', proposed'}${claim.pinned ? ', pinned' : ''}] ${claim.text}${(claim.sources ?? []).length ? ` (${claim.sources.join(', ')})` : ''}`;
 
   const tools = [];
@@ -106,7 +197,7 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
   // ---- Research reports -------------------------------------------------------------------------
   tools.push({
     name: 'content_reports',
-    description: 'Research reports the Research tab saved. action "list": the newest, with their titles. action "bring": copy one, as it is, into the subject\'s research/reports, and take its numbered sources into the ledger (with their grades). Then read it and record its claims with content_ledger.',
+    description: 'Research reports the Research tab saved. action "list": the newest, with their titles. action "bring": copy one, as it is, into the subject\'s research/reports, and take its numbered sources into the ledger (with their grades). When the Research tab wrote a packet beside it (claims, contradictions, timeline, leads), the packet is copied too and its claims are recorded in the ledger with proposed standings; otherwise read the report and record its claims with content_ledger.',
     parameters: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'bring'] }, name: { type: 'string', maxLength: 300, description: 'The report\'s file name, from the list.' } }, required: ['action'], additionalProperties: false },
     ...common,
     execute: safely(async (args, exec) => {
@@ -132,8 +223,39 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
         }
         mapping.push(`[${found.n}] → ${source.id}`);
       }
+      // The packet (step C2): its files beside the report, and its claims in the ledger, proposed.
+      const packet = readPacket(folder, name, text);
+      markReconSources(exec, state);
+      let packetNote = '';
+      if (packet) {
+        const base = name.replace(/^\d{4}-\d\d-\d\d-\d{4}-/, '').replace(/\.md$/, '');
+        const kept = [];
+        for (const [part, body] of Object.entries(packet.files)) {
+          if (part === 'packet.json') continue;
+          kept.push(saveFile(root, { part: 'research/reports', name: `${base}-${part.replace(/\.md$/, '')}`, text: body }));
+        }
+        const byNumber = new Map();
+        for (const found of reportSources(text)) {
+          const source = state.sources.find((one) => one.url === found.url);
+          if (source) byNumber.set(found.n, source.id);
+        }
+        const known = new Set(state.claims.map((claim) => claim.text.toLowerCase()));
+        let recorded = 0;
+        const sourcesNow = sourceMap(state);
+        for (const item of packet.claims.slice(0, 200)) {
+          const text = str(item.claim, 1500);
+          if (!text || known.has(text.toLowerCase())) continue;
+          known.add(text.toLowerCase());
+          const claim = { id: nextId(state, 'claim'), text, who: str(item.who, 300), where: '', when: str(item.date, 100), sources: byNumber.has(item.source) ? [byNumber.get(item.source)] : [], passage: str(item.passage, 4000), evidenceFor: '', evidenceAgainst: '', about: [], accuses: false, disputed: false, origin: 'research', addedInContent: false, ruled: null, pinned: false, response: null, history: [], created: now().getTime(), packet: str(item.id, 20) };
+          claim.standing = claim.proposed = proposeStanding(claim, sourcesNow);
+          claim.history.push({ at: claim.created, standing: claim.standing, reason: `from the Research report's packet (${claim.packet})${item.read && item.read !== 'read' ? `; its helper did not read the page (${item.read})` : ''}`, by: 'tab' });
+          state.claims.push(claim);
+          recorded += 1;
+        }
+        packetNote = ` Its packet came too (${kept.join(', ')}): ${recorded} claim${recorded === 1 ? '' : 's'} recorded in the ledger with proposed standings (the user rules on them). Read contradictions and leads, and check each claim's passage against its source.`;
+      }
       const skipped = save(store, state);
-      return `Brought in as ${file}. ${mapping.length} source${mapping.length === 1 ? '' : 's'} in the ledger: ${mapping.join(', ') || 'none listed'}${skipped}. Read the report, then record its claims with content_ledger (action add), citing these source ids, with the passage each rests on.`;
+      return `Brought in as ${file}. ${mapping.length} source${mapping.length === 1 ? '' : 's'} in the ledger: ${mapping.join(', ') || 'none listed'}${skipped}.${packetNote || ' Read the report, then record its claims with content_ledger (action add), citing these source ids, with the passage each rests on.'}`;
     }),
   });
 
@@ -217,7 +339,10 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
           if (given.grade !== undefined) source.grade = ['primary', 'confirmed', 'single'].includes(String(given.grade).toLowerCase()) ? String(given.grade).toLowerCase() : '';
           if (given.kind !== undefined) source.kind = SOURCE_KINDS.includes(given.kind) ? given.kind : 'unknown';
           if (given.origin !== undefined && made) source.origin = ['research', 'recon', 'content', 'owner'].includes(given.origin) ? given.origin : 'content';
-          lines.push(`${made ? 'Added' : 'Updated'} ${source.id}: ${source.title || source.url || 'untitled'}`);
+          // An address from a Recon export is Recon's, whatever the call says: it stays off the sources page and is never looked up.
+          const recon = source.url && fromExport(exec, source.url) && source.origin !== 'recon';
+          if (recon) source.origin = 'recon';
+          lines.push(`${made ? 'Added' : 'Updated'} ${source.id}: ${source.title || source.url || 'untitled'}${recon ? ' (from a Recon export: kept as Recon\'s)' : ''}`);
         }
         // A changed source can change the proposed standing of claims nobody has ruled on.
         for (const claim of state.claims) if (!claim.ruled) claim.standing = claim.proposed = proposeStanding(claim, sourceMap(state));
@@ -514,7 +639,8 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
     description: 'Have a writer with no tools write the next draft of a piece from its approved brief, its outline, its claims (with their standing and passages), its format card and the user\'s notes. Saved as a new numbered file in drafts/; nothing is replaced. Takes a few minutes. Then check it with content_check.',
     parameters: { type: 'object', properties: { piece: { type: 'string' }, note: { type: 'string', description: 'What the user asked for in this draft (from their words).' } }, required: ['piece'], additionalProperties: false },
     ...common,
-    timeoutMs: 20 * 60_000,
+    // One writer works up to 15 minutes; with Ultra Code three writers and a judge work one after another.
+    timeoutMs: 65 * 60_000,
     execute: safely(async (args, exec) => {
       const { root, store } = subject(exec);
       const state = store.read();
@@ -522,15 +648,55 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
       if (!piece.brief?.approved) throw new Error(`The brief of ${piece.id} is not approved yet.`);
       if ((piece.outline?.points ?? []).length === 0) throw new Error(`${piece.id} has no outline yet (content_plan, action outline).`);
       const card = formats.get(piece.format) ?? formats.get('article');
-      const prompt = writerPrompt({ piece, card, claims: state.claims, sources: state.sources, ownText: ownWords(root), note: str(args.note, 1500) });
-      const text = str(await helper(exec, { role: 'writer', label: `Content: writer of ${piece.id}`, prompt }), 400_000);
+      const voice = voiceOf(piece, card);
+      const base = { piece, card, claims: state.claims, sources: state.sources, ownText: ownWords(root), note: str(args.note, 1500), voice };
+      // Ultra Code: three writers side by side (one after another on one machine), each with no tools, then
+      // a judge with no tools picks the best or merges them. Off: one writer, as always.
+      const wide = ultra(exec) === true;
+      let text;
+      let how = '';
+      if (wide) {
+        // Each attempt is kept as soon as it is written, so a stop or a time-out loses none of them.
+        const drafts = [];
+        const kept = [];
+        const failed = [];
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+          try {
+            const prompt = writerPrompt({ ...base, attempt: `Attempt ${attempt} of 3 written side by side: take your own route through the outline (another opening, another order inside the points), within every rule above.` });
+            const one = str(await helper(exec, { role: 'writer', label: `Content: writer ${attempt} of ${piece.id}`, prompt }), 400_000);
+            if (one) {
+              drafts.push(one);
+              kept.push(keepAttempt(root, piece.slug, attempt, one));
+            }
+          } catch (error) {
+            if (exec?.signal?.aborted) throw error;
+            failed.push(`writer ${attempt}: ${String(error?.message ?? error).slice(0, 120)}`);
+          }
+        }
+        if (drafts.length === 0) throw new Error(`No writer gave a text${failed.length ? ` (${failed.join('; ')})` : ''}.`);
+        let judged = '';
+        if (drafts.length > 1) {
+          try {
+            judged = str(await helper(exec, { role: 'judge', label: `Content: judge of ${piece.id}`, prompt: judgePrompt({ drafts, rules: writerPrompt(base).split('Rules:')[1] ?? '' }) }), 400_000);
+          } catch (error) {
+            if (exec?.signal?.aborted) throw error;
+            failed.push(`judge: ${String(error?.message ?? error).slice(0, 120)}`);
+          }
+        }
+        text = judged || drafts[0];
+        how = ` Ultra Code: ${drafts.length} writer${drafts.length === 1 ? '' : 's'}, ${judged ? 'a judge picked or merged' : drafts.length > 1 ? 'the judge gave nothing, so the first attempt is the draft' : 'one usable draft'}; each attempt is kept in ${kept.filter(Boolean).length ? '.content/attempts/' : 'the record'}.${failed.length ? ` Not done: ${failed.join('; ')}.` : ''}`;
+      } else {
+        text = str(await helper(exec, { role: 'writer', label: `Content: writer of ${piece.id}`, prompt: writerPrompt(base) }), 400_000);
+      }
       if (!text) throw new Error('The writer gave no text.');
       const file = saveFile(root, { part: 'drafts', name: piece.slug, text });
+      keepOriginal(root, file, text);
       const fresh = store.read();
       const same = pieceOf(fresh, piece.id);
-      same.drafts.push({ file, at: now().getTime(), by: 'writer' });
+      same.drafts.push({ file, at: now().getTime(), by: 'writer', ...(wide ? { ultra: true } : {}) });
       const marks = sentencesOf(text).filter((sentence) => sentence.marks.length > 0).length;
-      return `Draft saved as ${file} (${text.split(/\s+/).length.toLocaleString('en-US')} words, ${marks} sentences marked with their claims). Next: content_check ${piece.id}.${save(store, fresh)}`;
+      const examples = (voice?.examples ?? []).length;
+      return `Draft saved as ${file} (${text.split(/\s+/).length.toLocaleString('en-US')} words, ${marks} sentences marked with their claims).${how} ${examples > 0 ? `The writer had ${examples} approved piece${examples === 1 ? '' : 's'} from the ${LIBRARY_NAME} as examples of the owner's voice.` : `The ${LIBRARY_NAME} has no approved piece yet, so the writer wrote plainly.`} Next: content_check ${piece.id}.${save(store, fresh)}`;
     }),
   });
 
@@ -540,7 +706,8 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
     description: 'Check the latest draft of a piece against the ledger, sentence by sentence: in code (numbers and quotes against the material, claim marks, claims ruled out, gaps, accusations with no response sought, named people) and by a separate checker model with no tools (statements without a claim, wording stronger than the standing, mismatches, things from a model\'s own knowledge, own experience not in the user\'s words). "file": check a draft the user edited (a file in drafts/) as the latest.',
     parameters: { type: 'object', properties: { piece: { type: 'string' }, file: { type: 'string', description: 'A draft file in drafts/, when the user edited one.' } }, required: ['piece'], additionalProperties: false },
     ...common,
-    timeoutMs: 15 * 60_000,
+    // A checker and its one retry work up to 15 minutes each; with Ultra Code two checkers.
+    timeoutMs: 65 * 60_000,
     execute: safely(async (args, exec) => {
       const { root, store } = subject(exec);
       let state = store.read();
@@ -561,12 +728,25 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
       const code = mechanicalCheck({ text, claims: state.claims, out: piece.out ?? [], ownText });
       let checked = null;
       let checkerNote = '';
-      try {
-        const prompt = checkerPrompt({ piece, sentences, claims: state.claims, ownText });
-        checked = parseChecker(await helper(exec, { role: 'checker', label: `Content: checker of ${piece.id}`, prompt }), sentences);
-        if (!checked) checked = parseChecker(await helper(exec, { role: 'checker', label: `Content: checker of ${piece.id} (format)`, prompt: `${prompt}\n\nYour last answer was not the JSON asked for. Answer with the JSON object only.` }), sentences);
-      } catch (error) {
-        checkerNote = String(error?.message ?? error).slice(0, 200);
+      // Ultra Code: two checkers, each on its own; a flag either raises is kept (more than one checker).
+      const checkers = ultra(exec) === true ? 2 : 1;
+      for (let round = 1; round <= checkers; round += 1) {
+        try {
+          const label = `Content: checker${checkers > 1 ? ` ${round}` : ''} of ${piece.id}`;
+          const prompt = checkerPrompt({ piece, sentences, claims: state.claims, ownText });
+          let found = parseChecker(await helper(exec, { role: 'checker', label, prompt }), sentences);
+          if (!found) found = parseChecker(await helper(exec, { role: 'checker', label: `${label} (format)`, prompt: `${prompt}\n\nYour last answer was not the JSON asked for. Answer with the JSON object only.` }), sentences);
+          // A checker that gave no usable answer counts as one: the draft is not passed on half a check.
+          if (!found) {
+            checked = null;
+            break;
+          }
+          checked = [...(checked ?? []), ...found.filter((flag) => !(checked ?? []).some((one) => one.n === flag.n && one.kind === flag.kind))];
+        } catch (error) {
+          checkerNote = String(error?.message ?? error).slice(0, 200);
+          checked = null;
+          break;
+        }
       }
       const flags = [...code.flags, ...(checked ?? [{ n: 0, sentence: '', kind: 'checker', claim: '', why: `The checker gave no usable answer${checkerNote ? ` (${checkerNote})` : ''}.`, fix: 'Run the check again.', by: 'code' }])];
       state = store.read();
@@ -611,6 +791,7 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
     description: 'Make a piece final, only when the user says so (their words as quote) and nothing stands in the way: an approved brief, a checked latest draft, no open flag, a ruling on every claim it uses, and a yes for each unproven statement about a named person. Writes final/<piece>.md (claim marks turned into links or taken out, as the format says), the sources page (Markdown and a web page file), the corrections log, the publish kit (titles, description, chapters, show notes, sign-up offer) and the where-used index. Nothing is posted or sent.',
     parameters: { type: 'object', properties: { piece: { type: 'string' }, quote: { type: 'string' }, reconShown: { type: 'string', enum: ['description', 'address'], description: 'How a source from Recon appears on the sources page: a description (the default) or its address, as the user chose.' }, titles: { type: 'array', maxItems: 8, items: { type: 'string' } }, description: { type: 'string' }, showNotes: { type: 'string' } }, required: ['piece', 'quote'], additionalProperties: false },
     ...common,
+    timeoutMs: 6 * 60_000,
     execute: safely(async (args, exec) => {
       const quote = needOwner(exec, args.quote, 'Making a piece final', DECISION_WORDS.final);
       if (args.reconShown === 'address' && !/\baddress(es)?\b/i.test(quote)) throw new Error('Printing the addresses of sources from Recon is the user\'s choice: their words must say so ("show the addresses").');
@@ -624,6 +805,14 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
       if (gaps.length > 0) throw new Error(`Not yet: ${gaps.join(' ')}`);
       const card = formats.get(piece.format) ?? formats.get('article');
       const sentences = sentencesOf(text);
+      // Archived copies (C16): the Internet Archive's copy of each web source the piece uses, never for
+      // Recon. Looked up before anything is written, so a slow lookup never leaves half a final behind.
+      const usedNow = mechanicalCheck({ text, claims: state.claims, out: piece.out ?? [] }).used;
+      // Sources from a Recon export are Recon's before anything is looked up or printed; when that cannot be told, nothing is looked up.
+      const exportState = exportKeys(exec);
+      markReconSources(exec, state);
+      const usedSources = [...new Set(usedNow.flatMap((id) => state.claims.find((claim) => claim.id === id)?.sources ?? []))].map((id) => state.sources.find((source) => source.id === id)).filter(Boolean);
+      const archived = exportState.failed ? { looked: 0, found: 0 } : await archiveSources(usedSources, { fetchFn, webOff: webOff(exec) === true });
       // final/ takes only what approval writes: content_save cannot write there.
       const finalFolder = partFolder(root, 'final', { allow: ['final'] });
       const at = now();
@@ -639,7 +828,32 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
       piece.status = 'final';
       piece.final = { file: rel(finalFile), sources: [rel(sourcesMd), rel(sourcesHtml)], log: rel(log), kit: rel(kit), at: at.getTime(), quote, draft: draft.file };
       index.add({ subject: root, piece: `${piece.id} ${piece.title}`, file: join(root, piece.final.file), at: at.toISOString(), uses: wordingByClaim(sentences), claims: state.claims, sources: state.sources });
-      return `${piece.id} "${piece.title}" is final: ${piece.final.file}. Sources page: ${piece.final.sources.join(' and ')} (${page.sources.length} sources). Corrections log: ${piece.final.log}. Publish kit: ${piece.final.kit}. Nothing was posted or sent.${save(store, state)}`;
+      // The Voice Library (stages 1 and 2): the approved piece, and the writer's draft beside the owner's
+      // version. Then what he changed, for the assistant to propose voice rules he approves one by one.
+      let learned = '';
+      if (library) {
+        try {
+          const writerDraft = [...piece.drafts].reverse().find((one) => one.by === 'writer');
+          const writerText = (writerDraft ? originalOf(root, writerDraft.file) : '') || (writerDraft && writerDraft.file !== draft.file ? readFileSync(join(root, writerDraft.file), 'utf8') : '');
+          const finalBody = readFileSync(finalFile, 'utf8');
+          const { entry, changes } = library.addApproved({ title: piece.title, format: piece.format, voice: card.spoken ? 'spoken' : 'written', subject: root, piece: piece.id, finalText: finalBody, ownerText: text, writerText: writerText || (draft.by === 'writer' ? text : ''), at });
+          piece.final.library = entry.file;
+          learned = [
+            ``,
+            `Kept in the ${LIBRARY_NAME}: ${entry.file} (the owner wrote or changed ${Math.round(entry.share * 100)}% of it).`,
+            changes.removed.length + changes.added.length === 0 ? 'The owner changed nothing in the writer\'s draft, so there is nothing to learn from this one.' : [
+              'What the owner changed in the writer\'s draft:',
+              ...changes.removed.slice(0, 6).map((one) => `- took out: "${one.slice(0, 200)}"`),
+              ...changes.added.slice(0, 6).map((one) => `- added: "${one.slice(0, 200)}"`),
+              `- average sentence length ${changes.sentenceLength.before} → ${changes.sentenceLength.after} words; "I", "my", "me" ${changes.firstPerson.before} → ${changes.firstPerson.after}`,
+              `Propose at most three short voice rules for ${piece.format} from these changes (what he does, what he never does). Each enters only when the user approves it in their own words (content_library, action rule).`,
+            ].join('\n'),
+          ].join('\n');
+        } catch (error) {
+          learned = `\nThe ${LIBRARY_NAME} could not keep it (${String(error?.message ?? error).slice(0, 160)}); the piece is final all the same.`;
+        }
+      }
+      return `${piece.id} "${piece.title}" is final: ${piece.final.file}. Sources page: ${piece.final.sources.join(' and ')} (${page.sources.length} sources${archived.looked ? `; archived copies found for ${archived.found} of ${archived.looked} looked up` : ''}). Corrections log: ${piece.final.log}. Publish kit: ${piece.final.kit}. Nothing was posted or sent.${save(store, state)}${learned}`;
     }),
   });
 
@@ -676,6 +890,139 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
       addCorrection(join(root, piece.final.log), { at: now(), claim: claim ? `${claim.id} ${claim.text.slice(0, 120)}` : 'correction', from: claim?.changedFrom ?? claim?.standing ?? '', to: claim?.standing ?? '', reason: str(args.reason, 400), note: str(args.note, 3000), version });
       piece.corrections.push({ at: now().getTime(), claim: claim?.id ?? '', note: str(args.note, 3000), version, quote });
       return `Added to ${piece.final.log}${version ? `; corrected version saved as ${version} (the earlier final stays)` : ''}.${save(store, state)}`;
+    }),
+  });
+
+  // ---- the Voice Library (C10, C14, C16) ----------------------------------------------------------
+  /** The owner's own words, said in one of his recent messages (at least two words). */
+  const ownerWrote = (exec, text, recent = 10) => {
+    const want = plainWords(text);
+    if (!want || want.split(' ').length < 2) return false;
+    return ownerMessages(exec).slice(-recent).some((message) => ` ${plainWords(message.text)} `.includes(` ${want} `));
+  };
+  tools.push({
+    name: 'content_library',
+    description: [
+      `The ${LIBRARY_NAME}: the owner's approved pieces (added when a piece is made final), the writer's drafts beside his versions, his own words, pinned facts, approved sources, approved wording, his voice rules per format, and feedback. Nothing enters by itself.`,
+      'action "show": what is on the shelves. "own_words": keep the owner\'s own text (his words from the conversation as "text", or a notes file of his as "file"); voice "spoken" for a transcript of him talking; with "piece" (a talking outline) a transcript is compared with that outline: what he skipped, moved or expanded, which later outlines follow.',
+      '"pin" a fact or a ruled claim, "source" (trusted or distrusted, with a note), "wording" (a passage to reuse word for word, from his messages or an approved piece), "rule" (a voice rule you proposed, for a format and voice), "drop_rule": each only with the owner\'s own words as "quote".',
+      '"signal": feedback he gave ("too formal", or which of two versions he chose), in his own words as "text".',
+    ].join(' '),
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['show', 'own_words', 'pin', 'source', 'wording', 'rule', 'drop_rule', 'signal'] },
+        text: { type: 'string' },
+        file: { type: 'string', description: 'own_words: a file in the subject\'s notes/ that the owner put there.' },
+        title: { type: 'string' },
+        voice: { type: 'string', enum: VOICES },
+        format: { type: 'string' },
+        piece: { type: 'string', description: 'own_words, spoken: the piece whose talking outline the transcript is compared with.' },
+        claim: { type: 'string', description: 'pin: a claim the owner ruled on.' },
+        url: { type: 'string' },
+        trust: { type: 'string', enum: ['trusted', 'distrusted'] },
+        note: { type: 'string' },
+        label: { type: 'string' },
+        rule: { type: 'string', description: 'drop_rule: its id (R3).' },
+        kind: { type: 'string', enum: ['comment', 'choice'] },
+        quote: { type: 'string', description: 'The owner\'s own words for the decision.' },
+      },
+      required: ['action'],
+      additionalProperties: false,
+    },
+    ...common,
+    execute: safely(async (args, exec) => {
+      if (!library) throw new Error(`The ${LIBRARY_NAME} is not available here.`);
+      const action = String(args.action ?? '');
+      if (action === 'show') {
+        const shelf = library.read();
+        const byVoice = (voice) => shelf.rules.filter((rule) => rule.voice === voice).map((rule) => `- ${rule.id} (${rule.format || 'all formats'}): ${rule.text}`);
+        return [
+          `${LIBRARY_NAME} in ${library.where() || '(no folder)'}:`,
+          `- Approved pieces: ${shelf.pieces.length}${shelf.pieces.length ? ` (${shelf.pieces.slice(-5).map((one) => `${one.title}, ${one.format}, owner's share ${Math.round(one.share * 100)}%`).join('; ')})` : ''}`,
+          `- Own words: ${shelf.ownWords.filter((one) => one.voice === 'written').length} written, ${shelf.ownWords.filter((one) => one.voice === 'spoken').length} spoken`,
+          `- Pinned facts: ${shelf.pinned.length}; sources: ${shelf.sources.length}; wording: ${shelf.wording.length}; signals: ${shelf.signals.length}; recordings compared: ${shelf.spoken.length}`,
+          '', 'Voice rules, written:', ...(byVoice('written').length ? byVoice('written') : ['- none yet']),
+          'Voice rules, spoken:', ...(byVoice('spoken').length ? byVoice('spoken') : ['- none yet']),
+        ].join('\n');
+      }
+      if (action === 'own_words') {
+        const voice = VOICES.includes(args.voice) ? args.voice : 'written';
+        let body = '';
+        let title = str(args.title, 200);
+        if (args.file) {
+          const { root } = subject(exec);
+          const name = basename(str(args.file, 300));
+          const path = join(root, 'notes', name);
+          const stat = lstatSync(path);
+          if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`${name} is not a file in notes/.`);
+          body = readFileSync(path, 'utf8');
+          if (body.startsWith(ASSISTANT_NOTE)) throw new Error(`${name} was written by the assistant, not by the owner: only his own words go on this shelf.`);
+          title ||= name.replace(/\.(md|txt)$/i, '');
+        } else {
+          body = str(args.text, 200_000);
+          if (!body || !ownerSaid(ownerMessages(exec), body, 40)) throw new Error('Only the owner\'s own words go on this shelf: pass them exactly as he wrote them in the conversation (at least four words), or a notes file of his.');
+        }
+        const entry = library.addOwnWords({ text: body, title, voice, format: str(args.format, 60), at: now() });
+        let compared = '';
+        if (voice === 'spoken' && args.piece) {
+          const { store } = subject(exec);
+          const piece = pieceOf(store.read(), args.piece);
+          const points = (piece.outline?.points ?? []).map((point) => point.text);
+          if (points.length > 0) {
+            const compare = spokenCompare(points, body);
+            library.spoken({ title: piece.title, format: piece.format, compare, at: now() });
+            compared = ` Compared with ${piece.id}'s talking outline: skipped ${compare.skipped.length}, moved ${compare.moved.length}, expanded ${compare.expanded.length}. Later talking outlines of ${piece.format} follow it.${compare.skipped.length ? ` Skipped: ${compare.skipped.slice(0, 5).join('; ')}.` : ''}${compare.expanded.length ? ` Expanded: ${compare.expanded.slice(0, 5).join('; ')}.` : ''}`;
+          }
+        }
+        return `Kept in the ${LIBRARY_NAME} as ${voice} own words: ${entry.file} (${entry.words} words).${compared}`;
+      }
+      if (action === 'signal') {
+        const text = str(args.text, 1500);
+        if (!ownerWrote(exec, text)) throw new Error('A signal is the owner\'s own feedback: pass his words exactly as he wrote them in one of his recent messages.');
+        const entry = library.signal({ text, kind: args.kind, format: str(args.format, 60), piece: str(args.piece, 40), at: now() });
+        return `Kept as a signal (${entry.kind}): "${entry.text}".`;
+      }
+      if (action === 'pin') {
+        const quote = needOwner(exec, args.quote, 'Pinning a fact', DECISION_WORDS.pin);
+        let text = str(args.text, 1500);
+        let standing = '';
+        const claimId = str(args.claim, 20).toUpperCase();
+        if (claimId) {
+          const { store } = subject(exec);
+          const claim = store.read().claims.find((one) => one.id === claimId);
+          if (!claim) throw new Error(`There is no claim ${claimId}.`);
+          if (!claim.ruled) throw new Error(`${claimId} has no ruling of the owner yet: a pinned fact keeps his ruling.`);
+          text = claim.text;
+          standing = labelOf(claim.standing);
+        }
+        const entry = library.pin({ text, standing, claim: claimId, quote, at: now() });
+        return `Pinned in the ${LIBRARY_NAME}: ${entry.text}${entry.standing ? ` (${entry.standing})` : ''}.`;
+      }
+      if (action === 'source') {
+        const quote = needOwner(exec, args.quote, 'Marking a source', ['trust', 'trusted', 'distrust', 'distrusted', 'reliable', 'unreliable', 'good', 'bad', 'avoid', 'mark', 'keep', 'yes', 'ok', 'okay']);
+        const entry = library.source({ url: str(args.url, 2000), title: str(args.title, 300), trust: args.trust === 'distrusted' ? 'distrusted' : 'trusted', note: str(args.note, 600), quote, at: now() });
+        return `Marked ${entry.trust}: ${entry.title || entry.url}.`;
+      }
+      if (action === 'wording') {
+        const quote = needOwner(exec, args.quote, 'Saving wording', ['save', 'keep', 'reuse', 'use', 'wording', 'yes', 'ok', 'okay', 'good']);
+        const text = str(args.text, 6000);
+        const plain = plainWords(text);
+        if (!plain || !(ownerWrote(exec, text, 40) || ` ${plainWords(library.approvedText())} `.includes(` ${plain} `))) throw new Error('Saved wording is the owner\'s own: it must be in one of his messages or in a piece he approved, word for word.');
+        const entry = library.wording({ text, label: str(args.label, 120), format: str(args.format, 60), quote, at: now() });
+        return `Saved as approved wording ${entry.id}${entry.label ? ` (${entry.label})` : ''}.`;
+      }
+      if (action === 'rule') {
+        const quote = needOwner(exec, args.quote, 'A voice rule', ['rule', 'rules', 'yes', 'ok', 'okay', 'agree', 'agreed', 'approve', 'approved', 'keep', 'add', 'good', 'fine', 'right']);
+        const entry = library.rule({ text: str(args.text, 400), format: str(args.format, 60), voice: VOICES.includes(args.voice) ? args.voice : 'written', quote, at: now() });
+        return `Voice rule ${entry.id} added to the ${entry.voice} profile${entry.format ? ` for ${entry.format}` : ''}: ${entry.text}`;
+      }
+      if (action === 'drop_rule') {
+        needOwner(exec, args.quote, 'Taking a voice rule off', ['drop', 'remove', 'delete', 'take off', 'forget']);
+        library.dropRule(args.rule);
+        return `Rule ${String(args.rule).toUpperCase()} is off the profile.`;
+      }
+      throw new Error('The action is show, own_words, pin, source, wording, rule, drop_rule or signal.');
     }),
   });
 

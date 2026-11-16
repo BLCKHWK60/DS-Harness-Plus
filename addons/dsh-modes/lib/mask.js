@@ -20,6 +20,8 @@ export const WEB_REACHING = {
     'free_search_test', 'search_web_pages', 'web_search_exa', 'zhihu_search', 'global_search', 'search_pro',
     'scout_search', 'scout_posting', 'scout_titles', 'scout_demand', 'scout_pay',
     'recon_onion_search', 'recon_onion_read', 'recon_usenet_groups', 'recon_usenet_search', 'recon_usenet_read', 'recon_news_search', 'recon_archive_find', 'recon_archive_read',
+    // Recon's ordinary-web and board tools and its Ultra Code search go online too: Off leaves only recon_cite.
+    'recon_web_search', 'recon_web_read', 'recon_board_search', 'recon_board_read', 'recon_ultra',
   ],
   prefixes: ['finance_'],
 };

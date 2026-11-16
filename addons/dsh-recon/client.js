@@ -7,6 +7,7 @@ window.__ModuleLoader__.load({
   id: '@local/dsh-recon',
   factory(require) {
     const React = require('react');
+    const ReactDOM = require('react-dom');
     const h = React.createElement;
     const { useCallback, useEffect, useRef, useState } = React;
 
@@ -67,6 +68,140 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
 `;
 
     /** The add-on's route. `session` names the start page's conversation, for the status bar. */
+    // ---- the export door (step C8): only the user starts an export, from a Recon conversation ---------
+
+    const DOOR_CSS = `
+.dsh-rc-ctl { display: inline-flex; align-items: center; gap: 4px; height: calc(28px + var(--dsh-content-font-delta,0px)); padding: 0 8px; border: 0; border-radius: var(--dsw-radius-sm, 8px); background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+.dsh-rc-ctl:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+.dsh-rc-door { position: fixed; z-index: 1000; box-sizing: border-box; width: 420px; max-width: calc(100vw - 24px); overflow-y: auto; padding: 14px 16px; border-radius: 16px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-base)); color: var(--dsw-alias-label-primary); font-size: 12px; line-height: 18px; box-shadow: 0 8px 28px rgba(0,0,0,.28); }
+.dsh-rc-door h3 { margin: 0 0 6px; font-size: 14px; line-height: 22px; font-weight: 500; }
+.dsh-rc-door fieldset { border: 0; margin: 8px 0 0; padding: 0; }
+.dsh-rc-door legend { font-weight: 600; margin-bottom: 2px; }
+.dsh-rc-door label { display: flex; gap: 6px; align-items: flex-start; margin: 2px 0; }
+.dsh-rc-door select, .dsh-rc-door input[type=text] { max-width: 100%; margin-left: 22px; padding: 4px 6px; border-radius: 8px; border: 0.5px solid var(--dsw-alias-border-l2); background: transparent; color: inherit; font: inherit; }
+.dsh-rc-door ul { margin: 4px 0 0; padding-left: 18px; color: var(--dsw-alias-label-secondary); }
+.dsh-rc-door .warn { color: var(--dsw-alias-state-warn-primary, var(--dsw-alias-label-secondary)); }
+.dsh-rc-door .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+.dsh-rc-door .err { color: var(--dsw-alias-state-error-primary); margin-top: 8px; }
+`;
+
+    async function door(body, query) {
+      const address = new URL('dsh-recon/door', document.baseURI);
+      for (const [key, value] of Object.entries(query ?? {})) address.searchParams.set(key, String(value));
+      const response = await fetch(address, { method: body ? 'POST' : 'GET', cache: 'no-store', credentials: 'same-origin', headers: body ? { accept: 'application/json', 'content-type': 'application/json' } : { accept: 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `error ${response.status}`);
+      return data;
+    }
+
+    /** A new conversation in Scratch (never Recon's room, never a folder of yours), made a conversation of the picked tab, with the export as its first message. */
+    async function sendToNew(appCtx, done) {
+      const sessions = appCtx.get('sessions');
+      const remote = appCtx.get('remote.session');
+      const workspace = appCtx.get('uiWorkspace');
+      if (!sessions?.create || !remote?.prompt || !workspace?.openSession) throw new Error('this version of the app cannot open a conversation from here; send it to a folder instead');
+      const scratch = await fetch(new URL('dsh-cowork-shell/scratch', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
+      const place = scratch.ok ? String((await scratch.json()).place ?? '') : '';
+      if (!place) throw new Error('Scratch is not available here (it needs the Cowork sidebar); send it to a folder instead');
+      const child = await sessions.create({ cwd: place });
+      await door({ action: 'claim', id: done.id, sessionId: child, tab: done.tab });
+      const sent = await remote.prompt({ requestId: globalThis.crypto?.randomUUID?.() ?? `export-${Date.now()}`, sessionId: child, mode: 'queue', content: [{ type: 'text', text: done.message }] });
+      workspace.openSession(child);
+      if (sent && sent.ok === false) throw new Error(sent.error?.message ?? 'the export was not sent');
+    }
+
+    async function sendToExisting(appCtx, done) {
+      const remote = appCtx.get('remote.session');
+      if (!remote?.prompt) throw new Error('this version of the app cannot send from here; send it to a folder instead');
+      const sent = await remote.prompt({ requestId: globalThis.crypto?.randomUUID?.() ?? `export-${Date.now()}`, sessionId: done.target, mode: 'queue', content: [{ type: 'text', text: done.message }] });
+      if (sent && sent.ok === false) throw new Error(sent.error?.message ?? 'the export was not sent');
+    }
+
+    function ExportDoor({ sessionId, appCtx }) {
+      const [recon, setRecon] = useState(false);
+      const [open, setOpen] = useState(false);
+      const [what, setWhat] = useState('report');
+      const [to, setTo] = useState('new');
+      const [tab, setTab] = useState('content');
+      const [target, setTarget] = useState('');
+      const [folder, setFolder] = useState('');
+      const [preview, setPreview] = useState(null);
+      const [state, setState] = useState({ busy: false, error: '', done: '' });
+      const [place, setPlace] = useState({ right: 12, bottom: 80 });
+      const button = useRef(null);
+      useEffect(() => {
+        let alive = true;
+        if (!sessionId) return undefined;
+        call(undefined, sessionId).then((data) => { if (alive) setRecon(data?.conversation?.recon === true); }, () => {});
+        return () => { alive = false; };
+      }, [sessionId]);
+      useEffect(() => {
+        if (!open || !sessionId) return;
+        let alive = true;
+        setPreview(null);
+        door(undefined, { session: sessionId, what }).then((data) => {
+          if (!alive) return;
+          setPreview(data);
+          if (!folder) setFolder(data.folder ?? '');
+          if (!target && data.targets?.[0]) setTarget(data.targets[0].id);
+          if (!(data.tabs ?? []).some((one) => one.id === tab) && data.tabs?.[0]) setTab(data.tabs[0].id);
+        }, (problem) => { if (alive) setState({ busy: false, error: problem.message, done: '' }); });
+        return () => { alive = false; };
+      }, [open, what, sessionId]);
+      useEffect(() => {
+        if (!open) return undefined;
+        const rect = button.current?.getBoundingClientRect();
+        if (rect) setPlace({ left: Math.max(12, Math.min(rect.left - 20, window.innerWidth - 432)), bottom: window.innerHeight - rect.top + 8 });
+        const key = (event) => event.key === 'Escape' && setOpen(false);
+        document.addEventListener('keydown', key, true);
+        return () => document.removeEventListener('keydown', key, true);
+      }, [open]);
+      if (!recon) return h('style', null, DOOR_CSS);
+      const go = async () => {
+        setState({ busy: true, error: '', done: '' });
+        try {
+          const done = await door({ action: 'export', session: sessionId, what, to, tab, target, folder });
+          if (to === 'new') await sendToNew(appCtx, done);
+          else if (to === 'existing') await sendToExisting(appCtx, done);
+          setState({ busy: false, error: '', done: to === 'folder' ? `Exported to ${done.where}.` : `Exported (${done.id}).` });
+        } catch (problem) {
+          setState({ busy: false, error: `Not exported: ${problem.message}`, done: '' });
+        }
+      };
+      const radio = (name, value, current, set, label) => h('label', null, h('input', { type: 'radio', name, checked: current === value, onChange: () => set(value) }), label);
+      return h(React.Fragment, null,
+        h('style', null, DOOR_CSS),
+        h('button', { ref: button, type: 'button', className: 'dsh-rc-ctl', 'aria-haspopup': 'dialog', 'aria-expanded': open, title: 'Export what this Recon conversation found: only you can, and only this way', onClick: () => { setState({ busy: false, error: '', done: '' }); setOpen(!open); } }, 'Export…'),
+        open ? ReactDOM.createPortal(h('div', { className: 'dsh-rc-door', role: 'dialog', 'aria-label': 'Export from Recon', style: { left: place.left, bottom: place.bottom, maxHeight: `calc(100vh - ${(place.bottom ?? 80) + 12}px)` } },
+          h('style', null, DOOR_CSS),
+          h('h3', null, 'Export from Recon'),
+          h('div', null, 'The one way out of a Recon conversation. Recon\'s model cannot start it; the app copies plain text.'),
+          h('fieldset', null, h('legend', null, 'What goes'),
+            radio('dsh-rc-what', 'report', what, setWhat, 'The newest report and the sources it cites (the packet)'),
+            radio('dsh-rc-what', 'conversation', what, setWhat, 'The whole conversation: every report, your messages, every source')),
+          h('fieldset', null, h('legend', null, 'Where it goes'),
+            radio('dsh-rc-to', 'new', to, setTo, 'A new conversation in'),
+            to === 'new' ? h('select', { value: tab, 'aria-label': 'Tab', onChange: (event) => setTab(event.target.value) }, (preview?.tabs ?? [{ id: 'content', label: 'Content' }]).map((one) => h('option', { key: one.id, value: one.id }, one.label))) : null,
+            radio('dsh-rc-to', 'existing', to, setTo, 'A conversation that exists'),
+            to === 'existing' ? h('select', { value: target, 'aria-label': 'Conversation', onChange: (event) => setTarget(event.target.value) }, (preview?.targets ?? []).map((one) => h('option', { key: one.id, value: one.id }, `${one.title}${one.tab ? ` (${one.tab})` : ''}`))) : null,
+            radio('dsh-rc-to', 'folder', to, setTo, 'A folder on this Mac (full path)'),
+            to === 'folder' ? h('input', { type: 'text', spellCheck: false, value: folder, 'aria-label': 'Folder', onChange: (event) => setFolder(event.target.value) }) : null),
+          preview ? h('div', null,
+            h('fieldset', null, h('legend', null, 'What leaves Recon'), h('ul', null, preview.leaves.map((line) => h('li', { key: line }, line)))),
+            h('div', { style: { marginTop: 4, color: 'var(--dsw-alias-label-secondary)' } }, preview.notKept),
+            preview.restartNote ? h('div', { style: { marginTop: 4 } }, preview.restartNote) : null,
+            h('fieldset', null, h('legend', null, 'What never leaves'), h('ul', null, preview.never.map((line) => h('li', { key: line }, line)))),
+            h('fieldset', null, h('legend', null, 'Once it is out, Recon\'s rules no longer hold for the copy'), h('ul', { className: 'warn' }, preview.warnings.map((line) => h('li', { key: line }, line)))),
+            h('div', { style: { marginTop: 6 } }, 'In the tab it goes to, its addresses are citations: an onion address is never opened outside Recon, any other is opened only after you say yes, and nothing from it goes into Memory.'),
+            preview.tooLong && to !== 'folder' ? h('div', { className: 'err' }, 'This is too long for one message: send it to a folder.') : null)
+            : h('div', { style: { marginTop: 8 } }, 'Reading what would leave…'),
+          state.error ? h('div', { className: 'err', role: 'alert' }, state.error) : null,
+          state.done ? h('div', { role: 'status', style: { marginTop: 8 } }, state.done) : null,
+          h('div', { className: 'row' },
+            h('button', { type: 'button', className: 'dsh-rc-btn', onClick: () => setOpen(false) }, state.done ? 'Close' : 'Cancel'),
+            h('button', { type: 'button', className: 'dsh-rc-btn', disabled: state.busy || !preview || Boolean(state.done) || (preview.tooLong && to !== 'folder') || (to === 'existing' && !target), onClick: () => void go() }, state.busy ? 'Exporting…' : 'Export'))), document.body) : null);
+    }
+
     async function call(body, session) {
       const address = new URL('dsh-recon/state', document.baseURI);
       if (session) address.searchParams.set('session', String(session));
@@ -488,6 +623,7 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
         h('div', { className: 'dsh-rc-group' }, 'Export, and End and wipe'),
         h('ul', { className: 'dsh-rc-list' },
           item(`/recon export writes one text file with the research log, every source with its citation and text, and the assistant's notes. Everything from sources and from the assistant is quoted and marked as untrusted, so it cannot act as instructions if you give the file to another tab. Exports go to: ${data.exportFolder ?? ''}`),
+          item('The export door: the Export… button in a Recon conversation\'s chat box is the one way out, and only you can use it. It copies the newest report and the sources it cites (or the whole conversation) as plain text, sources as citations only, never the text of a page, each marked origin: Recon, to a new conversation in a tab you pick (Content first; never Recon), to a conversation that exists, or to a folder. The window says what leaves and what never does before anything leaves. Afterwards, in every tab, an onion address is never opened outside Recon, an address from the export only after you say yes, and nothing of it goes into Memory.'),
           item('/recon end ends a conversation for good: what it read is forgotten, Tor is stopped and its folder deleted, the conversation is closed and its files are deleted. They do not go to the trash. An open conversation is held by the app, so its files go as soon as the app lets go, at the latest at the next start.'),
           item(data.waitingToWipe > 0 ? `Waiting to be deleted: ${data.waitingToWipe} ended conversation${data.waitingToWipe === 1 ? '' : 's'}.` : 'No ended conversation is waiting to be deleted.'),
           item('Recon keeps no copy of its own. After a restart it rebuilds a conversation\'s sources, the addresses it was shown and the assistant\'s notes from the saved conversation, so earlier [S3] numbers, links and exports keep working. /recon end deletes the conversation, and with it all of this.'),
@@ -535,6 +671,7 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
         );
         // The start page's status bar; it shows only while the Recon tab is selected.
         ctx.effect(() => ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({ name: 'conversation.hero.options', id: 'recon-bar', order: 43 }, (props) => h(ReconBar, { sessionId: props?.sessionId }))));
+        ctx.effect(() => ctx.slots.inject('conversation.input.left', () => ctx.slots.register({ name: 'conversation.input.left', id: 'recon-export', order: -17, label: () => 'Export' }, (props) => h(ExportDoor, { sessionId: props?.sessionId, appCtx: ctx }))));
       },
     };
   },

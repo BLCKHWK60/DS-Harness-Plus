@@ -8,6 +8,7 @@
  */
 import { execFile } from 'node:child_process';
 import { readdirSync } from 'node:fs';
+import { familiesOf } from './catalogue.js';
 
 /** The fixed command. */
 export const IOREG = '/usr/sbin/ioreg';
@@ -160,6 +161,8 @@ export function usbReport(devices, ports, at = new Date()) {
       if (known) lines.push(`   Vendor number of ${known.maker}: ${known.chip}. Usually on: ${known.usual}.`);
       const facts = [device.ports.length > 0 ? `serial port ${device.ports.join(', ')}` : 'no serial port', device.speed ? `speed ${device.speed}` : '', device.location ? `location ${device.location}` : '', device.serial ? `serial number "${device.serial}"` : ''].filter(Boolean);
       lines.push(`   ${facts.join(' · ')}`);
+      const families = familiesOf(device);
+      if (families.length > 0) lines.push(`   Likely family (a guess from ${families[0].why}, not proof): ${families.map((entry) => entry.family.name).join(' or ')}.`);
     });
   }
   if (hubs.length > 0) lines.push('', `Hubs: ${hubs.map((hub) => `"${hub.name || 'hub'}"`).join(', ')}.`);

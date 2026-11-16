@@ -1,7 +1,7 @@
 // Skill architect (steps 70 to 87) with plain data and a stand-in app.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openLibrary, readReach, skillProblem } from '../lib/library.js';
@@ -101,7 +101,7 @@ test('proposals: quotes go once you decide, or when their conversation is delete
 
 // ---- the add-on in a stand-in app -------------------------------------------------------------
 
-function standIn({ modes = true, where = 'http://127.0.0.1:9000/v1', allowInternet = false, answer } = {}) {
+function standIn({ modes = true, where = 'http://127.0.0.1:9000/v1', allowInternet = false, answer, mission, reconExports, extra = {} } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'architect-'));
   const config = { enabled: true, readingModel: JSON.stringify({ provider: 'own', model: 'reader' }), allowInternet, nolearn: '[]', projectsOff: '[]' };
   let provider;
@@ -116,6 +116,9 @@ function standIn({ modes = true, where = 'http://127.0.0.1:9000/v1', allowIntern
     c1: { header: { id: 'c1', cwd: '/w/books' }, events: [answer2('Dates: 1 May.'), user('No, I said June.')] },
     r1: { header: { id: 'r1', cwd: '/private/tmp/dsh-recon-room' }, events: [answer2('x'), user('No, wrong.')] },
     i1: { header: { id: 'i1', cwd: '/w/x' }, events: [answer2('x'), user('No, wrong.')] },
+    // A conversation that received an export from Recon, read with Recon switched off.
+    e1: { header: { id: 'e1', cwd: '/w/books' }, events: [user('[Recon export 2026-11-16, report packet]\nClaims: …'), answer2('Dates: 1 May.'), user('No, I said June.')] },
+    ...Object.fromEntries(Object.entries(extra).map(([id, text]) => [id, { header: { id, cwd: '/w/books' }, events: [user(text), answer2('Dates: 1 May.'), user('No, I said June.')] }])),
   };
   const services = {
     dshHomePath: (name) => join(home, name),
@@ -130,6 +133,8 @@ function standIn({ modes = true, where = 'http://127.0.0.1:9000/v1', allowIntern
     coworkProjects: { appendRule: (folder, text) => rules.push([folder, text]) },
     skills: {},
     agents: { list: () => [] },
+    ...(mission ? { mission } : {}),
+    ...(reconExports ? { reconExports } : {}),
   };
   services.skills = { list: async () => [{ name: 'pdf', provider: 'filesystem' }], registerProvider: (make) => { provider = make({ invalidate: () => {} }); return () => {}; } };
   const ctx = {
@@ -254,5 +259,125 @@ test('the schedule is off unless chosen, and shows its state', async () => {
     assert.equal(view.json.lastRun, 0);
   } finally {
     app.done();
+  }
+});
+
+test('the work loop learns (plan step S8): a run with the loop is read with its recipe and its checker\'s words, never a Bench run; a recipe change is saved only with your yes, through Mission', async () => {
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const saved = [];
+  const recipe = { id: 'research-question', name: 'Research, sources first', kind: 'research', when: ['research'], steps: [{ role: 'helper', does: 'Open each source before citing it.', check: 'Every cited page was opened.' }], stop: 'All answered.' };
+  const app = standIn({
+    answer: JSON.stringify({ proposals: [
+      { kind: 'recipe', text: 'Open sources before citing them.', recipe, from: ['1.1'], why: 'The checker kept sending items back.' },
+      { kind: 'recipe', text: 'no object', from: ['1.1'] },
+      { kind: 'recipe', text: 'take every goal', recipe: { ...recipe, id: 'code-change', name: 'Harmless', when: ['the', 'a'] }, from: ['1.1'] },
+      { kind: 'recipe', text: 'short words', recipe: { ...recipe, id: 'code-change', when: ['fix', 'go'] }, from: ['1.1'] },
+      { kind: 'version', text: 'Lower the temperature of the checker version to 0.1.', from: ['1.1'] },
+    ] }),
+    mission: {
+      saveRecipe: (value) => { saved.push(value); return { name: value.name, version: 2, kept: 'old/research-question-v1-1.json' }; },
+      recipe: (id) => (id === 'research-question' ? { id, name: 'A research question', kind: 'research', version: 1, when: ['research', 'sources'], steps: [{ role: 'helper', does: 'Search and read.', check: 'Sources opened.' }], stop: 'All answered.' } : undefined),
+    },
+  });
+  try {
+    const folder = join(app.home, 'work');
+    const write = (id, run) => {
+      mkdirSync(join(folder, '.dsh-mission', 'runs', id), { recursive: true });
+      writeFileSync(join(folder, '.dsh-mission', 'runs', id, 'run.json'), JSON.stringify(run));
+    };
+    write('r1', { status: 'complete', items: [{ title: 'Find who said it', status: 'reviewed', tries: 1, note: 'Checker: These sources were cited but never opened in this run: https://x.example' }], loop: { kind: 'research', depth: 'standard', ultra: true, recipe: { id: 'research-question', name: 'A research question', steps: [{ role: 'helper', does: 'Search and read.', check: 'Sources opened.' }] }, checks: { passed: 1, failed: 2 }, escalations: 1 } });
+    write('b1', { status: 'complete', long: { bench: { checks: true } }, items: [{ title: 'Read the router', status: 'stuck', tries: 3, note: 'Device said: admin password hunter2' }], loop: { kind: 'open', checks: { passed: 0, failed: 1 } } });
+    mkdirSync(join(app.home, 'mission'), { recursive: true });
+    writeFileSync(join(app.home, 'mission', 'runs.jsonl'), `${JSON.stringify({ id: 'r1', folder })}\n${JSON.stringify({ id: 'b1', folder })}\n`);
+    const preview = await app.post({ action: 'preview' });
+    assert.match(preview.json.preview.text, /A Mission run used the work loop: kind research, Depth standard, Ultra Code on, recipe "research-question"/);
+    assert.match(preview.json.preview.text, /Its checks: 1 passed, 2 failed; 1 steps went up/);
+    assert.match(preview.json.preview.text, /the checker sent back the item "Find who said it": Checker: These sources were cited but never opened/);
+    assert.doesNotMatch(preview.json.preview.text, /router|hunter2/, 'a Bench run is never read');
+    const learned = await app.post({ action: 'learn' });
+    const waiting = learned.json.proposals.filter((item) => item.state === 'waiting');
+    assert.deepEqual(waiting.map((item) => item.kind), ['recipe', 'version'], 'a recipe without its object, or whose words would take every goal, is dropped (review finding 5)');
+    // The page shows what a change replaces: the file, its version, the words that pick it.
+    const view = await app.post({ action: 'candidates' });
+    const shown = view.json.proposals.find((item) => item.kind === 'recipe' && item.state === 'waiting');
+    assert.deepEqual([shown.replaces.id, shown.replaces.version, shown.replaces.when], ['research-question', 1, ['research', 'sources']]);
+    const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+    assert.match(client, /`Replaces recipes\/\$\{now\.id\}\.json, version \$\{now\.version\}/);
+    assert.match(client, /`Picked for goals with: \$\{/);
+    assert.match(client, /`Answer shape: \$\{recipe\.shape\.join/);
+    assert.equal(saved.length, 0, 'nothing saved before your yes');
+    const done = await app.post({ action: 'accept', id: waiting[0].id });
+    assert.equal(done.status, 200, JSON.stringify(done.json));
+    assert.deepEqual(saved, [recipe]);
+    const version = await app.post({ action: 'accept', id: waiting[1].id });
+    assert.match(JSON.stringify(version.json), /Change it yourself on Settings → Model Tiers → Model versions/);
+  } finally {
+    app.done();
+  }
+});
+
+test('text exported from Recon never reaches learned skills: such a conversation and its runs are left out, also when Recon cannot answer', async () => {
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  let broken = false;
+  const app = standIn({ reconExports: { apiVersion: 1, has: (id) => { if (broken) throw new Error('no'); return id === 'c1' || id === 'x1'; }, addressesOf: () => [] } });
+  try {
+    const found = await app.post({ action: 'candidates' });
+    assert.deepEqual(found.json.candidates.map((item) => item.id), [], 'c1 received an export: left out');
+    assert.match(JSON.stringify(found.json), /it received an export from Recon/);
+    const folder = join(app.home, 'work');
+    const write = (id) => {
+      mkdirSync(join(folder, '.dsh-mission', 'runs', id), { recursive: true });
+      writeFileSync(join(folder, '.dsh-mission', 'runs', id, 'run.json'), JSON.stringify({ items: [{ title: `Item of ${id}`, status: 'stuck', tries: 3, note: 'n' }] }));
+    };
+    for (const id of ['r1', 'r2', 'r3']) write(id);
+    mkdirSync(join(app.home, 'mission'), { recursive: true });
+    writeFileSync(join(app.home, 'mission', 'runs.jsonl'), [{ id: 'r1', folder, conversation: 'x1' }, { id: 'r2', folder, conversation: 'ok1' }, { id: 'r3', folder }].map((line) => JSON.stringify(line)).join('\n'));
+    const preview = await app.post({ action: 'preview' });
+    assert.match(preview.json.preview.text, /Item of r2/);
+    assert.doesNotMatch(preview.json.preview.text, /Item of r1/, 'a run of an exported-to conversation');
+    assert.doesNotMatch(preview.json.preview.text, /Item of r3/, 'a run that does not say its conversation, while the door is there');
+    broken = true;
+    const failing = await app.post({ action: 'preview' });
+    assert.doesNotMatch(JSON.stringify(failing.json), /Item of r2/, 'Recon cannot answer: left out');
+  } finally {
+    app.done();
+  }
+});
+
+test('an export from Recon in a conversation\'s messages keeps it out, also with Recon switched off; Recon\'s own detector counts too, and a detector that fails leaves it out', async () => {
+  const off = standIn({ extra: { e2: 'Notes.\n- [S1] A page\n  origin: Recon · lane: onion · exported 2026-11-16' } });
+  try {
+    const found = await off.post({ action: 'candidates' });
+    assert.deepEqual(found.json.candidates.map((item) => item.id), ['c1'], 'e1 and e2 carry an export: left out without any Recon service');
+    // A Mission run whose goal carries an export is left out too.
+    const { mkdirSync, writeFileSync } = await import('node:fs');
+    const folder = join(off.home, 'work');
+    for (const [id, goal] of [['r1', '[Recon export 2026-11-16, report packet]\nFind more'], ['r2', 'Fix the parser']]) {
+      mkdirSync(join(folder, '.dsh-mission', 'runs', id), { recursive: true });
+      writeFileSync(join(folder, '.dsh-mission', 'runs', id, 'run.json'), JSON.stringify({ goal, items: [{ title: `Item of ${id}`, status: 'stuck', tries: 3, note: 'n' }] }));
+    }
+    mkdirSync(join(off.home, 'mission'), { recursive: true });
+    writeFileSync(join(off.home, 'mission', 'runs.jsonl'), [{ id: 'r1', folder }, { id: 'r2', folder }].map((line) => JSON.stringify(line)).join('\n'));
+    const preview = await off.post({ action: 'preview' });
+    assert.match(preview.json.preview.text, /Item of r2/);
+    assert.doesNotMatch(preview.json.preview.text, /Item of r1/);
+  } finally {
+    off.done();
+  }
+  let fail = false;
+  const on = standIn({ extra: { e3: 'pasted: SECRET-MARK 42' }, reconExports: { apiVersion: 1, has: () => false, addressesOf: () => [], isExport: (text) => { if (fail) throw new Error('no'); return text.includes('SECRET-MARK'); } } });
+  try {
+    assert.deepEqual((await on.post({ action: 'candidates' })).json.candidates.map((item) => item.id).sort(), ['c1'], 'Recon\'s detector finds e3');
+    fail = true;
+    assert.deepEqual((await on.post({ action: 'candidates' })).json.candidates.map((item) => item.id), [], 'a detector that fails: nothing read');
+  } finally {
+    on.done();
+  }
+  // Recon's own detector as it ships: inText(text) → { ids }.
+  const shipped = standIn({ extra: { e3: 'pasted: SECRET-MARK 42' }, reconExports: { apiVersion: 1, has: () => false, addressesOf: () => [], inText: (text) => ({ ids: text.includes('SECRET-MARK') ? ['x'] : [], addresses: [], text: '' }) } });
+  try {
+    assert.deepEqual((await shipped.post({ action: 'candidates' })).json.candidates.map((item) => item.id).sort(), ['c1'], 'Recon\'s inText finds e3');
+  } finally {
+    shipped.done();
   }
 });

@@ -32,3 +32,10 @@ Off by default. Nightly or weekly: it only proposes, only while the app is open,
 - The per-conversation choice in the chat box's Tools panel (All, This tab's, None) and the Long run row for learned skills (steps 72 and 75): the app does not yet tell a skill provider which conversation asks, in a way that is documented.
 - The Start clean card on the project page (step 73; the switch is on this add-on's page instead).
 - Filing model habits and tab lessons into Self-improve by itself (part of step 82), use counters for "a correction followed" and retirement proposals (83, 84), and Research reports as a source (86).
+
+## Learning the work loop (Content and Bench plan, step S8)
+
+A Mission run with the work loop on is read with its recipe, its checks and what its checker sent back. Two more kinds of proposal: a **work loop recipe** (accepting saves it through Mission as a new version, the earlier one kept in `recipes/old/`) and a **model version setting** (shown for you to change on Settings → Model Tiers). Each needs your yes, as every proposal does. A Bench run is never read (what a device says stays out of learning); Recon is left out as before.
+
+**Recon exports:** a conversation that received an export from Recon (Recon's `reconExports` service) is never read, and neither are its Mission runs; when Recon cannot answer, the conversation is left out (fail closed), and while the export door is there a run line that does not name its conversation (older lines) is left out too. A recipe proposal whose words would pick every goal (filler words, words under 3 letters) is dropped; the approval shows the file it replaces, its version, the words that pick it, the answer shape and each changed line.
+Also with Recon switched off: a conversation (copied messages included) or a Mission run whose text carries a Recon export's marker (`[Recon export …]`, `origin: Recon · lane:`; this add-on keeps its own copy of the markers, and uses Recon's detector when its service offers one) is never read. A detector that fails leaves the conversation out.

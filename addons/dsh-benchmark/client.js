@@ -684,6 +684,32 @@ textarea.dsh-bm-field { height: auto; min-height: 60px; padding: 8px 14px; line-
       );
     }
 
+    /**
+     * A methods job (plan step S7): the suite run three ways, its scorecard and the advice. The owner's
+     * Accept only records the advice; nothing is switched on by itself.
+     */
+    function MethodsView({ data, onAccept, busy }) {
+      const accepted = data.accepted ?? {};
+      const fmt = (value, digits = 2) => (value === null || value === undefined ? '–' : Number(value).toFixed(digits));
+      return h('div', { className: 'dsh-bm-card', 'data-methods': '' },
+        h('h3', null, 'Ways of working'),
+        h('p', { className: 'dsh-bm-note' }, 'The same tasks, three ways: the small model in one pass, the small model with the work loop (Standard and Thorough, Ultra Code off and on), and the large model in one pass. Score from your graders (0 to 1), seconds and tokens per task.'),
+        h('table', { className: 'dsh-bm-table' },
+          h('thead', null, h('tr', null, ['Kind of task', 'Way', 'Score', 'Seconds', 'Tokens', 'Calls'].map((head) => h('th', { key: head }, head)))),
+          h('tbody', null, data.methods.map((cell) => h('tr', { key: `${cell.category}-${cell.way}` },
+            h('td', null, cell.category), h('td', null, cell.label), h('td', null, fmt(cell.score)), h('td', null, cell.ms === null ? '–' : fmt(cell.ms / 1000, 1)), h('td', null, cell.tokens === null ? '–' : String(Math.round(cell.tokens))), h('td', null, fmt(cell.calls, 1)))))),
+        h('h3', null, 'Advice'),
+        h('p', { className: 'dsh-bm-note' }, 'Your call: accepting records where the loop pays, and Settings → Mission shows it. Nothing is switched on by itself; you switch the loop on per tab there, or with Ultra Code in a conversation.'),
+        (data.advice ?? []).map((note) => h('div', { key: note.category, className: 'dsh-bm-bar' },
+          h('span', { className: 'dsh-bm-note' }, note.text),
+          h('span', { className: 'dsh-bm-spacer' }),
+          note.pays
+            ? accepted[note.category] === note.way
+              ? h('button', { type: 'button', className: 'dsh-bm-btn', disabled: busy, onClick: () => onAccept(note.category, '') }, 'Accepted · take back')
+              : h('button', { type: 'button', className: 'dsh-bm-btn', 'data-main': 'true', disabled: busy, onClick: () => onAccept(note.category, note.way) }, 'Accept')
+            : null)));
+    }
+
     function ReportView({ t, data }) {
       const [sort, setSort] = useState({ key: 'default', dir: 1 });
       const [copied, setCopied] = useState('');
@@ -1069,6 +1095,7 @@ textarea.dsh-bm-field { height: auto; min-height: 60px; padding: 8px 14px; line-
       const [selected, setSelected] = useState('');
       const [report, setReport] = useState(null);
       const [suite, setSuite] = useState('');
+      const [methodsPick, setMethodsPick] = useState({ small: '', large: '' });
       const [busy, setBusy] = useState('');
       const [actError, setActError] = useState('');
       const current = useRef('');
@@ -1195,6 +1222,16 @@ textarea.dsh-bm-field { height: auto; min-height: 60px; padding: 8px 14px; line-
             h('button', { type: 'button', className: 'dsh-bm-btn', 'data-main': 'true', 'data-act': 'run', disabled: !ready || !suiteInfo || Boolean(suiteInfo.problem) || busy !== '', onClick: () => void run('run', { action: 'run', suite }) }, busy === 'run' ? t('run.starting') : t('run.button')),
             runNote ? h('span', { className: 'dsh-bm-stamp', 'data-bad': String(Boolean(suiteInfo?.problem) && hasModels), role: 'status' }, runNote) : null,
           ),
+          // The work loop measured (plan step S7): this suite three ways, on a small and a large target.
+          (cfg?.targets ?? []).length >= 2 ? h(
+            'div',
+            { className: 'dsh-bm-bar', 'data-methods-run': '' },
+            h('span', { className: 'dsh-bm-note' }, 'Compare ways of working: small model'),
+            h('select', { className: 'dsh-bm-field', value: methodsPick.small, 'aria-label': 'Small model', onChange: (event) => setMethodsPick((prev) => ({ ...prev, small: event.target.value })) }, h('option', { value: '' }, 'Pick'), cfg.targets.map((target) => h('option', { key: target.id, value: target.id }, target.id))),
+            h('span', { className: 'dsh-bm-note' }, 'large model'),
+            h('select', { className: 'dsh-bm-field', value: methodsPick.large, 'aria-label': 'Large model', onChange: (event) => setMethodsPick((prev) => ({ ...prev, large: event.target.value })) }, h('option', { value: '' }, 'Pick'), cfg.targets.map((target) => h('option', { key: target.id, value: target.id }, target.id))),
+            h('button', { type: 'button', className: 'dsh-bm-btn', disabled: !ready || !suiteInfo || Boolean(suiteInfo.problem) || busy !== '' || !methodsPick.small || !methodsPick.large || methodsPick.small === methodsPick.large, onClick: () => void run('run', { action: 'methods', suite, small: methodsPick.small, large: methodsPick.large }) }, 'Compare'),
+          ) : null,
           actError ? h('p', { className: 'dsh-bm-note', 'data-bad': 'true', role: 'alert' }, actError) : null,
         ),
         h(
@@ -1210,7 +1247,7 @@ textarea.dsh-bm-field { height: auto; min-height: 60px; padding: 8px 14px; line-
               : data.jobs.length === 0
                 ? h('p', { className: 'dsh-bm-note' }, t('jobs.empty'))
                 : h('div', { className: 'dsh-bm-card' }, h(JobsTable, { t, jobs: data.jobs, selected, onSelect: setSelected })),
-          report ? h(ReportView, { t, data: report }) : null,
+          report ? (report.methods ? h(MethodsView, { data: report, busy: busy !== '', onAccept: (category, way) => void run('accept', { action: 'accept', category, way }).then(() => loadReport(selected)) }) : h(ReportView, { t, data: report })) : null,
         ),
       );
 

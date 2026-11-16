@@ -26,7 +26,7 @@ test('addresses and dates', () => {
   for (const bad of ['', 'ftp://example.com/', 'http://user:pw@example.com/', 'http://localhost/', 'not a url', 'file:///etc/passwd']) assert.equal(pageAddress(bad).ok, false, bad);
   assert.equal(captureDate('20071011223019'), '2007-10-11 22:30 UTC');
   assert.equal(captureDate('20071011'), '2007-10-11');
-  assert.ok(TOOLS.includes('recon_archive_read') && TOOLS.includes('recon_news_search') && MODE.tools === TOOLS);
+  assert.ok(TOOLS.includes('recon_archive_read') && TOOLS.includes('recon_news_search') && MODE.tools.slice(0, TOOLS.length).join() === TOOLS.join());
   assert.ok(METHOD.length <= 4000);
 });
 

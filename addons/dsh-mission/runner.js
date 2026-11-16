@@ -17,6 +17,7 @@ import { MODE_LABELS } from './lib/guard.js';
 import { ROLES, addAsk, applyChecks, dropCommands, noChecks, noCommands, offlineChecks, portsClosed, workersWithoutCommands, applyPlan, applyReview, applyUndo, applyWork, brokenChecks, checklist, finish, isLong, lapNotes, newRun, nextStep, reopen, report, tally } from './lib/run.js';
 import { conductorNote, formatPrompt, jsonOf, planPrompt, reviewPrompt, workPrompt } from './lib/prompts.js';
 import { runCommand } from './lib/shell.js';
+import { KINDS, SHAPE_NOTE, TEXT_KINDS, agreement, answerPrompt, citationCheck, goesUp, judgeOf, judgePrompt, limitedBy, loopLine, sameAnswer, questionsOf, questionsPrompt, readerCheckPrompt, readerVerdict, recipeText, revisePrompt, sameAddress, shapeCheck, sideBySide } from './lib/loop.js';
 
 export const STEP_TOOL = 'mission_step';
 /** The one tool a conversation in the app's PTC preset can call directly; every other tool is called from inside its program. */
@@ -35,7 +36,9 @@ export const FAILED_TURN_MS = 5000;
 export const FAIL_STREAK = 3;
 /** Added to a failed check in a Bench Long run that reached for a device's port. */
 export const PORTS_CLOSED_NOTE = 'Bench keeps the Mac\'s device ports closed to a Long run\'s checks, so this check could not open one. To run a Bench Long run without checks, switch them off in Settings → Bench.';
-const ROLE_NAMES = { plan: 'planner', implement: 'worker', review: 'reviewer' };
+const ROLE_NAMES = { plan: 'planner', implement: 'worker', review: 'reviewer', judge: 'judge', check: 'checker' };
+/** The work loop's roles as a team names them (Model Tiers, plan step S6). */
+const TEAM_ROLE = { plan: 'lead', implement: 'helper', review: 'checker', check: 'checker', judge: 'judge' };
 
 /** App 0.2.2-rc.2 takes the task's fields at the top level of the spec; rc.1 took them under `request`. */
 const startChild = (subagents, spec) => subagents.startActivation({ ...spec.request, ...spec });
@@ -104,7 +107,7 @@ export function pickRoute({ project, defaults, tierRoute, current }, role) {
  * @param {object} deps - what the plugin shares with the runner.
  * @returns {object} starting, stepping and ending runs.
  */
-export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home, failedTurnMs = FAILED_TURN_MS }) {
+export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home, failedTurnMs = FAILED_TURN_MS, callsAtOnce = () => 4 }) {
   /** Conversation id -> its run. */
   const runs = new Map();
   /**
@@ -221,13 +224,15 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     }
   };
 
-  const routeFor = (parent, role, root) => {
+  const routeFor = (parent, role, root, index = 0) => {
     const now = settings();
+    // The work loop's own roles (judge, check) take the reviewer's place outside a team.
+    const base = role === 'judge' || role === 'check' ? 'review' : role;
     let tierRoute;
     try {
       const tiers = ctx.get('modelTiers');
       const tier = tiers?.resolveTier?.(parent.id);
-      tierRoute = tier ? tiers.roleRoute(tier.id, role) : undefined;
+      tierRoute = tier ? tiers.roleRoute(tier.id, base) : undefined;
     } catch {
       tierRoute = undefined;
     }
@@ -245,14 +250,24 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
       const only = routeOf(current);
       return only ? { ...only, from: 'same' } : undefined;
     }
+    // The work loop's team (plan step S6), only while the loop is on in this run.
+    if (runs.get(parent?.id)?.loop) {
+      try {
+        const member = ctx.get('modelTiers')?.teamRoute?.(parent.id, TEAM_ROLE[role] ?? 'helper', index);
+        const route = routeOf(member);
+        if (route) return { ...route, from: 'team', ...(Number.isFinite(member.maxTokens) && member.maxTokens > 0 ? { maxTokens: member.maxTokens } : {}) };
+      } catch {
+        /* no team: the roles as before */
+      }
+    }
     // The settings hold a project's folder as the app names it; compare in the real spelling.
     const here = real(root);
     const project = now.projects[here] ?? Object.entries(now.projects).find(([folder]) => real(folder) === here)?.[1];
-    return pickRoute({ project, defaults: now.roles, tierRoute, current }, role);
+    return pickRoute({ project, defaults: now.roles, tierRoute, current }, base);
   };
 
   /** Long run effort by role (step 59): planner and reviewer think harder than the workers. */
-  const ROLE_EFFORT = { plan: 'high', review: 'high', implement: 'medium' };
+  const ROLE_EFFORT = { plan: 'high', review: 'high', implement: 'medium', judge: 'high', check: 'high' };
   /** Pause a run a moment after the step under way has returned (from inside a step: hold stops that step). */
   const holdAfter = (agent, reason) => {
     const timer = setTimeout(() => {
@@ -285,14 +300,32 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
   } catch {
     /* no session events here (a test): the helper's own time limit still holds */
   }
+  /** The reader a helper is, or the one it was started by (its parent, and so on up). */
+  const readerUp = (id) => {
+    let current = String(id ?? '');
+    for (let depth = 0; current && depth < 8; depth += 1) {
+      const found = readers.get(current);
+      if (found) return found;
+      let agent;
+      try {
+        agent = ctx.get('agents')?.get?.(current) ?? (ctx.get('agents')?.list?.() ?? []).find((other) => other.id === current);
+      } catch {
+        agent = undefined;
+      }
+      const parent = agent?.header?.parentSession ?? agent?.session?.header?.parentSession;
+      if (typeof parent !== 'string' || parent === current) return undefined;
+      current = parent;
+    }
+    return undefined;
+  };
   /** Models that refused a thinking level ("provider/model"): their helpers get none from then on. */
   const noEffort = new Set();
   /** Run one helper model to its answer. A helper whose model failed throws, with the model's reason. */
-  const helper = async ({ parent, role, root, label, prompt, signal, reader = '' }) => {
+  const helper = async ({ parent, role, root, label, prompt, signal, reader = '', index = 0, loopReader = false }) => {
     const owner = runs.get(parent?.id);
     const subagents = ctx.get('subagents');
     if (!subagents?.startActivation) throw new Error('The app\'s sub-agent service is not available.');
-    const route = routeFor(parent, role, root);
+    const route = routeFor(parent, role, root, index);
     const key = route ? `${route.provider}/${route.model}` : '';
     let effort = owner?.kind === 'long' && owner.long?.effort === true && !noEffort.has(key) ? ROLE_EFFORT[role] : undefined;
     const limit = new AbortController();
@@ -305,11 +338,11 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
         const child = await startChild(subagents, {
           provider: 'spawn',
           label,
-          request: { prompt: [{ type: 'text', text: `${prompt}\n\n` }], parent, signal: both, ...(route ? { agentOptions: { provider: route.provider, model: route.model, ...(effort ? { reasoningEffort: effort } : {}) } } : {}) },
+          request: { prompt: [{ type: 'text', text: `${prompt}\n\n` }], parent, signal: both, ...(route ? { agentOptions: { provider: route.provider, model: route.model, ...(effort ? { reasoningEffort: effort } : {}), ...(route.maxTokens ? { maxTokens: route.maxTokens } : {}) } } : {}) },
           delivery: 'parent',
           signal: both,
         });
-        if (reader && child?.childId) readers.set(String(child.childId), reader);
+        if (reader && child?.childId) readers.set(String(child.childId), { name: reader, loop: loopReader });
         const close = () => Promise.resolve(child?.dispose?.()).catch(() => {});
         if (child?.childId) working.set(String(child.childId), close);
         let result;
@@ -364,7 +397,7 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     return { ...result, output: back.length > 0 ? `${result.output}\n[It changed files the user has not approved; they were put back: ${back.slice(0, 20).join(', ')}]` : result.output };
   };
 
-  const modelLine = (who, done) => `${who} on ${done.model}${done.from === 'conversation' || done.from === 'same' ? '' : ` (${done.from === 'tiers' ? 'Model Tiers role' : done.from === 'project' ? 'this project\'s choice' : 'Mission\'s choice'})`}`;
+  const modelLine = (who, done) => `${who} on ${done.model}${done.from === 'conversation' || done.from === 'same' ? '' : ` (${done.from === 'tiers' ? 'Model Tiers role' : done.from === 'team' ? 'the tier\'s team' : done.from === 'project' ? 'this project\'s choice' : 'Mission\'s choice'})`}`;
 
   /**
    * A planner's or reviewer's prose answer turned into its JSON by one short ask (MISSION_FORMAT).
@@ -390,7 +423,7 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     } catch {
       files = '';
     }
-    const prompt = planPrompt({ goal: run.goal, root: run.root, files, maxItems: run.limits.maxItems, notes: lapNotes(run), context: run.long?.context ?? '', noCommands: noChecks(run), offline: offlineChecks(run) });
+    const prompt = `${planPrompt({ goal: run.goal, root: run.root, files, maxItems: run.limits.maxItems, notes: lapNotes(run), context: run.long?.context ?? '', noCommands: noChecks(run), offline: offlineChecks(run) })}${run.loop?.recipe ? `\n\n${recipeText(run.loop)}` : ''}`;
     let done = await helper({ parent, role: 'plan', root: run.root, label: 'Mission: planner', prompt, signal, reader: 'the planner' });
     let plan = jsonOf(done.text);
     if (!plan || !Array.isArray(plan.items)) {
@@ -426,11 +459,113 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     if (!run.long.lapItems.includes(item.id)) run.long.lapItems.push(item.id);
   };
 
+  /**
+   * The work loop's preparation of a text item (only when the loop is on): separate attempts side by side
+   * (Ultra Code), a vote or a judge between them, and checking questions at Thorough. Every helper here
+   * only reads: the one worker after them writes. Undefined when there is nothing to prepare.
+   */
+  const prepare = async (run, item, parent, signal, others) => {
+    const loop = run.loop;
+    const textOnly = TEXT_KINDS.includes(loop.kind) && !workersWithoutCommands(run);
+    const tries = sideBySide(run, textOnly) ? loop.attempts : 1;
+    if (!textOnly || noCommands(run) || (tries < 2 && !loop.questions)) return undefined;
+    const base = workPrompt({ goal: run.goal, summary: run.summary, item, others, senior: false, notes: lapNotes(run), root: run.root, noCommands: true });
+    const attemptPrompt = `${base}\n\nYou are one of ${tries} separate attempts at this item. Answer in text only: write no file and change nothing. ${SHAPE_NOTE}`;
+    // Calls at once per model server: each attempt waits for its own server's room.
+    const keyOf = (role, index) => String(routeFor(parent, role, run.root, index)?.provider ?? '');
+    const results = await limitedBy(Array.from({ length: tries }, (_, index) => ({ key: keyOf('implement', index), run: () => helper({ parent, role: 'implement', root: run.root, label: `Mission: item ${item.id}, attempt ${index + 1} of ${tries}`, prompt: attemptPrompt, signal, reader: 'an attempt of the work loop', index, loopReader: true }) })), callsAtOnce);
+    if (signal.aborted) throw new Error('Stopped.');
+    const texts = results.filter((result) => result.ok && String(result.value?.text ?? '').trim()).map((result) => result.value.text);
+    if (texts.length === 0) return undefined;
+    keep(run, `item-${item.id}-attempts`, texts.map((text, index) => `--- attempt ${index + 1} ---\n${text}`).join('\n\n'));
+    let text = texts[0];
+    let how = texts.length === 1 ? 'one attempt' : '';
+    let vote;
+    if (texts.length > 1) {
+      if (loop.kind === 'answer' || loop.kind === 'extraction') {
+        vote = agreement(texts);
+        text = texts[vote.pick];
+        how = vote.ok ? `${texts.length} attempts, the answer most of them gave` : `${texts.length} attempts that did not agree`;
+      } else {
+        try {
+          const judged = await helper({ parent, role: 'judge', root: run.root, label: `Mission: judge for item ${item.id}`, prompt: judgePrompt({ goal: run.goal, item, attempts: texts }), signal, reader: 'the judge', loopReader: true });
+          const verdict = judgeOf(judged.text, texts.length);
+          text = verdict.merged || texts[Math.max(0, verdict.pick)];
+          how = verdict.merged ? `${texts.length} attempts merged by the judge` : verdict.pick >= 0 ? `attempt ${verdict.pick + 1} of ${texts.length}, picked by the judge` : `${texts.length} attempts; the judge gave no usable pick, so the first is used`;
+        } catch (error) {
+          if (signal.aborted) throw error;
+          how = `${texts.length} attempts; the judge could not run, so the first is used`;
+        }
+      }
+    }
+    if (loop.questions) {
+      try {
+        const asked = await helper({ parent, role: 'check', root: run.root, label: `Mission: checking questions for item ${item.id}`, prompt: questionsPrompt({ item, text }), signal, reader: 'the checker', loopReader: true });
+        const questions = questionsOf(asked.text);
+        if (questions.length > 0) {
+          // Each answered on its own: the answerer never sees the draft.
+          const answered = await limitedBy(questions.map((question, index) => ({ key: keyOf('check', index), run: () => helper({ parent, role: 'check', root: run.root, label: `Mission: checking question ${index + 1}`, prompt: answerPrompt(question), signal, reader: 'the checker', index, loopReader: true }) })), callsAtOnce);
+          const answers = questions.map((question, index) => ({ question, answer: answered[index]?.ok ? answered[index].value.text : '(no answer)' }));
+          const revised = await helper({ parent, role: 'check', root: run.root, label: `Mission: revision of item ${item.id}`, prompt: revisePrompt({ item, text, answers }), signal, reader: 'the checker', loopReader: true });
+          if (String(revised.text ?? '').trim()) {
+            text = revised.text;
+            how = `${how}; checked with ${questions.length} separate question${questions.length === 1 ? '' : 's'} and revised`;
+          }
+        }
+      } catch (error) {
+        if (signal.aborted) throw error;
+        how = `${how}; the checking questions could not run`;
+      }
+    }
+    record(run, { kind: 'loop', item: item.id, attempts: texts.length, how });
+    return { text, how, vote, agreed: vote ? texts[vote.pick] : '', count: texts.length };
+  };
+
+  /**
+   * The work loop's checker for an item's kind (only when the loop is on): run by the app (sources really
+   * opened, a fixed shape, a vote) or by a separate checker that only reads, never by the run that made it.
+   * @returns {Promise<{ran: boolean, why: string}>} whether a check ran, and its words when it said no.
+   */
+  const loopCheck = async (run, item, text, prepared, parent, signal) => {
+    const loop = run.loop;
+    if (loop.kind === 'research') {
+      const verdict = citationCheck(text, new Set(loop.opened ?? []));
+      return { ran: true, why: verdict.ok ? '' : verdict.why, by: 'app' };
+    }
+    if (loop.kind === 'extraction') {
+      const verdict = shapeCheck(text, loop.recipe?.shape ?? ['items']);
+      return { ran: true, why: verdict.ok ? '' : verdict.why, by: 'app' };
+    }
+    // One right answer: the tries must agree, and the worker's final answer must be the one they agreed on.
+    if (loop.kind === 'answer' && prepared?.vote) {
+      if (!prepared.vote.ok) return { ran: true, why: prepared.vote.why, by: 'app' };
+      return { ran: true, why: sameAnswer(text, prepared.agreed) ? '' : 'The final answer is not the one the separate tries agreed on. Give the agreed answer, or show why it is wrong.', by: 'app' };
+    }
+    // Commands check code and data, as Mission always did; in the Content tab Content's drift check decides writing.
+    if (loop.kind === 'code' || loop.kind === 'data' || (loop.kind === 'writing' && loop.tab === 'content')) return { ran: false, why: '' };
+    // A Recon run gets no extra helper models: only the app's own checks.
+    if (noCommands(run)) return { ran: false, why: '' };
+    try {
+      const checked = await helper({ parent, role: 'check', root: run.root, label: `Mission: checker for item ${item.id}`, prompt: readerCheckPrompt({ goal: run.goal, item, text }), signal, reader: 'the checker', loopReader: true });
+      const verdict = readerVerdict(checked.text);
+      // A reply that is not the asked format is no verdict.
+      if (verdict.ok === undefined) return { ran: false, why: '' };
+      return { ran: true, why: verdict.ok ? '' : verdict.why, by: 'model' };
+    } catch (error) {
+      if (signal.aborted) throw error;
+      // A checker that could not run is no verdict: the item is not sent back for it.
+      return { ran: false, why: '' };
+    }
+  };
+
   const doWork = async (id, run, item, parent, signal, step) => {
-    const senior = run.limits.maxTries > 1 && item.tries >= run.limits.maxTries - 1;
+    // With the loop on, a step that failed twice goes up to the strongest model; without it, as before.
+    const senior = goesUp(run, item);
+    if (senior && run.loop) run.loop.escalations = (run.loop.escalations ?? 0) + 1;
     const others = run.items.filter((entry) => entry.id !== item.id).map((entry) => `${entry.id}. ${entry.title} [${entry.status}]`).join('\n');
     await lapStart(run, item);
-    const prompt = workPrompt({ goal: run.goal, summary: run.summary, item, others, senior, notes: lapNotes(run), root: run.root, noCommands: workersWithoutCommands(run) });
+    const prepared = run.loop && !senior ? await prepare(run, item, parent, signal, others) : undefined;
+    const prompt = `${workPrompt({ goal: run.goal, summary: run.summary, item, others, senior, notes: lapNotes(run), root: run.root, noCommands: workersWithoutCommands(run) })}${run.loop ? `\n\n${SHAPE_NOTE}` : ''}${prepared ? `\n\nSeparate attempts prepared this answer (${prepared.how}). Check it, then do the item with it: write it where the item needs it. Do not start again from nothing.\n--- PREPARED ---\n${prepared.text.slice(0, 8000)}\n--- END ---` : ''}`;
     let done;
     let failed = '';
     try {
@@ -444,13 +579,18 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     const blocked = /^\s*\**\s*BLOCKED\b/i.test(done.text);
     const check = item.check && !failed && !noChecks(run) ? await prove(id, run, item.check, signal) : undefined;
     const aside = !check?.ok && step.asides.length > 0 ? step.asides.join(' ') : '';
+    // The work loop's checker (only when it is on), after the worker and its command.
+    const judged = run.loop && !failed && !blocked && !aside ? await loopCheck(run, item, done.text, prepared, parent, signal) : { ran: false, why: '' };
+    if (judged.ran) run.loop.checks[judged.why ? 'failed' : 'passed'] += 1;
     applyWork(run, item.id, {
       report: done.text,
       check: check ? { ok: check.ok, output: check.output } : undefined,
       aside,
       failed: failed || (!check && blocked ? done.text.replace(/\s+/g, ' ').slice(0, 300) : ''),
+      loopFail: judged.why,
+      loopFailBy: judged.by ?? 'app',
     });
-    record(run, { kind: 'work', role: senior ? 'plan' : 'implement', model: done.model, ms: done.ms, item: item.id, try: item.tries, status: item.status, check: check ? { command: item.check, ok: check.ok, seconds: check.seconds } : null, aside: aside || undefined });
+    record(run, { kind: 'work', role: senior ? 'plan' : 'implement', model: done.model, ms: done.ms, item: item.id, try: item.tries, status: item.status, check: check ? { command: item.check, ok: check.ok, seconds: check.seconds } : null, aside: aside || undefined, ...(run.loop ? { loop: { kind: run.loop.kind, prepared: prepared?.how ?? '', checked: judged.ran, passed: judged.ran && !judged.why, senior } } : {}) });
     if (item.status === 'aside') emit('needs-you', id, run, { item: item.id, title: item.title });
     // Helpers that keep failing the same way (a model that does not answer, a folder they cannot write):
     // the run is paused and says why, instead of using up its laps on it.
@@ -465,6 +605,8 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     }
     const outcome = { verified: 'PASSED: its command was run and passed', unverified: 'done; no command proves it, so the reviewer will judge it', open: 'not done yet; it will be tried again', stuck: 'NOT FINISHED after all its tries', aside: 'SET ASIDE: it needs your yes' }[item.status] ?? item.status;
     const lines = [`Step ${run.steps}: item ${item.id} of ${run.items.length}, "${item.title}" (${modelLine(senior ? 'senior worker' : 'worker', done)}, try ${item.tries}). ${outcome}.`];
+    if (prepared) lines.push(`Work loop: ${prepared.how}.`);
+    if (judged.ran) lines.push(judged.why ? `Work loop check (${KINDS[run.loop.kind]?.name ?? run.loop.kind}): not passed. ${judged.why}` : `Work loop check (${KINDS[run.loop.kind]?.name ?? run.loop.kind}): passed.`);
     if (item.note) lines.push(item.note);
     if (check && !check.ok) lines.push(`Command: ${item.check}\n${check.output.slice(-1200)}`);
     if (done.text) lines.push(`Worker's report: ${done.text.replace(/\s+\n/g, '\n').slice(0, 700)}`);
@@ -562,7 +704,7 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
       // A Recon run leaves no line outside its folder (its goal would be there).
       if (finishedFile && !noCommands(run)) {
         mkdirSync(dirname(finishedFile), { recursive: true });
-        appendFileSync(finishedFile, `${JSON.stringify({ at: new Date().toISOString(), id: run.id, folder: run.root, goal: run.goal.slice(0, 300), mode: run.mode, status: run.status, steps: run.steps, minutes: Math.round((run.endedAt - run.startedAt) / 60000), tally: tally(run), log: join(dirOf(run), 'log.jsonl') })}\n`);
+        appendFileSync(finishedFile, `${JSON.stringify({ at: new Date().toISOString(), id: run.id, conversation: id, folder: run.root, goal: run.goal.slice(0, 300), mode: run.mode, status: run.status, steps: run.steps, minutes: Math.round((run.endedAt - run.startedAt) / 60000), tally: tally(run), log: join(dirOf(run), 'log.jsonl') })}\n`);
       }
     } catch (error) {
       warn(`could not write the report: ${String(error?.message ?? error)}`);
@@ -673,6 +815,8 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
       const now = settings();
       const id = `${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}-${Math.random().toString(36).slice(2, 6)}`;
       const run = newRun({ id, goal, mode: MODE_LABELS[entry.mode], root: entry.root, limits: now.limits, checkpoint: point.number, ...(options.kind === 'long' ? { kind: 'long', long: options.long } : {}) });
+      // The work loop (plan steps S3 to S5): only when Ultra Code or the tab's switch put it on.
+      if (options.loop && typeof options.loop === 'object') run.loop = { ...options.loop, opened: [] };
       save(run);
       runs.set(agent.id, run);
       if (!noCommands(run)) writeIndex(agent.id, { root: run.root, id: run.id });
@@ -687,8 +831,9 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
         : names.length === 1
           ? `one model for everything (${names[0]}): the roles are set to different models, but all of them come to this one.`
           : `${names.length} different models: ${routes.map(([role, route]) => `${ROLE_NAMES[role]} ${route?.model ?? 'the conversation\'s model'}`).join(', ')}. They may be loaded at the same time.`;
-      if (isLong(run)) return `Long run started (${run.mode}), ${names.length === 1 ? 'one model' : `${names.length} models`}. It runs by itself now, for at most ${run.long.minutes} minutes and ${run.long.laps} laps; /mission stop pauses it.\nGoal: ${run.goal}\nModels: ${roles}\nTo undo everything it changes: /mission back ${run.checkpoint}`;
-      return `Mission started (${run.mode}), ${names.length === 1 ? 'one model' : `${names.length} models`}. It runs by itself now; /mission stop pauses it.\nGoal: ${run.goal}\nModels: ${roles}\nLimits: ${run.limits.maxItems} items, ${run.limits.maxTries} tries per item, ${run.limits.maxReviews} review${run.limits.maxReviews === 1 ? '' : 's'}, ${run.limits.maxSteps} steps.\nTo undo everything it changes: /mission back ${run.checkpoint}`;
+      const loopSaid = run.loop ? `\n${loopLine(run).replace(/ Checks by the loop: .*$/, '')}` : '';
+      if (isLong(run)) return `Long run started (${run.mode}), ${names.length === 1 ? 'one model' : `${names.length} models`}. It runs by itself now, for at most ${run.long.minutes} minutes and ${run.long.laps} laps; /mission stop pauses it.\nGoal: ${run.goal}\nModels: ${roles}${loopSaid}\nTo undo everything it changes: /mission back ${run.checkpoint}`;
+      return `Mission started (${run.mode}), ${names.length === 1 ? 'one model' : `${names.length} models`}. It runs by itself now; /mission stop pauses it.\nGoal: ${run.goal}\nModels: ${roles}${loopSaid}\nLimits: ${run.limits.maxItems} items, ${run.limits.maxTries} tries per item, ${run.limits.maxReviews} review${run.limits.maxReviews === 1 ? '' : 's'}, ${run.limits.maxSteps} steps.\nTo undo everything it changes: /mission back ${run.checkpoint}`;
     },
 
     /**
@@ -968,7 +1113,26 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
      * A helper that only reads (the planner or the reviewer of a run under way).
      * @returns {string} its name ('' for any other conversation).
      */
-    readerOf: (id) => readers.get(String(id ?? '')) ?? '',
+    /** A run's reader, also a helper started by one (up the chain of helpers): its name, '' for none. */
+    readerOf: (id) => readerUp(id)?.name ?? '',
+    /** Whether a call comes from a reader of the work loop (an attempt, the judge, a checker) or a helper of one. */
+    loopReaderOf: (id) => readerUp(id)?.loop === true,
+    /**
+     * Pages a run's helpers opened (the work loop's research checker reads them). Kept only for a run
+     * with the loop on, at most 500, in the address form it compares.
+     * @param {string} id - the conversation.
+     * @param {string[]} addresses - web addresses a tool opened.
+     */
+    noteOpened(id, addresses) {
+      const run = runs.get(String(id ?? ''));
+      if (!run?.loop || run.status !== 'running') return;
+      const known = new Set(run.loop.opened ?? []);
+      for (const address of addresses ?? []) {
+        const same = sameAddress(address);
+        if (same) known.add(same);
+      }
+      run.loop.opened = [...known].slice(-500);
+    },
     /** Whether a run's folder exists; for tests. */
     has: (run) => existsSync(join(dirOf(run), 'run.json')),
   };

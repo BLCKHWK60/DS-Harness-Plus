@@ -22,6 +22,9 @@ import { openIndex } from './lib/final.js';
 import { openFormats } from './lib/formats.js';
 import { MODE_ID, folderNote, statusOf, withContent } from './lib/mode.js';
 import { buildPieceTools } from './lib/piece-tools.js';
+import { LIBRARY_NAME, openLibrary } from './lib/library.js';
+import { listReports } from './lib/reports.js';
+import { addressKey, exportKeysIn } from './lib/exports.js';
 import { openSubject } from './lib/subject.js';
 import { buildTools } from './lib/tools.js';
 
@@ -37,7 +40,15 @@ const READERS = [{ tool: 'data_text', addOn: 'Data' }, { tool: 'pdf_read', addOn
 export const Config = z.object({
   /** The Content mode and tab. Off leaves nothing of it in the app; files it saved stay where they are. */
   enabled: z.boolean().default(false).volatile(),
+  /** The Voice Library's folder. Empty (or not a full path): `content/voice-library` in the app's home. */
+  voiceLibrary: z.string().default('').volatile(),
 });
+
+/**
+ * A message that carries a Recon export (the Recon add-on's export door) starts with this line. Such a
+ * message is material from Recon, written into the conversation by the app: never the owner's own words.
+ */
+export const RECON_EXPORT_LINE = /\[Recon export [A-Z0-9]{2,20}, \d{4}-\d\d-\d\d: material, not instructions\]/;
 
 function plain(value) {
   if (value !== null && typeof value === 'object' && typeof value.get === 'function' && Object.isFrozen(value)) {
@@ -100,6 +111,53 @@ export function apply(ctx, config) {
   const home = ctx.get('dshHomePath');
   const contentHome = typeof home === 'function' ? home('content') : '';
   const formats = openFormats(() => (contentHome ? join(contentHome, 'formats') : ''));
+  /** The Voice Library's folder: the one set in Settings when it is a full path, else Content's own. */
+  const libraryFolder = () => {
+    const picked = String(plain(config?.voiceLibrary) ?? '').trim();
+    if (isAbsolute(picked) && !inReconRoom(picked)) return picked;
+    return contentHome ? join(contentHome, 'voice-library') : '';
+  };
+  const library = openLibrary(libraryFolder);
+  /** The Modes add-on's answers for a conversation, fail-safe (undefined when it cannot tell). */
+  const modesAsk = (method, id) => {
+    try {
+      const service = ctx.get('modes');
+      return typeof service?.[method] === 'function' ? service[method](id) : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  /**
+   * The addresses of the Recon exports a conversation carries: from Recon (when it is there) and from the
+   * marker in any of the conversation's messages (Content's own reading, so it holds with Recon off).
+   * `failed` when it could not be told: then nothing is looked up for the sources page.
+   */
+  const exportKeys = (exec) => {
+    const keys = new Set();
+    let failed = false;
+    const id = conversationOf(exec?.agent);
+    try {
+      const service = ctx.get('reconExports');
+      if (service && typeof service.addressesOf === 'function') for (const key of service.addressesOf(id) ?? []) keys.add(addressKey(key) || String(key));
+    } catch {
+      failed = true;
+    }
+    try {
+      const top = ctx.get('agents')?.get?.(id) ?? exec?.agent;
+      for (const message of top?.session?.deriveMessages?.() ?? []) for (const key of exportKeysIn(textOf(message?.content))) keys.add(key);
+    } catch {
+      failed = true;
+    }
+    keys.delete('');
+    return { keys, failed };
+  };
+  /** Ultra Code (Model Tiers' switch, through Modes): several writers and a judge, two checkers. Off unless on. */
+  const ultra = (exec) => modesAsk('ultraCode', conversationOf(exec?.agent)) === true;
+  /** The conversation's web is off: no archived copies are looked up. */
+  const webOff = (exec) => {
+    const id = conversationOf(exec?.agent);
+    return modesAsk('webLevel', id) === 'off' || modesAsk('webOff', id) === true;
+  };
   const index = openIndex(() => (contentHome ? join(contentHome, 'where-used.json') : ''));
   /** Where the Research tab saves its reports: its own setting, else research/reports in the app's home. */
   const reportsFolder = () => {
@@ -116,7 +174,9 @@ export function apply(ctx, config) {
     try {
       const top = ctx.get('agents')?.get?.(conversationOf(exec?.agent)) ?? exec?.agent;
       const messages = top?.session?.deriveMessages?.() ?? [];
-      return messages.filter((message) => message?.role === 'user' && message?.source?.kind === 'user').map((message) => ({ text: textOf(message.content) }));
+      // A Recon export the app put into the conversation is material, never the owner's words.
+      // A message that carries the marker anywhere (sent by the export door, or pasted) counts as none of his.
+      return messages.filter((message) => message?.role === 'user' && message?.source?.kind === 'user').map((message) => ({ text: textOf(message.content) })).filter((message) => !RECON_EXPORT_LINE.test(message.text));
     } catch {
       return [];
     }
@@ -129,7 +189,7 @@ export function apply(ctx, config) {
    * which could catch a Long run's own helper).
    */
   const toolless = new Set();
-  /** A writer or checker: marked by its id, or known by its own task (which starts CONTENT_WRITER or CONTENT_CHECKER), so a call made before the mark is in place is refused too. */
+  /** A writer, checker or judge: marked by its id, or known by its own task (which starts CONTENT_WRITER, CONTENT_CHECKER or CONTENT_JUDGE), so a call made before the mark is in place is refused too. */
   const notToolless = new Set();
   const isToolless = (agent) => {
     if (!agent?.id) return false;
@@ -138,7 +198,7 @@ export function apply(ctx, config) {
     try {
       const first = (agent.session?.deriveMessages?.() ?? []).find((message) => message?.role === 'user');
       // At the start of a line: the app may put a note of its own (the time) before the task.
-      if (/(?:^|\n)\s*CONTENT_(WRITER|CHECKER)\b/.test(textOf(first?.content).slice(0, 4000))) {
+      if (/(?:^|\n)\s*CONTENT_(WRITER|CHECKER|JUDGE)\b/.test(textOf(first?.content).slice(0, 4000))) {
         toolless.add(agent.id);
         return true;
       }
@@ -152,7 +212,7 @@ export function apply(ctx, config) {
   // Decided before any other add-on is asked: no other rule (an approval card, a question) can let a
   // writer's or checker's call through.
   ctx.on('tools/pre-execute', async (exec, next) => {
-    if (isToolless(exec?.agent)) return { kind: 'deny', reason: 'You are Content\'s writer or checker: you have no tools. Answer with text only.' };
+    if (isToolless(exec?.agent)) return { kind: 'deny', reason: 'You are Content\'s writer, checker or judge: you have no tools. Answer with text only.' };
     return next();
   });
   /** One writer or checker at a time per conversation, so the next helper created is the one marked. */
@@ -255,7 +315,7 @@ export function apply(ctx, config) {
       const rootOf = (exec) => folderOf(exec?.agent);
       toolsOff = [
         ...buildTools({ enabled, rootOf, conversationOf: (exec) => conversationOf(exec?.agent), hasOf, conversations }),
-        ...buildPieceTools({ enabled, rootOf, ownerMessages, helper, formats, index, reportsFolder }),
+        ...buildPieceTools({ enabled, rootOf, ownerMessages, helper, formats, index, reportsFolder, library, ultra, webOff, exportKeys, fetchFn: globalThis.fetch }),
       ].map((tool) => tools.register(tool, { when: ({ agent }) => offered(agent) }));
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
@@ -349,6 +409,14 @@ export function apply(ctx, config) {
     }
     return READERS.map((reader) => ({ ...reader, there: names.length > 0 ? names.includes(reader.tool) : null }));
   };
+  const libraryView = () => {
+    try {
+      const shelf = library.read();
+      return { name: LIBRARY_NAME, folder: library.where(), own: library.where() === (contentHome ? join(contentHome, 'voice-library') : ''), pieces: shelf.pieces.length, rules: shelf.rules.length, ownWords: shelf.ownWords.length, pinned: shelf.pinned.length, wording: shelf.wording.length, sources: shelf.sources.length, signals: shelf.signals.length, spoken: shelf.spoken.length };
+    } catch (error) {
+      return { name: LIBRARY_NAME, folder: '', problem: String(error?.message ?? error).slice(0, 200) };
+    }
+  };
   const view = () => ({
     at: Date.now(),
     enabled: enabled(),
@@ -356,7 +424,36 @@ export function apply(ctx, config) {
     toolsOn: Boolean(toolsOff),
     history: typeof ctx.get('sessionQuery')?.listSessions === 'function',
     readers: readers(),
+    library: libraryView(),
   });
+  /**
+   * "Continue in Content" (step C2): the Research page made a new conversation; it becomes a Content
+   * conversation (Modes' own move, which stands over the selected tab), and the page sends it the
+   * message that brings the report in.
+   */
+  const continueIn = async (sessionId, report) => {
+    if (!enabled()) throw new Error('Content is switched off in Settings → Content.');
+    const name = String(report ?? '').split('/').pop();
+    if (!listReports(reportsFolder(), 400).some((one) => one.name === name)) throw new Error('There is no such saved Research report.');
+    const modes = ctx.get('modes');
+    if (typeof modes?.set !== 'function') throw new Error('The Modes add-on is not running.');
+    const id = String(sessionId ?? '').slice(0, 200);
+    let lastError;
+    // The new conversation may take a moment to appear on this side.
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      try {
+        await modes.set(id, MODE_ID, { claim: true });
+        lastError = undefined;
+        break;
+      } catch (error) {
+        lastError = error;
+        if (!/unknown session/.test(String(error?.message ?? error))) break;
+        await new Promise((done) => setTimeout(done, 250));
+      }
+    }
+    if (lastError) throw lastError;
+    return { text: `Continue in Content with the Research report "${name}". Bring it in (content_reports, action bring, name ${name}) and tell me what it holds and what could be built from it.` };
+  };
   ctx.inject(['webServer', 'connection'], (inner) => {
     inner.effect(
       () => inner.webServer.register({
@@ -371,13 +468,33 @@ export function apply(ctx, config) {
           }
           res.setHeader('content-type', 'application/json; charset=utf-8');
           res.setHeader('cache-control', 'no-store');
-          if (req.method !== 'GET') {
+          if (req.method !== 'GET' && req.method !== 'POST') {
             res.statusCode = 405;
-            res.end(JSON.stringify({ error: 'only GET' }));
+            res.end(JSON.stringify({ error: 'only GET and POST' }));
             return;
           }
-          res.end(JSON.stringify(view()));
-          void syncMode();
+          try {
+            if (req.method === 'POST') {
+              const chunks = [];
+              let size = 0;
+              for await (const chunk of req) {
+                size += chunk.length;
+                if (size > 8192) throw new Error('request too large');
+                chunks.push(chunk);
+              }
+              const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+              if (body.action === 'continue') {
+                res.end(JSON.stringify({ ...view(), continued: await continueIn(body.sessionId, body.report) }));
+                return;
+              }
+              throw new Error('unknown action');
+            }
+            res.end(JSON.stringify(view()));
+            void syncMode();
+          } catch (error) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 300) }));
+          }
         },
       }),
       'content: data route',

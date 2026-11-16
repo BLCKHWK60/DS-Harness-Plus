@@ -17,6 +17,7 @@
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import z from '@deepseek-ai/schemastery';
+import { WAYS, advice, methodsText, runWay, scorecard } from './lib/methods.js';
 
 export const name = 'benchmark';
 
@@ -72,6 +73,11 @@ export const Config = z.object({
     .volatile(),
   export: z.object({ minSeeds: z.number().min(1).max(50).default(3), scoreTolerance: z.number().min(0).max(1).default(0.02) }).default({ minSeeds: 3, scoreTolerance: 0.02 }),
   commandName: z.string().default('bench'),
+  /**
+   * Where the work loop pays, as the owner accepted it from a methods job (plan step S7), as JSON
+   * `{ category: wayId }`. Advice only: Benchmark switches nothing on by itself; Mission shows it.
+   */
+  acceptedMethods: z.string().default('{}').volatile(),
 });
 
 /**
@@ -444,7 +450,7 @@ export function apply(ctx, config) {
       const temp = `${file}.${process.pid}.tmp`;
       writeFileSync(
         temp,
-        JSON.stringify({ id: job.id, suite: job.suite, state: job.state, startedAt: job.startedAt, finishedAt: job.finishedAt, error: job.error, runs: job.runs }),
+        JSON.stringify({ id: job.id, ...(job.kind ? { kind: job.kind, small: job.small, large: job.large, overlap: job.overlap === true } : {}), suite: job.suite, state: job.state, startedAt: job.startedAt, finishedAt: job.finishedAt, error: job.error, runs: job.runs }),
         { mode: 0o600 },
       );
       renameSync(temp, file);
@@ -462,6 +468,7 @@ export function apply(ctx, config) {
    * @param {AbortSignal} signal - cancellation.
    * @returns {Promise<{text: string, input: number, output: number, latencyMs: number}>} result.
    */
+  const ask_ = (...args) => ask(...args);
   async function ask(target, prompt, system, sampling, signal) {
     const llm = ctx.get('llm');
     if (!llm?.stream) throw new Error('the llm service is unavailable');
@@ -606,6 +613,90 @@ export function apply(ctx, config) {
   }
 
   /**
+   * Measure the work loop (plan step S7): every prompt of a suite run the ways in WAYS, on a small and a
+   * large target, graded as usual. Returns at once with the job's id.
+   * @param {string} suiteName - suite to run.
+   * @param {string} smallId - the small model's target id.
+   * @param {string} largeId - the large model's target id.
+   * @returns {string} job id.
+   */
+  function startMethods(suiteName, smallId, largeId) {
+    const setup = live();
+    const suite = setup.suites[suiteName];
+    if (!suite) throw new Error(`benchmark: unknown suite "${suiteName}".`);
+    if (suite.problem) throw new Error(`benchmark: suite "${suiteName}" cannot run: ${suite.problem}`);
+    const small = setup.targets.find((target) => target.id === smallId);
+    const large = setup.targets.find((target) => target.id === largeId);
+    if (!small || !large) throw new Error('benchmark: pick a small and a large model from your targets.');
+    if (small.id === large.id) throw new Error('benchmark: the small and the large model must differ.');
+    if (!dir) throw new Error('benchmark: no folder to keep results in. Set `dataDir`.');
+    const plan = [];
+    for (const way of WAYS) for (const prompt of suite.prompts) for (let seed = 1; seed <= setup.grid.seeds; seed += 1) plan.push({ way, prompt, seed });
+    const id = `${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}-${++counter}`;
+    // The judge both checks inside the loop and grades judge-graded prompts: said with the advice.
+    const overlap = Boolean(setup.judge) && suite.prompts.some((prompt) => prompt.grader?.type === 'judge');
+    const job = { id, kind: 'methods', overlap, suite: suiteName, small: small.id, large: large.id, state: 'running', done: 0, total: plan.length, startedAt: Date.now(), finishedAt: null, runs: [], abort: new AbortController(), error: null, spend: 0 };
+    jobs.set(id, job);
+    void executeMethods(job, suite, plan, setup, { small, large });
+    return id;
+  }
+
+  async function executeMethods(job, suite, plan, setup, targets) {
+    const limits = setup.limits;
+    const deadline = job.startedAt + (Number(limits.maxJobMinutes) || 60) * 60000;
+    let next = 0;
+    const worker = async () => {
+      while (next < plan.length && job.state === 'running') {
+        if (Date.now() >= deadline) {
+          job.state = 'stopped: time limit';
+          return;
+        }
+        if (limits.maxCloudUsdPerJob > 0 && job.spend >= limits.maxCloudUsdPerJob) {
+          job.state = 'stopped: spend limit';
+          return;
+        }
+        const item = plan[next++];
+        const row = { category: suite.category, way: item.way.id, prompt: item.prompt.id, seed: item.seed };
+        let cost = 0;
+        try {
+          const signal = AbortSignal.any([job.abort.signal, AbortSignal.timeout((Number(limits.timeoutMs) || 120000) * 12)]);
+          const ask = async (who, text, system) => {
+            const target = who === 'judge' ? setup.judge : targets[who];
+            if (!target) throw new Error('no judge model is set');
+            const result = await ask_(target, text, system, {}, signal);
+            cost += costOf(setup.pricing, `${target.provider}/${target.model}`, { input: result.input, output: result.output });
+            return result;
+          };
+          const done = await runWay({ way: item.way, task: item.prompt, ask, hasJudge: Boolean(setup.judge) });
+          row.ms = done.ms;
+          row.input = done.input;
+          row.output = done.output;
+          row.calls = done.calls;
+          const grader = item.prompt.grader;
+          row.score = grader.type === 'judge' ? await gradeWithJudge(grader.rubric, item.prompt.prompt, done.text, signal) : gradeLocal(grader, done.text);
+        } catch (error) {
+          row.error = String(error?.message ?? error).slice(0, 200);
+        } finally {
+          // The calls made before a failure cost too.
+          row.cost = cost;
+          job.spend += cost;
+        }
+        job.runs.push(row);
+        job.done += 1;
+      }
+    };
+    try {
+      await Promise.all(Array.from({ length: Math.min(Number(limits.maxParallel) || 1, plan.length) }, worker));
+      if (job.state === 'running') job.state = 'finished';
+    } catch (error) {
+      job.state = 'failed';
+      job.error = String(error?.message ?? error);
+    }
+    job.finishedAt = Date.now();
+    save(job);
+  }
+
+  /**
    * Load a job from memory or from its file.
    * @param {string} id - job id.
    * @returns {object} job record.
@@ -628,6 +719,11 @@ export function apply(ctx, config) {
    */
   function report(id) {
     const job = find(id);
+    if (job.kind === 'methods') {
+      const cells = scorecard(job.runs ?? []);
+      const notes = advice(cells, live().export.scoreTolerance, { overlap: job.overlap === true });
+      return { cells: [], picks: [], methods: cells, advice: notes, text: methodsText(cells, notes), job };
+    }
     const cells = summarize(job.runs ?? []);
     const picks = recommend(cells, live().export);
     return { cells, picks, text: renderReport(cells, picks), job };
@@ -650,6 +746,16 @@ export function apply(ctx, config) {
       }
     },
     report,
+    startMethods,
+    /** @returns {Record<string, string>} where the owner accepted that the work loop pays: `{ category: wayId }`. */
+    loopAdvice() {
+      try {
+        const value = JSON.parse(String(plain(config.acceptedMethods) ?? '{}') || '{}');
+        return value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).filter(([, way]) => WAYS.some((entry) => entry.id === way))) : {};
+      } catch {
+        return {};
+      }
+    },
     /** @param {string} id - job id. @returns {string} YAML fragment for dsh-sampling-presets. */
     exportPresets(id) {
       return toPresetsYaml(report(id).picks, id);
@@ -758,7 +864,9 @@ export function apply(ctx, config) {
             if (!JOB_ID.test(id)) return { status: 400, body: { error: 'bad job id' } };
             const summary = jobSummary(id);
             if (!summary) return { status: 404, body: { error: 'unknown job' } };
-            const { cells, picks } = report(id);
+            const built = report(id);
+            if (built.methods) return { status: 200, body: { at: Date.now(), job: summary, methods: built.methods, advice: built.advice, accepted: benchmark.loopAdvice() } };
+            const { cells, picks } = built;
             return {
               status: 200,
               body: {
@@ -804,7 +912,23 @@ export function apply(ctx, config) {
               }
               const body = await readJsonBody(req);
               if (!body.ok) return send(body.status, { error: body.status === 413 ? 'too large' : 'bad request' });
-              const { action, suite, id } = body.value;
+              const { action, suite, id, small, large, category, way } = body.value;
+              if (action === 'methods') {
+                if (typeof suite !== 'string' || !SUITE_NAME.test(suite)) return send(400, { error: 'bad suite name' });
+                return send(200, { ok: true, id: startMethods(suite, String(small ?? ''), String(large ?? '')) });
+              }
+              if (action === 'accept') {
+                // The owner's yes to one piece of advice (or '' to take it back): kept, never acted on by itself.
+                if (typeof category !== 'string' || !category || category.length > 80) return send(400, { error: 'bad category' });
+                if (way !== '' && !WAYS.some((entry) => entry.id === way)) return send(400, { error: 'bad way' });
+                const settings = ctx.get('settings');
+                if (!settings?.mutate) return send(409, { error: 'settings are not available' });
+                const now = benchmark.loopAdvice();
+                if (way) now[category] = way;
+                else delete now[category];
+                await settings.mutate('benchmark', [{ op: 'set', path: ['acceptedMethods'], value: JSON.stringify(now) }]);
+                return send(200, { ok: true, accepted: now });
+              }
               if (action === 'run') {
                 if (typeof suite !== 'string' || !SUITE_NAME.test(suite)) return send(400, { error: 'bad suite name' });
                 return send(200, { ok: true, id: start(suite) });
@@ -833,12 +957,16 @@ export function apply(ctx, config) {
         () =>
           inner.commands.register({
             name: commandName,
-            description: 'Benchmark: `run <suite>`, `status [job]`, `report <job>`, `export <job>`, `cancel <job>`, `list`',
-            input: { hint: 'run <suite> | status | report <job> | export <job> | cancel <job> | list' },
+            description: 'Benchmark: `run <suite>`, `methods <suite> <small> <large>`, `status [job]`, `report <job>`, `export <job>`, `cancel <job>`, `list`',
+            input: { hint: 'run <suite> | methods <suite> <small> <large> | status | report <job> | export <job> | cancel <job> | list' },
             handler: async ({ rawInput }) => {
               const [verb, arg] = String(rawInput ?? '').trim().split(/\s+/);
               try {
                 if (verb === 'run') return { kind: 'success', text: `Started job ${benchmark.start(arg)}. Check it with /${commandName} status <job>.` };
+                if (verb === 'methods') {
+                  const [, suiteName, smallId, largeId] = String(rawInput ?? '').trim().split(/\s+/);
+                  return { kind: 'success', text: `Started job ${benchmark.startMethods(suiteName, smallId, largeId)}: the suite run three ways (one pass, the work loop, a large model). /${commandName} report <job> shows the scorecard.` };
+                }
                 if (verb === 'status') {
                   const id = arg ?? [...new Set([...jobs.keys(), ...benchmark.list()])].sort().pop();
                   const s = benchmark.status(id);

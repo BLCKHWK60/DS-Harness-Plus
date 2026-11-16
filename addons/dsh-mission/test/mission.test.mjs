@@ -241,7 +241,11 @@ test('settings fall back to Restricted', async () => {
   const { readSettings, HELP } = await import('../index.js');
   const limits = { maxItems: 12, maxTries: 3, maxReviews: 2, maxSteps: 60, waitMinutes: 3 };
   const long = { minutes: 120, laps: 10, fullTime: false, keepAwake: true, battery: false, retry: true, effort: true };
-  assert.deepEqual(readSettings({}), { enabled: true, defaultMode: 'restricted', limits, roles: {}, projects: {}, long });
+  // The work loop's settings (plan steps S3 to S5): no tab, one call at a time, unless the owner sets them.
+  assert.deepEqual(readSettings({}), { enabled: true, loopTabs: [], callsAtOnce: {}, defaultMode: 'restricted', limits, roles: {}, projects: {}, long });
+  assert.deepEqual(readSettings({ loopTabs: '["research","Bad Tab!",3]', callsAtOnce: '{"local":4,"cloud":99,"x":"no"}' }).loopTabs, ['research', '3']);
+  assert.deepEqual(readSettings({ callsAtOnce: '{"local":4,"cloud":99,"tiny":0,"x":"no"}' }).callsAtOnce, { local: 4, cloud: 16, tiny: 1 }, 'between 1 and 16 (the owner\'s answer)');
+  assert.deepEqual(readSettings({ loopTabs: 'not json' }).loopTabs, []);
   // Long run defaults: one place (Settings → Mission), kept in range.
   assert.deepEqual(readSettings({ longMinutes: 5000, longLaps: 0, longFullTime: true, longKeepAwake: false, longBattery: true, longRetry: false, longEffort: false }).long, { minutes: 720, laps: 1, fullTime: true, keepAwake: false, battery: true, retry: false, effort: false });
   const set = readSettings({ enabled: false, defaultMode: 'auto', maxTries: 99, maxSteps: 'x', waitMinutes: 0, roles: '{"plan":{"provider":"p","model":"big"},"review":{"provider":"","model":"x"},"other":{"provider":"p","model":"m"}}', projects: '{"/w":{"implement":{"provider":"p","model":"coder"}},"/empty":{}}' });

@@ -14,6 +14,7 @@ import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DEPTHS, FOCUSES, HELPER_MODELS, MODE_ID, listReports, saveReport, selectionNote, withResearch } from './lib/mode.js';
+import { PACKET_SUFFIX, writePacket } from './lib/packet.js';
 import { openOwned, removeOwned } from './lib/owned.js';
 
 export const name = 'dsh-research';
@@ -65,7 +66,7 @@ export function apply(ctx, config) {
   ctx.inject(['coworkTrash'], (inner) => {
     try {
       inner.effect(() => inner.coworkTrash.onErased((ids) => {
-        const removed = removeOwned(owned.take(ids), defaultFolder);
+        const removed = removeOwned(owned.take(ids), defaultFolder, [PACKET_SUFFIX]);
         if (removed > 0) ctx.logger?.info?.(`research: removed ${removed} report(s) of deleted Scratch conversations`);
       }), 'research: Scratch reports');
     } catch (error) {
@@ -225,6 +226,15 @@ export function apply(ctx, config) {
       saveReport(sessionId, report) {
         if (!enabled() || !folder()) return '';
         const file = saveReport(folder(), report);
+        // The packet beside it (step C2): its tables for the Content tab. A packet that cannot be written
+        // never costs the report.
+        if (report?.packet) {
+          try {
+            writePacket(file, report.packet, { question: report.question });
+          } catch (error) {
+            warn(`the report was saved, its packet was not: ${String(error?.message ?? error)}`);
+          }
+        }
         try {
           if (ownFolder() && scratchConversation(sessionId)) owned.add(String(sessionId), file);
         } catch (error) {

@@ -55,3 +55,32 @@ Each of these changes something already built, so each is asked, with the reason
 4. Research writing a fuller packet, and a "Continue in Content" button on its reports (C2): they change the Research tab.
 5. Bench reading a device by its serial port, and watching a live signal for hours (B3): opening a port restarts some boards.
 6. Long runs in Bench: **decided 16 November (option 3)**. Checks stay on by default and run with the Mac's device ports closed; Settings → Bench switches them off; the chat box's "Bench rules" shows what is open and closed.
+
+## The owner's answers for the remaining steps (16 November, evening)
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Chat box, Web levels (S1) | **Add the levels, keep the defaults.** Off, Verified, Open web, Everything, Custom on the Web button; each tab starts where it is today (On is Open web; Research and Recon stay at Everything). Ultra Code switch beside Effort |
+| 2 | Recon export door (C8) | **Build it.** Only the owner starts an export; the app's code copies plain text; onion links never opened outside Recon; nothing into Memory |
+| 3 | Research (C2) | **Both:** "Continue in Content" on Research reports, and the fuller packet (claims table, contradictions table, timeline) |
+| 4 | Content's library name | **Voice Library** (Settings → Library stays the document search) |
+| 5 | Bench firmware sources | **The owner may add sites on Settings → Bench**; the checksum is still read from the site |
+| 6 | Battery floor for a write | **30% on battery** |
+| 7 | Firmware download | **Bench downloads it** from the official page, after the owner's yes, checking the published checksum |
+| 8 | Router and server sign-in (B6, B8) | **Both: an SSH key and a password in the Keychain**, the owner's choice per device |
+| 9 | Phone unlock and flash (rest of B7) | **Build it, behind its own yes**, the typed phone name and a full backup |
+| 10 | Bluetooth services (rest of B9) | **Add it:** a small helper; read only, standard services |
+| 11 | Ultra Code and the work loop (S3 to S8) | **Off unless switched on** |
+| 12 | Home server way in | **SSH** (Windows OpenSSH; Bench shows how to switch it on) |
+
+### Follow-up answers (16 November, night)
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 13 | Bench as a destination of a Recon export | **Allow it** ("I don't want to add too many filters or blocks that might break future functionality or testing"); Bench then never counts export text as the owner's words |
+| 14 | Ultra Code in Research and Recon | **Yes, both.** Their loops stay as today except when Ultra Code is on; then it widens them as everywhere else (Recon's helpers stay under its lock) |
+| 15 | The team editor for the owner's own tiers | **Yes** |
+| 16 | Model calls at once | **A setting, 4 by default** |
+| 17 | A Research Long run with the work loop | **Yes, with Ultra Code** |
+| 18 | Firmware download limit | **8 GB** |
+| 19 | Windows Update and BITS on the server | **Allow changes with undo** (named by the owner, restore point first) |

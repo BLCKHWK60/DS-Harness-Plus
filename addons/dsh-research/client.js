@@ -26,6 +26,8 @@ window.__ModuleLoader__.load({
 .dsh-rs-rowtext { flex: 1; min-width: 0; }
 .dsh-rs-rowtitle { font-size: 14px; line-height: 22px; overflow-wrap: anywhere; }
 .dsh-rs-rowdesc { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.dsh-rs-btn.dsh-rs-btn-small { height: 22px; padding: 0 8px; font-size: 11px; margin-left: 6px; }
+.dsh-rs-btn:disabled { opacity: .5; cursor: default; }
 .dsh-rs-btn { flex: none; height: 30px; padding: 0 12px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 10px; cursor: pointer; font: inherit; font-size: 13px; color: var(--dsw-alias-label-primary); background: transparent; white-space: nowrap; }
 .dsh-rs-btn:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .dsh-rs-switch { flex: none; position: relative; width: 36px; height: 20px; padding: 2px; border: 0; border-radius: 999px; cursor: pointer; background: var(--dsw-alias-border-l3, var(--dsw-alias-border-l2)); }
@@ -79,6 +81,69 @@ html[data-cws-wide] .dsh-rs-dock { max-width: calc(100% - 2 * var(--dsh-composer
 
     /** What Depth cannot change: a run started from a program stops at the app's program time limit. */
     const programNote = (minutes) => (minutes ? `In conversations that run tools through programs (the app's PTC preset), searching stops after about ${minutes} minute${minutes === 1 ? '' : 's'} and the report is written in the time left before the app\'s program limit, so a longer depth may do fewer rounds there.` : '');
+
+    // ---- "Continue in Content" (step C2): a new Content conversation that brings the report in -------
+
+    /** Whether the Content tab is on (its own page data); false when it cannot be told. */
+    async function contentOn() {
+      try {
+        const response = await fetch(new URL('dsh-content/data', document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
+        return response.ok && (await response.json()).enabled === true;
+      } catch {
+        return false;
+      }
+    }
+
+    /**
+     * Open a new Content conversation in Scratch (never in a folder of yours, never in Recon's room) and
+     * send it the message that brings the report in. Content makes it a Content conversation first.
+     */
+    async function continueInContent(appCtx, file) {
+      const report = String(file ?? '').split('/').pop();
+      const sessions = appCtx.get('sessions');
+      const remote = appCtx.get('remote.session');
+      const workspace = appCtx.get('uiWorkspace');
+      if (!sessions?.create || !remote?.prompt || !workspace?.openSession) throw new Error('this version of the app cannot open a conversation from here');
+      if (!(await contentOn())) throw new Error('the Content tab is off: switch it on in Settings → Content');
+      const scratch = await fetch(new URL('dsh-cowork-shell/scratch', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
+      const place = scratch.ok ? String((await scratch.json()).place ?? '') : '';
+      if (!place) throw new Error('Scratch is not available here (it needs the Cowork sidebar)');
+      const child = await sessions.create({ cwd: place });
+      const answer = await fetch(new URL('dsh-content/data', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ action: 'continue', sessionId: child, report }) });
+      const data = await answer.json().catch(() => ({}));
+      if (!answer.ok) throw new Error(data.error || `error ${answer.status}`);
+      const sent = await remote.prompt({ requestId: globalThis.crypto?.randomUUID?.() ?? `continue-${Date.now()}`, sessionId: child, mode: 'queue', content: [{ type: 'text', text: data.continued.text }] });
+      workspace.openSession(child);
+      if (sent && sent.ok === false) throw new Error(sent.error?.message ?? 'the message was not sent');
+    }
+
+    /** Whether the Content tab is on, asked once for the component that shows the buttons. */
+    function useContentOn(active = true) {
+      const [on, setOn] = useState(false);
+      useEffect(() => {
+        if (!active) return undefined;
+        let alive = true;
+        void contentOn().then((value) => { if (alive) setOn(value); });
+        return () => { alive = false; };
+      }, [active]);
+      return on;
+    }
+
+    function ContinueButton({ appCtx, file, onNote, compact = false }) {
+      const [busy, setBusy] = useState(false);
+      if (!file) return null;
+      const go = async () => {
+        setBusy(true);
+        try {
+          await continueInContent(appCtx, file);
+        } catch (problem) {
+          onNote?.(`Could not continue in Content: ${problem.message}`);
+        } finally {
+          setBusy(false);
+        }
+      };
+      return h('button', { type: 'button', className: compact ? 'dsh-rs-btn dsh-rs-btn-small' : 'dsh-rs-btn', disabled: busy, title: 'A new Content conversation with this report as its material, and its packet (claims, contradictions, timeline, leads) when it has one', onClick: () => void go() }, busy ? 'Opening…' : 'Continue in Content');
+    }
 
     const STEPS = [['planning', 'Plan'], ['searching', 'Search'], ['reviewing', 'Review'], ['writing', 'Write'], ['done', 'Done']];
 
@@ -270,12 +335,16 @@ html[data-cws-wide] .dsh-rs-dock { max-width: calc(100% - 2 * var(--dsh-composer
       const run = useRun(sessionId);
       const [, bump] = useState(0);
       const [note, setNote] = useState('');
+      // Asked only once a run is done with a saved report; with Content off, nothing changes in the dock.
+      const contentIsOn = useContentOn(Boolean(run && run.stage === 'done' && run.file));
       if (!run) return null;
       const key = `${sessionId}:${run.startedAt}`;
       const busy = !['done', 'failed', 'stopped'].includes(run.stage);
       const recent = Date.now() - (run.endedAt || 0) < 6 * 60 * 60 * 1000;
       if (!busy && (dismissed.has(key) || !recent)) return null;
-      if (!busy && run.stage === 'done' && run.followups.length === 0) return null;
+      // Once done, the dock stays for its follow-up questions and, with a saved report, "Continue in Content".
+      const canContinue = run.stage === 'done' && Boolean(run.file) && contentIsOn;
+      if (!busy && run.stage === 'done' && run.followups.length === 0 && !canContinue) return null;
       const send = async (text) => {
         try {
           const remote = appCtx.get('remote.session');
@@ -303,6 +372,7 @@ html[data-cws-wide] .dsh-rs-dock { max-width: calc(100% - 2 * var(--dsh-composer
         busy && run.helpers > 0 ? h('div', null, `${run.helpers} helper${run.helpers === 1 ? '' : 's'} at work`) : null,
         !busy && run.error ? h('div', null, run.error) : null,
         !busy && run.followups.length ? h('div', { className: 'dsh-rs-follow' }, run.followups.map((question) => h('button', { key: question, type: 'button', title: 'Ask this next', onClick: () => void send(question) }, question))) : null,
+        !busy && canContinue ? h('div', { className: 'dsh-rs-follow' }, h(ContinueButton, { appCtx, file: run.file, onNote: setNote })) : null,
         note ? h('div', null, note) : null);
     }
 
@@ -313,6 +383,7 @@ html[data-cws-wide] .dsh-rs-dock { max-width: calc(100% - 2 * var(--dsh-composer
     function ResearchPage({ appCtx }) {
       const { data, setData, error, load } = useData();
       const [note, setNote] = useState({ text: '', error: false });
+      const contentIsOn = useContentOn(true);
       if (!data) return h('div', { className: 'dsh-rs-page' }, h('style', null, CSS), h('h2', { className: 'dsh-rs-title' }, 'Research'), h('p', { className: 'dsh-rs-desc', 'data-error': String(Boolean(error)) }, error ? `Could not load: ${error}` : 'Loading…'));
       const save = async (ns, values, done) => {
         try {
@@ -343,7 +414,8 @@ html[data-cws-wide] .dsh-rs-dock { max-width: calc(100% - 2 * var(--dsh-composer
           h(Segments, { items: data.helperModels ?? [], value: data.helperModel, label: 'Model for the helpers', onPick: (id) => void save('modes', { researchModel: id }, 'Saved. It also applies to Mission, Agent swarm and the other helper tools, unless a conversation chose otherwise.') })),
         h('div', { className: 'dsh-rs-group' }, 'Saved reports'),
         h('p', { className: 'dsh-rs-desc' }, `Every report from the Research tab is saved as a Markdown file in ${data.folder}.`),
-        (data.reports ?? []).length === 0 ? h('p', { className: 'dsh-rs-desc' }, 'No report saved yet.') : h('ul', { className: 'dsh-rs-list' }, data.reports.map((report) => h('li', { key: report.name }, `${report.name} (${report.date})`))),
+        (data.reports ?? []).length === 0 ? h('p', { className: 'dsh-rs-desc' }, 'No report saved yet.') : h('ul', { className: 'dsh-rs-list' }, data.reports.map((report) => h('li', { key: report.name }, `${report.name} (${report.date}) `, contentIsOn ? h(ContinueButton, { appCtx, file: report.name, compact: true, onNote: (text) => setNote({ text, error: true }) }) : null))),
+        h('p', { className: 'dsh-rs-desc' }, 'Beside each report Research also writes its packet (a folder of the same name): the claims table with who says each claim, its passage, source, grade and whether it was read, the contradictions, a timeline and the leads still open. It is made from the run\'s own findings, so it costs no time. With the Content tab on, "Continue in Content" opens a new Content conversation that brings the report and its packet in.'),
         h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }), h('button', { type: 'button', className: 'dsh-rs-btn', onClick: () => void post({ action: 'reveal' }).catch((problem) => setNote({ text: problem.message, error: true })) }, 'Show in Finder')),
         h('div', { className: 'dsh-rs-group' }, 'Good to know'),
         h('ul', { className: 'dsh-rs-list' },

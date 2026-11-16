@@ -267,3 +267,15 @@ A composer-selected tier is now matched to its fallback and role routes by its t
 The Settings page follows `docs/UI-STYLE.md` (the app's own fonts, fields, cards, switches and tabs; colours only from the app's variables). Checked in the Forest scheme, dark and light.
 
 **Not checked:** hiding the tools of a real connector (the lab has no MCP server running; only the "none allowed" prompt line and the code path were exercised); project profiles and role lanes in the new panel beyond rendering; the Chinese strings; the Mac desktop app; a model with real thinking levels beyond the mock's.
+
+## The Ultra Code switch (Content and Bench plan, step S1; 16 November)
+
+Ultra Code is also a **switch beside Effort** in the chat box's model panel, per conversation (`sessionUltra`), **off unless switched on** (the owner's choice). On, the conversation and its helpers get the Ultra Code words (decompose, start independent helpers together, own the synthesis) at whatever effort is set, and the Effort line says "with Ultra Code switched on". The top effort step "Ultra Code" keeps working as before and shows the switch on. The service answers `ultraCode(sessionId)` (the switch, or the top step); Modes passes it on to the other add-ons. Tested in `test/tiers.test.mjs`.
+
+Review fixes (16 November): with the switch on beside a lower effort, only the lines on spreading the work are added (decompose, the helper cap, own the synthesis), never the top step's exhaustive reasoning or its checks; on a tier without sub-agents the switch adds nothing and the panel says so. A helper's helper follows the conversation's switch too (the chain is walked up).
+
+## Teams for the work loop (plan step S6)
+
+Each tier can have a **team** (Settings → Model Tiers → a tier → Team for the work loop; `teams`): a **lead** (plans, and takes a step that failed twice: make it the strongest), **helpers** (up to six; attempts take turns, so different models make them differ), a **checker** and a **judge**, each a saved model version (its model and output limit) or a model typed in. Used only while Mission's work loop is on and the conversation's helpers use different models (the models chip); empty is as before. A version's temperature is not passed to helpers (the app's helper start takes a model, an effort and an output limit only). Service: `teamRoute(sessionId, role, index)`. Teams are edited on every tier's card, your own tiers included.
+
+Second review (16 November): the switch's words go to the conversation itself only, never to a helper (a helper told to start helpers would spread the work again, and Mission's readers must not start any); `ultraCode()` still follows the chain of helpers. With "Ultra auto-delegation" off, the switch adds no words.

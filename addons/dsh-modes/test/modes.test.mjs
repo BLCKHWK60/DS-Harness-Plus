@@ -638,9 +638,12 @@ test('Depth is kept per conversation like the Web level: cleaned up, carried int
   assert.match(source, /onPick: \(picked\) => void pickSetting\('depth', picked\)/);
   // A pick is stored (Standard too, against a start that differs) and becomes where new conversations start.
   assert.match(source, /const depths = \{ \.\.\.readObject\(current\.sessionDepth\), \[sessionId\]: picked \};\s*return \[\{ op: 'set', path: \['sessionDepth'\], value: JSON\.stringify\(depths\) \}, \{ op: 'set', path: \['searchDepth'\], value: picked \}\];/);
-  // Web is only On or Off; it never writes a level any more.
+  // Web keeps Off and On; the plan's levels (step S1) are added beside them, and On stays as before.
   assert.match(source, /const LEVELS = \['off', 'on'\];/);
-  assert.match(source, /return \[\{ op: 'set', path: \['sessionWeb'\], value: JSON\.stringify\(webs\) \}\];/);
+  assert.match(source, /const ops = \[\{ op: 'set', path: \['sessionWeb'\], value: JSON\.stringify\(webs\) \}\];/);
+  for (const key of ['web.verified', 'web.verified.hint', 'web.openweb', 'web.openweb.hint', 'web.everything', 'web.everything.hint', 'web.custom', 'web.custom.hint', 'web.levels']) {
+    assert.equal(source.split('\n').filter((line) => line.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+  }
   for (const key of ['depth.label', 'depth.quick', 'depth.standard', 'depth.thorough', 'depth.quick.hint', 'depth.thorough.hint', 'depth.note', 'depth.note.research', 'depth.quick.hint.research', 'depth.standard.hint.research', 'depth.thorough.hint.research', 'depth.note.isolated', 'depth.quick.hint.isolated', 'depth.standard.hint.isolated', 'depth.thorough.hint.isolated', 'depth.standard.hint', 'depth.title', 'depth.open', 'new.depth', 'new.depth.hint', 'web.on', 'web.on.hint']) {
     assert.equal(source.split('\n').filter((line) => line.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
   }
@@ -720,11 +723,21 @@ test('the chat box: a Web pick writes only On or Off; a Depth pick is kept for t
   assert.equal(startDepthOf('quick'), 'quick');
   assert.equal(startDepthOf(undefined), 'standard');
   assert.match(source, /searchDepth: startDepthOf\(view\.searchDepth\),/);
-  // The Web button: Off while all tools are off or the web is.
+  // The Web button: Off while all tools are off or the web is; a level the conversation picked; else On.
   assert.equal(webLevelOf(false, true), 'on');
   assert.equal(webLevelOf(false, false), 'off');
   assert.equal(webLevelOf(true, true), 'off');
-  assert.match(source, /h\(WebButton, \{ t, level: webLevelOf\(off, web\),/);
+  assert.equal(webLevelOf(false, true, 'verified', {}), 'verified');
+  assert.equal(webLevelOf(false, false, 'verified', {}), 'off', 'Off wins over a kept level');
+  assert.equal(webLevelOf(false, true, 'custom:Mine', { Mine: ['verified'] }), 'custom:Mine');
+  assert.equal(webLevelOf(false, true, 'custom:Gone', {}), 'on', 'a removed mix: as before');
+  assert.equal(webLevelOf(false, true, 'nonsense', {}), 'on');
+  assert.match(source, /h\(WebButton, \{ t, level: webLevelOf\(off, web, modeDef\.isolated === true \? undefined : readObject\(state\.view\.sessionWebLevel\)\[sessionId\], mixesOf\(state\.view\.webMixes\)\),/);
+  // A pick writes On or Off as before; On clears a level; a level turns the web on and is kept; Off leaves the level for later.
+  const after = (picked, current) => Object.fromEntries(settingOps('web', picked, current, 's1').map((op) => [op.path[0], JSON.parse(op.value)]));
+  assert.deepEqual(after('on', { sessionWeb: '{}', sessionWebLevel: '{"s1":"verified","s2":"open"}' }), { sessionWeb: { s1: true }, sessionWebLevel: { s2: 'open' } });
+  assert.deepEqual(after('open', { sessionWeb: '{"s1":false}', sessionWebLevel: '{}' }), { sessionWeb: { s1: true }, sessionWebLevel: { s1: 'open' } });
+  assert.deepEqual(after('off', { sessionWeb: '{}', sessionWebLevel: '{"s1":"verified"}' }), { sessionWeb: { s1: false } });
   // Recon (an isolated tab) gets its own list texts: Depth there sets only how hard it searches.
   // The row shortens its names also when a button on its first line is squeezed (the app's access-level
   // button shrinks, and its name then ran under the next one), in both ways the row is fitted.
@@ -783,7 +796,7 @@ test('the chat box: a Web pick writes only On or Off; a Depth pick is kept for t
   assert.equal(depthNow({ searchDepth: 'thorough', sessionDepth: JSON.stringify({ other: 'quick' }) }, 's'), 'thorough');
   assert.equal(depthNow({ sessionDepth: JSON.stringify({ s: 'deep' }) }, 's'), 'standard', 'nothing unknown shown');
   // What a pick writes.
-  assert.deepEqual(settingOps('web', 'on', { sessionWeb: JSON.stringify({ x: false }) }, 's'), [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify({ x: false, s: true }) }]);
+  assert.deepEqual(settingOps('web', 'on', { sessionWeb: JSON.stringify({ x: false }) }, 's'), [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify({ x: false, s: true }) }, { op: 'set', path: ['sessionWebLevel'], value: '{}' }], 'On as before (and no level)');
   assert.deepEqual(settingOps('web', 'off', {}, 's'), [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify({ s: false }) }]);
   assert.deepEqual(settingOps('depth', 'thorough', { sessionDepth: JSON.stringify({ x: 'quick' }) }, 's'), [
     { op: 'set', path: ['sessionDepth'], value: JSON.stringify({ x: 'quick', s: 'thorough' }) },

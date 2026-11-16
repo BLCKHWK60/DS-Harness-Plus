@@ -58,9 +58,10 @@ export async function settle() {
  * @param {Set<string>} [options.studying] - conversations where Learn runs a study session (no set: no Learn add-on).
  * @param {Set<string>} [options.scratch] - Scratch conversations, as the Cowork sidebar's `coworkScratch` service tells (no set: no such service).
  * @param {object} [options.mission] - Mission's service, e.g. `{ longRun: (id) => ({ files, web }) }` (none: no Mission).
+ * @param {Set<string>} [options.ultra] - conversations with Ultra Code on, as Model Tiers tells (no set: Model Tiers cannot say).
  * @returns {object} the running app.
  */
-export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0, home, goals, failWrite, chat, studying, scratch, mission } = {}) {
+export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0, home, goals, failWrite, chat, studying, scratch, mission, ultra } = {}) {
   const { config } = world;
   const handlers = new Map();
   const agents = new Map();
@@ -97,6 +98,8 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
       // A conversation without a tier of its own is on the tier its model belongs to.
       resolveTier: (id) => ({ id: currentTier.get(id) ?? baseTier }),
       instructionsReplaced: () => alone,
+      // Ultra Code's switch (plan step S1); no set: an older Model Tiers that cannot say.
+      ...(ultra ? { ultraCode: (id) => ultra.has(id) } : {}),
     },
     sessionPersistence: { stat: async (id) => (persisted?.has(id) ? {} : undefined) },
     // The app's home folder, when a test gives one (the Cowork sidebar's trash lives there).

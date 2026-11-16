@@ -1262,11 +1262,110 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         maxSubagents: Number.isFinite(max) ? clamp(Math.round(max), 1, 8) : 4,
         ultraAutoDelegate: source.ultraAutoDelegate !== false,
         activeTiers: parseActiveTiers(source.activeTiers),
+        sessionUltra: parseUltra(source.sessionUltra),
+        teams: parseTeams(source.teams),
         modelProfiles: normalizeModelProfiles(source.modelProfiles),
         modelProfilesMigrated: source.modelProfilesMigrated === true,
         modelVersions,
         versionsById,
       };
+    }
+
+    /** The work loop's teams per tier (plan step S6), as stored: `{ tierId: { lead, helpers: [], checker, judge } }`. */
+    function parseTeams(value) {
+      let parsed = {};
+      try {
+        parsed = typeof value === 'string' ? JSON.parse(value || '{}') : value && typeof value === 'object' ? value : {};
+      } catch {
+        parsed = {};
+      }
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    }
+
+    /**
+     * The team of a tier for the work loop (plan step S6): who leads (and takes a step that failed twice),
+     * who does the steps, who checks, who judges between attempts. Each a saved model version or a model.
+     */
+    function TeamEditor({ tierId, teams, versions, onChange }) {
+      const team = teams?.[tierId] ?? {};
+      const helpers = Array.isArray(team.helpers) ? team.helpers.filter(Boolean) : [];
+      const count = ['lead', 'checker', 'judge'].filter((role) => team[role]).length + helpers.length;
+      const store = (nextTeam) => {
+        const next = { ...(teams ?? {}) };
+        const list = (nextTeam.helpers ?? []).filter(Boolean);
+        const empty = !nextTeam.lead && !nextTeam.checker && !nextTeam.judge && list.length === 0;
+        if (empty) delete next[tierId];
+        else next[tierId] = { ...nextTeam, helpers: list };
+        onChange(next);
+      };
+      const setRole = (role, value) => {
+        const nextTeam = { ...team, helpers };
+        if (value) nextTeam[role] = value;
+        else delete nextTeam[role];
+        store(nextTeam);
+      };
+      const setHelper = (index, value) => {
+        const list = [...helpers];
+        if (value) list[index] = value;
+        else list.splice(index, 1);
+        store({ ...team, helpers: list });
+      };
+      const member = (key, label, value, onSet) =>
+        h(
+          'div',
+          { key, className: 'dsh-mt-field' },
+          h(
+            'div',
+            { className: 'dsh-mt-rolerow' },
+            h('span', { className: 'dsh-mt-rolelabel' }, label),
+            h(
+              'select',
+              {
+                className: 'dsh-mt-input',
+                'aria-label': `${label}: saved version or model`,
+                value: value?.version ? `v:${value.version}` : value?.provider ? 'route' : '',
+                onChange: (event) => {
+                  const picked = event.target.value;
+                  if (!picked) onSet(null);
+                  else if (picked.startsWith('v:')) onSet({ version: picked.slice(2) });
+                  else onSet(value?.provider ? value : null);
+                },
+              },
+              h('option', { value: '' }, 'Not set'),
+              (versions ?? []).map((version) => h('option', { key: version.id, value: `v:${version.id}` }, `Version: ${version.name}`)),
+              h('option', { value: 'route' }, 'A model, typed below'),
+            ),
+          ),
+          value?.version ? null : h(RoleRouteRow, { role: key, label: '', route: value?.provider ? value : null, onChange: (route) => onSet(route) }),
+        );
+      return h(
+        'details',
+        { className: 'dsh-mt-fallback dsh-mt-roles' },
+        h('summary', { className: 'dsh-mt-fallbackhead' }, `Team for the work loop (${count})`),
+        h(
+          'div',
+          { className: 'dsh-mt-fallbackbody' },
+          h('span', { className: 'dsh-mt-hint' }, 'Used only while the work loop is on (Ultra Code, or a tab switched on in Settings → Mission) and the conversation\'s helpers use different models (the models chip). The lead plans and takes a step that failed twice, so make it the strongest. Helpers do the steps; two or more different models make attempts differ more. The checker checks, the judge picks between attempts. A saved version brings its model and output limit; its temperature is not passed to helpers. Recon runs keep their own model. Empty: as before.'),
+          member('lead', 'Lead', team.lead, (value) => setRole('lead', value)),
+          ...helpers.map((value, index) => member(`helper-${index}`, `Helper ${index + 1}`, value, (next) => setHelper(index, next))),
+          helpers.length < 6 ? member(`helper-${helpers.length}`, helpers.length === 0 ? 'Helper' : 'Another helper', null, (next) => setHelper(helpers.length, next)) : null,
+          member('checker', 'Checker', team.checker, (value) => setRole('checker', value)),
+          member('judge', 'Judge', team.judge, (value) => setRole('judge', value)),
+        ),
+      );
+    }
+
+    /** The Ultra Code switches (plan step S1): `{ sessionId: true }` from the setting's JSON text. */
+    function parseUltra(value) {
+      let parsed = {};
+      try {
+        parsed = typeof value === 'string' ? JSON.parse(value || '{}') : value && typeof value === 'object' ? value : {};
+      } catch {
+        parsed = {};
+      }
+      const out = {};
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) for (const [id, on] of Object.entries(parsed)) if (on === true) out[id] = true;
+      return out;
     }
 
     async function loadSettings(ctx) {
@@ -1781,6 +1880,8 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
       profiles,
       fallbacks,
       roles,
+      teams,
+      versions,
       activeCount,
       canMoveUp,
       canMoveDown,
@@ -1791,6 +1892,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
       onMoveDown,
       onFallbacks,
       onRoles,
+      onTeams,
     }) {
       const [name, setName] = useState(tier.name);
       const [short, setShort] = useState(tier.short);
@@ -2038,6 +2140,14 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                 onChange: onRoles,
               }),
             ),
+            // The work loop's team, on your own tiers as on the starters (the owner's answer, 16 November).
+            onTeams
+              ? h(
+                  'div',
+                  { className: 'dsh-mt-field dsh-mt-span2' },
+                  h(TeamEditor, { tierId: tier.id, teams, versions, onChange: onTeams }),
+                )
+              : null,
           ),
           h(
             'div',
@@ -2094,10 +2204,13 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
       profiles,
       fallbacks,
       roles,
+      teams,
+      versions,
       activeTiers,
       onSave,
       onFallbacks,
       onRoles,
+      onTeams,
     }) {
       const nextOrder = () =>
         customTiers.reduce((max, tier) => Math.max(max, tier.order ?? 0), 0) + 10;
@@ -2189,6 +2302,9 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                   onMoveDown: () => move(index, 1),
                   onFallbacks,
                   onRoles,
+                  teams,
+                  versions,
+                  onTeams,
                 }),
               ),
             )
@@ -3665,6 +3781,8 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         save([{ op: 'set', path: ['fallbackChains'], value: JSON.stringify(next) }]);
       const saveRoles = (next) =>
         save([{ op: 'set', path: ['roleModels'], value: JSON.stringify(next) }]);
+      const saveTeams = (next) =>
+        save([{ op: 'set', path: ['teams'], value: JSON.stringify(next) }]);
       const copyTier = (id) => {
         const source = config.tiers[id];
         const meta = TIER_META[id];
@@ -3840,6 +3958,12 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                 roles: config.roleModels,
                 onChange: saveRoles,
               }),
+              h(TeamEditor, {
+                tierId: id,
+                teams: config.teams,
+                versions: config.modelVersions,
+                onChange: saveTeams,
+              }),
               h(EffortRange, { effort: tier.effort, onChange: (effort) => setTier(id, { effort }) }),
               h(
                 'div',
@@ -3885,11 +4009,14 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             profiles: config.modelProfiles,
             fallbacks: config.fallbackChains,
             roles: config.roleModels,
+            teams: config.teams,
+            versions: config.modelVersions,
             activeTiers: config.activeTiers,
             onSave: (next) =>
               save([{ op: 'set', path: ['customTiers'], value: JSON.stringify(next) }]),
             onFallbacks: saveFallbacks,
             onRoles: saveRoles,
+            onTeams: saveTeams,
           }),
         ),
         h(
@@ -4532,6 +4659,28 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         applySelection({ ...base, effort: next });
       };
 
+      /** The Ultra Code switch beside Effort, for this conversation only (plan step S1). */
+      const ultraOn = state.config?.sessionUltra?.[sessionId] === true;
+      const flipUltra = async () => {
+        if (!state.config || state.busy) return;
+        setState((prev) => ({ ...prev, busy: 'ultra', error: null }));
+        try {
+          const saved = await mutateSettings(
+            appCtx,
+            (latest) => {
+              const next = { ...(latest.sessionUltra ?? {}) };
+              if (ultraOn) delete next[sessionId];
+              else next[sessionId] = true;
+              return [{ op: 'set', path: ['sessionUltra'], value: JSON.stringify(next) }];
+            },
+            state.revision,
+          );
+          setState((prev) => ({ ...prev, config: saved.config, revision: saved.revision, busy: null }));
+        } catch (error) {
+          setState((prev) => ({ ...prev, busy: null, error: String(error?.message ?? error) }));
+        }
+      };
+
       const commitTemperature = (temperature) => {
         const base = baseChoice();
         if (!base || temperature === selection?.temperature) return;
@@ -4819,6 +4968,19 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
               route && !hasThinking && state.catalog
                 ? h('div', { className: 'dsh-mc-note' }, 'This model has no thinking control. Effort still changes how carefully it is told to work.')
                 : null,
+              // Ultra Code: a switch beside Effort, not an effort level (plan step S1). Off unless switched on.
+              h(
+                'div',
+                { className: 'dsh-mc-rowhead', 'data-ultra': '' },
+                h(Switch, { checked: ultraOn || effort === 'ultra', label: 'Ultra Code', disabled: Boolean(busy) || effort === 'ultra', onChange: () => void flipUltra() }),
+              ),
+              h('div', { className: 'dsh-mc-note' }, effort === 'ultra'
+                ? 'On through the top effort step. Lower Effort to switch it separately.'
+                : activeTier && activeTier.subagents === false
+                  ? 'This tier runs no helpers (Sub-agents is off for it in Settings → Model Tiers), so the switch changes nothing here.'
+                  : ultraOn
+                    ? 'On for this conversation: the work is spread over helpers where the parts are independent, at the effort above. Slower and uses more tokens.'
+                    : 'Off: one line of work, as before. On spreads the work over helpers at the effort above.'),
             ),
             // ---- tier
             h(

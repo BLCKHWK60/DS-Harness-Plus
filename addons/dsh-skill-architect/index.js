@@ -22,6 +22,12 @@ import { openLibrary, readReach } from './lib/library.js';
 import { CANDIDATES_MAX, isPrivate, learnPrompt, pickConversations, proposalsOf, signalsOf, whereOf } from './lib/learn.js';
 import { openProposals, visibleTo } from './lib/proposals.js';
 
+/**
+ * The marker lines of a Recon export (dsh-recon/lib/door.js: EXPORT_LINE_RE, and each source's
+ * "origin: Recon · lane:" line), kept here too so the rule holds with Recon switched off.
+ */
+export const EXPORT_MARKS = [/^\[Recon export [^\]\n]{1,80}\]/m, /origin: Recon · lane:/];
+
 export const name = 'skill-architect';
 export const DATA_PATH = '/dsh-skill-architect/data';
 /** The provider's name in the app's skill list. Learned skills rank after every other kind of skill. */
@@ -149,6 +155,57 @@ export function apply(ctx, config) {
 
   // ---- which conversations may be read (step 76) -------------------------------------------------
 
+  /**
+   * Whether a text holds a Recon export: Recon's own detector when its service offers one, and always this
+   * add-on's copy of the export's marker lines (so it holds with Recon switched off). Fail closed.
+   */
+  const exportText = (text) => {
+    const value = String(text ?? '');
+    if (EXPORT_MARKS.some((mark) => mark.test(value))) return true;
+    try {
+      const exports = ctx.get('reconExports');
+      // Recon's own detector: `inText(text)` → { ids } (an export is in the text when it names one).
+      if (typeof exports?.inText === 'function') {
+        const found = exports.inText(value);
+        if (Array.isArray(found?.ids) && found.ids.length > 0) return true;
+      }
+      const detect = [exports?.isExport, exports?.detect, exports?.looksExported, exports?.containsExport].find((fn) => typeof fn === 'function');
+      return detect ? detect(value) === true : false;
+    } catch {
+      return true;
+    }
+  };
+  /** @returns {boolean} whether any text in a conversation's events holds a Recon export (copied events too). */
+  const exportIn = (events) => {
+    let found = false;
+    const walk = (value, depth) => {
+      if (found || depth > 8 || value === null || value === undefined) return;
+      if (typeof value === 'string') {
+        if (exportText(value)) found = true;
+        return;
+      }
+      if (Array.isArray(value)) for (const item of value.slice(0, 500)) walk(item, depth + 1);
+      else if (typeof value === 'object') for (const item of Object.values(value).slice(0, 100)) walk(item, depth + 1);
+    };
+    for (const event of Array.isArray(events) ? events : []) walk(event, 0);
+    return found;
+  };
+
+  /**
+   * Whether a conversation received an export from Recon (Recon's export door): its text never reaches
+   * learned skills. Fail closed: when Recon's answer cannot be read, the conversation is left out.
+   * @returns {string} why it is left out ('' : it may be read).
+   */
+  const fromRecon = (id) => {
+    const exports = ctx.get('reconExports');
+    if (!exports) return '';
+    try {
+      return exports.has(String(id ?? '')) === true ? 'it received an export from Recon' : '';
+    } catch {
+      return 'Recon could not say whether it received an export';
+    }
+  };
+
   const readable = async () => {
     const query = ctx.get('sessionQuery');
     if (!query?.listSessions) return { known: false, reason: 'The app\'s conversation index is not available.', read: [], left: [] };
@@ -176,6 +233,8 @@ export function apply(ctx, config) {
           return 'isolated (Recon)';
         }
         if (cwd === RECON_ROOM || cwd.startsWith(`${RECON_ROOM}/`)) return 'isolated (Recon)';
+        const exported = fromRecon(id);
+        if (exported) return exported;
         if (nolearn.has(id)) return 'you marked it "never learn from this"';
         if (evolveHome && cwd.startsWith(evolveHome)) return 'a Self-improve test run';
         try {
@@ -198,6 +257,8 @@ export function apply(ctx, config) {
       const id = String(record.header.id);
       try {
         const log = await query.readSession(id);
+        // An export from Recon in its messages, also with Recon off: never read.
+        if (exportIn(log.events)) continue;
         const signals = signalsOf(log.events, log.inheritedEventCount);
         if (signals.score > 0 && signals.excerpts.length > 0) out.push({ id, cwd: String(record.header.cwd ?? ''), tab: String(ctx.get('modes')?.get?.(id) ?? ''), ...signals });
       } catch (error) {
@@ -226,15 +287,28 @@ export function apply(ctx, config) {
         }
         const folder = trimSlash(entry.folder);
         if (!folder || folder === RECON_ROOM || folder.startsWith(`${RECON_ROOM}/`)) continue;
+        // A run of a conversation that received an export from Recon is never read; with Recon's export
+        // door there, a run that does not say its conversation (an older line) is left out too.
+        if (ctx.get('reconExports') && (typeof entry.conversation !== 'string' || !entry.conversation || fromRecon(entry.conversation))) continue;
         let run;
         try {
           run = JSON.parse(readFileSync(join(entry.folder, '.dsh-mission', 'runs', entry.id, 'run.json'), 'utf8'));
         } catch {
           continue;
         }
+        // A Bench run is never read: what a device says stays out of learning (the plan's rule).
+        if (run.long?.bench) continue;
+        // A run whose goal, notes or items carry a Recon export is never read either.
+        if (exportIn([run])) continue;
         const stuck = (run.items ?? []).filter((item) => item.status === 'stuck' || item.tries >= 2).slice(0, 3);
-        if (stuck.length === 0) continue;
-        out.push({ id: `mission-run-${entry.id}`, cwd: entry.folder, tab: 'mission run', excerpts: stuck.map((item) => `A Mission run's item "${item.title}" took ${item.tries} tries${item.status === 'stuck' ? ' and was not finished' : ''}. Last note: ${String(item.note ?? '').slice(0, 300)}`) });
+        // A run with the work loop on (plan step S8): its recipe and what its checker said, so a recipe change can be proposed.
+        const loop = run.loop && typeof run.loop === 'object' ? run.loop : undefined;
+        const loopExcerpts = loop ? [
+          `A Mission run used the work loop: kind ${String(loop.kind ?? '?').slice(0, 20)}, Depth ${String(loop.depth ?? '?').slice(0, 20)}, ${loop.ultra ? 'Ultra Code on' : 'switched on for its tab'}${loop.recipe ? `, recipe "${String(loop.recipe.id ?? '').slice(0, 60)}" (${String(loop.recipe.name ?? '').slice(0, 80)}): ${(Array.isArray(loop.recipe.steps) ? loop.recipe.steps : []).slice(0, 8).map((step, index) => `${index + 1}. (${String(step.role ?? '').slice(0, 10)}) ${String(step.does ?? '').slice(0, 160)} Checked by: ${String(step.check ?? '').slice(0, 120)}`).join(' ')}` : ''}. Its checks: ${Number(loop.checks?.passed) || 0} passed, ${Number(loop.checks?.failed) || 0} failed; ${Number(loop.escalations) || 0} steps went up to the strongest model. The run ended ${String(run.status ?? '?').slice(0, 20)}.`,
+          ...(run.items ?? []).filter((item) => /^Checker: /.test(String(item.note ?? ''))).slice(0, 3).map((item) => `In that run the checker sent back the item "${String(item.title ?? '').slice(0, 120)}": ${String(item.note ?? '').slice(0, 300)}`),
+        ] : [];
+        if (stuck.length === 0 && loopExcerpts.length === 0) continue;
+        out.push({ id: `mission-run-${entry.id}`, cwd: entry.folder, tab: 'mission run', excerpts: [...stuck.map((item) => `A Mission run's item "${item.title}" took ${item.tries} tries${item.status === 'stuck' ? ' and was not finished' : ''}. Last note: ${String(item.note ?? '').slice(0, 300)}`), ...loopExcerpts] });
       }
     } catch {
       /* no runs yet */
@@ -327,6 +401,14 @@ export function apply(ctx, config) {
       if (!memory?.add) throw new Error('Memory is off, so the fact cannot be added. Switch Memory on, or reject this.');
       memory.add(merged.text);
       said = 'The fact is added to Memory.';
+    } else if (merged.kind === 'recipe') {
+      // A recipe changes only with your yes: Mission checks it, keeps the earlier version and writes the new one.
+      const mission = ctx.get('mission');
+      if (!mission?.saveRecipe) throw new Error('Mission is off or older, so the recipe cannot be saved. Switch Mission on, or reject this.');
+      const saved = mission.saveRecipe(merged.recipe);
+      said = `The recipe "${saved.name}" is saved as version ${saved.version}${saved.kept ? `; the earlier one is kept as ${saved.kept}` : ''}. Runs with the work loop use it from the next one.`;
+    } else if (merged.kind === 'version') {
+      said = 'Change it yourself on Settings → Model Tiers → Model versions, on the version it is about. Changing it by itself is not built.';
     } else if (merged.kind === 'rule') {
       const projectsService = ctx.get('coworkProjects');
       if (!projectsService?.appendRule) throw new Error('The Cowork sidebar is off, so the rule cannot be added to the project.');
@@ -420,7 +502,17 @@ export function apply(ctx, config) {
     nolearn: listOf(config?.nolearn),
     projectsOff: listOf(config?.projectsOff),
     skills: library.list(),
-    proposals: proposals.list(),
+    // A recipe change shows what it would replace: the file, its version and its steps (Mission's own copy).
+    proposals: proposals.list().map((item) => {
+      if (item.kind !== 'recipe' || !item.recipe || item.state !== 'waiting') return item;
+      let now;
+      try {
+        now = ctx.get('mission')?.recipe?.(String(item.recipe.id ?? ''));
+      } catch {
+        now = undefined;
+      }
+      return { ...item, replaces: now ? { id: now.id, name: now.name, kind: now.kind, version: now.version, when: now.when, steps: now.steps, stop: now.stop, ...(now.shape ? { shape: now.shape } : {}) } : null };
+    }),
     learning: Boolean(learning),
     ...scheduleState(),
   });

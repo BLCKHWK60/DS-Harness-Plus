@@ -3,7 +3,7 @@
  * isolated Recon conversation and that the user allows content to go to the conversation's model.
  * Searching and reading .onion sites go through lib/onion.js, Usenet through lib/usenet.js.
  */
-import { TOOLS } from './mode.js';
+import { MODE_TOOLS, TOOLS } from './mode.js';
 
 /**
  * How a tool's answer starts when the tool did not run (below, and mayReceive in lib/model.js).
@@ -16,6 +16,13 @@ const NOT_RUN = [
   'It did not work:',
   'This conversation uses ',
   'The model of this conversation could not be told',
+  // recon_ultra (Ultra Code's recipe) when it did not run.
+  'Ultra Code is off',
+  'This works only in a Recon conversation itself',
+  'Nothing was read',
+  'No draft was written',
+  'The action is search or report',
+  "Recon's web is off",
 ];
 
 /** The marker the app's compaction puts around its summary of earlier history. */
@@ -62,7 +69,8 @@ export function* answersOf(messages) {
   for (const message of messages ?? []) {
     const content = Array.isArray(message?.content) ? message.content : [];
     if (message?.role === 'assistant') {
-      for (const block of content) if (block?.type === 'tool-call' && TOOLS.includes(block.name)) calls.set(block.id, block.name);
+      // Recon's tools and Ultra Code's recipe: what either answered is what Recon found.
+      for (const block of content) if (block?.type === 'tool-call' && MODE_TOOLS.includes(block.name)) calls.set(block.id, block.name);
     } else if (message?.role === 'tool' && message.isError !== true && calls.has(message.toolCallId ?? message.source?.callId)) {
       const text = content.map((block) => (block?.type === 'text' ? block.text : '')).join('').trimStart();
       if (!NOT_RUN.some((start) => text.startsWith(start))) yield { name: calls.get(message.toolCallId ?? message.source?.callId), text };

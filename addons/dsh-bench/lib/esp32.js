@@ -26,14 +26,49 @@ export const FLASH_MAX = 32 * 1024 * 1024;
  * Where firmware may come from: the maker or an open project's official release pages (plan, "The
  * way back", condition 3). A file from a forum, a chat or a download site is never flashed.
  */
+/** The kinds of device a source is for: a router or phone flash never uses another kind's source. */
+export const SOURCE_KINDS = ['esp32', 'router', 'phone'];
 export const OFFICIAL = [
-  { host: /^(?:www\.|dl\.|docs\.)?espressif\.com$/, about: 'Espressif' },
-  { host: /^github\.com$/, path: /^\/(?:espressif|esphome|arendst|micropython|meshtastic|Aircoookie|wled|adafruit|arduino|tasmota)\//i, about: 'the project\'s official GitHub releases' },
-  { host: /^(?:ota\.tasmota\.com|micropython\.org|install\.wled\.me|firmware\.esphome\.io)$/, about: 'the project\'s own download site' },
+  { kind: 'esp32', host: /^(?:www\.|dl\.|docs\.)?espressif\.com$/, about: 'Espressif' },
+  { kind: 'esp32', host: /^github\.com$/, path: /^\/(?:espressif|esphome|arendst|micropython|meshtastic|Aircoookie|wled|adafruit|arduino|tasmota)\/[A-Za-z0-9._-]+\/releases(?:\/|$)/i, about: 'the ESP projects\' official GitHub releases' },
+  { kind: 'esp32', host: /^(?:ota\.tasmota\.com|micropython\.org|install\.wled\.me|firmware\.esphome\.io)$/, about: 'the ESP projects\' own download sites' },
+  { kind: 'router', host: /^(?:dl|docs)\.gl-inet\.com$/, about: 'GL.iNet\'s download centre and documentation' },
+  { kind: 'router', host: /^(?:downloads|firmware-selector)\.openwrt\.org$/, about: 'OpenWrt\'s downloads' },
+  { kind: 'phone', host: /^dl\.google\.com$/, path: /^\/dl\/android\/aosp\//, about: 'Google\'s factory images for Pixel phones' },
+  { kind: 'phone', host: /^developers\.google\.com$/, path: /^\/android\/images/, about: 'Google\'s factory images page' },
 ];
+/** A GitHub source is a project's releases: /<org>/<repo>/releases/… and nothing else under the org. */
+export const GITHUB_RELEASES = /^\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\/releases(?:\/|$)/;
+
+/**
+ * Whether an address is on a source the owner added on Settings → Bench: the same host, and the path
+ * starting with the prefix he gave.
+ * @param {URL} url - the address.
+ * @param {{host: string, path?: string}[]} extra - the owner's sources.
+ */
+export const ownSource = (url, extra = [], kind) => extra.some((entry) => entry && (!kind || entry.kind === kind) && url.hostname.toLowerCase() === String(entry.host ?? '').toLowerCase() && url.pathname.startsWith(String(entry.path || '/')) && (url.hostname.toLowerCase() !== 'github.com' || GITHUB_RELEASES.test(url.pathname)));
+
+/**
+ * One source the owner adds on the page, checked: an https address; its host and path prefix are kept.
+ * @returns {{host: string, path: string}} the entry.
+ */
+export function ownSourceOf(text, kind) {
+  if (!SOURCE_KINDS.includes(kind)) throw new Error('Say which kind of device the source is for: ESP32 boards, routers or phones.');
+  let url;
+  try {
+    url = new URL(String(text ?? '').trim());
+  } catch {
+    throw new Error('Give the source as a full https address, such as https://firmware.example.com/releases/.');
+  }
+  if (url.protocol !== 'https:') throw new Error('A firmware source must be an https address.');
+  if (url.username || url.password) throw new Error('A source address carries no name or password.');
+  if (!/^[a-z0-9.-]{1,200}$/i.test(url.hostname) || !url.hostname.includes('.')) throw new Error('That is not a web address Bench can use as a source.');
+  if (url.hostname.toLowerCase() === 'github.com' && !GITHUB_RELEASES.test(url.pathname)) throw new Error('A GitHub source is one project\'s releases page, such as https://github.com/<org>/<project>/releases/.');
+  return { host: url.hostname.toLowerCase(), path: url.pathname.slice(0, 300) || '/', kind };
+}
 
 /** @returns {string} why a firmware's source is not accepted, or ''. */
-export function sourceRefusal(source) {
+export function sourceRefusal(source, { extra = [], kind } = {}) {
   let url;
   try {
     url = new URL(String(source ?? ''));
@@ -42,8 +77,10 @@ export function sourceRefusal(source) {
   }
   if (url.protocol !== 'https:') return 'The firmware\'s source must be an https address.';
   const host = url.hostname.toLowerCase();
-  if (OFFICIAL.some((entry) => entry.host.test(host) && (!entry.path || entry.path.test(url.pathname)))) return '';
-  return `${host} is not the maker's or an official project's release page Bench knows (${OFFICIAL.map((entry) => entry.about).join(', ')}). Firmware from a forum, a chat or a download site is never flashed.`;
+  const list = OFFICIAL.filter((entry) => !kind || entry.kind === kind);
+  if (list.some((entry) => entry.host.test(host) && (!entry.path || entry.path.test(url.pathname)))) return '';
+  if (ownSource(url, extra, kind)) return '';
+  return `${host}${url.pathname.slice(0, 60)} is not ${kind ? `a source Bench knows for ${kind === 'esp32' ? 'ESP32 boards' : kind === 'router' ? 'routers' : 'phones'}` : 'a source Bench knows'} (${list.map((entry) => entry.about).join(', ')}), nor one the user added for them on Settings → Bench. Firmware from a forum, a chat, another kind of device's source or a download site is never flashed.`;
 }
 
 /** GitHub's own download hosts, where a release file's address on github.com leads. */
@@ -52,10 +89,10 @@ export const DOWNLOAD_HOSTS = /^(?:objects|release-assets|github-releases)\.gith
 export const PAGE_MAX = 4 * 1024 * 1024;
 
 /** @returns {string} why one step of the way to the page (the page, or where it leads) is not accepted, or ''. */
-function stepRefusal(url, first) {
+export function stepRefusal(url, first, extra = [], kind) {
   if (url.protocol !== 'https:') return 'the page must be reached over https';
   if (!first && DOWNLOAD_HOSTS.test(url.hostname.toLowerCase())) return '';
-  return sourceRefusal(url.href);
+  return sourceRefusal(url.href, { extra, kind });
 }
 
 /**
@@ -66,7 +103,7 @@ function stepRefusal(url, first) {
  * @param {{fetchFn?: typeof fetch, timeoutMs?: number}} [options] - the web (a stand-in in tests).
  * @returns {Promise<{ok: boolean, why: string}>} whether the page publishes this checksum.
  */
-export async function publishedOn(page, sum, { fetchFn = globalThis.fetch, timeoutMs = 20_000 } = {}) {
+export async function publishedOn(page, sum, { fetchFn = globalThis.fetch, timeoutMs = 20_000, extra = [], kind } = {}) {
   let url;
   try {
     url = new URL(String(page ?? ''));
@@ -75,7 +112,7 @@ export async function publishedOn(page, sum, { fetchFn = globalThis.fetch, timeo
   }
   if (typeof fetchFn !== 'function') return { ok: false, why: 'Bench cannot reach the web here' };
   for (let step = 0; step < 6; step += 1) {
-    const refused = stepRefusal(url, step === 0);
+    const refused = stepRefusal(url, step === 0, extra, kind);
     if (refused) return { ok: false, why: `${url.hostname}: ${refused}` };
     let response;
     try {

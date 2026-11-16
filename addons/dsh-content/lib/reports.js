@@ -3,6 +3,7 @@
  * Markdown, listed, and one copied as it is into the subject's research part, with its numbered
  * sources taken into the ledger. The Research tab itself is not changed.
  */
+import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -63,3 +64,50 @@ export const hostOf = (url) => {
     return '';
   }
 };
+
+/** The packet folder the Research tab writes beside a report (`<report>.packet/`), since step C2's Research side. */
+export const PACKET_SUFFIX = '.packet';
+const PACKET_FILES = ['claims.md', 'contradictions.md', 'timeline.md', 'leads.md', 'packet.json'];
+const PACKET_MAX = 2_000_000;
+
+/**
+ * A report's packet, when the Research tab wrote one: its files as text and its claims. Never through a
+ * link; undefined when there is none (older reports), so bringing a report works as before. A packet is
+ * taken only when it was made for this very report (its SHA-256 is in packet.json): a packet left over
+ * from another report of the same name is not.
+ * @param {string} folder - the Research tab's report folder.
+ * @param {string} name - the report's file name.
+ * @param {string} reportText - the report's text, as read.
+ * @returns {{files: Record<string, string>, claims: object[], sources: object[]} | undefined} the packet.
+ */
+export function readPacket(folder, name, reportText) {
+  const dir = join(folder, `${name}${PACKET_SUFFIX}`);
+  try {
+    const stat = lstatSync(dir);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) return undefined;
+  } catch {
+    return undefined;
+  }
+  const files = {};
+  for (const file of PACKET_FILES) {
+    try {
+      const path = join(dir, file);
+      const stat = lstatSync(path);
+      if (!stat.isFile() || stat.size > PACKET_MAX) continue;
+      files[file] = readFileSync(path, 'utf8');
+    } catch {
+      /* a part may be missing */
+    }
+  }
+  let data = {};
+  try {
+    data = JSON.parse(files['packet.json'] ?? '{}') ?? {};
+  } catch {
+    data = {};
+  }
+  const sum = createHash('sha256').update(String(reportText ?? '')).digest('hex');
+  if (data.reportSha256 !== sum) return undefined;
+  const claims = (Array.isArray(data.claims) ? data.claims : []).filter((claim) => claim && typeof claim.claim === 'string' && claim.claim.trim()).slice(0, 400);
+  const sources = (Array.isArray(data.sources) ? data.sources : []).filter((source) => source && Number.isInteger(source.n));
+  return Object.keys(files).length > 0 ? { files, claims, sources } : undefined;
+}

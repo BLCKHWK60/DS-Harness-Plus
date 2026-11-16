@@ -12,6 +12,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import z from '@deepseek-ai/schemastery';
+import { LEVEL_NAMES, VERIFIED_START, addressesIn, addressesOf, levelAllows, mixesOf, pickedLevel, verifiedList } from './lib/weblevel.js';
 import { IMAGE_TOOLS, WEB_TOOLS, goesOnline, imageToolsOffline, longRunMask, longToolsFor, oldWebMarks, parentIdOf, programGoesOnline, researchTab, rootOf, toolMaskFor, webFor, webReaching } from './lib/mask.js';
 import { trashedIds } from './lib/trashed.js';
 import { fromScheduler, scheduledModeId } from './lib/scheduled.js';
@@ -141,6 +142,16 @@ export const Config = z.object({
   pinOnFirstTurn: z.boolean().default(true),
   /** Per-session web switch as JSON: `{ sessionId: true | false }`. Missing = the mode's default (off in a no-tools mode). */
   sessionWeb: z.string().default('{}').volatile(),
+  /**
+   * Per-session Web level as JSON (plan step S1): `{ sessionId: 'verified' | 'open' | 'everything' | 'custom:<name>' }`.
+   * Missing = On as before: no limit beyond the tab's own (the owner's choice: the levels are added, the
+   * defaults kept). Only while the Web is on; lib/weblevel.js.
+   */
+  sessionWebLevel: z.string().default('{}').volatile(),
+  /** The verified list (Web level Verified): one host or address ending per line. Its own list; Settings → Modes. */
+  verifiedSources: z.string().default(VERIFIED_START).volatile(),
+  /** The owner's Custom Web mixes as JSON: `{ name: ['verified', 'sites', 'forums', 'channels', 'archives'] }`. Settings → Modes. */
+  webMixes: z.string().default('{}').volatile(),
   /** Obsolete: the old per-conversation Deep research switch, no longer offered or read (kept so older settings files still load). Old entries are pruned with the others. */
   sessionResearch: z.string().default('{}').volatile(),
   /** Obsolete since 0.59.0: each conversation's former Web level, moved into `sessionDepth` once (`depthMoved`). Kept so older settings files still load. */
@@ -686,6 +697,39 @@ export function apply(ctx, config) {
     return webFor({ tools: mode?.tools, isolated: mode?.isolated, off: toolsOff(sessionId), chosen: readObject(config.sessionWeb)[topOf(sessionId)] });
   }
 
+  /**
+   * The Web level a conversation picked (plan step S1), while its web is on. Undefined: On as before.
+   * Not in an isolated tab (Recon keeps its own rules) nor in a research tab (its web is fixed).
+   * @returns {{level: string, lanes?: string[], name?: string} | undefined}
+   */
+  function levelOf(sessionId) {
+    const top = topOf(sessionId);
+    const mode = modeOf(top);
+    if (!mode || mode.isolated || researchTab(mode.tools)) return undefined;
+    // The Web button on Off keeps a level for later; it applies only while the button is not on Off.
+    if (readObject(config.sessionWeb)[top] === false) return undefined;
+    const long = longRunOf(top);
+    if (long ? !long.web : !webOn(top, mode)) return undefined;
+    return pickedLevel(readObject(config.sessionWebLevel)[top], mixesOf(plain(config.webMixes)));
+  }
+
+  /** A command or program that goes online with no address to check, while a level below Everything is picked. */
+  const LEVEL_COMMAND = 'The conversation\'s Web level is below Everything, and this command or program goes online without a web address Modes can check, so it was not run. Use the web tools for pages, or tell the user: they can pick Everything (or On) on the Web button.';
+
+  /** @returns {string} the note a conversation gets about its Web level ('' for On as before). */
+  function levelSaid(sessionId) {
+    const level = levelOf(sessionId);
+    if (!level) return '';
+    const what = level.level === 'verified'
+      ? 'only sources on the verified list (official bodies, courts and registers, research publishers, wire services and public broadcasters, archives)'
+      : level.level === 'open'
+        ? 'verified sources and ordinary sites, not forums and boards, public groups and channels, or the Reddit archives'
+        : level.level === 'everything'
+          ? 'every kind of source'
+          : `the lanes of the user's Custom mix "${level.name}"`;
+    return `\n\nWeb level: ${level.level === 'custom' ? 'Custom' : LEVEL_NAMES[level.level]}. Pages you open must be ${what}. Search as usual; a result of another kind is a lead to name to the user, not to open. The user widens the level on the Web button.`;
+  }
+
   /** @returns {boolean} whether an isolated conversation's Web button is on Off (its own searching is then off). */
   function isolatedWebOff(sessionId) {
     return readObject(config.sessionWeb)[topOf(sessionId)] === false;
@@ -971,6 +1015,44 @@ export function apply(ctx, config) {
     });
   }
 
+  // The Web level (plan step S1): a tool that opens an address the conversation's level does not cover
+  // is refused, in the conversation and its helpers; so is a command or a program that goes online
+  // without an address to check (below Everything). On as before (no level picked) changes nothing.
+  ctx.effect(
+    () =>
+      ctx.tools.guard((exec) => {
+        let level;
+        try {
+          const id = exec?.agent?.id;
+          if (!id) return undefined;
+          level = levelOf(id);
+        } catch {
+          return undefined;
+        }
+        if (!level) return undefined;
+        try {
+          const name = String(exec.name ?? '');
+          const args = exec.arguments ?? {};
+          const verified = verifiedList(plain(config.verifiedSources));
+          let addresses = addressesOf(args);
+          if (SHELL_TOOLS.has(name) || name === PROGRAM_TOOL) {
+            const text = String(name === PROGRAM_TOOL ? (typeof args === 'string' ? args : args.code ?? '') : (typeof args === 'string' ? args : args.command ?? args.cmd ?? args.script ?? args.text ?? ''));
+            const written = addressesIn(text);
+            addresses = [...addresses, ...written];
+            const online = name === PROGRAM_TOOL ? programGoesOnline(text) : goesOnline(text);
+            if (online && written.length === 0 && level.level !== 'everything') return LEVEL_COMMAND;
+          }
+          for (const address of addresses) {
+            const decision = levelAllows({ ...level, verified, address });
+            if (!decision.ok) return decision.why;
+          }
+          return undefined;
+        } catch {
+          return 'Modes could not check this call against the conversation\'s Web level, so it was not run.';
+        }
+      }),
+    'modes: web level',
+  );
   // The app's PTC preset offers `run_code` whatever the mask says. With nothing to call, a program is refused,
   // so "Tools off" and a mode without tools mean the same in every preset.
   ctx.effect(
@@ -1122,7 +1204,7 @@ export function apply(ctx, config) {
               connectors: known.some((name) => name.startsWith('mcp__')),
               programs: viaPrograms(agent),
               programOnly: false,
-            })}${longNote}` : promptText({
+            })}${longNote}${levelSaid(agent.id)}` : promptText({
               mode,
               off: toolsOff(agent.id),
               alone,
@@ -1139,7 +1221,7 @@ export function apply(ctx, config) {
               // An isolated tab runs no programs; under PTC it is told it cannot work there instead.
               programs: mode.isolated ? '' : viaPrograms(agent),
               programOnly: mode.isolated === true && programOnly(ctx.tools, agent),
-            }) + isolatedRun;
+            }) + isolatedRun + levelSaid(agent.id);
           },
         }),
       'modes prompt section',
@@ -1810,7 +1892,7 @@ export function apply(ctx, config) {
       // Without an app home there is no trash (the Cowork sidebar keeps it there).
       const trashed = typeof home === 'function' ? trashedIds(home('trash', 'conversations')) : new Set();
       if (trashed === null) return;
-      const fields = ['sessionModes', 'sessionWeb', 'sessionResearch', 'sessionSearchDepth', 'sessionDepth', 'sessionLens', 'sessionTools', 'sessionHelpers', 'sessionIsolated', 'sessionToolSets', 'sessionSandboxBase'];
+      const fields = ['sessionModes', 'sessionWeb', 'sessionWebLevel', 'sessionResearch', 'sessionSearchDepth', 'sessionDepth', 'sessionLens', 'sessionTools', 'sessionHelpers', 'sessionIsolated', 'sessionToolSets', 'sessionSandboxBase'];
       const ids = new Set(fields.flatMap((field) => Object.keys(readObject(config[field]))));
       const gone = new Set();
       for (const sessionId of ids) {
@@ -2003,6 +2085,52 @@ export function apply(ctx, config) {
         return mode?.isolated ? isolatedWebOff(top) : !webOn(top, mode);
       } catch {
         return false;
+      }
+    },
+    /**
+     * The conversation's Web level (plan step S1): 'off', 'verified', 'open', 'everything' or 'custom';
+     * undefined for On as before (no limit beyond the tab's own), and in Recon and Research.
+     * @param {string} sessionId - Agent id.
+     * @returns {string | undefined}
+     */
+    webLevel(sessionId) {
+      try {
+        const mode = modeOf(topOf(sessionId));
+        if (!mode || mode.isolated || researchTab(mode.tools)) return undefined;
+        if (modes.webOff(sessionId)) return 'off';
+        return levelOf(sessionId)?.level;
+      } catch {
+        return undefined;
+      }
+    },
+    /**
+     * Whether the conversation's Web level lets a tool open an address (for tools that fetch inside
+     * themselves, such as Deep research). Undefined when no level is picked.
+     * @param {string} sessionId - Agent id.
+     * @param {string} address - a web address.
+     * @returns {boolean | undefined}
+     */
+    webAllows(sessionId, address) {
+      try {
+        const level = levelOf(sessionId);
+        if (!level) return undefined;
+        return levelAllows({ ...level, verified: verifiedList(plain(config.verifiedSources)), address }).ok;
+      } catch {
+        return undefined;
+      }
+    },
+    /**
+     * Whether Ultra Code is on for the conversation (its switch beside Effort, or Model Tiers' top
+     * effort step). Undefined when Model Tiers cannot say.
+     * @param {string} sessionId - Agent id.
+     * @returns {boolean | undefined}
+     */
+    ultraCode(sessionId) {
+      try {
+        const answer = ctx.get('modelTiers')?.ultraCode?.(topOf(sessionId));
+        return typeof answer === 'boolean' ? answer : undefined;
+      } catch {
+        return undefined;
       }
     },
     /**

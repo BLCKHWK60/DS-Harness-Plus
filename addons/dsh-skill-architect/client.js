@@ -12,7 +12,7 @@ window.__ModuleLoader__.load({
 
     const NS = 'skillArchitect';
     const DICT = { en: { 'section.title': 'Learned skills' }, zh: { 'section.title': '学到的技能' } };
-    const KIND_LABELS = { skill: 'Skill', fact: 'Fact for Memory', rule: 'Project rule', habit: 'Model habit', lesson: 'Tab lesson' };
+    const KIND_LABELS = { skill: 'Skill', fact: 'Fact for Memory', rule: 'Project rule', habit: 'Model habit', lesson: 'Tab lesson', recipe: 'Work loop recipe', version: 'Model version setting' };
     const WHERE = { local: 'on this Mac', network: 'on your own network', cloud: 'on the internet', unknown: 'somewhere unknown (treated as the internet)' };
 
     const CSS = `
@@ -77,6 +77,38 @@ window.__ModuleLoader__.load({
               skill.versions.filter((version) => version.n !== skill.current).reverse().map((version) => h('option', { key: version.n, value: version.n }, `${version.n}: ${new Date(version.at).toLocaleString()} ${version.why}`))))) : null);
     }
 
+    /** A recipe's lines as the owner reads them: its file, name, kind, the words that pick it, its shape, steps and stop. */
+    function recipeLines(recipe) {
+      if (!recipe) return [];
+      return [
+        `File: recipes/${recipe.id}.json`,
+        `Name: ${recipe.name ?? recipe.id}`,
+        `Kind of task: ${recipe.kind ?? '?'}`,
+        `Picked for goals with: ${(Array.isArray(recipe.when) ? recipe.when : []).join(', ') || '(no words)'}`,
+        ...(Array.isArray(recipe.shape) ? [`Answer shape: ${recipe.shape.join(', ')}`] : []),
+        ...(Array.isArray(recipe.steps) ? recipe.steps : []).map((step, index) => `Step ${index + 1} (${step.role ?? 'helper'}): ${step.does ?? ''} Checked by: ${step.check ?? ''}`),
+        `Stop when: ${recipe.stop ?? ''}`,
+      ];
+    }
+
+    /**
+     * A proposed recipe change, shown against the recipe it would replace: which file, which version, the
+     * words that pick it, and each line that changes (- now, + proposed). Nothing is saved before Accept.
+     */
+    function RecipeChange({ proposal }) {
+      const now = proposal.replaces;
+      const next = recipeLines(proposal.recipe);
+      const before = recipeLines(now);
+      const lines = now
+        ? [...before.filter((line) => !next.includes(line)).map((line) => `- ${line}`), ...next.filter((line) => !before.includes(line)).map((line) => `+ ${line}`)]
+        : next.map((line) => `+ ${line}`);
+      return h('div', null,
+        h('p', null, now
+          ? `Replaces recipes/${now.id}.json, version ${now.version} ("${now.name}"). Lines starting with - go, lines starting with + come.`
+          : `A new recipe file: recipes/${proposal.recipe.id}.json.`),
+        h('pre', { className: 'dsh-sa-quote', 'data-recipe-diff': '' }, lines.length > 0 ? lines.join('\n') : '(no change)'));
+    }
+
     function ProposalCard({ proposal, busy, act }) {
       const [name, setName] = useState(proposal.name ?? '');
       const [text, setText] = useState(proposal.text);
@@ -91,6 +123,9 @@ window.__ModuleLoader__.load({
         waiting && proposal.kind === 'skill' ? h('input', { className: 'dsh-sa-field', value: name, 'aria-label': 'Skill name', onChange: (event) => setName(event.target.value) }) : null,
         waiting ? h('textarea', { className: 'dsh-sa-field', rows: 4, value: text, 'aria-label': 'Proposal text', onChange: (event) => setText(event.target.value) }) : h('div', { className: 'dsh-sa-text' }, proposal.text),
         waiting && (proposal.kind === 'habit' || proposal.kind === 'lesson') ? h('p', null, 'Accepting marks it done; add the text yourself on Settings → Self-improve as your own lesson, on the model version it is about.') : null,
+        waiting && proposal.kind === 'version' ? h('p', null, 'Accepting marks it done; change the version yourself on Settings → Model Tiers → Model versions.') : null,
+        proposal.kind === 'recipe' && proposal.recipe ? h(RecipeChange, { proposal }) : null,
+        waiting && proposal.kind === 'recipe' ? h('p', null, 'Accepting saves it in Mission\'s recipes as a new version; the earlier one is kept in recipes/old. Runs with the work loop use it from the next one.') : null,
         (proposal.quotes ?? []).map((quote, index) => h('div', { key: index, className: 'dsh-sa-quote' }, quote)),
         proposal.quotesGone ? h('p', null, 'Its quotes are gone: the conversation was deleted.') : null);
     }

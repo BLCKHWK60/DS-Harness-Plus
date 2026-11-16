@@ -25,8 +25,8 @@
  * start no helpers.
  */
 import z from '@deepseek-ai/schemastery';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname, join, sep } from 'node:path';
 import { BENCH_CHECKS_TEXT, BENCH_NO_CHECKS_TEXT, ISOLATED_TEXT, RECON_CHECKS_TEXT, RECON_NO_CHECKS_TEXT, READ_ONLY_LONG_TEXT, READ_ONLY_TABS, RECON_LONG_TEXT, whyNot } from './lib/gate.js';
 import { COMMAND_TOOLS, MODES, MODE_LABELS, WRITE_TOOLS, decide, modeOf, rulesNote } from './lib/guard.js';
 import { exists, isInside, pathsOf, real, shown } from './lib/paths.js';
@@ -37,6 +37,7 @@ import { CONTEXT_MAX, LIMITS, LONG, ROLES, isLong, readLimits, readLong, readToo
 /** `/mission` words that look at, pause, carry on or end a Long run: they work in Data and Research too. */
 const LONG_WORDS = new Set(['', 'status', 'help', 'report', 'resume', 'go', 'continue', 'stop', 'pause', 'end', 'finish', 'checkpoints', 'list', 'checkpoint', 'back', 'rollback']);
 import { createAwake } from './lib/awake.js';
+import { CALLS_AT_ONCE, KINDS, loopFor, loopReaderRefuses, loopWanted, openRecipes, readRecipe } from './lib/loop.js';
 import { PROGRAM_TOOL, STEP_TOOL, WAIT_MS, createRunner, routeOf } from './runner.js';
 
 /** What the step tool says when it is called again on a run that has ended (the report was given the first time). */
@@ -90,6 +91,16 @@ export const Config = z.object({
   roles: z.string().default('{}').volatile(),
   /** The same per project, as JSON keyed by the project's folder. A project's choice wins over `roles`. */
   projects: z.string().default('{}').volatile(),
+  /**
+   * The work loop (Content and Bench plan, steps S3 to S5) without Ultra Code: the tabs (Modes' mode ids)
+   * where the owner switched it on, as JSON `["code", "research"]`. Empty: only Ultra Code puts it on.
+   */
+  loopTabs: z.string().default('[]').volatile(),
+  /**
+   * How many calls the work loop sends to a model server at once, per provider, as JSON `{ provider: 2 }`.
+   * Missing: 4 (the owner's default); each between 1 and 16. A server that runs one request at a time is set to 1.
+   */
+  callsAtOnce: z.string().default('{}').volatile(),
 });
 
 function plain(value) {
@@ -125,8 +136,22 @@ export function readSettings(config) {
     const roles = rolesOf(value);
     if (folder && Object.keys(roles).length > 0) projects[folder] = roles;
   }
+  let loopTabs = [];
+  try {
+    const parsed = JSON.parse(String(plain(config?.loopTabs) ?? '[]') || '[]');
+    loopTabs = Array.isArray(parsed) ? parsed.map(String).filter((tab) => /^[a-z0-9-]{1,40}$/.test(tab)).slice(0, 40) : [];
+  } catch {
+    loopTabs = [];
+  }
+  const callsAtOnce = {};
+  for (const [provider, count] of Object.entries(object(plain(config?.callsAtOnce))).slice(0, 50)) {
+    const number = Math.floor(Number(count));
+    if (provider && Number.isFinite(number)) callsAtOnce[provider] = Math.min(CALLS_AT_ONCE.max, Math.max(CALLS_AT_ONCE.min, number));
+  }
   return {
     enabled: plain(config?.enabled) !== false,
+    loopTabs,
+    callsAtOnce,
     defaultMode: MODES.includes(mode) ? mode : 'restricted',
     limits: readLimits({ maxItems: plain(config?.maxItems), maxTries: plain(config?.maxTries), maxReviews: plain(config?.maxReviews), maxSteps: plain(config?.maxSteps), waitMinutes: plain(config?.waitMinutes) }),
     roles: rolesOf(object(plain(config?.roles))),
@@ -309,6 +334,8 @@ export function apply(ctx, config) {
   // Other add-ons ask which permission mode a conversation is in ('' when none is on).
   /** The runner, made further down; the service reaches it through this. */
   const runnerRef = { current: undefined };
+  /** The recipes folder, set further down; the service reaches it through this. */
+  const recipesDirRef = { current: undefined };
   /** Long runs about to start: their tools are given before the first round (conversation id -> tools). */
   const pendingLong = new Map();
   /** Conversations whose Run button was pressed: their next message of yours starts a Long run (id -> {at, timer}). */
@@ -350,6 +377,68 @@ export function apply(ctx, config) {
       return tools;
     },
     view: (id) => runnerRef.current?.view(String(id ?? '')),
+    /** The work loop's recipes (plan step S3): plain files in `<home>/mission/recipes`. */
+    recipes: () => {
+      try {
+        return openRecipes(recipesDirRef.current?.() ?? '').recipes.map((recipe) => ({ id: recipe.id, name: recipe.name, kind: recipe.kind, version: recipe.version }));
+      } catch {
+        return [];
+      }
+    },
+    /**
+     * Save a changed recipe the owner accepted (Skill architect, plan step S8). Checked first; the earlier
+     * version is kept in `recipes/old/`. Never called without the owner's yes.
+     * @param {object} value - the recipe.
+     * @returns {{name: string, version: number, kept: string}} what was saved.
+     */
+    saveRecipe: (value) => {
+      const recipe = readRecipe(value);
+      if (!recipe) throw new Error('That is not a recipe Mission can use: it needs an id, a kind of work Mission knows, and steps.');
+      const dir = recipesDirRef.current?.() ?? '';
+      if (!dir || typeof home !== 'function') throw new Error('Mission has no folder for recipes here.');
+      openRecipes(dir);
+      // Only a real folder inside Mission's own folder, never through a link.
+      const here = lstatSync(dir);
+      if (here.isSymbolicLink() || !here.isDirectory() || !realpathSync(dir).startsWith(`${realpathSync(home('mission'))}${sep}`)) throw new Error('The recipes folder is a link or outside Mission\'s folder; Mission does not write there.');
+      const file = join(dir, `${recipe.id}.json`);
+      let now;
+      try {
+        now = lstatSync(file);
+      } catch {
+        now = undefined;
+      }
+      if (now && !now.isFile()) throw new Error('That recipe\'s file is a link or not a file; Mission does not write through it.');
+      let version = 1;
+      let kept = '';
+      if (now) {
+        let old;
+        try {
+          old = readRecipe(JSON.parse(readFileSync(file, 'utf8')));
+        } catch {
+          old = undefined;
+        }
+        version = (old?.version ?? 1) + 1;
+        const oldDir = join(dir, 'old');
+        mkdirSync(oldDir, { recursive: true, mode: 0o700 });
+        const oldStat = lstatSync(oldDir);
+        if (oldStat.isSymbolicLink() || !oldStat.isDirectory()) throw new Error('The folder for earlier recipes is a link; Mission does not write there.');
+        kept = join('old', `${recipe.id}-v${old?.version ?? 1}-${Date.now()}.json`);
+        renameSync(file, join(dir, kept));
+      }
+      // A new file beside it, then renamed into place: never written through what stands there.
+      const temp = join(dir, `.${recipe.id}.${process.pid}.${Date.now()}.tmp`);
+      writeFileSync(temp, `${JSON.stringify({ ...recipe, version }, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
+      renameSync(temp, file);
+      return { name: recipe.name, version, kept };
+    },
+    /** One recipe in full (for Skill architect's approval: what a change would replace), or undefined. */
+    recipe: (id) => {
+      try {
+        return openRecipes(recipesDirRef.current?.() ?? '').recipes.find((recipe) => recipe.id === String(id ?? ''));
+      } catch {
+        return undefined;
+      }
+    },
     ownsEffort: (agent) => {
       try {
         const parent = parentOf(agent);
@@ -541,7 +630,30 @@ export function apply(ctx, config) {
     return back;
   };
 
-  const runner = createRunner(ctx, { settings, pointsOf, afterCommand, warn, home });
+  const runner = createRunner(ctx, { settings, pointsOf, afterCommand, warn, home, callsAtOnce: (provider) => settings().callsAtOnce[String(provider ?? '')] ?? CALLS_AT_ONCE.start });
+  /** The recipes folder of the work loop (plain files the owner can read and edit). */
+  const recipesDir = () => (typeof home === 'function' ? join(home('mission'), 'recipes') : '');
+  recipesDirRef.current = recipesDir;
+  /**
+   * Whether the work loop is on for a run starting now (plan steps S3 to S5): Ultra Code on for the
+   * conversation, or the owner's switch for its tab. Undefined (the run as before) otherwise, and when
+   * Modes cannot say.
+   */
+  const loopOptions = (agent, goal, long = false) => {
+    try {
+      const modes = ctx.get('modes');
+      const tab = tabOf(agent.id);
+      // Research: only Ultra Code puts the loop on (its Long runs as today without it).
+      const { ultra, tabOn } = loopWanted({ ultra: modes?.ultraCode?.(agent.id) === true, tab, loopTabs: settings().loopTabs });
+      if (!ultra && !tabOn) return undefined;
+      // A Recon conversation writes nothing to the app's home: the starters are used from memory there.
+      const loop = loopFor({ ultra, tabOn, depth: String(modes?.depthOf?.(agent.id) ?? 'standard'), long, goal, recipes: openRecipes(isolated(agent.id) ? '' : recipesDir()).recipes });
+      return loop ? { ...loop, tab } : undefined;
+    } catch (error) {
+      warn(`the work loop could not be set up, so the run goes as before: ${String(error?.message ?? error)}`);
+      return undefined;
+    }
+  };
   runnerRef.current = runner;
 
   // ---- Long run (the owner's plan, Long run part, steps 45 to 63) ---------------------------------
@@ -987,7 +1099,7 @@ export function apply(ctx, config) {
       if (state.get(agent.id)?.mode !== mode || before) lead = `${(await switchOn(agent, mode)).split('\n')[0]}\n`;
       // A run whose helpers cannot write would use up its laps for nothing: refused, and says why.
       if (options.tools?.files !== false && levelOf(agent) === 'read-only') throw new Error('This conversation is still Read Only, so the run\'s helpers could not save anything. Set the access to Workspace Write (the chip in the chat box) and press Run again.');
-      said = `${await runner.start(agent, goalText, state.get(agent.id), { kind: 'long', long: { ...options, ...(before ? { restore: before } : {}) } })}${lead ? `\n${lead}` : ''}`;
+      said = `${await runner.start(agent, goalText, state.get(agent.id), { kind: 'long', long: { ...options, ...(before ? { restore: before } : {}) }, loop: loopOptions(agent, goalText, true) })}${lead ? `\n${lead}` : ''}`;
     } catch (error) {
       // No run came of it: a Read Only tab gets its level back at once (review finding 3).
       if (before && !runner.isOn(agent.id)) restoreAccess(agent, before);
@@ -1183,6 +1295,9 @@ export function apply(ctx, config) {
     // folder (small models wrote plan.json and review.json there).
     const reader = exec?.agent?.id && WRITE_TOOLS.has(exec.name) ? runner.readerOf(exec.agent.id) : '';
     if (reader) return { kind: 'deny', reason: `You are ${reader} of a run: change no files. Put your whole answer in your reply.` };
+    // The work loop's readers (attempts, the judge, checkers) and anything they start: no commands, no
+    // programs, no helpers of their own either, in every mode.
+    if (exec?.agent?.id && loopReaderRefuses(exec.name, WRITE_TOOLS, COMMAND_TOOLS) && runner.loopReaderOf(exec.agent.id)) return { kind: 'deny', reason: 'You are a reader of the work loop: you only read and answer. No commands, programs, file changes or helpers. Put your whole answer in your reply.' };
     let guard;
     try {
       guard = guardOf(exec?.agent);
@@ -1224,6 +1339,18 @@ export function apply(ctx, config) {
       const reason = String(error?.message ?? error).slice(0, 240);
       warn(`could not decide ${exec.name}: ${reason}`);
       return { kind: 'deny', reason: `Mission could not check this call (${reason}), so it was not run. The user can switch the mode off with /mission off.` };
+    }
+  });
+
+  // The pages a run's helpers opened, for the work loop's research checker (only runs with the loop on keep them).
+  ctx.on('tools/result', (exec, result) => {
+    try {
+      if (!exec?.agent || result?.isError === true || !/fetch|_read$|browse|navigate|open_url/i.test(String(exec.name ?? ''))) return;
+      const args = exec.arguments ?? {};
+      const addresses = [args.url, args.href, ...(Array.isArray(args.urls) ? args.urls : [])].filter((value) => typeof value === 'string' && /^https?:\/\//i.test(value));
+      if (addresses.length > 0) runner.noteOpened(ownerOf(exec.agent), addresses);
+    } catch {
+      /* the checker then finds the page not opened */
     }
   });
 
@@ -1464,7 +1591,7 @@ export function apply(ctx, config) {
               const wanted = named === 2 ? modeOf(`${first} ${rest[0]}`) : named === 1 ? modeOf(first) : state.get(agent.id)?.mode ?? settings().defaultMode;
               let lead = '';
               if (state.get(agent.id)?.mode !== wanted) lead = `${(await switchOn(agent, wanted)).split('\n')[0]}\n`;
-              const started = await runner.start(agent, goal, state.get(agent.id));
+              const started = await runner.start(agent, goal, state.get(agent.id), { loop: loopOptions(agent, goal) });
               const [head, ...more] = started.split('\n');
               return { kind: 'success', text: [head, lead.trim(), ...more].filter(Boolean).join('\n') };
             } catch (error) {

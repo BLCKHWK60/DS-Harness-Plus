@@ -22,6 +22,7 @@
  * routes (planner, analyst and writer: `plan`, searchers: `fast` by default).
  * Writing files is left to the model's own tools, so the sandbox applies.
  */
+import { DRAFTS, DRAFT_MAX, callsAtOnceFor, counterTask, judgeAccepted, judgePrompt, keyClaims, widened } from './lib/ultra.js';
 import z from '@deepseek-ai/schemastery';
 import { insideProgram, programMinutes, researchMinutes } from './lib/budget.js';
 import { searchProblem } from './lib/ready.js';
@@ -256,7 +257,34 @@ export function apply(ctx, config) {
    * @param {{role: string, prompt: string, label: string, parent: object, signal: AbortSignal}} spec - child spec.
    * @returns {Promise<{childId: string, text: string, stopReason: string}>} the child's answer.
    */
-  async function runChild({ role, prompt, label, parent, signal, run }) {
+  /** Ultra Code's judges: helpers with no tools (marked by the id the app gives back, and known by their task). */
+  const judges = new Set();
+  /** Conversations whose run is writing with a judge now: only their helpers are looked at by their task. */
+  const judging = new Set();
+  const isJudge = (agent) => {
+    if (!agent?.id) return false;
+    if (judges.has(agent.id)) return true;
+    // Only a helper of a conversation whose run has a judge at work pays for reading its task.
+    const parent = agent.header?.parentSession ?? agent.session?.header?.parentSession;
+    if (!parent || !judging.has(String(parent))) return false;
+    try {
+      const first = (agent.session?.deriveMessages?.() ?? []).find((message) => message?.role === 'user');
+      const text = typeof first?.content === 'string' ? first.content : Array.isArray(first?.content) ? first.content.map((block) => (block?.type === 'text' ? block.text : '')).join('\n') : '';
+      return /(?:^|\n)\s*RESEARCH_JUDGE\b/.test(text.slice(0, 4000));
+    } catch {
+      return false;
+    }
+  };
+  const NO_TOOLS = 'You are the judge of the research drafts: you have no tools. Answer with the report only.';
+  ctx.on('tools/pre-execute', async (exec, next) => (isJudge(exec?.agent) ? { kind: 'deny', reason: NO_TOOLS } : next()));
+  // And as a final refusal, after every other add-on.
+  try {
+    if (typeof ctx.tools?.guard === 'function') ctx.effect(() => ctx.tools.guard((exec) => (isJudge(exec?.agent) ? NO_TOOLS : undefined)), 'deep-research: the judge has no tools');
+  } catch {
+    /* the refusal above still holds */
+  }
+
+  async function runChild({ role, prompt, label, parent, signal, run, onStart }) {
     const subagents = ctx.get('subagents');
     if (!subagents) throw new Error('The sub-agent service is unavailable.');
     const route = routeFor(parent, role);
@@ -274,6 +302,7 @@ export function apply(ctx, config) {
       signal,
     });
     childIds.add(started.childId);
+    onStart?.(started.childId);
     if (run) {
       childRun.set(started.childId, run);
       run.helpers += 1;
@@ -459,13 +488,24 @@ export function apply(ctx, config) {
       } catch {
         chosen = undefined;
       }
-      const depth = capped(depthOf(chosen ?? plain(config.depth)), {
+      const tierCap = ctx.get('modelTiers')?.resolveTier?.(parent.id)?.maxSubagents;
+      const baseDepth = capped(depthOf(chosen ?? plain(config.depth)), {
         maxParallel: plain(config.maxParallel),
         maxSubquestions: plain(config.maxSubquestions),
         maxSources: plain(config.maxSources),
-        tierCap: ctx.get('modelTiers')?.resolveTier?.(parent.id)?.maxSubagents,
+        tierCap,
         askedSources: args?.maxSources,
       });
+      // Ultra Code (Model Tiers' switch, through Modes): the same loop, wider. Off or unknown: exactly today's.
+      let ultra = false;
+      try {
+        ultra = ctx.get('modes')?.ultraCode?.(parent.id) === true;
+      } catch {
+        ultra = false;
+      }
+      const depth = ultra
+        ? widened(baseDepth, { maxParallel: plain(config.maxParallel), tierCap, maxSubquestions: plain(config.maxSubquestions), callsAtOnce: callsAtOnceFor(ctx.get('settings'), routeFor(parent, plain(config.roles)?.searcher)?.provider) })
+        : baseDepth;
       const minutes = researchMinutes({ configured: Math.min(Number(plain(config.maxMinutes)) || depth.minutes, depth.minutes), asked: args?.maxMinutes, inProgram: insideProgram(exec.callId), programMaxMs });
       const deadline = startedAt + minutes * 60 * 1000;
       const maxSources = depth.sources;
@@ -519,6 +559,51 @@ export function apply(ctx, config) {
       let round = 0;
       let stoppedEarly = '';
 
+      /** Merge the helpers' answers: their queries, gaps and findings, with sources numbered once. */
+      const mergeOutcomes = (outcomes, extra = {}) => {
+      for (const outcome of outcomes) {
+        if (!outcome) continue;
+        for (const query of outcome.queries) if (!tried.includes(query)) tried.push(query);
+        for (const gap of outcome.gaps) if (!gaps.includes(gap)) gaps.push(gap);
+        for (const finding of outcome.findings) {
+          const url = normalizeUrl(finding?.url);
+          const claim = String(finding?.claim ?? '').trim();
+          if (!url || !claim) {
+            dropped += 1;
+            continue;
+          }
+          // What this finding's own helper did with the page. requireFetched decides from it alone:
+          // a finding is kept only when its own helper read the page, even if another helper did.
+          const status = statusOf(url, outcome.log);
+          if (plain(config.requireFetched) === true && notRead(status)) {
+            dropped += 1;
+            continue;
+          }
+          let entry = sourceIndex.get(url);
+          if (!entry) {
+            if (sources.length >= maxSources) {
+              dropped += 1;
+              continue;
+            }
+            entry = { n: sources.length + 1, url, status, host: new URL(url).hostname.replace(/^www\./, '') };
+            sources.push(entry);
+            sourceIndex.set(url, entry);
+          } else {
+            // Another helper cited the same page: the source (the Sources list) keeps the most certain of what they did.
+            entry.status = moreCertain(entry.status, status);
+          }
+          // The same claim from the same page, reported by two helpers, is kept once, with the more certain of their two statuses.
+          const same = findings.find((other) => other.n === entry.n && other.claim.toLowerCase() === claim.toLowerCase());
+          if (same) {
+            same.status = moreCertain(same.status, status);
+            continue;
+          }
+          // The finding keeps its own helper's status: the writer's label says what that helper did, not what another helper did with the page.
+          findings.push({ n: entry.n, host: entry.host, claim, quote: String(finding?.quote ?? '').trim().slice(0, 300), date: String(finding?.date ?? '').trim().slice(0, 40), status, ...extra });
+        }
+      }
+      };
+
       while (tasks.length > 0) {
         round += 1;
         run.stage = 'searching';
@@ -547,47 +632,7 @@ export function apply(ctx, config) {
         for (const task of tasks) asked.push(task.question);
 
         // 3. Merge and de-duplicate sources.
-        for (const outcome of outcomes) {
-          if (!outcome) continue;
-          for (const query of outcome.queries) if (!tried.includes(query)) tried.push(query);
-          for (const gap of outcome.gaps) if (!gaps.includes(gap)) gaps.push(gap);
-          for (const finding of outcome.findings) {
-            const url = normalizeUrl(finding?.url);
-            const claim = String(finding?.claim ?? '').trim();
-            if (!url || !claim) {
-              dropped += 1;
-              continue;
-            }
-            // What this finding's own helper did with the page. requireFetched decides from it alone:
-            // a finding is kept only when its own helper read the page, even if another helper did.
-            const status = statusOf(url, outcome.log);
-            if (plain(config.requireFetched) === true && notRead(status)) {
-              dropped += 1;
-              continue;
-            }
-            let entry = sourceIndex.get(url);
-            if (!entry) {
-              if (sources.length >= maxSources) {
-                dropped += 1;
-                continue;
-              }
-              entry = { n: sources.length + 1, url, status, host: new URL(url).hostname.replace(/^www\./, '') };
-              sources.push(entry);
-              sourceIndex.set(url, entry);
-            } else {
-              // Another helper cited the same page: the source (the Sources list) keeps the most certain of what they did.
-              entry.status = moreCertain(entry.status, status);
-            }
-            // The same claim from the same page, reported by two helpers, is kept once, with the more certain of their two statuses.
-            const same = findings.find((other) => other.n === entry.n && other.claim.toLowerCase() === claim.toLowerCase());
-            if (same) {
-              same.status = moreCertain(same.status, status);
-              continue;
-            }
-            // The finding keeps its own helper's status: the writer's label says what that helper did, not what another helper did with the page.
-            findings.push({ n: entry.n, host: entry.host, claim, quote: String(finding?.quote ?? '').trim().slice(0, 300), date: String(finding?.date ?? '').trim().slice(0, 40), status });
-          }
-        }
+        mergeOutcomes(outcomes);
 
         run.sources = sources.length;
         // 4. Between rounds: what is missing, what contradicts, and better queries for the next round.
@@ -622,6 +667,36 @@ export function apply(ctx, config) {
         );
       }
 
+      // 4b. Ultra Code: a counter-search for each key claim, by searchers of the same kind, in the time left.
+      let ultraNote = ultra ? 'Ultra Code: twice the sub-questions and helpers' : '';
+      if (ultra && Date.now() < deadline) {
+        run.stage = 'searching';
+        const key = keyClaims(findings, (finding) => !notRead(finding.status));
+        const triedBefore = [...tried];
+        const counters = await mapLimit(key, parallel, async (finding, index) => {
+          if (Date.now() >= deadline) return null;
+          const task = counterTask(finding.claim);
+          const label = `Research counter-search ${index + 1}/${key.length}`;
+          try {
+            const answer = await runChild({ role: roles.searcher, label, parent, run, signal: signalFor(), prompt: searchPrompt({ question, task, round: round + 1, depth, searchTools, fetchTools, tried: triedBefore, known: [finding.claim.slice(0, 160)], today, focus }) });
+            return { task, ...searchAnswer(await answerJson(answer.text, 'findings', label), depth.findings), log: fetchLog(answer.childId) };
+          } catch (error) {
+            failures.push(`counter-search ${index + 1}: ${error?.message ?? error}`);
+            return null;
+          }
+        });
+        mergeOutcomes(counters, { counter: true });
+        ultraNote += `, a counter-search on ${key.length} key claim${key.length === 1 ? '' : 's'}`;
+        key.forEach((finding, index) => {
+          const found = counters[index]?.findings?.length ?? 0;
+          if (found > 0) {
+            const note = `Counter-search on "${finding.claim.slice(0, 160)}" [${finding.n}]: ${found} finding${found === 1 ? '' : 's'} that may contradict or qualify it.`;
+            if (!conflicts.includes(note)) conflicts.push(note);
+          }
+        });
+        run.sources = sources.length;
+      }
+
       // 5. Write the report.
       const partial = Date.now() >= deadline;
       run.stage = 'writing';
@@ -633,7 +708,41 @@ export function apply(ctx, config) {
       } catch {
         lens = '';
       }
-      const writtenRaw = await runChild({ role: roles.writer, label: 'Research report', parent, run, signal: exec.signal, prompt: writePrompt({ question, findings, conflicts, gaps, today, followups: tab.followups === true, lens }) });
+      const writing = writePrompt({ question, findings, conflicts, gaps, today, followups: tab.followups === true, lens });
+      let writtenRaw;
+      if (!ultra) writtenRaw = await runChild({ role: roles.writer, label: 'Research report', parent, run, signal: exec.signal, prompt: writing });
+      else {
+        // Ultra Code: several drafts side by side, and a judge with no tools that picks or merges.
+        const drafts = (await mapLimit(Array.from({ length: DRAFTS }, (_, index) => index), Math.min(parallel, DRAFTS), async (index) => {
+          try {
+            return await runChild({ role: roles.writer, label: `Research report, draft ${index + 1} of ${DRAFTS}`, parent, run, signal: exec.signal, prompt: `${writing}\n\nDraft ${index + 1} of ${DRAFTS}, written side by side: take your own order and wording, within every rule above.` });
+          } catch (error) {
+            failures.push(`draft ${index + 1}: ${error?.message ?? error}`);
+            return null;
+          }
+        })).filter((draft) => draft?.text);
+        if (drafts.length === 0) throw new Error('No writer gave a report.');
+        for (const draft of drafts) draft.text = draft.text.slice(0, DRAFT_MAX);
+        writtenRaw = drafts[0];
+        ultraNote += `, ${drafts.length} draft${drafts.length === 1 ? '' : 's'} of the report`;
+        if (drafts.length > 1) {
+          let judgeId = '';
+          judging.add(parent.id);
+          try {
+            const judged = await runChild({ role: roles.writer, label: 'Research report, judge', parent, run, signal: exec.signal, prompt: judgePrompt({ question, drafts: drafts.map((draft) => draft.text) }), onStart: (id) => { judgeId = id; judges.add(id); } });
+            // Taken only when it ended normally, kept the citations and is of a sane length; else draft 1, and it says so.
+            if (judgeAccepted(judged, drafts.map((draft) => draft.text))) {
+              writtenRaw = { ...judged, text: judged.text.slice(0, DRAFT_MAX) };
+              ultraNote += ' and a judge with no tools that picked or merged them';
+            } else ultraNote += `; the judge's answer was not whole (${judged.stopReason || 'no text'}), so draft 1 is the report`;
+          } catch (error) {
+            failures.push(`judge: ${error?.message ?? error}`);
+          } finally {
+            judging.delete(parent.id);
+            if (judgeId) judges.delete(judgeId);
+          }
+        }
+      }
       // Source grades (step 64): the writer's primary list comes out of the text; the rest is worked out.
       const primaryList = primaryOf(writtenRaw.text);
       const written = { ...writtenRaw, text: primaryList.text };
@@ -644,6 +753,7 @@ export function apply(ctx, config) {
       const usedSources = sources.filter((source) => cited.has(source.n));
       const notes = [];
       notes.push(`Depth: ${depth.label}. ${round} round${round === 1 ? '' : 's'} of searching with up to ${parallel} helper${parallel === 1 ? '' : 's'} at once, ${asked.length} sub-question${asked.length === 1 ? '' : 's'}, ${sources.length} source${sources.length === 1 ? '' : 's'}.`);
+      if (ultraNote) notes.push(`${ultraNote}.`);
       if (stoppedEarly === 'enough') notes.push('The review after the last round found the question answered, so no further round was run.');
       if (stoppedEarly === 'time') notes.push('Not enough time was left for another round.');
       if (stoppedEarly === 'review failed') notes.push('The review between rounds failed, so no further round was run.');
@@ -663,7 +773,10 @@ export function apply(ctx, config) {
       run.followups = followupsOf(written.text);
       if (tab.save === true) {
         try {
-          run.file = String((await ctx.get('research')?.saveReport?.(parent.id, { question, text, focus, depth: depth.label })) ?? '');
+          // The packet beside the report (step C2): what the run already holds, put in tables by the Research
+          // tab. No model is asked for it, so it costs no time.
+          const packet = { findings: findings.slice(0, 400), conflicts: conflicts.slice(0, 100), gaps: gaps.slice(0, 100), sources: sources.map((source) => ({ n: source.n, url: source.url, host: source.host, status: source.status })), grades: Object.fromEntries(graded.grades) };
+          run.file = String((await ctx.get('research')?.saveReport?.(parent.id, { question, text, focus, depth: depth.label, packet })) ?? '');
           if (run.file) text += `\n\nSaved as ${run.file}`;
         } catch (error) {
           ctx.logger?.warn?.(`deep-research: the report could not be saved: ${error?.message ?? error}`);

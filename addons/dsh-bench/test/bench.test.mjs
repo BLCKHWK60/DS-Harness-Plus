@@ -295,7 +295,7 @@ test('links: Bench never writes through a link in its folder', () => {
 });
 
 /** The add-on on a stand-in app. */
-function plugin({ extraModes = '{}', enabled = true, folder = '', modeOf = () => MODE_ID, longChecks } = {}) {
+function plugin({ extraModes = '{}', enabled = true, folder = '', modeOf = () => MODE_ID, longChecks, modesExtra = {} } = {}) {
   const provided = {};
   const home = scratch();
   const registered = new Map();
@@ -310,7 +310,7 @@ function plugin({ extraModes = '{}', enabled = true, folder = '', modeOf = () =>
   };
   const when = new Map();
   const tools = { register(tool, options) { registered.set(tool.name, tool); when.set(tool.name, options?.when); return () => registered.delete(tool.name); } };
-  const services = { dshHomePath: (name) => join(home, name), settings, tools, modes: { get: modeOf, isolated: () => false }, agents: { list: () => [] } };
+  const services = { dshHomePath: (name) => join(home, name), settings, tools, modes: { get: modeOf, isolated: () => false, ...modesExtra }, agents: { list: () => [] } };
   const config = { enabled, folder, ...(longChecks === undefined ? {} : { longChecks }) };
   const guards = [];
   const ctx = {
@@ -455,5 +455,69 @@ test('the app gives a service to an add-on only when it asks for it: Bench asks 
   const bench = await import('../index.js');
   for (const service of ['tools']) {
     if (new RegExp(`ctx\\.${service}\\b`).test(source)) assert.ok(bench.inject?.includes(service), `index.js uses ctx.${service}, so it must be in inject`);
+  }
+});
+
+test('the catalogue and its recipes are written with the first card, once: the user\'s edits are kept', async () => {
+  const app = plugin();
+  try {
+    await settle();
+    assert.equal(existsSync(join(app.home, 'bench', 'catalogue.md')), false, 'nothing before a card');
+    assert.match((await app.call('bench_catalogue', {})).text, /- maker-boards: usb; Write; built: identify; read; write \(ESP32 with esptool\)/);
+    await app.call('bench_card', { name: 'Board' });
+    const file = join(app.home, 'bench', 'catalogue.md');
+    assert.match(readFileSync(file, 'utf8'), /^# The kinds of device Bench knows/);
+    assert.equal(readdirSync(join(app.home, 'bench', 'recipes')).filter((name) => name.endsWith('.md')).length, 22);
+    writeFileSync(file, 'my own notes');
+    await app.call('bench_card', { name: 'Board 2' });
+    assert.equal(readFileSync(file, 'utf8'), 'my own notes');
+    assert.match((await app.call('bench_catalogue', { family: 'drones-rc' })).text, /Never changed: failsafes, radio limits/);
+    assert.match((await app.call('bench_catalogue', { describe: 'Shelly Plug S' })).text, /Smart plugs, lights and sensors/);
+    assert.match((await app.call('bench_usb', {})).text, /Likely family \(a guess from its USB maker number 0x10c4, not proof\): Maker boards/);
+  } finally {
+    app.close();
+  }
+});
+
+test('the plan checker has no tools at all, in either rule; one write at a time across every device', async () => {
+  const app = plugin({ modeOf: (id) => (id === 'b1' ? MODE_ID : 'cowork') });
+  try {
+    await settle();
+    const checker = { id: 'chk-9', header: { parentSession: 'b1', cwd: '/x' }, session: { deriveMessages: () => [{ role: 'user', content: [{ type: 'text', text: 'Time sampled: now' }, { type: 'text', text: 'BENCH_CHECKER\nYou check a plan' }] }] } };
+    for (const name of ['bench_esp32', 'web_fetch', 'read']) {
+      assert.equal((await app.handlers['tools/pre-execute']({ agent: checker, name, arguments: {} }, async () => ({ kind: 'allow' }))).kind, 'deny', name);
+      assert.match(app.guards[0]({ agent: checker, name, arguments: {} }), /plan checker: you have no tools/);
+    }
+    const helper = { id: 'h-2', header: { parentSession: 'b1', cwd: '/x' }, session: { deriveMessages: () => [{ role: 'user', content: 'MISSION_WORK read the card' }] } };
+    assert.equal((await app.handlers['tools/pre-execute']({ agent: helper, name: 'bench_devices', arguments: {} }, async () => ({ kind: 'allow' }))).kind, 'allow', 'a Long run helper keeps Bench\'s tools');
+  } finally {
+    app.close();
+  }
+  const { makeKit } = await import('../lib/kit.js');
+  const busy = new Set();
+  const kit = makeKit({ enabled: () => true, bench: {}, find: async () => '', run: async () => ({}), approve: async () => 'allowed-once', isHelper: () => false, seen: () => ({}), busy });
+  let release;
+  const first = kit.exclusive(['board-1', 'write:all'], () => new Promise((done) => { release = done; }));
+  await assert.rejects(kit.exclusive(['router', 'write:all'], async () => 'x'), /Another write is running on a device right now/);
+  assert.equal(await kit.exclusive(['router'], async () => 'read'), 'read', 'reading another device goes on beside it');
+  release('done');
+  assert.equal(await first, 'done');
+  assert.equal(await kit.exclusive(['router', 'write:all'], async () => 'next'), 'next');
+});
+
+test('the note says the web level and Ultra Code when the Modes add-on gives them; nothing when it does not', () => {
+  const app = plugin({ modesExtra: { webLevel: () => 'verified', ultraCode: () => true } });
+  const plain = plugin();
+  try {
+    const sections = new Map();
+    const agentFor = (id) => ({ id, ctx: { effect: (fn) => fn(), systemPrompt: { section: (spec) => sections.set(id, spec) } } });
+    app.handlers['agent/created']({ agent: agentFor('b1') });
+    assert.match(sections.get('b1').text(), /Web access in this conversation: verified\. Firmware and write steps come only from/);
+    assert.match(sections.get('b1').text(), /Ultra Code is on: helpers may identify, read and diagnose side by side; only one write runs at a time/);
+    plain.handlers['agent/created']({ agent: agentFor('b2') });
+    assert.doesNotMatch(sections.get('b2').text(), /Web access in this conversation|Ultra Code/);
+  } finally {
+    app.close();
+    plain.close();
   }
 });

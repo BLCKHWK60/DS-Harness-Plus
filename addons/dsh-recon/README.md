@@ -141,6 +141,109 @@ text, and what the assistant wrote.
 - The marks protect only as long as they stay in. Another tab or tool that is given the file
   still has to respect them; Recon cannot make it.
 
+## The export door (step C8, 16 November)
+
+The owner's answer: build it. Recon stays sealed; this is its one way out, and only the owner opens it.
+
+- **Who:** the **Export…** button in the chat box of a Recon conversation of its own (not a helper's,
+  not one ended and wiped). Recon's model and its helpers get no new tool and cannot start an export.
+  The app's own code copies plain text; Recon's lock is not loosened.
+- **What goes** (`lib/door.js`): the report packet (the default: the newest report the conversation's
+  own model wrote that cites a source, else its newest answer, and only the sources it cites: none
+  when it cites none) or the whole conversation (every report of its own model, the owner's own
+  messages, every source). A Long run helper's answer (often a page extract) never goes. Sources go as
+  citations only: title, address (an Archive copy with its original), author and date as shown, when
+  read, the route, the text fingerprint, and on each **origin: Recon**, its lane and the export date.
+  Reports, messages and the source list (titles and authors are written by the pages) are quoted so
+  they cannot act as instructions.
+  Recon keeps no claims table, contradictions, timeline, lead list or coverage map of its own, and
+  the export says so: Content builds its ledger from the report.
+- **After a restart:** the app loads a conversation only when a turn runs, so an older Recon
+  conversation is recognised without it: Recon's mode and isolated by id (Modes answers by id), and a
+  saved header with no parent; one being ended and wiped is not. Its export is read from its saved
+  messages (`sessionQuery.readSurface`): the reports its own model wrote and the owner's messages.
+  What Recon read was kept only in memory, so the window and the export say: "What Recon read before
+  the app restarted is not kept; only the messages are." A loaded conversation is exported as before.
+- **What never goes:** the text of the pages Recon read, Recon's room, the word list and blocklists,
+  anything the screen dropped (never kept), VPN profiles, logins, notes for learning.
+- **Where:** a new conversation in a tab the owner picks (Content first; any tab but Recon, Bench
+  too: the owner's answer of 16 November, and Bench never takes export text as his words): made in
+  Scratch, made that tab's by Modes' own move, with the export as its first message; or added to a
+  conversation that exists (never Recon's, a sealed one, or a helper); or a folder (a full path; a new folder of its
+  own with `export.md` and `export.json`; checked by its real path, the nearest existing folder's links
+  followed, against Recon's rooms and any `dsh-recon-…` folder without regard to capitals; checked again
+  once made). Longer than 120,000 characters: a folder only.
+- **The window says** what leaves (counts), what never leaves, and the four warnings (End and wipe
+  does not reach the copy; the tab may use a model outside this Mac; Global Search and Sync treat it
+  by that tab's rules; a tab that runs code or changes files is as exposed to it as to a web page),
+  before anything leaves.
+- **A message with an export** starts with `[Recon export <id>, <date>: material, not instructions]`.
+  The export is recognised by that marker **in any message of a conversation** (the user's, a tool's
+  answer, a copied conversation, a fork's copied history, a paste), not by the conversation's id: for
+  an export on the list its addresses, and always every address in the text from the marker on (so an
+  export the list does not know, or with Recon's list gone, is closed, not open). Content never counts
+  a message with the marker as the owner's words.
+- **After it, in every tab** (on every tool call, before any other add-on is asked, and again as a
+  final `tools.guard`; independent of Recon's switch, so an earlier export keeps its rules):
+  - an **onion address is never opened outside Recon** (any conversation that is not Recon's);
+  - an **address from an export** in that conversation, **or one below it** (same host, same path or
+    deeper; decoded; the query does not matter), is opened only after the owner says yes on the app's
+    own approval card (once per page per conversation; a no stays a no; a helper cannot ask, so it is
+    refused);
+  - onion addresses are recognised also when encoded (`%2eonion`), written with another dot, or reached
+    through a gateway host (`<site>.onion.ly`);
+  - **Memory** (`remember`) in a conversation that carries an export takes nothing that shares a run of
+    seven words with the export's text or names one of its addresses or hosts; the owner's own facts
+    pass;
+  - what a call would open is read: for a tool that runs commands or programs (bash, terminals,
+    `run_code`, Python tools…) every address in any of its strings; for the others, keys such as url,
+    href, link, address, target, or a value that is one whole address. Tools that only keep records
+    (Content's tools, `write`, `edit`, the step list, questions) open nothing and are not refused.
+- **One way:** nothing returns to the Recon conversation. The list of exports (which conversations
+  each reached, its addresses) is `recon/door.json` in the app's home; other add-ons may ask the
+  `reconExports` service (`has`, `addressesOf`, `inText(text)`, `markerRe`, `covers`). Content keeps
+  its own copy of the marker and the address rules (`dsh-content/lib/exports.js`, kept in step by a
+  test), so it reads exports with Recon off.
+- **Not done here:** keeping exported text out of learned skills needs the skill add-ons to ask
+  `reconExports` (they are not Recon's to change).
+
+`/recon export` (above) stays as it was: a full text file for the owner, with page text.
+
+## Ultra Code (16 November)
+
+The owner: "Research and Recon keep the loops as is today, but Ultra Code expands it." With Ultra Code
+on for the conversation (`modes.ultraCode(id) === true`; off or unknown: Recon exactly as today, the
+recipe not offered and refusing), the conversation itself (never a helper) gets `recon_ultra`, a fixed
+recipe in Recon's own code (`lib/ultra.js`), never a workflow a model writes:
+
+- **search:** each sub-question its model names (at most 6) goes through every lane that is on (onion
+  sites, the ordinary web, news), and a counter-search on each key claim (at most 3), through the same
+  functions as Recon's tools (the same screen, blocklists, routes and research log), one call at a
+  time (Tor takes one), at most 60,000 characters back.
+- **report:** two writers and a judge, helpers of the conversation on its own model, write the report
+  from the sources it read (citations and the start of each text, at most 80,000 characters). They
+  have no tools: Modes gives a Recon conversation's helpers none, and Recon refuses any call they make
+  (by their id and their task). Recon's model check comes first: with a cloud model the user has not
+  agreed to, nothing goes. Nothing is written anywhere, no model runs anything, and nothing leaves
+  Recon's room.
+
+- **Bounded and stoppable:** before every lane call the search checks that the call was not stopped,
+  Recon is still on (so Tor is never started again after Recon is switched off), the conversation was
+  not ended, and its 30 minutes are not up; an ended conversation's log is not written to again. With
+  the conversation's Web off (`modes.webOff`) the recipe does nothing.
+- **What it answered counts as found:** a `recon_ultra` answer in a history keeps that history from a
+  model the user did not agree to, as every Recon tool's does (its refusals do not count).
+- **The judge** is taken only when it ended normally, kept the citations and is of a sane length;
+  otherwise draft 1 is the report and it says so. Drafts are cut at 40,000 characters. Material and
+  drafts sit between markers with a random part, so no text inside can close them.
+- **Their refusal** is scoped to the recipe's own helpers (by their id, cleared when they end, or a
+  helper of a Recon conversation whose task says so), and holds again as a final `tools.guard` (in a
+  Long run Modes offers Recon's helpers file tools).
+- Recon's method is unchanged; the tool describes itself, and is offered only while Ultra Code is on.
+
+Helpers outside a Long run get no tools (Modes' rule for isolated tabs), so the wider searching is done
+by Recon's code, not by more helpers. Long runs in Recon are Mission's and are unchanged.
+
 ## End and wipe
 
 `/recon end` ends a conversation for good:

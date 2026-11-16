@@ -195,13 +195,13 @@ test('a version that stands alone leaves out the tier wording but keeps the rule
 // ---- isolated conversations and conversations without tools ---------------------------------
 
 /** Run the add-on on a stand-in host and give back its service, with one conversation on `prov-a/model-x`. */
-async function running(config, { isolated = false, noTools = false, depth, prompt = false } = {}) {
+async function running(config, { isolated = false, noTools = false, depth, prompt = false, parent } = {}) {
   const { apply } = await import('../index.js');
   let current = { provider: 'prov-a', model: 'model-x' };
   let section;
   const effect = (make) => { const undo = make(); return typeof undo === 'function' ? undo : () => {}; };
   const agent = {
-    id: 's1', session: {},
+    id: 's1', session: {}, ...(parent ? { header: { parentSession: parent } } : {}),
     model: { current: () => current, select: (route) => { current = { provider: route.provider, model: route.model }; } },
     // With `prompt`, the conversation is open when the add-on loads and its tier section is captured.
     ...(prompt ? { ctx: { effect, systemPrompt: { section: (spec) => { section = spec; return () => {}; } } } } : {}),
@@ -413,4 +413,115 @@ test('a Long run\'s helpers keep the effort Mission set by role; every other age
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.equal(selected.some(([id]) => id === 'h1'), false, 'the Long run helper keeps Mission\'s effort');
   assert.ok(selected.some(([id]) => id === 'h2'), `the other agent gets the tier's effort (${JSON.stringify(selected)})`);
+});
+
+test('Ultra Code is a switch beside Effort (plan step S1): off unless switched on; on, the conversation and its helpers get the Ultra Code words at the effort set; the top effort step keeps working', async () => {
+  const { apply, testing } = await import('../index.js');
+  const { tierPrompt, readDeck } = testing;
+  const base = { ...readDeck({}).tiers.sonnet, provider: 'p', model: 'm', effort: 'medium', subagents: true };
+  const off = tierPrompt(base, 3, true, {}, {});
+  assert.doesNotMatch(off, /Ultra Code/, 'off: as before');
+  const on = tierPrompt(base, 3, true, {}, { ultra: true });
+  assert.match(on, /Effort: Medium, with Ultra Code switched on\./);
+  assert.match(on, /\*\*Ultra Code\.\*\* Decompose the task before acting/);
+  assert.match(on, /You own the final synthesis and verification/);
+  // The switch alone never brings the top step's exhaustive reasoning or its checks (review finding 7).
+  for (const effort of ['off', 'low', 'medium', 'high', 'extra-high']) {
+    const without = tierPrompt({ ...base, effort }, 3, true, {}, {}).split('\n');
+    const added = tierPrompt({ ...base, effort }, 3, true, {}, { ultra: true }).split('\n').filter((line) => !without.includes(line));
+    // Only the Effort line's mention and the three lines on spreading the work; nothing about thinking or checks.
+    assert.equal(added.length, 4, `${effort}: ${JSON.stringify(added)}`);
+    assert.match(added[0], /with Ultra Code switched on/, effort);
+    assert.match(added.slice(1).join('\n'), /^\*\*Ultra Code\.\*\* Decompose the task before acting[\s\S]*Cap concurrent children at 3[\s\S]*You own the final synthesis/, effort);
+    for (const line of added) assert.doesNotMatch(line, /Reason exhaustively|Before finishing, run the narrowest checks/, effort);
+  }
+  // A tier without sub-agents runs no helpers: nothing is said, and the Effort line does not claim the switch.
+  const solo = tierPrompt({ ...base, subagents: false }, 3, true, {}, { ultra: true });
+  assert.equal(solo, tierPrompt({ ...base, subagents: false }, 3, true, {}, {}), 'the same words as with the switch off');
+  assert.doesNotMatch(solo, /Ultra Code/);
+  assert.match(tierPrompt({ ...base, effort: 'ultra' }, 3, true, {}, {}), /\*\*Ultra Code\.\*\* Decompose the task before acting/, 'the top step as before');
+  assert.doesNotMatch(tierPrompt({ ...base, effort: 'ultra' }, 3, true, {}, { ultra: true }), /with Ultra Code switched on/);
+  // The service: the switch, or the top effort step.
+  let provided;
+  const make = (id, parent) => ({ id, session: { header: { id, ...(parent ? { parentSession: parent } : {}) } }, header: { id, ...(parent ? { parentSession: parent } : {}) }, model: { current: () => ({ provider: 'p', model: 'm' }), select: () => {} } });
+  const agents = new Map([['c1', make('c1')], ['h1', make('h1', 'c1')], ['h2', make('h2', 'h1')], ['c2', make('c2')]]);
+  const services = { agents: { get: (id) => agents.get(id), list: () => [...agents.values()] }, modes: { isolated: () => false, noTools: () => false } };
+  const ctx = {
+    on: () => () => {}, effect: (fn) => { const undo = fn(); return typeof undo === 'function' ? undo : () => {}; }, provide: (name, value) => { if (name === 'modelTiers') provided = value; }, get: (name) => services[name], inject: () => {},
+    logger: { warn: () => {}, info: () => {}, debug: () => {} }, loader: {}, tools: { register: () => () => {} },
+  };
+  apply(ctx, { sessionUltra: JSON.stringify({ c1: true, c2: 'yes' }) });
+  assert.equal(provided.ultraCode('c1'), true);
+  assert.equal(provided.ultraCode('h1'), true, 'a helper follows its conversation');
+  assert.equal(provided.ultraCode('h2'), true, 'a helper\'s helper too (review finding 8)');
+  assert.equal(provided.ultraCode('c2'), false, 'only true counts');
+  assert.equal(provided.ultraCode('nobody'), false);
+  // The panel's switch is beside Effort, and writes this conversation only.
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  assert.match(client, /h\(Switch, \{ checked: ultraOn \|\| effort === 'ultra', label: 'Ultra Code'/);
+  assert.match(client, /activeTier && activeTier\.subagents === false\s*\? 'This tier runs no helpers/);
+  assert.match(client, /if \(ultraOn\) delete next\[sessionId\];\s*else next\[sessionId\] = true;\s*return \[\{ op: 'set', path: \['sessionUltra'\], value: JSON\.stringify\(next\) \}\];/);
+});
+
+test('teams per tier for the work loop (plan step S6): lead, helpers, checker, judge; a saved version brings its model and output limit; a team for a tier only', async () => {
+  const { apply, testing } = await import('../index.js');
+  const config = {
+    modelVersions: JSON.stringify([{ id: 'precise', name: 'Precise', provider: 'local', model: 'small', temperature: 0.1, maxTokens: 2000 }]),
+    teams: JSON.stringify({
+      sonnet: { lead: { provider: 'cloud', model: 'big' }, helpers: [{ provider: 'local', model: 'small' }, { provider: 'local', model: 'other' }, { provider: '', model: 'x' }], checker: { version: 'precise' }, judge: { version: 'gone' } },
+      broken: 'nonsense',
+    }),
+  };
+  const teams = testing.readTeams(config);
+  assert.deepEqual(Object.keys(teams), ['sonnet']);
+  assert.equal(teams.sonnet.helpers.length, 2, 'a member without a model is left out');
+  assert.deepEqual(teams.sonnet.checker, { provider: 'local', model: 'small', version: 'precise', maxTokens: 2000 });
+  assert.equal(teams.sonnet.judge, undefined, 'a version that does not exist is no member');
+  let provided;
+  const agents = new Map([['c1', { id: 'c1', header: { id: 'c1' }, model: { current: () => ({ provider: 'p', model: 'm' }), select: () => {} } }]]);
+  const services = { agents: { get: (id) => agents.get(id), list: () => [...agents.values()] }, modes: { isolated: () => false, noTools: () => false } };
+  const ctx = {
+    on: () => () => {}, effect: (fn) => { const undo = fn(); return typeof undo === 'function' ? undo : () => {}; }, provide: (name, value) => { if (name === 'modelTiers') provided = value; }, get: (name) => services[name], inject: () => {},
+    logger: { warn: () => {}, info: () => {}, debug: () => {} }, loader: {}, tools: { register: () => () => {} },
+  };
+  apply(ctx, { ...config, activeTiers: JSON.stringify({ c1: { tier: 'sonnet', provider: 'p', model: 'm', effort: 'medium' } }) });
+  assert.deepEqual({ ...provided.teamRoute('c1', 'lead') }, { provider: 'cloud', model: 'big' });
+  assert.deepEqual({ ...provided.teamRoute('c1', 'helper', 0) }, { provider: 'local', model: 'small' });
+  assert.deepEqual({ ...provided.teamRoute('c1', 'helper', 3) }, { provider: 'local', model: 'other' }, 'attempts take turns');
+  assert.deepEqual({ ...provided.teamRoute('c1', 'checker') }, { provider: 'local', model: 'small', maxTokens: 2000 });
+  assert.equal(provided.teamRoute('c1', 'judge'), null);
+  assert.equal(provided.teamRoute('nobody', 'lead'), null);
+});
+
+test('review fixes: the switch\'s words go to the conversation only, never to a helper (which would start helpers again); off with Ultra auto-delegation off; ultraCode still follows the chain', async () => {
+  const tiers = { sonnet: { provider: 'prov-a', model: 'model-x', effort: 'medium' } };
+  const top = await running({ tiers, sessionUltra: JSON.stringify({ s1: true }) }, { prompt: true });
+  assert.match(top.text(), /\*\*Ultra Code\.\*\* Decompose the task before acting/);
+  const helper = await running({ tiers, sessionUltra: JSON.stringify({ c0: true }) }, { prompt: true, parent: 'c0' });
+  assert.doesNotMatch(helper.text(), /Ultra Code/, 'a helper is not told to start helpers');
+  assert.equal(helper.service.ultraCode('s1'), true, 'it still counts as Ultra Code for the run');
+  const manual = await running({ tiers, sessionUltra: JSON.stringify({ s1: true }), ultraAutoDelegate: false }, { prompt: true });
+  assert.doesNotMatch(manual.text(), /Ultra Code/, 'auto-delegation off: the switch adds no delegation words');
+});
+
+test('the owner\'s answer: your own tiers get a team too, edited on their card', async () => {
+  const { apply } = await import('../index.js');
+  let provided;
+  const agents = new Map([['c1', { id: 'c1', header: { id: 'c1' }, model: { current: () => ({ provider: 'p', model: 'm' }), select: () => {} } }]]);
+  const services = { agents: { get: (id) => agents.get(id), list: () => [...agents.values()] }, modes: { isolated: () => false, noTools: () => false } };
+  const ctx = {
+    on: () => () => {}, effect: (fn) => { const undo = fn(); return typeof undo === 'function' ? undo : () => {}; }, provide: (name, value) => { if (name === 'modelTiers') provided = value; }, get: (name) => services[name], inject: () => {},
+    logger: { warn: () => {}, info: () => {}, debug: () => {} }, loader: {}, tools: { register: () => () => {} },
+  };
+  apply(ctx, {
+    customTiers: JSON.stringify([{ id: 'my-writer', name: 'My writer', short: 'MW', role: 'Writing', provider: 'p', model: 'm', effort: 'medium', order: 10 }]),
+    activeTiers: JSON.stringify({ c1: { tier: 'my-writer', provider: 'p', model: 'm', effort: 'medium' } }),
+    teams: JSON.stringify({ 'my-writer': { lead: { provider: 'cloud', model: 'big' } } }),
+  });
+  assert.equal(provided.resolveTier('c1')?.id, 'my-writer');
+  assert.deepEqual({ ...provided.teamRoute('c1', 'lead') }, { provider: 'cloud', model: 'big' });
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  const card = client.slice(client.indexOf('function CustomTierCard('), client.indexOf('function CustomTiersEditor('));
+  assert.match(card, /h\(TeamEditor, \{ tierId: tier\.id, teams, versions, onChange: onTeams \}\)/);
+  assert.match(client, /onTeams: saveTeams,\n\s*\}\),/);
 });

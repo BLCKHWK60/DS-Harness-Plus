@@ -5,7 +5,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { gate, lookOnlyFamily, powerOf, powerRefusal } from '../lib/gate.js';
@@ -83,7 +83,7 @@ test('the ESP32 recipe: chip details, sizes, addresses, official sources only, p
   assert.equal(sourceRefusal('https://github.com/esphome/esphome/releases/download/2026.1.0/x.bin'), '');
   assert.equal(sourceRefusal('https://dl.espressif.com/x.bin'), '');
   assert.equal(sourceRefusal('https://micropython.org/resources/firmware/ESP32_GENERIC.bin'), '');
-  assert.match(sourceRefusal('https://github.com/someone/fork/releases/x.bin'), /not the maker's or an official project's/);
+  assert.match(sourceRefusal('https://github.com/someone/fork/releases/x.bin'), /is not a source Bench knows/);
   assert.match(sourceRefusal('https://forum.example.com/attachment/123'), /never flashed/);
   assert.match(sourceRefusal('http://dl.espressif.com/x.bin'), /https/);
   assert.match(protectedHit(0x0, 0x1000), /loader/);
@@ -225,3 +225,45 @@ test('the guard is an allow-list: every way to run a command and every tool Benc
   for (const name of ['bench_usb', 'bench_esp32', 'web_search', 'web_fetch', 'pdf_read', 'library_search', 'todo_write', 'ask_user_question', 'mission_step', 'diagram_draw', 'remember']) assert.equal(decide(name), '', name);
 });
 
+
+test('the power rule: no write on the Mac\'s battery below 30% (the owner\'s choice)', () => {
+  assert.equal(powerRefusal({ battery: true, percent: 30 }), '');
+  assert.equal(powerRefusal({ battery: true, percent: 35 }), '');
+  assert.match(powerRefusal({ battery: true, percent: 29 }), /below 30%/);
+  assert.equal(powerRefusal({ battery: false, percent: 5 }), '', 'plugged in');
+});
+
+test('the catalogue: 22 families with doors, deepest level and what is built; guesses from what a device reports; radio limits and failsafes never changed', async () => {
+  const { FAMILIES, catalogueText, familiesOf, neverChanged, recipeText } = await import('../lib/catalogue.js');
+  assert.equal(FAMILIES.length, 22);
+  assert.equal(new Set(FAMILIES.map((family) => family.id)).size, 22);
+  for (const family of FAMILIES) {
+    assert.ok(family.name && family.kinds && family.doors.length && family.deepest && family.built.length, family.id);
+    assert.match(recipeText(family), new RegExp(`^# Recipe: ${family.name.replace(/[()]/g, '.')}`));
+  }
+  assert.equal(familiesOf({ vendorId: 0x10c4 })[0].family.id, 'maker-boards');
+  assert.equal(familiesOf({ name: 'Bosch Kiox 300' })[0].family.id, 'bikes-scooters-cars');
+  assert.ok(FAMILIES.find((family) => family.id === 'bikes-scooters-cars').lookOnly);
+  assert.equal(familiesOf({ name: 'Living room', type: '_ipp._tcp' })[0].family.id, 'printers-scanners');
+  assert.equal(familiesOf({ name: 'x', services: ['180D'] })[0].family.id, 'wearables-health');
+  assert.match(catalogueText(), /\| Drones and radio control \|[\s\S]*Failsafes and radio limits are look-only/);
+  for (const key of ['wireless.radio0.txpower', 'wifi_country_code', 'failsafe_throttle', 'rth_altitude', 'max_speed', 'lora_frequency', 'region']) assert.match(neverChanged(key), /never changes it/, key);
+  assert.equal(neverChanged('screen_brightness'), '');
+  assert.match(settingRefusal({ namespace: 'global', key: 'ble_tx_power_level', value: '1', change: true }), /radio limit or a safety setting/);
+});
+
+test('downloads: at most 8 GB (the owner\'s choice); a larger file is refused before anything is written', async () => {
+  const { FIRMWARE_MAX, download } = await import('../lib/firmware.js');
+  assert.equal(FIRMWARE_MAX, 8 * 1024 * 1024 * 1024);
+  const folder = scratch();
+  try {
+    const fetchFn = async () => ({ status: 200, headers: { get: (name) => (name === 'content-length' ? String(9 * 1024 * 1024 * 1024) : null) }, arrayBuffer: async () => new ArrayBuffer(1) });
+    await assert.rejects(download({ url: 'https://dl.gl-inet.com/x.bin', folder, fetchFn, kind: 'router' }), /more than Bench downloads/);
+    assert.deepEqual(readdirSync(folder), []);
+    const small = async () => ({ status: 200, headers: { get: (name) => (name === 'content-length' ? String(7 * 1024 * 1024 * 1024) : null) }, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer });
+    const got = await download({ url: 'https://dl.gl-inet.com/x.bin', folder, fetchFn: small, kind: 'router' });
+    assert.equal(got.bytes, 3, '7 GB announced is within the limit');
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});

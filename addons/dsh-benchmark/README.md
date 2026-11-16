@@ -107,3 +107,9 @@ Real models (every answer was scripted), long jobs, the `/bench` command in the 
 - **A guide, not proof:** Benchmark puts the system text in front of the message; in a conversation a Lens will be in the instructions (step 26). Only the owner can run it on his models; nothing reaches his conversations.
 - Tested: the grader (pass, fail, letter case, across lines, a prompt without phrases), the other graders unchanged, the suite (18 prompts, the approved texts, valid with a judge). Lab: the button added the suite with no problem shown.
 
+
+## Compare ways of working (Content and Bench plan, step S7)
+
+**Settings → Benchmark → Compare ways of working** (or `/bench methods <suite> <small> <large>`) runs a suite's prompts six ways (`lib/methods.js`): the small model in one pass; the small model with the work loop at Standard and at Thorough, with Ultra Code off and on; and the large model in one pass. The loop here is Mission's idea: attempts (several only with Ultra Code), a vote where answers can be compared or the judge model's pick, a check by the judge model (never the grader, which knows the answer) with one retry in the checker's words, and checking questions at Thorough. The grader scores only the final answer. The scorecard gives mean score, seconds, tokens and calls per kind of task and way; the advice says where the loop pays (a gain of at least the export's score tolerance). **Accept** records it (`acceptedMethods`) and Settings → Mission shows it; nothing is switched on by itself. Tests: `test/methods.test.mjs`.
+
+Review fixes: a way that fails or times out scores 0 for that task (it is still counted as an error), so giving up never looks better; the cost of the calls made before a failure counts toward the spend limit; when the same judge model checks inside the loop and grades judge-graded prompts, the advice says so and suggests a different judge.

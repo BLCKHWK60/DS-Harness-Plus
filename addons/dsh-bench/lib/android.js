@@ -11,6 +11,7 @@
  */
 import { clean } from './usb.js';
 import { mask } from './cards.js';
+import { neverChanged } from './catalogue.js';
 
 export const SERIAL = /^[A-Za-z0-9._:-]{1,64}$/;
 export const NAMESPACES = ['system', 'secure', 'global'];
@@ -88,6 +89,8 @@ export function settingRefusal({ namespace, key, value, change = false }) {
   if (!KEY.test(String(key ?? ''))) return 'A setting\'s name is letters, digits, dots and underscores only.';
   if (REFUSED_KEYS.test(key)) return `${key} is an identifier or one of the phone's protections (network, debugging, lock, accessibility and the like); Bench does not touch it.`;
   if (!change) return '';
+  const never = neverChanged(key);
+  if (never) return never;
   const allowed = CHANGEABLE[namespace]?.[key];
   if (!allowed) return `Bench changes only these settings: ${CHANGEABLE_TEXT}. ${namespace} ${key} is read only.`;
   if (!VALUE.test(String(value ?? '')) || !allowed.test(String(value ?? ''))) return `${String(value ?? '').slice(0, 40)} is not a value ${key} takes.`;

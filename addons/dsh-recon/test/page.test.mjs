@@ -161,6 +161,8 @@ check('the browser half loads', page?.id === '@local/dsh-recon' && typeof page.f
 
 const module = page.factory((name) => {
   if (name === 'react') return React;
+  // The export window (step C8) opens over the page.
+  if (name === 'react-dom') return { createPortal: (node) => node };
   throw new Error(`unexpected require(${name})`);
 });
 

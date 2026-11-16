@@ -2,7 +2,7 @@
  * Files made for a Scratch conversation (Scratch part, step 40): which report files a Scratch thread
  * made, so they go when the thread is deleted for good. Kept in one small JSON file of this add-on.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, sep } from 'node:path';
 
 /** At most this many files are remembered (the oldest are forgotten first: their files simply stay). */
@@ -58,7 +58,9 @@ export function removeOwned(files, folder, extras = []) {
     if (!insideFolder(path, folder)) continue;
     for (const target of [path, ...extras.map((extra) => `${path}${extra}`)]) {
       if (!existsSync(target)) continue;
-      rmSync(target, { force: true });
+      // A sidecar folder (a report's packet) goes with its files; never through a link.
+      const stat = lstatSync(target);
+      rmSync(target, { force: true, recursive: target !== path && stat.isDirectory() && !stat.isSymbolicLink() });
       if (target === path) removed += 1;
     }
   }

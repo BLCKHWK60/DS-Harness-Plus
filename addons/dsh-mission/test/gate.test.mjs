@@ -39,9 +39,10 @@ test('the gate: isolated refuses all but taking back, and a run needs the tier\'
 });
 
 /** Mission on stand-in services. */
-function running() {
+function running(config = {}) {
   const home = fresh();
   const isolatedIds = new Set();
+  const ultraIds = new Set();
   const tabs = {};
   const tiers = {};
   const presets = [];
@@ -70,6 +71,8 @@ function running() {
       longTools: (id) => ({ files: true, web: (tabs[id] ?? 'cowork') !== 'chat' }),
       // What Mission says at the moment it asks for the tools to be put on.
       refreshTools: (id) => refreshed.push([id, provided.mission?.longRun(id) ?? null]),
+      ultraCode: (id) => ultraIds.has(id),
+      depthOf: () => 'standard',
     },
     coworkScratch: { folderOf: (agent) => scratchFolders[agent?.id] ?? '' },
     sandboxPolicy: { resolve: ({ session }) => ({ mode: levels[session.id] ?? 'read-only' }) },
@@ -105,7 +108,7 @@ function running() {
       connection: { requestRejection: () => undefined },
     }),
   };
-  apply(ctx, {});
+  apply(ctx, config);
   const folders = [home];
   const open = (id) => {
     const cwd = fresh();
@@ -154,7 +157,7 @@ function running() {
   /** Wait until a condition holds (a run started from a message is started a moment later). */
   const until = async (check) => { for (let i = 0; i < 200 && !check(); i += 1) await tick(); return check(); };
   const refuse = (on) => { refusePreset = on; };
-  return { agents, handlers: (name) => handlers.get(name) ?? [], services, scratchFolders, refuse, isolatedIds, tabs, tiers, presets, levels, appended, refreshed, provided, calls, goals, open, mission, step, preExecute, turnStarts, tick, runOnDisk, done, card, emit, says, until, home, tools };
+  return { agents, handlers: (name) => handlers.get(name) ?? [], services, scratchFolders, refuse, isolatedIds, ultraIds, tabs, tiers, presets, levels, appended, refreshed, provided, calls, goals, open, mission, step, preExecute, turnStarts, tick, runOnDisk, done, card, emit, says, until, home, tools };
 }
 
 test('an isolated conversation: /mission and mission_step refuse; off and end still take back', async () => {
@@ -822,4 +825,24 @@ test('a run that has ended: the step tool gives the report once more, then a sho
   } finally {
     app.done();
   }
+});
+
+test('the owner\'s answer: a Long run in the Research tab uses the work loop with Ultra Code on, and runs as today without it (the tab switch does not count there)', { skip: !hasGit && 'needs git' }, async () => {
+  for (const [ultra, loopTabs, wanted] of [[true, '[]', true], [false, '[]', false], [false, '["research"]', false]]) {
+    const app = running({ loopTabs });
+    try {
+      const agent = app.open('r1');
+      app.tabs.r1 = 'research';
+      if (ultra) app.ultraIds.add('r1');
+      const started = await app.card('POST', { sessionId: 'r1', action: 'start', goal: 'research the sources about heat pumps', tools: { files: true, web: true }, keepAwake: false });
+      assert.equal(started.status, 200, JSON.stringify(started.json));
+      const onDisk = app.runOnDisk(agent);
+      assert.equal(Boolean(onDisk.loop), wanted, `ultra ${ultra}, tabs ${loopTabs}`);
+      if (wanted) assert.equal(onDisk.loop.kind, 'research');
+    } finally {
+      app.done();
+    }
+  }
+  const { loopWanted } = await import('../lib/loop.js');
+  assert.deepEqual(loopWanted({ ultra: false, tab: 'code', loopTabs: ['code'] }), { ultra: false, tabOn: true }, 'other tabs keep their switch');
 });

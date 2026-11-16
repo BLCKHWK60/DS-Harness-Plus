@@ -284,6 +284,21 @@ export const Config = z.object({
   fallbackChains: z.string().default('{}').volatile(),
   /** Role routes per tier: `{ tierId: { plan|implement|review|fast: {provider, model} } }`. */
   roleModels: z.string().default('{}').volatile(),
+  /**
+   * The Ultra Code switch beside Effort, per conversation, as JSON: `{ sessionId: true }` (plan step S1).
+   * Off unless switched on (the owner's choice). Ultra Code is a switch, not an effort level: on, the
+   * conversation spreads its work over helpers at whatever effort is set. The top effort step "Ultra
+   * Code" keeps working and means the switch on at the highest effort.
+   */
+  sessionUltra: z.string().default('{}').volatile(),
+  /**
+   * Teams for the work loop (plan step S6), per tier, as JSON:
+   * `{ tierId: { lead, helpers: [..], checker, judge } }`, each a `{ provider, model }` or `{ version: id }`.
+   * The lead plans and takes a step that failed twice; helpers do the steps (several models make attempts
+   * differ more); the checker checks; the judge picks between attempts. Used only while the work loop is
+   * on and the conversation's helpers use different models (the models chip); empty: as before.
+   */
+  teams: z.string().default('{}').volatile(),
   /** Drop per-Session tier and profile entries whose stored Session no longer exists, once per start. */
   pruneStaleSessions: z.boolean().default(true),
 });
@@ -514,6 +529,50 @@ function readRoleModels(config) {
       if (provider && model) normalizedRoles[role] = { provider, model };
     }
     if (Object.keys(normalizedRoles).length > 0) result[tierId] = normalizedRoles;
+  }
+  return result;
+}
+
+/** The roles of a team (plan step S6). */
+export const TEAM_ROLES = ['lead', 'helpers', 'checker', 'judge'];
+
+/**
+ * Teams per tier, checked: each member a route or a saved model version that exists.
+ * @param {object} config - live Config.
+ * @returns {Record<string, {lead?: object, helpers: object[], checker?: object, judge?: object}>} the teams.
+ */
+function readTeams(config) {
+  const raw = plain(config.teams);
+  let parsed = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = raw.trim() ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  const versions = readModelVersions(config);
+  const member = (value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    if (typeof value.version === 'string') {
+      const version = versions[value.version.trim().toLowerCase()];
+      return version ? { provider: version.provider, model: version.model, version: version.id, ...(typeof version.maxTokens === 'number' ? { maxTokens: version.maxTokens } : {}) } : undefined;
+    }
+    const provider = typeof value.provider === 'string' ? value.provider.trim() : '';
+    const model = typeof value.model === 'string' ? value.model.trim() : '';
+    return provider && model ? { provider, model } : undefined;
+  };
+  const result = {};
+  for (const [tierId, team] of Object.entries(parsed).slice(0, 50)) {
+    if (!tierId || !team || typeof team !== 'object' || Array.isArray(team)) continue;
+    const helpers = (Array.isArray(team.helpers) ? team.helpers : [team.helpers]).map(member).filter(Boolean).slice(0, 6);
+    const entry = { helpers };
+    for (const role of ['lead', 'checker', 'judge']) {
+      const found = member(team[role]);
+      if (found) entry[role] = found;
+    }
+    if (entry.lead || entry.checker || entry.judge || helpers.length > 0) result[tierId] = entry;
   }
   return result;
 }
@@ -1121,7 +1180,7 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
   const lines = [
     // A model picked on its own, with no tier, is not a tier called "custom".
     tier.id === 'custom' && !tier.custom ? '## Active model' : `## Active model tier: ${tierLabel(tier)}`,
-    `Effort: ${EFFORT_LABELS[tier.effort] ?? tier.effort}. Route: \`${tier.provider}/${tier.model}\`.`,
+    `Effort: ${EFFORT_LABELS[tier.effort] ?? tier.effort}${extras.ultra === true && tier.effort !== 'ultra' && tier.subagents && ultraAutoDelegate ? ', with Ultra Code switched on' : ''}. Route: \`${tier.provider}/${tier.model}\`.`,
   ];
   if (tier.role && ROLE_META[tier.role]) {
     lines[1] += ` Role: ${ROLE_META[tier.role].label}.`;
@@ -1249,6 +1308,19 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
     if (wanted > 0) {
       lines.push(
         `When a task has independent parts, split it across at least ${wanted} sub-agent${wanted === 1 ? '' : 's'} started together. For a small or indivisible task, do it directly and say so in one line.`,
+      );
+    }
+  }
+
+  // The switch alone (Ultra Code on beside a lower effort): only how to spread the work, never the top
+  // step's exhaustive reasoning or its checks; a tier without sub-agents runs no helpers, so nothing is said.
+  if (extras.ultra === true && tier.effort !== 'ultra' && !alone && !bare) {
+    // Only when delegation is pushed at all (Settings → Model Tiers: Ultra auto-delegation).
+    if (tier.subagents && ultraAutoDelegate) {
+      lines.push(
+        '**Ultra Code.** Decompose the task before acting. When two or more pieces are genuinely independent, start them as sub-agents together in one assistant message and keep doing useful work while they run.',
+        `Cap concurrent children at ${maxSubagents}; if a piece is not independent, do it directly instead of delegating. Do not sleep or poll while children run.`,
+        'You own the final synthesis and verification; do not delegate either one.',
       );
     }
   }
@@ -1595,7 +1667,7 @@ export function apply(ctx, config) {
                 readMaxSubagents(config, tier),
                 plain(config.ultraAutoDelegate) !== false,
                 readRoleModels(config),
-                { skillText: (name) => skillTexts.get(skillKey(agent, name))?.text, version: versionExtras(agent, tier), bare, webOff, thinkingOnly },
+                { skillText: (name) => skillTexts.get(skillKey(agent, name))?.text, version: versionExtras(agent, tier), bare, webOff, thinkingOnly, ultra: ultraSwitchHere(agent) },
               );
             },
           }),
@@ -2445,6 +2517,37 @@ export function apply(ctx, config) {
    * @param {string} sessionId - Agent id.
    * @returns {object | undefined} tier, or undefined when no tier applies.
    */
+  /** @returns {boolean} whether the conversation (or the one a helper works for) has the Ultra Code switch on. */
+  function ultraSwitch(sessionId) {
+    try {
+      // Up the chain of helpers (a helper's helper too), as Modes finds a conversation's top.
+      let top = String(sessionId ?? '');
+      for (let depth = 0; depth < 8; depth += 1) {
+        const agent = ctx.get('agents')?.get?.(top);
+        const parent = agent?.header?.parentSession ?? agent?.session?.header?.parentSession;
+        if (typeof parent !== 'string' || !parent || parent === top) break;
+        top = parent;
+      }
+      return readJsonObject(config.sessionUltra)[top] === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Whether the switch's words go to this agent: only to the conversation itself, never to a helper (a
+   * helper told to start helpers would spread the work again, and a run's readers must not start any).
+   */
+  function ultraSwitchHere(agent) {
+    try {
+      const parent = agent?.header?.parentSession ?? agent?.session?.header?.parentSession;
+      if (parent) return false;
+      return readJsonObject(config.sessionUltra)[String(agent?.id ?? '')] === true;
+    } catch {
+      return false;
+    }
+  }
+
   function resolveTierOf(sessionId) {
     const known = tierForSession(sessionId, lastRoute, config);
     if (known) return known;
@@ -2621,6 +2724,21 @@ export function apply(ctx, config) {
     },
 
     /**
+     * Whether Ultra Code is on for a conversation: its switch beside Effort, or the top effort step.
+     * Off unless switched on (plan step S1).
+     * @param {string} sessionId - Agent id.
+     * @returns {boolean}
+     */
+    ultraCode(sessionId) {
+      try {
+        if (ultraSwitch(sessionId)) return true;
+        return resolveTierOf(sessionId)?.effort === 'ultra';
+      } catch {
+        return false;
+      }
+    },
+
+    /**
      * Put one Agent on a tier: record the per-session choice and select the
      * tier's route and effort for the next step.
      * @param {string} sessionId - Agent id.
@@ -2678,6 +2796,28 @@ export function apply(ctx, config) {
      * @param {'plan' | 'implement' | 'review' | 'fast'} role - role.
      * @returns {{provider: string, model: string} | null} the role's route, or null.
      */
+    /**
+     * The model for one role of the work loop's team on a conversation's tier (plan step S6): 'lead'
+     * (also the strongest, for a step that failed twice), 'helper' (the index picks one of several, so
+     * attempts differ), 'checker' or 'judge'. Null when the tier has no team or no member for the role.
+     * @param {string} sessionId - Agent id.
+     * @param {string} role - lead, helper, checker or judge.
+     * @param {number} [index] - which attempt (helpers).
+     * @returns {{provider: string, model: string, maxTokens?: number} | null}
+     */
+    teamRoute(sessionId, role, index = 0) {
+      try {
+        const tier = resolveTierOf(sessionId);
+        const team = tier ? readTeams(config)[tier.id] : undefined;
+        if (!team) return null;
+        const pick = role === 'helper' ? (team.helpers.length > 0 ? team.helpers[Math.abs(Math.floor(index)) % team.helpers.length] : undefined) : team[role];
+        // The lead is the strongest the team has; a team without one passes a step up to nobody else.
+        return pick ? Object.freeze({ provider: pick.provider, model: pick.model, ...(pick.maxTokens ? { maxTokens: pick.maxTokens } : {}) }) : null;
+      } catch {
+        return null;
+      }
+    },
+
     roleRoute(tierId, role) {
       if (!ROLE_IDS.includes(role)) throw new Error(`model-tiers: unknown role "${role}"`);
       const route = readRoleModels(config)[tierId]?.[role];
@@ -2910,6 +3050,7 @@ export const testing = {
   normalizeSelection,
   tierForRoute,
   tierPrompt,
+  readTeams,
   DEFAULTS,
   TIER_IDS,
 };

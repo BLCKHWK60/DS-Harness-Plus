@@ -87,7 +87,7 @@ const replaceFile = (path, text) => {
 };
 
 /** The tab's own folder inside the subject folder, never a link. */
-function stateDir(root) {
+export function stateDir(root) {
   const dir = join(root, STATE_DIR);
   let stat;
   try {

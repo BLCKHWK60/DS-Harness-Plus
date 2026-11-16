@@ -112,10 +112,11 @@ export function openSources() {
       return [...entry.log.map((line) => `${stamp(line.at)}  ${line.kind}: ${line.detail}`), entry.dropped > 0 ? `Left out by the filters: ${entry.dropped} (not kept, not opened).` : ''].filter(Boolean).join('\n');
     },
     /** Keep something the assistant wrote in this conversation, for the export. */
-    say(id, text, at = Date.now()) {
+    say(id, text, at = Date.now(), { helper = false } = {}) {
       const entry = of(id);
       const body = String(text ?? '').trim();
-      if (body && entry.notes.length < 400) entry.notes.push({ at, text: body.slice(0, 60_000) });
+      // A Long run helper's answer is marked: it is kept for /recon export, never for the export door.
+      if (body && entry.notes.length < 400) entry.notes.push({ at, text: body.slice(0, 60_000), ...(helper ? { helper: true } : {}) });
     },
     notes: (id) => [...of(id).notes],
     /** @returns {object[]} every source with its text, in the order read. */

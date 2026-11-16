@@ -70,6 +70,6 @@ export function bluetoothReport({ connected, paired }, at = new Date()) {
     paired.length > 0 ? 'Paired, not connected:' : 'Paired, not connected: none.',
     ...paired.map(line),
     '',
-    'Reading a device\'s own Bluetooth services (battery, device information) needs the app\'s Bluetooth permission and a Bluetooth library; that part is not built. Bench never changes a device over Bluetooth.',
+    'To read a nearby device\'s own standard services (battery, device information): bench_bluetooth action "scan", then "read" for the one the user names. Bench never changes a device over Bluetooth.',
   ].join('\n');
 }

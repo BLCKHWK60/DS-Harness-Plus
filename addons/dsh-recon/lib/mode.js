@@ -7,6 +7,8 @@
 export const MODE_ID = 'recon';
 
 /** Every tool a Recon conversation has. It has no others: the mode is isolated. */
+import { ULTRA_TOOL } from './ultra.js';
+
 export const TOOLS = ['recon_onion_search', 'recon_onion_read', 'recon_web_search', 'recon_web_read', 'recon_board_search', 'recon_board_read', 'recon_usenet_groups', 'recon_usenet_search', 'recon_usenet_read', 'recon_news_search', 'recon_archive_find', 'recon_archive_read', 'recon_cite'];
 
 /** The method. Kept under the Modes add-on's limit of 4,000 characters. */
@@ -35,7 +37,9 @@ How to report:
 - Do not give instructions for crimes, and do not help anyone buy illegal goods or services. Describing what a source offers or claims, for research, is fine.`;
 
 /** The mode as the Modes add-on stores it. */
-export const MODE = { label: 'Recon', tools: TOOLS, sandbox: 'read-only', defaultTier: '', prompt: METHOD, isolated: true };
+/** The mode's tools: Recon's own, and the Ultra Code recipe (offered only while Ultra Code is on). */
+export const MODE_TOOLS = [...TOOLS, ULTRA_TOOL];
+export const MODE = { label: 'Recon', tools: MODE_TOOLS, sandbox: 'read-only', defaultTier: '', prompt: METHOD, isolated: true };
 
 /**
  * The Modes add-on's extra modes with Recon added or taken out.

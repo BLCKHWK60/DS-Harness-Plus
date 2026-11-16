@@ -5,6 +5,7 @@
  */
 import { ASKS, FIELDS, LEVELS, linkedText } from './cards.js';
 import { lookOnlyFamily } from './gate.js';
+import { FAMILIES, catalogueText, familiesOf, recipeText } from './catalogue.js';
 
 /**
  * @param {object} options - what the tools need.
@@ -92,8 +93,34 @@ export function buildTools({ enabled, bench, identify }) {
       ...common,
       execute: safely(async (args) => {
         const { card, made, changed, file } = bench.saveCard(args);
+        // The catalogue and its recipes are written with the first card (the Bench folder now exists), once.
+        try {
+          bench.writeOnce('', 'catalogue.md', catalogueText());
+          for (const family of FAMILIES) bench.writeOnce('recipes', `${family.id}.md`, recipeText(family));
+        } catch {
+          /* the card is what matters */
+        }
         if (!made && changed.length === 0) return `The card for ${card.name} already says that; nothing changed.`;
         return `${made ? 'Made the card' : `Updated the card (${changed.join(', ')})`} for ${card.name}: ${file}. Permissions: highest level ${label(LEVELS, card.permissions.level)}, asks ${label(ASKS, card.permissions.asks)}.`;
+      }),
+    },
+    {
+      name: 'bench_catalogue',
+      description: 'The kinds of device Bench knows: 22 families, each with its doors, the deepest level it can reach, the open tools of its route and what is built in Bench so far. Without a family: the list. With a family id: its recipe. With a device\'s description (name, maker): the likely families (a guess, never proof). Adjust and Write exist only where a recipe is built; the others come when the user asks.',
+      parameters: { type: 'object', properties: { family: { type: 'string', maxLength: 40 }, describe: { type: 'string', maxLength: 200 } }, additionalProperties: false },
+      ...common,
+      isConcurrencySafe: () => true,
+      execute: safely(async (args) => {
+        if (args.describe) {
+          const found = familiesOf({ name: String(args.describe) });
+          return found.length ? `Likely: ${found.map((entry) => `${entry.family.name} (${entry.family.id})`).join(' or ')} — a guess from its name, never proof.` : 'No family matches that description; it may be a device that is not in the catalogue (bench_recipe drafts a Read recipe for it).';
+        }
+        if (args.family) {
+          const family = FAMILIES.find((entry) => entry.id === String(args.family));
+          if (!family) throw new Error(`There is no family "${String(args.family).slice(0, 40)}". The ids: ${FAMILIES.map((entry) => entry.id).join(', ')}.`);
+          return recipeText(family);
+        }
+        return ['The catalogue (family id: doors; deepest level; built so far):', ...FAMILIES.map((family) => `- ${family.id}${family.lookOnly ? ' (look-only)' : ''}: ${family.doors.join(', ')}; ${family.deepest}; built: ${family.built.join('; ')}`), 'Never changed on any device: radio limits and a drone\'s failsafes.'].join('\n');
       }),
     },
     {
