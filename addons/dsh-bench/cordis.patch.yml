@@ -1,0 +1,8 @@
+- insert:
+    - id: bench
+      name: '@local/dsh-bench'
+      config:
+        # Off until you switch it on in Settings > Bench. It then adds a Bench tab beside Chat, Cowork and Code.
+        # Needs the Modes add-on and the Cowork sidebar. Optional:
+        #   folder: <FOLDER>   # where cards and logbooks are kept; empty: bench in the app's data folder
+        enabled: false

@@ -1,0 +1,40 @@
+{
+  "name": "@local/dsh-bench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A Bench mode and tab for the devices you connect to your Mac: it identifies what is plugged in by USB and its serial port without opening anything, finds the maker's documentation, and keeps a card and a logbook for each device. It changes nothing on a device yet. Off until you switch it on.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib/*.js",
+    "cordis.patch.yml",
+    "README.md",
+    "locale/*.json",
+    "icon.svg",
+    "node_modules/@deepseek-ai/schemastery/**",
+    "node_modules/@deepseek-ai/cosmokit/**"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
+}

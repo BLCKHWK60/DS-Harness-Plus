@@ -119,6 +119,11 @@ export function newRun({ id, goal, mode, root, limits, checkpoint, at = Date.now
   if (restore) extra.restore = restore;
   // A Recon conversation's run: no commands, one model, nothing kept outside its folder.
   if (long?.isolated === true) extra.isolated = true;
+  // A Recon run whose checks are switched on (Settings → Recon): they run without the internet.
+  if (long?.isolated === true && long?.offlineChecks === true) extra.offlineChecks = true;
+  // A Bench conversation's run (its own add-on decides): checks on or off (Settings → Bench), and
+  // device ports closed to them; its workers have no commands.
+  if (long?.bench && typeof long.bench === 'object') extra.bench = { checks: long.bench.checks !== false, closedPorts: long.bench.closedPorts !== false };
   // Started with the Run button: what was said in the conversation before it (for the planner and reviewer).
   const context = clip(long?.context, CONTEXT_MAX);
   if (context) extra.context = context;
@@ -492,9 +497,21 @@ export function addAsk(run, text, at = Date.now()) {
 /** @returns {boolean} whether a run may run no commands (a Recon conversation's Long run). */
 export const noCommands = (run) => isLong(run) && run.long?.isolated === true;
 
+/** @returns {boolean} whether a run runs no check commands: a Recon run (unless its checks are switched on), or a Bench run with its checks switched off. */
+export const noChecks = (run) => (noCommands(run) && run.long?.offlineChecks !== true) || (isLong(run) && run.long?.bench?.checks === false);
+
+/** @returns {boolean} whether a run's checks run without the internet and see only its folder (a Recon run with checks switched on). */
+export const offlineChecks = (run) => noCommands(run) && run.long?.offlineChecks === true;
+
+/** @returns {boolean} whether a run's workers have no commands: a Recon run, or any Bench run. */
+export const workersWithoutCommands = (run) => noCommands(run) || (isLong(run) && Boolean(run.long?.bench));
+
+/** @returns {boolean} whether a run's checks run with the Mac's device ports closed (a Bench run). */
+export const portsClosed = (run) => isLong(run) && run.long?.bench?.closedPorts === true;
+
 /** Take the commands out of a run that may run none: the reviewer judges every item instead. */
 export function dropCommands(run) {
-  if (!noCommands(run)) return run;
+  if (!noChecks(run)) return run;
   run.checks = [];
   for (const item of run.items) item.check = '';
   return run;

@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
 
     /** The groups, in order, and their pages in order. */
     const GROUPS = [
-      { label: 'Tabs and modes', pages: ['modes', 'research', 'finance', 'data', 'scout', 'recon'] },
+      { label: 'Tabs and modes', pages: ['modes', 'research', 'finance', 'data', 'scout', 'recon', 'content', 'bench'] },
       { label: 'Models', pages: ['model-tiers', 'sampling-presets', 'model-arena', 'benchmark'] },
       { label: 'Cost and limits', pages: ['budget', 'usage-ledger'] },
       { label: 'Agents and runs', pages: ['mission', 'agent-swarm', 'evolve', 'alerts'] },
@@ -31,6 +31,8 @@ window.__ModuleLoader__.load({
       data: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
       scout: 'M12 4a8 8 0 1 0 0 16a8 8 0 0 0 0-16zM15.5 8.5l-2 5-5 2 2-5z',
       recon: 'M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6zM9.5 12l2 2 3.5-4',
+      content: 'M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4M12 20h8',
+      bench: 'M8 8h8v8H8zM10 8V4M14 8V4M10 20v-4M14 20v-4M8 10H4M8 14H4M20 10h-4M20 14h-4',
       'model-tiers': 'M5 18h14M7 14h10M9 10h6M11 6h2',
       'sampling-presets': 'M5 7h9M18 7h1M5 12h3M12 12h7M5 17h11M20 17h-1M16 5v4M10 10v4M18 15v4',
       'model-arena': 'M6 4l5 5M18 4l-5 5M6 20l12-12M18 20L6 8M4 6l2-2M20 6l-2-2',

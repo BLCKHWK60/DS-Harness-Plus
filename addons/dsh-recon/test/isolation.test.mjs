@@ -251,3 +251,16 @@ test('a real tool call: without a working tunnel, and without /recon direct, not
     broken.dispose();
   }
 });
+
+test('Long run checks: off unless switched on in Settings → Recon; Mission reads the switch at the start of each run', () => {
+  const plainApp = start({ modeOf: { r1: { mode: 'recon', isolated: true } } });
+  const checking = start({ modeOf: { r1: { mode: 'recon', isolated: true } }, config: { longChecks: true } });
+  try {
+    assert.equal(Config({}).longChecks.get(), false, 'off by default');
+    assert.equal(plainApp.provided.recon.longChecks(), false);
+    assert.equal(checking.provided.recon.longChecks(), true);
+  } finally {
+    plainApp.dispose();
+    checking.dispose();
+  }
+});

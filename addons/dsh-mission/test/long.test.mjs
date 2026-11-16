@@ -444,6 +444,157 @@ test('a Recon conversation\'s run: commands are dropped (the reviewer judges), h
   }
 });
 
+/** A Bench conversation's Long run with stand-in helpers: the planner's answer, and what each helper was told and on which model. */
+async function benchRun({ checks, plan }) {
+  const { createRunner } = await import('../runner.js');
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const root = mkdtempSync(join(tmpdir(), 'mission-bench-'));
+  const goal = { id: 'g', revision: 1, phase: 'active' };
+  let made = false;
+  const goals = { create: () => { made = true; return goal; }, get: () => (made ? goal : undefined), pause: () => {}, resume: () => {}, complete: () => {}, clear: () => {} };
+  const seen = [];
+  const subagents = {
+    startActivation: async (spec) => {
+      seen.push({ label: spec.label, model: spec.agentOptions?.model, prompt: spec.prompt?.[0]?.text ?? '' });
+      const text = spec.label === 'Mission: planner' ? JSON.stringify(plan) : 'done';
+      return { childId: `c${seen.length}`, result: Promise.resolve({ output: [{ type: 'text', text }], stopReason: 'end' }) };
+    },
+  };
+  const modes = { helperModels: () => 'roles' };
+  const modelTiers = { resolveTier: () => ({ id: 't' }), roleRoute: () => ({ provider: 'cloud', model: 'role-model' }) };
+  const points = { take: async () => ({ id: 'p', number: 1 }), files: async () => ({ files: [], more: false }), idOf: async () => 'p', changes: async () => '' };
+  const runner = createRunner({ get: (name) => ({ goals, subagents, modes, modelTiers })[name] }, { settings: () => ({ limits: { maxItems: 12, maxTries: 3, maxReviews: 2, maxSteps: 60, waitMinutes: 3 }, roles: {}, projects: {} }), pointsOf: () => points, afterCommand: async () => [], warn: () => {}, home: undefined });
+  const agent = { id: 'bc', model: { current: () => ({ provider: 'local', model: 'home-model' }) } };
+  const events = [];
+  runner.onEvent((event) => events.push(event));
+  await runner.start(agent, 'look up the board', { mode: 'auto', root }, { kind: 'long', long: { minutes: 30, laps: 1, bench: { checks, closedPorts: true } } });
+  return { runner, agent, seen, events, root };
+}
+
+test('a Bench conversation\'s run, checks on: they run as in every tab, with the Mac\'s device ports closed; workers are told they have no commands; nothing else of Recon\'s rules', async () => {
+  const { existsSync, rmSync } = await import('node:fs');
+  const { NO_COMMANDS_PLAN, NO_COMMANDS_WORK } = await import('../lib/prompts.js');
+  const { PORTS_CLOSED_NOTE } = await import('../runner.js');
+  // The Mac's own debug port, when this Mac has one: no device of anyone's.
+  const port = existsSync('/dev/cu.debug-console') ? '/dev/cu.debug-console' : '';
+  const plan = { items: [{ title: 'Write the notes', check: 'echo fine > /dev/null && echo ok' }, ...(port ? [{ title: 'Read the port', check: `: < ${port} && echo opened` }] : [])], checks: [] };
+  const { runner, agent, seen, events, root } = await benchRun({ checks: true, plan });
+  try {
+    await runner.step(agent, new AbortController().signal, 60000); // plan
+    const run = runner.runOf('bc');
+    assert.deepEqual(run.long.bench, { checks: true, closedPorts: true });
+    assert.equal(run.items[0].check, 'echo fine > /dev/null && echo ok', 'the planner\'s checks are kept');
+    assert.ok(!seen[0].prompt.includes(NO_COMMANDS_PLAN), 'the planner may write checks');
+    const first = await runner.step(agent, new AbortController().signal, 60000); // item 1
+    assert.ok(seen[1].prompt.includes(NO_COMMANDS_WORK), 'a worker in Bench has no commands');
+    assert.equal(run.items[0].status, 'verified', first);
+    assert.match(first, /PASSED: its command was run and passed/);
+    if (port) {
+      const second = await runner.step(agent, new AbortController().signal, 60000); // item 2
+      assert.match(second, /Operation not permitted/);
+      assert.ok(second.includes(PORTS_CLOSED_NOTE), second);
+      assert.notEqual(run.items[1].status, 'verified');
+    }
+    assert.ok(seen.some((entry) => entry.model === 'role-model'), 'helpers keep the conversation\'s model choice (not Recon\'s one model)');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.ok(events.some((event) => event.goal === 'look up the board'), 'its events carry the goal, unlike Recon\'s');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a Bench conversation\'s run, checks switched off in Settings: no commands at all, the reviewer judges, as in a Recon run', async () => {
+  const { rmSync } = await import('node:fs');
+  const { NO_COMMANDS_PLAN } = await import('../lib/prompts.js');
+  const { runner, agent, seen, root } = await benchRun({ checks: false, plan: { items: [{ title: 'Write the notes', check: 'ls' }], checks: ['ls'] } });
+  try {
+    await runner.step(agent, new AbortController().signal, 60000); // plan
+    const run = runner.runOf('bc');
+    assert.deepEqual(run.checks, []);
+    assert.equal(run.items[0].check, '');
+    assert.ok(seen[0].prompt.includes(NO_COMMANDS_PLAN));
+    assert.match(await runner.step(agent, new AbortController().signal, 60000), /no command proves it, so the reviewer will judge it/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the check sandbox: device ports are closed only when asked; without the sandbox a Bench check is not run at all', async () => {
+  const { fence, runCommand, DEVICE_PORTS } = await import('../lib/shell.js');
+  assert.ok(!fence('/x').includes(DEVICE_PORTS), 'every other tab: as before');
+  assert.ok(fence('/x', { closePorts: true }).endsWith(DEVICE_PORTS), 'the last rule wins');
+  const missing = await runCommand({ command: 'echo hi', root: '/', closePorts: true, sandbox: '/nonexistent/sandbox-exec' });
+  assert.equal(missing.ok, false);
+  assert.match(missing.output, /sandbox is not available, so this check was not run/);
+});
+
+test('a Recon run with checks switched on: checks are kept and run with no internet and only in the run\'s folder; workers still have no commands; Recon\'s other rules stay', async () => {
+  const { createRunner } = await import('../runner.js');
+  const { NO_COMMANDS_PLAN, NO_COMMANDS_WORK, OFFLINE_CHECKS_PLAN } = await import('../lib/prompts.js');
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { createServer } = await import('node:http');
+  // A live server on this Mac: reachable from outside the sandbox, so a refused check can only be the sandbox.
+  const server = createServer((_req, res) => res.end('reached'));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  const root = mkdtempSync(join(tmpdir(), 'mission-recon-checks-'));
+  try {
+    writeFileSync(join(root, 'findings.md'), 'the forum named the alias');
+    const goal = { id: 'g', revision: 1, phase: 'active' };
+    let made = false;
+    const goals = { create: () => { made = true; return goal; }, get: () => (made ? goal : undefined), pause: () => {}, resume: () => {}, complete: () => {}, clear: () => {} };
+    const seen = [];
+    const plan = { items: [{ title: 'Note the alias', check: 'grep -q alias findings.md' }, { title: 'Phone home', check: `curl -sS --max-time 3 http://127.0.0.1:${port}/ | grep -q reached` }], checks: [] };
+    const subagents = {
+      startActivation: async (spec) => {
+        seen.push({ label: spec.label, model: spec.agentOptions?.model, prompt: spec.prompt?.[0]?.text ?? '' });
+        const text = spec.label === 'Mission: planner' ? JSON.stringify(plan) : 'done';
+        return { childId: `c${seen.length}`, result: Promise.resolve({ output: [{ type: 'text', text }], stopReason: 'end' }) };
+      },
+    };
+    const modes = { helperModels: () => 'roles' };
+    const modelTiers = { resolveTier: () => ({ id: 't' }), roleRoute: () => ({ provider: 'cloud', model: 'big-cloud-model' }) };
+    const points = { take: async () => ({ id: 'p', number: 1 }), files: async () => ({ files: [], more: false }), idOf: async () => 'p', changes: async () => '' };
+    const runner = createRunner({ get: (name) => ({ goals, subagents, modes, modelTiers })[name] }, { settings: () => ({ limits: { maxItems: 12, maxTries: 3, maxReviews: 2, maxSteps: 60, waitMinutes: 3 }, roles: {}, projects: {} }), pointsOf: () => points, afterCommand: async () => [], warn: () => {}, home: undefined });
+    const agent = { id: 'rc', model: { current: () => ({ provider: 'local', model: 'home-model' }) } };
+    await runner.start(agent, 'find what the forums say', { mode: 'restricted', root }, { kind: 'long', long: { minutes: 30, laps: 1, isolated: true, offlineChecks: true } });
+    await runner.step(agent, new AbortController().signal, 60000); // plan
+    const run = runner.runOf('rc');
+    assert.equal(run.long.offlineChecks, true);
+    assert.equal(run.items[0].check, 'grep -q alias findings.md', 'checks are kept');
+    assert.ok(seen[0].prompt.includes(OFFLINE_CHECKS_PLAN));
+    assert.ok(!seen[0].prompt.includes(NO_COMMANDS_PLAN));
+    const first = await runner.step(agent, new AbortController().signal, 60000);
+    assert.match(first, /PASSED: its command was run and passed/);
+    assert.ok(seen[1].prompt.includes(NO_COMMANDS_WORK), 'workers still have no commands');
+    const second = await runner.step(agent, new AbortController().signal, 60000);
+    assert.doesNotMatch(second, /PASSED/, 'the check could not reach the server');
+    assert.notEqual(run.items[1].status, 'verified');
+    assert.deepEqual([...new Set(seen.map((entry) => entry.model))], ['home-model'], 'still one model, as every Recon run');
+  } finally {
+    server.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('offlineChecks counts only with a Recon run: an ordinary run cannot ask for it', async () => {
+  const { newRun, noChecks, offlineChecks } = await import('../lib/run.js');
+  const ordinary = newRun({ id: 'x', goal: 'g', mode: 'Auto', root: '/r', kind: 'long', long: { offlineChecks: true } });
+  assert.equal(ordinary.long.offlineChecks, undefined);
+  assert.equal(offlineChecks(ordinary), false);
+  const recon = newRun({ id: 'y', goal: 'g', mode: 'Restricted', root: '/r', kind: 'long', long: { isolated: true } });
+  assert.equal(noChecks(recon), true, 'Recon without the switch: no checks, as before');
+  const { offlineFence, runCommand } = await import('../lib/shell.js');
+  const profile = offlineFence('/private/tmp/x', '/Users/someone');
+  for (const rule of ['(deny network*)', '(deny mach-lookup)', '(deny file-read* (subpath "/Users/someone")', '"/usr/bin/open"']) assert.ok(profile.includes(rule), rule);
+  const missing = await runCommand({ command: 'echo hi', root: '/', offline: true, sandbox: '/nonexistent/sandbox-exec' });
+  assert.match(missing.output, /checks must run without the internet/);
+});
+
 test('a Recon run ended while a step was under way: the step writes nothing into the run\'s folder again', async () => {
   const { createRunner } = await import('../runner.js');
   const { mkdtempSync, rmSync, existsSync } = await import('node:fs');

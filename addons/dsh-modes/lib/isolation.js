@@ -68,6 +68,13 @@ export function isolatedMayRun({ mode, name, child = false, off = false, webOff 
 
 /** The tool a conversation conducts its Long run with (Mission). */
 export const RUN_STEP_TOOL = 'mission_step';
+/**
+ * What the step tool answers in an isolated conversation once its Long run has ended (16 November
+ * 2026: a local model ignored the run's "stop" and called the tool some 340 times).
+ */
+export const RUN_OVER_TEXT = 'The Long run in this conversation has ended, and its report is above. There is no step left to take, so do not call mission_step again. Tell the user in a few plain sentences what the report found, then stop.';
+/** After this many calls of the step tool in a row with no run on, the turn is ended. */
+export const RUN_OVER_LIMIT = 3;
 /** The file tools a Long run's helpers get in an isolated conversation: no shell, no programs. */
 export const ISOLATED_RUN_FILES = Object.freeze(['read', 'write', 'edit', 'multi_edit', 'glob', 'grep']);
 

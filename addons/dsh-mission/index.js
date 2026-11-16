@@ -27,7 +27,7 @@
 import z from '@deepseek-ai/schemastery';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { ISOLATED_TEXT, READ_ONLY_LONG_TEXT, READ_ONLY_TABS, RECON_LONG_TEXT, whyNot } from './lib/gate.js';
+import { BENCH_CHECKS_TEXT, BENCH_NO_CHECKS_TEXT, ISOLATED_TEXT, RECON_CHECKS_TEXT, RECON_NO_CHECKS_TEXT, READ_ONLY_LONG_TEXT, READ_ONLY_TABS, RECON_LONG_TEXT, whyNot } from './lib/gate.js';
 import { COMMAND_TOOLS, MODES, MODE_LABELS, WRITE_TOOLS, decide, modeOf, rulesNote } from './lib/guard.js';
 import { exists, isInside, pathsOf, real, shown } from './lib/paths.js';
 import { GIT_CANDIDATES, openCheckpoints } from './lib/checkpoints.js';
@@ -38,6 +38,11 @@ import { CONTEXT_MAX, LIMITS, LONG, ROLES, isLong, readLimits, readLong, readToo
 const LONG_WORDS = new Set(['', 'status', 'help', 'report', 'resume', 'go', 'continue', 'stop', 'pause', 'end', 'finish', 'checkpoints', 'list', 'checkpoint', 'back', 'rollback']);
 import { createAwake } from './lib/awake.js';
 import { PROGRAM_TOOL, STEP_TOOL, WAIT_MS, createRunner, routeOf } from './runner.js';
+
+/** What the step tool says when it is called again on a run that has ended (the report was given the first time). */
+export const RUN_ENDED_AGAIN = `The run has ended and its report was given above. There is no step left to take, so do not call mission_step again. Tell the user in a few plain sentences what the report found, then stop.`;
+/** After this many calls of the step tool on a run that has ended, the turn is ended. */
+export const OVER_LIMIT = 3;
 
 /** The Long run card's route: a run's view and pre-flight (GET), start and the card's buttons (POST). */
 export const LONG_PATH = '/dsh-mission/long';
@@ -615,6 +620,26 @@ export function apply(ctx, config) {
     }
   };
 
+  /**
+   * A Bench conversation's rules for a Long run, from the Bench add-on (undefined anywhere else, and
+   * when Bench is off): its checks on or off (Settings → Bench), and device ports closed to them.
+   */
+  const benchRules = (id) => {
+    try {
+      const rules = ctx.get('bench')?.longRunRules?.(id);
+      return rules && typeof rules === 'object' ? { checks: rules.checks !== false, closedPorts: rules.closePorts !== false } : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  /** Whether Recon lets its Long runs check their work without the internet (Settings → Recon; off unless switched on). */
+  const reconChecks = () => {
+    try {
+      return ctx.get('recon')?.longChecks?.() === true;
+    } catch {
+      return false;
+    }
+  };
   const preflight = (agent) => {
     const id = agent?.id;
     const ticks = [];
@@ -628,6 +653,11 @@ export function apply(ctx, config) {
     // Every tab but Recon (the isolated check above), Scratch too (the owner's choice, 16 November). In
     // Data and Research, which run Read Only, it is allowed with a warning: the run can change files.
     if (readOnlyTab(id) && !iso) ticks.push({ key: 'tab', ok: false, warn: true, required: false, text: READ_ONLY_LONG_TEXT });
+    // Recon: whether the run checks its work (without the internet) or the reviewer judges by reading.
+    if (iso && reconRuns(id)) ticks.push({ key: 'recon-checks', ok: true, required: false, text: reconChecks() ? RECON_CHECKS_TEXT : RECON_NO_CHECKS_TEXT });
+    // Bench: what is closed during the run, so nothing is refused without the user knowing why.
+    const bench = iso ? undefined : benchRules(id);
+    if (bench) ticks.push({ key: 'bench', ok: true, required: false, text: bench.checks ? BENCH_CHECKS_TEXT : BENCH_NO_CHECKS_TEXT });
     const tier = tierOf(id);
     add('helpers', tier?.subagents !== false, tier?.subagents === false ? whyNot({ isolated: false, tier, helpers: true }) : 'The tier allows helper models.');
     add('free', !runner.isOn(id), runner.isOn(id) ? 'A run is already on in this conversation.' : 'No run is on here yet.');
@@ -938,6 +968,11 @@ export function apply(ctx, config) {
     const mode = recon ? 'restricted' : longModeOf(body, agent.id);
     const options = longOptions(body, agent.id);
     if (recon) options.isolated = true;
+    // Recon's checks, when switched on in Settings → Recon, run without the internet.
+    if (recon && reconChecks()) options.offlineChecks = true;
+    // Bench (its own add-on): its checks setting, device ports closed to the checks, workers without commands.
+    const bench = recon ? undefined : benchRules(agent.id);
+    if (bench) options.bench = bench;
     if (typeof body.context === 'string' && body.context.trim()) options.context = body.context;
     // In a Read Only tab, or a conversation set to Read Only by hand, the run may write in the folder
     // (the owner's choice); the level from before comes back when it ends, and the Mission mode goes
@@ -964,6 +999,24 @@ export function apply(ctx, config) {
     keepAwakeFor(agent.id);
     return said;
   };
+
+  /** Calls of the step tool on a run that has ended, per conversation; reset by a new turn of the user's. */
+  const overCalls = new Map();
+  ctx.on('agent/pre-step', ({ agent }, next) => {
+    try {
+      if (agent?.id && (overCalls.get(agent.id) ?? 0) >= OVER_LIMIT) {
+        overCalls.delete(agent.id);
+        warn(`ended a turn of ${agent.id}: it kept calling ${STEP_TOOL} after its run had ended`);
+        return { kind: 'reject' };
+      }
+    } catch {
+      /* the step goes on */
+    }
+    return next();
+  });
+  ctx.on('session/event', (session, event) => {
+    if (event?.type === 'turn/start' && session?.id) overCalls.delete(session.id);
+  });
 
   ctx.inject(['webServer', 'connection'], (inner) => {
     inner.effect(() => inner.webServer.register({
@@ -1282,6 +1335,14 @@ export function apply(ctx, config) {
                 const next = isolatedHere ? 'End it with /mission end.' : 'Once that is changed, the user carries on with /mission resume.';
                 return { text: paused ? `The mission run is paused. ${no} ${next} Tell the user this and do not call ${STEP_TOOL} again.` : no };
               }
+              // A run that has ended: the report once more, then a short answer; a model that keeps
+              // calling has its turn ended (16 November 2026: a local model called some 340 times).
+              const ended = runner.runOf(exec.agent.id);
+              if (ended && ended.status !== 'running') {
+                const calls = (overCalls.get(exec.agent.id) ?? 0) + 1;
+                overCalls.set(exec.agent.id, calls);
+                if (calls > 1) return { text: RUN_ENDED_AGAIN };
+              } else overCalls.delete(exec.agent.id);
               return { text: await runner.step(exec.agent, exec.signal, viaProgram(exec.agent) ? WAIT_MS.program : WAIT_MS.direct) };
             } catch (error) {
               return { text: `It did not work: ${String(error?.message ?? error).slice(0, 300)}` };

@@ -1,0 +1,7 @@
+- insert:
+    - id: content
+      name: '@local/dsh-content'
+      config:
+        # Off until you switch it on in Settings > Content. It then adds a Content tab beside Chat, Cowork and Code.
+        # Needs the Modes add-on and the Cowork sidebar.
+        enabled: false

@@ -18,7 +18,7 @@ import { fromScheduler, scheduledModeId } from './lib/scheduled.js';
 import { PROGRAM_TOOL, programNote, programOnly, SLOW_TOOLS } from './lib/ptc.js';
 import { helpersBelow, onlyStopNotes, stoppedByUser } from './lib/stop.js';
 import { CORE, FAMILIES, FIND_TOOL, brings, catalog as trimCatalog, mentioned, others as trimOthers, resolveRequest, skillFamilies } from './lib/trim.js';
-import { dropIsolatedNotes, heldMode, isolatedMayRun, isolatedRunMask, modeChangeRefusal } from './lib/isolation.js';
+import { RUN_OVER_LIMIT, RUN_OVER_TEXT, RUN_STEP_TOOL, dropIsolatedNotes, heldMode, isolatedMayRun, isolatedRunMask, modeChangeRefusal } from './lib/isolation.js';
 import { DEPTH_CHECK_KIND, DEPTH_CHECK_PROMPT, DEPTH_CHECK_REFUSAL, DEPTH_CHECK_SUMMARY, promptText } from './lib/prompt.js';
 import { lensIdIn, lensTextIn, ownLensesOf } from './lib/lens.js';
 import { movedSince, readBase, readEntry, sandboxStep } from './lib/sandbox.js';
@@ -1011,6 +1011,11 @@ export function apply(ctx, config) {
       }),
     'modes: no network from the shell or from programs while the web is off',
   );
+  /**
+   * An isolated conversation's calls of the step tool with no Long run on, in a row: after
+   * RUN_OVER_LIMIT of them the turn is ended (a model that ignores "stop" loops otherwise).
+   */
+  const runOverCalls = new Map();
   // An isolated conversation runs a tool only when its mode lists it, whatever else is on offer:
   // no programs, no helpers, nothing of another add-on. A second lock behind the tool mask.
   ctx.effect(
@@ -1021,7 +1026,17 @@ export function apply(ctx, config) {
           if (!id) return undefined;
           const mode = modeOf(id);
           if (!mode?.isolated) return undefined;
-          if (isolatedMayRun({ mode, name: exec.name, child: topOf(id) !== id, off: toolsOff(id), webOff: isolatedWebOff(id), long: longRunOf(id) })) return undefined;
+          const long = longRunOf(id);
+          if (isolatedMayRun({ mode, name: exec.name, child: topOf(id) !== id, off: toolsOff(id), webOff: isolatedWebOff(id), long })) {
+            runOverCalls.delete(id);
+            return undefined;
+          }
+          // The run's own step tool after the run ended: say so plainly, and count the calls.
+          if (exec.name === RUN_STEP_TOOL && topOf(id) === id && !long) {
+            runOverCalls.set(id, (runOverCalls.get(id) ?? 0) + 1);
+            return RUN_OVER_TEXT;
+          }
+          runOverCalls.delete(id);
           return `the tool ${exec?.name} is not part of this isolated conversation and was not run.`;
         } catch {
           return 'this isolated conversation could not be checked, so the tool was not run.';
@@ -1520,6 +1535,23 @@ export function apply(ctx, config) {
   };
   ctx.on('agent/created', ({ agent }) => watchStop(agent));
   for (const agent of ctx.get('agents')?.list?.() ?? []) watchStop(agent);
+  // An isolated conversation that keeps calling the step tool of a run that has ended: the turn ends.
+  // Its report is already in the conversation; a new message from the user starts afresh.
+  ctx.on('agent/pre-step', ({ agent }, next) => {
+    try {
+      if (agent?.id && (runOverCalls.get(agent.id) ?? 0) >= RUN_OVER_LIMIT) {
+        runOverCalls.delete(agent.id);
+        ctx.logger.info(`modes: ended a turn of ${agent.id}: it kept calling ${RUN_STEP_TOOL} after its Long run had ended`);
+        return { kind: 'reject' };
+      }
+    } catch (error) {
+      ctx.logger.warn(`modes: could not check for a run that has ended: ${error?.message ?? error}`);
+    }
+    return next();
+  });
+  ctx.on('session/event', (session, event) => {
+    if (event?.type === 'turn/start' && session?.id) runOverCalls.delete(session.id);
+  });
   // An isolated conversation is not handed the app's own notes either (see ISOLATED_DROPS).
   ctx.on('agent/pre-step', async ({ agent }, next) => {
     const decision = await next();

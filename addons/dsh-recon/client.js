@@ -453,6 +453,15 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
             h('button', { type: 'button', className: 'dsh-rc-btn', disabled: busy || !addOk, onClick: addAccount }, 'Add'))
           : null,
 
+        h('div', { className: 'dsh-rc-group' }, 'Long runs'),
+        h('div', { className: 'dsh-rc-row' },
+          h('div', { className: 'dsh-rc-rowtext' },
+            h('div', { className: 'dsh-rc-rowtitle' }, 'Let a Long run check its work, without the internet'),
+            h('div', { className: 'dsh-rc-rowdesc' }, more.longChecks === true
+              ? 'On: after each step the run proves its work with a small command on its files (does the notes file exist, does it name the source). Mission runs it inside a macOS sandbox with no internet and no name lookups, unable to start another program or app, unable to read your home folder, and able to write only in the run\'s own folder in Recon\'s room. The Long run card says so when a run starts.'
+              : 'Off (the default): a Long run here runs no commands at all, as Recon always has. The reviewer judges each step by reading the files. On lets small checks run, with no internet and only in the run\'s own folder.')),
+          h('button', { type: 'button', role: 'switch', className: 'dsh-rc-switch', 'aria-checked': String(more.longChecks === true), 'aria-label': 'Let a Long run check its work, without the internet', disabled: busy || !data.enabled, onClick: () => void save({ longChecks: more.longChecks !== true }, more.longChecks === true ? 'Long runs in Recon run no commands again.' : 'Long runs in Recon now check their work, without the internet.') })),
+
         h('div', { className: 'dsh-rc-group' }, 'More sources'),
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },

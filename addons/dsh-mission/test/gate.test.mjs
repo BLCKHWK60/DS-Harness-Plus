@@ -661,6 +661,60 @@ test('a run\'s planner may not write files: its answer goes in its reply; a work
   }
 });
 
+test('a Long run in Recon with checks switched on in Settings → Recon: the card says so and the run keeps its checks, without the internet', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const agent = app.open('rc2');
+    app.tabs.rc2 = 'recon';
+    app.isolatedIds.add('rc2');
+    const room = mkdtempSync(join(tmpdir(), 'dsh-recon-test-'));
+    const folder = join(room, 'run-rc2');
+    app.services.recon = { runs: () => true, runFolder: (id) => { mkdirSync(join(room, `run-${id}`), { recursive: true }); return join(room, `run-${id}`); }, longChecks: () => true };
+    const card = await app.card('GET', { sessionId: 'rc2' });
+    assert.match(card.json.preflight.ticks.find((entry) => entry.key === 'recon-checks').text, /^Recon: the run checks its work with commands that have no internet/);
+    assert.equal((await app.card('POST', { sessionId: 'rc2', action: 'save', mode: 'auto', minutes: 30, laps: 1, keepAwake: false })).status, 200);
+    assert.equal((await app.card('POST', { sessionId: 'rc2', action: 'arm' })).status, 200);
+    app.says(agent, 'find what the forums say about the leak');
+    assert.ok(await app.until(() => existsSync(join(folder, '.dsh-mission', 'runs'))));
+    const dir = join(folder, '.dsh-mission', 'runs');
+    const run = JSON.parse(readFileSync(join(dir, readdirSync(dir)[0], 'run.json'), 'utf8'));
+    assert.equal(run.long.isolated, true);
+    assert.equal(run.long.offlineChecks, true);
+    rmSync(room, { recursive: true, force: true });
+  } finally {
+    app.done();
+  }
+});
+
+test('a Long run in Bench: the card says what is closed, and the run carries Bench\'s rules; other tabs carry none', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const agent = app.open('bn1');
+    app.tabs.bn1 = 'bench';
+    let checks = true;
+    app.services.bench = { longRunRules: (id) => (id === 'bn1' ? { checks, closePorts: true } : undefined) };
+    let card = await app.card('GET', { sessionId: 'bn1' });
+    assert.match(card.json.preflight.ticks.find((entry) => entry.key === 'bench').text, /device ports closed to those checks/);
+    checks = false;
+    card = await app.card('GET', { sessionId: 'bn1' });
+    assert.match(card.json.preflight.ticks.find((entry) => entry.key === 'bench').text, /checks are switched off in Settings → Bench/);
+    checks = true;
+    assert.equal((await app.card('POST', { sessionId: 'bn1', action: 'save', mode: 'auto', minutes: 30, laps: 1, keepAwake: false })).status, 200);
+    assert.equal((await app.card('POST', { sessionId: 'bn1', action: 'arm' })).status, 200);
+    app.says(agent, 'look up the board and write a note');
+    const dir = join(agent.header.cwd, '.dsh-mission', 'runs');
+    assert.ok(await app.until(() => existsSync(dir) && readdirSync(dir).length > 0), 'the run started');
+    const run = JSON.parse(readFileSync(join(dir, readdirSync(dir)[0], 'run.json'), 'utf8'));
+    assert.deepEqual(run.long.bench, { checks: true, closedPorts: true });
+    assert.equal(run.long.isolated, undefined, 'none of Recon\'s rules');
+    app.open('cw1');
+    app.tabs.cw1 = 'cowork';
+    assert.equal((await app.card('GET', { sessionId: 'cw1' })).json.preflight.ticks.find((entry) => entry.key === 'bench'), undefined, 'Cowork: no Bench line');
+  } finally {
+    app.done();
+  }
+});
+
 test('a Long run in Recon, where Recon keeps it in its rules: its own folder, Restricted, no commands, one model, no record outside', { skip: !hasGit && 'needs git' }, async () => {
   const app = running();
   try {
@@ -678,6 +732,7 @@ test('a Long run in Recon, where Recon keeps it in its rules: its own folder, Re
     const tick = card.json.preflight.ticks.find((entry) => entry.key === 'isolated');
     assert.equal(tick.ok, true);
     assert.match(tick.text, /helpers use this conversation's model and Recon's tools, with files only in the run's own folder/);
+    assert.match(card.json.preflight.ticks.find((entry) => entry.key === 'recon-checks').text, /^Recon: the run runs no commands; the reviewer judges each item by reading\./, 'checks off: the default');
     assert.equal((await app.card('POST', { sessionId: 'rc1', action: 'save', mode: 'auto', minutes: 30, laps: 2, keepAwake: false })).status, 200);
     assert.equal((await app.card('POST', { sessionId: 'rc1', action: 'arm' })).status, 200);
     app.says(agent, 'find what the forums say about the leak');
@@ -688,6 +743,7 @@ test('a Long run in Recon, where Recon keeps it in its rules: its own folder, Re
     assert.equal(run.root, folder);
     assert.equal(run.mode, 'Restricted', 'Restricted whatever was saved: nothing outside the folder');
     assert.equal(run.long.isolated, true);
+    assert.equal(run.long.offlineChecks, undefined, 'no checks unless switched on in Settings → Recon');
     assert.equal(app.provided.mission.mode('rc1'), 'restricted');
     // mission_step is let through now (it would refuse an isolated conversation before).
     const stepped = await app.step(agent);
@@ -733,6 +789,36 @@ test('a Long run in Recon, where Recon keeps it in its rules: its own folder, Re
     // /mission modes stay refused in Recon.
     assert.match((await app.mission(agent, 'auto')).text, /isolated conversation/);
     rmSync(room, { recursive: true, force: true });
+  } finally {
+    app.done();
+  }
+});
+
+test('a run that has ended: the step tool gives the report once more, then a short answer; a model that keeps calling has its turn ended (16 November: some 340 calls)', { skip: !hasGit && 'needs git' }, async () => {
+  const { OVER_LIMIT, RUN_ENDED_AGAIN } = await import('../index.js');
+  const app = running();
+  try {
+    const agent = app.open('o1');
+    app.tabs.o1 = 'code';
+    app.levels.o1 = 'workspace-write';
+    assert.equal((await app.card('POST', { sessionId: 'o1', action: 'start', goal: 'make every test pass please', mode: 'restricted', keepAwake: false })).status, 200);
+    await app.card('POST', { sessionId: 'o1', action: 'end' });
+    await app.tick();
+    const nextStep = async () => {
+      let decision = { kind: 'enter', messages: [] };
+      for (const handler of app.handlers('agent/pre-step')) decision = await handler({ agent }, async () => decision);
+      return decision;
+    };
+    assert.match((await app.step(agent)).text, /^The mission run has ended\.[\s\S]*The run is over\./, 'the report once more');
+    assert.equal((await app.step(agent)).text, RUN_ENDED_AGAIN);
+    assert.equal((await nextStep()).kind, 'enter');
+    for (let n = 2; n < OVER_LIMIT; n += 1) await app.step(agent);
+    assert.equal((await nextStep()).kind, 'reject', `after ${OVER_LIMIT} calls the turn ends`);
+    assert.equal((await nextStep()).kind, 'enter', 'counted afresh');
+    // A new turn of the user's starts afresh, and the report comes once more.
+    await app.step(agent);
+    app.turnStarts(agent, 9);
+    assert.match((await app.step(agent)).text, /^The mission run has ended\./);
   } finally {
     app.done();
   }

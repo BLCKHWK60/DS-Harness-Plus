@@ -14,7 +14,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeF
 import { basename, dirname, join } from 'node:path';
 import { OWN_FOLDER, real } from './lib/paths.js';
 import { MODE_LABELS } from './lib/guard.js';
-import { ROLES, addAsk, applyChecks, dropCommands, noCommands, applyPlan, applyReview, applyUndo, applyWork, brokenChecks, checklist, finish, isLong, lapNotes, newRun, nextStep, reopen, report, tally } from './lib/run.js';
+import { ROLES, addAsk, applyChecks, dropCommands, noChecks, noCommands, offlineChecks, portsClosed, workersWithoutCommands, applyPlan, applyReview, applyUndo, applyWork, brokenChecks, checklist, finish, isLong, lapNotes, newRun, nextStep, reopen, report, tally } from './lib/run.js';
 import { conductorNote, formatPrompt, jsonOf, planPrompt, reviewPrompt, workPrompt } from './lib/prompts.js';
 import { runCommand } from './lib/shell.js';
 
@@ -33,6 +33,8 @@ const HELPER_MS = 30 * 60_000;
 export const FAILED_TURN_MS = 5000;
 /** Helpers in a row that could not do their item before a run pauses itself. */
 export const FAIL_STREAK = 3;
+/** Added to a failed check in a Bench Long run that reached for a device's port. */
+export const PORTS_CLOSED_NOTE = 'Bench keeps the Mac\'s device ports closed to a Long run\'s checks, so this check could not open one. To run a Bench Long run without checks, switch them off in Settings → Bench.';
 const ROLE_NAMES = { plan: 'planner', implement: 'worker', review: 'reviewer' };
 
 /** App 0.2.2-rc.2 takes the task's fields at the top level of the spec; rc.1 took them under `request`. */
@@ -345,7 +347,12 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     } catch {
       point = undefined;
     }
-    const result = await runCommand({ command, root: run.root, signal });
+    const closed = portsClosed(run);
+    const ran = await runCommand({ command, root: run.root, signal, closePorts: closed, offline: offlineChecks(run) });
+    // In Bench a check may not open a device's port: said where the user and the reviewer read it.
+    const result = closed && !ran.ok && /\/dev\/(cu|tty)\.|\/dev\/r?disk|Operation not permitted/i.test(ran.output ?? '')
+      ? { ...ran, output: `${ran.output}\n[${PORTS_CLOSED_NOTE}]` }
+      : ran;
     let back = [];
     if (point) {
       try {
@@ -383,7 +390,7 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     } catch {
       files = '';
     }
-    const prompt = planPrompt({ goal: run.goal, root: run.root, files, maxItems: run.limits.maxItems, notes: lapNotes(run), context: run.long?.context ?? '', noCommands: noCommands(run) });
+    const prompt = planPrompt({ goal: run.goal, root: run.root, files, maxItems: run.limits.maxItems, notes: lapNotes(run), context: run.long?.context ?? '', noCommands: noChecks(run), offline: offlineChecks(run) });
     let done = await helper({ parent, role: 'plan', root: run.root, label: 'Mission: planner', prompt, signal, reader: 'the planner' });
     let plan = jsonOf(done.text);
     if (!plan || !Array.isArray(plan.items)) {
@@ -423,7 +430,7 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     const senior = run.limits.maxTries > 1 && item.tries >= run.limits.maxTries - 1;
     const others = run.items.filter((entry) => entry.id !== item.id).map((entry) => `${entry.id}. ${entry.title} [${entry.status}]`).join('\n');
     await lapStart(run, item);
-    const prompt = workPrompt({ goal: run.goal, summary: run.summary, item, others, senior, notes: lapNotes(run), root: run.root, noCommands: noCommands(run) });
+    const prompt = workPrompt({ goal: run.goal, summary: run.summary, item, others, senior, notes: lapNotes(run), root: run.root, noCommands: workersWithoutCommands(run) });
     let done;
     let failed = '';
     try {
@@ -435,7 +442,7 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     }
     keep(run, `item-${item.id}-try-${item.tries + 1}`, done.text || failed);
     const blocked = /^\s*\**\s*BLOCKED\b/i.test(done.text);
-    const check = item.check && !failed && !noCommands(run) ? await prove(id, run, item.check, signal) : undefined;
+    const check = item.check && !failed && !noChecks(run) ? await prove(id, run, item.check, signal) : undefined;
     const aside = !check?.ok && step.asides.length > 0 ? step.asides.join(' ') : '';
     applyWork(run, item.id, {
       report: done.text,

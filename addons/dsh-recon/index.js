@@ -123,6 +123,12 @@ export const Config = z.object({
    */
   archiveOn: z.boolean().default(false).volatile(),
   /**
+   * A Long run here may check its work with small commands that Mission runs with no internet, no
+   * name lookups, no other programs, nothing of the home folder and writing only in the run's folder.
+   * Off (the owner's default): no commands at all; the reviewer judges each step by reading.
+   */
+  longChecks: z.boolean().default(false).volatile(),
+  /**
    * Read the Internet Archive directly, not through Tor: its list of copies and the copies
    * themselves, still GET only, text only, with the same filters and limits. The Archive then sees
    * this Mac's internet address. Off: through Recon's Tor, where the Archive refuses most reads.
@@ -642,7 +648,7 @@ export function apply(ctx, config) {
     if (!agent || topIdOf(agent) !== String(agent.id)) return false;
     return inRecon(agent) && inRoom(agent);
   };
-  if (typeof ctx.provide === 'function') ctx.effect(() => ctx.provide('recon', Object.freeze({ apiVersion: 2, runs: runsIn, runFolder: (id) => (runsIn(id) ? runFolder(id) : '') })), 'recon: run folders');
+  if (typeof ctx.provide === 'function') ctx.effect(() => ctx.provide('recon', Object.freeze({ apiVersion: 2, runs: runsIn, runFolder: (id) => (runsIn(id) ? runFolder(id) : ''), longChecks: () => plain(config?.longChecks) === true })), 'recon: run folders');
   if (typeof ctx.provide === 'function') ctx.effect(() => ctx.provide('reconWipe', Object.freeze({ has: (id) => wipeList.has(String(id)), list: () => wipeList.list() })), 'recon: wipe list');
   /** Set once the app's conversation services are there. */
   let wiper;
@@ -883,7 +889,7 @@ export function apply(ctx, config) {
         status: vpn.status(),
         test: vpnTest,
       },
-      more: { web: plain(config?.webOn) !== false, archive: plain(config?.archiveOn) === true, archiveDirect: archiveDirect(), news: plain(config?.newsOn) === true, archiveHost: ARCHIVE, newsHost: NEWS },
+      more: { longChecks: plain(config?.longChecks) === true, web: plain(config?.webOn) !== false, archive: plain(config?.archiveOn) === true, archiveDirect: archiveDirect(), news: plain(config?.newsOn) === true, archiveHost: ARCHIVE, newsHost: NEWS },
       room: ROOM,
       exportFolder: exportFolder(),
       waitingToWipe: wipeList.list().length,

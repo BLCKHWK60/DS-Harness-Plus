@@ -52,4 +52,10 @@ export function whyNot({ isolated, tier = null, helpers = false, word, tab = '',
 }
 
 /** What the Long run card says in a Recon conversation, where Recon keeps the run inside its rules. */
-export const RECON_LONG_TEXT = 'A Recon conversation: its helpers use this conversation\'s model and Recon\'s tools, with files only in the run\'s own folder in Recon\'s room; no programs or commands. End and wipe deletes the run too.';
+/** A Bench conversation's Long run, checks on (the default) or off (Settings → Bench). */
+export const BENCH_CHECKS_TEXT = 'Bench: the run checks its work, with the Mac\'s device ports closed to those checks. Its helpers run no commands. Checks can be switched off in Settings → Bench.';
+export const BENCH_NO_CHECKS_TEXT = 'Bench: this run checks nothing by itself (checks are switched off in Settings → Bench): the reviewer judges each item by reading. Its helpers run no commands.';
+/** A Recon Long run's checks: off (the default) or on without the internet (Settings → Recon). */
+export const RECON_CHECKS_TEXT = 'Recon: the run checks its work with commands that have no internet, see only the run\'s folder and can start no other program. Switch this off in Settings → Recon.';
+export const RECON_NO_CHECKS_TEXT = 'Recon: the run runs no commands; the reviewer judges each item by reading. Checks without the internet can be switched on in Settings → Recon.';
+export const RECON_LONG_TEXT = 'A Recon conversation: its helpers use this conversation\'s model and Recon\'s tools, with files only in the run\'s own folder in Recon\'s room, and run no programs or commands. End and wipe deletes the run too.';

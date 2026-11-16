@@ -51,7 +51,7 @@ const COMMON = [
  * @param {object} input - the goal and what the folder holds.
  * @returns {string} the planner's task.
  */
-export function planPrompt({ goal, root, files, maxItems, notes = '', context = '', noCommands = false }) {
+export function planPrompt({ goal, root, files, maxItems, notes = '', context = '', noCommands = false, offline = false }) {
   return [
     'MISSION_PLAN',
     'You are the planner. Turn the goal into a short checklist that other models will work through one item at a time. Change nothing: only read.',
@@ -76,6 +76,7 @@ export function planPrompt({ goal, root, files, maxItems, notes = '', context = 
     '- Use commands this project already has. Do not name a tool that is not installed.',
     '- If the goal needs tests that do not exist, make writing them an item of its own, before the code they test.',
     ...(noCommands ? [NO_COMMANDS_PLAN] : []),
+    ...(offline ? [OFFLINE_CHECKS_PLAN] : []),
   ].join('\n');
 }
 
@@ -196,5 +197,7 @@ export function formatPrompt(kind, text) {
 
 /** A Recon conversation's run (no programs or commands there): what the planner is told. */
 export const NO_COMMANDS_PLAN = 'This run can run no commands at all: leave every "check" empty and "checks" an empty list. The reviewer judges each item by reading the files. Plan research items: each one searches and reads with the tools the workers have, and writes what it found, with its sources, into a file in the working folder.';
+/** What the planner of a Recon run with checks switched on is told. */
+export const OFFLINE_CHECKS_PLAN = 'Checks here run with no internet, see only the working folder, and can start no other program: give only checks on the files in it (test -f, grep -q, wc), or leave a check empty. Plan research items: each one searches and reads with the tools the workers have, and writes what it found, with its sources, into a file in the working folder.';
 /** What a worker is told there. */
 export const NO_COMMANDS_WORK = 'You have no programs or commands here: search and read with your tools, and write what you found, with its sources, into a file in the working folder.';

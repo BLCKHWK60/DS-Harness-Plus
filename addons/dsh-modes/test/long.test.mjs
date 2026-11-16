@@ -37,7 +37,7 @@ test('the mask while a Long run is on', () => {
 test('Modes follows Long runs: the mask, the shell guard, the note, the service, the settings', () => {
   assert.match(source, /const long = longRunOf\(sessionId\);[\s\S]{0,400}if \(long && mode\?\.isolated\) return isolatedRunMask\(\{ tools: mode\.tools, child: topOf\(sessionId\) !== sessionId, files: long\.files/);
   assert.match(source, /if \(long && !mode\?\.isolated\) \{\n      return longRunMask\(/);
-  assert.match(source, /isolatedMayRun\(\{ mode, name: exec\.name, child: topOf\(id\) !== id, off: toolsOff\(id\), webOff: isolatedWebOff\(id\), long: longRunOf\(id\) \}\)/);
+  assert.match(source, /const long = longRunOf\(id\);\s+if \(isolatedMayRun\(\{ mode, name: exec\.name, child: topOf\(id\) !== id, off: toolsOff\(id\), webOff: isolatedWebOff\(id\), long \}\)\)/);
   assert.match(source, /if \(mode\?\.isolated \|\| \(long \? long\.web : webOn\(id, mode\)\)\) return undefined;/);
   assert.match(source, /A Long run is on in this conversation\./);
   assert.match(source, /if \(event\?\.kind !== 'long' \|\| \(event\.type !== 'started' && event\.type !== 'finished'\)\) return;/);
@@ -104,4 +104,42 @@ test('a Long run in an isolated tab (Recon): the conversation gets its own tools
   assert.equal(isolatedMayRun({ mode, name: 'recon_onion_read', child: true, long }), true);
   assert.equal(isolatedMayRun({ mode, name: 'recon_onion_read', child: true }), false, 'without a run, no helper at all');
   assert.equal(isolatedMayRun({ mode, name: 'mission_step' }), false, 'without a run, no step tool');
+});
+
+test('a Recon conversation whose Long run has ended: the step tool says the run is over, and a model that keeps calling it has its turn ended (16 November: some 340 calls)', async () => {
+  const { RUN_OVER_LIMIT, RUN_OVER_TEXT } = await import('../lib/isolation.js');
+  const { boot, makeWorld } = await import('./app.mjs');
+  const RECON = { label: 'Recon', tools: ['recon_cite'], sandbox: 'read-only', prompt: 'Recon method.', isolated: true };
+  const world = makeWorld({ pruneStaleSessions: false, extraModes: JSON.stringify({ recon: RECON }), sessionModes: JSON.stringify({ r1: 'recon', c1: 'cowork' }) });
+  const on = new Set(['r1']);
+  const app = boot(world, { known: ['recon_cite', 'mission_step', 'bash'], mission: { longRun: (id) => (on.has(id) ? { files: true, web: false } : undefined) } });
+  try {
+    const r1 = (await app.open('r1')).agent;
+    await app.open('c1');
+    const call = (id, name = 'mission_step') => app.guard({ name, agent: { id }, arguments: {} });
+    const nextStep = (agent) => app.waterfall('agent/pre-step', { agent }, () => ({ kind: 'enter', messages: [] }));
+    // While the run is on: the step tool runs, nothing is counted.
+    assert.equal(call('r1'), undefined);
+    on.delete('r1');
+    // The run has ended: a plain answer instead of "not part of this conversation".
+    assert.equal(call('r1'), RUN_OVER_TEXT);
+    assert.match(RUN_OVER_TEXT, /has ended[\s\S]*do not call mission_step again[\s\S]*then stop/);
+    assert.equal((await nextStep(r1)).kind, 'enter', 'once is fine: the model may still answer');
+    // Another tool in between starts the count afresh.
+    call('r1');
+    assert.match(call('r1', 'bash'), /is not part of this isolated conversation/);
+    for (let n = 1; n < RUN_OVER_LIMIT; n += 1) call('r1');
+    assert.equal((await nextStep(r1)).kind, 'enter');
+    call('r1');
+    assert.equal((await nextStep(r1)).kind, 'reject', `after ${RUN_OVER_LIMIT} calls in a row the turn ends`);
+    assert.equal((await nextStep(r1)).kind, 'enter', 'counted afresh after that');
+    // A new turn of the user's starts afresh too.
+    for (let n = 0; n < RUN_OVER_LIMIT; n += 1) call('r1');
+    await app.emit('session/event', { id: 'r1' }, { type: 'turn/start' });
+    assert.equal((await nextStep(r1)).kind, 'enter');
+    // Other tabs are not touched.
+    assert.equal(call('c1'), undefined, 'Cowork: as before');
+  } finally {
+    app.stop();
+  }
 });
