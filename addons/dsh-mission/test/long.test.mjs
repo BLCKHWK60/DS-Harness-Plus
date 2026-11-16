@@ -402,3 +402,80 @@ test('the planner and the reviewer are known as readers while they work; a check
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('a Recon conversation\'s run: commands are dropped (the reviewer judges), helpers use the conversation\'s model, workers are told the folder', async () => {
+  const { createRunner } = await import('../runner.js');
+  const { NO_COMMANDS_PLAN, NO_COMMANDS_WORK } = await import('../lib/prompts.js');
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const root = mkdtempSync(join(tmpdir(), 'mission-recon-'));
+  try {
+    const goal = { id: 'g', revision: 1, phase: 'active' };
+    let made = false;
+    const goals = { create: () => { made = true; return goal; }, get: () => (made ? goal : undefined), pause: () => {}, resume: () => {}, complete: () => {}, clear: () => {} };
+    const seen = [];
+    const subagents = {
+      startActivation: async (spec) => {
+        seen.push({ label: spec.label, model: spec.agentOptions?.model, prompt: spec.prompt?.[0]?.text ?? '' });
+        const text = spec.label === 'Mission: planner' ? '{"items":[{"title":"Search the forums","check":"curl https://example.com"}],"checks":["ls"]}' : 'found it';
+        return { childId: `c${seen.length}`, result: Promise.resolve({ output: [{ type: 'text', text }], stopReason: 'end' }) };
+      },
+    };
+    // The conversation is set to "different models", and its tier has other models for the roles.
+    const modes = { helperModels: () => 'roles' };
+    const modelTiers = { resolveTier: () => ({ id: 't' }), roleRoute: () => ({ provider: 'cloud', model: 'big-cloud-model' }) };
+    const points = { take: async () => ({ id: 'p', number: 1 }), files: async () => ({ files: [], more: false }), idOf: async () => 'p', changes: async () => '' };
+    const runner = createRunner({ get: (name) => ({ goals, subagents, modes, modelTiers })[name] }, { settings: () => ({ limits: { maxItems: 12, maxTries: 3, maxReviews: 2, maxSteps: 60, waitMinutes: 3 }, roles: {}, projects: {} }), pointsOf: () => points, afterCommand: async () => [], warn: () => {}, home: undefined });
+    const agent = { id: 'rc', model: { current: () => ({ provider: 'local', model: 'home-model' }) } };
+    await runner.start(agent, 'find what the forums say', { mode: 'restricted', root }, { kind: 'long', long: { minutes: 30, laps: 1, isolated: true } });
+    await runner.step(agent, new AbortController().signal, 60000); // plan
+    const run = runner.runOf('rc');
+    assert.deepEqual(run.checks, [], 'no overall commands');
+    assert.equal(run.items[0].check, '', 'no item command');
+    assert.ok(seen[0].prompt.includes(NO_COMMANDS_PLAN));
+    const worked = await runner.step(agent, new AbortController().signal, 60000); // item 1
+    assert.match(worked, /no command proves it, so the reviewer will judge it/);
+    assert.ok(seen[1].prompt.includes(NO_COMMANDS_WORK));
+    assert.ok(seen[1].prompt.includes(`Working folder: ${root}. Keep every file you write inside it.`));
+    assert.deepEqual([...new Set(seen.map((entry) => entry.model))], ['home-model'], 'every helper on the conversation\'s own model');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a Recon run ended while a step was under way: the step writes nothing into the run\'s folder again', async () => {
+  const { createRunner } = await import('../runner.js');
+  const { mkdtempSync, rmSync, existsSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const root = mkdtempSync(join(tmpdir(), 'mission-recon-end-'));
+  try {
+    const goal = { id: 'g', revision: 1, phase: 'active' };
+    let made = false;
+    const goals = { create: () => { made = true; return goal; }, get: () => (made ? goal : undefined), pause: () => {}, resume: () => {}, complete: () => {}, clear: () => {} };
+    const subagents = {
+      startActivation: async (spec) => (spec.label === 'Mission: planner'
+        ? { childId: 'p', result: Promise.resolve({ output: [{ type: 'text', text: '{"items":[{"title":"one"}],"checks":[]}' }], stopReason: 'end' }) }
+        : { childId: 'w', result: new Promise(() => {}), dispose: () => {} }),
+    };
+    const points = { take: async () => ({ id: 'p', number: 1 }), files: async () => ({ files: [], more: false }), idOf: async () => 'p', changes: async () => '' };
+    const runner = createRunner({ get: (name) => ({ goals, subagents })[name] }, { settings: () => ({ limits: { maxItems: 12, maxTries: 3, maxReviews: 2, maxSteps: 60, waitMinutes: 3 }, roles: {}, projects: {} }), pointsOf: () => points, afterCommand: async () => [], warn: () => {}, home: undefined });
+    const agent = { id: 'rc', model: { current: () => ({ provider: 'local', model: 'm' }) } };
+    const events = [];
+    runner.onEvent((event) => events.push(event));
+    await runner.start(agent, 'secret goal words', { mode: 'restricted', root }, { kind: 'long', long: { minutes: 30, laps: 1, isolated: true } });
+    await runner.step(agent, new AbortController().signal, 60000);
+    const under = runner.step(agent, new AbortController().signal, 60000);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    runner.end(agent);
+    rmSync(join(root, '.dsh-mission'), { recursive: true, force: true }); // what Recon's End and wipe does
+    await under;
+    assert.equal(existsSync(join(root, '.dsh-mission')), false, 'not written again');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.ok(events.length > 0);
+    assert.equal(events.every((event) => event.goal === ''), true, 'a Recon run\'s events carry no goal');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

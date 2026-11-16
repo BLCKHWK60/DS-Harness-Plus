@@ -51,7 +51,7 @@ const COMMON = [
  * @param {object} input - the goal and what the folder holds.
  * @returns {string} the planner's task.
  */
-export function planPrompt({ goal, root, files, maxItems, notes = '', context = '' }) {
+export function planPrompt({ goal, root, files, maxItems, notes = '', context = '', noCommands = false }) {
   return [
     'MISSION_PLAN',
     'You are the planner. Turn the goal into a short checklist that other models will work through one item at a time. Change nothing: only read.',
@@ -75,6 +75,7 @@ export function planPrompt({ goal, root, files, maxItems, notes = '', context = 
     `- ${CHECK_RULE}`,
     '- Use commands this project already has. Do not name a tool that is not installed.',
     '- If the goal needs tests that do not exist, make writing them an item of its own, before the code they test.',
+    ...(noCommands ? [NO_COMMANDS_PLAN] : []),
   ].join('\n');
 }
 
@@ -82,7 +83,7 @@ export function planPrompt({ goal, root, files, maxItems, notes = '', context = 
  * @param {object} input - the item and what happened before.
  * @returns {string} the worker's task.
  */
-export function workPrompt({ goal, summary, item, others, senior, notes = '' }) {
+export function workPrompt({ goal, summary, item, others, senior, notes = '', root = '', noCommands = false }) {
   return [
     'MISSION_WORK',
     senior
@@ -91,6 +92,8 @@ export function workPrompt({ goal, summary, item, others, senior, notes = '' }) 
     ...COMMON,
     '',
     `The overall goal: ${clip(goal, 2000)}`,
+    root ? `Working folder: ${root}. Keep every file you write inside it.` : '',
+    noCommands ? NO_COMMANDS_WORK : '',
     summary ? `The plan: ${clip(summary, 800)}` : '',
     others ? `The other items, for context only (do not do them):\n${clip(others, 1500)}` : '',
     notes ? `Notes the run keeps between laps (what passed, what failed, what to avoid):\n${clip(notes, 2000)}` : '',
@@ -190,3 +193,8 @@ export function formatPrompt(kind, text) {
     clip(String(text ?? ''), 20000),
   ].join('\n');
 }
+
+/** A Recon conversation's run (no programs or commands there): what the planner is told. */
+export const NO_COMMANDS_PLAN = 'This run can run no commands at all: leave every "check" empty and "checks" an empty list. The reviewer judges each item by reading the files. Plan research items: each one searches and reads with the tools the workers have, and writes what it found, with its sources, into a file in the working folder.';
+/** What a worker is told there. */
+export const NO_COMMANDS_WORK = 'You have no programs or commands here: search and read with your tools, and write what you found, with its sources, into a file in the working folder.';

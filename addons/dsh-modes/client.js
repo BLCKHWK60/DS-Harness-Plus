@@ -1053,7 +1053,8 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
             onPickLens: (picked) => void pickSetting('lens', picked),
             // The last stop opens Mission's Long run card (Long run part, step 61): every tab but Recon (also a Recon
             // conversation moved elsewhere), and only while Mission is on.
-            onLongRun: depthKind(modeDef) !== 'isolated' && !lockedHere && missionHere ? () => window.dispatchEvent(new CustomEvent('dsh-mission:long', { detail: { sessionId } })) : undefined,
+            // Recon too (16 November): Mission keeps its run inside Recon's rules.
+            onLongRun: !lockedHere && missionHere ? () => window.dispatchEvent(new CustomEvent('dsh-mission:long', { detail: { sessionId } })) : undefined,
           }),
           h(HelpersButton, {
             t, sessionId, busy: state.busy,

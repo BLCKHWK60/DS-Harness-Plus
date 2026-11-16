@@ -428,7 +428,15 @@ export function apply(ctx, config) {
     try {
       inner.effect(() => inner.mission.onEvent?.((event) => {
         if (!enabled()) return;
-        const base = { scheduled: false, run: event.kind === 'long' ? 'long' : 'mission', name: event.folder ?? '' };
+        // A Recon conversation's run is named only "Recon": its folder holds the conversation's id, and
+        // an alert can go to an outside service (ntfy).
+        let sealed = false;
+        try {
+          sealed = ctx.get('modes')?.isolated?.(event.conversation) === true;
+        } catch {
+          sealed = true;
+        }
+        const base = { scheduled: false, run: event.kind === 'long' ? 'long' : 'mission', name: sealed ? 'Recon' : event.folder ?? '' };
         if (event.type === 'finished') void alerter.notify({ ...base, event: 'finished' });
         else if (event.type === 'needs-you') void alerter.notify({ ...base, event: 'needs' });
         else if (event.type === 'stopped-by-itself') void alerter.notify({ ...base, event: 'failed', state: event.why === 'restart' ? 'restart' : 'failed' });

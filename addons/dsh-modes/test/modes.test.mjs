@@ -745,7 +745,8 @@ test('the chat box: a Web pick writes only On or Off; a Depth pick is kept for t
     assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
   }
   // Long run: every tab but Recon (also a Recon conversation moved elsewhere), only while Mission is on.
-  assert.match(source, /onLongRun: depthKind\(modeDef\) !== 'isolated' && !lockedHere && missionHere \?/);
+  // Recon too since 16 November (Mission keeps the run inside Recon's rules); never a Recon conversation moved elsewhere.
+  assert.match(source, /onLongRun: !lockedHere && missionHere \?/);
   assert.doesNotMatch(source, /LONG_TABS/);
   assert.doesNotMatch(cut('DepthButton'), /return null/, 'the button never hides itself');
   const { depthKind } = new Function(`${cut('depthKind')}\nreturn { depthKind };`)();

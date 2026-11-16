@@ -55,8 +55,33 @@ export function heldMode({ found, wasIsolated, fresh }) {
  * @param {boolean} [want.webOff] - the conversation's Web button is on Off.
  * @returns {boolean} true when the call may run.
  */
-export function isolatedMayRun({ mode, name, child = false, off = false, webOff = false }) {
+export function isolatedMayRun({ mode, name, child = false, off = false, webOff = false, long }) {
+  // A Long run (Recon, 16 November): the conversation conducts it, its helpers do the work with the
+  // mode's own tools and, with Files on, the file tools (in the run's folder; Mission keeps them there).
+  if (long && !off) {
+    const own = Array.isArray(mode?.tools) && mode.tools.includes(name) && !(webOff && webReaching([name]).length > 0);
+    if (own) return true;
+    return child ? long.files !== false && ISOLATED_RUN_FILES.includes(name) : name === RUN_STEP_TOOL;
+  }
   return !child && Array.isArray(mode?.tools) && mode.tools.includes(name) && !off && !(webOff && webReaching([name]).length > 0);
+}
+
+/** The tool a conversation conducts its Long run with (Mission). */
+export const RUN_STEP_TOOL = 'mission_step';
+/** The file tools a Long run's helpers get in an isolated conversation: no shell, no programs. */
+export const ISOLATED_RUN_FILES = Object.freeze(['read', 'write', 'edit', 'multi_edit', 'glob', 'grep']);
+
+/**
+ * The tool mask of an isolated conversation while a Long run is on: the conversation keeps its mode's
+ * tools and gains the step tool; its helpers get the mode's tools and, with Files on, the file tools.
+ * @param {object} want - `tools` (the mode's), `child`, `files`, `off`, `webOff`.
+ * @returns {{allow: string[]}} the mask.
+ */
+export function isolatedRunMask({ tools, child = false, files = true, off = false, webOff = false }) {
+  if (off || !Array.isArray(tools)) return { allow: [] };
+  const online = webOff ? webReaching(tools) : [];
+  const own = tools.filter((name) => !online.includes(name));
+  return { allow: child ? [...own, ...(files ? ISOLATED_RUN_FILES : [])] : [...own, RUN_STEP_TOOL] };
 }
 
 /**

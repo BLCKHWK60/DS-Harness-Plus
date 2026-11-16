@@ -376,3 +376,15 @@ Usenet provider; you can have up to eight.
 - **Not verified:** the cloud agreement in the running app (unit test only); other engines than
   Ahmia. The builder has never run the real tor program or opened an .onion site. Ahmia's page formats were read once on the normal web on 2026-11-14 and can change;
   if its result page changes, a search falls back to the page's plain .onion links.
+
+## Long run in Recon (16 November 2026)
+
+A Recon conversation can run a Long run (the Run button next to Send, with Mission on). Recon keeps it inside its rules:
+
+- **Helpers belong to the conversation.** A run's planner, workers and reviewer are helpers of the Recon conversation. Everything Recon keeps per conversation goes by that conversation (`topIdOf`): the numbered sources and the research log, the .onion addresses it may open, your `/recon cloud` agreement, the notes for the export, and the check before every step that findings go only to a model they may go to.
+- **One model.** Helpers use the conversation's own model, never another role model.
+- **No programs or commands.** The conversation gets Recon's tools and `mission_step`; helpers get Recon's tools and, with Files on, the file tools (read, write, edit, multi_edit, glob, grep). Mission runs no check commands in such a run: the reviewer judges each item.
+- **Its own folder.** The run works in `<room>/run-<conversation id>` (`recon.runFolder`), in Mission's Restricted mode there; helpers are moved into it before their turn. Mission writes nothing about the run outside the room.
+- **End and wipe** ends the run (`mission.endRun`), deletes its folder, and deletes the helpers' saved conversations with the conversation's.
+
+Mission asks `ctx.get('recon').runs()`: without it an isolated conversation is left alone, as before.

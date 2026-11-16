@@ -237,8 +237,28 @@ export function apply(ctx, config) {
       return false;
     }
   };
-  /** Whether a conversation runs in the room. */
-  const inRoom = (agent) => sameFolder((agent?.header ?? agent?.session?.header)?.cwd);
+  /** Whether a conversation (a helper's: its conversation) runs in the room. */
+  const inRoom = (agent) => {
+    const top = topOf(agent);
+    return sameFolder((top?.header ?? top?.session?.header)?.cwd ?? (agent?.header ?? agent?.session?.header)?.cwd);
+  };
+  /**
+   * A Long run's own folder in the room (Mission keeps its record, checkpoints and the helpers' files
+   * there). Each conversation has its own; End and wipe deletes it, and the room is emptied at every start.
+   * @returns {string} the folder, made if need be ('' when it cannot be).
+   */
+  const runFolder = (id) => {
+    const safe = String(id ?? '').replace(/[^\w-]/g, '').slice(0, 80);
+    if (!safe || !existsSync(ROOM)) return '';
+    const folder = join(ROOM, `run-${safe}`);
+    try {
+      mkdirSync(folder, { recursive: true, mode: 0o700 });
+      const seen = lstatSync(folder);
+      return seen.isDirectory() && !seen.isSymbolicLink() ? folder : '';
+    } catch {
+      return '';
+    }
+  };
 
   const settingsOf = (ns) => {
     try {
@@ -254,10 +274,42 @@ export function apply(ctx, config) {
       return undefined;
     }
   };
-  /** Whether an agent is an isolated Recon conversation. A missing Modes add-on means no. */
+  /**
+   * The conversation an agent belongs to: itself, or for a helper (a Long run's planner, worker or
+   * reviewer) the conversation that started it. What Recon keeps per conversation (sources, the
+   * addresses it may open, your agreement to a cloud model, the export) is that conversation's.
+   * @returns {string} its id ('' when none).
+   */
+  const topIdOf = (agent) => {
+    let id = agent?.id ? String(agent.id) : '';
+    let parent = agent?.header?.parentSession ?? agent?.session?.header?.parentSession;
+    for (let depth = 0; parent && depth < 8; depth += 1) {
+      id = String(parent);
+      let above;
+      try {
+        above = ctx.get('agents')?.get?.(id);
+      } catch {
+        above = undefined;
+      }
+      parent = above?.header?.parentSession ?? above?.session?.header?.parentSession;
+    }
+    return id;
+  };
+  /** The agent of an agent's conversation (itself, or the one a helper works for). */
+  const topOf = (agent) => {
+    const id = topIdOf(agent);
+    if (!id || id === String(agent?.id ?? '')) return agent;
+    try {
+      return ctx.get('agents')?.get?.(id) ?? { id };
+    } catch {
+      return { id };
+    }
+  };
+  /** Whether an agent is an isolated Recon conversation, or a helper of one. A missing Modes add-on means no. */
   const inRecon = (agent) => {
     const service = modes();
-    return Boolean(agent?.id) && service?.get?.(agent.id) === MODE_ID && service?.isolated?.(agent.id) === true;
+    const id = topIdOf(agent);
+    return Boolean(id) && service?.get?.(id) === MODE_ID && service?.isolated?.(id) === true;
   };
   /** The conversation's model, and where it runs. */
   const modelOf = (agent) => {
@@ -271,8 +323,9 @@ export function apply(ctx, config) {
     return { route, place: providerPlace(settingsOf('llm-pi-ai')?.providers, route?.provider) };
   };
   const gate = (agent) => {
+    // The model the agent uses; the agreement is the conversation's (a helper uses the same model).
     const { route, place } = modelOf(agent);
-    return mayReceive({ place, route, id: agent?.id, consent });
+    return mayReceive({ place, route, id: topIdOf(agent), consent });
   };
 
   /** Conversations whose record was rebuilt from their saved history since Recon started. */
@@ -357,7 +410,8 @@ export function apply(ctx, config) {
     if (on && !toolsOff) {
       const tools = ctx.get('tools');
       if (!tools?.register) return;
-      toolsOff = buildTools({ enabled, inRecon: (exec) => inRecon(exec?.agent), inRoom: (exec) => inRoom(exec?.agent), gate: (exec) => gate(exec?.agent), onion, usenet, web, sources, idOf: (exec) => String(exec?.agent?.id ?? ''), restore: (exec) => restore(exec?.agent) }).map((tool) => tools.register(tool));
+      // A helper's searches and reads belong to its conversation: one numbering of sources, one log, one export.
+      toolsOff = buildTools({ enabled, inRecon: (exec) => inRecon(exec?.agent), inRoom: (exec) => inRoom(exec?.agent), gate: (exec) => gate(exec?.agent), onion, usenet, web, sources, idOf: (exec) => topIdOf(exec?.agent), restore: (exec) => restore(topOf(exec?.agent)) }).map((tool) => tools.register(tool));
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
       toolsOff = undefined;
@@ -400,7 +454,10 @@ export function apply(ctx, config) {
    */
   const holdsRecon = (agent) => {
     if (!agent?.id) return false;
-    if (sources.readCount(agent.id) > 0) return true;
+    // A helper of a Recon conversation carries its goal, plan and findings from its first request on
+    // (review finding 3): it counts as holding them.
+    if (topIdOf(agent) !== String(agent.id) && inRecon(agent)) return true;
+    if (sources.readCount(topIdOf(agent)) > 0) return true;
     try {
       const messages = agent.session?.deriveMessages?.();
       if (holdsFindings(messages)) return true;
@@ -426,7 +483,7 @@ export function apply(ctx, config) {
     const chosen = payload?.modelSelection;
     const route = chosen?.provider && chosen?.model ? { provider: String(chosen.provider), model: String(chosen.model) } : undefined;
     const place = providerPlace(settingsOf('llm-pi-ai')?.providers, route?.provider);
-    if (mayReceive({ place, route, id: agent?.id, consent }).ok || !holdsRecon(agent)) return next();
+    if (mayReceive({ place, route, id: topIdOf(agent), consent }).ok || !holdsRecon(agent)) return next();
     const who = !route ? 'not known' : `${route.model} (${place.name || route.provider}), ${place.where === 'cloud' ? 'in the cloud' : 'at a place Recon cannot tell, treated as cloud'}`;
     const agree = enabled() && inRecon(agent) ? ', or type /recon cloud to agree to this model for this conversation' : '';
     throw new Error(`This conversation holds what Recon found, and its model is ${who}. Nothing was sent. Pick a model on this computer or in your own network${agree}, then send your message again.`);
@@ -445,10 +502,13 @@ export function apply(ctx, config) {
   // What the assistant writes in a Recon conversation is kept for the export.
   ctx.on('session/event', (session, event) => {
     try {
-      if (event?.type !== 'assistant/message' || !session?.id || !inRecon({ id: session.id })) return;
+      if (event?.type !== 'assistant/message' || !session?.id || !inRecon({ id: session.id, header: session.header })) return;
       const content = event.data?.message?.content;
       const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map((block) => (block?.type === 'text' ? block.text : '')).join('\n') : '';
-      if (text.trim()) sources.say(session.id, text);
+      // A Long run's helpers write their findings as answers: kept with their conversation.
+      // The planner's and reviewer's JSON is not a finding (review finding 9).
+      const helper = Boolean(session.header?.parentSession);
+      if (text.trim() && !(helper && text.trim().startsWith('{'))) sources.say(topIdOf({ id: session.id, header: session.header }), text);
     } catch (error) {
       warn(`could not keep an answer for the export: ${String(error?.message ?? error)}`);
     }
@@ -457,6 +517,9 @@ export function apply(ctx, config) {
   ctx.on('session/event', (session, event) => {
     try {
       if (event?.type !== 'user/message' || !session?.id || event.data?.source?.kind !== 'user') return;
+      // A helper's task arrives as a "user" message too, but it is Mission's text, not yours: an address
+      // a worker copied from a page must not become one the conversation may open (review finding 2).
+      if (session.header?.parentSession) return;
       const content = event.data?.content;
       const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map((block) => (block?.type === 'text' ? block.text : '')).join('\n') : '';
       const found = onionAddressesIn(text);
@@ -479,7 +542,7 @@ export function apply(ctx, config) {
     return [
       'Recon conversation: isolated.',
       inRoom(agent) ? 'Folder: Recon\'s own empty folder. The model is told no path of yours.' : 'Folder: a folder of yours, so the tools are OFF in this conversation. Start a new one with the New button in the Recon tab.',
-      `Tools: only ${TOOLS.join(', ')}. No programs, files, memory, helpers or other modes.`,
+      `Tools: only ${TOOLS.join(', ')}. No programs, files, memory, helpers or other modes; a Long run (the Run button) adds helpers on this conversation's model, with file tools in the run's own folder in the room, and no programs or commands.`,
       `Model: ${model}${where ? `, ${where}` : ''}.`,
       allowed.ok ? (staysHome(place) ? 'What Recon finds stays on your own machines.' : 'You agreed that what Recon finds goes to this cloud model, for this conversation.') : 'What Recon finds is NOT sent to this model. Type /recon cloud to agree for this conversation, or pick a local model.',
       `Network: .onion sites through Recon's own Tor (${tor.status().state}). Usenet: ${usenetRoute() === 'direct' ? `direct encrypted connections; accounts: ${usenetAccounts().map((account) => `${nameOf(account)} (${account.host || 'no server yet'}:${account.port})`).join(', ') || '(none set yet)'}` : 'off (Settings → Recon → Usenet)'}.`,
@@ -495,6 +558,23 @@ export function apply(ctx, config) {
   const trashDir = typeof home === 'function' ? home('trash', 'conversations') : '';
   // Which conversations End and wipe is deleting: the Cowork sidebar's trash refuses them, and its
   // Archived list offers no Restore or Delete for them.
+  // Mission asks where a Long run of a Recon conversation keeps its files (16 November).
+  /**
+   * Whether a conversation may have a Long run Recon keeps in its rules: Recon is on, the conversation is
+   * a Recon conversation of its own (not a helper, not one locked in another tab) and runs in the room.
+   */
+  const runsIn = (id) => {
+    if (!enabled() || !existsSync(ROOM)) return false;
+    let agent;
+    try {
+      agent = ctx.get('agents')?.get?.(String(id ?? ''));
+    } catch {
+      agent = undefined;
+    }
+    if (!agent || topIdOf(agent) !== String(agent.id)) return false;
+    return inRecon(agent) && inRoom(agent);
+  };
+  if (typeof ctx.provide === 'function') ctx.effect(() => ctx.provide('recon', Object.freeze({ apiVersion: 2, runs: runsIn, runFolder: (id) => (runsIn(id) ? runFolder(id) : '') })), 'recon: run folders');
   if (typeof ctx.provide === 'function') ctx.effect(() => ctx.provide('reconWipe', Object.freeze({ has: (id) => wipeList.has(String(id)), list: () => wipeList.list() })), 'recon: wipe list');
   /** Set once the app's conversation services are there. */
   let wiper;
@@ -512,6 +592,25 @@ export function apply(ctx, config) {
     // list is kept from it; one that could not be deleted still holds what it read.
     ended.add(id);
     rebuilt.delete(id);
+    // A Long run of this conversation ends first, and its folder in the room goes (its record, the
+    // checkpoints, the helpers' files). Its helpers' saved conversations go with the conversation (sweep).
+    try {
+      ctx.get('mission')?.endRun?.(id);
+    } catch (error) {
+      warn(`could not end the conversation's Long run: ${String(error?.message ?? error)}`);
+    }
+    const dropRunFolder = () => {
+      try {
+        const folder = join(ROOM, `run-${id.replace(/[^\w-]/g, '').slice(0, 80)}`);
+        if (existsSync(folder) && !lstatSync(folder).isSymbolicLink()) rmSync(folder, { recursive: true, force: true });
+      } catch (error) {
+        warn(`could not delete the Long run's folder: ${String(error?.message ?? error)}`);
+      }
+    };
+    dropRunFolder();
+    // Once more after the step that was under way has stopped, in case it still wrote something.
+    const again = setTimeout(dropRunFolder, 3000);
+    again.unref?.();
     await tor.stop();
     if (!wiper) return 'What this conversation read is forgotten and Tor is stopped. The conversation itself could not be deleted: this version of the app does not offer what that needs. Its saved history still holds what it read until you delete it: archive it yourself, then delete it from the list.';
     wipeList.add(id);
@@ -542,9 +641,39 @@ export function apply(ctx, config) {
       const waiting = wipeList.list();
       if (waiting.length === 0) return;
       const stored = await inner.sessionPersistence.list();
+      /** The saved helpers of a conversation (a Long run's planner, workers, reviewer), at any depth. */
+      const helpersOf = (id) => {
+        const out = [];
+        const below = new Set([id]);
+        for (let grew = true; grew;) {
+          grew = false;
+          for (const entry of stored) {
+            const own = entry.header?.id;
+            if (own && !below.has(own) && below.has(entry.header?.parentSession)) {
+              below.add(own);
+              out.push(entry);
+              grew = true;
+            }
+          }
+        }
+        return out;
+      };
       for (const id of waiting) {
         try {
           if (inMemory(id)) continue;
+          // Its helpers first: the conversation leaves the list only once they are gone too.
+          let left = 0;
+          for (const helper of helpersOf(id)) {
+            const helperId = helper.header.id;
+            if (inMemory(helperId)) {
+              left += 1;
+              continue;
+            }
+            if (helper.location?.kind !== 'jsonl' || typeof helper.location.path !== 'string') continue;
+            const folder = dirname(helper.location.path);
+            if (!wipeFiles({ id: helperId, folder, cache: typeof home === 'function' ? home('storages', 'session_projcache', 'sessions', `${helperId}.json`) : '' }, dirname(dirname(folder)))) left += 1;
+          }
+          if (left > 0) continue;
           const snap = stored.find((entry) => entry.header?.id === id);
           // Deleted from the Archived list after /recon end, its files may be in the Cowork
           // sidebar's trash: they go too, and it leaves the trash's waiting list.

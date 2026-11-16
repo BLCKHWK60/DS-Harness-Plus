@@ -18,7 +18,7 @@ import { fromScheduler, scheduledModeId } from './lib/scheduled.js';
 import { PROGRAM_TOOL, programNote, programOnly, SLOW_TOOLS } from './lib/ptc.js';
 import { helpersBelow, onlyStopNotes, stoppedByUser } from './lib/stop.js';
 import { CORE, FAMILIES, FIND_TOOL, brings, catalog as trimCatalog, mentioned, others as trimOthers, resolveRequest, skillFamilies } from './lib/trim.js';
-import { dropIsolatedNotes, heldMode, isolatedMayRun, modeChangeRefusal } from './lib/isolation.js';
+import { dropIsolatedNotes, heldMode, isolatedMayRun, isolatedRunMask, modeChangeRefusal } from './lib/isolation.js';
 import { DEPTH_CHECK_KIND, DEPTH_CHECK_PROMPT, DEPTH_CHECK_REFUSAL, DEPTH_CHECK_SUMMARY, promptText } from './lib/prompt.js';
 import { lensIdIn, lensTextIn, ownLensesOf } from './lib/lens.js';
 import { movedSince, readBase, readEntry, sandboxStep } from './lib/sandbox.js';
@@ -519,6 +519,9 @@ export function apply(ctx, config) {
   function toolMask(sessionId, mode, added) {
     // A Long run in this conversation (Mission): its tab keeps its own tools and gains what the run needs.
     const long = longRunOf(sessionId);
+    // In an isolated conversation (Recon) a Long run keeps to the mode's own tools: the step tool for
+    // the conversation, the file tools for its helpers, never a shell, a program or the web.
+    if (long && mode?.isolated) return isolatedRunMask({ tools: mode.tools, child: topOf(sessionId) !== sessionId, files: long.files, off: toolsOff(sessionId), webOff: isolatedWebOff(sessionId) });
     if (long && !mode?.isolated) {
       return longRunMask({ mode, files: long.files, web: long.web, research: researchOn(sessionId), child: topOf(sessionId) !== sessionId, offline: [...webReaching(knownTools(sessionId)), ...onlineImageTools()], fenced: isolatedTools() });
     }
@@ -1018,7 +1021,7 @@ export function apply(ctx, config) {
           if (!id) return undefined;
           const mode = modeOf(id);
           if (!mode?.isolated) return undefined;
-          if (isolatedMayRun({ mode, name: exec.name, child: topOf(id) !== id, off: toolsOff(id), webOff: isolatedWebOff(id) })) return undefined;
+          if (isolatedMayRun({ mode, name: exec.name, child: topOf(id) !== id, off: toolsOff(id), webOff: isolatedWebOff(id), long: longRunOf(id) })) return undefined;
           return `the tool ${exec?.name} is not part of this isolated conversation and was not run.`;
         } catch {
           return 'this isolated conversation could not be checked, so the tool was not run.';
@@ -1086,6 +1089,7 @@ export function apply(ctx, config) {
             }
             const known = knownTools(agent.id);
             const images = onlineImageTools();
+            const isolatedRun = mode.isolated && longRunOf(agent.id) ? `\n\nA Long run is on in this conversation. You conduct it with mission_step; its helpers do the work with this mode's tools${longRunOf(agent.id).files ? ' and file tools in the run\'s own folder' : ''}. There are no programs, commands or other tools.` : '';
             const long = mode.isolated ? undefined : longRunOf(agent.id);
             const longNote = long ? `\n\nA Long run is on in this conversation. Until it ends, it and its helpers have the tools the run needs${long.files ? ' (files and commands' : ' (this tab\'s own tools'}${long.web ? ', and the web)' : ', no web)'}; this overrides what this tab says above about tools, files and the web. The tab's own way of working still applies.` : '';
             return longNote ? `${promptText({
@@ -1120,7 +1124,7 @@ export function apply(ctx, config) {
               // An isolated tab runs no programs; under PTC it is told it cannot work there instead.
               programs: mode.isolated ? '' : viaPrograms(agent),
               programOnly: mode.isolated === true && programOnly(ctx.tools, agent),
-            });
+            }) + isolatedRun;
           },
         }),
       'modes prompt section',

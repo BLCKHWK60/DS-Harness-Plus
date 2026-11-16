@@ -10,7 +10,7 @@ import { SUMMARY_MARK, holdsFindings, wasCompacted } from '../lib/tools.js';
 import { loadRecon } from './fixtures/room.mjs';
 
 // Never the real room: apply() empties it.
-const { apply, Config } = await loadRecon();
+const { apply, Config, ROOM } = await loadRecon();
 
 const uriOf = (id) => `dsh-session:${Buffer.from(JSON.stringify(id), 'utf8').toString('base64url')}`;
 
@@ -47,7 +47,7 @@ test('mentions of other conversations are taken out as asked', () => {
 });
 
 /** Recon on stand-in services, with its pre-step listeners and its command. */
-function start({ modeOf = {} } = {}) {
+function start({ modeOf = {}, agents = {}, stored = [], memory = new Set() } = {}) {
   const listeners = [];
   let command;
   const services = {
@@ -63,11 +63,15 @@ function start({ modeOf = {} } = {}) {
     commands: { register: (spec) => { command = spec; return () => {}; } },
     webServer: { register: () => () => {} },
     connection: { requestRejection: () => undefined },
-    sessionPersistence: { list: async () => [] },
-    sessions: { get: () => undefined },
+    sessionPersistence: { list: async () => stored },
+    sessions: { get: (id) => (memory.has(id) ? {} : undefined) },
+    agents: { get: (id) => agents[id] },
+    mission: { endRun: (id) => { ended.push(id); return 'Long run stopped. You ended it.'; } },
     workspaceRegistry: { archiveSession: async () => {} },
   };
   const disposers = [];
+  const ended = [];
+  const provided = {};
   const ctx = {
     ...services,
     logger: { warn: () => {}, info: () => {}, error: () => {} },
@@ -75,6 +79,7 @@ function start({ modeOf = {} } = {}) {
     get: (name) => services[name],
     inject: (_names, callback) => callback(ctx),
     on: (name, listener) => { if (name === 'agent/pre-step') listeners.push(listener); return () => {}; },
+    provide: (name, value) => { provided[name] = value; return () => {}; },
   };
   apply(ctx, Config({ enabled: true }));
   /** One step, through every pre-step listener in the order the app runs them. */
@@ -83,7 +88,7 @@ function start({ modeOf = {} } = {}) {
     return run(0);
   };
   const say = (agent, rawInput) => command.handler({ agent, rawInput });
-  return { step, say, dispose: () => { for (const done of disposers) done(); } };
+  return { step, say, provided, ended, dispose: () => { for (const done of disposers) done(); } };
 }
 
 const agentOf = (id, history, model) => ({ id, session: { header: {}, deriveMessages: () => history }, model: { current: () => model } });
@@ -152,5 +157,54 @@ test('a compacted Recon conversation is still held: after a restart, and in a Re
     assert.equal((await app.step(agentOf('r2', [asked], CLOUD), CLOUD)).kind, 'enter');
   } finally {
     app.dispose();
+  }
+});
+
+test('a Long run\'s helpers in Recon: the conversation\'s agreement covers them, its run has its own folder, and End and wipe takes the run and the helpers\' files', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const sessionsDir = mkdtempSync(join(tmpdir(), 'recon-sessions-'));
+  const folderOf = (id) => { const dir = join(sessionsDir, 'project', id); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'session.v4.jsonl'), '{}\n'); return join(dir, 'session.v4.jsonl'); };
+  const stored = [
+    { header: { id: 'session-r1' }, location: { kind: 'jsonl', path: folderOf('session-r1') } },
+    { header: { id: 'helper-plan-1', parentSession: 'session-r1' }, location: { kind: 'jsonl', path: folderOf('helper-plan-1') } },
+    { header: { id: 'helper-deep-2', parentSession: 'helper-plan-1' }, location: { kind: 'jsonl', path: folderOf('helper-deep-2') } },
+    { header: { id: 'other-helper-3', parentSession: 'session-other' }, location: { kind: 'jsonl', path: folderOf('other-helper-3') } },
+  ];
+  const history = [asked, call('c1'), answer('c1', 'Results for "x":\n1. A title')];
+  const conversation = { id: 'session-r1', header: { cwd: ROOM }, session: { header: { cwd: ROOM }, deriveMessages: () => history }, model: { current: () => CLOUD } };
+  const helper = { id: 'helper-plan-1', header: { parentSession: 'session-r1', cwd: ROOM }, session: { header: { parentSession: 'session-r1', cwd: ROOM }, deriveMessages: () => history }, model: { current: () => CLOUD } };
+  const app = start({ modeOf: { 'session-r1': { mode: 'recon', isolated: true }, 'helper-plan-1': { mode: 'recon', isolated: true } }, agents: { 'session-r1': conversation, 'helper-plan-1': helper }, stored });
+  try {
+    // The helper holds findings and runs on a cloud model: not before the user agreed in the conversation.
+    await assert.rejects(app.step(helper, CLOUD), /holds what Recon found/);
+    // Even a helper with nothing in its history yet: it carries the goal and the plan from its first request.
+    const fresh = { id: 'helper-new-9', header: { parentSession: 'session-r1', cwd: ROOM }, session: { header: { parentSession: 'session-r1', cwd: ROOM }, deriveMessages: () => [asked] }, model: { current: () => CLOUD } };
+    await assert.rejects(app.step(fresh, CLOUD), /holds what Recon found/);
+    assert.equal((await app.say(conversation, 'cloud')).kind, 'success');
+    assert.equal((await app.step(helper, CLOUD)).kind, 'enter', 'the conversation\'s agreement covers its helper');
+    // Mission's question: may a run happen here, and where does it keep its files.
+    assert.equal(app.provided.recon.runs('session-r1'), true);
+    assert.equal(app.provided.recon.runs('helper-plan-1'), false, 'a helper is not a conversation of its own');
+    assert.equal(app.provided.recon.runs('nobody'), false);
+    assert.equal(app.provided.recon.runFolder('helper-plan-1'), '', 'no folder for one that may not run');
+    const folder = app.provided.recon.runFolder('session-r1');
+    assert.equal(folder, join(ROOM, 'run-session-r1'));
+    assert.ok(existsSync(folder));
+    writeFileSync(join(folder, 'findings.md'), 'what the run found');
+    // End and wipe: the run ends, its folder goes, and the helpers' saved conversations go with the conversation's.
+    const said = await app.say(conversation, 'end');
+    assert.equal(said.kind, 'success');
+    assert.deepEqual(app.ended, ['session-r1']);
+    assert.equal(existsSync(folder), false, 'the run\'s folder in the room is gone');
+    for (let i = 0; i < 50 && existsSync(join(sessionsDir, 'project', 'session-r1')); i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(existsSync(join(sessionsDir, 'project', 'session-r1')), false);
+    assert.equal(existsSync(join(sessionsDir, 'project', 'helper-plan-1')), false, 'its helper');
+    assert.equal(existsSync(join(sessionsDir, 'project', 'helper-deep-2')), false, 'and its helper\'s helper');
+    assert.equal(existsSync(join(sessionsDir, 'project', 'other-helper-3')), true, 'another conversation\'s helper stays');
+  } finally {
+    app.dispose();
+    rmSync(sessionsDir, { recursive: true, force: true });
   }
 });

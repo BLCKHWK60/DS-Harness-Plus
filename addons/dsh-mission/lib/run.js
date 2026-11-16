@@ -117,6 +117,8 @@ export function newRun({ id, goal, mode, root, limits, checkpoint, at = Date.now
   if (tools) extra.tools = tools;
   const restore = readRestore(long?.restore);
   if (restore) extra.restore = restore;
+  // A Recon conversation's run: no commands, one model, nothing kept outside its folder.
+  if (long?.isolated === true) extra.isolated = true;
   // Started with the Run button: what was said in the conversation before it (for the planner and reviewer).
   const context = clip(long?.context, CONTEXT_MAX);
   if (context) extra.context = context;
@@ -485,4 +487,15 @@ export function addAsk(run, text, at = Date.now()) {
   if (!said) return false;
   run.long.asks = [...(Array.isArray(run.long.asks) ? run.long.asks : []), { at, text: said }].slice(-ASKS_KEPT);
   return true;
+}
+
+/** @returns {boolean} whether a run may run no commands (a Recon conversation's Long run). */
+export const noCommands = (run) => isLong(run) && run.long?.isolated === true;
+
+/** Take the commands out of a run that may run none: the reviewer judges every item instead. */
+export function dropCommands(run) {
+  if (!noCommands(run)) return run;
+  run.checks = [];
+  for (const item of run.items) item.check = '';
+  return run;
 }

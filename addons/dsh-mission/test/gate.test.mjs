@@ -154,7 +154,7 @@ function running() {
   /** Wait until a condition holds (a run started from a message is started a moment later). */
   const until = async (check) => { for (let i = 0; i < 200 && !check(); i += 1) await tick(); return check(); };
   const refuse = (on) => { refusePreset = on; };
-  return { services, scratchFolders, refuse, isolatedIds, tabs, tiers, presets, levels, appended, refreshed, provided, calls, goals, open, mission, step, preExecute, turnStarts, tick, runOnDisk, done, card, emit, says, until, home, tools };
+  return { agents, handlers: (name) => handlers.get(name) ?? [], services, scratchFolders, refuse, isolatedIds, tabs, tiers, presets, levels, appended, refreshed, provided, calls, goals, open, mission, step, preExecute, turnStarts, tick, runOnDisk, done, card, emit, says, until, home, tools };
 }
 
 test('an isolated conversation: /mission and mission_step refuse; off and end still take back', async () => {
@@ -656,6 +656,78 @@ test('a run\'s planner may not write files: its answer goes in its reply; a work
     assert.match(decisions.write.reason, /^You are the planner of a run: change no files/);
     assert.notEqual(decisions.read.kind, 'deny', 'reading is fine');
     assert.notEqual((await app.preExecute({ name: 'write', arguments: { path: 'x.md' }, agent: planner })).reason ?? '', 'You are the planner of a run: change no files. Put your whole answer in your reply.', 'not once it is done');
+  } finally {
+    app.done();
+  }
+});
+
+test('a Long run in Recon, where Recon keeps it in its rules: its own folder, Restricted, no commands, one model, no record outside', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const agent = app.open('rc1');
+    app.tabs.rc1 = 'recon';
+    app.isolatedIds.add('rc1');
+    // Without Recon's say-so: refused as before.
+    assert.equal((await app.card('POST', { sessionId: 'rc1', action: 'arm' })).status, 400);
+    assert.equal((await app.card('GET', { sessionId: 'rc1' })).json.runButton, false);
+    const room = mkdtempSync(join(tmpdir(), 'dsh-recon-test-'));
+    const folder = join(room, 'run-rc1');
+    app.services.recon = { runs: () => true, runFolder: (id) => { mkdirSync(join(room, `run-${id}`), { recursive: true }); return join(room, `run-${id}`); } };
+    let card = await app.card('GET', { sessionId: 'rc1' });
+    assert.equal(card.json.runButton, true);
+    const tick = card.json.preflight.ticks.find((entry) => entry.key === 'isolated');
+    assert.equal(tick.ok, true);
+    assert.match(tick.text, /helpers use this conversation's model and Recon's tools, with files only in the run's own folder/);
+    assert.equal((await app.card('POST', { sessionId: 'rc1', action: 'save', mode: 'auto', minutes: 30, laps: 2, keepAwake: false })).status, 200);
+    assert.equal((await app.card('POST', { sessionId: 'rc1', action: 'arm' })).status, 200);
+    app.says(agent, 'find what the forums say about the leak');
+    assert.ok(await app.until(() => existsSync(join(folder, '.dsh-mission', 'runs'))), 'the run lives in its own folder in the room');
+    const dir = join(folder, '.dsh-mission', 'runs');
+    const [id] = readdirSync(dir);
+    const run = JSON.parse(readFileSync(join(dir, id, 'run.json'), 'utf8'));
+    assert.equal(run.root, folder);
+    assert.equal(run.mode, 'Restricted', 'Restricted whatever was saved: nothing outside the folder');
+    assert.equal(run.long.isolated, true);
+    assert.equal(app.provided.mission.mode('rc1'), 'restricted');
+    // mission_step is let through now (it would refuse an isolated conversation before).
+    const stepped = await app.step(agent);
+    assert.doesNotMatch(stepped.text, /isolated conversation/);
+    // No record of it outside the room.
+    assert.equal(existsSync(join(app.home, 'mission', 'active-runs.json')) && readFileSync(join(app.home, 'mission', 'active-runs.json'), 'utf8').includes('rc1'), false);
+    // Its helpers are moved into the run's folder before their turn (they start in the room).
+    const moved = [];
+    app.services.workingDirectory = { get: () => '/private/tmp/dsh-recon-room', set: async (who, where) => { moved.push([who.id, where]); } };
+    const helper = { id: 'rc1-worker', header: { parentSession: 'rc1' }, session: { header: { parentSession: 'rc1' } } };
+    app.agents.set?.('rc1-worker', helper);
+    const assemble = app.handlers('system-prompt/assemble')[0];
+    let passed = false;
+    await assemble({}, { agent: helper, signal: new AbortController().signal }, async () => { passed = true; });
+    assert.equal(passed, true);
+    assert.deepEqual(moved, [['rc1-worker', folder]]);
+    // Not the conversation itself, and not a helper of a conversation that is not Recon.
+    await assemble({}, { agent, signal: new AbortController().signal }, async () => {});
+    assert.equal(moved.length, 1);
+    // The helpers' file tools: only inside the fence and from the run's folder (review findings 1 and 7).
+    assert.equal(app.provided.mission.longRun('rc1').files, true);
+    let where = '/private/tmp/dsh-recon-room';
+    app.services.workingDirectory = { get: () => where, set: async () => {} };
+    const read = () => app.preExecute({ name: 'read', arguments: { path: 'findings.md' }, agent: helper });
+    assert.equal((await read()).kind, 'deny', 'not from the room');
+    where = folder;
+    assert.notEqual((await read()).kind, 'deny', 'from the run\'s folder');
+    assert.equal((await app.preExecute({ name: 'read', arguments: { path: '/etc/hosts' }, agent: helper })).kind, 'deny', 'nothing outside the run\'s folder');
+    // /mission off takes the fence away: the file tools go with it, also for a helper already running.
+    assert.match((await app.mission(agent, 'off')).text ?? '', /off/i);
+    assert.equal(app.provided.mission.longRun('rc1').files, false);
+    assert.equal((await read()).kind, 'deny');
+    // Recon's End and wipe ends it.
+    assert.match(app.provided.mission.endRun('rc1'), /You ended it/);
+    // No record of it in the app's home: Mission keeps a Recon conversation's record in memory (review finding 4).
+    assert.equal(existsSync(join(app.home, 'mission', 'conversations.json')) && readFileSync(join(app.home, 'mission', 'conversations.json'), 'utf8').includes('rc1'), false);
+    assert.equal(existsSync(join(app.home, 'mission', 'runs.jsonl')) && readFileSync(join(app.home, 'mission', 'runs.jsonl'), 'utf8').includes(folder), false, 'no line in runs.jsonl');
+    // /mission modes stay refused in Recon.
+    assert.match((await app.mission(agent, 'auto')).text, /isolated conversation/);
+    rmSync(room, { recursive: true, force: true });
   } finally {
     app.done();
   }

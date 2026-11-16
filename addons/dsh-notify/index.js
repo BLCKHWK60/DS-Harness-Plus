@@ -230,7 +230,14 @@ export function apply(ctx, config) {
           if (event.type !== 'finished') return;
           for (const rule of rules) {
             if (rule.on !== 'turnEnd' || !(rule.reasons ?? ['completed', 'error']).includes('completed')) continue;
-            fire(rule, { event: 'turnEnd', reason: 'completed', project: event.folder ?? '' });
+            // A Recon conversation's run is named only "Recon" (its folder holds the conversation's id).
+            let sealed = false;
+            try {
+              sealed = ctx.get('modes')?.isolated?.(event.conversation) === true;
+            } catch {
+              sealed = true;
+            }
+            fire(rule, { event: 'turnEnd', reason: 'completed', project: sealed ? 'Recon' : event.folder ?? '' });
           }
         }) ?? (() => {}), 'notify: end of runs');
       } catch (error) {

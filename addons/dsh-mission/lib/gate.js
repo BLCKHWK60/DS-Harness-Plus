@@ -40,11 +40,16 @@ export const READ_ONLY_LONG_TEXT = 'This tab is Read Only, but a Long run can ch
  * @param {string} [what.word] - the `/mission` word, for the ones that only take back.
  * @param {string} [what.tab] - the conversation's tab (Modes' mode id): Data and Research refuse.
  * @param {boolean} [what.long] - the conversation's run is a Long run, which the owner allows in Data and Research too.
+ * @param {boolean} [what.runs] - Recon keeps a Long run of an isolated conversation inside its rules.
  * @returns {string} the reason; '' when it may.
  */
-export function whyNot({ isolated, tier = null, helpers = false, word, tab = '', long = false }) {
-  if (isolated && !(typeof word === 'string' && UNDO_WORDS.has(word))) return ISOLATED_TEXT;
+export function whyNot({ isolated, tier = null, helpers = false, word, tab = '', long = false, runs = false }) {
+  // In Recon only a Long run, and only where Recon keeps it inside its rules (`runs`, 16 November).
+  if (isolated && !(runs && long) && !(typeof word === 'string' && UNDO_WORDS.has(word))) return ISOLATED_TEXT;
   if (READ_ONLY_TABS.has(String(tab)) && !long && !(typeof word === 'string' && (UNDO_WORDS.has(word) || LOOK_WORDS.has(word)))) return READ_ONLY_TEXT;
   if (helpers && tier?.subagents === false) return helpersOffText(tier);
   return '';
 }
+
+/** What the Long run card says in a Recon conversation, where Recon keeps the run inside its rules. */
+export const RECON_LONG_TEXT = 'A Recon conversation: its helpers use this conversation\'s model and Recon\'s tools, with files only in the run\'s own folder in Recon\'s room; no programs or commands. End and wipe deletes the run too.';

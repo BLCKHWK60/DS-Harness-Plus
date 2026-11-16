@@ -35,7 +35,9 @@ test('the mask while a Long run is on', () => {
 });
 
 test('Modes follows Long runs: the mask, the shell guard, the note, the service, the settings', () => {
-  assert.match(source, /const long = longRunOf\(sessionId\);\n    if \(long && !mode\?\.isolated\) \{\n      return longRunMask\(/);
+  assert.match(source, /const long = longRunOf\(sessionId\);[\s\S]{0,400}if \(long && mode\?\.isolated\) return isolatedRunMask\(\{ tools: mode\.tools, child: topOf\(sessionId\) !== sessionId, files: long\.files/);
+  assert.match(source, /if \(long && !mode\?\.isolated\) \{\n      return longRunMask\(/);
+  assert.match(source, /isolatedMayRun\(\{ mode, name: exec\.name, child: topOf\(id\) !== id, off: toolsOff\(id\), webOff: isolatedWebOff\(id\), long: longRunOf\(id\) \}\)/);
   assert.match(source, /if \(mode\?\.isolated \|\| \(long \? long\.web : webOn\(id, mode\)\)\) return undefined;/);
   assert.match(source, /A Long run is on in this conversation\./);
   assert.match(source, /if \(event\?\.kind !== 'long' \|\| \(event\.type !== 'started' && event\.type !== 'finished'\)\) return;/);
@@ -81,4 +83,25 @@ test('a research tab\'s helpers get no web while the run\'s Web is off', () => {
   const helperOwn = longRunMask({ mode: research, files: false, web: false, research: true, child: true });
   assert.ok(!helperOwn.allow.includes('web_search') && !helperOwn.allow.includes('web_fetch'), JSON.stringify(helperOwn));
   assert.equal(longRunMask({ mode: research, files: true, web: true, research: true, child: true }), null, 'with Web on, as before');
+});
+
+test('a Long run in an isolated tab (Recon): the conversation gets its own tools and the step tool, its helpers its own tools and the file tools; never a shell or a program', async () => {
+  const { isolatedRunMask, isolatedMayRun, ISOLATED_RUN_FILES } = await import('../lib/isolation.js');
+  const tools = ['recon_onion_search', 'recon_onion_read', 'recon_cite'];
+  assert.deepEqual(isolatedRunMask({ tools }), { allow: [...tools, 'mission_step'] });
+  assert.deepEqual(isolatedRunMask({ tools, child: true }), { allow: [...tools, ...ISOLATED_RUN_FILES] });
+  assert.deepEqual(isolatedRunMask({ tools, child: true, files: false }), { allow: tools });
+  assert.deepEqual(isolatedRunMask({ tools, off: true }), { allow: [] });
+  for (const name of ['bash', 'shell', 'run_code', 'web_search', 'deep_research', 'subagent']) assert.equal(ISOLATED_RUN_FILES.includes(name), false, name);
+  const mode = { isolated: true, tools };
+  const long = { files: true, web: false };
+  assert.equal(isolatedMayRun({ mode, name: 'mission_step', long }), true);
+  assert.equal(isolatedMayRun({ mode, name: 'write', long }), false, 'the conversation itself writes no files');
+  assert.equal(isolatedMayRun({ mode, name: 'write', child: true, long }), true);
+  assert.equal(isolatedMayRun({ mode, name: 'write', child: true, long: { files: false } }), false);
+  assert.equal(isolatedMayRun({ mode, name: 'mission_step', child: true, long }), false, 'a helper does not drive the run');
+  for (const name of ['bash', 'run_code', 'web_fetch']) assert.equal(isolatedMayRun({ mode, name, child: true, long }), false, name);
+  assert.equal(isolatedMayRun({ mode, name: 'recon_onion_read', child: true, long }), true);
+  assert.equal(isolatedMayRun({ mode, name: 'recon_onion_read', child: true }), false, 'without a run, no helper at all');
+  assert.equal(isolatedMayRun({ mode, name: 'mission_step' }), false, 'without a run, no step tool');
 });

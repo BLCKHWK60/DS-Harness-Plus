@@ -27,7 +27,7 @@
 import z from '@deepseek-ai/schemastery';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { ISOLATED_TEXT, READ_ONLY_LONG_TEXT, READ_ONLY_TABS, whyNot } from './lib/gate.js';
+import { ISOLATED_TEXT, READ_ONLY_LONG_TEXT, READ_ONLY_TABS, RECON_LONG_TEXT, whyNot } from './lib/gate.js';
 import { COMMAND_TOOLS, MODES, MODE_LABELS, WRITE_TOOLS, decide, modeOf, rulesNote } from './lib/guard.js';
 import { exists, isInside, pathsOf, real, shown } from './lib/paths.js';
 import { GIT_CANDIDATES, openCheckpoints } from './lib/checkpoints.js';
@@ -43,6 +43,8 @@ import { PROGRAM_TOOL, STEP_TOOL, WAIT_MS, createRunner, routeOf } from './runne
 export const LONG_PATH = '/dsh-mission/long';
 /** Minutes before each try again after the app stopped a Long run by itself (at most three). */
 export const RETRY_MINUTES = [2, 5, 10];
+/** The file tools a Recon run's helpers have (Modes gives them; Mission fences them). */
+const RUN_FILE_TOOLS = new Set(['read', 'write', 'edit', 'multi_edit', 'glob', 'grep']);
 /** How long a press of Run waits for its message to arrive before it counts as not pressed. */
 export const ARM_MS = 30_000;
 /** The most chats whose Long run settings are kept. */
@@ -164,7 +166,20 @@ export function apply(ctx, config) {
   const settings = () => readSettings(config);
   const warn = (text) => ctx.logger?.warn?.(`mission: ${text}`);
   const home = ctx.get('dshHomePath');
-  const state = openState(typeof home === 'function' ? join(home('mission'), 'conversations.json') : '');
+  const diskState = openState(typeof home === 'function' ? join(home('mission'), 'conversations.json') : '');
+  // An isolated conversation's (Recon's) record is never written to the app's home: the files its run
+  // makes are named after what it found (review finding 4).
+  const memState = openState('');
+  const pickState = (id) => (isolated(String(id ?? '')) ? memState : diskState);
+  const state = {
+    get: (id) => pickState(id).get(id),
+    ids: () => [...diskState.ids(), ...memState.ids()],
+    set: (id, entry) => pickState(id).set(id, entry),
+    clear: (id) => memState.clear(id) ?? diskState.clear(id),
+    approve: (id, paths) => pickState(id).approve(id, paths),
+    allowOutside: (id, paths) => pickState(id).allowOutside(id, paths),
+    flush: () => diskState.flush(),
+  };
   ctx.effect(() => () => {
     try {
       state.flush();
@@ -177,6 +192,14 @@ export function apply(ctx, config) {
 
   const parentOf = (agent) => agent?.header?.parentSession ?? agent?.session?.header?.parentSession;
   const folderOf = (agent) => {
+    // A Recon conversation's Long run works in its own folder in Recon's room, never the room itself.
+    if (agent?.id && !parentOf(agent) && isolated(agent.id)) {
+      try {
+        return reconRuns(agent.id) ? String(ctx.get('recon')?.runFolder?.(agent.id) ?? '') : '';
+      } catch {
+        return '';
+      }
+    }
     // A Scratch conversation works in its own sub-folder of the Scratch place (the Cowork sidebar
     // knows it); its checks and checkpoints belong there, not in the place shared by every thread.
     try {
@@ -215,6 +238,41 @@ export function apply(ctx, config) {
       return true;
     }
   };
+  /**
+   * Whether Recon keeps a Long run of an isolated conversation inside its rules (its helpers' sources,
+   * consent and wipe follow the conversation, and the run has its own folder in Recon's room). Without
+   * Recon's say-so an isolated conversation is left alone, as before.
+   */
+  const reconRuns = (id) => {
+    try {
+      // Asked per conversation: a Recon conversation in Recon's room, not any isolated one (review finding 6).
+      return Boolean(id) && ctx.get('recon')?.runs?.(String(id)) === true;
+    } catch {
+      return false;
+    }
+  };
+  /** Whether a conversation has a Long run that has not ended (runner made further down). */
+  const longOn = (id) => {
+    const run = runnerRef.current?.runOf?.(String(id ?? ''));
+    return isLong(run) && !run.endedAt;
+  };
+  /** Whether a conversation has a Recon Long run that has not ended (one started in Recon). */
+  const reconRunOn = (id) => longOn(id) && runnerRef.current?.runOf?.(String(id))?.long?.isolated === true;
+  /** An isolated conversation where Mission stays out: always, except a Recon Long run Recon keeps in its rules. */
+  const sealed = (id) => isolated(id) && !(reconRuns(id) && reconRunOn(id));
+  /**
+   * Whether a Recon run's helper may use its file tools now: Mission's fence (the Restricted mode in the
+   * run's folder) is on, and the helper's working folder is the run's folder (review findings 1 and 7).
+   */
+  const fencedHelper = (agent, owner) => {
+    const entry = !sealed(owner) ? state.get(owner) : undefined;
+    if (!entry?.root) return false;
+    try {
+      return ctx.get('workingDirectory')?.get?.(agent.session) === entry.root;
+    } catch {
+      return false;
+    }
+  };
   /** @returns {string} the conversation's tab (Modes' mode id), '' when Modes cannot say. */
   const tabOf = (id) => {
     try {
@@ -236,8 +294,9 @@ export function apply(ctx, config) {
   const guardOf = (agent) => {
     if (!settings().enabled || !agent?.id) return undefined;
     const id = ownerOf(agent);
-    // A mode an earlier version let through in an isolated conversation is left alone.
-    if (!id || isolated(id)) return undefined;
+    // A mode an earlier version let through in an isolated conversation is left alone; a Long run
+    // Recon keeps in its rules has its mode (Restricted, in the run's folder).
+    if (!id || sealed(id)) return undefined;
     const entry = state.get(id);
     return entry ? { id, entry } : undefined;
   };
@@ -266,6 +325,11 @@ export function apply(ctx, config) {
       }
     },
     onEvent: (listener) => runnerRef.current?.onEvent(listener) ?? (() => {}),
+    /** End a conversation's run now, with its report (Recon's End and wipe). @returns {string} what was said ('' when none). */
+    endRun: (id) => {
+      const agent = agentById(String(id ?? ''));
+      return agent && runnerRef.current?.runOf?.(agent.id) ? runnerRef.current.end(agent) : '';
+    },
     isRunning: (id) => runnerRef.current?.isOn(String(id ?? '')) === true,
     /**
      * The tools of a Long run in a conversation, for Modes: a run that has not ended (also paused).
@@ -273,9 +337,12 @@ export function apply(ctx, config) {
      */
     longRun: (id) => {
       const key = String(id ?? '');
-      if (pendingLong.has(key)) return { ...pendingLong.get(key) };
       const run = runnerRef.current?.runOf(key);
-      return run && isLong(run) && !run.endedAt && run.long?.tools ? { ...run.long.tools } : undefined;
+      const tools = pendingLong.has(key) ? { ...pendingLong.get(key) } : run && isLong(run) && !run.endedAt && run.long?.tools ? { ...run.long.tools } : undefined;
+      // In an isolated conversation (Recon) the helpers' file tools are there only while Mission's fence
+      // holds: the Restricted mode in the run's folder (review finding 1: /mission off, Recon switched off).
+      if (tools && isolated(key) && !(state.get(key) && !sealed(key) && reconRunOn(key))) tools.files = false;
+      return tools;
     },
     view: (id) => runnerRef.current?.view(String(id ?? '')),
     ownsEffort: (agent) => {
@@ -318,9 +385,11 @@ export function apply(ctx, config) {
             interpolate: false,
             text: () => {
               try {
-                if (ctx.get('modes')?.isolated?.(agent.id) === true) return '';
-                // Between a press of Run and its run's start: the model is told what is coming.
-                if ((armed.has(agent.id) || starting.has(agent.id)) && !runner.isOn(agent.id)) return ARMED_NOTE;
+                const isolatedHere = ctx.get('modes')?.isolated?.(agent.id) === true;
+                // Between a press of Run and its run's start: the model is told what is coming (Recon too, where Recon allows runs).
+                if ((armed.has(agent.id) || starting.has(agent.id)) && !runner.isOn(agent.id)) return isolatedHere && !reconRuns(agent.id) ? '' : ARMED_NOTE;
+                // An isolated conversation (Recon) gets nothing, unless Recon keeps its Long run in its rules.
+                if (isolatedHere && sealed(ownerOf(agent))) return '';
                 const guard = guardOf(agent);
                 if (!guard) return '';
                 // The conversation's own model conducts a run; its helpers do the work.
@@ -395,6 +464,23 @@ export function apply(ctx, config) {
     }, 0);
   };
 
+  // A Recon conversation's run: its helpers work in the run's own folder, not in Recon's room (the app
+  // starts a helper in its conversation's folder, and a file written by a plain name would land there).
+  ctx.on('system-prompt/assemble', async (assembly, context, next) => {
+    try {
+      const agent = context?.agent;
+      const owner = agent && parentOf(agent) ? ownerOf(agent) : '';
+      if (owner && owner !== agent.id && isolated(owner) && reconRuns(owner) && reconRunOn(owner)) {
+        const root = state.get(owner)?.root ?? '';
+        const service = ctx.get('workingDirectory');
+        if (root && existsSync(root) && service?.set && service.get?.(agent.session) !== root) await service.set(agent, root, context.signal);
+      }
+    } catch (error) {
+      warn(`could not move a Recon run's helper into the run's folder: ${String(error?.message ?? error)}`);
+    }
+    return next();
+  }, { prepend: true });
+
   // A checkpoint at the start of every turn.
   ctx.on('session/event', (session, event) => {
     try {
@@ -404,7 +490,7 @@ export function apply(ctx, config) {
       // version started, or one in a conversation moved to the Recon tab) cannot move, because
       // Modes refuses mission_step there: it is paused, so it does not use up the goal's rounds.
       if (isolated(session.id)) {
-        if (agent && runner.isOn(session.id) && !runner.paused(agent)) afterEvent(() => runner.hold(agent, ISOLATED_TEXT), 'could not pause the run in an isolated conversation');
+        if (sealed(session.id) && agent && runner.isOn(session.id) && !runner.paused(agent)) afterEvent(() => runner.hold(agent, ISOLATED_TEXT), 'could not pause the run in an isolated conversation');
         return;
       }
       const entry = state.get(session.id);
@@ -525,10 +611,10 @@ export function apply(ctx, config) {
     const git = GIT_CANDIDATES.some((candidate) => existsSync(candidate));
     add('git', git, git ? 'The git program for checkpoints is there.' : 'Checkpoints need Apple\'s git program: install the Command Line Tools first.');
     const iso = isolated(id);
-    add('isolated', !iso, iso ? ISOLATED_TEXT : 'Not an isolated conversation.');
+    add('isolated', !iso || reconRuns(id), !iso ? 'Not an isolated conversation.' : reconRuns(id) ? RECON_LONG_TEXT : ISOLATED_TEXT);
     // Every tab but Recon (the isolated check above), Scratch too (the owner's choice, 16 November). In
     // Data and Research, which run Read Only, it is allowed with a warning: the run can change files.
-    if (readOnlyTab(id)) ticks.push({ key: 'tab', ok: false, warn: true, required: false, text: READ_ONLY_LONG_TEXT });
+    if (readOnlyTab(id) && !iso) ticks.push({ key: 'tab', ok: false, warn: true, required: false, text: READ_ONLY_LONG_TEXT });
     const tier = tierOf(id);
     add('helpers', tier?.subagents !== false, tier?.subagents === false ? whyNot({ isolated: false, tier, helpers: true }) : 'The tier allows helper models.');
     add('free', !runner.isOn(id), runner.isOn(id) ? 'A run is already on in this conversation.' : 'No run is on here yet.');
@@ -804,7 +890,7 @@ export function apply(ctx, config) {
       // This chat's Long run settings, as the Run button will use them.
       saved: { ...longOptions({}, agent.id), mode: longModeOf({}, agent.id) },
       // The Run button: not in an isolated conversation (Recon), and not in a helper.
-      runButton: !isolated(agent.id) && !parentOf(agent),
+      runButton: (!isolated(agent.id) || reconRuns(agent.id)) && !parentOf(agent),
       armed: armed.has(agent.id) || starting.has(agent.id),
       startError: startErrors.get(agent.id) ?? null,
     };
@@ -833,8 +919,12 @@ export function apply(ctx, config) {
     const check = preflight(agent);
     if (!check.ok) throw new Error(check.ticks.find((tick) => tick.required && tick.ok !== true)?.text ?? 'Not ready.');
     if (goalText.trim() === '') throw new Error('Say what the run should do.');
-    const mode = longModeOf(body, agent.id);
+    // Recon: Restricted (nothing outside the run's folder, never asked), no commands, one model.
+    const recon = isolated(agent.id);
+    if (recon && !reconRuns(agent.id)) throw new Error(ISOLATED_TEXT);
+    const mode = recon ? 'restricted' : longModeOf(body, agent.id);
     const options = longOptions(body, agent.id);
+    if (recon) options.isolated = true;
     if (typeof body.context === 'string' && body.context.trim()) options.context = body.context;
     // In a Read Only tab, or a conversation set to Read Only by hand, the run may write in the folder
     // (the owner's choice); the level from before comes back when it ends, and the Mission mode goes
@@ -935,7 +1025,7 @@ export function apply(ctx, config) {
             } else if (action === 'finish-lap') said = runner.finishLap(agent);
             else if (action === 'pause') said = runner.stop(agent);
             else if (action === 'resume') {
-              const no = whyNot({ isolated: isolated(agent.id), tier: tierOf(agent.id), helpers: true, tab: tabOf(agent.id), long: isLong(runner.runOf(agent.id)) });
+              const no = whyNot({ isolated: isolated(agent.id), runs: reconRuns(agent.id), tier: tierOf(agent.id), helpers: true, tab: tabOf(agent.id), long: isLong(runner.runOf(agent.id)) });
               if (no) throw new Error(no);
               said = runner.resume(agent);
               refreshTools(agent.id);
@@ -1018,6 +1108,11 @@ export function apply(ctx, config) {
     if (decision?.kind && decision.kind !== 'allow') return decision;
     // A Long run being started from your message comes first: then the run's rules below hold.
     if (exec?.agent?.id && starting.has(exec.agent.id)) await starting.get(exec.agent.id);
+    // A Recon run's helper: its file tools only inside the fence and from the run's own folder.
+    if (exec?.agent && RUN_FILE_TOOLS.has(exec.name) && parentOf(exec.agent)) {
+      const owner = ownerOf(exec.agent);
+      if (isolated(owner) && !fencedHelper(exec.agent, owner)) return { kind: 'deny', reason: 'This run\'s file tools work only in the run\'s own folder while the run is on. Nothing was read or written.' };
+    }
     // A run's planner and reviewer only read: their answer goes in their reply, not into a file in the
     // folder (small models wrote plan.json and review.json there).
     const reader = exec?.agent?.id && WRITE_TOOLS.has(exec.name) ? runner.readerOf(exec.agent.id) : '';
@@ -1168,7 +1263,7 @@ export function apply(ctx, config) {
               const failed = startErrors.get(exec.agent.id);
               if (!runner.isOn(exec.agent.id) && failed && Date.now() - failed.at < 10 * 60_000) return { text: `The Long run did not start: ${failed.text} Tell the user this and do not call ${STEP_TOOL} again.` };
               const isolatedHere = isolated(exec.agent.id);
-              const no = whyNot({ isolated: isolatedHere, tier: tierOf(exec.agent.id), helpers: true, tab: tabOf(exec.agent.id), long: isLong(runner.runOf(exec.agent.id)) });
+              const no = whyNot({ isolated: isolatedHere, runs: reconRuns(exec.agent.id), tier: tierOf(exec.agent.id), helpers: true, tab: tabOf(exec.agent.id), long: isLong(runner.runOf(exec.agent.id)) });
               if (no) {
                 const paused = runner.hold(exec.agent, no);
                 const next = isolatedHere ? 'End it with /mission end.' : 'Once that is changed, the user carries on with /mission resume.';
@@ -1240,10 +1335,10 @@ export function apply(ctx, config) {
               const isolatedHere = isolated(agent?.id);
               // A Long run in Data or Research (allowed there) can still be looked at, paused and carried on.
               const long = isLong(runner.runOf(agent?.id));
-              const shut = whyNot({ isolated: isolatedHere, word, tab: tabOf(agent?.id), long: long && LONG_WORDS.has(word) });
+              const shut = whyNot({ isolated: isolatedHere, runs: reconRuns(agent?.id), word, tab: tabOf(agent?.id), long: long && LONG_WORDS.has(word) });
               if (shut) return { kind: 'error', text: shut };
               /** Why a run may not start or carry on here: its helpers need the tier's sub-agents. */
-              const noHelpers = () => whyNot({ isolated: isolatedHere, tier: tierOf(agent?.id), helpers: true, word, tab: tabOf(agent?.id), long });
+              const noHelpers = () => whyNot({ isolated: isolatedHere, runs: reconRuns(agent?.id), tier: tierOf(agent?.id), helpers: true, word, tab: tabOf(agent?.id), long });
               if (!word || word === 'status' || word === 'help') return { kind: 'success', text: status(agent) };
               const mode = word === 'on' ? settings().defaultMode : modeOf(text);
               if (mode) return { kind: 'success', text: await switchOn(agent, mode) };

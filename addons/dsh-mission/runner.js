@@ -14,7 +14,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeF
 import { basename, dirname, join } from 'node:path';
 import { OWN_FOLDER, real } from './lib/paths.js';
 import { MODE_LABELS } from './lib/guard.js';
-import { ROLES, addAsk, applyChecks, applyPlan, applyReview, applyUndo, applyWork, brokenChecks, checklist, finish, isLong, lapNotes, newRun, nextStep, reopen, report, tally } from './lib/run.js';
+import { ROLES, addAsk, applyChecks, dropCommands, noCommands, applyPlan, applyReview, applyUndo, applyWork, brokenChecks, checklist, finish, isLong, lapNotes, newRun, nextStep, reopen, report, tally } from './lib/run.js';
 import { conductorNote, formatPrompt, jsonOf, planPrompt, reviewPrompt, workPrompt } from './lib/prompts.js';
 import { runCommand } from './lib/shell.js';
 
@@ -111,7 +111,7 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
   const listeners = new Set();
   const emit = (type, conversation, run, extra = {}) => {
     if (listeners.size === 0) return;
-    const event = Object.freeze({ type, conversation, runId: run?.id ?? '', kind: run?.kind === 'long' ? 'long' : 'mission', goal: String(run?.goal ?? '').slice(0, 200), folder: run?.root ? basename(run.root) : '', status: run?.status ?? '', at: Date.now(), ...extra });
+    const event = Object.freeze({ type, conversation, runId: run?.id ?? '', kind: run?.kind === 'long' ? 'long' : 'mission', goal: noCommands(run) ? '' : String(run?.goal ?? '').slice(0, 200), folder: run?.root ? basename(run.root) : '', status: run?.status ?? '', at: Date.now(), ...extra });
     const timer = setTimeout(() => {
       for (const listener of listeners) {
         try {
@@ -236,7 +236,8 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     // One model for everything is the default: with it, every role runs on the conversation's
     // model and nothing else has to be loaded. The roles' own models apply only when the
     // conversation is set to "different models" (the Modes add-on keeps that choice).
-    if (helperPolicy(parent) === 'same') {
+    // A Recon conversation's helpers use its own model: the one Recon's rules were checked for.
+    if (helperPolicy(parent) === 'same' || noCommands(runs.get(parent?.id))) {
       const only = routeOf(current);
       return only ? { ...only, from: 'same' } : undefined;
     }
@@ -356,7 +357,7 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     } catch {
       files = '';
     }
-    const prompt = planPrompt({ goal: run.goal, root: run.root, files, maxItems: run.limits.maxItems, notes: lapNotes(run), context: run.long?.context ?? '' });
+    const prompt = planPrompt({ goal: run.goal, root: run.root, files, maxItems: run.limits.maxItems, notes: lapNotes(run), context: run.long?.context ?? '', noCommands: noCommands(run) });
     let done = await helper({ parent, role: 'plan', root: run.root, label: 'Mission: planner', prompt, signal, reader: 'the planner' });
     let plan = jsonOf(done.text);
     if (!plan || !Array.isArray(plan.items)) {
@@ -368,6 +369,7 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     if (!plan || !Array.isArray(plan.items)) plan = await asJson(done.text, 'plan', (parsed) => Array.isArray(parsed?.items), parent, run, signal) ?? plan;
     keep(run, 'plan', done.text);
     applyPlan(run, plan);
+    dropCommands(run);
     record(run, { kind: 'plan', role: 'plan', model: done.model, ms: done.ms, items: run.items.length, parsed: Boolean(plan) });
     return [`Step ${run.steps}: plan (${modelLine('planner', done)}). ${run.items.length} item${run.items.length === 1 ? '' : 's'}${run.checks.length > 0 ? `, ${run.checks.length} overall command${run.checks.length === 1 ? '' : 's'}` : ''}.${plan ? '' : ' The planner gave no usable checklist, so the goal itself is the one item.'}`, run.summary ? `Approach: ${run.summary}` : '', '', checklist(run), run.checks.length > 0 ? `\nAt the end these must pass: ${run.checks.join(' ; ')}` : ''].filter((part) => part !== '').join('\n');
   };
@@ -395,7 +397,7 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     const senior = run.limits.maxTries > 1 && item.tries >= run.limits.maxTries - 1;
     const others = run.items.filter((entry) => entry.id !== item.id).map((entry) => `${entry.id}. ${entry.title} [${entry.status}]`).join('\n');
     await lapStart(run, item);
-    const prompt = workPrompt({ goal: run.goal, summary: run.summary, item, others, senior, notes: lapNotes(run) });
+    const prompt = workPrompt({ goal: run.goal, summary: run.summary, item, others, senior, notes: lapNotes(run), root: run.root, noCommands: noCommands(run) });
     let done;
     let failed = '';
     try {
@@ -407,7 +409,7 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     }
     keep(run, `item-${item.id}-try-${item.tries + 1}`, done.text || failed);
     const blocked = /^\s*\**\s*BLOCKED\b/i.test(done.text);
-    const check = item.check && !failed ? await prove(id, run, item.check, signal) : undefined;
+    const check = item.check && !failed && !noCommands(run) ? await prove(id, run, item.check, signal) : undefined;
     const aside = !check?.ok && step.asides.length > 0 ? step.asides.join(' ') : '';
     applyWork(run, item.id, {
       report: done.text,
@@ -505,6 +507,7 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
     keep(run, `review-${run.reviews + 1}`, done.text);
     const before = { items: run.items.length, open: tally(run).open };
     applyReview(run, review);
+    dropCommands(run);
     const now = tally(run);
     record(run, { kind: 'review', role: 'review', model: done.model, ms: done.ms, verdict: review?.verdict ?? null, reopened: now.open - before.open, added: run.items.length - before.items });
     const lapLine = isLong(run) ? ` Lap ${run.long.lap} of at most ${run.long.laps} done${hunt ? (now.open > 0 ? '; it found weak spots to work on' : '; it found nothing more to do') : ''}.` : '';
@@ -523,7 +526,8 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
       save(run);
       writeFileSync(join(dirOf(run), 'report.md'), `${text}\n`);
       record(run, { kind: 'finish', status: run.status, tally: tally(run) });
-      if (finishedFile) {
+      // A Recon run leaves no line outside its folder (its goal would be there).
+      if (finishedFile && !noCommands(run)) {
         mkdirSync(dirname(finishedFile), { recursive: true });
         appendFileSync(finishedFile, `${JSON.stringify({ at: new Date().toISOString(), id: run.id, folder: run.root, goal: run.goal.slice(0, 300), mode: run.mode, status: run.status, steps: run.steps, minutes: Math.round((run.endedAt - run.startedAt) / 60000), tally: tally(run), log: join(dirOf(run), 'log.jsonl') })}\n`);
       }
@@ -577,13 +581,16 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
       const ahead = { work: `Next: item ${after.item?.id}, "${after.item?.title}".`, checks: 'Next: the overall commands.', review: 'Next: the review.', plan: 'Next: the plan.' }[after.kind] ?? '';
       return `${text}\n\n${ahead} The run goes on in the next round.`;
     } catch (error) {
+      // A Recon run ended (End and wipe) while this step ran: its folder is being deleted, so nothing is
+      // written there again (review finding 5).
+      const gone = noCommands(run) && run.status !== 'running';
       try {
-        save(run);
+        if (!gone) save(run);
       } catch {
         /* the run on disk is one step behind */
       }
       if (signal.aborted) {
-        record(run, { kind: 'interrupted' });
+        if (!gone) record(run, { kind: 'interrupted' });
         // Ended by the user (End, /mission end): not "taken again on resume".
         if (run.status !== 'running') return `The user ended the run while this step was under way. Give the user its report:\n\n${report(run)}\n\n${OVER}`;
         return 'The step was stopped before it finished. Nothing is lost: the run takes this step again when it is resumed (/mission resume).';
@@ -635,7 +642,7 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
       const run = newRun({ id, goal, mode: MODE_LABELS[entry.mode], root: entry.root, limits: now.limits, checkpoint: point.number, ...(options.kind === 'long' ? { kind: 'long', long: options.long } : {}) });
       save(run);
       runs.set(agent.id, run);
-      writeIndex(agent.id, { root: run.root, id: run.id });
+      if (!noCommands(run)) writeIndex(agent.id, { root: run.root, id: run.id });
       record(run, { kind: 'start', goal: run.goal, mode: run.mode, limits: run.limits });
       emit('started', agent.id, run);
       goals.create(agent, { objective: `Mission run ${run.id}: ${run.goal}\n\nIn each round call the ${STEP_TOOL} tool once and tell the user what the step did. The run ends when ${STEP_TOOL} returns the final report.`, maxGoalRounds: GOAL_ROUNDS });
