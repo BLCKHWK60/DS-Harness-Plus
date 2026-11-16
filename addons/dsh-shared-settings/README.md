@@ -27,7 +27,7 @@ The `include` setting adds other entries, for example the app's own `ui-theme`. 
 - Any field whose name looks like a key, token, secret, password, passphrase or credential, at any depth.
 - The fields in `skipFields`. By default these are the per-conversation choices:
   - `modes.sessionModes`, `sessionWeb` and `sessionResearch`;
-  - `modes.sessionIsolated`, `sessionSearchDepth`, `sessionDepth` (each conversation's Depth), `sessionLens` (each conversation's Lens), `depthMoved` (whether this Mac's old Web levels were moved into Depth), `sessionTools`, `sessionHelpers`, `sessionToolSets`, `sessionSandboxBase` (each conversation's earlier access level) and `extraModes` (the tabs this Mac's add-ons add);
+  - `modes.sessionIsolated`, `sessionSearchDepth`, `sessionDepth` (each conversation's Depth), `sessionLens` (each conversation's Lens), `depthMoved` (whether this Mac's old Web levels were moved into Depth), `sessionTools`, `sessionHelpers`, `sessionToolSets`, `sessionSandboxBase` (each conversation's earlier access level) and `extraModes` (the tabs this Mac's add-ons add); and the Skill architect's `skill-architect.nolearn` (the conversations you marked "never learn from this");
   - `model-tiers.activeTiers`, `sessionProfiles` and `modelProfilesMigrated`.
 
   The ten `modes` fields on the second line stay on each Mac even when you set your own `skipFields`.

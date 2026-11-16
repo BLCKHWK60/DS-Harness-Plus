@@ -25,8 +25,9 @@
 import z from '@deepseek-ai/schemastery';
 import { insideProgram, programMinutes, researchMinutes } from './lib/budget.js';
 import { searchProblem } from './lib/ready.js';
-import { FOCUS, analysisOf, analyzePrompt, capped, depthOf, followupsOf, planPrompt, roundLeft, searchAnswer, searchPrompt, tasksOf, writePrompt } from './lib/rounds.js';
+import { FOCUS, analysisOf, analyzePrompt, capped, depthOf, followupsOf, jsonOrAsk, planPrompt, roundLeft, searchAnswer, searchPrompt, tasksOf, writePrompt } from './lib/rounds.js';
 import { droppedNote, fetchSucceeded, moreCertain, notRead, sourceLines, statusOf, unreadNotes } from './lib/sources.js';
+import { GRADES_NOTE, gradeSources, primaryOf, singleBlock, withSingleBlock } from './lib/grades.js';
 
 /**
  * Start a helper agent. App 0.2.2-rc.2 takes the task's fields (prompt, parent, agentOptions) at
@@ -496,9 +497,14 @@ export function apply(ctx, config) {
       const focus = Object.hasOwn(FOCUS, tab.focus) ? tab.focus : Object.hasOwn(FOCUS, args.focus) ? args.focus : 'web';
       const run = startRun(parent.id, { question: question.slice(0, 300), depth: depth.label, focus, rounds: depth.rounds, minutes });
       try {
+      /**
+       * A helper's answer as JSON with `key`; a helper that answered in prose instead (small local models
+       * often do) has its answer turned into that JSON by one more short ask, with nothing added.
+       */
+      const answerJson = (text, key, label) => jsonOrAsk(text, key, async (prompt) => (await runChild({ role: roles.planner, label: `${label} (format)`, parent, run, signal: signalFor(), prompt })).text, extractJson);
       // 1. Plan: sub-questions, each with search queries.
       const planned = await runChild({ role: roles.planner, label: 'Research plan', parent, run, signal: signalFor(), prompt: planPrompt(question, depth, today, focus) });
-      let tasks = tasksOf(extractJson(planned.text)?.subquestions, depth.subquestions);
+      let tasks = tasksOf((await answerJson(planned.text, 'subquestions', 'Research plan'))?.subquestions, depth.subquestions);
       if (tasks.length === 0) tasks = [{ question, queries: [], why: '' }];
 
       const failures = [];
@@ -531,7 +537,8 @@ export function apply(ctx, config) {
               signal: signalFor(),
               prompt: searchPrompt({ question, task, round, depth, searchTools, fetchTools, tried: triedBefore, known, today, focus }),
             });
-            return { task, ...searchAnswer(extractJson(answer.text), depth.findings), log: fetchLog(answer.childId) };
+            const label = `Research ${depth.rounds > 1 ? `round ${round}, ` : ''}${index + 1}/${tasks.length}`;
+            return { task, ...searchAnswer(await answerJson(answer.text, 'findings', label), depth.findings), log: fetchLog(answer.childId) };
           } catch (error) {
             failures.push(`${task.question}: ${error?.message ?? error}`);
             return null;
@@ -626,7 +633,10 @@ export function apply(ctx, config) {
       } catch {
         lens = '';
       }
-      const written = await runChild({ role: roles.writer, label: 'Research report', parent, run, signal: exec.signal, prompt: writePrompt({ question, findings, conflicts, gaps, today, followups: tab.followups === true, lens }) });
+      const writtenRaw = await runChild({ role: roles.writer, label: 'Research report', parent, run, signal: exec.signal, prompt: writePrompt({ question, findings, conflicts, gaps, today, followups: tab.followups === true, lens }) });
+      // Source grades (step 64): the writer's primary list comes out of the text; the rest is worked out.
+      const primaryList = primaryOf(writtenRaw.text);
+      const written = { ...writtenRaw, text: primaryList.text };
 
       // 6. Check the citations.
       const cited = new Set([...written.text.matchAll(/\[(\d+)\]/g)].map((match) => Number(match[1])));
@@ -646,8 +656,10 @@ export function apply(ctx, config) {
       if (failures.length) notes.push(`${failures.length} step(s) failed.`);
       if (dropped) notes.push(droppedNote(dropped, plain(config.requireFetched) === true));
 
-      const list = sourceLines(usedSources.length ? usedSources : sources);
-      let text = `${written.text}\n\n## Sources\n${list}${notes.length ? `\n\n## Checks\n${notes.map((note) => `- ${note}`).join('\n')}` : ''}`;
+      const graded = gradeSources({ text: written.text, sources, primary: primaryList.primary });
+      if (graded.grades.size > 0) notes.push(GRADES_NOTE);
+      const list = sourceLines(usedSources.length ? usedSources : sources, graded.grades);
+      let text = `${withSingleBlock(written.text, singleBlock(graded.single))}\n\n## Sources\n${list}${notes.length ? `\n\n## Checks\n${notes.map((note) => `- ${note}`).join('\n')}` : ''}`;
       run.followups = followupsOf(written.text);
       if (tab.save === true) {
         try {

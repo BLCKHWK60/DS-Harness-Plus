@@ -148,3 +148,35 @@ test('the report writer follows the conversation\'s Lens after its own rules; no
   assert.equal((host.match(/lensWords/g) ?? []).length, 1, 'asked once, for the writer');
   assert.match(host, /writePrompt\(\{ question, findings, conflicts, gaps, today, followups: tab\.followups === true, lens \}\)/);
 });
+
+test('a helper that answered in prose is asked once more for the JSON: the same shape its prompt asks for, nothing added', async () => {
+  const { formatPrompt, SHAPES, planPrompt, searchPrompt, depthOf } = await import('../lib/rounds.js');
+  const prose = 'Based on my research, here is what I found. The subject ran a channel since 2011 (https://example.com/channel/subject/).';
+  const asked = formatPrompt('findings', prose);
+  assert.match(asked, /^RESEARCH_FORMAT\n/);
+  assert.ok(asked.includes(`Answer with ONLY this JSON: ${SHAPES.findings}`));
+  assert.ok(asked.endsWith(prose));
+  assert.match(asked, /only links that appear in it/);
+  assert.match(asked, /Do not search or read anything/);
+  assert.ok(formatPrompt('subquestions', 'x').includes(SHAPES.subquestions));
+  assert.ok(planPrompt('q', depthOf('quick'), '2026-11-16').includes(SHAPES.subquestions), 'the plan asks for the same shape');
+  const search = searchPrompt({ question: 'q', task: { question: 'q', queries: [] }, round: 1, depth: depthOf('quick'), searchTools: ['web_search'], fetchTools: ['web_fetch'], tried: [], known: [], today: '2026-11-16' });
+  for (const key of ['"findings"', '"claim"', '"url"', '"quote"', '"queries"', '"gaps"']) assert.ok(search.includes(key) && SHAPES.findings.includes(key), key);
+  assert.equal(formatPrompt('findings', 'y'.repeat(30000)).length < 25000, true, 'a long answer is cut');
+});
+
+test('jsonOrAsk: JSON answers are kept as they are; a prose answer is turned into JSON by one more ask; a failed ask leaves it', async () => {
+  const { jsonOrAsk } = await import('../lib/rounds.js');
+  const { extractJson } = await import('../index.js');
+  const asks = [];
+  const ask = async (prompt) => { asks.push(prompt); return '{"findings":[{"claim":"c","url":"https://a.example"}]}'; };
+  assert.deepEqual(await jsonOrAsk('{"findings":[]}', 'findings', ask, extractJson), { findings: [] });
+  assert.equal(asks.length, 0, 'no second ask for a JSON answer');
+  assert.deepEqual((await jsonOrAsk('Based on my research, … https://a.example', 'findings', ask, extractJson)).findings, [{ claim: 'c', url: 'https://a.example' }]);
+  assert.equal(asks.length, 1);
+  assert.match(asks[0], /^RESEARCH_FORMAT/);
+  assert.equal(await jsonOrAsk('', 'findings', ask, extractJson), null, 'an empty answer is not asked about');
+  assert.equal(asks.length, 1);
+  assert.equal(await jsonOrAsk('prose again', 'findings', async () => 'still prose', extractJson), null);
+  assert.equal(await jsonOrAsk('prose again', 'findings', async () => { throw new Error('down'); }, extractJson), null);
+});

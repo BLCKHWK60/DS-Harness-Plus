@@ -154,6 +154,7 @@ test('a conversation opened by an Automation task gets its own starting mode', a
   const modes = { chat: { tools: 'none' }, cowork: { tools: 'all' }, code: { tools: 'all' } };
   assert.equal(scheduledModeId(modes, 'code'), 'code');
   assert.equal(scheduledModeId(modes, 'gone'), 'cowork', 'an unknown id falls back to the first mode with all tools');
+  assert.equal(scheduledModeId({ ...modes, automations: { tools: ['schedule_list'] } }, 'automations'), 'cowork', 'never the Automations tab');
   assert.equal(scheduledModeId(modes, ''), 'cowork');
   assert.equal(scheduledModeId({ chat: { tools: 'none' } }, 'gone'), undefined, 'nothing suitable leaves the usual rule in charge');
 });
@@ -555,7 +556,7 @@ test('Settings → Modes: cards beyond the tab count have no tab; scheduled task
   assert.deepEqual([...withoutTab(rows, 3)], ['k-review']);
   assert.deepEqual([...withoutTab(rows, 5)], []);
   assert.deepEqual([...withoutTab(rows, 1)], ['k-cowork', 'k-code', 'k-review']);
-  const extras = [{ id: 'finance', label: 'Finance', isolated: false }, { id: 'recon', label: 'Recon', isolated: true }];
+  const extras = [{ id: 'finance', label: 'Finance', isolated: false }, { id: 'recon', label: 'Recon', isolated: true }, { id: 'automations', label: 'Automations', isolated: false }];
   assert.deepEqual(scheduledChoices(rows, extras).map((choice) => `${choice.id}:${choice.label}:${choice.extra}`), ['chat:CHAT:false', 'cowork:COWORK:false', 'code:CODE:false', 'review:review:false', 'finance:Finance:true']);
 });
 
@@ -734,8 +735,18 @@ test('the chat box: a Web pick writes only On or Off; a Depth pick is kept for t
   assert.match(source, /if \(first && !crowded\(first\)\) return;/);
   // Only the list texts fit the tab: Recon's (its own search tools), a research tab's (run size), the usual ones.
   assert.match(source, /h\(DepthButton, \{\s*t, depth: sessionDepthNow, kind: depthKind\(modeDef\),/);
-  assert.match(source, /t\(kind \? `depth\.\$\{id\}\.hint\.\$\{kind\}` : `depth\.\$\{id\}\.hint`\)/);
+  // The list shows short words (16 November); the full texts are tooltips after 3 seconds.
+  assert.match(source, /const suffix = kind \? `\.\$\{kind\}` : '';/);
+  assert.match(source, /tipFor\(t\(`depth\.\$\{id\}\.hint\$\{suffix\}`\)\)/);
+  assert.match(source, /t\(`depth\.\$\{id\}\.short\$\{suffix\}`\)/);
   assert.match(source, /t\(kind \? `depth\.note\.\$\{kind\}` : 'depth\.note'\)/);
+  assert.match(source, /const TIP_MS = 3000;/);
+  for (const key of ['depth.long.short', 'lens.short', 'lens.web.short', ...['quick', 'standard', 'thorough'].flatMap((id) => [`depth.${id}.short`, `depth.${id}.short.isolated`, `depth.${id}.short.research`])]) {
+    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+  }
+  // Long run: every tab but Recon (also a Recon conversation moved elsewhere), only while Mission is on.
+  assert.match(source, /onLongRun: depthKind\(modeDef\) !== 'isolated' && !lockedHere && missionHere \?/);
+  assert.doesNotMatch(source, /LONG_TABS/);
   assert.doesNotMatch(cut('DepthButton'), /return null/, 'the button never hides itself');
   const { depthKind } = new Function(`${cut('depthKind')}\nreturn { depthKind };`)();
   assert.equal(depthKind({ isolated: true, tools: ['recon_cite'] }), 'isolated');

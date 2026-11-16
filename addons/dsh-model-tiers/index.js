@@ -2073,9 +2073,22 @@ export function apply(ctx, config) {
    * @param {{provider: string, model: string, reasoningEffort?: string} | undefined} selection - current selection.
    * @returns {Promise<void>}
    */
+  /**
+   * A Long run sets its helpers' effort by role (Mission, step 59): those helpers keep it. Every other
+   * agent is unchanged. Without Mission nothing is left out.
+   */
+  function missionOwnsEffort(agent) {
+    try {
+      return ctx.get('mission')?.ownsEffort?.(agent) === true;
+    } catch {
+      return false;
+    }
+  }
+
   async function reconcileEffort(agent, selection) {
     try {
       if (!selection || typeof agent?.model?.select !== 'function') return;
+      if (missionOwnsEffort(agent)) return;
       const effort = await desiredEffort(agent.id, selection.provider, selection.model);
       if (effort === undefined || effort === selection.reasoningEffort) return;
       agent.model.select({
@@ -2499,7 +2512,7 @@ export function apply(ctx, config) {
    * @returns {Promise<void>}
    */
   async function selectRoute(agent, route) {
-    const effort = await desiredEffort(agent.id, route.provider, route.model);
+    const effort = missionOwnsEffort(agent) ? agent.model?.current?.()?.reasoningEffort : await desiredEffort(agent.id, route.provider, route.model);
     agent.model.select({
       provider: route.provider,
       model: route.model,

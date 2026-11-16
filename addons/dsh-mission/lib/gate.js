@@ -20,6 +20,17 @@ export function helpersOffText(tier) {
   return `A mission run needs helper models (sub-agents), and this conversation's tier${name ? `, ${name},` : ''} has Sub-agents switched off. Switch them on for that tier in Settings → Model Tiers, or give this conversation another tier. The modes and checkpoints (/mission restricted, ask, auto, checkpoints, back) still work.`;
 }
 
+/** Tabs that run Read Only by the owner's decisions (data-1, research-6): no mode and no run there yet. */
+export const READ_ONLY_TABS = new Set(['data', 'research']);
+/** `/mission` words that only look or take back: they work in a Read Only tab. */
+const LOOK_WORDS = new Set(['', 'status', 'help', 'checkpoints', 'list']);
+
+/** What `/mission` answers in a Read Only tab. */
+export const READ_ONLY_TEXT = 'Mission is not available in this tab: Data and Research run Read Only, so the assistant cannot change your files here, and a Mission mode or run would lift that. Move the conversation to Cowork or Code to work with Mission, or start a Long run with the Run button next to Send (it can change files in this conversation\'s folder).';
+
+/** What the Long run card says in a Read Only tab: allowed (the owner's choice), with a warning. */
+export const READ_ONLY_LONG_TEXT = 'This tab is Read Only, but a Long run can change files in this conversation\'s folder.';
+
 /**
  * Why Mission may not do something in a conversation.
  * @param {object} what - the conversation and the action.
@@ -27,10 +38,13 @@ export function helpersOffText(tier) {
  * @param {{subagents?: boolean, label?: string, id?: string} | null} [what.tier] - its tier (`modelTiers.resolveTier`), if any.
  * @param {boolean} [what.helpers] - the action starts helper models: a run, or carrying one on.
  * @param {string} [what.word] - the `/mission` word, for the ones that only take back.
+ * @param {string} [what.tab] - the conversation's tab (Modes' mode id): Data and Research refuse.
+ * @param {boolean} [what.long] - the conversation's run is a Long run, which the owner allows in Data and Research too.
  * @returns {string} the reason; '' when it may.
  */
-export function whyNot({ isolated, tier = null, helpers = false, word }) {
+export function whyNot({ isolated, tier = null, helpers = false, word, tab = '', long = false }) {
   if (isolated && !(typeof word === 'string' && UNDO_WORDS.has(word))) return ISOLATED_TEXT;
+  if (READ_ONLY_TABS.has(String(tab)) && !long && !(typeof word === 'string' && (UNDO_WORDS.has(word) || LOOK_WORDS.has(word)))) return READ_ONLY_TEXT;
   if (helpers && tier?.subagents === false) return helpersOffText(tier);
   return '';
 }

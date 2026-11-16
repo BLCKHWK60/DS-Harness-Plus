@@ -111,6 +111,51 @@ export function maskFor({ tools, web, research, off, child, offline = [] }) {
   return { allow: [...new Set(allow)] };
 }
 
+/** Mission's step tool: the conversation conducts a run by calling it. */
+export const LONG_STEP_TOOL = 'mission_step';
+
+/**
+ * A tab's starting choice of tools for a Long run (the owner's rule, 16 November 2026: a Long run runs
+ * in its own tab with the tools it needs, switchable per tab and per run). Files and commands are on
+ * everywhere; the web is on except in an isolated tab, which searches only with its own tools.
+ * @param {object} mode - the tab's mode.
+ * @param {{files?: unknown, web?: unknown} | undefined} saved - the choice saved on Settings → Modes, if any.
+ * @returns {{files: boolean, web: boolean}} the starting choice.
+ */
+export function longToolsFor(mode, saved) {
+  const isolated = mode?.isolated === true;
+  return {
+    files: typeof saved?.files === 'boolean' ? saved.files : true,
+    web: isolated ? false : typeof saved?.web === 'boolean' ? saved.web : true,
+  };
+}
+
+/**
+ * The mask while a Long run is on in a conversation that is not isolated: the tab keeps its own tools,
+ * gains Mission's step tool, and with Files and commands on gets every tool (as in Cowork). The web
+ * follows the run's own switch. An isolated mode's tools stay with that mode.
+ * @param {object} want - what applies.
+ * @param {object} want.mode - the tab's mode.
+ * @param {boolean} want.files - the run's Files and commands switch.
+ * @param {boolean} want.web - the run's Web switch.
+ * @param {boolean} [want.research] - a research tab (its helpers search).
+ * @param {boolean} [want.child] - the agent is a helper.
+ * @param {string[]} [want.offline] - tools that go online besides the web tools.
+ * @param {string[]} [want.fenced] - the tools of isolated modes.
+ * @returns {{allow?: string[], deny?: string[]} | null} the mask.
+ */
+export function longRunMask({ mode, files, web, research = false, child = false, offline = [], fenced = [] }) {
+  const own = mode?.tools === 'all' ? 'all' : Array.isArray(mode?.tools) ? mode.tools : [];
+  const tools = files || own === 'all' ? 'all' : [...own, LONG_STEP_TOOL];
+  // A research tab's helpers search whatever the conversation's Web says, but not when the run's own Web is off.
+  let mask = maskFor({ tools, web, research: research && web, off: false, child, offline });
+  if (mask?.allow && !mask.allow.includes(LONG_STEP_TOOL)) mask = { allow: [...mask.allow, LONG_STEP_TOOL] };
+  if (fenced.length === 0) return mask;
+  if (!mask) return { deny: [...fenced] };
+  if (mask.deny) return { deny: [...new Set([...mask.deny, ...fenced])] };
+  return { allow: mask.allow.filter((name) => !fenced.includes(name)) };
+}
+
 /**
  * The mask of a conversation in an isolated mode: its own list, to the letter. No web search, no
  * Deep research, nothing for helpers.

@@ -14,6 +14,7 @@ import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DEPTHS, FOCUSES, HELPER_MODELS, MODE_ID, listReports, saveReport, selectionNote, withResearch } from './lib/mode.js';
+import { openOwned, removeOwned } from './lib/owned.js';
 
 export const name = 'dsh-research';
 export const DATA_PATH = '/dsh-research/data';
@@ -47,6 +48,30 @@ export function apply(ctx, config) {
   const home = ctx.get('dshHomePath');
   const researchHome = typeof home === 'function' ? home('research') : '';
   const folder = () => String(plain(config?.folder) ?? '').trim() || (researchHome ? join(researchHome, 'reports') : '');
+  // Scratch (step 40): a report made in a Scratch conversation stays in the report folder (listed, and
+  // compared as before) and goes when that conversation is deleted for good. Only in Research's own
+  // folder: reports in a folder you picked yourself are never removed.
+  const defaultFolder = researchHome ? join(researchHome, 'reports') : '';
+  const ownFolder = () => Boolean(defaultFolder) && folder() === defaultFolder;
+  const owned = openOwned(researchHome ? join(researchHome, 'scratch-reports.json') : '');
+  const scratchConversation = (sessionId) => {
+    try {
+      const agent = ctx.get('agents')?.get?.(String(sessionId));
+      return Boolean(agent && ctx.get('coworkScratch')?.folderOf?.(agent));
+    } catch {
+      return false;
+    }
+  };
+  ctx.inject(['coworkTrash'], (inner) => {
+    try {
+      inner.effect(() => inner.coworkTrash.onErased((ids) => {
+        const removed = removeOwned(owned.take(ids), defaultFolder);
+        if (removed > 0) ctx.logger?.info?.(`research: removed ${removed} report(s) of deleted Scratch conversations`);
+      }), 'research: Scratch reports');
+    } catch (error) {
+      warn(`reports of Scratch conversations will stay after they are deleted: ${String(error?.message ?? error)}`);
+    }
+  });
   const settingsOf = (ns) => {
     try {
       return ctx.get('settings')?.describe?.().find((entry) => entry.ns === ns)?.value;
@@ -129,6 +154,15 @@ export function apply(ctx, config) {
       return false;
     }
   };
+  /** @returns {boolean} whether a conversation is a helper of another one (a run's planner, worker or reviewer). */
+  const isHelper = (id) => {
+    try {
+      const agent = (ctx.get('agents')?.list?.() ?? []).find((other) => other.id === id);
+      return Boolean(agent?.header?.parentSession ?? agent?.session?.header?.parentSession);
+    } catch {
+      return false;
+    }
+  };
   const rootOf = (agent) => String(agent?.header?.parentSession ?? agent?.session?.header?.parentSession ?? agent?.id ?? '');
   const focusFor = (id) => focusOf(pins[id] ?? plain(config?.focus));
 
@@ -183,12 +217,20 @@ export function apply(ctx, config) {
       runOptions(sessionId) {
         const id = String(sessionId ?? '');
         if (!enabled() || !inResearch(id)) return {};
-        return { focus: focusFor(id), followups: true, save: Boolean(folder()) };
+        // Follow-up questions are for you to click in your own conversation; a helper's (one a Long run
+        // started) has nobody to ask them, and clicking one would write to a helper that has finished.
+        return { focus: focusFor(id), followups: !isHelper(id), save: Boolean(folder()) };
       },
-      /** Save a finished report; returns the file. */
+      /** Save a finished report; returns the file. One made in a Scratch conversation is remembered with it. */
       saveReport(sessionId, report) {
         if (!enabled() || !folder()) return '';
-        return saveReport(folder(), report);
+        const file = saveReport(folder(), report);
+        try {
+          if (ownFolder() && scratchConversation(sessionId)) owned.add(String(sessionId), file);
+        } catch (error) {
+          warn(`a Scratch report was saved but will stay after its conversation is deleted: ${String(error?.message ?? error)}`);
+        }
+        return file;
       },
     })),
     'research: service',

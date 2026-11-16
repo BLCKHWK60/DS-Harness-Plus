@@ -71,6 +71,13 @@ export function openPins(file, max = 500) {
   };
   return {
     get: (id) => (table[id] ? readSelection(table[id]) : undefined),
+    /** Forget one conversation's selection (Scratch: deleted for good). @returns {boolean} true when it had one. */
+    forget(id) {
+      if (!Object.prototype.hasOwnProperty.call(table, id)) return false;
+      delete table[id];
+      write();
+      return true;
+    },
     pin(id, selection) {
       table[id] = selection;
       const ids = Object.keys(table);

@@ -62,7 +62,9 @@ html[data-cws-tab="research"] [class*='_composerHero']:has(.dsh-rs-bar) .cws-chi
 .dsh-rs-pop .note { margin-top: 8px; color: var(--dsw-alias-label-secondary); }
 
 /* The progress strip above the message box. */
-.dsh-rs-dock { margin: 0 0 8px; padding: 10px 12px; border-radius: 12px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1, transparent); font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.dsh-rs-dock { box-sizing: border-box; width: calc(100% - 2 * var(--dsh-composer-side-clearance, 0px)); max-width: var(--dsh-composer-card-max-width, 100%); margin: 0 auto 8px; padding: 10px 12px; border-radius: 12px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1, transparent); font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+/* As wide as the chat box, also with Cowork's wide chat (which lets the box use the window less 32px). */
+html[data-cws-wide] .dsh-rs-dock { max-width: calc(100% - 2 * var(--dsh-composer-side-clearance, 0px) - 32px); }
 .dsh-rs-dock b { color: var(--dsw-alias-label-primary); font-weight: 600; }
 .dsh-rs-steps { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 4px; }
 .dsh-rs-step { padding: 0 8px; border-radius: 8px; line-height: 20px; background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent); }

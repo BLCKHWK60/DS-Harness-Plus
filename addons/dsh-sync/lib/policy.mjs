@@ -7,6 +7,7 @@ import { renderStatus } from './render.mjs'
 import { messageOf } from './errors.mjs'
 import { UNKNOWN_REASON, askIsolation } from './isolation.mjs'
 import { applyProjects, planProjects, readManifests, renderPlan, writeManifest } from './projects.mjs'
+import { isScratch } from './scratch.mjs'
 
 export const PLAINTEXT_WARNING =
   'PLAINTEXT: session text is stored unencrypted in the sync repository and on its remote. Use backend "encrypted" with age, or set encryption: required.'
@@ -22,6 +23,7 @@ export const PLAINTEXT_WARNING =
  * @param {{sync: boolean, autoCreate: boolean, folderMap: Array<{from: string, to: string}>}} deps.projects - project settings.
  * @param {string} deps.deviceLabel - label written into this device's manifest.
  * @param {() => object | undefined} deps.registry - returns dsh's workspace registry when available.
+ * @param {() => string} [deps.scratchPlace] - the Scratch place: that project is never put in the manifest or made here.
  * @param {() => Promise<{known: boolean, reason?: string, ids: Set<string>, exclude: (rel: string) => boolean}>} [deps.isolation] -
  *   which conversations are isolated now (lib/isolation.mjs `readIsolation`). Without it nothing is known, so nothing is sent.
  * @param {{warn: Function, info: Function}} deps.logger - logger.
@@ -57,13 +59,23 @@ export function createSyncService(deps) {
     return { warnings: selection.warnings }
   }
 
+  /** @returns {boolean} whether a project folder is the Scratch place (or in it): never shared, never made from a manifest. */
+  const scratchProject = (folder) => {
+    try {
+      const place = deps.scratchPlace?.() ?? ''
+      return Boolean(place) && isScratch(folder, place)
+    } catch {
+      return false
+    }
+  }
+
   /** Write this device's project manifest (when project sync is on). */
   async function exportProjects() {
     if (!projects.sync) return
     const registry = deps.registry()
     if (!registry?.list) return
     try {
-      const list = registry.list().map((entity) => ({ id: entity.id, title: entity.title, path: entity.path }))
+      const list = registry.list().filter((entity) => !scratchProject(entity.path)).map((entity) => ({ id: entity.id, title: entity.title, path: entity.path }))
       await writeManifest({ repoDir, deviceShort: state.deviceShort, deviceId: state.deviceId, label: deps.deviceLabel, projects: list })
     } catch (error) {
       logger.warn(`could not write the project manifest: ${messageOf(error)}`)
@@ -73,7 +85,8 @@ export function createSyncService(deps) {
   /** @returns {Promise<Array<object>>} what applying the other devices' projects would do here. */
   async function planFromManifests() {
     const manifests = await readManifests({ repoDir, ownShort: state.deviceShort })
-    return planProjects({ manifests, rules: projects.folderMap, registry: deps.registry() })
+    const plan = await planProjects({ manifests, rules: projects.folderMap, registry: deps.registry() })
+    return plan.filter((item) => !scratchProject(item.localPath))
   }
 
   /** Record the outcome of an operation in the state file. */
@@ -89,7 +102,7 @@ export function createSyncService(deps) {
       // Without knowing which conversations are isolated, status does not copy anything into the worktree either.
       const [{ isolation: fence = { known: false, reason: UNKNOWN_REASON, count: 0 }, ...base }, selection] = [await engine.status({ isolation }), await transport()]
       const meta = state.read()
-      return { ...base, warnings: [...new Set([...(base.warnings ?? []), ...selection.warnings])], mode: selection.mode, encryption, isolated: fence.known ? fence.count : undefined, isolatedWhy: fence.known ? '' : String(fence.reason ?? '').replace(/^Sync did not run: /, ''), lastPullAt: meta.lastPullAt, lastPushAt: meta.lastPushAt, lastError: meta.lastError || base.error }
+      return { ...base, warnings: [...new Set([...(base.warnings ?? []), ...selection.warnings])], mode: selection.mode, encryption, isolated: fence.known ? fence.count : undefined, scratch: fence.known ? fence.scratch ?? 0 : undefined, isolatedWhy: fence.known ? '' : String(fence.reason ?? '').replace(/^Sync did not run: /, ''), lastPullAt: meta.lastPullAt, lastPushAt: meta.lastPushAt, lastError: meta.lastError || base.error }
     },
 
     /** @returns {Promise<string>} status as text. */
@@ -98,6 +111,7 @@ export function createSyncService(deps) {
       const lines = [renderStatus(status)]
       lines.push(`      transport: ${status.mode === 'encrypted' ? 'encrypted (age)' : 'PLAINTEXT'} · encryption policy: ${encryption}`)
       lines.push(status.isolated === undefined ? `      isolated conversations (Recon): unknown, so push and pull wait: ${status.isolatedWhy}` : `      isolated conversations (Recon): ${status.isolated}, never synced`)
+      if (status.isolated !== undefined) lines.push(`      Scratch conversations: ${status.scratch ?? 0}, never synced`)
       lines.push(`      last pull ${status.lastPullAt ? new Date(status.lastPullAt).toISOString() : '-'} · last push ${status.lastPushAt ? new Date(status.lastPushAt).toISOString() : '-'}`)
       return lines.join('\n')
     },

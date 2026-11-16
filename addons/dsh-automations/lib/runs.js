@@ -7,8 +7,65 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-/** Runs kept, newest first. */
-export const RUNS_MAX = 200;
+/**
+ * Runs kept for all automations together, newest first: only a ceiling for the file's size. Each
+ * automation's own keep rule (`keepDefault`, Automations part step A11) usually drops runs long before.
+ */
+export const RUNS_MAX = 1000;
+/** A run that started this long after its due time is marked late (step A2). The app's floor is 60 s. */
+export const LATE_MS = 3 * 60 * 1000;
+const DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * How long an automation's past runs are kept, from how often it runs (the plan's starting values:
+ * hourly one week, daily one month, weekly six months, monthly one year).
+ * @param {number | undefined} everyMs - the time between two runs; undefined when not known.
+ * @returns {{days: number, count: number}} days kept (0 = no limit) and runs kept (0 = no limit).
+ */
+export function keepDefault(everyMs) {
+  const every = Number(everyMs);
+  if (!Number.isFinite(every) || every <= 0) return { days: 31, count: 0 };
+  if (every <= 60 * 60 * 1000) return { days: 7, count: 0 };
+  if (every <= DAY) return { days: 31, count: 0 };
+  if (every <= 7 * DAY) return { days: 183, count: 0 };
+  return { days: 365, count: 0 };
+}
+
+/**
+ * The due time of each task in a scheduler message (`occurrence_at`), for late marks (step A2).
+ * Run now sends the current time, so it is never late.
+ * @param {unknown} message - a user-role message.
+ * @returns {Record<string, number>} task id -> due time in ms.
+ */
+export function occurrencesOf(message) {
+  if (message?.source?.kind !== 'schedule') return {};
+  const text = (Array.isArray(message.content) ? message.content : [])
+    .map((block) => (block?.type === 'text' ? String(block.text ?? '') : ''))
+    .join('\n');
+  const out = {};
+  const put = (id, at) => {
+    const time = Date.parse(String(at ?? ''));
+    if (id && Number.isFinite(time)) out[String(id)] = time;
+  };
+  const one = /^schedule_id_json: (.+)$/m.exec(text);
+  const when = /^occurrence_at: (.+)$/m.exec(text);
+  if (one && when) {
+    try {
+      put(JSON.parse(one[1]), when[1].trim());
+    } catch {
+      /* not a task id */
+    }
+  }
+  const many = /^reminders_json: (.+)$/m.exec(text);
+  if (many) {
+    try {
+      for (const item of JSON.parse(many[1])) put(item?.schedule_id, item?.occurrence_at);
+    } catch {
+      /* not a list */
+    }
+  }
+  return out;
+}
 /** How much of the answer's end is kept, in characters. */
 export const TEXT_MAX = 400;
 
@@ -122,8 +179,17 @@ export function openRuns(file) {
      * @param {number} [what.steps] - steps of its turn already begun (the instruction is read inside the first step).
      * @returns {object} the run.
      */
-    start({ id, sessionId, tasks, at = Date.now(), steps = 0 }) {
+    start({ id, sessionId, tasks, at = Date.now(), steps = 0, dueAt, whenOpened = false, target }) {
       const run = { id: String(id), sessionId: String(sessionId), tasks, startedAt: at, state: 'running', steps: Math.max(0, Number(steps) || 0), tokens: 0, text: '', detail: '' };
+      // Late (step A2): due earlier than it started, by more than LATE_MS. 'whenOpened' only when the
+      // app's own record shows it was closed at the due time (a busy conversation also delays a run).
+      if (Number.isFinite(dueAt) && at - dueAt > LATE_MS) {
+        run.dueAt = dueAt;
+        run.late = true;
+        if (whenOpened) run.whenOpened = true;
+      }
+      // Where it ran: its own new conversation ('new'), or one shared with other runs (step A11).
+      if (target === 'new') run.own = true;
       active.set(run.sessionId, run);
       runs = [run, ...runs.filter((other) => other.id !== run.id)].slice(0, RUNS_MAX);
       dirty = true;
@@ -212,8 +278,57 @@ export function openRuns(file) {
       return run;
     },
 
+    /** You wrote in a conversation after its run ended: that run's conversation is never trashed by age. */
+    touch(sessionId) {
+      const id = String(sessionId);
+      if (active.has(id)) return;
+      let changed = false;
+      for (const run of runs) {
+        if (run.sessionId === id && run.own && !run.touched && run.state !== 'running' && run.state !== 'waiting') {
+          run.touched = true;
+          changed = true;
+        }
+      }
+      if (changed) {
+        dirty = true;
+        save();
+      }
+    },
+
     /** Every run, newest first. */
     list: () => runs.map((run) => ({ ...run, waitKey: undefined })),
+
+    /**
+     * Drop ended runs that no task keeps any more (step A11). A run of several tasks together stays
+     * while any of them keeps it.
+     * @param {(taskId: string) => {days: number, count: number}} keepFor - each task's keep rule.
+     * @param {number} [now] - the current time.
+     * @returns {object[]} the runs dropped (their conversations may go to the trash).
+     */
+    prune(keepFor, now = Date.now()) {
+      const seen = new Map();
+      const kept = [];
+      const dropped = [];
+      for (const run of runs) {
+        const ended = run.state !== 'running' && run.state !== 'waiting';
+        let keep = !ended;
+        for (const task of run.tasks ?? []) {
+          const rule = keepFor(String(task.id)) ?? { days: 0, count: 0 };
+          const n = (seen.get(task.id) ?? 0) + 1;
+          seen.set(task.id, n);
+          const young = !(rule.days > 0) || now - (run.endedAt ?? run.startedAt) <= rule.days * DAY;
+          const few = !(rule.count > 0) || n <= rule.count;
+          if (young && few) keep = true;
+        }
+        (keep ? kept : dropped).push(run);
+      }
+      if (dropped.length > 0) {
+        runs = kept;
+        dirty = true;
+        save();
+      }
+      return dropped;
+    },
 
     flush: save,
   };

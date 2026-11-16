@@ -26,9 +26,9 @@ test('the line has a name and what happened, nothing else', () => {
 });
 
 test('settings: defaults and checks', () => {
-  assert.deepEqual(readAlertSettings({}), { failed: true, needs: true, finished: false, others: false, othersMinutes: 2, mac: true, phone: false, ntfyServer: 'https://ntfy.sh', ntfyTopic: '' });
+  assert.deepEqual(readAlertSettings({}), { failed: true, needs: true, finished: false, others: false, runs: true, othersMinutes: 2, mac: true, phone: false, ntfyServer: 'https://ntfy.sh', ntfyTopic: '' });
   const set = readAlertSettings({ alertFailed: false, alertFinished: true, alertOthers: true, othersMinutes: 0, mac: false, phone: true, ntfyServer: ' https://example.org// ', ntfyTopic: ' my-topic ' });
-  assert.deepEqual(set, { failed: false, needs: true, finished: true, others: true, othersMinutes: 0, mac: false, phone: true, ntfyServer: 'https://example.org', ntfyTopic: 'my-topic' });
+  assert.deepEqual(set, { failed: false, needs: true, finished: true, others: true, runs: true, othersMinutes: 0, mac: false, phone: true, ntfyServer: 'https://example.org', ntfyTopic: 'my-topic' });
   assert.equal(readAlertSettings({ othersMinutes: -3 }).othersMinutes, 2);
 
   assert.equal(phoneProblem(set), '');
@@ -126,4 +126,20 @@ test('the phone alert is one JSON post to the server root', async () => {
   } finally {
     globalThis.fetch = realFetch;
   }
+});
+
+test('run alerts: their own switch, never the goal\'s text, and not held back by the switches for your own conversations', async () => {
+  assert.equal(alertText({ event: 'finished', run: 'long', name: 'my-app' }), 'A long run in my-app finished');
+  assert.equal(alertText({ event: 'needs', run: 'mission', name: 'my-app' }), 'A mission run in my-app needs your yes');
+  assert.equal(alertText({ event: 'failed', run: 'long', name: '' }), 'A long run stopped by itself (the model did not answer)');
+  assert.match(alertText({ event: 'failed', run: 'long', name: 'x', state: 'restart' }), /interrupted when the app closed/);
+  const sent = [];
+  hooks.mac = async (_title, text) => { sent.push(text); };
+  hooks.phone = async () => {};
+  let raw = { alertOthers: false, alertFinished: false };
+  const alerter = createAlerter({ settings: () => readAlertSettings(raw) });
+  assert.ok(await alerter.notify({ event: 'finished', run: 'long', name: 'my-app' }), 'on by default, whatever the others say');
+  assert.deepEqual(sent, ['A long run in my-app finished']);
+  raw = { ...raw, alertRuns: false };
+  assert.equal(alerter.notify({ event: 'finished', run: 'long', name: 'my-app' }), undefined, 'off with its own switch');
 });

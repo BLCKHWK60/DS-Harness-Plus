@@ -898,6 +898,12 @@ Nothing uses them yet. Bring them to you for word-for-word approval.
 ### Steps
 
 > **Status (15 November 2026):** lab trial 1 done: a conversation outside any project gets the disabled 'Choose a workspace to start' box. The owner chose one hidden 'Scratch' project with a sub-folder per thread.
+>
+> **Step 32 built (15 November 2026, not installed):** the place `<app home>/scratch`, `isScratch` by place, a sub-folder per thread made at its first turn, the working-folder guard, helpers kept to their thread's folder, Scratch kept out of 'last used' and Plus's project lists, `startInScratch` with no button. Lab trials 1 (with the Scratch project) and 3 passed. Shared helper offered as the `coworkScratch` service; dsh-modes needed no change.
+>
+> **Step 33 built (16 November 2026, not installed):** Sync leaves Scratch conversations out of push and pull (by each conversation's recorded folder, and by the Scratch store folder for threads only on the remote), takes one already there off the branch, and never shares the Scratch project. Lab trial 6 passed.
+>
+> **Steps 34 to 44 built overnight (16 November 2026, not installed), each on the recommended answer; see docs/OVERNIGHT-2026-11-16.md.** Step 42 moved to the Automations part (needs the record of where a task was created, A4).
 
 **Step 32. Scratch place and helpers (no visible change)** (size M)
 
@@ -1256,6 +1262,8 @@ Nothing uses them yet. Bring them to you for word-for-word approval.
 - **The repeat check under PTC across rounds** Why: The conductor sends the same program every round How: PTC lab conversation, a run of 10 steps with maxRepeats at 3; check that no round is stopped as a loop.
 - **An automation falling due during a run** Why: There is no queue; both share one model How: Schedule a one-minute task during a mock run; record whether both run at once and whether the run's step times out.
 - **A right-panel tab from Plus (only if decision 4 picks it)** Why: The app documents it; Plus has never tried it How: Throwaway client plugin registering ctx.sidebarRightTabs and a body slot; open it during a run.
+
+> **Status (16 November 2026, overnight, not installed):** steps 45 to 61, 63 and 64 built on the recommended answers (docs/OVERNIGHT-2026-11-16.md); 58 as an optional allowance kept by Mission; 62 defaults only (no saved presets); 65 not built (the answer chosen: not in Research); 66 to 68 later.
 
 ### Steps
 
@@ -1646,6 +1654,8 @@ Nothing uses them yet. Bring them to you for word-for-word approval.
 - **A learned skill with the same name as yours, Plus's or a project's** Why: Within one layer the lower rank wins, so a learned skill could replace one of yours, or be replaced. How: Register provider candidates with ranks 100, 250 and 700 under names that exist in ~/.agents/skills (lab home) and in Plus. Check which one wins in skills.list and in the skill tool.
 - **The reader skips Self-improve's test runs and Recon** Why: Check and Guard tasks and Recon findings must never reach the reading model or a proposal. How: Run one Self-improve 'with tools' task and one Recon conversation in the lab. Run the reader's list without a model, and assert that neither appears. Switch Modes off and confirm the reader refuses to run.
 
+> **Status (16 November 2026, overnight, not installed):** built as a new add-on, `dsh-skill-architect` (Settings → Learned skills), on the recommended answers (docs/OVERNIGHT-2026-11-16.md). Built: 69–71, 74, 76, 78–81, 85, 87; 82 for skills, facts and project rules (habits and tab lessons are shown to add by hand in Self-improve); 83 counts loads only; 73 as a Start clean list on the add-on's page; 74 needed no Model Tiers change (a tier loads skills with `skills.get`, which asks this provider); 77 not needed (the app's `inheritedEventCount` says where a copy's own part starts). Not built: 72 and 75 (the app does not tell a skill provider which conversation asks), the project-page card of 73, 84, 86.
+
 ### Steps
 
 **Step 69. Owner's answers before building** (size S)
@@ -1946,6 +1956,8 @@ Nothing uses them yet. Bring them to you for word-for-word approval.
 - **An old run's conversation to the trash, from a server-side service** Why: For keeping runs by time or count (question 4). How: Archive a 'new' run conversation, move it with a trash service, then Put back. The automation and its other runs must stay untouched. Check what the app's receipt link shows.
 - **Opening one specific task in the app's editor from Plus** Why: For 'Open in the app's editor' (question 1). How: Try layout.selectPanel('schedules') with a task selection, and the right-sidebar 'scheduleTask' tab.
 - **A recurrence engine for Plus** Why: The Missed list, the tiles and the timeline need past and future times. Plus has none, and no add-on loads app packages today. How: Check whether an add-on can load the app's dsh-util-time or rrule at run time. If not, ship a small engine. Compare its next time with the app's scheduledAt for all seven kinds, including a daylight-saving change.
+
+> **Status (16 November 2026, overnight, not installed):** built on the recommended answers (docs/OVERNIGHT-2026-11-16.md): A1 (done 15 November as step 4), A2, A3, A4, A5, A6, A7, A8, A10 (= step 14), A11 (= step 13), A16 (lanes per automation; no chain or file lanes), A17, A22, and step 42; A9 only as the filter by tab; A12 as option 2 (the late run is labelled); A21 only as the tab's instructions (no hard check: the app has no hook before a tool runs). Not built: A9's tab applied before the first step, A12 option 1, A13, A14, A15, A18, A19, A20, A23.
 
 ### Steps
 

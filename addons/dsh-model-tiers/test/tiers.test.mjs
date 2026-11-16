@@ -389,3 +389,28 @@ test('in a running app the tier section keeps only the thinking words exactly wh
   assert.match(await section(new Error('Modes failed')), OLD, 'a failing Modes leaves the usual words');
   assert.match(await section(undefined), OLD, 'an older Modes without depthSpoken leaves the usual words');
 });
+
+test('a Long run\'s helpers keep the effort Mission set by role; every other agent gets the tier\'s', async () => {
+  const { apply } = await import('../index.js');
+  const selected = [];
+  const make = (id, parent) => ({
+    id, session: { header: { id, ...(parent ? { parentSession: parent, origin: 'subagent' } : {}) } }, header: { id, ...(parent ? { parentSession: parent } : {}) },
+    model: { current: () => ({ provider: 'prov-a', model: 'model-x', reasoningEffort: 'medium' }), select: (route) => selected.push([id, route.reasoningEffort]) },
+  });
+  const helper = make('h1', 'c1');
+  const other = make('h2', 'c2');
+  const services = {
+    agents: { get: () => undefined, list: () => [helper, other] },
+    modes: { isolated: () => false, noTools: () => false },
+    mission: { ownsEffort: (agent) => agent?.header?.parentSession === 'c1' },
+    llm: { resolveModelInfo: async () => ({ reasoning: { efforts: [{ id: 'low' }, { id: 'medium' }, { id: 'high' }] } }) },
+  };
+  const ctx = {
+    on: () => () => {}, effect: (fn) => { const undo = fn(); return typeof undo === 'function' ? undo : () => {}; }, provide: () => {}, get: (name) => services[name], inject: () => {},
+    logger: { warn: () => {}, info: () => {}, debug: () => {} }, loader: {}, tools: { register: () => () => {} },
+  };
+  apply(ctx, { tiers: { haiku: { provider: 'prov-a', model: 'model-x', effort: 'high' } } });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(selected.some(([id]) => id === 'h1'), false, 'the Long run helper keeps Mission\'s effort');
+  assert.ok(selected.some(([id]) => id === 'h2'), `the other agent gets the tier's effort (${JSON.stringify(selected)})`);
+});

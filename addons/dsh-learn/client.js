@@ -20,7 +20,9 @@ window.__ModuleLoader__.load({
     const SOURCE = { pdf: 'PDF', notes: 'Notes', topic: 'Topic', code: 'Code' };
 
     const CSS = `
-.dsh-ln-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 12px 8px; padding: 6px 10px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 12px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); min-width: 0; }
+.dsh-ln-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; box-sizing: border-box; width: calc(100% - 2 * var(--dsh-composer-side-clearance, 0px)); max-width: var(--dsh-composer-card-max-width, 100%); margin: 0 auto 8px; padding: 6px 10px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 12px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); min-width: 0; }
+/* As wide as the chat box, also with Cowork's wide chat (which lets the box use the window less 32px). */
+html[data-cws-wide] .dsh-ln-bar { max-width: calc(100% - 2 * var(--dsh-composer-side-clearance, 0px) - 32px); }
 .dsh-ln-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46%; color: var(--dsw-alias-label-primary); }
 .dsh-ln-dots { display: inline-flex; gap: 4px; align-items: center; flex: none; }
 .dsh-ln-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dsw-alias-border-l3, var(--dsw-alias-border-l2)); }
@@ -386,7 +388,8 @@ window.__ModuleLoader__.load({
           ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'learn', order: 550, label: () => t('section.title') }, (props) => h(SettingsPage, { ...props, appCtx: ctx }))),
         );
         // Above the chat box, under the activity indicator.
-        ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'learn', order: 8 }, (props) => h(StudyBar, props))));
+        // Before the Activity monitor (order 5): it pulls itself down onto the chat box, over anything between the two.
+        ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'learn', order: 2 }, (props) => h(StudyBar, props))));
       },
     };
   },

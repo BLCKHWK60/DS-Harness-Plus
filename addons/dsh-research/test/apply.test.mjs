@@ -73,11 +73,14 @@ test('a Research mode stored by an older version (sandbox inherit) is rewritten 
 });
 
 test('Deep research gets the focus, follow-ups and saving only in a Research conversation', async () => {
-  const app = plugin('{}', { modeOf: (id) => (id === 'conv-r' ? MODE_ID : 'cowork') });
+  const helper = { id: 'helper-r', session: { header: { parentSession: 'conv-r' } } };
+  const app = plugin('{}', { modeOf: (id) => (id === 'conv-r' || id === 'helper-r' ? MODE_ID : 'cowork'), agents: [helper] });
   try {
     await settle();
     assert.deepEqual(app.provided.research.runOptions('conv-r'), { focus: 'news', followups: true, save: true });
     assert.deepEqual(app.provided.research.runOptions('conv-c'), {});
+    // A Long run's helper doing research: no follow-up questions (nobody to click them).
+    assert.equal(app.provided.research.runOptions('helper-r').followups, false);
   } finally {
     app.close();
   }
@@ -95,5 +98,71 @@ test('the selection note gives the Depth of the conversation itself (the same De
     assert.match(sections.get('conv-c').text(), /depth Standard \(about 25 minutes\)/, 'unknown: Standard');
   } finally {
     app.close();
+  }
+});
+
+test('Scratch: a report made in a Scratch conversation stays listed, and goes when that conversation is deleted for good', async () => {
+  const { existsSync, mkdtempSync: temp } = await import('node:fs');
+  const home = temp(join(tmpdir(), 'research-scratch-'));
+  const provided = {};
+  const listeners = [];
+  const services = {
+    dshHomePath: (name) => join(home, name),
+    settings: { describe: () => [{ ns: 'modes', value: { extraModes: '{}', defaultMode: 'cowork' } }], mutate: async () => {} },
+    modes: { get: () => 'research' },
+    agents: { get: (id) => ({ id }), list: () => [] },
+    coworkScratch: { folderOf: (agent) => (agent.id === 'session-scratch1' ? '/x/scratch/session-scratch1' : '') },
+  };
+  const trash = { onErased: (fn) => { listeners.push(fn); return () => {}; } };
+  const ctx = {
+    get: (key) => services[key],
+    on() {},
+    effect(fn) { fn(); },
+    provide(name, value) { provided[name] = value; },
+    inject(deps, fn) { if (deps.includes('coworkTrash')) fn({ coworkTrash: trash, effect: (make) => make() }); },
+    logger: { warn() {}, info() {} },
+  };
+  try {
+    apply(ctx, { enabled: true, focus: 'web', folder: '' });
+    const scratchFile = provided.research.saveReport('session-scratch1', { question: 'Scratch question', text: 'Body.' });
+    const plainFile = provided.research.saveReport('session-plain01', { question: 'Plain question', text: 'Body.' });
+    assert.equal(existsSync(scratchFile), true);
+    assert.equal(listeners.length, 1);
+    await listeners[0](['session-plain01']);
+    assert.equal(existsSync(plainFile), true, 'a conversation outside Scratch keeps its reports');
+    await listeners[0](['session-scratch1']);
+    assert.equal(existsSync(scratchFile), false, 'gone with its Scratch conversation');
+    assert.equal(existsSync(plainFile), true);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('Scratch: reports in a folder you picked yourself are never removed', async () => {
+  const { existsSync, mkdtempSync: temp } = await import('node:fs');
+  const home = temp(join(tmpdir(), 'research-scratch-'));
+  const own = temp(join(tmpdir(), 'research-own-'));
+  const provided = {};
+  const listeners = [];
+  const services = {
+    dshHomePath: (name) => join(home, name),
+    settings: { describe: () => [{ ns: 'modes', value: { extraModes: '{}', defaultMode: 'cowork' } }], mutate: async () => {} },
+    modes: { get: () => 'research' },
+    agents: { get: (id) => ({ id }), list: () => [] },
+    coworkScratch: { folderOf: () => '/x/scratch/thread' },
+  };
+  const ctx = {
+    get: (key) => services[key], on() {}, effect(fn) { fn(); }, provide(name, value) { provided[name] = value; },
+    inject(deps, fn) { if (deps.includes('coworkTrash')) fn({ coworkTrash: { onErased: (fn2) => { listeners.push(fn2); return () => {}; } }, effect: (make) => make() }); },
+    logger: { warn() {}, info() {} },
+  };
+  try {
+    apply(ctx, { enabled: true, focus: 'web', folder: own });
+    const file = provided.research.saveReport('session-scratch1', { question: 'Q', text: 'Body.' });
+    await listeners[0](['session-scratch1']);
+    assert.equal(existsSync(file), true);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(own, { recursive: true, force: true });
   }
 });

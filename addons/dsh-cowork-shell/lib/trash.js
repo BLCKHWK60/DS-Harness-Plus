@@ -9,7 +9,7 @@
  * `<dir>/pending.json` lists conversations that were in use when deleted; their files move later.
  */
 import { randomUUID } from 'node:crypto';
-import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 
 /** How long a deleted conversation is kept. */
@@ -233,7 +233,7 @@ export function openTrash(dir, { wiping = () => false } = {}) {
      * @returns {{id: string, title: string, deletedAt: number, pending: boolean, tab?: string, erasing?: true}[]} the items.
      */
     list({ registered } = {}) {
-      const plain = (src, pending) => ({ id: src.id, title: cleanTitle(src.title), deletedAt: Number(src.deletedAt) || 0, pending, ...tabField(src.tab), ...fallbackField(src.fallbackTab), ...(src.erase === true ? { erasing: true } : {}) });
+      const plain = (src, pending) => ({ id: src.id, title: cleanTitle(src.title), deletedAt: Number(src.deletedAt) || 0, pending, ...tabField(src.tab), ...fallbackField(src.fallbackTab), ...(src.erase === true ? { erasing: true } : {}), ...(Array.isArray(src.folders) && src.folders.length > 0 ? { files: true } : {}) });
       const rows = [];
       // Records that share a group label are one row (each still its own record underneath).
       const groups = new Map();
@@ -386,6 +386,15 @@ export function openTrash(dir, { wiping = () => false } = {}) {
         if (!safeId(part.id)) throw new Error('not a conversation id');
         if (!isAbsolute(String(part.folder)) || !isSessionFolder(part.folder)) throw new Error(`not a stored conversation: ${part.id}`);
       }
+      // A Scratch thread's own files (its sub-folder of the Scratch place) go with it: a real folder, never a link.
+      const folders = (Array.isArray(what.folders) ? what.folders : []).filter((folder) => {
+        if (!isAbsolute(String(folder))) return false;
+        try {
+          return lstatSync(folder).isDirectory();
+        } catch {
+          return false;
+        }
+      });
       const target = entryDir(id);
       if (existsSync(target)) throw new Error('already in the trash');
       mkdirSync(target, { recursive: true });
@@ -395,13 +404,14 @@ export function openTrash(dir, { wiping = () => false } = {}) {
       const marked = waitingEntry?.erase === true;
       // A run of a group row keeps its group (given now, or kept with it while it waited).
       const group = groupFields(what).group ? groupFields(what) : groupFields(waitingEntry);
-      const info = { id, title: cleanTitle(title), deletedAt, ...tabField(tab), ...fallbackField(fallbackTab), ...group, ...(marked ? { erase: true } : {}), parts: parts.map((p) => ({ id: p.id, from: p.folder, cacheFrom: p.cache && existsSync(p.cache) ? p.cache : null })) };
+      const info = { id, title: cleanTitle(title), deletedAt, ...tabField(tab), ...fallbackField(fallbackTab), ...group, ...(marked ? { erase: true } : {}), parts: parts.map((p) => ({ id: p.id, from: p.folder, cacheFrom: p.cache && existsSync(p.cache) ? p.cache : null })), ...(folders.length > 0 ? { folders: folders.map((from, index) => ({ from, name: `files-${index}` })) } : {}) };
       // Written first: an interrupted move can still be put back from this record.
       writeJsonAtomic(join(target, 'info.json'), info);
       for (const part of info.parts) {
         move(part.from, join(target, part.id, 'session'));
         if (part.cacheFrom) move(part.cacheFrom, join(target, part.id, 'cache.json'));
       }
+      for (const folder of info.folders ?? []) move(folder.from, join(target, folder.name));
       writePending(readPending().filter((item) => item.id !== id));
     },
 
@@ -511,6 +521,26 @@ export function openTrash(dir, { wiping = () => false } = {}) {
         }
         if (part.cacheFrom && isAbsolute(String(part.cacheFrom)) && existsSync(cache) && !existsSync(part.cacheFrom)) moves.push([cache, part.cacheFrom]);
       }
+      // Its files: back where they were. An empty folder made there meanwhile gives way; one with files
+      // in it does not (nothing is ever mixed or overwritten), and then nothing moves at all.
+      const emptied = [];
+      for (const folder of Array.isArray(info.folders) ? info.folders : []) {
+        if (!isAbsolute(String(folder?.from)) || !/^files-\d+$/.test(String(folder?.name))) throw new Error('the trash record is damaged');
+        const kept = join(target, folder.name);
+        if (!existsSync(kept)) continue;
+        if (existsSync(folder.from)) {
+          let names;
+          try {
+            names = lstatSync(folder.from).isDirectory() ? readdirSync(folder.from) : null;
+          } catch {
+            names = null;
+          }
+          if (!names || names.length > 0) throw new Error(`its files cannot go back: ${folder.from} holds other files now`);
+          emptied.push(folder.from);
+        }
+        moves.push([kept, folder.from]);
+      }
+      for (const folder of emptied) rmdirSync(folder);
       for (const [from, to] of moves) move(from, to);
       rmSync(target, { recursive: true, force: true });
       return true;
@@ -541,6 +571,7 @@ export function openTrash(dir, { wiping = () => false } = {}) {
         // A move that broke off half-way: some files are still in the app's store. Erasing the record
         // alone would bring the conversation back to the list.
         if (info && info.parts.some((part) => isAbsolute(String(part.from)) && existsSync(part.from) && !existsSync(join(target, part.id, 'session')))) throw new Error(PARTIAL);
+        if (info && (Array.isArray(info.folders) ? info.folders : []).some((folder) => isAbsolute(String(folder?.from)) && existsSync(folder.from) && !existsSync(join(target, String(folder.name))))) throw new Error(PARTIAL);
         rmSync(target, { recursive: true, force: true });
         writePending(readPending().filter((item) => item.id !== id));
         return 'erased';

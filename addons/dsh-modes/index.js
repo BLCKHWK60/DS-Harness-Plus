@@ -12,7 +12,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import z from '@deepseek-ai/schemastery';
-import { IMAGE_TOOLS, WEB_TOOLS, goesOnline, imageToolsOffline, oldWebMarks, parentIdOf, programGoesOnline, researchTab, rootOf, toolMaskFor, webFor, webReaching } from './lib/mask.js';
+import { IMAGE_TOOLS, WEB_TOOLS, goesOnline, imageToolsOffline, longRunMask, longToolsFor, oldWebMarks, parentIdOf, programGoesOnline, researchTab, rootOf, toolMaskFor, webFor, webReaching } from './lib/mask.js';
 import { trashedIds } from './lib/trashed.js';
 import { fromScheduler, scheduledModeId } from './lib/scheduled.js';
 import { PROGRAM_TOOL, programNote, programOnly, SLOW_TOOLS } from './lib/ptc.js';
@@ -108,6 +108,9 @@ export function depthId(value) {
 
 /** Sandbox values a mode may set. `danger-full-access` is deliberately not allowed here. */
 const SANDBOX_VALUES = ['inherit', 'read-only', 'workspace-write'];
+/** The app's Full access level, and the most a Scratch conversation starts with. */
+const FULL_ACCESS = 'danger-full-access';
+const SCRATCH_CAP = 'workspace-write';
 
 export const Config = z.object({
   /** Mode definitions as a JSON object: `{ id: { label, tools, sandbox, defaultTier, prompt } }`. */
@@ -167,6 +170,12 @@ export const Config = z.object({
   ownLenses: z.array(z.object({ id: z.string(), name: z.string(), text: z.string() })).default([]).volatile(),
   /** Each conversation's former Web level has been moved into its Depth (once, since 0.59.0). */
   depthMoved: z.boolean().default(false).volatile(),
+  /**
+   * Each tab's starting choice of tools for a Long run, as JSON: `{ modeId: { files: boolean, web: boolean } }`
+   * (missing: files and commands on; the web on, off in an isolated tab). A run's card can change it for
+   * that run. Set on Settings → Modes → Long run tools.
+   */
+  longTools: z.string().default('{}').volatile(),
   /** Per-session tools switch as JSON: `{ sessionId: false }`. While off, the model is offered no tool at all. */
   sessionTools: z.string().default('{}').volatile(),
   /** The Depth new conversations start with (quick, standard, thorough), and that a conversation without its own pick follows. Set on Settings → Modes, and by every pick on the Depth button. (Named for the former Web level, which it replaced in 0.59.0.) */
@@ -508,6 +517,11 @@ export function apply(ctx, config) {
    * @returns {{allow?: string[], deny?: string[]} | null} mask, or null for no restriction.
    */
   function toolMask(sessionId, mode, added) {
+    // A Long run in this conversation (Mission): its tab keeps its own tools and gains what the run needs.
+    const long = longRunOf(sessionId);
+    if (long && !mode?.isolated) {
+      return longRunMask({ mode, files: long.files, web: long.web, research: researchOn(sessionId), child: topOf(sessionId) !== sessionId, offline: [...webReaching(knownTools(sessionId)), ...onlineImageTools()], fenced: isolatedTools() });
+    }
     const loadsAsNeeded = trimmed(sessionId, mode);
     return toolMaskFor({
       mode,
@@ -643,6 +657,25 @@ export function apply(ctx, config) {
   /** @returns {boolean} whether the conversation's tools are switched off altogether. A helper follows its conversation. */
   function toolsOff(sessionId) {
     return readObject(config.sessionTools)[topOf(sessionId)] === false;
+  }
+
+  /**
+   * The tools of a Long run on in the conversation (or the one a helper works for), as Mission says.
+   * @returns {{files: boolean, web: boolean} | undefined} the run's switches; undefined when none is on.
+   */
+  function longRunOf(sessionId) {
+    try {
+      const run = ctx.get('mission')?.longRun?.(topOf(sessionId));
+      return run && typeof run === 'object' ? { files: run.files === true, web: run.web === true } : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** @returns {{files: boolean, web: boolean}} a tab's starting choice of tools for a Long run (Settings → Modes). */
+  function longToolsOf(mode) {
+    const saved = readObject(config.longTools)[mode?.id];
+    return longToolsFor(mode, saved && typeof saved === 'object' ? saved : undefined);
   }
 
   /** @returns {boolean} whether web tools are on for the Session (explicit switch, else the mode's default). */
@@ -788,9 +821,21 @@ export function apply(ctx, config) {
    * @param {object} mode - mode to apply.
    * @param {boolean} start - the conversation starts in the mode now, or switches into it.
    */
+  /** @returns {boolean} whether the Cowork sidebar says this is a Scratch conversation (false without it). */
+  function scratchConversation(agent) {
+    try {
+      return Boolean(ctx.get('coworkScratch')?.folderOf?.(agent));
+    } catch {
+      return false;
+    }
+  }
+
   function applySandbox(agent, state, mode, start) {
     const policy = ctx.get('sandboxPolicy');
     if (!policy) return;
+    // A helper of a Long run keeps the level it inherits from its conversation: in a Read Only tab the
+    // run has lifted it to Workspace Write, and the helpers do the run's writing (review finding 1).
+    if (!isTopLevel(agent) && longRunOf(agent.id)) return;
     const session = agent.session;
     // Only conversations keep it for good; a helper keeps it while it lives.
     const lasting = isTopLevel(agent);
@@ -802,7 +847,22 @@ export function apply(ctx, config) {
     const previous = state.modeId ?? entry?.mode;
     const earlier = lasting && start && !known && previous && previous !== mode.id ? readModes(config)[previous]?.sandbox : undefined;
     const before = earlier && earlier !== 'inherit' && level === earlier ? presetLevel(session) : undefined;
-    const step = sandboxStep({ sandbox: mode.sandbox, start, level, known, before });
+    let step = sandboxStep({ sandbox: mode.sandbox, start, level, known, before });
+    // Scratch (step 35): a Scratch conversation starts, or switches tabs, at Workspace Write at most,
+    // so nothing it does lands in a folder of yours. Full access picked by hand since still wins.
+    if (lasting && scratchConversation(agent)) {
+      const handPicked = Boolean(known) && known.set !== undefined && level !== known.set;
+      const capped = known?.set === SCRATCH_CAP;
+      if (capped && !handPicked && step.write === FULL_ACCESS) {
+        // Never handed back by a tab that leaves the level alone, on a reload or a move.
+        step = { known };
+      } else if (start && !handPicked && (step.write ?? level) === FULL_ACCESS) {
+        step = { write: SCRATCH_CAP, known: { base: step.known?.base ?? known?.base ?? level, set: SCRATCH_CAP } };
+      } else if (capped && !step.known) {
+        // Remembered, so a level picked by hand later is still told apart from the cap.
+        step = { ...step, known };
+      }
+    }
     state.sandbox = step.known ?? null;
     if (lasting) {
       const next = { mode: mode.id, ...(step.known ?? {}) };
@@ -936,7 +996,8 @@ export function apply(ctx, config) {
           const name = exec?.name;
           if (!id || (!SHELL_TOOLS.has(name) && name !== PROGRAM_TOOL)) return undefined;
           const mode = modeOf(id);
-          if (mode?.isolated || webOn(id, mode)) return undefined;
+          const long = mode?.isolated ? undefined : longRunOf(id);
+          if (mode?.isolated || (long ? long.web : webOn(id, mode))) return undefined;
           const args = exec.arguments ?? {};
           if (name === PROGRAM_TOOL) return programGoesOnline(typeof args === 'string' ? args : args.code ?? '') ? PROGRAM_OFFLINE : undefined;
           const command = typeof args === 'string' ? args : args.command ?? args.cmd ?? args.script ?? args.text ?? '';
@@ -1025,7 +1086,24 @@ export function apply(ctx, config) {
             }
             const known = knownTools(agent.id);
             const images = onlineImageTools();
-            return promptText({
+            const long = mode.isolated ? undefined : longRunOf(agent.id);
+            const longNote = long ? `\n\nA Long run is on in this conversation. Until it ends, it and its helpers have the tools the run needs${long.files ? ' (files and commands' : ' (this tab\'s own tools'}${long.web ? ', and the web)' : ', no web)'}; this overrides what this tab says above about tools, files and the web. The tab's own way of working still applies.` : '';
+            return longNote ? `${promptText({
+              mode,
+              off: false,
+              alone,
+              web: long.web,
+              stepWeb: stepWebTools(context),
+              depth: missionRound(agent) ? 'standard' : depthOf(agent.id),
+              webOff: isolatedWebOff(agent.id),
+              codeMethod: plain(config.codeMethod) !== false,
+              coworkMethod: plain(config.coworkMethod) !== false,
+              trimmed: false,
+              offline: [...webReaching(known), ...images.filter((name) => known.includes(name))],
+              connectors: known.some((name) => name.startsWith('mcp__')),
+              programs: viaPrograms(agent),
+              programOnly: false,
+            })}${longNote}` : promptText({
               mode,
               off: toolsOff(agent.id),
               alone,
@@ -1168,6 +1246,20 @@ export function apply(ctx, config) {
       const mode = modeOf(id);
       // A new conversation that starts in the task's mode: its sandbox and tier apply as on a switch.
       if (agent && applied.get(id)?.modeId !== mode.id) void applyMode(agent, mode, true).catch(report);
+    } catch (error) {
+      report(error);
+    }
+  });
+
+  // A Long run starting or ending changes the tools of its conversation and its helpers (Mission says which).
+  ctx.inject(['mission'], (inner) => {
+    try {
+      inner.effect(() => inner.mission.onEvent?.((event) => {
+        if (event?.kind !== 'long' || (event.type !== 'started' && event.type !== 'finished')) return;
+        for (const agent of ctx.get('agents')?.list?.() ?? []) {
+          if (topOf(agent.id) === event.conversation) reconcile(agent);
+        }
+      }) ?? (() => {}), 'modes: tools follow Long runs');
     } catch (error) {
       report(error);
     }
@@ -1813,6 +1905,45 @@ export function apply(ctx, config) {
      * @param {string} sessionId - Agent id.
      * @returns {boolean}
      */
+    /**
+     * Whether the conversation's tab runs Read Only (its mode sets the read-only access level). A
+     * Long run there is allowed, with a warning, and Mission puts the level back when it ends.
+     * @param {string} sessionId - Agent id.
+     * @returns {boolean}
+     */
+    readOnly(sessionId) {
+      try {
+        return modeOf(sessionId)?.sandbox === 'read-only';
+      } catch {
+        return false;
+      }
+    },
+    /**
+     * Put the tool mask of a conversation and its helpers right now (Mission, just before a Long run's
+     * first round, and after it ends), not at the next turn's boundary: the run's first round needs them.
+     * @param {string} sessionId - the conversation.
+     */
+    refreshTools(sessionId) {
+      for (const agent of ctx.get('agents')?.list?.() ?? []) {
+        try {
+          if (topOf(agent.id) === sessionId) refreshTools(agent);
+        } catch (error) {
+          report(error);
+        }
+      }
+    },
+    /**
+     * The tab's starting choice of tools for a Long run (Settings → Modes → Long run tools).
+     * @param {string} sessionId - Agent id.
+     * @returns {{files: boolean, web: boolean}}
+     */
+    longTools(sessionId) {
+      try {
+        return longToolsOf(modeOf(sessionId));
+      } catch {
+        return { files: true, web: true };
+      }
+    },
     noTools(sessionId) {
       try {
         const mask = toolMask(sessionId, modeOf(sessionId));
@@ -1831,6 +1962,8 @@ export function apply(ctx, config) {
       try {
         const top = topOf(sessionId);
         const mode = modeOf(top);
+        const long = mode?.isolated ? undefined : longRunOf(top);
+        if (long) return !long.web;
         return mode?.isolated ? isolatedWebOff(top) : !webOn(top, mode);
       } catch {
         return false;

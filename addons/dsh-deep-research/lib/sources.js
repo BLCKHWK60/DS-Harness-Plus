@@ -78,8 +78,8 @@ export function statusOf(url, log) {
  * @param {{n: number, url: string, status: string}[]} sources - the sources to list.
  * @returns {string} one line per source.
  */
-export function sourceLines(sources) {
-  return sources.map((source) => `[${source.n}] ${source.url} (${sourceLabel(source.status)})`).join('\n');
+export function sourceLines(sources, grades = new Map()) {
+  return sources.map((source) => `[${source.n}] ${source.url} (${sourceLabel(source.status)}${grades.has(source.n) ? ` · ${grades.get(source.n)}` : ''})`).join('\n');
 }
 
 const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;

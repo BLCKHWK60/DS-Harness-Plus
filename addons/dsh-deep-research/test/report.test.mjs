@@ -102,7 +102,8 @@ function plugin(config = {}, { searchers = [DEFAULT_SEARCHER], row, writer = 'Ou
 }
 
 /** The `## Sources` block of a report. */
-const sourcesOf = (text) => text.split('## Sources\n')[1].split('\n\n')[0];
+// The read labels (research-4); the grade beside them (step 64) is tested in grades.test.mjs.
+const sourcesOf = (text) => text.split('## Sources\n')[1].split('\n\n')[0].replace(/ · (?:Primary|Confirmed|Single)\)/g, ')');
 /** The `## Checks` block of a report. */
 const checksOf = (text) => text.split('## Checks\n')[1];
 
@@ -117,6 +118,10 @@ test('findings from pages no helper read stay in the report, each labelled', asy
   assert.match(prompts.RESEARCH_WRITE, /say so in the same sentence/);
   // The Sources list labels each source.
   assert.equal(sourcesOf(text), `[1] ${READ} (read)\n[2] ${SNIPPET} (seen only in search results, not read)\n[3] ${UNSEEN} (not read, and not seen in search results)`);
+  // Grades (step 64): each cited source gets one beside its label, explained under Checks; the writer is asked for its primary sources.
+  assert.match(text.split('## Sources\n')[1], /\(read · (?:Primary|Confirmed|Single)\)/);
+  assert.match(prompts.RESEARCH_WRITE, /## Primary sources/);
+  assert.match(checksOf(text), /Grades beside each source: Primary is the writer model's judgement/);
   // The Checks say what rests on unread pages.
   const checks = checksOf(text);
   assert.match(checks, /- 1 cited source was seen only in search results, not read: what the report takes from it rests at most on a search result's short summary, not on the page\./);

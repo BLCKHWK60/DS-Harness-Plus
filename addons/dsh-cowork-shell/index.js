@@ -6,14 +6,16 @@
  * The bundle patch switches the app's own sidebar (`ui-sidebar`) off, and this row turns itself on only
  * while that sidebar is off: both at once would stop the app from loading.
  */
+import { existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 import z from '@deepseek-ai/schemastery';
 import { KEEP_MS, groupLabel, jsonSize, openTrash, safeId, safeOwner, safeTab, tidyPending } from './lib/trash.js';
-import { UPLOAD_MAX, addFile, canonical, listFiles, noteOf, openProjects } from './lib/projects.js';
+import { INSTRUCTIONS_MAX, UPLOAD_MAX, addFile, canonical, listFiles, noteOf, openProjects } from './lib/projects.js';
 import { openPresets } from './lib/presets.js';
 import { buildDigest, drift } from './lib/digest.js';
 import { generatePrompt, openVersions, parseGenerated, versionsDir, whereOf } from './lib/generate.js';
 import { fileURLToPath } from 'node:url';
+import { SCRATCH_TITLE, copyDropped, copyThreadFiles, insideThread, isScratch, keepInProject, prepareFolder, threadFolderOf } from './lib/scratch.js';
 
 export const name = 'cowork-shell';
 
@@ -30,8 +32,6 @@ export const DEFAULT_TABS = {
   "cowork": {
     "newLabel": "New task",
     "pages": [
-      "schedules",
-      "automations",
       "connectors",
       "skills"
     ],
@@ -236,6 +236,8 @@ export const SKILLS_PATH = '/dsh-cowork-shell/skills';
 export const PROJECTS_PATH = '/dsh-cowork-shell/projects';
 export const CONNECTORS_PATH = '/dsh-cowork-shell/connectors';
 export const TRASH_PATH = '/dsh-cowork-shell/trash';
+export const SCRATCH_PATH = '/dsh-cowork-shell/scratch';
+export const KEEP_PATH = '/dsh-cowork-shell/scratch/keep';
 /** The most conversations one Empty trash request may name. */
 export const EMPTY_MAX = 2000;
 const MCP_CLIENT = '@deepseek-ai/dsh-mcp-client';
@@ -307,6 +309,13 @@ export const Config = z.object({
   dateTitle: z.boolean().default(false).volatile(),
   /** Let the conversation and the message box use the whole width of the window instead of a centred column. */
   wideChat: z.boolean().default(false).volatile(),
+  /**
+   * Start places (Scratch step 44) as JSON: `{ tabId: 'scratch' | 'folder' }`, over the defaults (every tab but
+   * Code starts in Scratch; Recon always in its room). Set on Settings → Start places.
+   */
+  startPlaces: z.string().default('').volatile(),
+  /** Cmd-N (the app's New Session) starts in the open tab's start place. Off: the app's own choice. */
+  newKeyFollows: z.boolean().default(true).volatile(),
 });
 
 /**
@@ -424,6 +433,27 @@ export function apply(ctx) {
   // reach every conversation whose folder is the project's folder as a system-prompt section.
   const projects = openProjects(ctx.get('dshHomePath')?.('cowork-shell', 'projects.json') ?? '');
   const versions = openVersions(versionsDir(ctx.get('dshHomePath')?.('cowork-shell', 'projects.json') ?? ''));
+  /**
+   * The Skill architect files a project rule you accepted (its step 81): appended to the project's instructions
+   * as a new version marked as the architect's, so it can be put back. Only a folder the app lists as a project.
+   */
+  ctx.effect(() => ctx.provide('coworkProjects', Object.freeze({
+    apiVersion: 1,
+    appendRule(folder, text) {
+      const key = canonical(folder);
+      const known = key && registryList().some((item) => canonical(item.path) === key);
+      if (!known) throw new Error('That folder is not one of your projects.');
+      const rule = String(text ?? '').replace(/\r/g, '').trim();
+      if (!rule) throw new Error('The rule is empty.');
+      const before = projects.get(key)?.instructions ?? '';
+      const next = before ? `${before.replace(/\s+$/, '')}\n\n${rule}` : rule;
+      if (next.length > INSTRUCTIONS_MAX) throw new Error(`The project's instructions would pass ${INSTRUCTIONS_MAX} characters. Shorten them first on its page.`);
+      projects.save(key, { instructions: next });
+      if (versions.list(key).length === 0) versions.add(key, { text: before, by: 'you', at: Date.now() - 1 });
+      versions.add(key, { text: next, by: 'architect', note: 'A rule you accepted from the Skill architect' });
+      return { instructions: next };
+    },
+  })), 'cowork-shell projects service');
 
   /** The settings of another part of the app, by its namespace; undefined when it is not there. */
   const settingsOf = (ns) => {
@@ -489,6 +519,8 @@ export function apply(ctx) {
     const workspace = registryList().find((item) => canonical(item.path) === key);
     return noteOf(workspace?.title ?? '', record.instructions, shared);
   };
+  /** What a Scratch conversation is told (its own folder is its working directory, so no path is needed). */
+  const SCRATCH_NOTE = 'This is a Scratch conversation: it works in a private folder of its own (the working directory), never in a folder of the user\'s. Keep files you make there. Files the user drops into the chat are also copied there under their own names. Deleting the conversation deletes that folder.';
   const projectSections = new Map();
   const installProjectNote = (agent) => {
     if (!agent?.id || projectSections.has(agent.id) || !agent.ctx?.systemPrompt) return;
@@ -500,6 +532,8 @@ export function apply(ctx) {
         text: () => {
           try {
             if (ctx.get('modes')?.isolated?.(agent.id) === true) return '';
+            // Scratch (step 39): no project note there; say where it works and where dropped files are.
+            if (scratchFolderOf(agent)) return SCRATCH_NOTE;
             return projectNote(agent);
           } catch {
             return '';
@@ -558,6 +592,198 @@ export function apply(ctx) {
     }
     projectSections.clear();
   }, 'cowork-shell project notes');
+
+  // Scratch (step 32, nothing visible yet): one hidden project, <home>/scratch, and a sub-folder per
+  // thread named after the conversation (lib/scratch.js). A thread's working folder is moved into its
+  // sub-folder before each of its turns, and the assistant cannot move it out again. Everything here
+  // gives way when a part of the app is missing: a Scratch thread then works at the place itself.
+  const scratchPlace = ctx.get('dshHomePath')?.('scratch') ?? '';
+  /** Helper conversation id -> the Scratch thread that started it (through helpers in between). */
+  const scratchRoots = new Map();
+  const noteHelper = (agent) => {
+    const header = agent?.session?.header ?? agent?.header;
+    if (header?.origin !== 'subagent' || !header.parentSession || !header.id) return;
+    scratchRoots.set(String(header.id), scratchRoots.get(header.parentSession) ?? String(header.parentSession));
+  };
+  /** The sub-folder a conversation is kept to ('' when it is not a Scratch conversation, or on any doubt). */
+  const scratchFolderOf = (agent) => {
+    try {
+      return scratchPlace ? threadFolderOf(agent?.session?.header ?? agent?.header, scratchPlace, scratchRoots) : '';
+    } catch {
+      return '';
+    }
+  };
+  /** Make the place (and a thread's sub-folder): the user's alone. '' when ready, else what is wrong. */
+  const prepareScratch = (folder) => prepareFolder(scratchPlace) || (folder ? prepareFolder(folder) : '');
+  ctx.on('agent/created', ({ agent }) => noteHelper(agent));
+  ctx.on('agent/disposed', ({ agent }) => scratchRoots.delete(String(agent?.session?.header?.id ?? agent?.id ?? '')));
+  try {
+    for (const agent of ctx.get('agents')?.list?.() ?? []) noteHelper(agent);
+  } catch {
+    /* agents appear later */
+  }
+  /**
+   * A copy of another thread (the app's Fork) still points into that thread's folder: its own folder starts
+   * as a copy of those files, once, before anything else is put there. Done as soon as the copy exists, so
+   * deleting the original first does not leave it empty, and again before its turns as a fallback.
+   */
+  const adoptFork = (agent, folder) => {
+    if (!folder || !scratchPlace || existsSync(folder)) return;
+    let now = '';
+    try {
+      now = ctx.get('workingDirectory')?.get?.(agent.session) ?? '';
+    } catch {
+      now = '';
+    }
+    if (!now || !isScratch(now, scratchPlace) || insideThread(now, now, folder)) return;
+    const source = threadFolderOf({ cwd: now }, scratchPlace);
+    if (!source || !existsSync(source)) return;
+    const why = copyThreadFiles(source, folder);
+    if (why) ctx.logger?.warn?.(`cowork-shell: a copy of a Scratch conversation starts with an empty folder: ${why}`);
+  };
+  ctx.on('agent/created', ({ agent }) => {
+    try {
+      const header = agent?.session?.header ?? agent?.header;
+      if (header?.origin === 'subagent') return;
+      const folder = scratchFolderOf(agent);
+      if (folder) adoptFork(agent, folder);
+    } catch (error) {
+      ctx.logger?.warn?.(`cowork-shell: could not give a copy of a Scratch conversation its files: ${String(error?.message ?? error)}`);
+    }
+  });
+  // Before a Scratch conversation's turn is put together, its working folder is its own sub-folder.
+  // Only then, so a thread nobody wrote in leaves no folder behind.
+  ctx.on('system-prompt/assemble', async (assembly, context, next) => {
+    const agent = context?.agent;
+    const folder = agent ? scratchFolderOf(agent) : '';
+    if (folder) {
+      try {
+        const service = ctx.get('workingDirectory');
+        const now = service?.get?.(agent.session) ?? '';
+        adoptFork(agent, folder);
+        // Its folder went missing (removed by hand, say): made again, empty, so the turn still runs there.
+        if (!existsSync(folder)) {
+          const problem = prepareScratch(folder);
+          if (problem) throw new Error(`the folder ${problem}`);
+        }
+        if (service?.set && !insideThread(now, now, folder)) {
+          const problem = prepareScratch(folder);
+          if (problem) throw new Error(`the folder ${problem}`);
+          await service.set(agent, folder, context.signal);
+        }
+      } catch (error) {
+        ctx.logger?.warn?.(`cowork-shell: could not move a Scratch conversation into its own folder: ${String(error?.message ?? error)}`);
+      }
+    }
+    return next();
+  }, { prepend: true });
+  // Dropped files (step 39): a file dropped into a Scratch conversation is copied into its own folder,
+  // so Data and the PDF reader (which read only there) can open it. Done before the turn is put together.
+  // The app keeps its own copy in its attachment store; deleting the conversation cannot remove that one.
+  ctx.on('agent/inbox/claimed', ({ agent, message }) => {
+    try {
+      const blocks = Array.isArray(message?.content) ? message.content.filter((block) => block?.type === 'file' && block.attachment) : [];
+      if (blocks.length === 0) return;
+      const folder = scratchFolderOf(agent);
+      if (!folder) return;
+      adoptFork(agent, folder);
+      const problem = prepareScratch(folder);
+      if (problem) throw new Error(`the folder ${problem}`);
+      const store = ctx.get('attachments');
+      for (const block of blocks) {
+        const hostPath = store?.fileHostPath?.(block.attachment);
+        if (!hostPath) {
+          ctx.logger?.warn?.('cowork-shell: a file dropped into a Scratch conversation could not be found in the app\'s store, so it was not copied');
+          continue;
+        }
+        copyDropped(hostPath, folder, block.attachment.name);
+      }
+    } catch (error) {
+      ctx.logger?.warn?.(`cowork-shell: a dropped file was not copied into its Scratch folder: ${String(error?.message ?? error)}`);
+    }
+  });
+  // The assistant can move a conversation's working folder (the app's working_directory tool); a
+  // Scratch conversation may move only within its own sub-folder. Checking the current folder (no
+  // path) is always allowed, so the app can still restore a folder that went missing.
+  ctx.on('working-directory/access', (request, next) => {
+    if (request?.path === null || request?.path === undefined) return next();
+    const folder = scratchFolderOf(request.agent);
+    if (!folder) return next();
+    let now = folder;
+    try {
+      now = ctx.get('workingDirectory')?.get?.(request.agent.session) ?? folder;
+    } catch {
+      /* relative paths are then read from the thread's own folder */
+    }
+    if (insideThread(request.path, now, folder)) return next();
+    return Promise.reject(new Error(`This is a Scratch conversation: its working folder stays inside ${folder}. Work there instead.`));
+  });
+  // Other add-ons ask whether a folder or conversation is Scratch (by place, never by the store's name).
+  ctx.effect(() => ctx.provide('coworkScratch', Object.freeze({
+    apiVersion: 1,
+    title: SCRATCH_TITLE,
+    place: () => scratchPlace,
+    isScratch: (path) => {
+      try {
+        return Boolean(scratchPlace) && isScratch(path, scratchPlace);
+      } catch {
+        return false;
+      }
+    },
+    folderOf: (agent) => scratchFolderOf(agent),
+  })), 'cowork-shell scratch service');
+  // The page asks where the place is (GET: to keep it out of 'last used' and the project lists; this
+  // makes no folder) and has it made before a thread starts there (POST).
+  ctx.inject(['webServer', 'connection'], (inner) => {
+    inner.effect(() => inner.webServer.register({
+      kind: 'exact',
+      path: SCRATCH_PATH,
+      handler: (req, res) => {
+        if (!guard(inner, req, res, ['GET', 'POST'])) return;
+        if (!scratchPlace) {
+          res.end(JSON.stringify({ place: '', title: SCRATCH_TITLE, error: 'No data folder is available.' }));
+          return;
+        }
+        const problem = req.method === 'POST' ? prepareScratch('') : '';
+        res.end(JSON.stringify(problem ? { place: '', title: SCRATCH_TITLE, error: `The Scratch folder ${problem}.` } : { place: scratchPlace, title: SCRATCH_TITLE }));
+      },
+    }), 'cowork-shell scratch route');
+  });
+
+  // Keep in a project (step 38): a Scratch thread's files are copied into a new sub-folder of a project
+  // the user picked, named after the thread; nothing there is ever overwritten. The thread stays.
+  ctx.inject(['webServer', 'connection', 'sessionPersistence'], (inner) => {
+    inner.effect(() => inner.webServer.register({
+      kind: 'exact',
+      path: KEEP_PATH,
+      handler: async (req, res) => {
+        if (!guard(inner, req, res, ['POST'])) return;
+        try {
+          const chunks = [];
+          let size = 0;
+          for await (const chunk of req) {
+            size += chunk.length;
+            if (size > 16384) throw new Error('request too large');
+            chunks.push(chunk);
+          }
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          if (!scratchPlace) throw new Error('Scratch is not available.');
+          const project = registryList().find((item) => String(item.id) === String(body?.workspaceId ?? ''));
+          if (!project?.path || isScratch(project.path, scratchPlace)) throw new Error('That is not one of your projects.');
+          const stored = await inner.sessionPersistence.list();
+          const own = stored.find((snap) => snap.header?.id === body?.sessionId);
+          const roots = new Map(stored.filter((snap) => snap.header?.origin === 'subagent').map((snap) => [snap.header.id, snap.header.parentSession]));
+          const from = own ? threadFolderOf(own.header, scratchPlace, roots) : '';
+          if (!from) throw new Error('This is not a Scratch conversation.');
+          const kept = keepInProject(from, project.path, typeof body.title === 'string' ? body.title : '', body.sessionId);
+          res.end(JSON.stringify({ ok: true, ...kept }));
+        } catch (error) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 300) }));
+        }
+      },
+    }), 'cowork-shell keep route');
+  });
 
   ctx.inject(['webServer', 'connection'], (inner) => {
     /** Only a folder the app lists as a project may be read or written through this route. */
@@ -639,7 +865,8 @@ export function apply(ctx) {
             out.versions = versions.list(folder);
             if (url.searchParams.get('provider')) out.where = whereIs(url.searchParams.get('provider'));
           }
-          const list = registryList().map((item) => ({ workspaceId: String(item.id), path: item.path, title: item.title, tab: '', instructions: '', preset: '', ...(projects.get(item.path) ?? {}) }));
+          // The hidden Scratch project is not one of the user's projects to list.
+          const list = registryList().filter((item) => !(scratchPlace && isScratch(item.path, scratchPlace))).map((item) => ({ workspaceId: String(item.id), path: item.path, title: item.title, tab: '', instructions: '', preset: '', ...(projects.get(item.path) ?? {}) }));
           res.end(JSON.stringify({ at: Date.now(), projects: list, presets: presets.list(), shared: sharedTools(), ...out }));
         } catch (error) {
           res.statusCode = req.method === 'POST' ? 400 : 500;
@@ -647,6 +874,18 @@ export function apply(ctx) {
         }
       },
     }), 'cowork-shell projects route');
+  });
+
+  // Folders automations open their conversations in (step 42): a Scratch thread's folder in this list
+  // stays where it is when the thread is deleted.
+  let automationFolders = [];
+  ctx.inject(['schedule'], (inner) => {
+    const read = () => void Promise.resolve().then(() => inner.schedule.catalog()).then((list) => {
+      automationFolders = (Array.isArray(list) ? list : []).filter((task) => task?.status !== 'ended')
+        .map((task) => String(task?.target?.create?.cwd ?? '').replace(/\/+$/, '')).filter(Boolean);
+    }).catch(() => {});
+    read();
+    inner.on('schedule/changed', read);
   });
 
   // The shared trash (`coworkTrash`): other add-ons put their own things in this trash through it (old
@@ -677,6 +916,18 @@ export function apply(ctx) {
       dispose: () => { if (live()) trashOwners.delete(spec.owner); },
     });
   };
+  /**
+   * Told of conversations deleted for good (Delete permanently, Empty trash, the 30 days): add-ons remove
+   * what they kept for them (Scratch steps 40 and 41). Never waited for; a failing listener changes nothing.
+   */
+  const erasedListeners = new Set();
+  const tellErased = (ids) => {
+    if (ids.length === 0) return;
+    for (const listener of erasedListeners) {
+      void withTime(Promise.resolve().then(() => listener([...ids])), 30000)
+        .catch((error) => ctx.logger?.warn?.(`cowork-shell: an add-on could not clean up after a deleted conversation: ${String(error?.message ?? error)}`));
+    }
+  };
   ctx.effect(() => ctx.provide('coworkTrash', Object.freeze({
     apiVersion: 1,
     keepMs: KEEP_MS,
@@ -684,6 +935,12 @@ export function apply(ctx) {
     find: (id) => trashHost?.find(id),
     findMany: (ids) => trashHost?.findMany(ids) ?? {},
     register: registerTrashOwner,
+    /** @param {(ids: string[]) => unknown} listener - told of conversations deleted for good. @returns {() => void} stop listening. */
+    onErased: (listener) => {
+      if (typeof listener !== 'function') throw new Error('Give a function.');
+      erasedListeners.add(listener);
+      return () => erasedListeners.delete(listener);
+    },
   })), 'cowork-shell trash service');
 
   // Trash: the app cannot delete a conversation, so Delete moves an archived conversation's files
@@ -740,7 +997,41 @@ export function apply(ctx) {
       if (parts[0]?.id !== id) throw new Error('conversation not found');
       return parts;
     };
-    const partsOf = async (id) => partsFrom(await inner.sessionPersistence.list(), id);
+
+    /**
+     * Scratch (step 34): a Scratch thread's own sub-folder goes to the trash with it. A folder another
+     * stored conversation still works in (a Rerun copy started there, or one still waiting to move) stays
+     * until the last of them is deleted. `[]` for anything else, and on any doubt.
+     */
+    const scratchFoldersFrom = (stored, id, parts) => {
+      try {
+        if (!scratchPlace) return [];
+        const roots = new Map();
+        const parentOf = new Map(stored.map((snap) => [snap.header?.id, snap.header?.origin === 'subagent' ? snap.header?.parentSession : undefined]));
+        for (const sid of parentOf.keys()) {
+          let at = sid;
+          const seen = new Set();
+          while (parentOf.get(at) !== undefined && !seen.has(at)) {
+            seen.add(at);
+            at = parentOf.get(at);
+          }
+          if (at !== sid) roots.set(sid, at);
+        }
+        const folderOf = (snap) => threadFolderOf(snap.header, scratchPlace, roots);
+        const own = stored.find((snap) => snap.header?.id === id);
+        const folder = own ? folderOf(own) : '';
+        if (!folder) return [];
+        const leaving = new Set(parts.map((part) => part.id));
+        const shared = stored.some((snap) => !leaving.has(snap.header?.id) && folderOf(snap) === folder);
+        // Step 42: an automation that opens its conversations in this thread's folder still needs it.
+        const used = automationFolders.some((cwd) => cwd === folder || cwd.startsWith(`${folder}/`));
+        if (used) ctx.logger?.info?.('cowork-shell: a Scratch thread\'s folder stays: an automation still opens its conversations there');
+        return shared || used ? [] : [folder];
+      } catch (error) {
+        ctx.logger?.warn?.(`cowork-shell: a Scratch conversation's files stay where they are: ${String(error?.message ?? error)}`);
+        return [];
+      }
+    };
 
     /**
      * `tab`: the sidebar tab it is deleted from, so only that tab's Trash list shows it; `fallbackTab`:
@@ -750,13 +1041,14 @@ export function apply(ctx) {
      */
     const remove = async (id, title, deletedAt, tab, fallbackTab, stillWaiting) => {
       if (!inner.workspaceRegistry.archivedSessionIds.includes(id)) throw new Error('archive the conversation first');
-      const parts = inMemory(id) ? undefined : await partsOf(id);
+      const stored = inMemory(id) ? undefined : await inner.sessionPersistence.list();
+      const parts = stored === undefined ? undefined : partsFrom(stored, id);
       if (stillWaiting && !stillWaiting()) return 'cancelled';
       if (parts === undefined) {
         trash.addPending({ id, title, deletedAt, tab, fallbackTab });
         return 'pending';
       }
-      trash.add({ id, title, parts, deletedAt, tab, fallbackTab });
+      trash.add({ id, title, parts, deletedAt, tab, fallbackTab, folders: scratchFoldersFrom(stored, id, parts) });
       return 'moved';
     };
 
@@ -767,6 +1059,7 @@ export function apply(ctx) {
      */
     const forgetMany = async (ids) => {
       if (ids.length === 0) return;
+      tellErased(ids);
       let stored;
       try {
         stored = new Set((await inner.sessionPersistence.list()).map((snap) => snap.header?.id));
@@ -1127,7 +1420,7 @@ export function apply(ctx) {
             trash.addPending({ id, ...fields });
             out.waiting.push(id);
           } else {
-            trash.add({ id, parts, ...fields });
+            trash.add({ id, parts, ...fields, folders: scratchFoldersFrom(stored, id, parts) });
             out.moved.push(id);
           }
         } catch (error) {

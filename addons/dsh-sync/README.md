@@ -69,6 +69,17 @@ Recon conversations are isolated: other add-ons leave them alone, and Sync never
 - **Project manifest.** With `projects.sync`, this machine's manifest is written inside the same turn, after the isolated conversations are known (before, it was written before the push waited for its turn).
 - `/sync status` shows how many isolated conversations are never synced; `/sync push` and `/sync pull` say how many of their files were left out or taken out.
 
+
+## Scratch conversations are never synced (Scratch part, step 33)
+
+The Cowork sidebar keeps one hidden project, `<app data folder>/scratch`, for Scratch conversations; each works in its own sub-folder there. Sync never pushes or pulls them, the same way as Recon conversations above (`lib/scratch.mjs`):
+
+- **Which ones.** A conversation whose stored header records a folder that is the Scratch place or inside it (its helpers record the same folder). This is decided by place, with links and macOS's `/private` resolved, exactly as the Cowork sidebar decides (a test compares the two). Sync works the place out itself, so this holds while the Cowork sidebar is off.
+- **Threads only on the remote.** A file in the store folder the app gives the Scratch place is left out too, unless this Mac knows its conversation is something else. So a pull never writes a Scratch thread pushed by another Mac (with the same data folder path) or by a Sync from before this step. The app's store folder names are lossy (`<home>-scratch` gets the same name), so a conversation this Mac has is judged by its header, never by that name alone.
+- **Already on the remote.** Whatever the sync worktree holds of a Scratch thread is taken out, and the next push takes it off the remote's branch; the git history still holds it.
+- **Project list.** With `projects.sync`, the Scratch project is never put in this Mac's manifest, and a project from another Mac's list that would land on this Mac's Scratch place is never planned or made.
+- `/sync status` shows how many Scratch conversations are never synced; `/sync push` and `/sync pull` count their files with the isolated ones. Push and pull still wait while the Modes add-on cannot be asked (see above).
+
 ## Projects (best effort)
 
 With `projects.sync: true`, each machine writes one manifest of its projects (title and folder) into the sync repository (inside the encrypted tree when encryption is on), and never writes another machine's manifest, so manifests cannot conflict. After a pull, `/sync projects` lists the other machines' projects and what applying would do on this machine: **already here**, **can be added** (the folder exists here), **mapped folder does not exist here**, or **no mapping and no such folder here**. `/sync projects apply` (or `autoCreate: true`) adds the addable ones through dsh's project registry. `folderMap` translates one machine's folder prefix to this machine's. Nothing is ever deleted or renamed, and sessions are never touched.

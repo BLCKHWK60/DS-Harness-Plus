@@ -98,6 +98,28 @@ export function openStore(queriesFile, analysesFile) {
       save(analysesFile, analyses);
       return analyses[key];
     },
+    /**
+     * Forget a conversation for good (Scratch: deleted for good): its query log, and the analyses saved
+     * for its folder. @returns {{queries: boolean, analyses: number}} what went.
+     */
+    forget(conversation, folder = '') {
+      const key = String(conversation);
+      const hadQueries = Object.prototype.hasOwnProperty.call(queries, key);
+      if (hadQueries) {
+        delete queries[key];
+        save(queriesFile, queries);
+      }
+      let gone = 0;
+      if (folder) {
+        for (const [name, analysis] of Object.entries(analyses)) {
+          if (analysis?.folder !== folder) continue;
+          delete analyses[name];
+          gone += 1;
+        }
+        if (gone > 0) save(analysesFile, analyses);
+      }
+      return { queries: hadQueries, analyses: gone };
+    },
     /** @returns {boolean} whether there was one to remove. */
     remove(name) {
       const key = cleanName(name).toLowerCase();

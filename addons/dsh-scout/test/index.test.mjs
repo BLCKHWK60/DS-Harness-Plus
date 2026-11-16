@@ -142,3 +142,80 @@ test('the app wiring: mode, tools per conversation, guard, pinned selection, act
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('Scratch: a Scratch conversation\'s selection and postings go when it is deleted for good; other conversations keep theirs', async () => {
+  const { existsSync, readFileSync, writeFileSync, mkdirSync } = await import('node:fs');
+  const home = mkdtempSync(join(tmpdir(), 'scout-scratch-'));
+  const config = { enabled: true, title: 'Data engineer', markets: ['Germany'], workType: 'any', folder: '', sourceState: '{}', extraSources: '[]' };
+  const app = fakeApp(home, config);
+  const erasedListeners = [];
+  const services = app.ctx.get;
+  app.ctx.get = (name) => {
+    if (name === 'agents') return { get: (id) => ({ id }), list: () => [] };
+    if (name === 'coworkScratch') return { folderOf: (agent) => (agent.id === 'scratch-1' ? '/x/scratch/scratch-1' : '') };
+    return services(name);
+  };
+  const inject = app.ctx.inject;
+  app.ctx.inject = (names, use) => (names.includes('coworkTrash')
+    ? use({ effect: (make) => make(), coworkTrash: { onErased: (fn) => { erasedListeners.push(fn); return () => {}; } } })
+    : inject(names, use));
+  try {
+    apply(app.ctx, config);
+    await new Promise((done) => setImmediate(done));
+    app.modeOf['scratch-1'] = 'scout';
+    app.modeOf['plain-1'] = 'scout';
+    for (const id of ['scratch-1', 'plain-1']) app.handlers['session/event']({ id, header: {} }, { type: 'turn/start' });
+    const pinsFile = join(home, 'scout', 'conversations.json');
+    assert.deepEqual(Object.keys(JSON.parse(readFileSync(pinsFile, 'utf8'))).sort(), ['plain-1', 'scratch-1']);
+    // Its postings file (the save tool's report files are removed by the same list; see the owned-files test).
+    const marks = JSON.parse(readFileSync(join(home, 'scout', 'scratch.json'), 'utf8'));
+    const postingsFile = marks.find((entry) => entry.id === 'scratch-1').file;
+    mkdirSync(join(home, 'scout', 'postings'), { recursive: true });
+    writeFileSync(postingsFile, '{"list":[]}');
+    assert.equal(marks.some((entry) => entry.id === 'plain-1'), false, 'only Scratch conversations are noted');
+    assert.equal(erasedListeners.length, 1);
+    await erasedListeners[0](['plain-1']);
+    assert.ok(JSON.parse(readFileSync(pinsFile, 'utf8'))['plain-1'], 'a conversation outside Scratch keeps everything');
+    await erasedListeners[0](['scratch-1']);
+    assert.equal(JSON.parse(readFileSync(pinsFile, 'utf8'))['scratch-1'], undefined, 'its selection is gone');
+    assert.equal(existsSync(postingsFile), false, 'its postings are gone');
+  } finally {
+    app.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('Scratch: Scout removes only its own report files, inside its own reports folder', async () => {
+  const { insideFolder } = await import('../lib/owned.js');
+  assert.equal(insideFolder('/h/scout/files/reports/a.md', '/h/scout/files/reports'), true);
+  assert.equal(insideFolder('/h/scout/files/reports', '/h/scout/files/reports'), false);
+  assert.equal(insideFolder('/h/scout/files/reports/../x.md', '/h/scout/files/reports'), false);
+  assert.equal(insideFolder('relative.md', '/h/scout/files/reports'), false);
+});
+
+test('Scratch: the report files Scout noted for a Scratch conversation (.md, .csv, .seen.json) go, and nothing outside its reports folder', async () => {
+  const { existsSync, writeFileSync, mkdirSync } = await import('node:fs');
+  const home = mkdtempSync(join(tmpdir(), 'scout-scratch-reports-'));
+  const config = { enabled: true, title: 'Data engineer', markets: ['Germany'], workType: 'any', folder: '', sourceState: '{}', extraSources: '[]' };
+  const app = fakeApp(home, config);
+  const erased = [];
+  const base = app.ctx.get;
+  app.ctx.get = (name) => (name === 'agents' ? { get: (id) => ({ id }), list: () => [] } : name === 'coworkScratch' ? { folderOf: () => '/x/scratch/s' } : base(name));
+  const inject = app.ctx.inject;
+  app.ctx.inject = (names, use) => (names.includes('coworkTrash') ? use({ effect: (make) => make(), coworkTrash: { onErased: (fn) => { erased.push(fn); return () => {}; } } }) : inject(names, use));
+  try {
+    apply(app.ctx, config);
+    const reports = join(home, 'scout', 'files', 'reports');
+    mkdirSync(reports, { recursive: true });
+    for (const ext of ['.md', '.csv', '.seen.json']) writeFileSync(join(reports, `run-1${ext}`), 'x');
+    writeFileSync(join(home, 'outside.md'), 'mine');
+    // What Scout's save tool records for a Scratch conversation, plus an entry that points outside.
+    writeFileSync(join(home, 'scout', 'scratch.json'), JSON.stringify([{ id: 's', file: join(reports, 'run-1.md') }, { id: 's', file: join(home, 'outside.md') }]));
+    await erased[0](['s']);
+    for (const ext of ['.md', '.csv', '.seen.json']) assert.equal(existsSync(join(reports, `run-1${ext}`)), false, ext);
+    assert.equal(existsSync(join(home, 'outside.md')), true, 'nothing outside its reports folder');
+  } finally {
+    app.close();
+    rmSync(home, { recursive: true, force: true });
+  }
+});

@@ -74,7 +74,7 @@ test('the chat box: the Lens is the second part of the Depth list (step 28), sto
   assert.deepEqual(settingOps('lens', 'default', { sessionLens: JSON.stringify({ s: 'blunt' }) }, 's'), [{ op: 'set', path: ['sessionLens'], value: '{}' }]);
   // "Depth · Thorough · Blunt"; Default reads as before. The hint only for a fact Lens with Web Off (never in Research or Scout).
   assert.match(source, /lens === 'default' \? `· \$\{name\}` : `· \$\{name\} · \$\{lensName\}`/);
-  assert.match(source, /webOff && FACT_LENSES\.includes\(lens\) \? h\('p', \{ className: 'hint', 'data-lens-web': '' \}, t\('lens\.web\.off'\)\) : null/);
+  assert.match(source, /webOff && FACT_LENSES\.includes\(lens\) \? h\('p', \{ className: 'hint', 'data-lens-web': '', \.\.\.tipFor\(t\('lens\.web\.off'\)\) \}, t\('lens\.web\.short'\)\) : null/);
   assert.match(source, /lens: lensNow\(state\.view, sessionId\), own: ownLensesOf\(state\.view\.ownLenses\), webOff: !researchTab && !web,/);
   assert.match(source, /onPickLens: \(picked\) => void pickSetting\('lens', picked\)/);
   // Short enough to see without scrolling: chips, and the list may use the room above the button.

@@ -56,9 +56,11 @@ export async function settle() {
  * @param {(ops: object[]) => boolean} [options.failWrite] - a settings write it returns true for fails (as a refused or crashed write does).
  * @param {object} [options.chat] - the app's chat settings (`ui-chat`), e.g. `{ foldedReplies: 'final' }`.
  * @param {Set<string>} [options.studying] - conversations where Learn runs a study session (no set: no Learn add-on).
+ * @param {Set<string>} [options.scratch] - Scratch conversations, as the Cowork sidebar's `coworkScratch` service tells (no set: no such service).
+ * @param {object} [options.mission] - Mission's service, e.g. `{ longRun: (id) => ({ files, web }) }` (none: no Mission).
  * @returns {object} the running app.
  */
-export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0, home, goals, failWrite, chat, studying } = {}) {
+export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0, home, goals, failWrite, chat, studying, scratch, mission } = {}) {
   const { config } = world;
   const handlers = new Map();
   const agents = new Map();
@@ -105,6 +107,10 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
     ...(goals ? { goals: { get: (agent) => goals.get(agent.id) } } : {}),
     // Learn's service: whether a study session runs in a conversation.
     ...(studying ? { learning: { studying: (id) => studying.has(id) } } : {}),
+    // Mission's service (a test gives `longRun(id)`): the tools of a Long run on in a conversation.
+    ...(mission ? { mission } : {}),
+    // The Cowork sidebar's Scratch service: the folder a Scratch conversation is kept to.
+    ...(scratch ? { coworkScratch: { folderOf: (agent) => (scratch.has(agent?.id) ? `/home/scratch/${agent.id}` : '') } } : {}),
     ...(world.presets
       ? {
           permissionPresets: {

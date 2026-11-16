@@ -17,7 +17,7 @@
  */
 import z from '@deepseek-ai/schemastery';
 import { execFile } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { MODE_ID, OWN_TOOLS, SEARCHES, TOP_ONLY, withScout } from './lib/mode.js';
 import { contactIn, masked } from './lib/contact.js';
@@ -25,6 +25,7 @@ import { countReports, listReports, reportsOf } from './lib/report.js';
 import { DEFAULT_MARKETS, KINDS, MARKETS, WORK_TYPES, addressProblem, cleanExtra, isSearchOnly, keyRef, readRegistry, searchOnlyHosts } from './lib/registry.js';
 import { openPins, readSelection, selectionNote } from './lib/selection.js';
 import { openStore } from './lib/store.js';
+import { insideFolder, openOwned } from './lib/owned.js';
 import { openFolder, openProfile } from './lib/private.js';
 import { providerPlace, staysHome } from './lib/model.js';
 import { buildTools } from './lib/tools.js';
@@ -95,6 +96,69 @@ export function apply(ctx, config) {
   const pins = openPins(scoutHome ? join(scoutHome, 'conversations.json') : '');
   const profile = openProfile(scoutHome ? join(scoutHome, 'profile.md') : '');
   const store = openStore(scoutHome ? join(scoutHome, 'postings') : '');
+  // Scratch (steps 40 and 41): what a Scratch conversation leaves here (its reports in Scout's own folder,
+  // its postings, its selection) goes when that conversation is deleted for good. Reports stay listed and
+  // compared until then. A Scout folder you picked yourself is never touched.
+  const defaultScoutFolder = scoutHome ? join(scoutHome, 'files') : '';
+  const owned = openOwned(scoutHome ? join(scoutHome, 'scratch.json') : '');
+  const scratchConversation = (id) => {
+    try {
+      const agent = ctx.get('agents')?.get?.(String(id));
+      return Boolean(agent && ctx.get('coworkScratch')?.folderOf?.(agent));
+    } catch {
+      return false;
+    }
+  };
+  /** Note a Scratch conversation once, by its postings file, so its notes can go with it. */
+  const markScratch = (id) => {
+    if (!scratchConversation(id)) return false;
+    const postings = store.fileOf(id);
+    if (postings && !owned.list().some((entry) => entry.id === id && entry.file === postings)) owned.add(id, postings);
+    return true;
+  };
+  const savedReport = store.saved.bind(store);
+  store.saved = (id, name) => {
+    savedReport(id, name);
+    try {
+      if (markScratch(id) && folderPath() === defaultScoutFolder) owned.add(id, join(reportsOf(defaultScoutFolder), `${name}.md`));
+    } catch (error) {
+      warn(`a Scratch report will stay after its conversation is deleted: ${String(error?.message ?? error)}`);
+    }
+  };
+  const pinSelection = pins.pin.bind(pins);
+  pins.pin = (id, selection) => {
+    pinSelection(id, selection);
+    try {
+      markScratch(id);
+    } catch { /* its selection then stays */ }
+  };
+  ctx.inject(['coworkTrash'], (inner) => {
+    try {
+      inner.effect(() => inner.coworkTrash.onErased((ids) => {
+        const had = new Set(owned.list().filter((entry) => ids.includes(entry.id)).map((entry) => entry.id));
+        if (had.size === 0) return;
+        const files = owned.take([...had]);
+        const reports = reportsOf(defaultScoutFolder);
+        let removed = 0;
+        for (const file of files) {
+          if (!file.endsWith('.md') || !insideFolder(file, reports)) continue;
+          const base = file.slice(0, -3);
+          for (const part of [`${base}.md`, `${base}.csv`, `${base}.seen.json`]) {
+            if (existsSync(part)) rmSync(part, { force: true });
+          }
+          removed += 1;
+        }
+        // Its postings and its selection.
+        for (const id of had) {
+          store.remove(id);
+          pins.forget(id);
+        }
+        if (removed > 0) ctx.logger?.info?.(`scout: removed ${removed} report(s) of deleted Scratch conversations`);
+      }), 'scout: Scratch clean-up');
+    } catch (error) {
+      warn(`what Scratch conversations leave in Scout will stay after they are deleted: ${String(error?.message ?? error)}`);
+    }
+  });
   const pdf = async (path, root) => {
     const reader = ctx.get('pdfReader');
     if (typeof reader?.read !== 'function') throw new Error('reading PDFs needs the PDF reader add-on: switch it on in Settings → PDF reader');

@@ -1,6 +1,6 @@
 # DeepSeek Harness Plus: the guide
 
-Plus is a set of 41 add-ons for the DeepSeek Harness desktop app. This guide says what each part does, where to find it, how to use it, and what its settings are.
+Plus is a set of 42 add-ons for the DeepSeek Harness desktop app. This guide says what each part does, where to find it, how to use it, and what its settings are.
 
 - **Part 1** is for using it: the tabs, the chat box, projects, and the main features, in the order you meet them.
 - **Part 2** lists every slash command.
@@ -15,7 +15,7 @@ Installing, updating and removing are in the [README](../README.md). The history
 | Place | What is there |
 |---|---|
 | **Top of the sidebar** | The tabs: Chat, Cowork, Code, and Finance, Data, Research, Scout and Recon once you switch them on. With more than three they sit in rows of three. How many of your own modes get a tab is set in Settings → Modes. |
-| **Sidebar, under the tabs** | The tab's own pages (Automation tasks, Connectors, Skills, Plugins…), then its projects and conversations, then the Trash. |
+| **Sidebar, under the tabs** | The tab's own pages (Automations, Connectors, Skills, Plugins…), then its projects and conversations, then the Trash. |
 | **Bottom of the sidebar** | Your DeepSeek balance, and **More** (Settings, look options). |
 | **Chat box, left** | Web, Depth, the models chip, Tools (Depth is in every tab and hidden only while Tools are off; in Research and Scout the Web label reads Always on and cannot be changed, and Research adds Focus; in a Finance conversation: its selection too). |
 | **Chat box, right** | The model button: model, effort, tier. |
@@ -41,6 +41,7 @@ A tab is a way of working. Clicking a tab returns you to the conversation you la
 | **Scout** | Finding work: jobs, freelance projects, contracts, public tenders. | Its own job sources and checks; a scored report with draft messages, and nothing is sent. Off until you switch it on in Settings → Scout (see 9). |
 | **Recon** | Research on .onion sites and Usenet text newsgroups. | Isolated: only its own tools (.onion sites through Tor); nothing from other conversations comes in or goes out. Needs the `tor` program. Off until you switch it on in Settings → Recon (see 10). |
 
+- **Where a new conversation starts.** Every tab except Code starts a new conversation in **Scratch**: a private folder of its own, never a folder of yours, with no project instructions; its files go with it when you delete it. Code starts in the open or last used project, Recon in its room. Change a tab in **Settings → Start places**. The **Scratch | Folder** switch on the start page starts the other way once. A Scratch conversation shows a dashed Scratch mark in the chat box and sits in its tab's **Scratch** group; its `⋯` has **Keep in a project…** (copies its files into a new folder of a project and continues there), and **Clean up…** beside the group moves old ones to the trash.
 - Change what a tab's mode allows in **Settings → Modes** (tools, file sandbox, tier, instructions). The same page sets the Depth new conversations start with, the mode for scheduled tasks, how many of your modes get a sidebar tab (1 to 5), and switches for the built-in working methods of Code and Cowork.
 - A mode's tier applies to a new conversation from its first message.
 - **The access level** (file sandbox): Chat, Data, Research and Recon set Read Only and Code sets Workspace Write, only when a conversation starts in the mode or is moved into it. A level you pick by hand in the chat box is kept, also after a restart. Moving to a tab that sets none (Cowork, Finance, Scout) puts back the earlier level, unless you changed it by hand.
@@ -174,12 +175,13 @@ Install the `tor` program (`brew install tor`), switch Recon on in **Settings �
 | Feature | What it does | Where |
 |---|---|---|
 | **Memory** | A short list of lasting facts and preferences about you, given to every new conversation. You add, edit and delete every entry; the assistant can only suggest one. | Settings → Memory |
+| **Learned skills** | Reads where you corrected the assistant and proposes skills, Memory facts and project rules. Nothing is installed until you say yes; Recon conversations are never read. | Settings → Learned skills, `/skills learn` |
 | **Library** | Lets the assistant search your own documents and quote them with the file and page. | Settings → Library |
 | **PDF reader** | Reads, searches and, when needed, OCRs PDFs page by page. | Settings → PDF reader, `/pdf` |
 | **Diagram builder** | Draws charts and diagrams and shows them under the answer. | Settings → Diagrams |
 | **Code map** | A compact map of a code project, so the assistant looks things up instead of reading whole files. | Settings → Code map, `/codemap` |
 | **Learning** | A tutor that makes you attempt first and gives hints step by step. | Settings → Learning, `/learn` |
-| **Automations and alerts** | Shows how every scheduled task run ended on one page, lists conversations that need you, and alerts you on this Mac and on your phone. | Sidebar → Automation runs, Settings → Alerts |
+| **Automations and alerts** | Your scheduled tasks on one page: how each run ended, what needs you, what was missed while the app was closed, a timeline; pause, change or delete one (deleted ones stay in the trash for 30 days); alerts on this Mac and on your phone. The Automations tab's chat makes and changes them. | Sidebar → Automations (every tab), the Automations tab, Settings → Alerts |
 | **Mac bridge** | Lets the assistant find your files and run your Apple Shortcuts, only where and what you allow. | Settings → Mac |
 | **Budget guard** | Hard limits that stop a task that is running away: steps, tokens and minutes per task, a loop check, and an optional daily limit. | Settings → Budget guard |
 | **Balance** | Your DeepSeek balance at the bottom of the sidebar. | Sidebar |
@@ -235,6 +237,7 @@ Where a row says "configuration file": that add-on has no settings page. Open **
 | `/sampling` | Sampling presets |
 | `/saved` | Context Saver |
 | `/scout` | Scout |
+| `/skills` | Learned skills |
 | `/usage` | Usage ledger |
 
 Type a command alone to see what it offers. The app's own commands (such as `/goal`, `/permission`, `/feedback`) are not listed here.
@@ -247,7 +250,7 @@ Every add-on, in the order of Part 1, with what it adds and every setting. "Star
 
 Chat, Cowork and Code tabs at the top of the left sidebar, each with its own sections.
 
-- **Where:** sidebar; start page; start page of a new conversation
+- **Where:** sidebar; start page; start page of a new conversation; chat box, left group
 - **After install:** on
 - **Details:** `addons/dsh-cowork-shell/README.md`
 
@@ -259,6 +262,8 @@ Chat, Cowork and Code tabs at the top of the left sidebar, each with its own sec
 | `hideLogos` | `false` | Hide the DeepSeek logo and name at the top of the sidebar and the logo on the start page. |
 | `dateTitle` | `false` | Show today's date as the start page title instead of the tab's greeting. |
 | `wideChat` | `false` | Let the conversation and the message box use the whole width of the window instead of a centred column. |
+| `startPlaces` | `''` | Start places (Scratch step 44) as JSON: `{ tabId: 'scratch' \| 'folder' }`, over the defaults (every tab but Code starts in Scratch; Recon always in its room). Set on Settings → Start places. |
+| `newKeyFollows` | `true` | Cmd-N (the app's New Session) starts in the open tab's start place. Off: the app's own choice. |
 
 ### Modes
 
@@ -282,6 +287,8 @@ Chat, Cowork and Code modes you can switch for each session.
 | `sessionResearch` | `'{}'` | Obsolete: the old per-conversation Deep research switch, no longer offered or read (kept so older settings files still load). Old entries are pruned with the others. |
 | `sessionSearchDepth` | `'{}'` | Obsolete since 0.59.0: each conversation's former Web level, moved into `sessionDepth` once (`depthMoved`). Kept so older settings files still load. |
 | `sessionDepth` | `'{}'` | Per-session Depth as JSON: `{ sessionId: 'quick' \| 'standard' \| 'thorough' }` (missing = where new conversations start, `searchDepth`). How much work the conversation gets: how much it searches when Web is on, helpers, planning, checks and reviews. Set with th |
+| `sessionLens` | `'{}'` | Per-session Lens as JSON: `{ sessionId: 'blunt' \| 'scientific' \| 'journalistic' \| 'data-only' \| 'skeptic' \| 'encouraging' }` (missing or unknown = Default, which adds nothing). How the answer is worded (lib/lens.js, texts approved word for word). Its own secti |
+| `ownLenses` | `[]` | Your own Lenses (Lens part, step 30): `[{ name, text }]`, at most 40, names up to 40 characters, texts up to 4,000, no name of a shipped Lens. Each gets the same guard as every Lens. Edited on Settings → Modes; kept in these settings, so Shared settings carrie |
 | `depthMoved` | `false` | Each conversation's former Web level has been moved into its Depth (once, since 0.59.0). |
 | `sessionTools` | `'{}'` | Per-session tools switch as JSON: `{ sessionId: false }`. While off, the model is offered no tool at all. |
 | `searchDepth` | `'standard'` | The Depth new conversations start with (quick, standard, thorough), and that a conversation without its own pick follows. Set on Settings → Modes, and by every pick on the Depth button. (Named for the former Web level, which it replaced in 0.59.0.) |
@@ -303,7 +310,7 @@ Chat, Cowork and Code modes you can switch for each session.
 
 Give a goal to several models: a planner, workers and a reviewer, with real commands as the proof. Three permission modes keep the work inside the conversation's folder, with checkpoints you can go back to. Type /mission in a conversation.
 
-- **Where:** Settings → Mission; `/mission` in the chat box
+- **Where:** Settings → Mission; above the chat box; window edge; `/mission` in the chat box
 - **After install:** on
 - **Tools the assistant gets:** `mission`
 - **Details:** `addons/dsh-mission/README.md`
@@ -316,6 +323,13 @@ Give a goal to several models: a planner, workers and a reviewer, with real comm
 | `maxTries` | `LIMITS.maxTries` |  |
 | `maxReviews` | `LIMITS.maxReviews` |  |
 | `maxSteps` | `LIMITS.maxSteps` |  |
+| `longMinutes` | `LONG.minutes` | Long run defaults (the owner's plan, Long run part; one place, as he chose): minutes, laps, use the full time. |
+| `longLaps` | `LONG.laps` |  |
+| `longFullTime` | `false` |  |
+| `longKeepAwake` | `true` | Keep the Mac awake while a Long run is on (on power; on battery only with longBattery). |
+| `longBattery` | `false` |  |
+| `longRetry` | `true` | When the app stops giving a Long run rounds by itself, try again up to 3 times, minutes apart. |
+| `longEffort` | `true` | Long run helpers think by role: planner and reviewer High, workers Medium (Model Tiers leaves them alone). |
 | `waitMinutes` | `LIMITS.waitMinutes` | Minutes a helper waits for the user's yes before the item is set aside. 0 waits without end. |
 | `roles` | `'{}'` | The models for the roles, as JSON: `{ plan: {provider, model}, implement: {…}, review: {…} }`. Empty follows Model Tiers. |
 | `projects` | `'{}'` | The same per project, as JSON keyed by the project's folder. A project's choice wins over `roles`. |
@@ -543,8 +557,9 @@ A tutor that makes you do the thinking: a question before any teaching, hints in
 
 Shows how every scheduled task run ended on one page, and alerts you on this Mac and on your phone.
 
-- **Where:** Settings → Alerts; sidebar
+- **Where:** Settings → Alerts; start page of a new conversation; sidebar
 - **After install:** on
+- **Tools the assistant gets:** `automation_results`
 - **Details:** `addons/dsh-automations/README.md`
 
 | Setting | Starts as | What it does |
@@ -555,10 +570,14 @@ Shows how every scheduled task run ended on one page, and alerts you on this Mac
 | `alertFinished` | `false` | Alert when a task finishes. |
 | `alertOthers` | `false` | Also alert for conversations you started yourself, not only scheduled tasks. |
 | `othersMinutes` | `2` | For those conversations: only when the task has run at least this many minutes. |
+| `alertRuns` | `true` | Mission and Long runs (Long run part, step 54): alert when a run ends, needs your yes, or stops by itself. Never per round. The alert names the project folder only, never the run's goal. |
 | `mac` | `true` | Show alerts as notifications on this Mac. |
 | `phone` | `false` | Send alerts to your phone through ntfy. Needs a topic. |
 | `ntfyServer` | `'https://ntfy.sh'` | The ntfy server. |
 | `ntfyTopic` | `''` | Your ntfy topic: the name your phone is subscribed to. Treat it like a password. |
+| `deletedToTrash` | `true` | Automations part, step A10: an automation deleted anywhere (its page, the assistant, or archiving the conversation it writes into) is kept in the trash for 30 days, with Put back. |
+| `oldRunsToTrash` | `true` | Step A11: runs older than an automation's keep rule leave the run list; for an automation that opens a new conversation at every run, that run's conversation goes to the 30-day trash. A conversation shared by several runs is never touched. |
+| `tab` | `true` | Step A5: the Automations tab in the sidebar (a mode of the Modes add-on), with its own chat. |
 
 ### Mac bridge
 
@@ -1007,3 +1026,21 @@ Groups the Plus pages in Settings under headings, gives each its own icon, and a
 | Setting | Starts as | What it does |
 |---|---|---|
 | `enabled` | `true` | Groups, icons and the search field in the Settings window. |
+
+### Learned skills
+
+Learns from your past corrections and proposes skills, Memory facts and project rules. Nothing is installed until you say yes.
+
+- **Where:** Settings → Learned skills; `/skills` in the chat box
+- **After install:** on
+- **Tools the assistant gets:** `skills`
+- **Details:** `addons/dsh-skill-architect/README.md`
+
+| Setting | Starts as | What it does |
+|---|---|---|
+| `enabled` | `true` | Off: learned skills are not offered and nothing is read. |
+| `readingModel` | `''` | The model that reads your conversations, as JSON `{provider, model}`. Empty: the first model on this Mac or your network. |
+| `allowInternet` | `false` | Allow a reading model on the internet. You still see what would be sent before anything is. |
+| `nolearn` | `'[]'` | Conversations never to learn from (ids, as JSON). Kept on each Mac. |
+| `projectsOff` | `'[]'` | Project folders where learned skills are off ("Start clean"), as JSON. |
+| `schedule` | `'off'` | Learn by itself (step 87): off, nightly or weekly. Only proposes, only while the app is open, and only with a reading model on this Mac or your own network. A time missed while the app was closed is shown, not caught up. |

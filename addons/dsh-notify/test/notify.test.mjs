@@ -164,3 +164,35 @@ test('/notify test fires ignoring limits; /notify shows status', async () => {
   assert.equal((await run('wat')).kind, 'error');
   assert.match((await harness({}).commands.notify.handler({ rawInput: '' })).text, /No notification rules/);
 });
+
+test('a run\'s rounds are quiet; the run\'s end fires the rule once', async () => {
+  const runs = [];
+  hooks.run = async (file, args) => { runs.push(args); };
+  let handler;
+  let missionListener;
+  const running = new Set(['s1']);
+  const ctx = {
+    on: (event, fn) => { if (event === 'session/event') handler = fn; },
+    effect: (fn) => fn(),
+    provide: () => {},
+    get: (name) => (name === 'mission' ? { isRunning: (id) => running.has(id) } : undefined),
+    inject: (keys, fn) => fn({ effect: (f) => f(), commands: { register: () => {} }, ...(keys.includes('mission') ? { mission: { onEvent: (listener) => { missionListener = listener; return () => {}; } } } : {}) }),
+  };
+  apply(ctx, { rules: [rule()] });
+  const emit = (type, data) => handler(top, { type, data, time: new Date().toISOString() });
+  for (let round = 0; round < 3; round += 1) {
+    emit('turn/start', { turn: round });
+    emit('turn/end', { turn: round, reason: { kind: 'completed' } });
+  }
+  await new Promise((r) => setTimeout(r, 15));
+  assert.equal(runs.length, 0, 'no rule fires for a run\'s rounds');
+  missionListener({ type: 'step', folder: 'my-app' });
+  missionListener({ type: 'finished', folder: 'my-app' });
+  await new Promise((r) => setTimeout(r, 15));
+  assert.deepEqual(runs, [['--text', 'Finished in my-app']], 'once, at the run\'s end');
+  running.delete('s1');
+  emit('turn/start', { turn: 9 });
+  emit('turn/end', { turn: 9, reason: { kind: 'completed' } });
+  await new Promise((r) => setTimeout(r, 15));
+  assert.equal(runs.length, 2, 'a normal turn still fires');
+});

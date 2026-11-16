@@ -42,7 +42,7 @@ exit 2
  * `modes: false`; `isolated` lists the conversations it marked isolated, `open` the ones open in the app (with
  * `modes.isolated` answering for them), `stored` the stored headers (`sessionPersistence.list`).
  */
-function device(config, { registry, modes = true, isolated = [], open = {}, stored, sessionModes = {}, late = [] } = {}) {
+function device(config, { registry, modes = true, isolated = [], open = {}, stored, sessionModes = {}, late = [], noScratch = false } = {}) {
   const home = config.home ?? tmp();
   mkdirSync(join(home, 'sessions'), { recursive: true });
   const commands = {};
@@ -59,7 +59,8 @@ function device(config, { registry, modes = true, isolated = [], open = {}, stor
   /** Mark a conversation isolated, as Modes does when it begins in Recon. */
   const isolate = (id) => { modesValue.sessionIsolated = JSON.stringify({ ...JSON.parse(modesValue.sessionIsolated), [id]: true }); };
   const ctx = {
-    get: (key) => (key === 'dshHomePath' ? (sub) => join(home, sub) : key === 'workspaceRegistry' ? registry : key in services ? services[key] : provided[key]),
+    // `noScratch`: like a Sync from before Scratch, which knew no Scratch place.
+    get: (key) => (key === 'dshHomePath' ? (sub) => (noScratch && sub === 'scratch' ? undefined : join(home, sub)) : key === 'workspaceRegistry' ? registry : key in services ? services[key] : provided[key]),
     effect: (fn) => fn(),
     provide: (key, value) => { provided[key] = value; },
     on: (event, fn) => { (listeners[event] ??= []).push(fn); },
@@ -565,8 +566,8 @@ test('askIsolation never throws, and anything but a usable answer means "not kno
   const good = await askIsolation(async () => ({ known: true, ids: new Set(['r1']), exclude: (rel) => rel.includes('/r1/') }));
   assert.equal(good.known, true);
   assert.ok(good.exclude('p/r1/session.jsonl'));
-  assert.deepEqual(await isolationSummary(good), { known: true, reason: '', count: 1 });
-  assert.deepEqual(await isolationSummary(undefined, undefined), { known: false, reason: UNKNOWN_REASON, count: 0 });
+  assert.deepEqual(await isolationSummary(good), { known: true, reason: '', count: 1, scratch: 0 });
+  assert.deepEqual(await isolationSummary(undefined, undefined), { known: false, reason: UNKNOWN_REASON, count: 0, scratch: 0 });
 });
 
 test('the mirror asks which conversations are isolated after it lists the session store, and stops when nobody knows', async () => {
@@ -605,7 +606,7 @@ test('plaintext git: an isolated conversation is never pushed, and the other mac
   a.put('--proj--/r~003A1/session.jsonl', 'RECON-SECRET-TEXT\n');
   const pushed = await a.run('push');
   assert.equal(pushed.kind, 'success', pushed.text);
-  assert.match(pushed.text, /left out 1 file\(s\) of isolated conversations \(Recon\): they are never synced/);
+  assert.match(pushed.text, /left out 1 file\(s\) of isolated \(Recon\) and Scratch conversations: they are never synced/);
   assert.deepEqual(git(remote, 'ls-tree', '-r', '--name-only', 'main').trim().split('\n'), ['sessions/--proj--/c1/session.jsonl']);
   assert.equal(git(remote, 'log', '--all', '-p').includes('RECON-SECRET-TEXT'), false, 'not in any commit');
   assert.ok(!walk(a.repo).some((file) => file.includes('r~003A1')), 'not even in the local worktree');
@@ -629,7 +630,7 @@ test('a conversation pushed by an earlier version leaves the remote\'s branch on
   a.isolate('r1');
   const pushed = await a.run('push');
   assert.equal(pushed.kind, 'success', pushed.text);
-  assert.match(pushed.text, /took 1 file\(s\) of isolated conversations out of the sync repository \(its git history still holds them\)/);
+  assert.match(pushed.text, /took 1 file\(s\) of isolated \(Recon\) and Scratch conversations out of the sync repository \(its git history still holds them\)/);
   assert.deepEqual(git(remote, 'ls-tree', '-r', '--name-only', 'main').trim().split('\n'), ['sessions/--proj--/c1/session.jsonl']);
   assert.equal(a.read('--proj--/r1/session.jsonl'), 'recon talk\n', 'the live files stay');
   // The other machine's copy, which only Sync put there and nobody changed, goes with it.
@@ -716,7 +717,7 @@ exec '${realGit}' "$@"
   assert.equal((await pulling).kind, 'success');
   const pushed = await pushing;
   assert.equal(pushed.kind, 'success', pushed.text);
-  assert.match(pushed.text, /left out 1 file\(s\) of isolated conversations/);
+  assert.match(pushed.text, /left out 1 file\(s\) of isolated \(Recon\) and Scratch conversations/);
   assert.equal(git(remote, 'log', '--all', '-p').includes('RECON-SECRET-TEXT'), false, 'not in any commit on the remote');
   assert.equal(git(a.repo, 'log', '--all', '-p').includes('RECON-SECRET-TEXT'), false, 'not in any local commit either');
 });
@@ -771,4 +772,131 @@ test('encrypted backend: an isolated conversation never reaches the remote, and 
   assert.equal(git(remote, 'rev-parse', 'main').trim(), before, 'the remote received nothing');
   assert.ok(!existsSync(join(off.repo, 'sessions')) || walk(join(off.repo, 'sessions')).length === 0, 'nothing copied into the worktree');
   assert.match((await off.run('status')).text, /isolated conversations \(Recon\): unknown, so push and pull wait/);
+});
+
+
+// ---- Scratch (step 33): never synced ----------------------------------------------------------
+
+const scratchLib = await import('../lib/scratch.mjs');
+const shellScratch = await import('../../dsh-cowork-shell/lib/scratch.js');
+
+test('Sync tells Scratch apart exactly as the Cowork sidebar does', () => {
+  const dir = tmp();
+  const place = join(dir, 'scratch');
+  mkdirSync(join(place, 'session-a'), { recursive: true });
+  const samples = [place, `${place}/`, join(place, 'session-a'), join(place, 'not-yet', 'deep'), dir, `${place}-x`, `${dir}-scratch`, join(place, '..', 'other'), 'relative', '', '/'];
+  for (const path of samples) assert.equal(scratchLib.isScratch(path, place), shellScratch.isScratch(path, place), path);
+  for (const path of ['/Users/a b/c', '/', '//x//y/', '/a/~b', '/a/😀', place]) assert.equal(scratchLib.storeKey(path), shellScratch.storeKey(path), path);
+});
+
+test('which store files are Scratch: by header, and by the place\'s store folder unless known as something else', () => {
+  const dir = tmp();
+  const place = join(dir, 'scratch');
+  const folder = scratchLib.storeKey(place);
+  const twin = `${dir}-scratch`;
+  assert.equal(scratchLib.storeKey(twin), folder, 'the app\'s store name is shared by <home>-scratch');
+  const scratch = scratchLib.scratchOf({ place, listed: [{ id: 's1', cwd: place }, { id: 'h1', cwd: place }, { id: 'c1', cwd: twin }, { id: 'p1', cwd: '/elsewhere' }, { id: 7 }] });
+  assert.deepEqual([...scratch.ids].sort(), ['h1', 's1']);
+  assert.deepEqual([...scratch.others].sort(), ['c1', 'p1']);
+  const idOf = (rel) => rel.split('/')[1];
+  const exclude = scratchLib.scratchExclude(scratch, idOf);
+  assert.equal(exclude(`${folder}/s1/session.jsonl`), true);
+  assert.equal(exclude(`${folder}/remote-only/session.jsonl`), true, 'a thread from another Mac, not known here');
+  assert.equal(exclude(`${folder}/c1/session.jsonl`), false, 'a conversation of <home>-scratch, known by its header');
+  assert.equal(exclude('--proj--/s1/session.jsonl'), true, 'by id wherever its files are');
+  assert.equal(exclude('--proj--/p1/session.jsonl'), false);
+  assert.equal(exclude('__dsh-sync__/projects/x.json'), false, 'never the plugin\'s own folder');
+  assert.equal(exclude(folder), false, 'not a file of a conversation');
+  const none = scratchLib.scratchOf({ place: '', listed: [{ id: 's1', cwd: place }] });
+  assert.equal(scratchLib.scratchExclude(none, idOf)(`${folder}/s1/session.jsonl`), false, 'no place known: no Scratch rule');
+});
+
+test('plaintext git: a Scratch thread and its helper are never pushed, and the other machine never gets them', async () => {
+  const remote = makeRemote();
+  const home = tmp();
+  const place = join(home, 'scratch');
+  const folder = scratchLib.storeKey(place);
+  const a = device(plainCfg(remote, { home }), { stored: [{ header: { id: 's1', cwd: place } }, { header: { id: 'h1', cwd: place, origin: 'subagent', parentSession: 's1' } }, { header: { id: 'c1', cwd: '/proj' } }] });
+  const b = device(plainCfg(remote));
+  a.put('--proj--/c1/session.jsonl', 'ordinary talk\n');
+  a.put(`${folder}/s1/session.jsonl`, 'SCRATCH-PRIVATE-TEXT\n');
+  a.put(`${folder}/h1/session.jsonl`, 'SCRATCH-HELPER-TEXT\n');
+  const pushed = await a.run('push');
+  assert.equal(pushed.kind, 'success', pushed.text);
+  assert.match(pushed.text, /left out 2 file\(s\) of isolated \(Recon\) and Scratch conversations/);
+  assert.deepEqual(git(remote, 'ls-tree', '-r', '--name-only', 'main').trim().split('\n'), ['sessions/--proj--/c1/session.jsonl']);
+  assert.equal(/SCRATCH-(PRIVATE|HELPER)-TEXT/.test(git(remote, 'log', '--all', '-p')), false, 'not in any commit');
+  assert.equal((await b.run('pull')).kind, 'success');
+  assert.equal(b.has(`${folder}/s1/session.jsonl`), false);
+  assert.equal(a.read(`${folder}/s1/session.jsonl`), 'SCRATCH-PRIVATE-TEXT\n', 'the live files stay');
+  assert.match((await a.run('status')).text, /Scratch conversations: 2, never synced/);
+});
+
+test('a Scratch thread pushed by an earlier Sync leaves the remote\'s branch, and a pull never writes one', async () => {
+  const remote = makeRemote();
+  const home = tmp();
+  const folder = scratchLib.storeKey(join(home, 'scratch'));
+  const old = device(plainCfg(remote, { home }), { noScratch: true });
+  old.put('--proj--/c1/session.jsonl', 'ordinary\n');
+  old.put(`${folder}/s1/session.jsonl`, 'scratch talk\n');
+  assert.equal((await old.run('push')).kind, 'success');
+  assert.ok(git(remote, 'ls-tree', '-r', '--name-only', 'main').includes('s1'), 'the earlier Sync sent it');
+  // Another Mac with the same data folder path (same user name): its pull never writes the thread.
+  const twin = device(plainCfg(remote, { home: tmp() }));
+  const twinFolder = scratchLib.storeKey(join(twin.home, 'scratch'));
+  old.put(`${twinFolder}/s2/session.jsonl`, 'scratch talk on the twin\n');
+  assert.equal((await old.run('push')).kind, 'success');
+  const pulled = await twin.run('pull');
+  assert.equal(pulled.kind, 'success', pulled.text);
+  assert.equal(twin.has(`${twinFolder}/s2/session.jsonl`), false, 'nothing written into the Scratch store folder');
+  assert.equal(twin.read('--proj--/c1/session.jsonl'), 'ordinary\n');
+  // The same Mac, now with this Sync: the next push takes the thread off the branch.
+  const now = device(plainCfg(remote, { home }), { stored: [{ header: { id: 's1', cwd: join(home, 'scratch') } }] });
+  const pushed = await now.run('push');
+  assert.equal(pushed.kind, 'success', pushed.text);
+  assert.match(pushed.text, /took 1 file\(s\) of isolated \(Recon\) and Scratch conversations out of the sync repository/);
+  assert.ok(!git(remote, 'ls-tree', '-r', '--name-only', 'main').includes(`${folder}/s1`), 'off the branch');
+  assert.equal(now.read(`${folder}/s1/session.jsonl`), 'scratch talk\n', 'the live files stay');
+});
+
+test('a conversation of a folder whose store name matches Scratch\'s is still synced when its header says so', async () => {
+  const remote = makeRemote();
+  const home = tmp();
+  const twin = `${home}-scratch`;
+  const folder = scratchLib.storeKey(twin);
+  const a = device(plainCfg(remote, { home }), { stored: [{ header: { id: 'c9', cwd: twin } }] });
+  a.put(`${folder}/c9/session.jsonl`, 'mine, not scratch\n');
+  assert.equal((await a.run('push')).kind, 'success');
+  assert.deepEqual(git(remote, 'ls-tree', '-r', '--name-only', 'main').trim().split('\n'), [`sessions/${folder}/c9/session.jsonl`]);
+});
+
+test('the Scratch project is never in the shared project list, nor made from another Mac\'s list', async () => {
+  const remote = makeRemote();
+  const homeA = tmp();
+  const homeB = tmp();
+  const own = tmp();
+  const registryA = { list: () => [{ id: 'w1', title: 'My project', path: own }, { id: 'w2', title: 'Scratch', path: join(homeA, 'scratch') }] };
+  const created = [];
+  const registryB = { list: () => [], resolveByPath: async () => undefined, create: async (p, title) => { created.push([p, title]); return {}; } };
+  const a = device(plainCfg(remote, { home: homeA, projects: { sync: true } }), { registry: registryA });
+  // B maps A's data folder onto its own: A's Scratch would land on B's Scratch place.
+  const b = device(plainCfg(remote, { home: homeB, projects: { sync: true, folderMap: [{ from: homeA, to: homeB }, { from: own, to: own }] } }), { registry: registryB });
+  a.put('p/s/session.jsonl', 'x\n');
+  assert.equal((await a.run('push')).kind, 'success');
+  const manifest = walk(join(a.repo, 'sessions')).find((f) => f.startsWith('__dsh-sync__/projects/'));
+  assert.ok(manifest);
+  const text = readFileSync(join(a.repo, 'sessions', manifest), 'utf8');
+  assert.match(text, /My project/);
+  assert.doesNotMatch(text, /scratch/i, 'the Scratch project is not shared');
+  // An older Mac's list that still has it: never planned or made here.
+  const listed = JSON.parse(text);
+  listed.projects.push({ id: 'w2', title: 'Scratch', path: join(homeA, 'scratch') });
+  writeFileSync(join(a.repo, 'sessions', manifest), JSON.stringify(listed));
+  git(a.repo, 'add', '-A'); git(a.repo, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'old list'); git(a.repo, 'push', '-q', 'origin', 'HEAD:main');
+  assert.equal((await b.run('pull')).kind, 'success');
+  const plan = await b.run('projects');
+  assert.match(plan.text, /My project/);
+  assert.doesNotMatch(plan.text, /Scratch/);
+  await b.run('projects apply');
+  assert.ok(created.every(([p]) => !p.startsWith(join(homeB, 'scratch'))), 'never made');
 });

@@ -21,6 +21,7 @@ export function fromScheduler(inserted) {
  * @returns {string | undefined} a mode id, or undefined to leave the usual rule in charge.
  */
 export function scheduledModeId(modes, wanted) {
-  if (typeof wanted === 'string' && wanted && modes?.[wanted]) return wanted;
+  // Never the Automations tab: it manages automations, it is no place for one to run (step A5).
+  if (typeof wanted === 'string' && wanted && wanted !== 'automations' && modes?.[wanted]) return wanted;
   return Object.keys(modes ?? {}).find((id) => modes[id]?.tools === 'all');
 }

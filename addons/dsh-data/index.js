@@ -19,12 +19,14 @@
  * Route: `GET/POST /dsh-data/data`.
  */
 import z from '@deepseek-ai/schemastery';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createEngine } from './lib/engine.js';
 import { READS } from './lib/files.js';
 import { MODE_ID, withData } from './lib/method.js';
 import { createPython } from './lib/python.js';
 import { openStore } from './lib/store.js';
+import { openOwned } from './lib/owned.js';
 import { OUTPUT_FOLDER, buildTools, changedFiles } from './lib/tools.js';
 
 export const name = 'dsh-data';
@@ -67,6 +69,37 @@ export function apply(ctx, config) {
   const home = ctx.get('dshHomePath');
   const dir = typeof home === 'function' ? home('data') : '';
   const store = openStore(dir ? join(dir, 'queries.json') : '', dir ? join(dir, 'analyses.json') : '');
+  // Scratch (step 41): a Scratch conversation's query log (SQL text, file names) and the analyses saved for
+  // its folder (up to 200 result rows each) go when it is deleted for good. Other conversations keep them.
+  const owned = openOwned(dir ? join(dir, 'scratch.json') : '');
+  const markScratch = (conversation) => {
+    try {
+      const agent = ctx.get('agents')?.get?.(String(conversation));
+      const folder = agent ? String(ctx.get('coworkScratch')?.folderOf?.(agent) ?? '') : '';
+      if (folder && !owned.list().some((entry) => entry.id === String(conversation))) owned.add(String(conversation), folder);
+    } catch { /* its notes then stay */ }
+  };
+  const recordQuery = store.record.bind(store);
+  store.record = (conversation, query, now) => {
+    const id = recordQuery(conversation, query, now);
+    markScratch(conversation);
+    return id;
+  };
+  ctx.inject(['coworkTrash'], (inner) => {
+    try {
+      inner.effect(() => inner.coworkTrash.onErased((ids) => {
+        const had = owned.list().filter((entry) => ids.includes(entry.id));
+        if (had.length === 0) return;
+        owned.take(had.map((entry) => entry.id));
+        // Its query log always goes; the analyses of its folder only when the folder left with it (a Rerun
+        // copy that still works there keeps the folder, and so the analyses saved for it).
+        for (const entry of had) store.forget(entry.id, existsSync(entry.file) ? '' : entry.file);
+        ctx.logger?.info?.(`data: removed what ${had.length} deleted Scratch conversation(s) left`);
+      }), 'data: Scratch clean-up');
+    } catch (error) {
+      warn(`what Scratch conversations leave in Data will stay after they are deleted: ${String(error?.message ?? error)}`);
+    }
+  });
   const engine = createEngine();
   ctx.effect(() => () => engine.stop(), 'data: engine');
   const python = dir ? createPython(join(dir, 'python')) : undefined;
@@ -109,8 +142,22 @@ export function apply(ctx, config) {
     );
   };
 
-  /** The folder a conversation works in, from its header. */
+  /**
+   * The Scratch thread folder of a conversation ('' when it is not one, or the Cowork sidebar is off). A Scratch
+   * conversation records the shared Scratch place, so its own folder (where its files and dropped files are)
+   * comes from the Cowork sidebar: never the place, which holds every thread's files.
+   */
+  const scratchFolderOf = (agent) => {
+    try {
+      return String(ctx.get('coworkScratch')?.folderOf?.(agent) ?? '');
+    } catch {
+      return '';
+    }
+  };
+  /** The folder a conversation works in: a Scratch thread's own folder, else the folder in its header. */
   const folderOf = (agent) => {
+    const own = scratchFolderOf(agent);
+    if (own) return own;
     const header = agent?.header ?? agent?.session?.header;
     return typeof header?.cwd === 'string' ? header.cwd : '';
   };
@@ -210,7 +257,10 @@ export function apply(ctx, config) {
       return [`The folder of this conversation is ${folder}. When the user's own files matter (a portfolio, exported statements, a spreadsheet of figures), work on them with the data tools: data_files, data_profile, data_query, data_chart (a chart straight from a query), data_python (statistics and special charts) and data_text. Cite each run's id, like [Q7]. New files go into ${OUTPUT_FOLDER}; never change the user's files.`, pythonLine()].join('\n');
     }
     if (!folder) return 'This Data conversation has no folder, so there are no files to analyse. Tell the user to start a conversation in the folder that holds their data (the folder is picked on the start page).';
-    const lines = [`The data folder of this conversation is ${folder}. Paths you give the data tools are relative to it. Files you make go into ${OUTPUT_FOLDER} inside it: write them with data_python (data_chart saves its charts there by itself).`, pythonLine()];
+    const scratch = scratchFolderOf(agent) !== '';
+    const lines = [scratch
+      ? `This is a Scratch conversation: its data folder is its own folder (the working directory), never one of the user's. Files the user drops into the chat are copied there under their own names. Paths you give the data tools are relative to it. Files you make go into ${OUTPUT_FOLDER} inside it: write them with data_python (data_chart saves its charts there by itself). An analysis saved here can be run again only while this conversation exists: deleting it deletes its files.`
+      : `The data folder of this conversation is ${folder}. Paths you give the data tools are relative to it. Files you make go into ${OUTPUT_FOLDER} inside it: write them with data_python (data_chart saves its charts there by itself).`, pythonLine()];
     const mine = store.analyses().filter((analysis) => analysis.folder === folder).slice(0, 12);
     if (mine.length > 0) {
       lines.push('Saved analyses for this folder:');

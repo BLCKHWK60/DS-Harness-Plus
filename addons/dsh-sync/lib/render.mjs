@@ -91,8 +91,8 @@ export function renderPull(result) {
  */
 function isolatedLines(result) {
   const lines = []
-  if ((result.isolatedLeftOut ?? 0) > 0) lines.push(`  left out ${result.isolatedLeftOut} file(s) of isolated conversations (Recon): they are never synced`)
-  if ((result.isolatedRemoved ?? 0) > 0) lines.push(`  took ${result.isolatedRemoved} file(s) of isolated conversations out of the sync repository (its git history still holds them)`)
+  if ((result.isolatedLeftOut ?? 0) > 0) lines.push(`  left out ${result.isolatedLeftOut} file(s) of isolated (Recon) and Scratch conversations: they are never synced`)
+  if ((result.isolatedRemoved ?? 0) > 0) lines.push(`  took ${result.isolatedRemoved} file(s) of isolated (Recon) and Scratch conversations out of the sync repository (its git history still holds them)`)
   return lines
 }
 

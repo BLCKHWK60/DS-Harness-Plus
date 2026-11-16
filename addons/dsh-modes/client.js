@@ -135,6 +135,21 @@ window.__ModuleLoader__.load({
         'depth.open': 'Depth: {0}. Click to change.',
         'depth.open.lens': 'Depth: {0}, Lens: {1}. Click to change.',
         'lens.title': 'Lens: how the answer is worded',
+        'depth.long.title': 'Beyond Thorough',
+        'depth.long': 'Long run settings…',
+        'depth.long.hint': 'Time, laps and tools for a Long run in this chat, saved. Run (next to Send) starts one with what you typed; Send stays at the depth above.',
+        'depth.long.short': 'For the Run button',
+        'depth.quick.short': 'Fast, light checks',
+        'depth.standard.short': 'As usual',
+        'depth.thorough.short': 'Plan, 10+ searches, review',
+        'depth.quick.short.isolated': 'Fast, 1–2 searches',
+        'depth.standard.short.isolated': 'As usual',
+        'depth.thorough.short.isolated': '10+ searches, checked',
+        'depth.quick.short.research': '~10 min, 4 helpers',
+        'depth.standard.short.research': '~25 min, 6 helpers',
+        'depth.thorough.short.research': '~45 min, 8 helpers',
+        'lens.short': 'Lens',
+        'lens.web.short': 'Web off: unchecked facts labelled',
         'lens.default': 'Default',
         'lens.blunt': 'Blunt',
         'lens.scientific': 'Scientific',
@@ -153,6 +168,11 @@ window.__ModuleLoader__.load({
         'lens.web.off': 'Web is Off here: this Lens labels anything it could not check as an inference or a guess. Switch Web on to check facts.',
         'lens.own.hint': 'Your own Lens (Settings → Modes)',
         'own.group': 'Your own Lenses',
+        'long.group': 'Long run tools',
+        'long.hint': 'What a Long run may use in each tab, from the start. A run stays in its tab and keeps its way of working; Depth → Long run settings can change these for one chat.',
+        'long.files': 'Files and commands',
+        'long.web': 'Web',
+        'long.isolated': 'Only inside its own room; no commands; its own search tools only',
         'own.hint': 'Lenses you write yourself appear in the chat box\'s Depth list after the six that come with Plus. At most 40, names up to 40 characters, texts up to 4,000. Each gets the same closing lines as every Lens: the tab\'s own rules, labels and order come first, and a required warning is not softening. Kept in Modes\' settings, so Shared settings carries them to your other Mac. A conversation whose Lens you remove goes back to Default.',
         'own.name': 'Name',
         'own.text': 'What the model is told',
@@ -332,6 +352,21 @@ window.__ModuleLoader__.load({
         'depth.open': '细致度：{0}。点击更改。',
         'depth.open.lens': '细致度：{0}，视角：{1}。点击更改。',
         'lens.title': '视角：回答的措辞方式',
+        'depth.long.title': '比深入更进一步',
+        'depth.long': '长时运行设置…',
+        'depth.long.hint': '本对话长时运行的时间、圈数和工具，会被保存。“运行”按钮（在“发送”旁）用你输入的内容开始一次长时运行；“发送”仍按上面的深度。',
+        'depth.long.short': '供“运行”按钮使用',
+        'depth.quick.short': '快速，轻量检查',
+        'depth.standard.short': '照常',
+        'depth.thorough.short': '计划、10+ 次搜索、复核',
+        'depth.quick.short.isolated': '快速，搜索 1–2 次',
+        'depth.standard.short.isolated': '照常',
+        'depth.thorough.short.isolated': '10+ 次搜索，核实',
+        'depth.quick.short.research': '约 10 分钟，4 个助手',
+        'depth.standard.short.research': '约 25 分钟，6 个助手',
+        'depth.thorough.short.research': '约 45 分钟，8 个助手',
+        'lens.short': '视角',
+        'lens.web.short': '联网关闭：未核实的会标出',
         'lens.default': '默认',
         'lens.blunt': '直言',
         'lens.scientific': '科学',
@@ -350,6 +385,11 @@ window.__ModuleLoader__.load({
         'lens.web.off': '此处联网已关闭：此视角会把无法核实的内容标为推断或猜测。开启联网以核实事实。',
         'lens.own.hint': '你自己的视角（设置 → 模式）',
         'own.group': '你自己的视角',
+        'long.group': '长时运行的工具',
+        'long.hint': '每个标签中长时运行一开始可以使用什么。运行留在它的标签里，保持它的工作方式；深度 → 长时运行设置可以为某个对话更改这些。',
+        'long.files': '文件和命令',
+        'long.web': '联网',
+        'long.isolated': '只在它自己的房间里；不能运行命令；只用它自己的搜索工具',
         'own.hint': '你自己写的视角会出现在输入框细致度列表中，排在 Plus 自带的六个之后。最多 40 个，名称最多 40 个字符，文字最多 4,000 个字符。每个都会加上与所有视角相同的结尾：标签页自己的规则、标签和顺序优先，必要的警告不算软化。保存在模式的设置中，因此共享设置会把它们带到你的另一台 Mac。删除某个视角后，使用它的对话会回到默认。',
         'own.name': '名称',
         'own.text': '告诉模型的内容',
@@ -458,6 +498,9 @@ window.__ModuleLoader__.load({
 .dsh-me-toggle > div { flex: 1; min-width: 0; }
 .dsh-me-toggle b { display: block; font-size: 14px; line-height: 22px; font-weight: 400; color: var(--dsw-alias-label-primary); }
 .dsh-me-toggle span { display: block; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.dsh-me-lts { display: flex; flex: none; gap: 14px; align-items: center; }
+.dsh-me-lt { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.dsh-me-sw:disabled { opacity: .4; cursor: default; }
 .dsh-me-sw { flex: none; position: relative; width: 36px; height: 20px; padding: 2px; border: 0; border-radius: 999px; cursor: pointer; background: var(--dsw-alias-border-l3, var(--dsw-alias-border-l2)); transition: background .12s ease; }
 .dsh-me-sw[aria-checked="true"] { background: var(--dsw-alias-brand-primary); }
 .dsh-me-sw::after { content: ''; display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--dsw-alias-switch-thumb, var(--dsw-alias-label-primary)); transition: transform .12s ease; }
@@ -785,6 +828,15 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
 .dsh-mt-pop .row{display:flex;align-items:center;gap:12px}
 .dsh-mt-pop .row > span:first-child{flex:1;font-size:14px;line-height:22px}
 .dsh-mt-pop .hint{margin:4px 0 0;color:var(--dsw-alias-label-secondary)}
+.dsh-mt-pop[data-slim]{width:272px;padding:12px 14px}
+.dsh-mt-pop[data-slim] .title{font-size:13px;line-height:20px}
+.dsh-mt-pop[data-slim] .opts{margin-top:4px}
+.dsh-mt-pop[data-slim] .opts button{display:flex;align-items:baseline;gap:8px;padding:6px 10px}
+.dsh-mt-pop[data-slim] .opts b{flex:none}
+.dsh-mt-pop[data-slim] .opts small{flex:1;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsh-mt-pop[data-slim] .title + .chips, .dsh-mt-pop[data-slim] .sep{margin-top:10px}
+.dsh-mt-pop[data-slim] .sep{border-top:0.5px solid var(--dsw-alias-border-l2);padding-top:8px}
+.dsh-mt-tip{position:fixed;z-index:1001;box-sizing:border-box;max-width:300px;padding:8px 10px;border-radius:10px;border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2, var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-base)));color:var(--dsw-alias-label-primary);font-size:12px;line-height:17px;box-shadow:0 6px 20px rgba(0,0,0,.25);pointer-events:none}
 .dsh-mt-pop .head{margin:12px 0 4px;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}
 .dsh-mt-pop .names{display:flex;flex-wrap:wrap;gap:4px}.dsh-mt-pop .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.dsh-mt-pop .chips button{padding:3px 10px;border-radius:999px;border:0.5px solid var(--dsw-alias-border-l2);background:transparent;color:inherit;font:inherit;cursor:pointer}.dsh-mt-pop .chips button[aria-selected='true']{background:color-mix(in srgb, var(--dsw-alias-label-primary) 12%, transparent);border-color:transparent;font-weight:500}.dsh-mt-pop .chips button:hover:not([aria-selected='true']){background:var(--dsw-alias-interactive-bg-hover)}
 .dsh-mt-pop .names span{padding:0 7px;border-radius:9px;line-height:18px;font-size:11px;background:color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent)}
@@ -813,6 +865,8 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
     function ToggleControl({ appCtx, sessionId }) {
       const t = appCtx.locale.bind('modes');
       const [state, setState] = useState({ status: 'loading', view: null, busy: false });
+      // Whether Mission's Long run card can be opened (step 61); a hook, so before any early return.
+      const missionHere = useMissionLong();
       const refresh = useCallback(async () => {
         try {
           const loaded = await load(appCtx);
@@ -997,6 +1051,9 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
             lens: lensNow(state.view, sessionId), own: ownLensesOf(state.view.ownLenses), webOff: !researchTab && !web,
             onPick: (picked) => void pickSetting('depth', picked),
             onPickLens: (picked) => void pickSetting('lens', picked),
+            // The last stop opens Mission's Long run card (Long run part, step 61): every tab but Recon (also a Recon
+            // conversation moved elsewhere), and only while Mission is on.
+            onLongRun: depthKind(modeDef) !== 'isolated' && !lockedHere && missionHere ? () => window.dispatchEvent(new CustomEvent('dsh-mission:long', { detail: { sessionId } })) : undefined,
           }),
           h(HelpersButton, {
             t, sessionId, busy: state.busy,
@@ -1170,17 +1227,71 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
      * The Depth button in the chat box, and its list: Quick, Standard, Thorough. How much care the
      * conversation wants: Standard adds nothing; Quick and Thorough add a short note to the instructions.
      */
-    function DepthButton({ t, depth, kind, lens = 'default', own = [], webOff = false, busy, onPick, onPickLens }) {
+    /** @returns {boolean} whether Mission's Long run card is there to open (it says so on window). */
+    function useMissionLong() {
+      const [here, setHere] = useState(() => window.__dshMissionLong === true);
+      useEffect(() => {
+        const update = () => setHere(window.__dshMissionLong === true);
+        window.addEventListener('dsh-mission:ready', update);
+        update();
+        return () => window.removeEventListener('dsh-mission:ready', update);
+      }, []);
+      return here;
+    }
+
+    /** How long the pointer rests on an item of the Depth list before its longer text shows (the owner asked for 3+ seconds). */
+    const TIP_MS = 3000;
+
+    /**
+     * A slow tooltip: the longer text of an item shows after the pointer has rested on it for TIP_MS.
+     * The app's own `title` tooltip comes after about a second, too soon for a list kept this short.
+     * @returns {{tipFor: (text: string) => object, tip: object | null}} props for an item, and the tip to draw.
+     */
+    function useSlowTip() {
+      const [tip, setTip] = useState(null);
+      const timer = useRef(0);
+      const clear = () => {
+        window.clearTimeout(timer.current);
+        setTip(null);
+      };
+      useEffect(() => () => window.clearTimeout(timer.current), []);
+      const tipFor = (text) => text ? {
+        // Screen readers get the longer text at once.
+        'aria-description': text,
+        onPointerEnter: (event) => {
+          const target = event.currentTarget;
+          window.clearTimeout(timer.current);
+          timer.current = window.setTimeout(() => {
+            if (!target.isConnected) return;
+            const rect = target.getBoundingClientRect();
+            const width = Math.min(300, window.innerWidth - 24);
+            // Beside the list when there is room on the right, otherwise on the left.
+            const right = rect.right + 8 + width <= window.innerWidth - 12;
+            setTip({ text, top: Math.max(12, Math.min(rect.top, window.innerHeight - 140)), left: right ? rect.right + 8 : Math.max(12, rect.left - 8 - width) });
+          }, TIP_MS);
+        },
+        onPointerLeave: clear,
+        onPointerDown: clear,
+      } : {};
+      const node = tip ? h('div', { className: 'dsh-mt-tip', role: 'tooltip', style: { top: tip.top, left: tip.left } }, tip.text) : null;
+      return { tipFor, tip: node, clear };
+    }
+
+    function DepthButton({ t, depth, kind, lens = 'default', own = [], webOff = false, busy, onPick, onPickLens, onLongRun }) {
       const [open, setOpen] = useState(false);
       const [place, setPlace] = useState({ left: 12, bottom: 80, maxHeight: 520 });
       const button = useRef(null);
       const panel = useRef(null);
+      const { tipFor, tip, clear } = useSlowTip();
       // Placed before the list is drawn, so it never shows for a moment in the corner while the page is busy.
       useLayoutEffect(() => {
-        if (!open) return undefined;
+        if (!open) {
+          clear();
+          return undefined;
+        }
         const rect = button.current?.getBoundingClientRect();
         // All the room above the button: Depth's three stops and the Lens chips then show without scrolling.
-        if (rect) setPlace({ left: Math.max(12, Math.min(rect.left - 20, window.innerWidth - 332)), bottom: window.innerHeight - rect.top + 8, maxHeight: Math.max(200, rect.top - 24) });
+        if (rect) setPlace({ left: Math.max(12, Math.min(rect.left - 20, window.innerWidth - 284)), bottom: window.innerHeight - rect.top + 8, maxHeight: Math.max(200, rect.top - 24) });
         const away = (event) => {
           if (panel.current?.contains(event.target) || button.current?.contains(event.target)) return;
           setOpen(false);
@@ -1198,6 +1309,8 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       const lensName = mine ? mine.name : t(`lens.${lens}`);
       // "Depth · Thorough · Blunt"; with Default it reads as before. The names go first when the row is narrow.
       const open_ = lens === 'default' ? t('depth.open').replace('{0}', name) : t('depth.open.lens').replace('{0}', name).replace('{1}', lensName);
+      const suffix = kind ? `.${kind}` : '';
+      // Short words in the list; the full explanations are the slow tooltips (step: "less text in the Depth list").
       return h('span', { className: 'pair', 'data-kind': 'depth' },
         h('button', {
           ref: button, type: 'button', 'aria-expanded': open, 'aria-haspopup': 'dialog', disabled: busy, 'data-depth': depth, 'data-lens': lens,
@@ -1206,27 +1319,30 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         }, icon('depth'), h('span', { className: 'lbl' }, t('depth.label')), h('span', { className: 'lbl lvl' }, lens === 'default' ? `· ${name}` : `· ${name} · ${lensName}`)),
         open
           ? ReactDOM.createPortal(
-              h('div', { ref: panel, className: 'dsh-mt-pop', role: 'dialog', 'aria-label': t('depth.title'), style: { left: place.left, bottom: place.bottom, maxHeight: place.maxHeight } },
-                h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
-                h('div', { className: 'title' }, t('depth.title')),
-                h('div', { className: 'opts', role: 'listbox', 'aria-label': t('depth.title') },
-                  DEPTHS.map((id) => h('button', { key: id, type: 'button', role: 'option', 'aria-selected': id === depth, 'aria-current': String(id === depth), disabled: busy, onClick: () => { setOpen(false); onPick(id); } },
-                    h('b', null, t(`depth.${id}`)), h('small', null, t(kind ? `depth.${id}.hint.${kind}` : `depth.${id}.hint`))))),
-                // Recon searches with its own tools, Research and Scout run research runs: the list says so.
-                h('p', { className: 'hint' }, t(kind ? `depth.note.${kind}` : 'depth.note')),
-                // The Lens (step 28): how the answer is worded, for this conversation only.
-                h('div', { className: 'title' }, t('lens.title')),
-                // Seven small chips (the list stays short); each one's use is its tooltip, the picked one's shows below.
-                h('div', { className: 'chips', role: 'listbox', 'aria-label': t('lens.title') },
-                  LENS_IDS.map((id) => h('button', { key: id, type: 'button', role: 'option', 'aria-selected': id === lens, 'aria-current': String(id === lens), disabled: busy, 'data-lens': id, title: t(`lens.${id}.hint`), onClick: () => { setOpen(false); onPickLens?.(id); } },
-                    t(`lens.${id}`))),
-                  // Your own Lenses (Settings → Modes) come after the shipped ones.
-                  own.map((entry) => h('button', { key: entry.id, type: 'button', role: 'option', 'aria-selected': entry.id === lens, 'aria-current': String(entry.id === lens), disabled: busy, 'data-lens': entry.id, 'data-own': '', title: t('lens.own.hint'), onClick: () => { setOpen(false); onPickLens?.(entry.id); } },
-                    entry.name))),
-                h('p', { className: 'hint' }, mine ? t('lens.own.hint') : t(`lens.${lens}.hint`)),
-                // Owner's rule: a Lens never switches the web on; a fact-heavy one says what Web Off means.
-                webOff && FACT_LENSES.includes(lens) ? h('p', { className: 'hint', 'data-lens-web': '' }, t('lens.web.off')) : null,
-                h('p', { className: 'hint' }, t('lens.note'))),
+              h(React.Fragment, null,
+                h('div', { ref: panel, className: 'dsh-mt-pop', 'data-slim': '', role: 'dialog', 'aria-label': t('depth.title'), style: { left: place.left, bottom: place.bottom, maxHeight: place.maxHeight } },
+                  h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
+                  // The note on what Depth is (Recon, Research and Scout have their own) is the title's tooltip.
+                  h('div', { className: 'title', ...tipFor(t(kind ? `depth.note.${kind}` : 'depth.note')) }, t('depth.title')),
+                  h('div', { className: 'opts', role: 'listbox', 'aria-label': t('depth.title') },
+                    DEPTHS.map((id) => h('button', { key: id, type: 'button', role: 'option', 'aria-selected': id === depth, 'aria-current': String(id === depth), disabled: busy, ...tipFor(t(`depth.${id}.hint${suffix}`)), onClick: () => { setOpen(false); onPick(id); } },
+                      h('b', null, t(`depth.${id}`)), h('small', null, t(`depth.${id}.short${suffix}`))))),
+                  // The last stop: Mission's Long run card, in every tab but Recon (the owner's choice, 16 November).
+                  onLongRun ? h('div', { className: 'opts' },
+                    h('button', { type: 'button', 'data-long-run': '', ...tipFor(t('depth.long.hint')), onClick: () => { setOpen(false); onLongRun(); } },
+                      h('b', null, t('depth.long')), h('small', null, t('depth.long.short')))) : null,
+                  // The Lens (step 28): how the answer is worded, for this conversation only.
+                  h('div', { className: 'title sep', ...tipFor(`${t('lens.title')}. ${t('lens.note')}`) }, t('lens.short')),
+                  // Seven small chips; each one's use is its slow tooltip.
+                  h('div', { className: 'chips', role: 'listbox', 'aria-label': t('lens.title') },
+                    LENS_IDS.map((id) => h('button', { key: id, type: 'button', role: 'option', 'aria-selected': id === lens, 'aria-current': String(id === lens), disabled: busy, 'data-lens': id, ...tipFor(t(`lens.${id}.hint`)), onClick: () => { setOpen(false); onPickLens?.(id); } },
+                      t(`lens.${id}`))),
+                    // Your own Lenses (Settings → Modes) come after the shipped ones.
+                    own.map((entry) => h('button', { key: entry.id, type: 'button', role: 'option', 'aria-selected': entry.id === lens, 'aria-current': String(entry.id === lens), disabled: busy, 'data-lens': entry.id, 'data-own': '', ...tipFor(t('lens.own.hint')), onClick: () => { setOpen(false); onPickLens?.(entry.id); } },
+                      entry.name))),
+                  // Owner's rule: a Lens never switches the web on; a fact-heavy one says what Web Off means.
+                  webOff && FACT_LENSES.includes(lens) ? h('p', { className: 'hint', 'data-lens-web': '', ...tipFor(t('lens.web.off')) }, t('lens.web.short')) : null),
+                tip),
               document.body,
             )
           : null);
@@ -1513,7 +1629,8 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
     function scheduledChoices(rows, extras) {
       return [
         ...rows.map((row) => ({ id: row.id, label: row.label.trim() || row.id, extra: false })),
-        ...extras.filter((extra) => !extra.isolated).map((extra) => ({ id: extra.id, label: extra.label, extra: true })),
+        // The Automations tab manages automations; its conversations are no place for one to run (step A5).
+        ...extras.filter((extra) => !extra.isolated && extra.id !== 'automations').map((extra) => ({ id: extra.id, label: extra.label, extra: true })),
       ];
     }
 
@@ -1618,6 +1735,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           codeMethod: view.codeMethod !== false,
           coworkMethod: view.coworkMethod !== false,
           ownLenses: ownLensesOf(view.ownLenses).map(({ name, text }) => ({ name, text })),
+          longTools: typeof view.longTools === 'string' ? view.longTools : '{}',
         });
         setDirty(false);
       }, []);
@@ -1844,6 +1962,33 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         h('div', null,
           Toggle(t('method.code'), t('method.code.hint'), general.codeMethod, (on) => void saveNow('codeMethod', on)),
           Toggle(t('method.cowork'), t('method.cowork.hint'), general.coworkMethod, (on) => void saveNow('coworkMethod', on))),
+        // Each tab's starting choice of tools for a Long run (the run's card can change it for one run).
+        h('div', { className: 'dsh-me-group' }, t('long.group')),
+        h('div', { className: 'dsh-me-note' }, t('long.hint')),
+        h('div', null,
+          [...rows.map((row) => ({ id: row.id, label: row.label.trim() || row.id, isolated: false })), ...extras.map((extra) => ({ id: extra.id, label: extra.label, isolated: extra.isolated }))]
+            // Not in an isolated tab (Recon): a Long run cannot start there yet.
+            .filter((tab) => tab.id && !tab.isolated)
+            .map((tab) => {
+              let saved = {};
+              try {
+                saved = JSON.parse(general.longTools || '{}') ?? {};
+              } catch {
+                saved = {};
+              }
+              const own = saved[tab.id] && typeof saved[tab.id] === 'object' ? saved[tab.id] : {};
+              const files = typeof own.files === 'boolean' ? own.files : true;
+              const web = tab.isolated ? false : typeof own.web === 'boolean' ? own.web : true;
+              const flip = (key, on) => {
+                const next = { ...saved, [tab.id]: { files, web, [key]: on } };
+                void saveNow('longTools', JSON.stringify(next));
+              };
+              const sw = (label, on, key, disabled) => h('label', { className: 'dsh-me-lt' }, h('span', null, label),
+                h('button', { type: 'button', role: 'switch', className: 'dsh-me-sw', disabled, 'aria-checked': on, 'aria-label': `${tab.label}: ${label}`, onClick: () => flip(key, !on) }));
+              return h('div', { key: `long-${tab.id}`, className: 'dsh-me-toggle', 'data-long-tools': tab.id },
+                h('div', null, h('b', null, tab.label), tab.isolated ? h('span', null, t('long.isolated')) : null),
+                h('div', { className: 'dsh-me-lts' }, sw(t('long.files'), files, 'files', false), sw(t('long.web'), web, 'web', tab.isolated)));
+            })),
         h('div', { className: 'dsh-me-group' }, t('own.group')),
         h(OwnLenses, { t, saved: general.ownLenses ?? [], onSave: (list) => saveNow('ownLenses', list) }),
         h('div', { className: 'dsh-me-group' }, t('answer.group')),

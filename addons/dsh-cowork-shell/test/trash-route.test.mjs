@@ -9,7 +9,7 @@ import { EMPTY_MAX, TRASH_PATH, apply } from '../index.js';
  * The add-on's trash part against a stand-in app, in a throwaway folder: stored conversations are
  * folders under `<home>/sessions/proj/<id>`, listed from disk on every call as the app does.
  */
-function standIn({ seed, gateFirstList = false, schedule, archiveError, noHome = false } = {}) {
+function standIn({ seed, gateFirstList = false, schedule, archiveError, noHome = false, cwds = new Map() } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'cws-route-'));
   const store = join(home, 'sessions', 'proj');
   mkdirSync(store, { recursive: true });
@@ -32,7 +32,7 @@ function standIn({ seed, gateFirstList = false, schedule, archiveError, noHome =
   const snapOf = (id) => {
     const path = join(store, id, 'session.v4.jsonl.zstd');
     const st = statSync(path);
-    const header = helpers.has(id) ? { id, origin: 'subagent', parentSession: helpers.get(id) } : { id };
+    const header = { ...(helpers.has(id) ? { id, origin: 'subagent', parentSession: helpers.get(id) } : { id }), ...(cwds.has(id) ? { cwd: cwds.get(id) } : {}) };
     return { header, revision: `${st.ino}:${st.size}:${st.mtimeMs}`, location: { kind: 'jsonl', path } };
   };
   const inner = {
@@ -97,7 +97,7 @@ function standIn({ seed, gateFirstList = false, schedule, archiveError, noHome =
   };
   const settle = () => new Promise((done) => setTimeout(done, 30));
   const close = () => { for (const off of disposers) off(); rmSync(home, { recursive: true, force: true }); };
-  return { home, store, inner, inMemory, archived, pinned, archiveCalls, services, call, make, settle, close, logs, gate };
+  return { home, store, inner, inMemory, archived, pinned, archiveCalls, services, call, make, settle, close, logs, gate, cwds };
 }
 
 test('the tab and the folder\'s tab sent with Delete are kept with the conversation; bad ones are not', async () => {
@@ -679,6 +679,88 @@ test('a row with a folder from a newer version is neither put back nor deleted h
     assert.equal(erase.status, 400);
     assert.match(erase.body.error, /newer version/);
     assert.equal(existsSync(dir), true);
+  } finally {
+    app.close();
+  }
+});
+
+
+// ---- Scratch (step 34): a thread's files go with it ------------------------------------------
+
+test('deleting a Scratch thread moves its own folder too; Put back returns both', async () => {
+  const cwds = new Map();
+  const app = standIn({ cwds });
+  try {
+    await app.settle();
+    const place = join(app.home, 'scratch');
+    const mine = join(place, 'session-s1');
+    mkdirSync(mine, { recursive: true });
+    writeFileSync(join(mine, 'notes.md'), 'made in scratch');
+    cwds.set('session-s1', place);
+    cwds.set('session-h1', place);
+    app.make('session-s1');
+    app.make('session-h1', { archive: false, helperOf: 'session-s1' });
+    let reply = await app.call('POST', { action: 'delete', sessionId: 'session-s1', title: 'S', tab: 'chat' });
+    assert.equal(reply.status, 200);
+    assert.equal(existsSync(mine), false, 'the folder went with it');
+    assert.equal(reply.body.items[0].files, true, 'the row says so');
+    reply = await app.call('POST', { action: 'restore', sessionId: 'session-s1' });
+    assert.equal(reply.status, 200, JSON.stringify(reply.body));
+    assert.equal(readFileSync(join(mine, 'notes.md'), 'utf8'), 'made in scratch');
+  } finally {
+    app.close();
+  }
+});
+
+test('a Scratch folder another conversation still works in stays; it goes with the last one', async () => {
+  const cwds = new Map();
+  const app = standIn({ cwds });
+  try {
+    await app.settle();
+    const place = join(app.home, 'scratch');
+    const mine = join(place, 'session-s1');
+    mkdirSync(mine, { recursive: true });
+    writeFileSync(join(mine, 'shared.txt'), 'x');
+    cwds.set('session-s1', place);
+    cwds.set('session-copy', mine); // a Rerun copy started in the thread's working folder
+    app.make('session-s1');
+    app.make('session-copy');
+    await app.call('POST', { action: 'delete', sessionId: 'session-s1', title: 'S', tab: 'chat' });
+    assert.equal(existsSync(join(mine, 'shared.txt')), true, 'kept: the copy still uses it');
+    const reply = await app.call('POST', { action: 'delete', sessionId: 'session-copy', title: 'C', tab: 'chat' });
+    assert.equal(existsSync(mine), false, 'the last one takes it');
+    assert.equal(reply.body.items.find((item) => item.id === 'session-copy').files, true);
+    // A conversation outside Scratch never takes a folder.
+    cwds.set('session-p', join(app.home, 'project'));
+    mkdirSync(join(app.home, 'project'), { recursive: true });
+    app.make('session-p');
+    await app.call('POST', { action: 'delete', sessionId: 'session-p', title: 'P', tab: 'cowork' });
+    assert.equal(existsSync(join(app.home, 'project')), true);
+  } finally {
+    app.close();
+  }
+});
+
+test('add-ons are told of conversations deleted for good, and only of those', async () => {
+  const app = standIn();
+  try {
+    await app.settle();
+    const told = [];
+    const stop = app.services.coworkTrash.onErased((ids) => told.push(...ids));
+    app.make('session-a');
+    app.make('session-b');
+    await app.call('POST', { action: 'delete', sessionId: 'session-a', title: 'A', tab: 'chat' });
+    await app.call('POST', { action: 'delete', sessionId: 'session-b', title: 'B', tab: 'chat' });
+    await app.settle();
+    assert.deepEqual(told, [], 'moving to the trash is not deleting for good');
+    await app.call('POST', { action: 'erase', sessionId: 'session-a' });
+    await app.settle();
+    assert.deepEqual(told, ['session-a']);
+    stop();
+    await app.call('POST', { action: 'erase', sessionId: 'session-b' });
+    await app.settle();
+    assert.deepEqual(told, ['session-a'], 'no longer listening');
+    assert.throws(() => app.services.coworkTrash.onErased('nope'), /Give a function/);
   } finally {
     app.close();
   }

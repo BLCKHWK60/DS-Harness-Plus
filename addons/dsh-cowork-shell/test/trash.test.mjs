@@ -538,3 +538,76 @@ test('the change token stays with the mark through every tidy-up while the conve
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+
+// ---- Scratch (step 34) -----------------------------------------------------------------------
+
+test('a Scratch thread\'s folder moves with it, comes back with Put back, and is erased with it', () => {
+  const { root, make, trash } = home();
+  try {
+    const thread = make('session-s1');
+    const files = join(root, 'scratch', 'session-s1');
+    mkdirSync(join(files, 'sub'), { recursive: true });
+    writeFileSync(join(files, 'sub', 'a.txt'), 'A');
+    trash.add({ id: thread.id, title: 'S', parts: [thread], folders: [files] });
+    assert.equal(existsSync(files), false);
+    assert.equal(trash.list()[0].files, true);
+    assert.equal(trash.restore(thread.id), true);
+    assert.equal(readFileSync(join(files, 'sub', 'a.txt'), 'utf8'), 'A');
+    // Erased for good: the files go too (only inside the trash).
+    trash.add({ id: thread.id, title: 'S', parts: [thread], folders: [files] });
+    assert.equal(trash.erase(thread.id), 'erased');
+    assert.equal(existsSync(files), false);
+    assert.equal(existsSync(join(root, 'trash', thread.id)), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('Put back: an empty folder made meanwhile gives way; one with files in it stops everything', () => {
+  const { root, make, trash } = home();
+  try {
+    const thread = make('session-s1');
+    const files = join(root, 'scratch', 'session-s1');
+    mkdirSync(files, { recursive: true });
+    writeFileSync(join(files, 'a.txt'), 'A');
+    trash.add({ id: thread.id, title: 'S', parts: [thread], folders: [files] });
+    mkdirSync(files);
+    assert.equal(trash.restore(thread.id), true, 'an empty folder gives way');
+    assert.equal(readFileSync(join(files, 'a.txt'), 'utf8'), 'A');
+    trash.add({ id: thread.id, title: 'S', parts: [thread], folders: [files] });
+    mkdirSync(files);
+    writeFileSync(join(files, 'new.txt'), 'someone else');
+    assert.throws(() => trash.restore(thread.id), /holds other files now/);
+    assert.equal(existsSync(thread.folder), false, 'nothing moved: the messages stay in the trash too');
+    assert.equal(readFileSync(join(files, 'new.txt'), 'utf8'), 'someone else', 'nothing overwritten');
+    assert.equal(trash.list().length, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a link or a missing folder is never moved; a folder move cut off half-way cannot be erased', () => {
+  const { root, make, trash } = home();
+  try {
+    const thread = make('session-s1');
+    const real = join(root, 'elsewhere');
+    mkdirSync(real);
+    writeFileSync(join(real, 'mine.txt'), 'keep');
+    const link = join(root, 'scratch-link');
+    symlinkSync(real, link);
+    trash.add({ id: thread.id, title: 'S', parts: [thread], folders: [link, join(root, 'gone'), 'relative/x'] });
+    assert.equal(existsSync(join(real, 'mine.txt')), true, 'a link is left alone');
+    assert.equal(trash.list()[0].files, undefined);
+    trash.restore(thread.id);
+    // Cut off: the record names a folder that is still in place and not in the trash.
+    const files = join(root, 'scratch', 'session-s1');
+    mkdirSync(files, { recursive: true });
+    trash.add({ id: thread.id, title: 'S', parts: [thread], folders: [files] });
+    renameSync(join(root, 'trash', thread.id, 'files-0'), files);
+    assert.throws(() => trash.erase(thread.id), /cannot be deleted permanently/);
+    assert.equal(existsSync(files), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

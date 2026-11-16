@@ -98,6 +98,14 @@ export function apply(ctx, config) {
     return;
   }
   const memory = openMemory({ dataFile: join(home('memory'), 'memory.json'), notesFile: home('AGENTS.md') });
+  // Other add-ons add an entry you accepted (the Skill architect, its step 80). Memory's limits apply.
+  ctx.effect(() => ctx.provide('memoryStore', Object.freeze({
+    apiVersion: 1,
+    add(text, group) {
+      memory.add(text, group);
+      return { ok: true };
+    },
+  })), 'memory store service');
 
   // Keep the notes file in step with the switch, now and whenever it changes.
   const sync = () => {

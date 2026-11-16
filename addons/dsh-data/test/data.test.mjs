@@ -707,3 +707,103 @@ test('the privacy and Read Only texts say only what is true (data-1, data-7)', (
   assert.match(page, /In a Data conversation each one is also saved as an SVG file/);
   assert.match(entry('How to use it'), /in a Data conversation each also saved as an SVG file in data-output/);
 });
+
+test('a Scratch conversation works in its own folder: the data tools read only there, and its note names no hidden path', async () => {
+  const { apply } = await import('../index.js');
+  const home = folder();
+  const place = join(home, 'scratch');
+  const mine = join(place, 'session-mine01');
+  const theirs = join(place, 'session-other1');
+  mkdirSync(mine, { recursive: true });
+  mkdirSync(theirs, { recursive: true });
+  writeFileSync(join(mine, 'sales.csv'), 'region,revenue\nNorth,100\n');
+  writeFileSync(join(theirs, 'secret.csv'), 'x\n1\n');
+  const registered = [];
+  const sections = [];
+  const disposers = [];
+  const services = {
+    dshHomePath: (name) => join(home, name),
+    tools: { register: (tool) => { registered.push(tool); return () => {}; } },
+    settings: { describe: () => [{ ns: 'modes', value: { extraModes: '{}', defaultMode: 'cowork' } }], mutate: async () => {} },
+    modes: { get: () => 'data', isolated: () => false },
+    // The Cowork sidebar's Scratch service: the thread's own folder.
+    coworkScratch: { folderOf: (agent) => (agent?.id === 'session-mine01' ? mine : '') },
+  };
+  const ctx = { get: (name) => services[name], effect: (make) => { const dispose = make(); disposers.push(dispose); return dispose; }, on: () => {}, inject: () => {}, logger: { warn() {}, info() {} } };
+  try {
+    apply(ctx, { enabled: true, pythonSetup: false });
+    await new Promise((resolve) => setImmediate(resolve));
+    const agent = { id: 'session-mine01', header: { id: 'session-mine01', cwd: place }, ctx: { effect: (make) => make(), systemPrompt: { section: (spec) => { sections.push(spec); return () => {}; } } } };
+    const files = registered.find((tool) => tool.name === 'data_files');
+    const listed = await files.execute({}, { agent });
+    assert.match(listed.text, /sales\.csv/);
+    assert.doesNotMatch(listed.text, /secret\.csv/, 'never another thread\'s files');
+    const query = registered.find((tool) => tool.name === 'data_query');
+    const refused = await query.execute({ files: ['../session-other1/secret.csv'], sql: 'SELECT * FROM secret' }, { agent });
+    assert.match(refused.text, /outside|not in|refus/i);
+  } finally {
+    for (const dispose of disposers) if (typeof dispose === 'function') dispose();
+  }
+});
+
+test('Scratch: a deleted Scratch conversation\'s query log and the analyses of its folder go; others stay', async () => {
+  const { apply } = await import('../index.js');
+  const home = folder();
+  const listeners = [];
+  const disposers = [];
+  const registered = [];
+  const work = folder();
+  const mine = join(home, 'scratch', 'session-mine01');
+  mkdirSync(mine, { recursive: true });
+  writeFileSync(join(mine, 'sales.csv'), 'region,revenue\nNorth,100\n');
+  writeFileSync(join(work, 'sales.csv'), 'region,revenue\nSouth,200\n');
+  const services = {
+    dshHomePath: (...parts) => join(home, ...parts),
+    tools: { register: (tool) => { registered.push(tool); return () => {}; } },
+    settings: { describe: () => [{ ns: 'modes', value: { extraModes: '{}', defaultMode: 'cowork' } }], mutate: async () => {} },
+    modes: { get: () => 'data', isolated: () => false },
+    agents: { get: (id) => ({ id, header: { id } }), list: () => [] },
+    coworkScratch: { folderOf: (agent) => (agent?.id === 'session-mine01' ? mine : '') },
+  };
+  const ctx = {
+    get: (name) => services[name], effect: (make) => { const dispose = make(); disposers.push(dispose); return dispose; }, on: () => {},
+    inject: (deps, fn) => { if (deps.includes('coworkTrash')) fn({ effect: (make) => make(), coworkTrash: { onErased: (f) => { listeners.push(f); return () => {}; } } }); },
+    logger: { warn() {}, info() {} },
+  };
+  try {
+    apply(ctx, { enabled: true, pythonSetup: false });
+    await new Promise((resolve) => setImmediate(resolve));
+    const query = registered.find((tool) => tool.name === 'data_query');
+    await query.execute({ files: ['sales.csv'], sql: 'SELECT * FROM sales' }, { agent: { id: 'session-mine01', header: { id: 'session-mine01', cwd: join(home, 'scratch') } } });
+    await query.execute({ files: ['sales.csv'], sql: 'SELECT * FROM sales' }, { agent: { id: 'session-plain1', header: { id: 'session-plain1', cwd: work } } });
+    const saved = () => JSON.parse(readFileSync(join(home, 'data', 'queries.json'), 'utf8'));
+    assert.deepEqual(Object.keys(saved()).sort(), ['session-mine01', 'session-plain1']);
+    assert.equal(listeners.length, 1);
+    await listeners[0](['session-plain1']);
+    assert.ok(saved()['session-plain1'], 'a conversation outside Scratch keeps its log');
+    await listeners[0](['session-mine01']);
+    assert.equal(saved()['session-mine01'], undefined, 'the Scratch conversation\'s log is gone');
+    // Analyses: kept while the folder is still there (a Rerun copy works in it), gone once the folder left.
+    const { openStore } = await import('../lib/store.js');
+    const analyses = () => JSON.parse(readFileSync(join(home, 'data', 'analyses.json'), 'utf8'));
+    const store = openStore(join(home, 'data', 'queries.json'), join(home, 'data', 'analyses.json'));
+    store.put({ name: 'Kept', folder: mine, steps: [] });
+    await query.execute({ files: ['sales.csv'], sql: 'SELECT * FROM sales' }, { agent: { id: 'session-mine01', header: { id: 'session-mine01', cwd: join(home, 'scratch') } } });
+    await listeners[0](['session-mine01']);
+    assert.ok(analyses().kept, 'the folder is still there: its analyses stay');
+  } finally {
+    for (const dispose of disposers) if (typeof dispose === 'function') dispose();
+  }
+});
+
+test('Scratch: forgetting a conversation removes only the analyses of its folder', async () => {
+  const { openStore } = await import('../lib/store.js');
+  const store = openStore('', '');
+  store.put({ name: 'Mine', folder: '/h/scratch/session-a', steps: [] });
+  store.put({ name: 'Theirs', folder: '/Users/me/data', steps: [] });
+  store.record('session-a', { sql: 'SELECT 1', files: [], total: 1 });
+  assert.deepEqual(store.forget('session-a', '/h/scratch/session-a'), { queries: true, analyses: 1 });
+  assert.deepEqual(store.analyses().map((a) => a.name), ['Theirs']);
+  assert.deepEqual(store.queries('session-a'), []);
+  assert.deepEqual(store.forget('session-x'), { queries: false, analyses: 0 });
+});

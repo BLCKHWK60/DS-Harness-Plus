@@ -114,8 +114,8 @@ test('each tab\'s Trash list shows only what was deleted from it; nothing delete
 });
 
 test('both ways to delete keep the tab, and the Trash list counts and lists only this tab\'s', () => {
-  assert.equal((source.match(/trash\.remove\(id, (?:title|titleOf\(id\)), tabOf\(id\)\)/g) ?? []).length, 2, 'Delete and the right-click Delete');
-  assert.equal((source.match(/trash\.remove\(/g) ?? []).length, 2, 'no other delete call');
+  assert.equal((source.match(/trash\.remove\(id, (?:title|titleOf\(id\)), tabOf\(id\)\)/g) ?? []).length, 3, 'Delete, the right-click Delete and the Scratch clean-up');
+  assert.equal((source.match(/trash\.remove\(/g) ?? []).length, 3, 'no other delete call');
   assert.match(source, /t\('trash\.title', \{ n: binHere\.length \}\)/);
   assert.match(source, /shown \? binHere\.map\(/);
   // Hiding a deleted conversation from the lists still uses the whole trash.
@@ -380,7 +380,7 @@ test('a drag lives only while arranging, follows the pointer on the window, and 
 function modelWith({ readDelay = 5, writeDelay = 20 } = {}) {
   const make = new Function('window', `const NS = 'coworkShell'; const SETTINGS_NS = 'cowork-shell'; const MODES_NS = 'modes'; const LOCAL_KEY = 'k';
     const FALLBACK_MODES = [{ id: 'chat', label: 'Chat' }]; const DEFAULT_TABS = {};
-    ${functionText('readObject')}\n${functionText('readOrder')}\n${functionText('createModel')}\nreturn createModel;`)({ localStorage: { getItem: () => null, setItem() {} } });
+    ${functionText('readObject')}\n${functionText('readOrder')}\n${constLine('DEFAULT_START_PLACES')}\n${functionText('startPlacesOf')}\n${constLine('startPlaceTable')}\n${functionText('createModel')}\nreturn createModel;`)({ localStorage: { getItem: () => null, setItem() {} } });
   const store = { revision: 1, value: { tabOrder: [] } };
   const wait = (ms) => new Promise((done) => setTimeout(done, ms));
   let writing = Promise.resolve();
@@ -480,4 +480,152 @@ test('row actions: a Delete names what the list showed; partial results and the 
   assert.match(source, /for \(const note of Array\.isArray\(done\?\.notes\) \? done\.notes : \[\]\)/);
   assert.match(source, /model\.fail\(t\('trash\.erase\.partly'/);
   for (const key of ['trash.erase.partly', 'trash.folder', 'trash.folder.its']) assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 2, key);
+});
+
+// ---- Scratch (step 32) ------------------------------------------------------------------------
+
+/** homeFor, learnScratch and startInScratch together, with a stand-in for the page's fetch. */
+function scratchPage(answer) {
+  const calls = [];
+  const fetch = async (url, init = {}) => {
+    calls.push([String(url), init.method ?? 'GET']);
+    return { ok: Boolean(answer), json: async () => answer };
+  };
+  const document = { baseURI: 'http://lab.test/' };
+  const make = new Function('fetch', 'document', `${constLine('roomKey')}\n${constLine('rooms')}\n${constLine('hidden')}\n${constLine('scratchPlace')}\n${functionText('defaultWorkspace')}\n${functionText('homeFor')}\nasync ${functionText('learnScratch')}\nasync ${functionText('startInScratch')}\nreturn { homeFor, learnScratch, startInScratch, hidden, roomKey };`);
+  return { ...make(fetch, document), calls };
+}
+
+const scratchWs = { workspaceId: 'w-scratch', path: '/Users/someone/.dsh/scratch', sessionIds: ['s4'], createdAt: '2026-01-04T00:00:00Z' };
+
+test('a new conversation of an ordinary tab never starts in Scratch by \'last used\'', async () => {
+  const page = scratchPage({ place: '/Users/someone/.dsh/scratch', title: 'Scratch' });
+  const lib = { ok: true, workspaces: [home, books, scratchWs], byId: { ...byId, s4: { updatedAt: 5000 } }, currentId: null };
+  assert.equal(await page.learnScratch(), '/Users/someone/.dsh/scratch');
+  assert.deepEqual(page.calls, [['http://lab.test/dsh-cowork-shell/scratch', 'GET']], 'asking is a GET, which makes no folder');
+  assert.equal(page.homeFor(lib, 'cowork')?.workspaceId, 'w-books');
+  assert.equal(page.homeFor({ ...lib, currentId: 's4' }, 'code')?.workspaceId, 'w-books', 'not even from a Scratch thread');
+  assert.equal(page.hidden.has(page.roomKey(scratchWs.path)), true, 'kept out of the project lists');
+  // No answer: nothing changes.
+  const quiet = scratchPage(null);
+  assert.equal(await quiet.learnScratch(), '');
+  assert.equal(quiet.hidden.size, 0);
+});
+
+test('starting a Scratch thread makes the project once and then lets the app reuse an unsent thread', async () => {
+  const page = scratchPage({ place: '/Users/someone/.dsh/scratch', title: 'Scratch' });
+  const made = [];
+  const renamed = [];
+  const started = [];
+  const library = { workspaces: [home, books] };
+  const appCtx = {
+    get: () => ({
+      create: async ({ path }) => { made.push(path); const ws = { workspaceId: 'w-new', path, sessionIds: [] }; library.workspaces.push(ws); return ws; },
+      rename: async (id, title) => { renamed.push([id, title]); },
+    }),
+    uiWorkspace: { startSession: (id, options) => started.push([id, options]) },
+  };
+  const lib = { get: () => library };
+  assert.equal(await page.startInScratch(appCtx, lib, { prompt: 'hi' }), true);
+  assert.equal(await page.startInScratch(appCtx, lib), true);
+  assert.deepEqual(made, ['/Users/someone/.dsh/scratch'], 'the project is made once');
+  assert.deepEqual(renamed, [['w-new', 'Scratch']]);
+  assert.deepEqual(started, [['w-new', { prompt: 'hi' }], ['w-new', undefined]], 'the app\'s own start, which reuses an unsent conversation');
+  assert.ok(page.calls.every(([, method]) => method === 'POST'), 'the folder is made first');
+  // The place cannot be made: the caller starts as usual.
+  const refused = scratchPage({ place: '', error: 'The Scratch folder is a link or not a folder.' });
+  assert.equal(await refused.startInScratch(appCtx, lib), false);
+});
+
+test('the Scratch project is left out of the project list and of Continue in a project', () => {
+  assert.match(source, /if \(hidden\.has\(roomKey\(ws\.path\)\)\) continue;/);
+  assert.match(source, /projects: flat \|\| isScratchRow\(id\) \? lib\.workspaces\.filter\(\(ws\) => !rooms\.has\(roomKey\(ws\.path\)\) && !hidden\.has\(roomKey\(ws\.path\)\)\) : undefined/);
+  assert.match(source, /void learnScratch\(\);/);
+});
+
+// ---- Scratch steps 36 and 37 -------------------------------------------------------------------
+
+const scratchHelpers = new Function(`${constLine('roomKey')}\n${constLine('hidden')}\n${constLine('scratchPlace')}\n${functionText('inScratch')}\n${functionText('scratchFolderOfRow')}\n${functionText('inScratchNow')}\nreturn { inScratch, scratchFolderOfRow, inScratchNow, hidden, scratchPlace, roomKey };`)();
+
+test('which conversations are Scratch, and where Show in Finder goes for them', () => {
+  const { inScratch, scratchFolderOfRow, inScratchNow, hidden, scratchPlace, roomKey } = scratchHelpers;
+  assert.equal(inScratch('/h/.dsh/scratch'), false, 'nothing is Scratch before the page knows the place');
+  scratchPlace.path = '/h/.dsh/scratch';
+  hidden.add(roomKey(scratchPlace.path));
+  assert.equal(inScratch('/h/.dsh/scratch'), true);
+  assert.equal(inScratch('/h/.dsh/scratch/session-abc123'), true, 'a copy working in a thread folder');
+  assert.equal(inScratch('/h/.dsh/scratch-x'), false);
+  assert.equal(inScratch('/Users/me/Books'), false, 'a Rerun copy of a project conversation is not Scratch');
+  assert.equal(scratchFolderOfRow('session-abc123', '/h/.dsh/scratch'), '/h/.dsh/scratch/session-abc123');
+  assert.equal(scratchFolderOfRow('session-copy99', '/h/.dsh/scratch/session-abc123/sub'), '/h/.dsh/scratch/session-abc123', 'a copy: the thread folder it works in');
+  assert.equal(scratchFolderOfRow('session-abc123', undefined, '/h/.dsh/scratch'), '/h/.dsh/scratch/session-abc123', 'by its project when the row has no folder');
+  assert.equal(scratchFolderOfRow('../x', '/h/.dsh/scratch'), '');
+  assert.equal(scratchFolderOfRow('session-abc123', '/Users/me/Books'), '');
+  const lib = { ok: true, currentId: 's1', workspaces: [{ workspaceId: 'w', path: '/h/.dsh/scratch', sessionIds: ['s1'] }, { workspaceId: 'b', path: '/Users/me/Books', sessionIds: ['s2'] }] };
+  assert.equal(inScratchNow(lib), true);
+  assert.equal(inScratchNow({ ...lib, currentId: 's2' }), false);
+  assert.equal(inScratchNow({ ...lib, currentId: null }), false);
+});
+
+test('Scratch has its own group in each tab, the switch sits beside the picker (not in Recon), chips stay in Scratch', () => {
+  assert.match(source, /const scratchRows = unplaced\.filter\(isScratchRow\);/);
+  assert.match(source, /list\(scratchRows, '__scratch', null\)/);
+  assert.match(source, /if \(!scratchPlace\.path \|\| !selected \|\| selected\.id === 'recon'\) return null;/);
+  assert.match(source, /id: 'cowork-place', order: 5/);
+  assert.match(source, /if \(selected\.id !== 'recon' && inScratchNow\(library\.get\(\)\)\) \{\s*startInScratch\(appCtx, library, options\)/);
+  assert.match(source, /\(!!currentWs && hidden\.has\(roomKey\(currentWs\.path\)\)\)/, 'Chat hides the picker in Scratch too');
+  assert.match(source, /id: 'cowork-scratch-mark'/);
+});
+
+const cleanupPlan = new Function(`${functionText('cleanupPlan')}\nreturn cleanupPlan;`)();
+
+test('Scratch clean-up: only old ones go; working, open and pinned ones are named and left alone', () => {
+  const now = Date.parse('2026-11-16T00:00:00Z');
+  const day = 86400000;
+  const lib = {
+    currentId: 'open-old',
+    byId: {
+      'old': { updatedAt: now - 40 * day },
+      'young': { updatedAt: now - 3 * day },
+      'busy-old': { updatedAt: now - 40 * day, running: true },
+      'open-old': { updatedAt: now - 40 * day },
+      'pin-old': { updatedAt: now - 40 * day },
+      'helper': { updatedAt: now - 40 * day, origin: 'subagent' },
+      'blank': { updatedAt: now - 40 * day, blank: true },
+      'no-time': {},
+    },
+  };
+  const plan = cleanupPlan(Object.keys(lib.byId), lib, { days: 30, now, pinned: new Set(['pin-old']) });
+  assert.deepEqual(plan.take, ['old']);
+  assert.deepEqual(plan.skipped, [{ id: 'busy-old', why: 'running' }, { id: 'open-old', why: 'open' }, { id: 'pin-old', why: 'pinned' }]);
+  assert.deepEqual(cleanupPlan(['young'], lib, { days: 2, now, pinned: new Set() }).take, ['young']);
+  for (const key of ['cleanup.why.running', 'cleanup.why.open', 'cleanup.why.pinned']) assert.equal((source.match(new RegExp(`'${key.replace(/\./g, '\\.')}':`, 'g')) ?? []).length, 2, `${key} in English and Chinese`);
+});
+
+// ---- Scratch step 44: start places ------------------------------------------------------------
+
+const startPlaces = new Function(`${constLine('DEFAULT_START_PLACES')}\n${functionText('startPlacesOf')}\n${constLine('startPlaceTable')}\n${functionText('startPlaceOf')}\nreturn { startPlacesOf, startPlaceOf, startPlaceTable };`)();
+
+test('start places: every tab but Code starts in Scratch, Recon in its room; a saved choice wins; odd values are ignored', () => {
+  const { startPlacesOf, startPlaceOf } = startPlaces;
+  const defaults = startPlacesOf('');
+  for (const tab of ['chat', 'cowork', 'finance', 'data', 'research', 'scout']) assert.equal(startPlaceOf(tab, defaults), 'scratch', tab);
+  assert.equal(startPlaceOf('code', defaults), 'folder');
+  assert.equal(startPlaceOf('recon', defaults), 'room');
+  assert.equal(startPlaceOf('my-own-mode', defaults), 'folder', 'a tab another add-on brings: a folder unless set');
+  const saved = startPlacesOf(JSON.stringify({ data: 'folder', code: 'scratch', recon: 'scratch', chat: 'elsewhere' }));
+  assert.equal(startPlaceOf('data', saved), 'folder');
+  assert.equal(startPlaceOf('code', saved), 'scratch');
+  assert.equal(startPlaceOf('recon', saved), 'room', 'Recon always keeps its room');
+  assert.equal(startPlaceOf('chat', saved), 'scratch', 'an odd value is ignored');
+  assert.deepEqual(startPlacesOf('not json'), defaults);
+  assert.deepEqual(startPlacesOf('[1]'), defaults);
+});
+
+test('New, a tab switch and Cmd-N start in the tab\'s start place; Scratch falls back to a folder when it cannot start', () => {
+  assert.match(source, /const place = startPlaceOf\(tabId\);/);
+  assert.match(source, /startInScratch\(appCtx, library\)\.then\(\(done\) => \{ if \(!done\) inFolder\(\); \}, inFolder\);/);
+  assert.match(source, /command\.resolve = \(context\) => \(startPlaceTable\.newKey === false \? original\(context\) : \{ status: 'handled', run: \(\) => startNew\(ctx, library, model\.get\(\)\.selected\) \}\);/);
+  assert.match(source, /if \(gone\) startNew\(appCtx, library, m\.id\);/, 'a tab switch with nothing to reopen starts in the start place');
+  for (const key of ['start.title', 'start.hint', 'start.newkey', 'start.recon.room']) assert.equal((source.match(new RegExp(`'${key.replace(/\./g, '\\.')}':`, 'g')) ?? []).length, 2, `${key} in English and Chinese`);
 });

@@ -87,6 +87,18 @@ export function openStore(folder = '') {
     return entry;
   };
   return {
+    /** The file a conversation's postings are kept in ('' in memory only). */
+    fileOf,
+    /** Remove a conversation's postings for good (Scratch: deleted for good). */
+    remove(id) {
+      all.delete(id);
+      const file = fileOf(id);
+      try {
+        if (file && existsSync(file)) unlinkSync(file);
+      } catch {
+        /* nothing more to do */
+      }
+    },
     /** Count one request; throws when the conversation reached its limit. */
     request(id) {
       const entry = of(id);

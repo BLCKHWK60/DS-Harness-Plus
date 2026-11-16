@@ -25,6 +25,7 @@
 import { RESERVED_DIR } from './constants.mjs'
 import { decodeSegment } from './paths.mjs'
 import { messageOf } from './errors.mjs'
+import { scratchExclude, scratchOf } from './scratch.mjs'
 
 export { decodeSegment }
 
@@ -49,7 +50,7 @@ export class IsolationUnknownError extends Error {
  * @returns {{known: false, reason: string, ids: Set<string>, exclude: (rel: string) => boolean}} the answer "not known".
  */
 export function unknownIsolation(reason = UNKNOWN_REASON) {
-  return { known: false, reason, ids: new Set(), exclude: () => false }
+  return { known: false, reason, ids: new Set(), scratch: new Set(), exclude: () => false }
 }
 
 /**
@@ -62,7 +63,7 @@ export async function askIsolation(source) {
   if (typeof source !== 'function') return unknownIsolation()
   try {
     const answer = await source()
-    if (answer?.known === true && typeof answer.exclude === 'function') return { ...answer, ids: answer.ids instanceof Set ? answer.ids : new Set() }
+    if (answer?.known === true && typeof answer.exclude === 'function') return { ...answer, ids: answer.ids instanceof Set ? answer.ids : new Set(), scratch: answer.scratch instanceof Set ? answer.scratch : new Set() }
     return unknownIsolation(typeof answer?.reason === 'string' && answer.reason ? answer.reason : UNKNOWN_REASON)
   } catch (error) {
     return unknownIsolation(`Sync did not run: it could not tell which conversations are isolated (${messageOf(error)}).`)
@@ -73,11 +74,12 @@ export async function askIsolation(source) {
  * What a status shows about isolated conversations, as plain data.
  * @param {object | undefined} answer - the answer already read inside the lock, if any.
  * @param {Function} source - asked now when there is no answer yet.
- * @returns {Promise<{known: boolean, reason: string, count: number}>} the summary.
+ * @returns {Promise<{known: boolean, reason: string, count: number, scratch: number}>} the summary (`scratch`: Scratch
+ *   conversations on this Mac, also never synced).
  */
 export async function isolationSummary(answer, source) {
   const final = answer ?? (await askIsolation(source))
-  return final.known === true ? { known: true, reason: '', count: final.ids?.size ?? 0 } : { known: false, reason: String(final.reason || UNKNOWN_REASON), count: 0 }
+  return final.known === true ? { known: true, reason: '', count: final.ids?.size ?? 0, scratch: final.scratch?.size ?? 0 } : { known: false, reason: String(final.reason || UNKNOWN_REASON), count: 0, scratch: 0 }
 }
 
 /** @returns {object} a JSON object stored as text, or {} when it is not one. */
@@ -154,12 +156,13 @@ export function excludeFor(ids) {
 }
 
 /**
- * Read which conversations are isolated now.
- * @param {object} services - the app's services, each optional: `settings`, `modes`, `agents`, `sessionPersistence`.
- * @returns {Promise<{known: boolean, reason?: string, ids: Set<string>, exclude: (rel: string) => boolean}>}
+ * Read which conversations are isolated now, and which are Scratch (lib/scratch.mjs): both are never synced.
+ * @param {object} services - the app's services, each optional: `settings`, `modes`, `agents`, `sessionPersistence`;
+ *   and `scratchPlace`, the Scratch place ('' or missing: no Scratch rule).
+ * @returns {Promise<{known: boolean, reason?: string, ids: Set<string>, scratch: Set<string>, exclude: (rel: string) => boolean}>}
  *   `known` false when the Modes add-on cannot be asked: then nothing may be pushed or pulled.
  */
-export async function readIsolation({ settings, modes, agents, sessionPersistence } = {}) {
+export async function readIsolation({ settings, modes, agents, sessionPersistence, scratchPlace = '' } = {}) {
   const none = unknownIsolation()
   /** @returns {object | undefined} the Modes add-on's settings now. */
   const modesSettings = () => {
@@ -172,12 +175,14 @@ export async function readIsolation({ settings, modes, agents, sessionPersistenc
   }
   if (!modesSettings()) return none
   const parents = new Map()
+  const listed = []
   if (typeof sessionPersistence?.list === 'function') {
     try {
       for (const snapshot of await sessionPersistence.list()) {
         const id = snapshot?.header?.id
         const parent = parentOf(snapshot?.header)
         if (typeof id === 'string' && parent && parent !== id) parents.set(id, parent)
+        if (typeof id === 'string' && id) listed.push({ id, cwd: snapshot?.header?.cwd })
       }
     } catch (error) {
       return { ...none, reason: `Sync did not run: the conversations could not be listed to leave out isolated ones (${String(error?.message ?? error).slice(0, 200)}). Try again in a moment.` }
@@ -193,5 +198,8 @@ export async function readIsolation({ settings, modes, agents, sessionPersistenc
     open = []
   }
   const ids = isolatedIds({ modes: value, open, isolated: (id) => modes?.isolated?.(id) === true && modes?.get?.(id) !== LATE_MODE_ID, parents })
-  return { known: true, ids, exclude: excludeFor(ids) }
+  const isolatedFile = excludeFor(ids)
+  const scratch = scratchOf({ place: typeof scratchPlace === 'string' ? scratchPlace : '', listed })
+  const scratchFile = scratchExclude(scratch, sessionIdOf)
+  return { known: true, ids, scratch: scratch.ids, exclude: (rel) => isolatedFile(rel) || scratchFile(rel) }
 }

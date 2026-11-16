@@ -32,6 +32,10 @@ A focus on your own documents (the Library) and dedicated academic and news sour
 - The writer adds "## Follow-up questions" when the Research tab asks for it.
 - Each run's progress is kept per conversation (stage, round, helpers, searches, pages, sources, recent searches and sites, follow-ups, saved file) and served at `/dsh-deep-research/progress?session=…` and as the `deepResearch` service.
 
+## Scratch
+
+A report made in a Scratch conversation (the Cowork sidebar's private place) is saved and listed as usual, and removed when that conversation is deleted for good (Delete permanently, Empty trash, or after 30 days in the trash). Only in Research's own report folder: a folder you picked yourself in Settings is never touched.
+
 ## Tested
 
 0.57.0: `test/research.test.mjs` (the mode is Read Only, an older stored Research mode with `inherit` is replaced, the method keeps the "not read" labels, Settings → Research's description and its search entry say what the check does and name all three labels, and its Good to know list says claims are not compared with the pages, with no "word for word") and `test/apply.test.mjs` (the add-on on a stand-in app: Research is handed to Modes as a Read Only mode, an older stored mode is rewritten, Deep research gets the focus, follow-ups and saving only in a Research conversation). The labels themselves are tested in Deep research (`test/sources.test.mjs`, `test/report.test.mjs`). That Modes sets Read Only and puts the earlier level back is tested in the Modes add-on.

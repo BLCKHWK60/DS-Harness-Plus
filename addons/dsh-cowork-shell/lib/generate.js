@@ -144,7 +144,7 @@ export function openVersions(dir) {
     /**
      * Keep a version. Text equal to the newest one is not kept twice; an empty text is not a version.
      * @param {string} key - the project's folder.
-     * @param {{text: unknown, by: string, note?: string, at?: number}} version - `by` is 'you', 'type' or 'model'.
+     * @param {{text: unknown, by: string, note?: string, at?: number}} version - `by` is 'you', 'type', 'model' or 'architect' (the Skill architect, after your yes).
      * @returns {boolean} whether it was kept.
      */
     add(key, { text, by, note = '', at = Date.now() }) {
@@ -152,7 +152,7 @@ export function openVersions(dir) {
       if (!body) return false;
       const data = read(key);
       if (data.versions[0]?.text === body) return false;
-      data.versions = [{ at, text: body, by: ['you', 'type', 'model'].includes(by) ? by : 'you', note: String(note ?? '').slice(0, 80) }, ...data.versions].slice(0, VERSIONS_MAX);
+      data.versions = [{ at, text: body, by: ['you', 'type', 'model', 'architect'].includes(by) ? by : 'you', note: String(note ?? '').slice(0, 80) }, ...data.versions].slice(0, VERSIONS_MAX);
       write(key, data);
       return true;
     },

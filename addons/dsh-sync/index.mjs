@@ -184,6 +184,14 @@ export function apply(ctx, config) {
   const cfg = plain(config) ?? {}
   if (cfg.enabled === false) return
   const homeFn = ctx.get('dshHomePath')
+  /** @returns {string} the Scratch place ('' without a data folder). */
+  const scratchPlace = () => {
+    try {
+      return typeof homeFn === 'function' ? String(homeFn('scratch') ?? '') : ''
+    } catch {
+      return ''
+    }
+  }
   const settings = resolveSettings(cfg, (sub) => (typeof homeFn === 'function' ? homeFn(sub) : undefined))
 
   const log = (level) => (message) => {
@@ -239,8 +247,10 @@ export function apply(ctx, config) {
     projects: settings.projects,
     deviceLabel: settings.deviceLabel,
     registry: () => ctx.get('workspaceRegistry'),
+    scratchPlace,
     // Isolated conversations (Recon) are never pushed or pulled; the Modes add-on says which they are.
-    isolation: () => readIsolation({ settings: ctx.get('settings'), modes: ctx.get('modes'), agents: ctx.get('agents'), sessionPersistence: ctx.get('sessionPersistence') }),
+    // Scratch conversations (the Cowork sidebar's hidden place, <app home>/scratch) are never synced either.
+    isolation: () => readIsolation({ settings: ctx.get('settings'), modes: ctx.get('modes'), agents: ctx.get('agents'), sessionPersistence: ctx.get('sessionPersistence'), scratchPlace: scratchPlace() }),
     logger,
   })
 

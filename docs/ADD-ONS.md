@@ -65,7 +65,9 @@ Replaces the left sidebar with a MindsHub-style one:
 
   **Each tab lists only its own conversations.** Code shows your coding projects, Chat your chats, Cowork your tasks. Use the `⋯` on a conversation or a project to move it to another tab, or on a conversation to **Archive** it (the tab ends with an **Archived** list where each one has **Restore**), or to **Delete** it. Delete moves the conversation to a **Trash** list at the end of the tab; **Put back** returns it within 30 days, and after that it is removed for good. A conversation you used since the app started leaves the list at once and its files move at the next start; **Show all** gives the app's full list with search.
 
-  **The Chat tab has no folders.** A chat lives on its own, so the Chat tab hides the workspace picker, always starts a new chat in the app's default workspace, and shows your chats as one flat list. The `⋯` on a chat can **Promote to Cowork** or **Promote to Code** (the same conversation, in the new mode) or **Continue in a project…** (a new conversation in a project you pick, with the chat attached for the assistant to read).
+  **Scratch: a place with no folder of yours.** New conversations of every tab except Code start in **Scratch**: each works in a private folder of its own, never in a folder of yours, and its files go with it when you delete it (through the 30-day trash). Code starts in the open or last used project; Recon in its room. Change any tab in **Settings → Start places**; the **Scratch | Folder** switch on the start page starts the other way once. A Scratch conversation's `⋯` has **Keep in a project…**, which copies its files into a new folder of a project and continues there. Each tab's list shows a **Scratch** group, with **Clean up…** for old ones. Files you drop into a Scratch chat are copied into its folder, so Data and the PDF reader can open them. Sync never carries Scratch conversations. More in the Cowork sidebar's README.
+
+  **The Chat tab has no folders.** A chat lives on its own, so the Chat tab hides the workspace picker (in its default folder and in Scratch), starts a new chat in Scratch (or, set to Folder on Settings → Start places, in the app's default workspace), and shows your chats as one flat list. The `⋯` on a chat can **Promote to Cowork** or **Promote to Code** (the same conversation, in the new mode) or **Continue in a project…** (a new conversation in a project you pick, with the chat attached for the assistant to read).
 
   The start page shows a greeting per tab, and on most tabs suggestion chips under the chat box (Create slides, Build website, …) that fill in a starter prompt.
 
@@ -258,13 +260,14 @@ Details: `addons/dsh-budget/README.md`.
 
 ## Automations
 
-Shows how every run of your scheduled tasks ended, and alerts you when one fails or needs you.
+Your scheduled tasks in one place: how every run ended, what needs you, what was missed, and alerts when one fails or needs you.
 
-- **Automation runs**, in the Cowork sidebar under Automation tasks. It lists what needs you, each task with its next run and how its last run ended, and the last runs: finished, failed, stopped or cancelled, with the time it took and the end of the answer. A failed run has **Run again**.
-- **Settings → Alerts** chooses what you are told about and where. As installed, you get a notification on this Mac when a scheduled task fails, is stopped or waits for you.
-- **Phone alerts** go through the free ntfy app. The Alerts page has the four setup steps and a **Send a test alert** button.
+- **Automations**, a row on every tab. Tiles (on, ran today, missed, failed, next run), what needs you, the times missed while the app was closed (with Run now), one card per automation (an on/off switch, its rule in plain words, its tab, Run now, Details), a Day/Week/Month timeline, and the last runs. A run that came late says so.
+- **Details** changes the name and instruction, sets this automation's own alerts and how long its past runs are kept, and deletes it. The app's own editor is one click away.
+- **Deleted automations** stay in the trash for 30 days, with Put back, wherever they were deleted.
+- **The Automations tab**: its chat makes and changes automations and answers questions about their results ("what did the morning brief say on Monday?").
+- **Settings → Alerts** chooses what you are told about and where. As installed, you get a notification on this Mac when a scheduled task fails, is stopped or waits for you. **Phone alerts** go through the free ntfy app.
 - An alert is one short line with the task's name and what happened, for example "Morning brief failed". It never contains your instruction or the answer.
-- You create and change tasks on the app's own Automation tasks page, as before. Runs are recorded from the moment this add-on is installed.
 - Tasks run only while the app is running. Nothing runs while the Mac sleeps.
 
 Details: `addons/dsh-automations/README.md`.
@@ -729,6 +732,14 @@ Keeps the settings you change in the app's pages the same on two Macs, through o
 ## Context saver
 
 Shortens very large tool results before the model reads them and keeps the full text so the assistant can look it up. Off until switched on, and it needs the optional Python tools in `extras/dsh-intel-mcp` installed first. Setup is in `addons/dsh-context-saver/README.md`.
+
+## Learned skills
+
+Learns from your past conversations where you corrected the assistant, and proposes skills, Memory facts and project rules. **Nothing is installed until you say yes** on Settings → Learned skills.
+
+- **Learn now** (or `/skills learn`) reads your corrections, Stops, thumbs down and feedback, never Recon conversations, helpers or ones you marked **Never learn from this**. A reading model on this Mac or your own network needs no tick; one on the internet needs your tick, and shows you what it would send first.
+- Accepted skills stay in this add-on's own folder, with every version kept and **Put back**. Each reaches every tab, one tab or one project; Recon never gets one. **Start clean** keeps them out of a project.
+- Learning by itself is off; nightly or weekly only proposes. Details: `addons/dsh-skill-architect/README.md`.
 
 ## Settings helper
 

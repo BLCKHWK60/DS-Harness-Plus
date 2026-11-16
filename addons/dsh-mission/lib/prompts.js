@@ -51,15 +51,17 @@ const COMMON = [
  * @param {object} input - the goal and what the folder holds.
  * @returns {string} the planner's task.
  */
-export function planPrompt({ goal, root, files, maxItems }) {
+export function planPrompt({ goal, root, files, maxItems, notes = '', context = '' }) {
   return [
     'MISSION_PLAN',
     'You are the planner. Turn the goal into a short checklist that other models will work through one item at a time. Change nothing: only read.',
     ...COMMON,
     '',
     `Goal: ${clip(goal, 4000)}`,
+    ...(context ? [`What was said in the conversation before the run (background: the goal decides, but it may point at a plan made here):\n${clip(context, 4000)}`] : []),
     `Working folder: ${root}`,
     files ? `Files in it (a sample):\n${clip(files, 6000)}` : 'The folder is empty or could not be listed.',
+    ...(notes ? [`Notes kept by the run so far:\n${clip(notes, 2000)}`] : []),
     '',
     'First look around: read the files that matter (README, package or build files, the tests, the code the goal touches) and find out how this project is tested and built.',
     `Then answer with one JSON object and nothing else:`,
@@ -70,6 +72,7 @@ export function planPrompt({ goal, root, files, maxItems }) {
     'Rules for the checklist:',
     `- At most ${maxItems} items, in the order they should be done. Each one small enough for one model in one sitting.`,
     '- A check is a real command, run in the working folder, that proves the item: a test file, a script, a grep for what must exist. Leave it empty rather than invent a command that proves nothing.',
+    `- ${CHECK_RULE}`,
     '- Use commands this project already has. Do not name a tool that is not installed.',
     '- If the goal needs tests that do not exist, make writing them an item of its own, before the code they test.',
   ].join('\n');
@@ -79,7 +82,7 @@ export function planPrompt({ goal, root, files, maxItems }) {
  * @param {object} input - the item and what happened before.
  * @returns {string} the worker's task.
  */
-export function workPrompt({ goal, summary, item, others, senior }) {
+export function workPrompt({ goal, summary, item, others, senior, notes = '' }) {
   return [
     'MISSION_WORK',
     senior
@@ -90,6 +93,7 @@ export function workPrompt({ goal, summary, item, others, senior }) {
     `The overall goal: ${clip(goal, 2000)}`,
     summary ? `The plan: ${clip(summary, 800)}` : '',
     others ? `The other items, for context only (do not do them):\n${clip(others, 1500)}` : '',
+    notes ? `Notes the run keeps between laps (what passed, what failed, what to avoid):\n${clip(notes, 2000)}` : '',
     '',
     `ITEM ${item.id}: ${item.title}`,
     item.detail ? `What to do: ${item.detail}` : '',
@@ -109,24 +113,29 @@ export function workPrompt({ goal, summary, item, others, senior }) {
  * @param {object} input - the goal, the checklist and the changes.
  * @returns {string} the reviewer's task.
  */
-export function reviewPrompt({ goal, list, checks, changes, last }) {
+export function reviewPrompt({ goal, list, checks, changes, last, notes = '', hunt = false, context = '' }) {
   return [
     'MISSION_REVIEW',
     'You are the reviewer. Other models worked through the checklist below. Judge the result against the goal. Change nothing: only read and run read-only commands.',
     ...COMMON,
     '',
     `Goal: ${clip(goal, 4000)}`,
+    context ? `What was said before the run (background for the goal):\n${clip(context, 1500)}` : '',
     '',
     `Checklist as it stands:\n${clip(list, 5000)}`,
     checks ? `\nOverall commands, run just now:\n${clip(checks, 3000)}` : '',
     `\nWhat changed in the folder since the start:\n${changes ? clip(changes, 40000) : '(nothing changed)'}`,
     '',
+    notes ? `\nNotes from the earlier laps of this long run:\n${clip(notes, 2000)}` : '',
     'Look at the real files, not only at this summary. For each item marked NOT VERIFIED decide whether it is truly done. For items marked PASSED, object only if the change is wrong in a way its command does not catch, or a test was weakened to pass.',
-    last ? 'This is the last review: no further work will follow it, so do not ask for new items.' : 'If the goal is not met although every item is done, add the missing work as new items (at most four).',
+    hunt
+      ? 'Every item is done and the commands pass. This is an extra lap of a long run: look for real weak spots against the goal (a missed case, an error not handled, a check that proves too little) and add them as new items (at most four), each with a command that proves it where possible. Add nothing for style or taste. If you find nothing worth doing, add no items.'
+      : last ? 'This is the last review: no further work will follow it, so do not ask for new items.' : 'If the goal is not met although every item is done, add the missing work as new items (at most four).',
     'Answer with one JSON object and nothing else:',
     '{"verdict": "approve" or "changes", "note": "two or three sentences for the user",',
     ' "items": [{"id": "the item number", "ok": true or false, "note": "why, with file names"}],',
     ' "new_items": [{"title": "...", "detail": "...", "done_when": "...", "check": "a command or empty"}]}',
+    `For a new item's check: ${CHECK_RULE}`,
   ].filter((part) => part !== '').join('\n');
 }
 
@@ -147,5 +156,37 @@ export function conductorNote(run, viaProgram = false) {
     'A step can take many minutes. When mission_step answers that it is still working, that is not an error: say so in a few words and call it again in the next round.',
     'When mission_step returns the final report, give the user that report in full, as it is. Do not add claims that are not in it.',
     'If the user writes to you during the run, answer them briefly. To stop the run they type /mission stop.',
+  ].join('\n');
+}
+
+/**
+ * How a check proves that something is gone: grep (also grep -c) succeeds when it finds the text, so a
+ * check meant to prove "removed" passed while the text was there and failed once it was gone (owner's
+ * run, 16 November 2026).
+ */
+export const CHECK_RULE = 'a check must exit 0 only when the item is done. grep and grep -c exit 0 when they FIND the text, so to prove that something was removed or no longer appears use `! grep -q \'text\' file` (and `! grep -qE \'pattern\' file` for a pattern). A pipeline exits as its last command does, so one that ends in wc, head, sort or echo always passes and proves nothing: end it in a test, such as `grep -q`, or `test $(… | wc -l) -ge 1`.';
+
+/** The JSON the planner and the reviewer answer with, for a second ask when one answered in prose. */
+export const SHAPES = Object.freeze({
+  plan: '{"summary": "...", "items": [{"title": "...", "detail": "...", "done_when": "...", "check": "a command or empty"}], "checks": ["..."]}',
+  review: '{"verdict": "approve" or "changes", "note": "...", "items": [{"id": "the item number", "ok": true or false, "note": "..."}], "new_items": [{"title": "...", "detail": "...", "done_when": "...", "check": "a command or empty"}]}',
+});
+
+/**
+ * A second ask for a planner or reviewer that answered in prose (small local models often do, or write
+ * the plan into a file instead): a model turns that answer into the JSON, with nothing added.
+ * @param {'plan' | 'review'} kind - whose answer.
+ * @param {string} text - the answer.
+ * @returns {string} the instruction.
+ */
+export function formatPrompt(kind, text) {
+  return [
+    'MISSION_FORMAT',
+    `Another model answered as the ${kind === 'plan' ? 'planner' : 'reviewer'} of a run, but in prose. Turn its answer into JSON and add nothing: use only what the text says. Do not read, change or run anything.`,
+    kind === 'plan' ? `Where the text gives a check command for an item, keep it as it is. ${CHECK_RULE}` : 'If the text approves the work and asks for nothing more, the verdict is "approve"; if it asks for more work, "changes".',
+    `Answer with ONLY this JSON: ${SHAPES[kind]}`,
+    '',
+    'The answer:',
+    clip(String(text ?? ''), 20000),
   ].join('\n');
 }

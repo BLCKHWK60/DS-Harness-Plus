@@ -976,3 +976,58 @@ test('your own Lens reaches the conversation\'s instructions with the guard; rem
   assert.equal(app.section('o1', 'modes:lens').text, '');
   app.stop();
 });
+
+
+test('Scratch: a thread starts at Workspace Write at most; Full access picked by hand then survives a restart and a tab move', async () => {
+  const modes = JSON.stringify({
+    cowork: { label: 'Cowork', tools: 'all', sandbox: 'inherit', defaultTier: '', prompt: '' },
+    chat: { label: 'Chat', tools: 'none', sandbox: 'read-only', defaultTier: '', prompt: '' },
+    finance: { label: 'Finance', tools: 'all', sandbox: 'inherit', defaultTier: '', prompt: '' },
+  });
+  const world = makeWorld({ modes, defaultMode: 'cowork', defaultLevel: 'danger-full-access' });
+  const scratch = new Set(['s1', 's2']);
+  let app = boot(world, { scratch });
+  const { agent } = await app.open('s1');
+  await app.firstTurn(agent);
+  const plain = (await app.open('p1')).agent;
+  await app.firstTurn(plain);
+  await settle();
+  assert.equal(levelOf(world, 's1'), 'workspace-write', 'capped at the start');
+  assert.equal(levelOf(world, 'p1'), 'danger-full-access', 'a conversation outside Scratch keeps its preset');
+  // A restart and a move to a tab that leaves the level alone never hand Full access back.
+  app.stop();
+  app = boot(world, { scratch });
+  await app.open('s1', { source: 'resume', lastTurn: 1 });
+  await settle();
+  assert.equal(levelOf(world, 's1'), 'workspace-write', 'still capped after a restart');
+  await app.service().set('s1', 'finance');
+  await settle();
+  assert.equal(levelOf(world, 's1'), 'workspace-write', 'still capped after a move');
+  await app.service().set('s1', 'chat');
+  await app.service().set('s1', 'cowork');
+  await settle();
+  assert.equal(levelOf(world, 's1'), 'workspace-write', 'back from Chat: capped again, not Full access');
+  // Raised by hand, then a restart and a move to another tab that leaves the level alone.
+  world.sessions.get('s1').append('sandbox/mode', { mode: 'danger-full-access' });
+  app.stop();
+  app = boot(world, { scratch });
+  await app.open('s1', { source: 'resume', lastTurn: 1 });
+  await settle();
+  assert.equal(levelOf(world, 's1'), 'danger-full-access', 'a restart keeps the hand pick');
+  await app.service().set('s1', 'finance');
+  await settle();
+  assert.equal(levelOf(world, 's1'), 'danger-full-access', 'a move keeps the hand pick');
+  // A mode that sets a lower level still sets it.
+  await app.service().set('s1', 'chat');
+  await settle();
+  assert.equal(levelOf(world, 's1'), 'read-only');
+  app.stop();
+  // Without the Cowork sidebar nothing is capped.
+  const bare = makeWorld({ modes, defaultMode: 'cowork', defaultLevel: 'danger-full-access' });
+  const alone = boot(bare);
+  const { agent: other } = await alone.open('s2');
+  await alone.firstTurn(other);
+  await settle();
+  assert.equal(levelOf(bare, 's2'), 'danger-full-access');
+  alone.stop();
+});

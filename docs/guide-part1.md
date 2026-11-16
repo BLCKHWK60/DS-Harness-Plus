@@ -1,6 +1,6 @@
 # DeepSeek Harness Plus: the guide
 
-Plus is a set of 41 add-ons for the DeepSeek Harness desktop app. This guide says what each part does, where to find it, how to use it, and what its settings are.
+Plus is a set of 42 add-ons for the DeepSeek Harness desktop app. This guide says what each part does, where to find it, how to use it, and what its settings are.
 
 - **Part 1** is for using it: the tabs, the chat box, projects, and the main features, in the order you meet them.
 - **Part 2** lists every slash command.
@@ -15,7 +15,7 @@ Installing, updating and removing are in the [README](../README.md). The history
 | Place | What is there |
 |---|---|
 | **Top of the sidebar** | The tabs: Chat, Cowork, Code, and Finance, Data, Research, Scout and Recon once you switch them on. With more than three they sit in rows of three. How many of your own modes get a tab is set in Settings → Modes. |
-| **Sidebar, under the tabs** | The tab's own pages (Automation tasks, Connectors, Skills, Plugins…), then its projects and conversations, then the Trash. |
+| **Sidebar, under the tabs** | The tab's own pages (Automations, Connectors, Skills, Plugins…), then its projects and conversations, then the Trash. |
 | **Bottom of the sidebar** | Your DeepSeek balance, and **More** (Settings, look options). |
 | **Chat box, left** | Web, Depth, the models chip, Tools (Depth is in every tab and hidden only while Tools are off; in Research and Scout the Web label reads Always on and cannot be changed, and Research adds Focus; in a Finance conversation: its selection too). |
 | **Chat box, right** | The model button: model, effort, tier. |
@@ -41,6 +41,7 @@ A tab is a way of working. Clicking a tab returns you to the conversation you la
 | **Scout** | Finding work: jobs, freelance projects, contracts, public tenders. | Its own job sources and checks; a scored report with draft messages, and nothing is sent. Off until you switch it on in Settings → Scout (see 9). |
 | **Recon** | Research on .onion sites and Usenet text newsgroups. | Isolated: only its own tools (.onion sites through Tor); nothing from other conversations comes in or goes out. Needs the `tor` program. Off until you switch it on in Settings → Recon (see 10). |
 
+- **Where a new conversation starts.** Every tab except Code starts a new conversation in **Scratch**: a private folder of its own, never a folder of yours, with no project instructions; its files go with it when you delete it. Code starts in the open or last used project, Recon in its room. Change a tab in **Settings → Start places**. The **Scratch | Folder** switch on the start page starts the other way once. A Scratch conversation shows a dashed Scratch mark in the chat box and sits in its tab's **Scratch** group; its `⋯` has **Keep in a project…** (copies its files into a new folder of a project and continues there), and **Clean up…** beside the group moves old ones to the trash.
 - Change what a tab's mode allows in **Settings → Modes** (tools, file sandbox, tier, instructions). The same page sets the Depth new conversations start with, the mode for scheduled tasks, how many of your modes get a sidebar tab (1 to 5), and switches for the built-in working methods of Code and Cowork.
 - A mode's tier applies to a new conversation from its first message.
 - **The access level** (file sandbox): Chat, Data, Research and Recon set Read Only and Code sets Workspace Write, only when a conversation starts in the mode or is moved into it. A level you pick by hand in the chat box is kept, also after a restart. Moving to a tab that sets none (Cowork, Finance, Scout) puts back the earlier level, unless you changed it by hand.
@@ -174,12 +175,13 @@ Install the `tor` program (`brew install tor`), switch Recon on in **Settings �
 | Feature | What it does | Where |
 |---|---|---|
 | **Memory** | A short list of lasting facts and preferences about you, given to every new conversation. You add, edit and delete every entry; the assistant can only suggest one. | Settings → Memory |
+| **Learned skills** | Reads where you corrected the assistant and proposes skills, Memory facts and project rules. Nothing is installed until you say yes; Recon conversations are never read. | Settings → Learned skills, `/skills learn` |
 | **Library** | Lets the assistant search your own documents and quote them with the file and page. | Settings → Library |
 | **PDF reader** | Reads, searches and, when needed, OCRs PDFs page by page. | Settings → PDF reader, `/pdf` |
 | **Diagram builder** | Draws charts and diagrams and shows them under the answer. | Settings → Diagrams |
 | **Code map** | A compact map of a code project, so the assistant looks things up instead of reading whole files. | Settings → Code map, `/codemap` |
 | **Learning** | A tutor that makes you attempt first and gives hints step by step. | Settings → Learning, `/learn` |
-| **Automations and alerts** | Shows how every scheduled task run ended on one page, lists conversations that need you, and alerts you on this Mac and on your phone. | Sidebar → Automation runs, Settings → Alerts |
+| **Automations and alerts** | Your scheduled tasks on one page: how each run ended, what needs you, what was missed while the app was closed, a timeline; pause, change or delete one (deleted ones stay in the trash for 30 days); alerts on this Mac and on your phone. The Automations tab's chat makes and changes them. | Sidebar → Automations (every tab), the Automations tab, Settings → Alerts |
 | **Mac bridge** | Lets the assistant find your files and run your Apple Shortcuts, only where and what you allow. | Settings → Mac |
 | **Budget guard** | Hard limits that stop a task that is running away: steps, tokens and minutes per task, a loop check, and an optional daily limit. | Settings → Budget guard |
 | **Balance** | Your DeepSeek balance at the bottom of the sidebar. | Sidebar |

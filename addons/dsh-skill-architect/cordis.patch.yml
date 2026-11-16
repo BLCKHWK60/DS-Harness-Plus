@@ -1,0 +1,7 @@
+- insert:
+    - id: skill-architect
+      name: '@local/dsh-skill-architect'
+      config:
+        # Works with nothing set. It reads nothing until you ask (/skills learn, or Settings → Learned skills)
+        # and installs nothing until you say yes. Pick the reading model on its Settings page.
+        enabled: true

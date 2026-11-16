@@ -3,13 +3,14 @@
  * and a run is refused, or paused, while the conversation's tier has its sub-agents switched off.
  */
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { apply } from '../index.js';
 import { IDLE_ROUNDS } from '../runner.js';
 import { GIT_CANDIDATES } from '../lib/checkpoints.js';
+import { lapNotes } from '../lib/run.js';
 import { ISOLATED_TEXT, UNDO_WORDS, helpersOffText, whyNot } from '../lib/gate.js';
 
 const fresh = () => realpathSync(mkdtempSync(join(tmpdir(), 'dsh-mission-gate-')));
@@ -31,14 +32,24 @@ test('the gate: isolated refuses all but taking back, and a run needs the tier\'
   assert.equal(whyNot({ isolated: false, tier: small, helpers: false, word: 'restricted' }), '');
   assert.equal(whyNot({ isolated: false, tier: { ...small, subagents: true }, helpers: true }), '');
   assert.equal(whyNot({ isolated: false, tier: null, helpers: true }), '');
+  // A Long run is allowed in Data and Research (the owner's choice); other runs and modes are not.
+  assert.equal(whyNot({ isolated: false, tab: 'data', helpers: true, long: true }), '');
+  assert.match(whyNot({ isolated: false, tab: 'research', helpers: true }), /Read Only/);
+  assert.equal(whyNot({ isolated: true, tab: 'data', helpers: true, long: true }), ISOLATED_TEXT, 'never in Recon');
 });
 
 /** Mission on stand-in services. */
 function running() {
   const home = fresh();
   const isolatedIds = new Set();
+  const tabs = {};
   const tiers = {};
   const presets = [];
+  const levels = {};
+  const appended = [];
+  const refreshed = [];
+  const provided = {};
+  const readOnlyTabs = new Set(['data', 'research', 'chat']);
   const goals = new Map();
   const calls = [];
   const handlers = new Map();
@@ -48,11 +59,22 @@ function running() {
   // Like the app: a goal cannot be paused while a session event is being handed out (goals.pause
   // writes to the conversation, and the app refuses that: "session append cannot reenter").
   let dispatching = false;
+  let refusePreset = false;
+  const scratchFolders = {};
   const services = {
     dshHomePath: (sub) => join(home, sub),
-    modes: { isolated: (id) => isolatedIds.has(id) },
+    modes: {
+      isolated: (id) => isolatedIds.has(id),
+      get: (id) => tabs[id] ?? 'cowork',
+      readOnly: (id) => readOnlyTabs.has(tabs[id] ?? 'cowork'),
+      longTools: (id) => ({ files: true, web: (tabs[id] ?? 'cowork') !== 'chat' }),
+      // What Mission says at the moment it asks for the tools to be put on.
+      refreshTools: (id) => refreshed.push([id, provided.mission?.longRun(id) ?? null]),
+    },
+    coworkScratch: { folderOf: (agent) => scratchFolders[agent?.id] ?? '' },
+    sandboxPolicy: { resolve: ({ session }) => ({ mode: levels[session.id] ?? 'read-only' }) },
     modelTiers: { resolveTier: (id) => tiers[id] ?? null, roleRoute: () => undefined },
-    permissionPresets: { current: () => 'danger-full-access', set: (_session, preset) => presets.push(preset) },
+    permissionPresets: { current: () => 'danger-full-access', set: (session, preset) => { if (dispatching) throw new Error('session append cannot reenter while another append is being published'); if (refusePreset) throw new Error('refused'); presets.push(preset); levels[session.id] = preset; } },
     agents: { list: () => [...agents.values()], get: (id) => agents.get(id) },
     goals: {
       create: (agent) => { calls.push(['create', agent.id]); const goal = { id: `g-${agent.id}`, revision: 1, phase: 'active' }; goals.set(agent.id, goal); return goal; },
@@ -68,16 +90,19 @@ function running() {
     },
     subagents: { startActivation: async () => { calls.push(['helper']); throw new Error('no helpers in this test'); } },
   };
+  const routes = {};
   const ctx = {
     logger: { warn: () => {}, info: () => {} },
     get: (name) => services[name],
     effect: (start) => start(),
-    provide: () => () => {},
+    provide: (name, service) => { provided[name] = service; return () => {}; },
     on: (name, handler) => { handlers.set(name, [...(handlers.get(name) ?? []), handler]); return () => {}; },
     inject: (_deps, fn) => fn({
       effect: (start) => start(),
       tools: { register: (spec) => { tools[spec.name] = spec; return () => {}; } },
       commands: { register: (spec) => { commands[spec.name] = spec; return () => {}; } },
+      webServer: { register: (spec) => { routes[spec.path] = spec.handler; return () => {}; } },
+      connection: { requestRejection: () => undefined },
     }),
   };
   apply(ctx, {});
@@ -85,7 +110,8 @@ function running() {
   const open = (id) => {
     const cwd = fresh();
     folders.push(cwd);
-    const agent = { id, header: { cwd }, session: { id, header: { cwd } }, model: { current: () => ({ provider: 'p', model: 'm' }) } };
+    // Like the app: nothing is written to a conversation while one of its events is being handed out.
+    const agent = { id, header: { cwd }, session: { id, header: { cwd }, append: (type, data) => { if (dispatching) throw new Error('session append cannot reenter while another append is being published'); appended.push([id, type, data]); if (type === 'sandbox/mode') levels[id] = data.mode; } }, model: { current: () => ({ provider: 'p', model: 'm' }) } };
     agents.set(id, agent);
     return agent;
   };
@@ -114,7 +140,21 @@ function running() {
     return { ...JSON.parse(readFileSync(join(dir, id, 'run.json'), 'utf8')), log: readFileSync(join(dir, id, 'log.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line)) };
   };
   const done = () => { for (const folder of folders) rmSync(folder, { recursive: true, force: true }); };
-  return { isolatedIds, tiers, presets, calls, goals, open, mission, step, preExecute, turnStarts, tick, runOnDisk, done };
+  /** Call the Long run card's route, as the page does. */
+  const card = async (method, body) => {
+    const chunks = method === 'POST' ? [Buffer.from(JSON.stringify(body))] : [];
+    const req = { method, url: method === 'GET' ? `/dsh-mission/long?sessionId=${encodeURIComponent(body.sessionId)}` : '/dsh-mission/long', headers: {}, async *[Symbol.asyncIterator]() { yield* chunks; } };
+    let out = '';
+    const res = { statusCode: 200, setHeader() {}, end: (text) => { out = text ?? ''; } };
+    await routes['/dsh-mission/long'](req, res);
+    return { status: res.statusCode, json: out ? JSON.parse(out) : null };
+  };
+  /** A message in the chat, as the app logs it (source: you, or a goal round). */
+  const says = (agent, text, kind = 'user', id = `m-${Math.random().toString(36).slice(2, 8)}`) => emit('session/event', { id: agent.id, header: agent.header }, { type: 'user/message', data: { id, role: 'user', source: { kind }, content: [{ type: 'text', text }] } });
+  /** Wait until a condition holds (a run started from a message is started a moment later). */
+  const until = async (check) => { for (let i = 0; i < 200 && !check(); i += 1) await tick(); return check(); };
+  const refuse = (on) => { refusePreset = on; };
+  return { services, scratchFolders, refuse, isolatedIds, tabs, tiers, presets, levels, appended, refreshed, provided, calls, goals, open, mission, step, preExecute, turnStarts, tick, runOnDisk, done, card, emit, says, until, home, tools };
 }
 
 test('an isolated conversation: /mission and mission_step refuse; off and end still take back', async () => {
@@ -250,6 +290,372 @@ test('turns without a step pause a run, a moment after the turn starts', { skip:
     }
     assert.equal(app.goals.get('c6').phase, 'paused');
     assert.match((await app.mission(conversation, '')).text, /did not call mission_step for 5 rounds in a row/);
+  } finally {
+    app.done();
+  }
+});
+
+
+test('Data and Research run Read Only: /mission refuses there and says why; looking still works', async () => {
+  const app = running();
+  try {
+    const agent = app.open('d1');
+    app.tabs.d1 = 'data';
+    for (const words of ['restricted', 'make every test pass please', 'on']) {
+      const said = await app.mission(agent, words);
+      assert.equal(said.kind, 'error', words);
+      assert.match(said.text, /Data and Research run Read Only/);
+    }
+    assert.equal((await app.mission(agent, 'status')).kind, 'success');
+    app.tabs.d1 = 'research';
+    assert.match((await app.mission(agent, 'auto')).text, /run Read Only/);
+    app.tabs.d1 = 'cowork';
+    assert.equal((await app.mission(agent, 'restricted')).kind, 'success', 'in Cowork it works as before');
+  } finally {
+    app.done();
+  }
+});
+
+test('the Long run card: pre-flight says why not, a run starts as its own kind, and the card\'s buttons work', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const agent = app.open('l1');
+    // Every tab but Recon (16 November): Finance is fine, and a Read Only tab (Data, Chat) only warns.
+    app.tabs.l1 = 'finance';
+    let card = await app.card('GET', { sessionId: 'l1' });
+    assert.equal(card.status, 200);
+    assert.equal(card.json.preflight.ok, true, JSON.stringify(card.json.preflight.ticks.filter((tick) => tick.ok !== true)));
+    assert.equal(card.json.preflight.ticks.find((tick) => tick.key === 'tab'), undefined);
+    app.tabs.l1 = 'data';
+    card = await app.card('GET', { sessionId: 'l1' });
+    assert.equal(card.json.preflight.ok, true);
+    const warning = card.json.preflight.ticks.find((tick) => tick.key === 'tab');
+    assert.equal(warning.warn, true);
+    assert.equal(warning.required, false);
+    assert.match(warning.text, /Read Only, but a Long run can change files/);
+    assert.deepEqual(card.json.defaults, { minutes: 120, laps: 10, fullTime: false, keepAwake: true, battery: false, retry: true, effort: true });
+    const refused = await app.card('POST', { sessionId: 'l1', action: 'start', goal: 'fix' });
+    assert.equal(refused.status, 400, 'a goal of one word is refused');
+    app.tabs.l1 = 'code';
+    card = await app.card('GET', { sessionId: 'l1' });
+    assert.equal(card.json.preflight.ok, true, JSON.stringify(card.json.preflight.ticks.filter((tick) => tick.ok !== true)));
+    const started = await app.card('POST', { sessionId: 'l1', action: 'start', goal: 'make the tool better please', mode: 'auto', minutes: 30, laps: 3, keepAwake: false });
+    assert.equal(started.status, 200, JSON.stringify(started.json));
+    assert.match(started.json.said, /^Long run started \(Full Auto\)/);
+    assert.equal(started.json.run.kind, 'long');
+    assert.equal(started.json.run.laps, 3);
+    assert.equal(started.json.run.minutes, 30);
+    const onDisk = app.runOnDisk(agent);
+    assert.equal(onDisk.kind, 'long');
+    assert.equal(onDisk.long.keepAwake, false);
+    assert.match((await app.card('POST', { sessionId: 'l1', action: 'finish-lap' })).json.said, /finishes the lap under way/);
+    assert.equal(app.runOnDisk(agent).long.finishLap, true);
+    assert.match((await app.card('POST', { sessionId: 'l1', action: 'pause' })).json.said, /^Mission paused/);
+    assert.equal((await app.card('POST', { sessionId: 'l1', action: 'nonsense' })).status, 400);
+    assert.equal((await app.card('GET', { sessionId: 'nobody' })).status, 400);
+  } finally {
+    app.done();
+  }
+});
+
+test('the watchdog: a Long run the app stopped by itself is noted and tried again; never over your own pause', { skip: !hasGit && 'needs git' }, async (t) => {
+  const app = running();
+  try {
+    const agent = app.open('w1');
+    app.tabs.w1 = 'cowork';
+    await app.card('POST', { sessionId: 'w1', action: 'start', goal: 'keep improving the thing', keepAwake: false });
+    await new Promise((resolve) => setTimeout(resolve, 3100)); // past the moment the conversation was opened
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const goal = app.goals.get('w1');
+    goal.activation = 'disarmed';
+    app.emit('goal/activation-changed', { sessionId: 'w1', goal: { id: goal.id, revision: 1, activation: 'disarmed' } });
+    const log = () => app.runOnDisk(agent).log.map((entry) => entry.kind);
+    assert.ok(log().includes('stopped-by-itself'));
+    assert.match(app.runOnDisk(agent).stalled, /^Stopped by itself/);
+    t.mock.timers.tick(2 * 60000);
+    assert.deepEqual(app.calls.filter((call) => call[0] === 'resume'), [['resume', 'w1']], 'tried again after two minutes');
+    assert.ok(log().includes('retried'));
+    // Stopped by itself again, but this time you paused it before the retry: no retry.
+    goal.activation = 'disarmed';
+    app.emit('goal/activation-changed', { sessionId: 'w1', goal: { id: goal.id, revision: 1, activation: 'disarmed' } });
+    goal.phase = 'paused';
+    t.mock.timers.tick(5 * 60000);
+    assert.equal(app.calls.filter((call) => call[0] === 'resume').length, 1, 'your own pause wins');
+  } finally {
+    app.done();
+  }
+});
+
+test('a Long run in a Read Only tab: its tools come first, it may write, and the tab is put back when it ends', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const agent = app.open('r1');
+    app.tabs.r1 = 'research';
+    let card = await app.card('GET', { sessionId: 'r1' });
+    assert.deepEqual(card.json.tools, { files: true, web: true }, 'the tab\'s starting choice');
+    assert.equal(card.json.preflight.ticks.find((tick) => tick.key === 'tab').warn, true);
+    const started = await app.card('POST', { sessionId: 'r1', action: 'start', goal: 'keep looking for new postings', tools: { files: true, web: false } });
+    assert.equal(started.status, 200, JSON.stringify(started.json));
+    // Modes was asked to put the tools on before the run started, with the card's choice.
+    assert.deepEqual(app.refreshed[0], ['r1', { files: true, web: false }]);
+    assert.ok(app.presets.includes('workspace-write'), 'it may write in the folder');
+    assert.equal(app.levels.r1, 'workspace-write');
+    const onDisk = app.runOnDisk(agent);
+    assert.deepEqual(onDisk.long.tools, { files: true, web: false });
+    assert.deepEqual(onDisk.long.restore, { sandbox: 'read-only', preset: 'danger-full-access', modeWasOn: false });
+    assert.deepEqual(app.provided.mission.longRun('r1'), { files: true, web: false });
+    // Ended: the earlier preset and the Read Only level come back, the Mission mode it put on goes off.
+    assert.equal((await app.card('POST', { sessionId: 'r1', action: 'end' })).status, 200);
+    await app.tick();
+    assert.equal(app.provided.mission.longRun('r1'), undefined);
+    assert.equal(app.presets.at(-1), 'danger-full-access');
+    assert.deepEqual(app.appended.at(-1), ['r1', 'sandbox/mode', { mode: 'read-only' }]);
+    assert.equal(app.levels.r1, 'read-only');
+    assert.equal(app.provided.mission.mode('r1'), '', 'the Mission mode it put on is off');
+    assert.deepEqual(app.refreshed.at(-1), ['r1', null], 'the tab\'s own tools come back');
+  } finally {
+    app.done();
+  }
+});
+
+test('a Long run in Code keeps its Mission mode after it ends and puts nothing back', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const agent = app.open('c1');
+    app.tabs.c1 = 'code';
+    app.levels.c1 = 'workspace-write'; // Code starts at Workspace Write
+    assert.equal((await app.card('POST', { sessionId: 'c1', action: 'start', goal: 'make every test pass please', mode: 'restricted', keepAwake: false })).status, 200);
+    assert.equal(app.runOnDisk(agent).long.restore, undefined);
+    assert.deepEqual(app.runOnDisk(agent).long.tools, { files: true, web: true });
+    await app.card('POST', { sessionId: 'c1', action: 'end' });
+    await app.tick();
+    assert.equal(app.appended.filter((entry) => entry[1] === 'sandbox/mode').length, 0);
+    assert.equal(app.provided.mission.mode('c1'), 'restricted', 'its Mission mode stays on, as before');
+  } finally {
+    app.done();
+  }
+});
+
+test('a Long run in a Read Only tab: a failed start puts the level back; undo words work; an ended one is not taken up again', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const agent = app.open('r2');
+    app.tabs.r2 = 'data';
+    // The conversation has a goal of its own: the run cannot start, and nothing stays lifted.
+    app.goals.set('r2', { id: 'own', revision: 1, phase: 'active', objective: 'my own goal' });
+    const refused = await app.card('POST', { sessionId: 'r2', action: 'start', goal: 'tidy the data folder please', keepAwake: false });
+    assert.equal(refused.status, 400, JSON.stringify(refused.json));
+    assert.equal(app.levels.r2, 'read-only', 'the level is put back at once');
+    assert.equal(app.provided.mission.mode('r2'), '');
+    app.goals.delete('r2');
+    assert.equal((await app.card('POST', { sessionId: 'r2', action: 'start', goal: 'tidy the data folder please', keepAwake: false })).status, 200);
+    // The run's own advice, /mission back N, is not refused for the tab.
+    assert.doesNotMatch((await app.mission(agent, 'back 1')).text ?? '', /Read Only/);
+    await app.card('POST', { sessionId: 'r2', action: 'end' });
+    await app.tick();
+    const again = await app.card('POST', { sessionId: 'r2', action: 'resume' });
+    assert.match(again.json.said ?? '', /Read Only again\. Start a new one/);
+    assert.equal(app.levels.r2, 'read-only');
+  } finally {
+    app.done();
+  }
+});
+
+test('Run: the chat\'s saved settings, the next message of yours is the goal, and later messages go to the run', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const agent = app.open('u1');
+    app.tabs.u1 = 'chat';
+    agent.session.deriveMessages = () => [
+      { id: 'a', role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'plan a weekly sales report' }] },
+      { id: 'b', role: 'assistant', source: { kind: 'model' }, content: [{ type: 'thinking', text: 'hidden' }, { type: 'text', text: 'here is the plan: three steps' }] },
+      { id: 'c', role: 'user', source: { kind: 'goal' }, content: [{ type: 'text', text: 'a goal round' }] },
+      { id: 'go', role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'do it now' }] },
+    ];
+    let card = await app.card('GET', { sessionId: 'u1' });
+    assert.equal(card.json.runButton, true);
+    assert.deepEqual(card.json.saved.tools, { files: true, web: false }, 'the tab\'s starting choice until saved');
+    assert.equal(card.json.saved.minutes, 120);
+    // Depth → Long run settings: kept for this chat (and on disk).
+    const saved = await app.card('POST', { sessionId: 'u1', action: 'save', minutes: 45, laps: 4, keepAwake: false, mode: 'auto', tools: { files: true, web: true } });
+    assert.equal(saved.status, 200, JSON.stringify(saved.json));
+    assert.equal(saved.json.saved.minutes, 45);
+    assert.equal(saved.json.saved.mode, 'auto');
+    assert.deepEqual(saved.json.saved.tools, { files: true, web: true });
+    assert.equal(JSON.parse(readFileSync(join(app.home, 'mission', 'long-settings.json'), 'utf8')).u1.laps, 4);
+    // Send without Run: an ordinary message, no run.
+    app.says(agent, 'what does the data folder hold?');
+    await app.tick();
+    assert.equal((await app.card('GET', { sessionId: 'u1' })).json.run, null);
+    // Run: its tools are there from the first request of the turn, and the model is told.
+    const armed = await app.card('POST', { sessionId: 'u1', action: 'arm' });
+    assert.equal(armed.status, 200, JSON.stringify(armed.json));
+    assert.equal(armed.json.armed, true);
+    assert.deepEqual(app.provided.mission.longRun('u1'), { files: true, web: true });
+    // A goal round's message is not yours: still waiting.
+    app.says(agent, 'a goal round', 'goal');
+    await app.tick();
+    assert.equal((await app.card('GET', { sessionId: 'u1' })).json.run, null);
+    app.says(agent, 'do it now', 'user', 'go');
+    // The model's tools wait for the start, then only mission_step is let through.
+    const blocked = await app.preExecute({ name: 'write_file', arguments: {}, agent });
+    assert.equal(blocked.kind, 'deny');
+    assert.match(blocked.reason, /mission_step/);
+    assert.ok(await app.until(() => existsSync(join(agent.header.cwd, '.dsh-mission', 'runs'))));
+    const onDisk = app.runOnDisk(agent);
+    assert.equal(onDisk.kind, 'long');
+    assert.equal(onDisk.goal, 'do it now');
+    assert.equal(onDisk.mode, 'Full Auto');
+    assert.equal(onDisk.long.minutes, 45);
+    assert.equal(onDisk.long.laps, 4);
+    assert.equal(onDisk.long.keepAwake, false);
+    assert.deepEqual(onDisk.long.tools, { files: true, web: true });
+    assert.equal(onDisk.long.context, 'User: plan a weekly sales report\n\nAssistant: here is the plan: three steps', 'your messages and the answers before it, not the message itself or a goal round');
+    assert.equal(app.levels.u1, 'workspace-write', 'a Read Only tab may write while it runs');
+    card = await app.card('GET', { sessionId: 'u1' });
+    assert.equal(card.json.armed, false);
+    assert.equal(card.json.run.kind, 'long');
+    // Send while it works: the message is kept for the helpers' next step.
+    app.says(agent, 'also add a chart of the totals');
+    const now = app.runOnDisk(agent);
+    assert.deepEqual(now.long.asks.map((ask) => ask.text), ['also add a chart of the totals']);
+    assert.ok(now.log.some((entry) => entry.kind === 'ask'));
+    assert.match(lapNotes(now), /The user wrote to the run while it worked[^\n]*\n- also add a chart of the totals/);
+    await app.card('POST', { sessionId: 'u1', action: 'end' });
+    await app.tick();
+    assert.equal(app.levels.u1, 'read-only');
+    // After it ended, Send is an ordinary message again.
+    app.says(agent, 'thanks, how did it go?');
+    assert.equal(app.runOnDisk(agent).long.asks.length, 1);
+  } finally {
+    app.done();
+  }
+});
+
+test('Run: refused when not ready, forgotten when taken back, and a start that fails says why', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const agent = app.open('u2');
+    app.tabs.u2 = 'data';
+    app.tiers.u2 = { subagents: false };
+    const refused = await app.card('POST', { sessionId: 'u2', action: 'arm' });
+    assert.equal(refused.status, 400);
+    assert.equal(app.provided.mission.longRun('u2'), undefined);
+    delete app.tiers.u2;
+    // Not while the conversation is answering.
+    agent.status = 'running';
+    assert.match((await app.card('POST', { sessionId: 'u2', action: 'arm' })).json.error, /done answering/);
+    agent.status = 'idle';
+    // Taken back (the Send press did not go through): nothing waits, its tools go.
+    assert.equal((await app.card('POST', { sessionId: 'u2', action: 'arm' })).status, 200);
+    const back = await app.card('POST', { sessionId: 'u2', action: 'disarm' });
+    assert.equal(back.json.armed, false);
+    assert.equal(app.provided.mission.longRun('u2'), undefined);
+    app.says(agent, 'tidy the data folder please');
+    await app.tick();
+    assert.equal((await app.card('GET', { sessionId: 'u2' })).json.run, null);
+    // The conversation has a goal of its own: the run cannot start, and says so.
+    assert.equal((await app.card('POST', { sessionId: 'u2', action: 'arm' })).status, 200);
+    app.goals.set('u2', { id: 'own', revision: 1, phase: 'active', objective: 'my own goal' });
+    app.says(agent, 'tidy the data folder please');
+    const said = await app.step(agent);
+    assert.match(said.text, /^The Long run did not start: .*goal of its own/);
+    const card = await app.card('GET', { sessionId: 'u2' });
+    assert.match(card.json.startError.text, /goal of its own/);
+    assert.equal(card.json.armed, false);
+    assert.equal(app.levels.u2, 'read-only', 'the level is put back');
+    assert.equal(app.provided.mission.longRun('u2'), undefined, 'its tools go');
+    // An isolated conversation has no Run button, and cannot be armed.
+    app.isolatedIds.add('u2');
+    assert.equal((await app.card('GET', { sessionId: 'u2' })).json.runButton, false);
+    assert.equal((await app.card('POST', { sessionId: 'u2', action: 'arm' })).status, 400);
+  } finally {
+    app.done();
+  }
+});
+
+test('Run: a conversation set to Read Only by hand is lifted for the run and put back; a run that cannot be lifted does not start', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const agent = app.open('h1');
+    app.tabs.h1 = 'cowork';
+    app.levels.h1 = 'read-only';
+    assert.equal((await app.card('POST', { sessionId: 'h1', action: 'arm' })).status, 200);
+    app.says(agent, 'research this and save notes');
+    assert.ok(await app.until(() => existsSync(join(agent.header.cwd, '.dsh-mission', 'runs'))));
+    assert.equal(app.levels.h1, 'workspace-write', 'lifted, after the message was handed out');
+    assert.deepEqual(app.runOnDisk(agent).long.restore, { sandbox: 'read-only', preset: 'danger-full-access', modeWasOn: false });
+    await app.card('POST', { sessionId: 'h1', action: 'end' });
+    await app.tick();
+    assert.equal(app.levels.h1, 'read-only', 'put back');
+    // The switch is refused: the run does not start, and says why.
+    const other = app.open('h2');
+    app.tabs.h2 = 'data';
+    app.refuse(true);
+    assert.equal((await app.card('POST', { sessionId: 'h2', action: 'arm' })).status, 200);
+    app.says(other, 'research this and save notes');
+    const said = await app.step(other);
+    assert.match(said.text, /^The Long run did not start: This conversation is still Read Only/);
+    assert.equal(existsSync(join(other.header.cwd, '.dsh-mission', 'runs')), false);
+    assert.equal(app.levels.h2 ?? 'read-only', 'read-only');
+    // Files and commands off: a Read Only run is fine.
+    app.refuse(false);
+  } finally {
+    app.done();
+  }
+});
+
+test('Run in a Scratch conversation: the run\'s folder is the conversation\'s own sub-folder, where its helpers work', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const agent = app.open('s1');
+    app.tabs.s1 = 'cowork';
+    app.levels.s1 = 'workspace-write';
+    const own = join(agent.header.cwd, 'session-s1');
+    mkdirSync(own);
+    app.scratchFolders.s1 = own;
+    const card = await app.card('GET', { sessionId: 's1' });
+    assert.equal(card.json.preflight.ok, true);
+    assert.equal((await app.card('POST', { sessionId: 's1', action: 'arm' })).status, 200);
+    app.says(agent, 'research this and save notes');
+    assert.ok(await app.until(() => existsSync(join(own, '.dsh-mission', 'runs'))), 'the run lives in the conversation\'s own folder');
+    assert.equal(existsSync(join(agent.header.cwd, '.dsh-mission', 'runs')), false);
+    const dir = join(own, '.dsh-mission', 'runs');
+    const [id] = readdirSync(dir);
+    assert.equal(JSON.parse(readFileSync(join(dir, id, 'run.json'), 'utf8')).root, own);
+    await app.card('POST', { sessionId: 's1', action: 'end' });
+  } finally {
+    app.done();
+  }
+});
+
+test('a run\'s planner may not write files: its answer goes in its reply; a worker may', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const agent = app.open('w9');
+    app.tabs.w9 = 'code';
+    app.levels.w9 = 'workspace-write';
+    let release;
+    const decisions = {};
+    app.services.subagents = {
+      startActivation: async (spec) => {
+        const childId = `kid-${spec.label}`;
+        const result = new Promise((resolve) => { release = () => resolve({ output: [{ type: 'text', text: '{"items":[{"title":"one"}],"checks":[]}' }], stopReason: 'end' }); });
+        return { childId, result };
+      },
+    };
+    assert.equal((await app.card('POST', { sessionId: 'w9', action: 'start', goal: 'do one small thing please', keepAwake: false, effort: false })).status, 200);
+    const stepping = app.step(agent);
+    assert.ok(await app.until(() => typeof release === 'function'), 'the planner started');
+    const planner = { id: 'kid-Mission: planner', header: { parentSession: 'w9', cwd: agent.header.cwd }, session: { header: { parentSession: 'w9' } } };
+    decisions.write = await app.preExecute({ name: 'write', arguments: { path: 'plan.json' }, agent: planner });
+    decisions.read = await app.preExecute({ name: 'read', arguments: { path: 'README.md' }, agent: planner });
+    release();
+    await stepping;
+    assert.equal(decisions.write.kind, 'deny');
+    assert.match(decisions.write.reason, /^You are the planner of a run: change no files/);
+    assert.notEqual(decisions.read.kind, 'deny', 'reading is fine');
+    assert.notEqual((await app.preExecute({ name: 'write', arguments: { path: 'x.md' }, agent: planner })).reason ?? '', 'You are the planner of a run: change no files. Put your whole answer in your reply.', 'not once it is done');
   } finally {
     app.done();
   }

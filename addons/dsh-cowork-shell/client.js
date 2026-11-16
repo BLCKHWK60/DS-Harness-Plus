@@ -90,6 +90,12 @@ window.__ModuleLoader__.load({
         'skills.user': '/ command',
         'refresh': 'Refresh',
         'chips.label': 'Suggestions',
+        'place.label': 'Where this conversation works',
+        'place.scratch': 'Scratch',
+        'place.folder': 'Folder',
+        'place.failed': 'Could not start in Scratch.',
+        'place.scratch.hint': 'Scratch: the conversation works in a private folder of its own, never in one of your folders. Deleting it removes its files too.',
+        'place.folder.hint': 'Folder: the conversation works in one of your project folders (pick it on the left).',
         'untitled': 'New conversation',
         'running': 'Running',
         'needs.title': 'Needs you ({n})',
@@ -130,6 +136,8 @@ window.__ModuleLoader__.load({
         'delete': 'Delete',
         'delete.label': 'Delete "{title}"',
         'delete.confirm': 'Delete "{title}"?\n\nIt goes to the trash. You can put it back for 30 days. After that it is gone for good.',
+        'delete.confirm.scratch': 'Delete "{title}"?\n\nIt goes to the trash together with the files it made in Scratch (a copy of it that still works there keeps them until it is deleted too). You can put both back for 30 days. After that they are gone for good.',
+        'trash.files': 'with its files',
         'delete.running': 'This conversation is still working. Stop it and delete it?',
         'stop.automation.one': 'An automation delivers into this conversation: {names}. To go on, the app deletes that automation and its list of past runs for good. It cannot be put back, even if the conversation is. Go on?',
         'stop.automation.many': '{n} automations deliver into this conversation: {names}. To go on, the app deletes them and their lists of past runs for good. They cannot be put back, even if the conversation is. Go on?',
@@ -182,6 +190,12 @@ window.__ModuleLoader__.load({
         'continue.back': 'Back',
         'continue.prompt': 'Continue from my chat {mention}. ',
         'continue.failed': 'Could not start the new conversation.',
+        'keep.open': 'Keep in a project…',
+        'keep.title': 'Keep in a project',
+        'keep.hint': 'Copies the files this Scratch conversation made into a new folder in the project (nothing there is replaced), then continues there. This conversation stays until you delete it.',
+        'keep.prompt': 'Continue from my Scratch conversation {mention}. Its files are now in the folder "{folder}" of this project. ',
+        'keep.prompt.none': 'Continue from my Scratch conversation {mention}. ',
+        'keep.failed': 'Could not keep it in the project: {message}',
         'proj.move': 'Move all conversations of "{title}" to another tab',
         'proj.new': 'New conversation in this project',
         'proj.add': 'New',
@@ -284,6 +298,26 @@ window.__ModuleLoader__.load({
         'lib.mine': '{tab} only',
         'lib.empty': 'Nothing in {tab} yet. New conversations you start here show up in this list.',
         'lib.loose': 'Other conversations',
+        'lib.scratch': 'Scratch',
+        'start.title': 'Start places',
+        'start.hint': 'Where a new conversation of each tab starts. Scratch: a private folder of its own, never one of yours, and no project instructions. Folder: the open or last used project, with its instructions. Each tab\'s Scratch | Folder switch on the start page still lets you start the other way.',
+        'start.for': 'Start place of {tab}',
+        'start.folder.hint': 'Folder: the open or last used project, with its instructions.',
+        'start.recon': 'Recon',
+        'start.recon.room': 'always its own room',
+        'start.newkey': 'Cmd-N starts in the open tab\'s start place (off: the app\'s own choice, the open or last used project)',
+        'cleanup': 'Clean up…',
+        'cleanup.hint': 'Move Scratch conversations you have not used for a while to the trash (all tabs).',
+        'cleanup.ask': 'Move Scratch conversations (in every tab) not used for how many days to the trash? They can be put back for 30 days.',
+        'cleanup.bad': 'Give a number of days from 1 to 3650.',
+        'cleanup.none': 'No Scratch conversation was last used before {date}.',
+        'cleanup.confirm': 'Move {n} Scratch conversations last used before {date} to the trash, with their files? You can put them back for 30 days.',
+        'cleanup.confirm.one': 'Move 1 Scratch conversation last used before {date} to the trash, with its files? You can put it back for 30 days.',
+        'cleanup.kept': 'Left alone:',
+        'cleanup.automation': 'Left alone because an automation still uses it (delete it by hand if you mean to; you will be asked first):',
+        'cleanup.why.running': 'still working',
+        'cleanup.why.open': 'open now',
+        'cleanup.why.pinned': 'pinned',
         'ago.now': 'now',
         'ago.m': '{n}m',
         'ago.h': '{n}h',
@@ -354,6 +388,12 @@ window.__ModuleLoader__.load({
         'skills.user': '/ 命令',
         'refresh': '刷新',
         'chips.label': '建议',
+        'place.label': '这个对话在哪里工作',
+        'place.scratch': 'Scratch',
+        'place.folder': '文件夹',
+        'place.failed': '无法在 Scratch 中开始。',
+        'place.scratch.hint': 'Scratch：对话在自己的私有文件夹中工作，不会写入你的任何文件夹。删除对话时，它的文件也会一并删除。',
+        'place.folder.hint': '文件夹：对话在你的某个项目文件夹中工作（在左侧选择）。',
         'untitled': '新对话',
         'running': '运行中',
         'needs.title': '等你处理（{n}）',
@@ -394,6 +434,8 @@ window.__ModuleLoader__.load({
         'delete': '删除',
         'delete.label': '删除“{title}”',
         'delete.confirm': '删除“{title}”？\n\n它会进入废纸篓，30 天内可以放回，之后将永久删除。',
+        'delete.confirm.scratch': '删除“{title}”？\n\n它会连同它在 Scratch 中生成的文件一起进入废纸篓（仍在使用这些文件的副本会保留它们，直到副本也被删除）。30 天内可以一起放回，之后将永久删除。',
+        'trash.files': '含其文件',
         'delete.running': '该对话仍在运行。要停止并删除吗？',
         'stop.automation.one': '有一个自动化任务向此对话发送结果：{names}。继续的话，应用会永久删除该自动化任务及其运行记录，即使对话被放回也无法恢复。要继续吗？',
         'stop.automation.many': '有 {n} 个自动化任务向此对话发送结果：{names}。继续的话，应用会永久删除它们及其运行记录，即使对话被放回也无法恢复。要继续吗？',
@@ -446,6 +488,12 @@ window.__ModuleLoader__.load({
         'continue.back': '返回',
         'continue.prompt': '接着我的聊天 {mention} 继续。',
         'continue.failed': '无法开始新对话。',
+        'keep.open': '保留到项目中…',
+        'keep.title': '保留到项目中',
+        'keep.hint': '把这个 Scratch 对话生成的文件复制到项目中的一个新文件夹（不会替换任何已有文件），然后在那里继续。这个对话会保留，直到你删除它。',
+        'keep.prompt': '从我的 Scratch 对话 {mention} 继续。它的文件现在位于本项目的“{folder}”文件夹中。',
+        'keep.prompt.none': '从我的 Scratch 对话 {mention} 继续。',
+        'keep.failed': '无法保留到项目中：{message}',
         'proj.move': '把“{title}”的所有对话移到其他标签页',
         'proj.new': '在此项目中新建对话',
         'proj.add': '新建',
@@ -548,6 +596,26 @@ window.__ModuleLoader__.load({
         'lib.mine': '仅 {tab}',
         'lib.empty': '{tab} 中还没有内容。在这里新建的对话会出现在此列表。',
         'lib.loose': '其他对话',
+        'lib.scratch': 'Scratch',
+        'start.title': '起始位置',
+        'start.hint': '每个标签页的新对话从哪里开始。Scratch：一个自己的私有文件夹，不会是你的文件夹，也没有项目说明。文件夹：当前或最近使用的项目，带有它的说明。起始页上每个标签页的 Scratch | 文件夹 开关仍然可以换另一种方式开始。',
+        'start.for': '{tab} 的起始位置',
+        'start.folder.hint': '文件夹：当前或最近使用的项目，带有它的说明。',
+        'start.recon': '侦察',
+        'start.recon.room': '始终在它自己的房间',
+        'start.newkey': 'Cmd-N 在当前标签页的起始位置开始（关闭：使用应用自己的选择，即当前或最近使用的项目）',
+        'cleanup': '清理…',
+        'cleanup.hint': '把一段时间没有用过的 Scratch 对话移到废纸篓（所有标签页）。',
+        'cleanup.ask': '把多少天没有用过的 Scratch 对话（所有标签页）移到废纸篓？30 天内可以放回。',
+        'cleanup.bad': '请输入 1 到 3650 之间的天数。',
+        'cleanup.none': '没有在 {date} 之前最后使用的 Scratch 对话。',
+        'cleanup.confirm': '把 {n} 个在 {date} 之前最后使用的 Scratch 对话连同其文件移到废纸篓？30 天内可以放回。',
+        'cleanup.confirm.one': '把 1 个在 {date} 之前最后使用的 Scratch 对话连同其文件移到废纸篓？30 天内可以放回。',
+        'cleanup.kept': '保留不动：',
+        'cleanup.automation': '仍有自动任务在使用，因此保留不动（如需删除请手动删除，删除前会先询问）：',
+        'cleanup.why.running': '仍在运行',
+        'cleanup.why.open': '当前打开',
+        'cleanup.why.pinned': '已置顶',
         'ago.now': '刚刚',
         'ago.m': '{n} 分钟',
         'ago.h': '{n} 小时',
@@ -634,8 +702,6 @@ window.__ModuleLoader__.load({
       "cowork": {
         "newLabel": "New task",
         "pages": [
-          "schedules",
-          "automations",
           "connectors",
           "skills"
         ],
@@ -1016,6 +1082,16 @@ html[data-cws-wide] [class*='_composerStack']:not([class*='_composerHero'] *) [c
 @media (hover:hover){.cws-chip-btn:hover{background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-border-l3)}}
 .cws-chip-btn svg{color:var(--dsw-alias-label-secondary)}
 .cws-chip-btn:focus-visible{outline:1px solid var(--dsw-alias-brand-primary);outline-offset:2px}
+.cws-place{display:inline-flex;align-items:center;height:28px;border:0.5px solid var(--dsw-alias-border-l2);border-radius:14px;overflow:hidden}
+.cws-place button{height:100%;padding:0 10px;border:0;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:12px}
+.cws-place button[aria-pressed='true']{background:var(--dsw-alias-fill-l2,rgba(127,127,127,.16));color:var(--dsw-alias-label-primary)}
+.cws-place button:focus-visible{outline:1px solid var(--dsw-alias-brand-primary);outline-offset:-1px}
+.cws-start-page{padding:8px 0;max-width:640px}
+.cws-start-page h2{font-size:16px;margin:0 0 6px}
+.cws-start-list{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+.cws-start-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:0.5px solid var(--dsw-alias-border-l1,rgba(127,127,127,.2))}
+.cws-start-key{display:flex;align-items:center;gap:6px;font-size:13px}
+.cws-scratch-mark{display:inline-flex;align-items:center;height:24px;padding:0 8px;border:0.5px dashed var(--dsw-alias-border-l2);border-radius:12px;color:var(--dsw-alias-label-secondary);font-size:12px;white-space:nowrap}
 .cws-lib{display:flex;flex-direction:column;gap:1px;padding-bottom:8px}
 .cws-lib-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 6px 4px;color:var(--dsw-alias-label-secondary);font-size:12px;font-weight:500}
 .cws-lib-allbar{padding-top:4px}
@@ -1091,6 +1167,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       recon: 'M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14zM16 16l4.5 4.5',
       scout: 'M12 4a8 8 0 1 0 0 16a8 8 0 0 0 0-16zM15.5 8.5l-2 5-5 2 2-5z',
       research: 'M10 4a6 6 0 1 0 0 12a6 6 0 0 0 0-12zM14.5 14.5L20 20M7 10h6M10 7v6',
+      automations: 'M12 4a8 8 0 1 0 0 16a8 8 0 0 0 0-16zM12 8v4l3 2',
       data: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
       plus: 'M12 5v14M5 12h14',
       search: 'M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14zM16 16l4.5 4.5',
@@ -1174,7 +1251,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     function glyphFor(modeId) {
-      return modeId === 'chat' || modeId === 'code' || modeId === 'cowork' || modeId === 'finance' || modeId === 'data' || modeId === 'recon' || modeId === 'scout' || modeId === 'research' ? modeId : 'dot';
+      return modeId === 'chat' || modeId === 'code' || modeId === 'cowork' || modeId === 'finance' || modeId === 'data' || modeId === 'recon' || modeId === 'scout' || modeId === 'research' || modeId === 'automations' ? modeId : 'dot';
     }
 
     /**
@@ -1182,10 +1259,15 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
      * tab layout. One store for the whole page, refreshed on demand and every 10 seconds.
      */
     function createModel(ctx) {
-      let state = { modes: FALLBACK_MODES, extra: [], selected: readLocal(), tabs: DEFAULT_TABS, maxTabs: 3, hideLogos: false, dateTitle: false, wideChat: false, tabOrder: [], modesOn: false, error: '', sessionModes: {} };
+      let state = { modes: FALLBACK_MODES, extra: [], selected: readLocal(), tabs: DEFAULT_TABS, maxTabs: 3, hideLogos: false, dateTitle: false, wideChat: false, tabOrder: [], startPlaces: '', newKeyFollows: true, modesOn: false, error: '', sessionModes: {} };
       const listeners = new Set();
       const emit = () => { for (const l of listeners) l(); };
-      const set = (patch) => { state = { ...state, ...patch }; emit(); };
+      const set = (patch) => {
+        state = { ...state, ...patch };
+        startPlaceTable.value = startPlacesOf(state.startPlaces);
+        startPlaceTable.newKey = state.newKeyFollows !== false;
+        emit();
+      };
 
       function readLocal() {
         try { return window.localStorage.getItem(LOCAL_KEY) || 'chat'; } catch { return 'chat'; }
@@ -1227,6 +1309,8 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
               patch.dateTitle = mine.value?.dateTitle === true;
               patch.wideChat = mine.value?.wideChat === true;
               patch.tabOrder = readOrder(mine.value?.tabOrder);
+              patch.startPlaces = typeof mine.value?.startPlaces === 'string' ? mine.value.startPlaces : '';
+              patch.newKeyFollows = mine.value?.newKeyFollows !== false;
             }
           }
           if (modesNs) {
@@ -2107,7 +2191,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
      * entries read "Promote to …", and `onContinue` adds "Continue in a project…", a second pane that
      * lists the projects and starts a new conversation there.
      */
-    function MoveMenu({ t, tabs, current, onMove, label, promote, projects, onContinue, extra }) {
+    function MoveMenu({ t, tabs, current, onMove, label, promote, projects, onContinue, extra, keep = false }) {
       const [open, setOpen] = useState(false);
       const [pane, setPane] = useState('root');
       const targets = tabs.filter((m) => m.id !== current);
@@ -2128,7 +2212,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         }, t(promote ? 'promote.to' : 'move.to', { tab: m.label }))),
         onContinue && asMode ? h(React.Fragment, null,
           h('div', { className: 'cws-movesep', role: 'separator' }),
-          h('button', { type: 'button', role: 'menuitem', className: 'cws-moveitem', 'aria-haspopup': 'menu', onClick: (e) => { e.stopPropagation(); setPane('projects'); } }, t('continue.open'))) : null,
+          h('button', { type: 'button', role: 'menuitem', className: 'cws-moveitem', 'aria-haspopup': 'menu', title: keep ? t('keep.hint') : undefined, onClick: (e) => { e.stopPropagation(); setPane('projects'); } }, t(keep ? 'keep.open' : 'continue.open'))) : null,
         (extra ?? []).length > 0 ? h(React.Fragment, null,
           h('div', { className: 'cws-movesep', role: 'separator' }),
           extra.map((item) => h('button', {
@@ -2138,7 +2222,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const projectPane = () => h(React.Fragment, null,
         h('div', { className: 'cws-movehead' },
           h('button', { type: 'button', className: 'cws-link', onClick: (e) => { e.stopPropagation(); setPane('root'); } }, '‹ ' + t('continue.back')),
-          h('span', null, t('continue.title'))),
+          h('span', null, t(keep ? 'keep.title' : 'continue.title'))),
         targets.length > 1 ? h('div', { className: 'cws-moveas', role: 'group', 'aria-label': t('continue.as') },
           h('span', null, t('continue.as')),
           targets.map((m) => h('button', { key: m.id, type: 'button', 'aria-pressed': m.id === asMode.id, onClick: (e) => { e.stopPropagation(); setAs(m.id); } }, m.label))) : null,
@@ -2223,14 +2307,21 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const binHere = bin.items.filter((item) => inTabTrash(item, state, tabIds, selected.id));
       const projects = [];
       for (const ws of lib.workspaces) {
+        // The Scratch project is not listed; its threads show under 'Other conversations' of their tab.
+        if (hidden.has(roomKey(ws.path))) continue;
         const ids = sortRows(ws.sessionIds ?? []);
         for (const id of ws.sessionIds ?? []) placed.add(id);
         const mine = ids.filter((id) => tabOfSession(id, lib.byId[id], ws, state, tabIds) === selected.id);
         if (mine.length > 0 || assigned.has(ws.workspaceId)) projects.push({ ws, ids: mine, all: ids, latest: mine.length > 0 ? Math.max(...mine.map((id) => lib.byId[id].updatedAt ?? 0)) : (Date.parse(ws.updatedAt ?? '') || 0) });
       }
       projects.sort((a, b) => b.latest - a.latest);
-      const loose = sortRows(Object.keys(lib.byId).filter((id) => !placed.has(id)))
+      const unplaced = sortRows(Object.keys(lib.byId).filter((id) => !placed.has(id)))
         .filter((id) => tabOfSession(id, lib.byId[id], null, state, tabIds) === selected.id);
+      // Scratch (step 37): its own group, in place of 'Other conversations' for Scratch threads (and copies
+      // that work in a thread's folder). Decided by folder, so a Rerun copy of a project conversation stays apart.
+      const isScratchRow = (id) => hidden.has(roomKey(homeOf[id]?.path)) || inScratch(lib.byId[id]?.cwd);
+      const scratchRows = unplaced.filter(isScratchRow);
+      const loose = unplaced.filter((id) => !isScratchRow(id));
 
       // A conversation's tab is recorded at its first message; read it right away, so the row does not
       // drop out of its tab until the next 10-second refresh.
@@ -2277,6 +2368,31 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       };
 
       /** A new conversation in a project, with this chat attached the app's own way (an @ mention). */
+      /**
+       * Keep in a project (step 38): the thread's files are copied into a new sub-folder of the project,
+       * named after the thread (never over anything), then a new conversation starts there with a mention
+       * of the thread. The Scratch thread stays until you delete it.
+       */
+      const keepIn = async (id, title, ws, mode) => {
+        let kept;
+        try {
+          const response = await fetch(new URL('dsh-cowork-shell/scratch/keep', document.baseURI), { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ sessionId: id, title, workspaceId: ws.workspaceId }) });
+          kept = await response.json();
+          if (!response.ok) throw new Error(kept?.error ?? 'refused');
+        } catch (error) {
+          model.fail(t('keep.failed', { message: String(error?.message ?? error) }));
+          return;
+        }
+        try {
+          if (mode.id !== state.selected) await model.select(mode.id, mode.label);
+          try { appCtx.layout.selectPanel(null); } catch { /* already there */ }
+          const folder = kept?.folder ? String(kept.folder).split('/').pop() : '';
+          const prompt = folder ? t('keep.prompt', { mention: sessionMention(id, title), folder }) : t('keep.prompt.none', { mention: sessionMention(id, title) });
+          uw.startSession(ws.workspaceId, { prompt, whenDraftExists: 'replace' });
+        } catch {
+          model.fail(t('continue.failed'));
+        }
+      };
       const continueIn = async (id, title, ws, mode) => {
         try {
           if (mode.id !== state.selected) await model.select(mode.id, mode.label);
@@ -2308,12 +2424,14 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     /** Archive a conversation the app's own way. One that is still working asks first. */
-      const archiveQuietly = async (id, question) => {
+      const archiveQuietly = async (id, question, { busy } = {}) => {
         const service = (() => { try { return appCtx.get('workspaces'); } catch { return null; } })();
         try {
           await service.archiveSession(id);
         } catch (error) {
           if (error?.rpcError?.code !== 'workspace/session-active') throw error;
+          // The clean-up never stops anything: it leaves a conversation that is still in use and says why.
+          if (typeof busy === 'function') { busy(error?.rpcError?.details?.activity); return false; }
           if (!window.confirm(stopQuestion(error?.rpcError?.details?.activity, question, t))) return false;
           await service.archiveSession(id, { stopActivity: true });
         }
@@ -2329,7 +2447,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       };
       /** Delete: archive it (the app then stops using it), then move its files to the trash. */
       const remove = async (id, title) => {
-        if (!window.confirm(t('delete.confirm', { title }))) return;
+        if (!window.confirm(t(inScratch(lib.byId[id]?.cwd) ? 'delete.confirm.scratch' : 'delete.confirm', { title }))) return;
         try {
           if (archived.has(id)) {
             if (id === lib.currentId) startNew(appCtx, library, selected.id);
@@ -2436,7 +2554,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const removeMany = async (ids) => {
         setMenu(null);
         const titleOf = (id) => (lib.byId[id]?.displayTitle && String(lib.byId[id].displayTitle).trim()) || t('untitled');
-        if (!window.confirm(ids.length === 1 ? t('delete.confirm', { title: titleOf(ids[0]) }) : t('delete.confirm.n', { n: ids.length }))) return;
+        if (!window.confirm(ids.length === 1 ? t(inScratch(lib.byId[ids[0]]?.cwd) ? 'delete.confirm.scratch' : 'delete.confirm', { title: titleOf(ids[0]) }) : t('delete.confirm.n', { n: ids.length }))) return;
         for (const id of ids) {
           try {
             if (archived.has(id)) {
@@ -2449,6 +2567,58 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           }
         }
         setPicked(new Set());
+      };
+      /** Clean up (step 43): every tab's Scratch conversations not used for a number of days, after one question. */
+      const cleanUp = async () => {
+        const answer = window.prompt(t('cleanup.ask'), '30');
+        if (answer === null) return;
+        const days = Math.floor(Number(String(answer).trim()));
+        if (!Number.isFinite(days) || days < 1 || days > 3650) { model.fail(t('cleanup.bad')); return; }
+        const all = Object.keys(lib.byId).filter((id) => !deleted.has(id) && (hidden.has(roomKey(homeOf[id]?.path)) || inScratch(lib.byId[id]?.cwd)));
+        const now = Date.now();
+        const plan = cleanupPlan(all, lib, { days, now, pinned });
+        // Threads an automation writes into, also a paused one (the app refuses to archive only for active
+        // ones): read from the Automations add-on when it runs; without it, the app's refusal below still holds.
+        const used = new Map();
+        try {
+          const answer = await fetch(new URL('dsh-automations/data', document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
+          if (answer.ok) {
+            const data = await answer.json();
+            for (const task of Array.isArray(data?.tasks) ? data.tasks : []) {
+              if (task?.status !== 'ended' && task?.sessionId) used.set(task.sessionId, [...(used.get(task.sessionId) ?? []), String(task.title ?? '')]);
+            }
+          }
+        } catch { /* the Automations add-on is off */ }
+        const take = plan.take.filter((id) => !used.has(id));
+        const skipped = plan.skipped;
+        const usedLines = plan.take.filter((id) => used.has(id)).map((id) => `• ${(lib.byId[id]?.displayTitle && String(lib.byId[id].displayTitle).trim()) || t('untitled')} (\u201c${used.get(id).filter(Boolean).join('\u201d, \u201c')}\u201d)`);
+        let date;
+        try { date = new Date(now - days * 86400000).toLocaleDateString(); } catch { date = new Date(now - days * 86400000).toISOString().slice(0, 10); }
+        const titleOf = (id) => (lib.byId[id]?.displayTitle && String(lib.byId[id].displayTitle).trim()) || t('untitled');
+        const kept = skipped.map((item) => `• ${titleOf(item.id)} (${t(`cleanup.why.${item.why}`)})`).join('\n');
+        if (take.length === 0) {
+          window.alert(`${t('cleanup.none', { date })}${kept ? `\n\n${t('cleanup.kept')}\n${kept}` : ''}${usedLines.length > 0 ? `\n\n${t('cleanup.automation')}\n${usedLines.join('\n')}` : ''}`);
+          return;
+        }
+        if (!window.confirm(`${t(take.length === 1 ? 'cleanup.confirm.one' : 'cleanup.confirm', { n: take.length, date })}${kept ? `\n\n${t('cleanup.kept')}\n${kept}` : ''}`)) return;
+        // Step 42 (Automations part, question 9): a thread an automation still writes into is left alone,
+        // and named with the automation, instead of asking once per thread.
+        const inUse = [...usedLines];
+        for (const id of take) {
+          try {
+            const busy = (activity) => {
+              const names = (Array.isArray(activity) ? activity : []).filter((entry) => entry?.kind === 'schedule')
+                .flatMap((entry) => (Array.isArray(entry.items) ? entry.items : [])).map((item) => String(item?.label ?? '').trim()).filter(Boolean);
+              inUse.push(`• ${titleOf(id)}${names.length > 0 ? ` (\u201c${names.join('\u201d, \u201c')}\u201d)` : ''}`);
+            };
+            if (!archived.has(id) && !(await archiveQuietly(id, t('delete.running'), { busy }))) continue;
+            await trash.remove(id, titleOf(id), tabOf(id));
+          } catch {
+            model.fail(t('delete.failed'));
+            break;
+          }
+        }
+        if (inUse.length > 0) window.alert(`${t('cleanup.automation')}\n${inUse.join('\n')}`);
       };
       const restoreMany = async (ids) => {
         setMenu(null);
@@ -2467,6 +2637,8 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           model.fail(t('rename.failed'));
         }
       };
+      /** The folder Show in Finder opens: a Scratch thread's own folder, else its project's folder. */
+      const revealPathOf = (id) => scratchFolderOfRow(id, lib.byId[id]?.cwd, homeOf[id]?.path) || (hidden.has(roomKey(homeOf[id]?.path)) ? '' : homeOf[id]?.path ?? '');
       /** Show a project's folder in Finder, through the app's own request for that. */
       const reveal = async (path) => {
         setMenu(null);
@@ -2504,7 +2676,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             : h(React.Fragment, null,
               one ? h('button', { type: 'button', role: 'menuitem', onClick: () => { setMenu(null); openSession(one); } }, t('ctx.open')) : null,
               one && !archived.has(one) ? h('button', { type: 'button', role: 'menuitem', onClick: () => setMenu({ ...menu, rename: String(lib.byId[one]?.displayTitle ?? '') }) }, t('ctx.rename')) : null,
-              one && homeOf[one]?.path ? h('button', { type: 'button', role: 'menuitem', title: homeOf[one].path, onClick: () => void reveal(homeOf[one].path) }, t('ctx.reveal')) : null,
+              one && revealPathOf(one) ? h('button', { type: 'button', role: 'menuitem', title: revealPathOf(one), onClick: () => void reveal(revealPathOf(one)) }, t('ctx.reveal')) : null,
               one ? h('hr') : null,
               noneArchived ? h('button', { type: 'button', role: 'menuitem', onClick: () => void archiveMany(ids) }, one ? t('archive') : t('ctx.archive.n', { n: ids.length })) : null,
               allArchived && usable.length > 0 ? h('button', { type: 'button', role: 'menuitem', onClick: () => void restoreMany(usable) }, usable.length === 1 ? t('ctx.restore') : t('ctx.restore.n', { n: usable.length })) : null,
@@ -2594,6 +2766,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
                 h('span', { className: 'cws-time' }, groupSummary(item, t))) : null,
               h('div', { className: 'cws-trash-meta' },
                 h('span', { className: 'cws-time' }, t(group ? 'trash.left.oldest' : 'trash.left', { n: left })),
+                ...(item.files ? [dot('d0'), h('span', { key: 'files', className: 'cws-time' }, t('trash.files'))] : []),
                 ...(item.erasing
                   ? [dot('d1'), h('span', { key: 'erasing', className: 'cws-time', title: t('trash.erasing.hint') }, t('trash.erasing'))]
                   : [
@@ -2653,8 +2826,13 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             label: t(flat ? 'promote.label' : 'move.label', { title }),
             onMove: (modeId) => void model.move([id], modeId),
             promote: flat,
-            projects: flat ? lib.workspaces : undefined,
-            onContinue: flat && typeof uw?.startSession === 'function' ? (target, mode) => void continueIn(id, title, target, mode) : undefined,
+            // Never a room (Recon's is emptied at every start) or Scratch itself.
+            projects: flat || isScratchRow(id) ? lib.workspaces.filter((ws) => !rooms.has(roomKey(ws.path)) && !hidden.has(roomKey(ws.path))) : undefined,
+            // A Scratch thread (any tab): Keep in a project copies its files there first.
+            keep: isScratchRow(id),
+            onContinue: typeof uw?.startSession !== 'function' ? undefined
+              : isScratchRow(id) ? (target, mode) => void keepIn(id, title, target, mode)
+                : flat ? (target, mode) => void continueIn(id, title, target, mode) : undefined,
             extra: [{ key: 'archive', label: t('archive'), run: () => void archive(id) }, { key: 'delete', label: t('delete'), run: () => void remove(id, title) }],
           }));
       };
@@ -2665,7 +2843,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           ids.length > limit ? h('button', { type: 'button', className: 'cws-more-btn', onClick: () => setMore((m) => ({ ...m, [key]: true })) }, t('show.more', { n: ids.length - limit })) : null);
       };
 
-      const empty = projects.length === 0 && loose.length === 0;
+      const empty = projects.length === 0 && loose.length === 0 && scratchRows.length === 0;
       if (flat) {
         return h('div', { className: 'cws-lib' },
           needsSection(),
@@ -2702,6 +2880,10 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
               h(MoveMenu, { t, tabs, current: selected.id, label: t('proj.move', { title: ws.title || '' }), onMove: (modeId) => void model.move(all.filter((id) => !lib.byId[id]?.blank), modeId) })),
             isOpen ? h('div', { className: 'cws-proj-list' }, list(ids, ws.workspaceId, ws)) : null);
         }),
+        scratchRows.length ? h(React.Fragment, null,
+          h('div', { className: 'cws-lib-head', title: t('place.scratch.hint') }, h('span', null, t('lib.scratch')),
+            h('button', { type: 'button', className: 'cws-link', title: t('cleanup.hint'), onClick: () => void cleanUp() }, t('cleanup'))),
+          list(scratchRows, '__scratch', null)) : null,
         loose.length ? h(React.Fragment, null,
           h('div', { className: 'cws-lib-head' }, h('span', null, t('lib.loose'))),
           list(loose, '__loose', null)) : null,
@@ -2736,8 +2918,121 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
      * may start a conversation there. Recon's room is known up front, so it is skipped even before
      * the Recon tab is opened in this window; startInRoom adds any other room it is told about.
      */
+    /**
+     * Start places (Scratch step 44): where a new conversation of each tab starts. As decided on 15
+     * November: every tab but Code starts in Scratch; Code in a folder (the open or last used project);
+     * Recon always in its room. A tab another add-on brings starts in a folder unless set. Each can be
+     * changed in Settings → Start places.
+     */
+    const DEFAULT_START_PLACES = { chat: 'scratch', cowork: 'scratch', finance: 'scratch', data: 'scratch', research: 'scratch', scout: 'scratch', code: 'folder' };
+    /** @returns {Record<string, 'scratch'|'folder'>} the saved start places over the defaults. */
+    function startPlacesOf(text) {
+      let saved = {};
+      try {
+        const value = typeof text === 'string' && text ? JSON.parse(text) : {};
+        if (value && typeof value === 'object' && !Array.isArray(value)) saved = value;
+      } catch { saved = {}; }
+      const out = { ...DEFAULT_START_PLACES };
+      for (const [tab, place] of Object.entries(saved)) if (place === 'scratch' || place === 'folder') out[tab] = place;
+      return out;
+    }
+    /** The start places in force (kept by the page model; read where a conversation starts). */
+    const startPlaceTable = { value: { ...DEFAULT_START_PLACES }, newKey: true };
+    /** @returns {'scratch'|'folder'|'room'} where a new conversation of this tab starts. */
+    function startPlaceOf(tabId, table = startPlaceTable.value) {
+      if (tabId === 'recon') return 'room';
+      return table[tabId] === 'scratch' ? 'scratch' : 'folder';
+    }
     const roomKey = (path) => String(path ?? '').replace(/^\/private(?=\/tmp\/)/, '').replace(/\/+$/, '');
     const rooms = new Set([roomKey('/tmp/dsh-recon-room')]);
+    /** Projects Plus keeps out of its own project lists: the hidden Scratch place (learnScratch). */
+    const hidden = new Set();
+
+    /**
+     * Scratch (step 32, no button yet): one hidden project in the app's home with a sub-folder per
+     * thread, which the add-on's host side looks after. The page learns where it is, once, so no
+     * other tab starts a conversation there by 'last used' and Plus's project lists leave it out.
+     * Asking makes no folder. Without an answer nothing changes.
+     */
+    const scratchPlace = { path: '' };
+    /**
+     * A Scratch conversation's own folder (where its files are): `<place>/<its id>` for a thread recorded
+     * at the place, else the thread folder its folder is in. '' for anything else.
+     */
+    function scratchFolderOfRow(id, cwd, projectPath) {
+      const place = roomKey(scratchPlace.path);
+      if (!place) return '';
+      const here = roomKey(cwd || projectPath);
+      if (here === place) return /^[A-Za-z0-9][A-Za-z0-9_-]{5,127}$/.test(String(id)) ? `${place}/${id}` : '';
+      if (!here.startsWith(`${place}/`)) return '';
+      const first = here.slice(place.length + 1).split('/')[0];
+      return first ? `${place}/${first}` : '';
+    }
+    /**
+     * Scratch clean-up (step 43): which Scratch conversations not used for `days` days go to the trash.
+     * Never one that is working, open or pinned: those are named instead. Helpers go with their conversation.
+     * @returns {{take: string[], skipped: {id: string, why: 'running'|'open'|'pinned'}[]}} the plan.
+     */
+    function cleanupPlan(ids, lib, options) {
+      const { days, now, pinned } = options;
+      const cutoff = now - days * 86400000;
+      const take = [];
+      const skipped = [];
+      for (const id of ids) {
+        const row = lib?.byId?.[id];
+        if (!row || row.origin === 'subagent' || row.blank) continue;
+        if (!(Number(row.updatedAt) <= cutoff)) continue;
+        if (row.running === true) skipped.push({ id, why: 'running' });
+        else if (id === lib.currentId) skipped.push({ id, why: 'open' });
+        else if (pinned.has(id)) skipped.push({ id, why: 'pinned' });
+        else take.push(id);
+      }
+      return { take, skipped };
+    }
+
+    /** Whether a conversation's folder is the Scratch place or inside it (as far as the page can tell: by its path). */
+    function inScratch(cwd) {
+      const place = roomKey(scratchPlace.path);
+      const here = roomKey(cwd);
+      return Boolean(place) && Boolean(here) && (here === place || here.startsWith(`${place}/`));
+    }
+    async function learnScratch() {
+      try {
+        const response = await fetch(new URL('dsh-cowork-shell/scratch', document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
+        const place = response.ok ? String((await response.json()).place ?? '') : '';
+        if (!place) return '';
+        scratchPlace.path = place;
+        rooms.add(roomKey(place));
+        hidden.add(roomKey(place));
+        return place;
+      } catch {
+        return '';
+      }
+    }
+
+    /**
+     * Start a Scratch thread (no button calls this yet): the place is made, registered as the project
+     * 'Scratch' the first time, and the app starts a conversation there. The app reuses an unsent
+     * conversation of that project instead of making another (its createInWorkspace), so clicking
+     * twice leaves no empty thread. Returns false when it could not, so the caller can start as usual.
+     */
+    async function startInScratch(appCtx, library, options) {
+      const response = await fetch(new URL('dsh-cowork-shell/scratch', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
+      const answer = response.ok ? await response.json() : {};
+      const place = String(answer.place ?? '');
+      if (!place) return false;
+      scratchPlace.path = place;
+      rooms.add(roomKey(place));
+      hidden.add(roomKey(place));
+      let ws = (library.get().workspaces ?? []).find((entry) => entry && roomKey(entry.path) === roomKey(place));
+      if (!ws) {
+        ws = await appCtx.get('workspaces').create({ path: place });
+        try { await appCtx.get('workspaces').rename(ws.workspaceId, String(answer.title || 'Scratch')); } catch { /* the folder's own name is fine */ }
+      }
+      if (!ws?.workspaceId) return false;
+      appCtx.uiWorkspace.startSession(ws.workspaceId, options);
+      return true;
+    }
 
     /**
      * The project a new conversation of an ordinary tab starts in. The app's own choice is the open
@@ -2785,13 +3080,22 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
 
     function startNew(appCtx, library, tabId) {
       try { appCtx.layout.selectPanel(null); } catch { /* already on the conversation */ }
-      if (tabId === 'recon') {
+      const inFolder = () => {
+        let home = null;
+        try { home = homeFor(library.get(), tabId); } catch { home = null; }
+        appCtx.uiWorkspace.startSession(home ? home.workspaceId : undefined);
+      };
+      const place = startPlaceOf(tabId);
+      if (place === 'room') {
         startInRoom(appCtx, library, tabId).then((done) => { if (!done) appCtx.uiWorkspace.startSession(undefined); }, () => appCtx.uiWorkspace.startSession(undefined));
         return;
       }
-      let home = null;
-      try { home = homeFor(library.get(), tabId); } catch { home = null; }
-      appCtx.uiWorkspace.startSession(home ? home.workspaceId : undefined);
+      // Scratch, when the page can reach it; otherwise the usual folder, so a New click always starts something.
+      if (place === 'scratch') {
+        startInScratch(appCtx, library).then((done) => { if (!done) inFolder(); }, inFolder);
+        return;
+      }
+      inFolder();
     }
 
     function CoworkSidebar(props) {
@@ -2870,7 +3174,10 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const claimed = new Set(Object.values(layout).flatMap((tab) => (Array.isArray(tab?.pages) ? tab.pages : [])));
       const own = (Array.isArray(layout[selected.id]?.pages) ? layout[selected.id].pages : [])
         .map((id) => allPages.find((p) => p.id === id)).filter(Boolean);
-      const shared = allPages.filter((p) => !claimed.has(p.id));
+      // Automations part, step A8: Plus's Automations page is listed by no tab, so it shows under every tab;
+      // the app's own task editor has no row of its own any more (it is one click away on that page),
+      // unless a layout you edited by hand still lists it under a tab.
+      const shared = allPages.filter((p) => !claimed.has(p.id) && p.id !== 'schedules');
       const rows = [...own, ...shared];
       // The saved layout may lack a tab another add-on brings (Research, Scout): fall back to the
       // built-in copy before the generic text, as tabEntry does for the greeting and chips.
@@ -2883,7 +3190,8 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       // The preset picker (Standard, PTC, ...) stays: it changes how the model calls tools, so it must be visible.
       const home = defaultWorkspace(libSnap.workspaces);
       const currentWs = libSnap.currentId ? libSnap.workspaces.find((ws) => (ws.sessionIds ?? []).includes(libSnap.currentId)) : null;
-      const plainChat = selected.id === 'chat' && libSnap.ok && !!home && (!currentWs || currentWs.workspaceId === home.workspaceId);
+      // Scratch is no folder of yours either: the picker is hidden there too.
+      const plainChat = selected.id === 'chat' && libSnap.ok && ((!!home && (!currentWs || currentWs.workspaceId === home.workspaceId)) || (!!currentWs && hidden.has(roomKey(currentWs.path))));
       useEffect(() => {
         const root = document.documentElement;
         if (plainChat) root.setAttribute('data-cws-plain-chat', '');
@@ -3374,6 +3682,11 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           key: chip.label, type: 'button', className: 'cws-chip-btn',
           onClick: () => {
             const options = { prompt: String(chip.prompt ?? chip.label), whenDraftExists: 'replace' };
+            // In Scratch, the chips stay in Scratch.
+            if (selected.id !== 'recon' && inScratchNow(library.get())) {
+              startInScratch(appCtx, library, options).then((done) => { if (!done) appCtx.uiWorkspace.startSession(undefined, options); }, () => appCtx.uiWorkspace.startSession(undefined, options));
+              return;
+            }
             // Recon's chips start in its room, like its New button.
             if (selected.id === 'recon') {
               startInRoom(appCtx, library, selected.id, options).then((done) => { if (!done) appCtx.uiWorkspace.startSession(undefined, options); }, () => appCtx.uiWorkspace.startSession(undefined, options));
@@ -3384,6 +3697,87 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             appCtx.uiWorkspace.startSession(home ? home.workspaceId : undefined, options);
           },
         }, h(ChipIcon, { name: typeof chip.icon === 'string' ? chip.icon : 'spark' }), chip.label)));
+    }
+
+    /** Settings → Start places (step 44): where each tab's new conversations start, and whether Cmd-N follows. */
+    function StartPlacesPage({ appCtx, model }) {
+      const state = useSyncExternalStore(model.subscribe, model.get);
+      const t = appCtx.locale.bind(NS);
+      useEffect(() => { void model.refresh(); }, [model]);
+      const table = startPlacesOf(state.startPlaces);
+      const tabs = tabsOf(state).filter((tab) => tab.id !== 'recon');
+      const pick = (tabId, place) => {
+        let saved = {};
+        try { saved = state.startPlaces ? JSON.parse(state.startPlaces) : {}; } catch { saved = {}; }
+        void model.setOption('startPlaces', JSON.stringify({ ...saved, [tabId]: place }));
+      };
+      return h('div', { className: 'cws-start-page' },
+        h('h2', null, t('start.title')),
+        h('p', { className: 'cws-lib-empty' }, t('start.hint')),
+        h('div', { className: 'cws-start-list' },
+          tabs.map((tab) => h('div', { key: tab.id, className: 'cws-start-row' },
+            h('span', null, tab.label),
+            h('span', { className: 'cws-place', role: 'group', 'aria-label': t('start.for', { tab: tab.label }) },
+              h('button', { type: 'button', 'aria-pressed': startPlaceOf(tab.id, table) === 'scratch', title: t('place.scratch.hint'), onClick: () => pick(tab.id, 'scratch') }, t('place.scratch')),
+              h('button', { type: 'button', 'aria-pressed': startPlaceOf(tab.id, table) === 'folder', title: t('start.folder.hint'), onClick: () => pick(tab.id, 'folder') }, t('place.folder'))))),
+          h('div', { className: 'cws-start-row' }, h('span', null, t('start.recon')), h('span', { className: 'cws-time' }, t('start.recon.room')))),
+        h('label', { className: 'cws-start-key' },
+          h('input', { type: 'checkbox', checked: state.newKeyFollows !== false, onChange: (event) => void model.setOption('newKeyFollows', event.target.checked) }),
+          ' ', t('start.newkey')),
+        state.error ? h('p', { className: 'cws-lib-empty', role: 'alert' }, state.error) : null);
+    }
+
+    /** @returns {boolean} whether the open conversation is in the Scratch project (by its project's folder). */
+    function inScratchNow(lib) {
+      if (!lib?.ok || !lib.currentId) return false;
+      const ws = (lib.workspaces ?? []).find((item) => (item.sessionIds ?? []).includes(lib.currentId));
+      return Boolean(ws) && hidden.has(roomKey(ws.path));
+    }
+
+    /**
+     * Scratch (step 36): a 'Scratch / Folder' switch beside the start page's folder picker, in every
+     * tab but Recon (which has its room). It starts a new conversation in Scratch, or back in a folder,
+     * without changing any tab's start place. Shown only once the page knows where Scratch is.
+     */
+    function PlaceSwitch({ appCtx, model, library }) {
+      const state = useSyncExternalStore(model.subscribe, model.get);
+      const lib = useSyncExternalStore(library.subscribe, library.get);
+      const [, bump] = useState(0);
+      useEffect(() => {
+        if (scratchPlace.path) return undefined;
+        let live = true;
+        learnScratch().then(() => { if (live) bump((n) => n + 1); });
+        return () => { live = false; };
+      }, []);
+      const tabs = tabsOf(state);
+      const selected = tabs.find((m) => m.id === state.selected) ?? tabs[0];
+      if (!scratchPlace.path || !selected || selected.id === 'recon') return null;
+      const t = appCtx.locale.bind(NS);
+      const here = inScratchNow(lib);
+      const toScratch = () => {
+        if (here) return;
+        startInScratch(appCtx, library).then((done) => { if (!done) model.fail(t('place.failed')); }, () => model.fail(t('place.failed')));
+      };
+      const toFolder = () => {
+        if (!here) return;
+        let home = null;
+        try { home = homeFor(library.get(), selected.id); } catch { home = null; }
+        appCtx.uiWorkspace.startSession(home ? home.workspaceId : undefined);
+      };
+      return h('span', { className: 'cws-place', role: 'group', 'aria-label': t('place.label') },
+        h('button', { type: 'button', 'aria-pressed': here, title: t('place.scratch.hint'), onClick: toScratch }, t('place.scratch')),
+        h('button', { type: 'button', 'aria-pressed': !here, title: t('place.folder.hint'), onClick: toFolder }, t('place.folder')));
+    }
+
+    /** Scratch (step 37): a small 'Scratch' mark in the chat box of a Scratch conversation. */
+    function ScratchMark({ appCtx, library, sessionId }) {
+      const lib = useSyncExternalStore(library.subscribe, library.get);
+      const id = sessionId ?? lib.currentId;
+      if (!id || !scratchPlace.path) return null;
+      const ws = (lib.workspaces ?? []).find((item) => (item.sessionIds ?? []).includes(id));
+      if (!(ws && hidden.has(roomKey(ws.path))) && !inScratch(lib.byId?.[id]?.cwd)) return null;
+      const t = appCtx.locale.bind(NS);
+      return h('span', { className: 'cws-scratch-mark', title: t('place.scratch.hint') }, t('place.scratch'));
     }
 
     const CHIP_ICONS = {"slides": "M4 5h16v11H4zM12 16v4M8 20h8", "website": "M4 5h16v14H4zM4 9h16M7 7h.01M9 7h.01", "app": "M8 3h8v18H8zM11 18h2", "spreadsheet": "M4 5h16v14H4zM4 10h16M4 15h16M10 5v14", "chart": "M5 19V9M10 19V5M15 19v-7M20 19v-4M4 19h17", "research": "M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.3 15.3 20 20", "game": "M6 9h12a3 3 0 0 1 3 3v2a3 3 0 0 1-5.4 1.8L14 14h-4l-1.6 1.8A3 3 0 0 1 3 14v-2a3 3 0 0 1 3-3zM8 11v2M7 12h2M16 12h.01M18 12h.01", "spark": "M12 4l1.8 5.2L19 11l-5.2 1.8L12 18l-1.8-5.2L5 11l5.2-1.8z"};
@@ -3410,7 +3804,36 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         const library = createLibrary(ctx);
         const trash = createTrash();
         const projects = createProjects();
+        void learnScratch();
         const shared = () => ({ appCtx: ctx, model, pages, library, trash, projects });
+        // Cmd-N (the app's New Session) follows the open tab's start place while that switch is on; the
+        // app's own action comes back when it is off or this add-on stops. As Global Search does for Cmd-K.
+        ctx.effect(() => {
+          let undo;
+          let tries = 0;
+          const take = () => {
+            if (undo) return true;
+            let command;
+            try {
+              const service = ctx.get('shortcuts');
+              command = (service?.registry?.commands ?? service?.commands)?.get?.('session.new');
+            } catch {
+              command = undefined;
+            }
+            if (!command || typeof command.resolve !== 'function') return false;
+            const original = command.resolve;
+            command.resolve = (context) => (startPlaceTable.newKey === false ? original(context) : { status: 'handled', run: () => startNew(ctx, library, model.get().selected) });
+            undo = () => { command.resolve = original; };
+            return true;
+          };
+          const timer = setInterval(() => { tries += 1; if (take() || tries > 40) clearInterval(timer); }, 500);
+          take();
+          return () => { clearInterval(timer); undo?.(); };
+        }, 'cowork-shell: Cmd-N follows the start place');
+        ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register(
+          { name: 'settings.section', id: 'cowork-start', order: 101, label: () => ctx.locale.bind(NS)('start.title') },
+          () => h(StartPlacesPage, { appCtx: ctx, model }),
+        )), 'cowork-shell: start places settings');
 
         ctx.effect(() => ctx.slots.inject('sidebar', function* () {
           yield ctx.slots.registerFactory({
@@ -3462,6 +3885,12 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         ctx.effect(() => ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({
           name: 'conversation.hero.options', id: 'cowork-chips', order: 50, inject: shared,
         }, HeroChips)), 'cowork-shell: suggestion chips');
+        ctx.effect(() => ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({
+          name: 'conversation.hero.options', id: 'cowork-place', order: 5, inject: shared,
+        }, PlaceSwitch)), 'cowork-shell: Scratch / Folder switch');
+        ctx.effect(() => ctx.slots.inject('conversation.input.left', () => ctx.slots.register({
+          name: 'conversation.input.left', id: 'cowork-scratch-mark', order: -30, inject: shared,
+        }, ScratchMark)), 'cowork-shell: Scratch mark');
         ctx.effect(() => ctx.slots.inject('shell.leading', () => ctx.slots.register({
           name: 'shell.leading', locale: NS, inject: shared,
         }, Leading)), 'cowork-shell: macOS hidden-sidebar controls');

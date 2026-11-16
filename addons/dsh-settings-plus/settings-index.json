@@ -14362,5 +14362,180 @@
   ],
   "configOnly": true,
   "field": "settings-plus.enabled"
+ },
+ {
+  "page": "cowork-start",
+  "pageLabel": "Start places",
+  "heading": "",
+  "label": "Start places",
+  "description": "Where a new conversation of each tab starts: Scratch (a private folder of its own) or a Folder (the open or last used project). Every tab but Code starts in Scratch; Recon always in its room.",
+  "kind": "section",
+  "keywords": [
+   "start place",
+   "scratch",
+   "folder",
+   "new conversation",
+   "startPlaces",
+   "where new chats start"
+  ],
+  "configOnly": false,
+  "field": "cowork-shell.startPlaces"
+ },
+ {
+  "page": "cowork-start",
+  "pageLabel": "Start places",
+  "heading": "Start places",
+  "label": "Cmd-N starts in the open tab's start place",
+  "description": "Off: the app's own choice (the open or last used project). Default on.",
+  "kind": "switch",
+  "keywords": [
+   "Cmd-N",
+   "new session",
+   "shortcut",
+   "newKeyFollows",
+   "keyboard"
+  ],
+  "configOnly": false,
+  "field": "cowork-shell.newKeyFollows"
+ },
+ {
+  "page": "mission",
+  "pageLabel": "Mission",
+  "heading": "Long runs",
+  "label": "Long runs",
+  "description": "Defaults of a long run: time, laps, use the full time, keep the Mac awake (also on battery), try again by itself, think by role.",
+  "kind": "section",
+  "keywords": [
+   "long run",
+   "laps",
+   "overnight",
+   "keep awake",
+   "caffeinate",
+   "longMinutes",
+   "longLaps",
+   "longFullTime",
+   "longKeepAwake",
+   "longBattery",
+   "longRetry",
+   "longEffort"
+  ],
+  "configOnly": false,
+  "field": "mission.longMinutes"
+ },
+ {
+  "page": "alerts",
+  "pageLabel": "Alerts",
+  "heading": "Alert me when",
+  "label": "Mission and long runs",
+  "description": "Alert when a run ends, needs your yes, or stops by itself. Never for each round; names the project folder only.",
+  "kind": "switch",
+  "keywords": [
+   "alertRuns",
+   "run alerts",
+   "mission",
+   "long run",
+   "overnight"
+  ],
+  "configOnly": false,
+  "field": "automations.alertRuns"
+ },
+ {
+  "page": "skill-architect",
+  "pageLabel": "Learned skills",
+  "heading": "",
+  "label": "Learned skills",
+  "description": "Learns from your past corrections and proposes skills, Memory facts and project rules. Nothing is installed until you say yes.",
+  "kind": "section",
+  "keywords": [
+   "skill architect",
+   "learn",
+   "skills learn",
+   "corrections",
+   "proposals",
+   "reading model",
+   "never learn",
+   "start clean"
+  ],
+  "configOnly": false,
+  "field": "skill-architect.enabled"
+ },
+ {
+  "page": "skill-architect",
+  "pageLabel": "Learned skills",
+  "heading": "Reading model",
+  "label": "Allow a reading model on the internet",
+  "description": "You still see what would be sent first.",
+  "kind": "switch",
+  "keywords": [
+   "allowInternet",
+   "privacy",
+   "internet",
+   "cloud"
+  ],
+  "configOnly": false,
+  "field": "skill-architect.allowInternet"
+ },
+ {
+  "page": "skill-architect",
+  "pageLabel": "Learned skills",
+  "heading": "Learn",
+  "label": "Learn by itself",
+  "description": "Off, nightly or weekly. Only proposes, only while the app is open, only with a model on this Mac or your network.",
+  "kind": "select",
+  "keywords": [
+   "schedule",
+   "nightly",
+   "weekly"
+  ],
+  "configOnly": false,
+  "field": "skill-architect.schedule"
+ },
+ {
+  "page": "alerts",
+  "pageLabel": "Alerts",
+  "heading": "Automations",
+  "label": "The Automations tab",
+  "description": "A tab of its own whose chat makes and changes automations and answers questions about their results.",
+  "kind": "switch",
+  "keywords": [
+   "automations tab",
+   "schedule",
+   "scheduled tasks",
+   "automation_results"
+  ],
+  "configOnly": false,
+  "field": "automations.tab"
+ },
+ {
+  "page": "alerts",
+  "pageLabel": "Alerts",
+  "heading": "Automations",
+  "label": "Keep deleted automations in the trash",
+  "description": "For 30 days, with Put back. Off: deleting an automation is final.",
+  "kind": "switch",
+  "keywords": [
+   "deleted automation",
+   "put back",
+   "trash",
+   "undo"
+  ],
+  "configOnly": false,
+  "field": "automations.deletedToTrash"
+ },
+ {
+  "page": "alerts",
+  "pageLabel": "Alerts",
+  "heading": "Automations",
+  "label": "Old runs' conversations to the trash",
+  "description": "Runs older than an automation's keep rule go to the trash, for automations that open a new conversation at every run.",
+  "kind": "switch",
+  "keywords": [
+   "keep past runs",
+   "old runs",
+   "retention",
+   "clean up"
+  ],
+  "configOnly": false,
+  "field": "automations.oldRunsToTrash"
  }
 ]

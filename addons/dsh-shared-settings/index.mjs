@@ -41,6 +41,8 @@ export const ALWAYS_SKIP = [
   'modes.sessionHelpers',
   'modes.sessionToolSets',
   'modes.sessionSandboxBase',
+  // The Skill architect's "never learn from this" marks: per conversation, kept on each Mac.
+  'skill-architect.nolearn',
 ];
 
 /** Per-conversation choices: they change all the time and mean little on the other Mac. */

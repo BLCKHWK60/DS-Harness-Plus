@@ -258,6 +258,8 @@ export function writePrompt({ question, findings, conflicts, gaps, today, follow
     anyUnread ? `- A finding labelled [${SOURCE_LABELS[SEARCH_ONLY]}] or [${SOURCE_LABELS[UNSEEN]}] comes from a page its helper did not read, most often only a search result's short summary. Prefer findings from pages that were read. Where a claim rests only on findings that were not read, keep it, but say so in the same sentence with that finding's own label in brackets, either "(${SOURCE_LABELS[SEARCH_ONLY]})" or "(${SOURCE_LABELS[UNSEEN]})", and never present it as confirmed.` : '',
     '- Where sources disagree, say so and set out both sides. Do not pick one silently.',
     '- End with a short section on what could not be established.',
+    // Source grades (step 64): the writer names the original documents; code grades the rest.
+    '- Then a section headed exactly "## Primary sources" listing, as [n][m], the cited sources that are the original document behind a claim (the study itself, the official filing, the law, an organisation\'s own statement), or the word none. It is taken out of the report and used to grade the sources.',
     followups ? '- After that, a last section headed exactly "## Follow-up questions" with three short questions the user might ask next, each on its own line starting with "- ". Make them specific to what was found.' : '',
     '- Do not add a source list; it is added for you.',
     // The findings and quotes below come word for word from web pages, so a planted page can try to steer the writer.
@@ -290,4 +292,48 @@ export function followupsOf(text) {
     if (out.length === 3) break;
   }
   return out;
+}
+
+/** The JSON each helper answers with, for a second ask when it answered in prose. */
+export const SHAPES = Object.freeze({
+  subquestions: '{"subquestions": [{"question": "...", "queries": ["...", "..."]}]}',
+  findings: '{"findings": [{"claim": "...", "url": "https://...", "quote": "short word-for-word quote", "date": "the page\'s date if it shows one"}], "queries": ["each search that was run"], "gaps": ["what was looked for and not found"]}',
+});
+
+/**
+ * A second ask for a helper that answered in prose instead of JSON (small local models often do):
+ * a model turns that answer into the JSON, with nothing added.
+ * @param {'subquestions' | 'findings'} key - which answer.
+ * @param {string} text - the helper's answer.
+ * @returns {string} the instruction.
+ */
+export function formatPrompt(key, text) {
+  return [
+    'RESEARCH_FORMAT',
+    'Another research helper answered in prose. Turn its answer into JSON, and add nothing: use only what the text says, and for findings only links that appear in it, each with the claim the text makes from that page. Leave out a claim that has no link. Do not search or read anything.',
+    `Answer with ONLY this JSON: ${SHAPES[key]}`,
+    '',
+    'The answer:',
+    String(text ?? '').slice(0, 24000),
+  ].join('\n');
+}
+
+/**
+ * A helper's answer as JSON with `key`. One that answered in prose is asked once more (`ask` runs that
+ * short helper with formatPrompt and returns its text); its answer counts only if it has the key.
+ * @param {string} text - the helper's answer.
+ * @param {'subquestions' | 'findings'} key - the list the answer must have.
+ * @param {(prompt: string) => Promise<string>} ask - runs the formatting helper.
+ * @param {(text: string) => any} parse - reads JSON out of a model's text.
+ * @returns {Promise<any>} the parsed answer (null or without the key when neither worked).
+ */
+export async function jsonOrAsk(text, key, ask, parse) {
+  const parsed = parse(text);
+  if (Array.isArray(parsed?.[key]) || !String(text ?? '').trim()) return parsed;
+  try {
+    const fixed = parse(await ask(formatPrompt(key, text)));
+    return Array.isArray(fixed?.[key]) ? fixed : parsed;
+  } catch {
+    return parsed;
+  }
 }

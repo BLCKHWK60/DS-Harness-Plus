@@ -271,7 +271,7 @@ test('the README names every field that always stays on each Mac, and how many t
   const fields = ALWAYS_SKIP.map((path) => path.replace(/^modes\./, ''));
   for (const field of fields) assert.ok(line.includes(`\`${field}\``) || line.includes(`\`modes.${field}\``), `${field} is listed`);
   const words = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
-  assert.match(readme, new RegExp(`The ${words[ALWAYS_SKIP.length]} \`modes\` fields on the second line stay on each Mac`));
+  assert.match(readme, new RegExp(`The ${words[ALWAYS_SKIP.filter((path) => path.startsWith('modes.')).length]} \`modes\` fields on the second line stay on each Mac`));
 });
 
 test('per-Mac Modes fields are never written to or taken from the file, even with your own skipFields', async () => {

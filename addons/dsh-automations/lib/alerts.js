@@ -38,8 +38,15 @@ export function cleanName(value) {
  * @param {string} [what.state] - for `failed`: failed or stopped.
  * @returns {string} the line.
  */
-export function alertText({ event, name, scheduled, waiting, state }) {
+export function alertText({ event, name, scheduled, waiting, state, run }) {
   const clean = cleanName(name);
+  // A Mission or Long run (Long run part, step 54): only the project folder's name, never the goal's text.
+  if (run) {
+    const what = `${run === 'long' ? 'A long run' : 'A mission run'}${clean ? ` in ${clean}` : ''}`;
+    if (event === 'needs') return `${what} needs your yes`;
+    if (event === 'failed') return state === 'restart' ? `${what} was interrupted when the app closed: open it to resume or end it` : `${what} stopped by itself (the model did not answer)`;
+    return `${what} finished`;
+  }
   const who = scheduled ? clean || 'A scheduled task' : clean ? `A task in ${clean}` : 'A task';
   if (event === 'needs') return `${who} ${WAIT_WORDS[waiting] ?? 'needs you'}`;
   if (event === 'failed') return `${who} ${state === 'stopped' ? 'was stopped before it finished' : 'failed'}`;
@@ -59,6 +66,7 @@ export function readAlertSettings(raw = {}) {
     needs: raw.alertNeeds !== false,
     finished: raw.alertFinished === true,
     others: raw.alertOthers === true,
+    runs: raw.alertRuns !== false,
     othersMinutes: Number.isFinite(minutes) && minutes >= 0 ? minutes : 2,
     mac: raw.mac !== false,
     phone: raw.phone === true,
@@ -185,8 +193,16 @@ export function createAlerter({ settings, warn = () => {}, now = () => Date.now(
      */
     notify(what) {
       const set = settings();
-      if (!EVENTS.includes(what.event) || !set[what.event]) return undefined;
-      if (!what.scheduled && (!set.others || (Number(what.minutes) || 0) < set.othersMinutes)) return undefined;
+      if (!EVENTS.includes(what.event)) return undefined;
+      // Run alerts have a switch of their own and are never per round.
+      if (what.run) {
+        if (!set.runs) return undefined;
+      } else {
+        // An automation's own choice (Automations part, step A17) wins over the global switch.
+        const own = what.scheduled && what.own && typeof what.own[what.event] === 'boolean' ? what.own[what.event] : undefined;
+        if (!(own ?? set[what.event])) return undefined;
+        if (!what.scheduled && (!set.others || (Number(what.minutes) || 0) < set.othersMinutes)) return undefined;
+      }
       if (!set.mac && !set.phone) return undefined;
       const at = now();
       recent = recent.filter((time) => at - time < 60000);

@@ -240,7 +240,10 @@ test('the record keeps approvals across a restart and a mode change', async () =
 test('settings fall back to Restricted', async () => {
   const { readSettings, HELP } = await import('../index.js');
   const limits = { maxItems: 12, maxTries: 3, maxReviews: 2, maxSteps: 60, waitMinutes: 3 };
-  assert.deepEqual(readSettings({}), { enabled: true, defaultMode: 'restricted', limits, roles: {}, projects: {} });
+  const long = { minutes: 120, laps: 10, fullTime: false, keepAwake: true, battery: false, retry: true, effort: true };
+  assert.deepEqual(readSettings({}), { enabled: true, defaultMode: 'restricted', limits, roles: {}, projects: {}, long });
+  // Long run defaults: one place (Settings → Mission), kept in range.
+  assert.deepEqual(readSettings({ longMinutes: 5000, longLaps: 0, longFullTime: true, longKeepAwake: false, longBattery: true, longRetry: false, longEffort: false }).long, { minutes: 720, laps: 1, fullTime: true, keepAwake: false, battery: true, retry: false, effort: false });
   const set = readSettings({ enabled: false, defaultMode: 'auto', maxTries: 99, maxSteps: 'x', waitMinutes: 0, roles: '{"plan":{"provider":"p","model":"big"},"review":{"provider":"","model":"x"},"other":{"provider":"p","model":"m"}}', projects: '{"/w":{"implement":{"provider":"p","model":"coder"}},"/empty":{}}' });
   assert.equal(set.enabled, false);
   assert.equal(set.defaultMode, 'auto');

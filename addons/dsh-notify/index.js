@@ -214,6 +214,31 @@ export function apply(ctx, config) {
     return !(header?.origin === 'subagent' || header?.parentSession || Number(header?.delegationDepth) > 0);
   };
 
+  /** Whether a conversation is running a Mission or Long run now (false without Mission). */
+  const roundOfRun = (id) => {
+    try {
+      return Boolean(id) && ctx.get('mission')?.isRunning?.(id) === true;
+    } catch {
+      return false;
+    }
+  };
+  // The end of a run fires the turnEnd rules once, as one finished turn of its conversation.
+  if (rules.some((rule) => rule.on === 'turnEnd')) {
+    ctx.inject(['mission'], (inner) => {
+      try {
+        inner.effect(() => inner.mission.onEvent?.((event) => {
+          if (event.type !== 'finished') return;
+          for (const rule of rules) {
+            if (rule.on !== 'turnEnd' || !(rule.reasons ?? ['completed', 'error']).includes('completed')) continue;
+            fire(rule, { event: 'turnEnd', reason: 'completed', project: event.folder ?? '' });
+          }
+        }) ?? (() => {}), 'notify: end of runs');
+      } catch (error) {
+        ctx.logger?.warn?.(`notify: runs end without a rule firing: ${error?.message ?? error}`);
+      }
+    });
+  }
+
   if (rules.length) {
     ctx.on('session/event', (session, event) => {
       try {
@@ -230,6 +255,8 @@ export function apply(ctx, config) {
         if (event?.type === 'turn/end') {
           const started = turnStarts.get(id);
           turnStarts.delete(id);
+          // A round of a running Mission or Long run (Long run part, step 55): quiet; the run's end fires once.
+          if (roundOfRun(id)) return;
           const reason = String(event.data?.reason?.kind ?? 'unknown');
           const seconds = started ? (Date.now() - started) / 1000 : 0;
           for (const rule of rules) {
