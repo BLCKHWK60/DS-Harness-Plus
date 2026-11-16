@@ -47,7 +47,7 @@ test('mentions of other conversations are taken out as asked', () => {
 });
 
 /** Recon on stand-in services, with its pre-step listeners and its command. */
-function start({ modeOf = {}, agents = {}, stored = [], memory = new Set() } = {}) {
+function start({ modeOf = {}, agents = {}, stored = [], memory = new Set(), config = {} } = {}) {
   const listeners = [];
   let command;
   const services = {
@@ -59,7 +59,7 @@ function start({ modeOf = {}, agents = {}, stored = [], memory = new Set() } = {
       mutate: async () => {},
     },
     modes: { get: (id) => modeOf[id]?.mode, isolated: (id) => modeOf[id]?.isolated === true },
-    tools: { register: () => () => {} },
+    tools: { register: (tool) => { registered[tool.name] = tool; return () => {}; } },
     commands: { register: (spec) => { command = spec; return () => {}; } },
     webServer: { register: () => () => {} },
     connection: { requestRejection: () => undefined },
@@ -71,6 +71,7 @@ function start({ modeOf = {}, agents = {}, stored = [], memory = new Set() } = {
   };
   const disposers = [];
   const ended = [];
+  const registered = {};
   const provided = {};
   const ctx = {
     ...services,
@@ -81,14 +82,14 @@ function start({ modeOf = {}, agents = {}, stored = [], memory = new Set() } = {
     on: (name, listener) => { if (name === 'agent/pre-step') listeners.push(listener); return () => {}; },
     provide: (name, value) => { provided[name] = value; return () => {}; },
   };
-  apply(ctx, Config({ enabled: true }));
+  apply(ctx, Config({ enabled: true, ...config }));
   /** One step, through every pre-step listener in the order the app runs them. */
   const step = (agent, modelSelection, messages = []) => {
     const run = (at) => (at === listeners.length ? Promise.resolve({ kind: 'enter', messages }) : listeners[at]({ agent, modelSelection, messages }, () => run(at + 1)));
     return run(0);
   };
   const say = (agent, rawInput) => command.handler({ agent, rawInput });
-  return { step, say, provided, ended, dispose: () => { for (const done of disposers) done(); } };
+  return { step, say, provided, ended, registered, dispose: () => { for (const done of disposers) done(); } };
 }
 
 const agentOf = (id, history, model) => ({ id, session: { header: {}, deriveMessages: () => history }, model: { current: () => model } });
@@ -206,5 +207,47 @@ test('a Long run\'s helpers in Recon: the conversation\'s agreement covers them,
   } finally {
     app.dispose();
     rmSync(sessionsDir, { recursive: true, force: true });
+  }
+});
+
+test('outside Tor without WireGuard: blocked until the user allows direct connections for the conversation; /recon block takes it back', async () => {
+  const conversation = { id: 'session-w1', header: { cwd: ROOM }, session: { header: { cwd: ROOM }, deriveMessages: () => [] }, model: { current: () => LOCAL } };
+  const app = start({ modeOf: { 'session-w1': { mode: 'recon', isolated: true } }, agents: { 'session-w1': conversation } });
+  try {
+    assert.match((await app.say(conversation, 'status')).text, /Outside Tor \(the Internet Archive read directly, Usenet, the ordinary web\): blocked: no WireGuard is set up, and direct connections are not allowed in this conversation \(\/recon direct\)\./);
+    const allowed = await app.say(conversation, 'direct');
+    assert.equal(allowed.kind, 'success');
+    assert.match(allowed.text, /sites see its internet address/);
+    assert.match((await app.say(conversation, 'status')).text, /Outside Tor [^\n]*: directly \(you allowed it for this conversation; no WireGuard is set up\)/);
+    assert.match((await app.say(conversation, 'block')).text, /^Blocked again/);
+    assert.match((await app.say(conversation, 'status')).text, /: blocked: no WireGuard is set up/);
+    // Not in a conversation that is not Recon's.
+    const plain = { id: 'plain', header: {}, session: { header: {} }, model: { current: () => LOCAL } };
+    assert.equal((await app.say(plain, 'direct')).kind, 'error');
+  } finally {
+    app.dispose();
+  }
+});
+
+test('a real tool call: without a working tunnel, and without /recon direct, nothing goes out on the ordinary web', async () => {
+  const conversation = { id: 'session-v1', header: { cwd: ROOM }, session: { header: { cwd: ROOM }, deriveMessages: () => [] }, model: { current: () => LOCAL } };
+  const exec = { agent: conversation };
+  // No configuration at all.
+  const none = start({ modeOf: { 'session-v1': { mode: 'recon', isolated: true } }, agents: { 'session-v1': conversation } });
+  try {
+    const said = await none.registered.recon_web_search.execute({ query: 'old handle' }, exec);
+    assert.match(said.text, /No WireGuard configuration is set up .* Nothing was sent\./);
+    const board = await none.registered.recon_board_search.execute({ source: 'hackernews', query: 'old handle' }, exec);
+    assert.match(board.text, /Nothing was sent\./);
+  } finally {
+    none.dispose();
+  }
+  // A configuration that cannot run (no wireproxy here): blocked the same way.
+  const broken = start({ modeOf: { 'session-v1': { mode: 'recon', isolated: true } }, agents: { 'session-v1': conversation }, config: { vpnConfigs: [{ id: 'wg-a', label: 'A' }], wireproxyPath: '/nowhere/wireproxy' } });
+  try {
+    const said = await broken.registered.recon_web_search.execute({ query: 'old handle' }, exec);
+    assert.match(said.text, /wireproxy program was not found.* Nothing was sent\..*\/recon direct/);
+  } finally {
+    broken.dispose();
   }
 });

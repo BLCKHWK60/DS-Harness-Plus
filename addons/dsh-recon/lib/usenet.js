@@ -31,7 +31,7 @@ export function createUsenet({ run, route, accounts, defaultAccount, login, forw
     const who = await login(serviceOf(account.id));
     if (!who) throw new Error(`No login is stored in the Keychain for the Usenet account "${nameOf(account)}". Settings → Recon → Usenet shows the user how to store it. Nothing was sent.`);
     if (sources.count(id) > MAX_VISITS) throw new Error(`This conversation has made ${MAX_VISITS} requests, which is its limit. Start a new Recon conversation to go on.`);
-    const way2 = await forward(account.host, account.port);
+    const way2 = await forward(account.host, account.port, id);
     try {
       const got = await run({ op: 'nntp', via: 'forward', port: way2.port, server: account.host, user: who.user, pass: who.pass, ...(ca ? { ca } : {}), ...request }, { proxyPort: way2.port, timeoutMs: 120_000 });
       return { ...got, account };

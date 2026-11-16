@@ -44,8 +44,11 @@ import { withoutMentions } from './lib/mentions.js';
 import { buildTools, holdsFindings, wasCompacted } from './lib/tools.js';
 import { createUsenet } from './lib/usenet.js';
 import { ARCHIVE, NEWS, createWeb } from './lib/web.js';
+import { createClearnet, openWebTrail } from './lib/clearnet.js';
+import { createBoards } from './lib/boards.js';
 import { openWipeList, wipeFiles, wipeTrashed } from './lib/wipe.js';
 import { createTor, findTor, torVersion } from './lib/tor.js';
+import { createVpn, findWireproxy, readVpnList, vpnNameOf, vpnRemoveCommandFor, vpnStoreCommandFor, vpnStored } from './lib/vpn.js';
 
 export const name = 'dsh-recon';
 
@@ -128,6 +131,8 @@ export const Config = z.object({
   archiveDirect: z.boolean().default(true).volatile(),
   /** The GDELT Project's index of news coverage, asked through Recon's Tor. On lets recon_news_search work. */
   newsOn: z.boolean().default(false).volatile(),
+  /** The ordinary web (recon_web_search, recon_web_read), through WireGuard only, or straight where a conversation allowed it. */
+  webOn: z.boolean().default(true).volatile(),
   /**
    * The Usenet accounts: a news server each, with its own login. No login is kept here: each is in
    * the macOS Keychain, under an item named after the account's id (lib/accounts.js).
@@ -146,6 +151,14 @@ export const Config = z.object({
   exportFolder: z.string().default('').volatile(),
   /** That older server's port. Read only, for the same reason. */
   usenetPort: z.natural().default(563).volatile(),
+  /**
+   * WireGuard (16 November 2026): everything Recon sends outside Tor goes through a WireGuard tunnel.
+   * The configurations by name, in order: the first is the primary, the others are backups. Each one's
+   * file is in the macOS Keychain under an item named after its id, never here (lib/vpn.js).
+   */
+  vpnConfigs: z.array(z.object({ id: z.string().default(''), label: z.string().default('') })).default([]).volatile(),
+  /** Where the wireproxy program is. Empty looks in the usual places (Homebrew). Plus does not install it. */
+  wireproxyPath: z.string().default('').volatile(),
 });
 
 function plain(value) {
@@ -183,10 +196,59 @@ export function apply(ctx, config) {
   const usenetDefault = () => String(plain(config?.usenetDefaultAccount) ?? '');
   /** Whether the Internet Archive is read directly (the default) rather than through Tor. */
   const archiveDirect = () => plain(config?.archiveDirect) !== false;
-  const web = createWeb({ port: () => onion.port(), run: runLocked, sources, on: () => ({ archive: plain(config?.archiveOn) === true, news: plain(config?.newsOn) === true }), archiveDirect });
-  const usenet = createUsenet({ run: runLocked, route: usenetRoute, accounts: usenetAccounts, defaultAccount: usenetDefault, login, forward: openForward, sources });
+  const web = createWeb({ port: () => onion.port(), run: runLocked, sources, on: () => ({ archive: plain(config?.archiveOn) === true, news: plain(config?.newsOn) === true }), archiveDirect, forward: (host, port, id) => clearForward(host, port, id) });
+  // ---- WireGuard: the way out for everything that is not Tor ------------------------------------
+  const vpnList = () => readVpnList(plain(config?.vpnConfigs));
+  const wireproxyBin = () => findWireproxy(String(plain(config?.wireproxyPath) ?? ''));
+  const vpn = createVpn({ list: vpnList, bin: wireproxyBin, warn });
+  ctx.effect(() => () => vpn.stop(), 'recon: wireguard');
+  /** Conversations whose user allowed direct connections (no tunnel works, or none is set up): in memory only. */
+  const directOk = new Set();
+  const ASK_DIRECT = 'Tell the user this. To allow direct connections for this conversation anyway, they type /recon direct (the sites then see this Mac\'s internet address); /recon block takes it back.';
+  /**
+   * The relay to one server outside Tor (lib/forward.js): through the WireGuard tunnel when one works,
+   * straight only when the user allowed it for this conversation. Otherwise nothing is sent.
+   */
+  const clearForward = async (host, port, id) => {
+    if (vpnList().length > 0) {
+      const tunnel = await vpn.start();
+      if (tunnel.ok) return { ...(await openForward(host, port, { socksPort: tunnel.port })), how: 'wireguard' };
+      if (!directOk.has(String(id))) throw new Error(`${tunnel.why} Nothing was sent. ${ASK_DIRECT}`);
+    } else if (!directOk.has(String(id))) {
+      throw new Error(`No WireGuard configuration is set up (Settings → Recon → WireGuard), so this would go straight from this Mac and show its internet address. Nothing was sent. ${ASK_DIRECT}`);
+    }
+    return { ...(await openForward(host, port)), how: 'direct' };
+  };
+  /** How a conversation reaches what is not Tor just now, in words. */
+  const clearWayText = (id) => {
+    const now = vpn.status();
+    if (vpnList().length === 0) return directOk.has(String(id)) ? 'directly (you allowed it for this conversation; no WireGuard is set up)' : 'blocked: no WireGuard is set up, and direct connections are not allowed in this conversation (/recon direct)';
+    if (now.state === 'ready') return `through WireGuard (${now.name})`;
+    return directOk.has(String(id)) ? 'through WireGuard when it starts, else directly (you allowed it for this conversation)' : 'through WireGuard when it starts; blocked if no configuration works (/recon direct allows direct connections)';
+  };
+  const usenet = createUsenet({ run: runLocked, route: usenetRoute, accounts: usenetAccounts, defaultAccount: usenetDefault, login, forward: clearForward, sources });
+  /** The ordinary web's addresses each conversation was shown (search results, links on pages it read, your messages). */
+  const webTrail = openWebTrail();
+  const clearnet = createClearnet({ run: runLocked, forward: clearForward, sources, trail: webTrail, on: () => plain(config?.webOn) !== false });
+  // Boards, forums and public channels that search engines miss (lib/boards.js), the same way out.
+  const boards = createBoards({ fetch: clearnet.fetch, sources, trail: webTrail, on: clearnet.on });
   /** Whether each account has a login in the Keychain, looked up now and then for the page. Only the fact, never a login. */
   const hasLogin = new Map();
+  /** Whether each WireGuard configuration is in the Keychain: only the fact, never its contents. */
+  const hasVpn = new Map();
+  const lookForVpns = () => {
+    for (const entry of vpnList()) void vpnStored(entry.id).then((there) => { hasVpn.set(entry.id, there); }, () => { hasVpn.set(entry.id, false); });
+  };
+  /** The last test of the tunnel, for the page. */
+  let vpnTest = { state: 'none', text: '' };
+  const runVpnTest = async () => {
+    if (vpnTest.state === 'running') return;
+    vpnTest = { state: 'running', text: 'Starting WireGuard…' };
+    const result = await vpn.start();
+    vpnTest = result.ok
+      ? { state: 'ok', text: `WireGuard works: ${result.name} passed traffic at ${new Date().toLocaleTimeString()}. It keeps running while Recon uses it.` }
+      : { state: 'failed', text: result.why.slice(0, 600) };
+  };
   const lookForLogins = () => {
     for (const account of usenetAccounts()) {
       void loginName(serviceOf(account.id)).then((name) => { hasLogin.set(account.id, Boolean(name)); }, () => { hasLogin.set(account.id, false); });
@@ -411,11 +473,12 @@ export function apply(ctx, config) {
       const tools = ctx.get('tools');
       if (!tools?.register) return;
       // A helper's searches and reads belong to its conversation: one numbering of sources, one log, one export.
-      toolsOff = buildTools({ enabled, inRecon: (exec) => inRecon(exec?.agent), inRoom: (exec) => inRoom(exec?.agent), gate: (exec) => gate(exec?.agent), onion, usenet, web, sources, idOf: (exec) => topIdOf(exec?.agent), restore: (exec) => restore(topOf(exec?.agent)) }).map((tool) => tools.register(tool));
+      toolsOff = buildTools({ enabled, inRecon: (exec) => inRecon(exec?.agent), inRoom: (exec) => inRoom(exec?.agent), gate: (exec) => gate(exec?.agent), onion, clearnet, boards, usenet, web, sources, idOf: (exec) => topIdOf(exec?.agent), restore: (exec) => restore(topOf(exec?.agent)) }).map((tool) => tools.register(tool));
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
       toolsOff = undefined;
       void tor.stop();
+      vpn.stop();
     }
   };
   const follow = () => {
@@ -524,6 +587,9 @@ export function apply(ctx, config) {
       const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map((block) => (block?.type === 'text' ? block.text : '')).join('\n') : '';
       const found = onionAddressesIn(text);
       if (found.length > 0) trail.add(session.id, found);
+      // A web address the user writes may be read too (the ordinary web, through WireGuard).
+      const web = text.match(/https?:\/\/[^\s<>"')\]]+/gi) ?? [];
+      if (web.length > 0) webTrail.add(session.id, web.slice(0, 50));
     } catch (error) {
       warn(`could not note the addresses in a message: ${String(error?.message ?? error)}`);
     }
@@ -545,8 +611,10 @@ export function apply(ctx, config) {
       `Tools: only ${TOOLS.join(', ')}. No programs, files, memory, helpers or other modes; a Long run (the Run button) adds helpers on this conversation's model, with file tools in the run's own folder in the room, and no programs or commands.`,
       `Model: ${model}${where ? `, ${where}` : ''}.`,
       allowed.ok ? (staysHome(place) ? 'What Recon finds stays on your own machines.' : 'You agreed that what Recon finds goes to this cloud model, for this conversation.') : 'What Recon finds is NOT sent to this model. Type /recon cloud to agree for this conversation, or pick a local model.',
-      `Network: .onion sites through Recon's own Tor (${tor.status().state}). Usenet: ${usenetRoute() === 'direct' ? `direct encrypted connections; accounts: ${usenetAccounts().map((account) => `${nameOf(account)} (${account.host || 'no server yet'}:${account.port})`).join(', ') || '(none set yet)'}` : 'off (Settings → Recon → Usenet)'}.`,
-      `More sources (Settings → Recon → More sources): Internet Archive ${plain(config?.archiveOn) !== true ? 'off' : archiveDirect() ? 'on, read directly, not through Tor (the Archive sees this Mac\'s internet address)' : 'on, through Tor'}; GDELT news ${plain(config?.newsOn) === true ? 'on, through Tor' : 'off'}.`,
+      `Outside Tor (the Internet Archive read directly, Usenet, the ordinary web): ${clearWayText(topIdOf(agent))}.`,
+      `Network: .onion sites through Recon's own Tor (${tor.status().state}). Usenet: ${usenetRoute() === 'direct' ? `encrypted connections, ${clearWayText(topIdOf(agent))}; accounts: ${usenetAccounts().map((account) => `${nameOf(account)} (${account.host || 'no server yet'}:${account.port})`).join(', ') || '(none set yet)'}` : 'off (Settings → Recon → Usenet)'}.`,
+      `The ordinary web: ${plain(config?.webOn) !== false ? `on, ${clearWayText(topIdOf(agent))}` : 'off (Settings → Recon → More sources)'}.`,
+      `More sources (Settings → Recon → More sources): Internet Archive ${plain(config?.archiveOn) !== true ? 'off' : archiveDirect() ? `on, not through Tor but ${clearWayText(topIdOf(agent))}` : 'on, through Tor'}; GDELT news ${plain(config?.newsOn) === true ? 'on, through Tor' : 'off'}.`,
       `Blocklist of banned sites: ${blocklist.ready() ? `${blocklist.info().size} sites, fetched ${new Date(blocklist.info().at).toISOString().slice(0, 16).replace('T', ' ')} UTC` : 'not fetched yet; it is fetched before the first search or page'}.`,
       `Read so far: ${sources.list(agent.id).length} sources. /recon log shows every search and source.`,
     ].join('\n');
@@ -586,7 +654,9 @@ export function apply(ctx, config) {
     const id = String(agent.id);
     sources.forget(id);
     trail.forget(id);
+    webTrail.forget(id);
     consent.forget(id);
+    directOk.delete(id);
     // Not rebuilt from its history again while Recon runs (only its numbering is), also when it
     // cannot be deleted. After the app restarts, only a conversation still waiting on the wipe
     // list is kept from it; one that could not be deleted still holds what it read.
@@ -707,7 +777,7 @@ export function apply(ctx, config) {
         inner.commands.register({
           name: 'recon',
           description: 'Recon conversation: show its isolation and model, or agree to a cloud model',
-          input: { hint: '[status | cloud | log | export | end | stop]' },
+          input: { hint: '[status | cloud | direct | block | log | export | end | stop]' },
           handler: async ({ agent, rawInput }) => {
             try {
               const word = String(rawInput ?? '').trim().toLowerCase();
@@ -741,9 +811,21 @@ export function apply(ctx, config) {
               }
               if (word === 'stop') {
                 await tor.stop();
-                return { kind: 'success', text: 'Recon\'s Tor is stopped and its temporary folder deleted. It starts again with the next search or page.' };
+                vpn.stop();
+                return { kind: 'success', text: 'Recon\'s Tor and its WireGuard tunnel are stopped and their temporary folders deleted. They start again with the next search or page.' };
               }
-              return { kind: 'error', text: `/recon does not know "${word.slice(0, 40)}". Use /recon, /recon cloud, /recon log, /recon export, /recon end or /recon stop.` };
+              // WireGuard missing or not working: the user may let this conversation connect directly (16 November).
+              if (word === 'direct') {
+                if (!enabled() || !inRecon(agent)) return { kind: 'error', text: status(agent) };
+                directOk.add(topIdOf(agent));
+                return { kind: 'success', text: 'Allowed for this conversation: when no WireGuard tunnel works, what is not Tor (the Internet Archive read directly, Usenet, the ordinary web) goes straight from this Mac, and those sites see its internet address. A working tunnel is still used first. /recon block takes this back. It holds until the app is closed.' };
+              }
+              if (word === 'block') {
+                if (!enabled() || !inRecon(agent)) return { kind: 'error', text: status(agent) };
+                directOk.delete(topIdOf(agent));
+                return { kind: 'success', text: 'Blocked again: without a working WireGuard tunnel, nothing outside Tor is sent from this conversation.' };
+              }
+              return { kind: 'error', text: `/recon does not know "${word.slice(0, 40)}". Use /recon, /recon cloud, /recon direct, /recon block, /recon log, /recon export, /recon end or /recon stop.` };
             } catch (error) {
               return { kind: 'error', text: String(error?.message ?? error).slice(0, 300) };
             }
@@ -789,10 +871,19 @@ export function apply(ctx, config) {
       torSeen = { path, version: '' };
       if (path) void torVersion(path).then((version) => { if (torSeen.path === path) torSeen = { path, version }; });
     }
-    if (!light) lookForLogins();
+    if (!light) {
+      lookForLogins();
+      lookForVpns();
+    }
     const accounts = usenetAccounts();
     return {
-      more: { archive: plain(config?.archiveOn) === true, archiveDirect: archiveDirect(), news: plain(config?.newsOn) === true, archiveHost: ARCHIVE, newsHost: NEWS },
+      vpn: {
+        bin: wireproxyBin(),
+        configs: vpnList().map((entry, index) => ({ ...entry, name: vpnNameOf(entry, index), stored: hasVpn.get(entry.id) === true, storeCommand: vpnStoreCommandFor(entry.id), removeCommand: vpnRemoveCommandFor(entry.id) })),
+        status: vpn.status(),
+        test: vpnTest,
+      },
+      more: { web: plain(config?.webOn) !== false, archive: plain(config?.archiveOn) === true, archiveDirect: archiveDirect(), news: plain(config?.newsOn) === true, archiveHost: ARCHIVE, newsHost: NEWS },
       room: ROOM,
       exportFolder: exportFolder(),
       waitingToWipe: wipeList.list().length,
@@ -848,10 +939,11 @@ export function apply(ctx, config) {
                   chunks.push(chunk);
                 }
                 const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-                if (body?.action !== 'tor-test') throw new Error('unknown action');
+                if (body?.action !== 'tor-test' && body?.action !== 'vpn-test') throw new Error('unknown action');
                 if (!enabled()) throw new Error('Recon is switched off.');
                 // Runs in the background; the page asks again to see how far it is.
-                void runTorTest();
+                if (body.action === 'vpn-test') void runVpnTest();
+                else void runTorTest();
               }
               // The start page's status bar names its conversation: `?session=<id>`.
               const asked = req.method === 'GET' ? String(new URL(String(req.url ?? ''), 'http://recon.invalid').searchParams.get('session') ?? '').slice(0, 200) : '';

@@ -132,7 +132,8 @@ check('it can be switched off', plain(Config({ archiveDirect: false }).archiveDi
   check('a conversation outside Recon\'s folder is shown as such', (await stateOf(app.route, `${STATE_PATH}?session=r3`)).conversation?.inRoom === false);
   check('an unknown conversation is said to be unknown', (await stateOf(app.route, `${STATE_PATH}?session=nobody`)).conversation?.known === false);
   const said = (await app.say(agents.r1, '')).text;
-  check('/recon shows the Archive read directly', said.includes('Internet Archive on, read directly, not through Tor (the Archive sees this Mac\'s internet address); GDELT news on, through Tor.'), said);
+  // Since WireGuard (16 November): not through Tor, but through the tunnel, or blocked without one.
+  check('/recon shows the Archive read outside Tor, and how', said.includes('Internet Archive on, not through Tor but blocked: no WireGuard is set up, and direct connections are not allowed in this conversation (/recon direct); GDELT news on, through Tor.'), said);
   app.dispose();
   const viaTor = start(Config({ enabled: true, archiveOn: true, archiveDirect: false }), extra);
   const saidTor = (await viaTor.say(agents.r1, 'status')).text;

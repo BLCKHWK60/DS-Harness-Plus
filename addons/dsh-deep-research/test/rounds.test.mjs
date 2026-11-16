@@ -180,3 +180,20 @@ test('jsonOrAsk: JSON answers are kept as they are; a prose answer is turned int
   assert.equal(await jsonOrAsk('prose again', 'findings', async () => 'still prose', extractJson), null);
   assert.equal(await jsonOrAsk('prose again', 'findings', async () => { throw new Error('down'); }, extractJson), null);
 });
+
+test('the map: every stage looks at the ground around the subject, and the report ends with a map of connections', async () => {
+  const { MAP_PLAN, MAP_SEARCH, MAP_ANALYZE, MAP_WRITE, planPrompt, searchPrompt, analyzePrompt, writePrompt, depthOf } = await import('../lib/rounds.js');
+  const depth = depthOf('standard');
+  assert.ok(planPrompt('q', depth, '2026-11-16').includes(MAP_PLAN));
+  assert.ok(searchPrompt({ question: 'q', task: { question: 'q', queries: [] }, round: 1, depth, searchTools: ['web_search'], fetchTools: ['web_fetch'], today: '2026-11-16' }).includes(MAP_SEARCH));
+  assert.ok(analyzePrompt({ question: 'q', findings: [], gaps: [], tried: [], asked: [], round: 1, depth, today: '2026-11-16' }).includes(MAP_ANALYZE));
+  assert.ok(writePrompt({ question: 'q', findings: [], conflicts: [], gaps: [], today: '2026-11-16' }).includes(MAP_WRITE));
+  assert.match(MAP_WRITE, /## Map of connections/);
+  const { METHOD } = await import('../../dsh-recon/lib/mode.js');
+  assert.match(METHOD, /Map the ground/);
+  assert.match(METHOD, /map of connections/);
+  assert.ok(METHOD.length < 4000, 'within the Modes add-on\'s limit');
+  const research = await import('../../dsh-research/lib/mode.js');
+  assert.match(research.METHOD, /Research the ground/);
+  assert.ok(research.METHOD.length < 4000);
+});

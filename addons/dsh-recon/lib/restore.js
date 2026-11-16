@@ -15,6 +15,7 @@
  */
 import { createHash } from 'node:crypto';
 import { onionAddress, onionAddressesIn } from './address.js';
+import { webAddress } from './clearnet.js';
 import { PART } from './sources.js';
 import { SUMMARY_MARK, answersOf } from './tools.js';
 
@@ -22,7 +23,7 @@ const OPEN = '<<<UNTRUSTED SOURCE TEXT\n';
 const CLOSE = '\nUNTRUSTED SOURCE TEXT>>>';
 /** What a part shows in place of an empty text. */
 const EMPTY = ['(the page has no text)', '(the article has no text)'];
-const KIND = { recon_onion_read: 'onion', recon_archive_read: 'archive', recon_usenet_read: 'usenet' };
+const KIND = { recon_onion_read: 'onion', recon_web_read: 'web', recon_board_read: 'web', recon_archive_read: 'archive', recon_usenet_read: 'usenet' };
 /**
  * A number only the assistant or a condensed summary mentions counts up to this far above the
  * highest number in Recon's own answers: a page can make the assistant write any [S#], and a far
@@ -89,10 +90,16 @@ export function partOf(name, text) {
     if (!retrieved || !address.ok) return undefined;
     Object.assign(source, { url: address.url, retrieved: retrieved[1], prefix: retrieved[2], via: 'Tor', cut: retrieved[3].includes('only its first part was read'), status: Number(/answered with status (\d{3})/.exec(retrieved[3])?.[1]) || 200 });
   } else if (kind === 'archive') {
-    const retrieved = /^Retrieved (\S+) \(UTC\) (through Tor|directly) from (\S+)\. Text fingerprint \(SHA-256\) ([0-9a-f]{16})…(.*)$/m.exec(before);
+    const retrieved = /^Retrieved (\S+) \(UTC\) (through Tor|through WireGuard|directly) from (\S+)\. Text fingerprint \(SHA-256\) ([0-9a-f]{16})…(.*)$/m.exec(before);
     const copy = retrieved ? /^https:\/\/web\.archive\.org\/web\/(\d{4,14})\/(https?:\/\/.+)$/.exec(retrieved[3]) : undefined;
     if (!retrieved || !copy) return undefined;
-    Object.assign(source, { url: retrieved[3], original: copy[2], captured: copy[1], retrieved: retrieved[1], prefix: retrieved[4], via: retrieved[2] === 'directly' ? 'direct' : 'Tor', cut: retrieved[5].includes('only its first part was read') });
+    Object.assign(source, { url: retrieved[3], original: copy[2], captured: copy[1], retrieved: retrieved[1], prefix: retrieved[4], via: retrieved[2] === 'directly' ? 'direct' : retrieved[2] === 'through WireGuard' ? 'wireguard' : 'Tor', cut: retrieved[5].includes('only its first part was read') });
+  } else if (kind === 'web') {
+    // The ordinary web (16 November 2026): read through WireGuard, or directly where the user allowed it.
+    const retrieved = /^Retrieved (\S+) \(UTC\) (through WireGuard|directly)\. Text fingerprint \(SHA-256\) ([0-9a-f]{16})…(.*)$/m.exec(before);
+    const address = webAddress(head[2].trim());
+    if (!retrieved || !address.ok) return undefined;
+    Object.assign(source, { url: address.url, retrieved: retrieved[1], prefix: retrieved[3], via: retrieved[2] === 'through WireGuard' ? 'wireguard' : 'web-direct', cut: retrieved[4].includes('only its first part was read'), status: Number(/answered with status (\d{3})/.exec(retrieved[4])?.[1]) || 200 });
   } else {
     const article = /^Usenet article (<[^<>\s]{3,250}>) in (\S+)$/.exec(head[2]);
     const retrieved = /^Retrieved (\S+) \(UTC\) through Usenet\. Text fingerprint \(SHA-256\) ([0-9a-f]{16})…(.*)$/m.exec(before);

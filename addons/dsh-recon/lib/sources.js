@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 export const PART = 12_000;
 
 /** How a source reached Recon, for its citation. */
-const ROUTE = { Tor: 'through Tor', Usenet: 'through Usenet', direct: 'directly from the Internet Archive, not through Tor' };
+const ROUTE = { Tor: 'through Tor', Usenet: 'through Usenet', direct: 'directly from the Internet Archive, not through Tor', wireguard: 'through WireGuard', 'web-direct': 'directly, not through Tor or WireGuard (the user allowed it for the conversation)' };
 
 /** @returns {object} the record of all Recon conversations. */
 export function openSources() {

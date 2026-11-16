@@ -6,7 +6,7 @@ archives. It is not a browser.
 
 **This version is steps 1 to 4 and 6 of 7.** It searches and reads .onion sites through Tor and
 Usenet text newsgroups through your news server, as text only, behind the filters, with citations,
-a research log, an export, and "End and wipe". WireGuard and saved searches are later steps.
+a research log, an export, and "End and wipe". WireGuard, the ordinary web and back channels came on 16 November 2026; saved searches are a later step.
 
 You need the `tor` program: `brew install tor`. Plus does not install it.
 
@@ -285,7 +285,7 @@ Usenet provider; you can have up to eight.
 
 ## What it does not do yet
 
-- **No WireGuard or saved searches:** later steps.
+- **No saved searches:** a later step.
 - **What was read stays in memory** until the app is closed or the conversation is ended, and in
   the conversation on disk until it is ended. After a restart it is rebuilt from the conversation
   on disk (see "Searching and reading"); Recon keeps no copy of its own.
@@ -388,3 +388,11 @@ A Recon conversation can run a Long run (the Run button next to Send, with Missi
 - **End and wipe** ends the run (`mission.endRun`), deletes its folder, and deletes the helpers' saved conversations with the conversation's.
 
 Mission asks `ctx.get('recon').runs()`: without it an isolated conversation is left alone, as before.
+
+## WireGuard, the ordinary web and back channels (16 November 2026)
+
+- **WireGuard** (`lib/vpn.js`): everything Recon sends outside Tor (Internet Archive copies read directly, Usenet, the ordinary web, the back channels) goes through a WireGuard tunnel run by `wireproxy` for Recon alone (the Mac's own network is not changed). Settings → Recon → WireGuard lists the configurations: the first is the primary, the others backups, tried in order; a running tunnel is checked again after a minute and the configurations are tried again when it stops passing traffic or the order changed. Each configuration's file is in the macOS Keychain (`dsh-recon-wg-<id>`, base64), put there by the user with the two-step command the page shows (copied, then pasted when `security` asks, so it never shows on a command line); Recon writes it for a moment into a 0700 temporary folder and deletes it once wireproxy has read it. wireproxy's own messages are never passed on (one about a bad key repeats the key). A configuration needs a DNS line. Without a working tunnel nothing is sent; `/recon direct` allows direct connections for one conversation (memory only), `/recon block` takes it back.
+- **The ordinary web** (`lib/clearnet.js`): `recon_web_search` (DuckDuckGo's HTML page, then Mojeek, then Marginalia) and `recon_web_read`. Only addresses the conversation was shown (search results, links on pages it read, the user's messages; oldest dropped past 8,000), never a bare number address, the site's own port kept. Settings → Recon → More sources → The ordinary web.
+- **Back channels** (`lib/boards.js`): `recon_board_search` / `recon_board_read` for 4chan (a board's live catalog and threads), 4chan archives (desuarchive, b4k, palanq; FoolFuuka's search and thread reader), Reddit (PullPush for words, Arctic Shift by subreddit or author; posts read with their comments, by an id a search showed), public Telegram channels (`t.me/s/<name>`, with its own search, only a channel the conversation was shown), Hacker News (Algolia), Lemmy (lemmy.world), Mastodon hashtags (mastodon.social), GitHub issue search, and Have I Been Pwned's list of known breaches. Checked on 16 November 2026; not usable without a login, a key or a "prove you are human" page (which Recon does not get past): Discord, Bluesky, reddit.com itself, 4plebs, archived.moe, thebarchive, Disboard, and every paste search tried.
+- **The map**: Recon's method looks at the ground around a subject (other names, people, groups, places, events, the topic) and ends with a map of connections.
+- **Known limit**: the trail stops a page from making the model build an address; a page can still offer many links and ask the model to open them in an order. The word screen and the fence (everything from a source is marked as material, not instructions) are what stand against that.

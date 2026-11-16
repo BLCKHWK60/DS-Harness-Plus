@@ -41,9 +41,10 @@ export function tidy(text) {
  * A page as plain text. Everything that is not text is dropped, not fetched.
  * @param {string} html - the page.
  * @param {string} base - the page's own address, to complete its links.
- * @returns {{title: string, text: string, links: {url: string, text: string}[]}} links are kept only when they point to an .onion address.
+ * @param {boolean} [web] - keep links to ordinary web addresses too (the ordinary web's pages and search results).
+ * @returns {{title: string, text: string, links: {url: string, text: string}[]}} links are kept only when they point to an .onion address, or with `web` to any http(s) address.
  */
-export function htmlToText(html, base) {
+export function htmlToText(html, base, web = false) {
   let page = String(html).replace(/<!--[\s\S]*?-->/g, ' ');
   const title = tidy(decodeEntities((/<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(page)?.[1] ?? '').replace(/<[^>]*>/g, ' '))).slice(0, 300);
   page = page.replace(/<(script|style|noscript|template|svg|math|iframe|object|embed|applet|canvas|audio|video|picture|map|head|select|textarea)\b[\s\S]*?<\/\1\s*>/gi, ' ');
@@ -59,7 +60,7 @@ export function htmlToText(html, base) {
     try {
       const made = new URL(raw, base);
       made.hash = '';
-      if ((made.protocol === 'http:' || made.protocol === 'https:') && /(^|\.)[a-z2-7]{56}\.onion$/.test(made.hostname) && !made.username && !made.password) url = made.href;
+      if ((made.protocol === 'http:' || made.protocol === 'https:') && (web || /(^|\.)[a-z2-7]{56}\.onion$/.test(made.hostname)) && !made.username && !made.password) url = made.href;
     } catch {
       url = '';
     }
@@ -303,7 +304,7 @@ export async function get(req) {
       else if (req.shape === 'results') {
         const results = searchResults(text, url.href);
         page = { results, ...(results.length === 0 ? { links: htmlToText(text, url.href).links.slice(0, 80) } : {}) };
-      } else page = head.type === 'text/plain' ? { title: '', text: tidy(text).slice(0, TEXT_MAX), links: [] } : htmlToText(text, url.href);
+      } else page = head.type === 'text/plain' ? { title: '', text: tidy(text).slice(0, TEXT_MAX), links: [] } : htmlToText(text, url.href, req.links === 'web');
       finish({ ok: true, status: head.status, type: head.type, ...page, bytes: body.length, cut });
     };
     socket.on('error', (error) => finish({ ok: false, why: `the connection broke (${error.code ?? error.message})` }));

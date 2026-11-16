@@ -29,6 +29,8 @@ export const IDLE_ROUNDS = 5;
 const GOAL_ROUNDS = 3000;
 /** How long one helper may work before it is stopped. */
 const HELPER_MS = 30 * 60_000;
+/** How long after a helper's failed turn it is closed, if the app has not settled it by then. */
+export const FAILED_TURN_MS = 5000;
 /** Helpers in a row that could not do their item before a run pauses itself. */
 export const FAIL_STREAK = 3;
 const ROLE_NAMES = { plan: 'planner', implement: 'worker', review: 'reviewer' };
@@ -100,7 +102,7 @@ export function pickRoute({ project, defaults, tierRoute, current }, role) {
  * @param {object} deps - what the plugin shares with the runner.
  * @returns {object} starting, stepping and ending runs.
  */
-export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home }) {
+export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home, failedTurnMs = FAILED_TURN_MS }) {
   /** Conversation id -> its run. */
   const runs = new Map();
   /**
@@ -262,6 +264,25 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
   };
   /** Helpers that only read (the planner, the reviewer, a format ask): child id -> its name for the refusal. */
   const readers = new Map();
+  /**
+   * Helpers at work (child id -> how to close one). A helper whose turn failed while something still
+   * waited in its inbox is never settled by the app; it is closed a moment later, so its result comes
+   * and the run goes on (16 November: a Recon run hung on its planner).
+   */
+  const working = new Map();
+  try {
+    ctx.on?.('session/event', (session, event) => {
+      if (event?.type !== 'turn/end' || event.data?.reason?.kind !== 'error') return;
+      const close = working.get(String(session?.id ?? ''));
+      if (!close) return;
+      const timer = setTimeout(() => {
+        if (working.get(String(session.id)) === close) close();
+      }, failedTurnMs);
+      timer.unref?.();
+    });
+  } catch {
+    /* no session events here (a test): the helper's own time limit still holds */
+  }
   /** Models that refused a thinking level ("provider/model"): their helpers get none from then on. */
   const noEffort = new Set();
   /** Run one helper model to its answer. A helper whose model failed throws, with the model's reason. */
@@ -287,11 +308,16 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
           signal: both,
         });
         if (reader && child?.childId) readers.set(String(child.childId), reader);
+        const close = () => Promise.resolve(child?.dispose?.()).catch(() => {});
+        if (child?.childId) working.set(String(child.childId), close);
         let result;
         try {
           result = await awaitChild(child, both);
         } finally {
-          if (child?.childId) readers.delete(String(child.childId));
+          if (child?.childId) {
+            readers.delete(String(child.childId));
+            if (working.get(String(child.childId)) === close) working.delete(String(child.childId));
+          }
         }
         const text = (result.output ?? []).filter((block) => block.type === 'text').map((block) => block.text).join('\n').trim();
         const failure = helperFailure(result);

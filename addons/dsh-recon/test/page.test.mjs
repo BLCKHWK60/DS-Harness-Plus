@@ -206,10 +206,11 @@ const buttons = elements.filter((element) => element.type === 'button');
 const labels = buttons.map((button) => walk(button.children).map((node) => node.text ?? '').join());
 check('each account can be saved and removed', buttons.filter((button) => walk(button.children).some((node) => node.text === 'Save')).length === 2 && buttons.filter((button) => walk(button.children).some((node) => node.text === 'Remove')).length === 2, labels.join(', '));
 check('only the other account can be made the default', buttons.filter((button) => walk(button.children).some((node) => node.text === 'Make default')).length === 1, labels.join(', '));
-check('a new account can be added', buttons.filter((button) => walk(button.children).some((node) => node.text === 'Add')).length === 1 && text.includes('Add another account'));
+// Two Add buttons since WireGuard (16 November): a WireGuard configuration's, then a Usenet account's.
+check('a new account can be added', buttons.filter((button) => walk(button.children).some((node) => node.text === 'Add')).length === 2 && text.includes('Add another account'));
 
 const inputs = elements.filter((element) => element.type === 'input');
-check('every account has its three fields, and the add form too', inputs.length === 9, `${inputs.length} inputs`);
+check('every account has its three fields, and the add form too (and WireGuard\'s name field)', inputs.length === 10, `${inputs.length} inputs`);
 check('the fields say which server and port they take', inputs.some((input) => input.props.placeholder === 'news.example.com') && inputs.some((input) => input.props.placeholder === '563'));
 
 check('an account without a login is shown how to store it', text.includes('security add-generic-password -U -s dsh-recon-usenet-a1 -a YOUR_USERNAME -w'));
@@ -227,7 +228,7 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 20));
   const typed = elementsOf(tree).find((element) => element.type === 'input' && element.props['aria-label'] === 'New news server');
   typed.props.onChange({ target: { value: 'news.new.example' } });
   const next = walk(section.component({}));
-  const add = buttonsOf(next).find((button) => labelOf(button) === 'Add');
+  const add = buttonsOf(next).filter((button) => labelOf(button) === 'Add').at(-1);
   check('the Add button wakes up once a server is typed', add !== undefined && add.props.disabled === false, JSON.stringify(add?.props.disabled));
   add.props.onClick();
   await tick();
@@ -267,7 +268,7 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 20));
   const now = walk(section.component({}));
   const toggle = elementsOf(now).find((element) => element.props['aria-label'] === 'Read Internet Archive copies directly (not through Tor)');
   check('the page has the switch for reading the Archive directly', toggle?.props.role === 'switch' && toggle.props['aria-checked'] === 'true', JSON.stringify(toggle?.props ?? null));
-  check('its description says the Archive then sees this Mac\'s address', allText(now).includes('The Archive then sees this Mac\'s internet address.') && allText(now).includes('GDELT and .onion sites always go through Tor.'));
+  check('its description says the copies go through the WireGuard tunnel', allText(now).includes('through the WireGuard tunnel (or straight where a conversation allowed /recon direct)') && allText(now).includes('GDELT and .onion sites always go through Tor.'));
   const before = mutations.length;
   toggle.props.onClick();
   await tick();

@@ -249,6 +249,7 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
       const [busy, setBusy] = useState(false);
       const alive = useRef(true);
       const [add, setAdd] = useState({ label: '', host: '', port: '' });
+      const [addVpn, setAddVpn] = useState('');
       const load = useCallback(async () => {
         try {
           const next = await call();
@@ -265,7 +266,7 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
       }, [load]);
 
       // While a test of Tor runs, look again every second. Before the first return, so the hook order never changes.
-      const testing = data?.tor?.test?.state === 'running';
+      const testing = data?.tor?.test?.state === 'running' || data?.vpn?.test?.state === 'running' || data?.vpn?.status?.state === 'starting';
       useEffect(() => {
         if (!testing) return undefined;
         const timer = setInterval(() => void load(), 1000);
@@ -326,6 +327,24 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
         setAdd({ label: '', host: '', port: '' });
         void save(values, `Added ${name || server}. Store its login in the Keychain as shown, then it is ready.`);
       };
+      const vpn = data.vpn ?? {};
+      const vpns = Array.isArray(vpn.configs) ? vpn.configs : [];
+      /** The configurations as the settings keep them: ids and names, in order. */
+      const saveVpns = (next, done) => void save({ vpnConfigs: next.map((one) => ({ id: String(one.id), label: String(one.label ?? '') })) }, done);
+      const moveVpn = (index, by) => {
+        const next = [...vpns];
+        const [one] = next.splice(index, 1);
+        next.splice(Math.max(0, Math.min(next.length, index + by)), 0, one);
+        saveVpns(next, `${one.name} is now ${index + by <= 0 ? 'the primary' : `backup ${index + by}`}.`);
+      };
+      const testVpn = async () => {
+        try {
+          const next = await call({ action: 'vpn-test' });
+          if (alive.current) setData(next);
+        } catch (problem) {
+          if (alive.current) setNote({ text: `Could not test WireGuard: ${String(problem?.message ?? problem)}`, error: true });
+        }
+      };
       const testTor = async () => {
         try {
           const next = await call({ action: 'tor-test' });
@@ -355,7 +374,7 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
               : 'The tor program is not installed. Plus does not install it. In the Terminal: brew install tor'),
             tor.test?.text ? h('div', { className: 'dsh-rc-rowdesc', 'data-error': String(tor.test.state === 'failed') }, tor.test.state === 'running' ? `Connecting… ${tor.percent || 0}%` : tor.test.text) : null),
           h('button', { type: 'button', className: 'dsh-rc-btn', disabled: !data.enabled || !tor.path || tor.test?.state === 'running', title: 'Connects this Mac to the Tor network, opens no site, then stops', onClick: () => void testTor() }, tor.test?.state === 'running' ? 'Testing…' : 'Test Tor')),
-        h('p', { className: 'dsh-rc-desc' }, 'The test connects this Mac to the Tor network and opens no site. Your internet provider can see that Tor was used. WireGuard is a later step.'),
+        h('p', { className: 'dsh-rc-desc' }, 'The test connects this Mac to the Tor network and opens no site. Your internet provider can see that Tor was used.'),
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },
             h('div', { className: 'dsh-rc-rowtitle' }, 'Blocklist of banned sites'),
@@ -369,12 +388,46 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
               ? `Another engine is set in the configuration file: ${data.engine.host}. The blocklist and the word screen still apply.`
               : `The built-in filtered index (Ahmia), at its .onion address: ${data.engine?.builtIn ?? ''}. It filters abuse material from its index. Another engine can be set in the configuration file (otherEngine, engineHost).`))),
 
+        h('div', { className: 'dsh-rc-group' }, 'WireGuard'),
+        h('p', { className: 'dsh-rc-desc' }, 'Everything Recon sends outside Tor (Internet Archive copies read directly, Usenet, and the ordinary web) goes through a WireGuard tunnel: the first configuration below that works, the others are backups, tried in order. Only Recon uses the tunnel; your Mac\'s own network is not changed. If none is set up or none works, nothing is sent, and a conversation tells you so: typing /recon direct there allows direct connections for that conversation (the sites then see this Mac\'s internet address), /recon block takes it back.'),
+        h('div', { className: 'dsh-rc-row' },
+          h('div', { className: 'dsh-rc-rowtext' },
+            h('div', { className: 'dsh-rc-rowtitle' }, 'wireproxy'),
+            h('div', { className: 'dsh-rc-rowdesc' }, vpn.bin
+              ? `Found: ${vpn.bin}. It runs WireGuard for Recon alone, through a port on this Mac, while Recon uses it.`
+              : 'The wireproxy program is not installed. Plus does not install it: download wireproxy for macOS from its releases page (github.com/pufferffish/wireproxy) and put it at /usr/local/bin/wireproxy, or give its place in the configuration file (wireproxyPath).'),
+            vpn.status?.state === 'ready' ? h('div', { className: 'dsh-rc-rowdesc' }, `Running now: ${vpn.status.name}.`) : null,
+            vpn.test?.text ? h('div', { className: 'dsh-rc-rowdesc', 'data-error': String(vpn.test.state === 'failed') }, vpn.test.state === 'running' ? 'Starting WireGuard…' : vpn.test.text) : null),
+          h('button', { type: 'button', className: 'dsh-rc-btn', disabled: !data.enabled || !vpn.bin || vpns.length === 0 || vpn.test?.state === 'running', title: 'Starts the tunnel with the first configuration that passes traffic, and leaves it running', onClick: () => void testVpn() }, vpn.test?.state === 'running' ? 'Testing…' : 'Test WireGuard')),
+        vpns.map((one, index) => h('div', { key: one.id, className: 'dsh-rc-account' },
+          h('div', { className: 'dsh-rc-rowtitle' }, one.name, h('span', { className: 'dsh-rc-tag' }, index === 0 ? 'primary' : `backup ${index}`)),
+          h('div', { className: 'dsh-rc-rowdesc' }, one.stored
+            ? 'Its file is in the Keychain. Recon reads it only to start the tunnel, writes it for that moment into a folder only you can open, and deletes it at once. It is never shown, logged or given to the model.'
+            : 'Its file is not in the Keychain yet: this configuration is skipped until it is.'),
+          h('div', { className: 'dsh-rc-actions' },
+            index > 0 ? h('button', { type: 'button', className: 'dsh-rc-btn', disabled: busy, onClick: () => moveVpn(index, -index) }, 'Make primary') : null,
+            index > 0 ? h('button', { type: 'button', className: 'dsh-rc-btn', disabled: busy, onClick: () => moveVpn(index, -1) }, 'Up') : null,
+            index < vpns.length - 1 ? h('button', { type: 'button', className: 'dsh-rc-btn', disabled: busy, onClick: () => moveVpn(index, 1) }, 'Down') : null,
+            h('button', { type: 'button', className: 'dsh-rc-btn', disabled: busy, title: 'Take it out of Settings. Its file stays in the Keychain.', onClick: () => saveVpns(vpns.filter((other) => other.id !== one.id), `Removed ${one.name}. Its file stays in the Keychain; to delete it, type this in the Terminal: ${one.removeCommand ?? ''}`) }, 'Remove')),
+          one.stored
+            ? h('div', null, h('div', { className: 'dsh-rc-rowdesc' }, 'To remove its file from the Keychain, type this in the Terminal:'), h('div', { className: 'dsh-rc-sql' }, one.removeCommand ?? ''))
+            : h('div', null, h('div', { className: 'dsh-rc-rowdesc' }, 'To store its file, type this in the Terminal with the path of your WireGuard file (the .conf your VPN provider gave you) in place of ~/PATH/TO/YOUR-FILE.conf:'), h('div', { className: 'dsh-rc-sql' }, one.storeCommand ?? '')))),
+        vpns.length < 20
+          ? h('div', { className: 'dsh-rc-row' },
+            h('div', { className: 'dsh-rc-rowtext' },
+              h('div', { className: 'dsh-rc-rowtitle' }, vpns.length === 0 ? 'Add a WireGuard configuration' : 'Add a backup'),
+              h('div', { className: 'dsh-rc-rowdesc' }, 'A name for it here; its file goes into the Keychain with the command shown once it is added.'),
+              h('div', { className: 'dsh-rc-fields' },
+                h('input', { className: 'dsh-rc-input', type: 'text', value: addVpn, placeholder: 'Name (for example the server\'s country)', spellCheck: false, autoCapitalize: 'off', autoCorrect: 'off', 'aria-label': 'New WireGuard configuration name', onChange: (event) => setAddVpn(event.target.value) }))),
+            h('button', { type: 'button', className: 'dsh-rc-btn', disabled: busy || !data.enabled, onClick: () => { const label = addVpn.trim().slice(0, 60); setAddVpn(''); saveVpns([...vpns, { id: `wg-${newId().toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 30) || Date.now().toString(36)}`, label }], `Added ${label || 'a WireGuard configuration'}. Store its file in the Keychain as shown.`); } }, 'Add'))
+          : null,
+
         h('div', { className: 'dsh-rc-group' }, 'Usenet'),
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },
             h('div', { className: 'dsh-rc-rowtitle' }, 'Connect to Usenet'),
-            h('div', { className: 'dsh-rc-rowdesc' }, 'Off: Usenet is not reached at all. On: an encrypted connection straight to the news server of the account a request names. That server sees your internet address and knows that account, as with any newsreader. Tor is not used for Usenet.')),
-          h('button', { type: 'button', role: 'switch', className: 'dsh-rc-switch', 'aria-checked': String(usenet.route === 'direct'), 'aria-label': 'Connect to Usenet', disabled: busy || !data.enabled, onClick: () => void save({ usenetRoute: usenet.route === 'direct' ? 'off' : 'direct' }, usenet.route === 'direct' ? 'Usenet is off.' : 'Usenet is on, through a direct encrypted connection.') })),
+            h('div', { className: 'dsh-rc-rowdesc' }, 'Off: Usenet is not reached at all. On: an encrypted connection to the news server of the account a request names, through the WireGuard tunnel (above), or straight only where a conversation allowed it with /recon direct. The server knows that account, as with any newsreader. Tor is not used for Usenet.')),
+          h('button', { type: 'button', role: 'switch', className: 'dsh-rc-switch', 'aria-checked': String(usenet.route === 'direct'), 'aria-label': 'Connect to Usenet', disabled: busy || !data.enabled, onClick: () => void save({ usenetRoute: usenet.route === 'direct' ? 'off' : 'direct' }, usenet.route === 'direct' ? 'Usenet is off.' : 'Usenet is on, through an encrypted connection over the WireGuard tunnel (or straight where a conversation allowed /recon direct).') })),
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },
             h('div', { className: 'dsh-rc-rowtitle' }, accounts.length === 1 ? 'Usenet account' : 'Usenet accounts'),
@@ -401,6 +454,11 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
           : null,
 
         h('div', { className: 'dsh-rc-group' }, 'More sources'),
+        h('div', { className: 'dsh-rc-row' },
+          h('div', { className: 'dsh-rc-rowtext' },
+            h('div', { className: 'dsh-rc-rowtitle' }, 'The ordinary web'),
+            h('div', { className: 'dsh-rc-rowdesc' }, 'Search the web (DuckDuckGo, then Mojeek, then Marginalia) and read its pages as text: forums, boards, blogs, news. With it, the back channels search engines miss, through their public read-only interfaces: 4chan and its archives (desuarchive, b4k, palanq), Reddit (PullPush, Arctic Shift), public Telegram channels, Hacker News, Lemmy, Mastodon hashtags, GitHub issues, and Have I Been Pwned\'s list of known breaches. Discord, Bluesky and paste searches need a login or a key, so they are only found through the web search. Only through the WireGuard tunnel above, or straight where a conversation allowed /recon direct; never otherwise. Only addresses a search, a page or your own message showed are opened. The search engine sees the search words.')),
+          h('button', { type: 'button', role: 'switch', className: 'dsh-rc-switch', 'aria-checked': String(more.web !== false), 'aria-label': 'The ordinary web', disabled: busy || !data.enabled, onClick: () => void save({ webOn: more.web === false }, more.web === false ? 'The ordinary web is on.' : 'The ordinary web is off.') })),
         h('p', { className: 'dsh-rc-desc' }, 'Two services on the normal web, reached only at their own addresses and as text. GDELT always goes through Recon\'s own Tor; the Internet Archive goes directly or through Tor, as set below. Both limit automated use, and more so through Tor: expect "asked to slow down" or "refused" now and then. Recon does not try another way.'),
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },
@@ -410,8 +468,8 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },
             h('div', { className: 'dsh-rc-rowtitle' }, 'Read Internet Archive copies directly (not through Tor)'),
-            h('div', { className: 'dsh-rc-rowdesc' }, 'On: the Archive\'s list of copies and the copies themselves are fetched straight from the Archive, as text only, with the same filters and limits. The Archive then sees this Mac\'s internet address. Off: through Recon\'s Tor, where the Archive refuses most reads. GDELT and .onion sites always go through Tor.')),
-          h('button', { type: 'button', role: 'switch', className: 'dsh-rc-switch', 'aria-checked': String(more.archiveDirect === true), 'aria-label': 'Read Internet Archive copies directly (not through Tor)', disabled: busy || !data.enabled, onClick: () => void save({ archiveDirect: more.archiveDirect !== true }, more.archiveDirect === true ? 'Internet Archive copies are read through Tor.' : 'Internet Archive copies are read directly, not through Tor.') })),
+            h('div', { className: 'dsh-rc-rowdesc' }, 'On: the Archive\'s list of copies and the copies themselves are fetched from the Archive through the WireGuard tunnel (or straight where a conversation allowed /recon direct), as text only, with the same filters and limits. Off: through Recon\'s Tor, where the Archive refuses most reads. GDELT and .onion sites always go through Tor.')),
+          h('button', { type: 'button', role: 'switch', className: 'dsh-rc-switch', 'aria-checked': String(more.archiveDirect === true), 'aria-label': 'Read Internet Archive copies directly (not through Tor)', disabled: busy || !data.enabled, onClick: () => void save({ archiveDirect: more.archiveDirect !== true }, more.archiveDirect === true ? 'Internet Archive copies are read through Tor.' : 'Internet Archive copies are read through the WireGuard tunnel, not through Tor.') })),
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },
             h('div', { className: 'dsh-rc-rowtitle' }, 'GDELT news index'),
@@ -429,7 +487,7 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
         h('div', { className: 'dsh-rc-group' }, 'What a Recon conversation has'),
         h('ul', { className: 'dsh-rc-list' },
           item(`Only these tools: ${(data.tools ?? []).join(', ')}.`),
-          item('No programs, no shell, no files, no memory, no skills, no helpers, no web search and no Deep research.'),
+          item('No programs, no shell, no files, no memory, no skills and no Deep research. The ordinary web only through Recon\'s own web tools and the WireGuard tunnel. Helpers only in a Long run, inside Recon\'s rules.'),
           item('No project instructions, no AGENTS.md, no notes from other add-ons.'),
           item('It can never be switched to another tab\'s mode, and a conversation of another tab can never become a Recon conversation.'),
           item('If Recon is switched off, its old conversations stay locked with no tools at all.')),
@@ -455,7 +513,7 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
           item('Until you end it with /recon end, the app keeps a Recon conversation on disk like any other, and writes its title with the model set for titles.'),
           item('Plugins from other makers are not covered by the isolation. Plus\'s own add-ons are.'),
           item('Usenet: text newsgroups only. Groups that hold files are never listed or opened, file postings are skipped, and an article that carries a file is refused before its text is fetched. Usenet has no full-text search: subject, author and date are matched.'),
-          item('Not built yet: WireGuard and saved searches.')));
+          item('Not built yet: saved searches.')));
     }
 
     return {

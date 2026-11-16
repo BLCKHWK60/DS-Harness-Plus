@@ -479,3 +479,45 @@ test('a Recon run ended while a step was under way: the step writes nothing into
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('a helper whose turn failed and that the app never settles is closed, so the retry without a thinking level runs (16 November: a Recon run hung)', async () => {
+  const { createRunner } = await import('../runner.js');
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const root = mkdtempSync(join(tmpdir(), 'mission-stuck-'));
+  try {
+    const goal = { id: 'g', revision: 1, phase: 'active' };
+    let made = false;
+    const goals = { create: () => { made = true; return goal; }, get: () => (made ? goal : undefined), pause: () => {}, resume: () => {}, complete: () => {}, clear: () => {} };
+    const listeners = [];
+    const closed = [];
+    let n = 0;
+    const subagents = {
+      startActivation: async (spec) => {
+        n += 1;
+        const childId = `child-${n}`;
+        if (spec.agentOptions?.reasoningEffort === 'high') {
+          // Like the app: the turn fails at once, but something still waits in the helper's inbox, so the
+          // result is not settled until the helper is closed.
+          let settle;
+          const result = new Promise((resolve) => { settle = resolve; });
+          setTimeout(() => { for (const listener of listeners) listener({ id: childId }, { type: 'turn/end', data: { reason: { kind: 'error', error: { message: 'does not support reasoning effort "high"' } } } }); }, 5);
+          return { childId, result, dispose: () => { closed.push(childId); settle({ output: [], stopReason: 'error' }); } };
+        }
+        return { childId, result: Promise.resolve({ output: [{ type: 'text', text: '{"items":[{"title":"one"}],"checks":[]}' }], stopReason: 'end' }) };
+      },
+    };
+    const ctx = { get: (name) => ({ goals, subagents })[name], on: (name, listener) => { if (name === 'session/event') listeners.push(listener); } };
+    const points = { take: async () => ({ id: 'p', number: 1 }), files: async () => ({ files: [], more: false }), idOf: async () => 'p', changes: async () => '' };
+    const runner = createRunner(ctx, { settings: () => ({ limits: { maxItems: 12, maxTries: 3, maxReviews: 2, maxSteps: 60, waitMinutes: 3 }, roles: {}, projects: {} }), pointsOf: () => points, afterCommand: async () => [], warn: () => {}, home: undefined, failedTurnMs: 30 });
+    const agent = { id: 'stuck', model: { current: () => ({ provider: 'local', model: 'no-high' }) } };
+    await runner.start(agent, 'plan something small', { mode: 'auto', root }, { kind: 'long', long: { minutes: 30, laps: 1, effort: true } });
+    const planned = await Promise.race([runner.step(agent, new AbortController().signal, 60000), new Promise((resolve) => setTimeout(() => resolve('HUNG'), 3000))]);
+    assert.notEqual(planned, 'HUNG', 'the step came back');
+    assert.deepEqual(closed, ['child-1'], 'the stuck helper was closed');
+    assert.match(planned, /1 item/, 'the planner was asked again without a thinking level, and planned');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

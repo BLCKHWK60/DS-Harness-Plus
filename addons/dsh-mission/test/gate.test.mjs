@@ -707,6 +707,11 @@ test('a Long run in Recon, where Recon keeps it in its rules: its own folder, Re
     // Not the conversation itself, and not a helper of a conversation that is not Recon.
     await assemble({}, { agent, signal: new AbortController().signal }, async () => {});
     assert.equal(moved.length, 1);
+    // Moved as soon as it is made, before its first turn (a move inside a failing first step left the
+    // app waiting on the helper for good).
+    const early = { id: 'rc1-planner', header: { parentSession: 'rc1' }, session: { header: { parentSession: 'rc1' } } };
+    for (const handler of app.handlers('agent/created')) await handler({ agent: early });
+    assert.deepEqual(moved.at(-1), ['rc1-planner', folder]);
     // The helpers' file tools: only inside the fence and from the run's folder (review findings 1 and 7).
     assert.equal(app.provided.mission.longRun('rc1').files, true);
     let where = '/private/tmp/dsh-recon-room';

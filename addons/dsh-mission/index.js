@@ -466,15 +466,28 @@ export function apply(ctx, config) {
 
   // A Recon conversation's run: its helpers work in the run's own folder, not in Recon's room (the app
   // starts a helper in its conversation's folder, and a file written by a plain name would land there).
+  /** Move a Recon run's helper into the run's folder, if it is not there yet. */
+  const moveHelper = async (agent, signal) => {
+    const owner = agent && parentOf(agent) ? ownerOf(agent) : '';
+    if (!owner || owner === agent.id || !isolated(owner) || !reconRuns(owner) || !reconRunOn(owner)) return;
+    const root = state.get(owner)?.root ?? '';
+    const service = ctx.get('workingDirectory');
+    if (root && existsSync(root) && service?.set && service.get?.(agent.session) !== root) await service.set(agent, root, signal);
+  };
+  // When the helper is made, before its first turn: the app tells the helper of the move with a message
+  // its first turn takes in. Moved later, inside a step that then fails (a model refusing the thinking
+  // level), that message waited unread and the app never settled the helper: the run hung (16 November).
+  ctx.on('agent/created', async ({ agent }) => {
+    try {
+      await moveHelper(agent, undefined);
+    } catch (error) {
+      warn(`could not move a Recon run's helper into the run's folder: ${String(error?.message ?? error)}`);
+    }
+  });
+  // The same before a turn is put together, should the helper not have been moved when it was made.
   ctx.on('system-prompt/assemble', async (assembly, context, next) => {
     try {
-      const agent = context?.agent;
-      const owner = agent && parentOf(agent) ? ownerOf(agent) : '';
-      if (owner && owner !== agent.id && isolated(owner) && reconRuns(owner) && reconRunOn(owner)) {
-        const root = state.get(owner)?.root ?? '';
-        const service = ctx.get('workingDirectory');
-        if (root && existsSync(root) && service?.set && service.get?.(agent.session) !== root) await service.set(agent, root, context.signal);
-      }
+      await moveHelper(context?.agent, context?.signal);
     } catch (error) {
       warn(`could not move a Recon run's helper into the run's folder: ${String(error?.message ?? error)}`);
     }
