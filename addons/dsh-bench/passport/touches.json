@@ -1,0 +1,78 @@
+{
+  "name": "@local/dsh-bench",
+  "folder": "dsh-bench",
+  "at": "2026-11-17",
+  "provides": [
+    "bench"
+  ],
+  "uses": [
+    "agents",
+    "approval",
+    "dshHomePath",
+    "modes",
+    "reconExports",
+    "session",
+    "settings",
+    "subagents",
+    "tools"
+  ],
+  "events": [
+    "tools/pre-execute",
+    "agent/created",
+    "agent/disposed"
+  ],
+  "tools": [
+    "bench_serial_watch",
+    "bench_esp32",
+    "bench_android",
+    "bench_undo",
+    "bench_bluetooth",
+    "bench_firmware",
+    "bench_network",
+    "bench_router",
+    "bench_server",
+    "bench_phone",
+    "bench_recipe",
+    "bench_usb",
+    "bench_devices",
+    "bench_card",
+    "bench_catalogue",
+    "bench_log"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-bench/data"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "bench"
+    },
+    {
+      "name": "conversation.input.left",
+      "id": "bench-rules"
+    }
+  ],
+  "settings": [
+    "modes",
+    "bench"
+  ],
+  "sections": [
+    "bench:folder"
+  ],
+  "modes": [
+    "bench"
+  ],
+  "storage": [
+    "bench"
+  ],
+  "config": [
+    "enabled",
+    "folder",
+    "longChecks"
+  ],
+  "instructionChars": 3604,
+  "rows": [
+    "bench"
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agents",
+    "approval",
+    "dshHomePath",
+    "loader",
+    "mission",
+    "modes",
+    "pluginManager",
+    "reconExports",
+    "remote.session",
+    "session",
+    "sessionQuery",
+    "settings",
+    "subagents",
+    "tools"
+  ],
+  "inject": [
+    "tools"
+  ],
+  "events": [
+    "tools/pre-execute",
+    "agent/created",
+    "agent/disposed"
+  ],
+  "places": [
+    "settings.section",
+    "conversation.input.left"
+  ]
+}

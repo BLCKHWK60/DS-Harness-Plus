@@ -1,0 +1,77 @@
+{
+  "name": "@local/dsh-automations",
+  "folder": "dsh-automations",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [
+    "BYDAY",
+    "FREQ",
+    "UNTIL",
+    "WKST",
+    "creatorPlus",
+    "dshHomePath",
+    "layout",
+    "mission",
+    "modes",
+    "sessionQuery",
+    "sessions",
+    "settings",
+    "uiWorkspace"
+  ],
+  "events": [
+    "session/event"
+  ],
+  "tools": [
+    "automation_results"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-automations/data",
+    "/dsh-cowork-shell/scratch",
+    "/dsh-creator-plus/data"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "alerts"
+    },
+    {
+      "name": "conversation.hero.options",
+      "id": "automations-start"
+    },
+    {
+      "name": "sidebar.panellist",
+      "id": "automations"
+    }
+  ],
+  "settings": [
+    "automations"
+  ],
+  "sections": [],
+  "modes": [
+    "automations"
+  ],
+  "storage": [
+    "automations"
+  ],
+  "config": [
+    "enabled",
+    "alertFailed",
+    "alertNeeds",
+    "alertFinished",
+    "alertOthers",
+    "othersMinutes",
+    "alertRuns",
+    "mac",
+    "phone",
+    "ntfyServer",
+    "ntfyTopic",
+    "deletedToTrash",
+    "oldRunsToTrash",
+    "tab"
+  ],
+  "instructionChars": 1160,
+  "rows": [
+    "automations"
+  ]
+}

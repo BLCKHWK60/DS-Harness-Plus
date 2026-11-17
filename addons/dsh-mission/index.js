@@ -27,7 +27,7 @@
 import z from '@deepseek-ai/schemastery';
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join, sep } from 'node:path';
-import { BENCH_CHECKS_TEXT, BENCH_NO_CHECKS_TEXT, ISOLATED_TEXT, RECON_CHECKS_TEXT, RECON_NO_CHECKS_TEXT, READ_ONLY_LONG_TEXT, READ_ONLY_TABS, RECON_LONG_TEXT, whyNot } from './lib/gate.js';
+import { BENCH_CHECKS_TEXT, BENCH_NO_CHECKS_TEXT, CREATOR_LONG_OFF_TEXT, CREATOR_NO_MISSION_TEXT, ISOLATED_TEXT, RECON_CHECKS_TEXT, RECON_NO_CHECKS_TEXT, READ_ONLY_LONG_TEXT, READ_ONLY_TABS, RECON_LONG_TEXT, whyNot } from './lib/gate.js';
 import { COMMAND_TOOLS, MODES, MODE_LABELS, WRITE_TOOLS, decide, modeOf, rulesNote } from './lib/guard.js';
 import { exists, isInside, pathsOf, real, shown } from './lib/paths.js';
 import { GIT_CANDIDATES, openCheckpoints } from './lib/checkpoints.js';
@@ -452,7 +452,8 @@ export function apply(ctx, config) {
   /** Folder -> its checkpoint store. */
   const stores = new Map();
   const pointsOf = (root) => {
-    if (!stores.has(root)) stores.set(root, openCheckpoints(root));
+    // git's HOME: an empty folder in Mission's own data folder, where no check may write.
+    if (!stores.has(root)) stores.set(root, openCheckpoints(root, typeof home === 'function' ? { gitHome: join(home('mission'), 'git-home') } : {}));
     return stores.get(root);
   };
   /** Conversation id -> the checkpoint being taken at the start of its turn. */
@@ -744,6 +745,19 @@ export function apply(ctx, config) {
       return undefined;
     }
   };
+  /**
+   * A Creator Plus conversation's rules for a Long run, from the Creator Plus add-on (undefined anywhere else,
+   * and when Creator Plus is off or not installed: Mission as always). Its checks run in the offline fence with
+   * no keys in their environment, and its workers have no commands.
+   */
+  const creatorRules = (id) => {
+    try {
+      const rules = ctx.get('creatorPlus')?.longRunRules?.(id);
+      return rules && typeof rules === 'object' ? { cleanEnv: rules.cleanEnv !== false, ...(rules.refuse ? { refuse: String(rules.refuse).slice(0, 400) } : {}) } : undefined;
+    } catch {
+      return undefined;
+    }
+  };
   /** Whether Recon lets its Long runs check their work without the internet (Settings → Recon; off unless switched on). */
   const reconChecks = () => {
     try {
@@ -770,6 +784,9 @@ export function apply(ctx, config) {
     // Bench: what is closed during the run, so nothing is refused without the user knowing why.
     const bench = iso ? undefined : benchRules(id);
     if (bench) ticks.push({ key: 'bench', ok: true, required: false, text: bench.checks ? BENCH_CHECKS_TEXT : BENCH_NO_CHECKS_TEXT });
+    const creator = iso || bench ? undefined : creatorRules(id);
+    // Creator Plus: Long runs are switched off for now (their checks would run in the conversation's live folder).
+    if (creator) ticks.push({ key: 'creator', ok: false, required: true, text: CREATOR_LONG_OFF_TEXT });
     const tier = tierOf(id);
     add('helpers', tier?.subagents !== false, tier?.subagents === false ? whyNot({ isolated: false, tier, helpers: true }) : 'The tier allows helper models.');
     add('free', !runner.isOn(id), runner.isOn(id) ? 'A run is already on in this conversation.' : 'No run is on here yet.');
@@ -1085,6 +1102,8 @@ export function apply(ctx, config) {
     // Bench (its own add-on): its checks setting, device ports closed to the checks, workers without commands.
     const bench = recon ? undefined : benchRules(agent.id);
     if (bench) options.bench = bench;
+    // Creator Plus (its own add-on): checks in the offline fence without keys, workers without commands.
+    // A Creator Plus conversation: refused by the pre-flight above (Long runs are switched off there for now).
     if (typeof body.context === 'string' && body.context.trim()) options.context = body.context;
     // In a Read Only tab, or a conversation set to Read Only by hand, the run may write in the folder
     // (the owner's choice); the level from before comes back when it ends, and the Mission mode goes
@@ -1585,6 +1604,9 @@ export function apply(ctx, config) {
               const named = modeOf(`${first} ${rest[0] ?? ''}`) ? 2 : modeOf(first) ? 1 : 0;
               const goal = text.split(/\s+/).slice(named).join(' ').trim();
               if (goal.split(/\s+/).length < 3) return { kind: 'error', text: `/mission does not know "${text.slice(0, 60)}". Click for the commands.\nA goal needs a few words, for example: /mission make every test pass and add a --json option\n\n${HELP}` };
+              // The Creator Plus tab: a plain /mission run would check its work outside Creator Plus's rules; only
+              // a Long run (the Run button), whose checks are fenced, runs there.
+              if (creatorRules(agent.id)) return { kind: 'error', text: CREATOR_NO_MISSION_TEXT };
               // Before anything is switched on: a run's helpers need the tier's sub-agents.
               const no = noHelpers();
               if (no) return { kind: 'error', text: no };

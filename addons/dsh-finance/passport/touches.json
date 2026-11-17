@@ -1,0 +1,81 @@
+{
+  "name": "@local/dsh-finance",
+  "folder": "dsh-finance",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [
+    "agents",
+    "credentials",
+    "diagrams",
+    "dshHomePath",
+    "modes",
+    "schedule",
+    "session",
+    "settings",
+    "skills",
+    "tools"
+  ],
+  "events": [
+    "agent/created",
+    "agent/disposed",
+    "session/event"
+  ],
+  "tools": [
+    "finance_profile_save",
+    "finance_prices",
+    "finance_news",
+    "finance_social",
+    "finance_company_figures",
+    "finance_company_filings",
+    "finance_economy",
+    "finance_source_get"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-finance/data"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "finance"
+    },
+    {
+      "name": "conversation.hero.options",
+      "id": "finance-bar"
+    },
+    {
+      "name": "conversation.input.left",
+      "id": "finance-selection"
+    }
+  ],
+  "settings": [
+    "modes",
+    "finance"
+  ],
+  "sections": [
+    "finance:selection"
+  ],
+  "modes": [
+    "finance"
+  ],
+  "storage": [
+    "finance"
+  ],
+  "config": [
+    "enabled",
+    "kind",
+    "subject",
+    "market",
+    "focus",
+    "period",
+    "watchlist",
+    "moreMarkets",
+    "sources",
+    "financeTasks",
+    "adviser"
+  ],
+  "instructionChars": 3942,
+  "rows": [
+    "finance"
+  ]
+}

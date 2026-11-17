@@ -116,10 +116,14 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dsh-sa-card' },
         h('div', { className: 'dsh-sa-row' },
           h('b', { className: 'dsh-sa-grow' }, `${KIND_LABELS[proposal.kind] ?? proposal.kind}${proposal.name ? `: ${proposal.name}` : ''}`),
-          waiting ? h('button', { type: 'button', className: 'dsh-sa-btn', disabled: busy, onClick: () => act({ action: 'accept', id: proposal.id, edits: { name, text } }) }, 'Accept') : h('span', null, proposal.state),
+          waiting ? h('button', { type: 'button', className: 'dsh-sa-btn', disabled: busy || proposal.examRunning === true, onClick: () => act({ action: 'accept', id: proposal.id, edits: { name, text } }) }, 'Accept') : h('span', null, proposal.state),
           waiting ? h('button', { type: 'button', className: 'dsh-sa-btn', disabled: busy, onClick: () => act({ action: 'reject', id: proposal.id }) }, 'Reject') : null),
         proposal.description ? h('p', null, proposal.description) : null,
         proposal.why ? h('p', null, `Why: ${proposal.why}`) : null,
+        proposal.examRunning ? h('p', null, 'Being tried on your own exam (Tuning Plus)…') : null,
+        proposal.examProblem ? h('p', null, `The exam could not be taken: ${proposal.examProblem}`) : null,
+        proposal.exam ? h('p', null, `Your own exam (Tuning Plus), with ${proposal.exam.model}: ${proposal.exam.ok ? 'not worse' : 'worse'}. ${proposal.exam.why}.`) : null,
+        waiting && proposal.kind === 'skill' && !proposal.examRunning && proposal.exam && !proposal.exam.ok ? h('button', { type: 'button', className: 'dsh-sa-btn', disabled: busy, title: 'Add the skill although it did worse on your own exam', onClick: () => act({ action: 'accept', id: proposal.id, edits: { name, text }, anyway: true }) }, 'Add anyway') : null,
         waiting && proposal.kind === 'skill' ? h('input', { className: 'dsh-sa-field', value: name, 'aria-label': 'Skill name', onChange: (event) => setName(event.target.value) }) : null,
         waiting ? h('textarea', { className: 'dsh-sa-field', rows: 4, value: text, 'aria-label': 'Proposal text', onChange: (event) => setText(event.target.value) }) : h('div', { className: 'dsh-sa-text' }, proposal.text),
         waiting && (proposal.kind === 'habit' || proposal.kind === 'lesson') ? h('p', null, 'Accepting marks it done; add the text yourself on Settings → Self-improve as your own lesson, on the model version it is about.') : null,
@@ -158,6 +162,13 @@ window.__ModuleLoader__.load({
         })();
         return () => { alive.current = false; };
       }, [load, appCtx]);
+      // While a skill is being tried on the owner's exam (Tuning Plus), look again every few seconds.
+      const trying = Boolean(data?.proposals?.some((item) => item.examRunning));
+      useEffect(() => {
+        if (!trying) return undefined;
+        const timer = setInterval(() => { if (!document.hidden) void load(); }, 3000);
+        return () => clearInterval(timer);
+      }, [trying, load]);
       const act = async (body, done = 'Done.') => {
         setBusy(true);
         setNote({ text: '', error: false });
@@ -169,6 +180,7 @@ window.__ModuleLoader__.load({
           return next;
         } catch (error) {
           if (alive.current) setNote({ text: error.message, error: true });
+          if (alive.current && body?.action === 'accept') void load();
           return undefined;
         } finally {
           if (alive.current) setBusy(false);

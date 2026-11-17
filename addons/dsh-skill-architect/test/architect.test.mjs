@@ -101,7 +101,7 @@ test('proposals: quotes go once you decide, or when their conversation is delete
 
 // ---- the add-on in a stand-in app -------------------------------------------------------------
 
-function standIn({ modes = true, where = 'http://127.0.0.1:9000/v1', allowInternet = false, answer, mission, reconExports, extra = {} } = {}) {
+function standIn({ modes = true, where = 'http://127.0.0.1:9000/v1', allowInternet = false, answer, mission, reconExports, extra = {}, tuning } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'architect-'));
   const config = { enabled: true, readingModel: JSON.stringify({ provider: 'own', model: 'reader' }), allowInternet, nolearn: '[]', projectsOff: '[]' };
   let provider;
@@ -135,6 +135,7 @@ function standIn({ modes = true, where = 'http://127.0.0.1:9000/v1', allowIntern
     agents: { list: () => [] },
     ...(mission ? { mission } : {}),
     ...(reconExports ? { reconExports } : {}),
+    ...(tuning ? { tuning } : {}),
   };
   services.skills = { list: async () => [{ name: 'pdf', provider: 'filesystem' }], registerProvider: (make) => { provider = make({ invalidate: () => {} }); return () => {}; } };
   const ctx = {
@@ -379,5 +380,73 @@ test('an export from Recon in a conversation\'s messages keeps it out, also with
     assert.deepEqual((await shipped.post({ action: 'candidates' })).json.candidates.map((item) => item.id).sort(), ['c1'], 'Recon\'s inText finds e3');
   } finally {
     shipped.done();
+  }
+});
+
+const until = async (check) => {
+  for (let index = 0; index < 200; index += 1) {
+    if (await check()) return;
+    await new Promise((done) => setTimeout(done, 10));
+  }
+  throw new Error('timed out');
+};
+
+test('Tuning Plus\'s exam: tried in the background (the page is not held); a skill worse on the owner\'s exam is not added unless the owner presses Add anyway; no exam, as before', async () => {
+  const asked = [];
+  let finish;
+  const tuning = { apiVersion: 1, examGate: (input) => { asked.push(input); return new Promise((done) => { finish = done; }); } };
+  const app = standIn({ tuning });
+  try {
+    const learned = await app.post({ action: 'learn' });
+    const skill = learned.json.proposals.find((item) => item.kind === 'skill');
+    // Accept answers at once while the exam is still going.
+    const started = Date.now();
+    const accepted = await Promise.race([app.post({ action: 'accept', id: skill.id }), new Promise((done) => setTimeout(() => done('held'), 500))]);
+    assert.notEqual(accepted, 'held', 'the request is not held open for the exam');
+    assert.ok(Date.now() - started < 500);
+    assert.match(accepted.json.said, /Trying "check-dates" on your own exam first \(Tuning Plus\), with reader/);
+    const card = () => app.post({ action: 'candidates' }).then((out) => out.json.proposals.find((item) => item.id === skill.id));
+    assert.equal((await card()).examRunning, true, 'the page shows it is being tried');
+    assert.match((await app.post({ action: 'accept', id: skill.id })).json.said, /being tried/, 'a second Accept does not start it again');
+    assert.equal(asked.length, 1);
+    assert.deepEqual(asked[0].route, { provider: 'own', model: 'reader' }, 'the reading model is examined');
+    assert.match(asked[0].after, /Check the month the user gave/);
+    // Worse: not added, the result kept on the card.
+    finish({ ok: false, why: 'worse on the owner\'s exam: 40% against 60% with today\'s instructions' });
+    await until(async () => (await card()).examRunning === false);
+    const after = await card();
+    assert.equal(after.state, 'waiting');
+    assert.equal(after.exam.ok, false);
+    assert.deepEqual(await app.provider().list({ cwd: '/w/books' }), []);
+    // Add anyway: the owner's call; the exam is not asked again.
+    const forced = await app.post({ action: 'accept', id: skill.id, anyway: true });
+    assert.equal(forced.status, 200, JSON.stringify(forced.json));
+    assert.equal(asked.length, 1);
+    assert.deepEqual((await app.provider().list({ cwd: '/w/books' })).map((one) => one.name), ['check-dates']);
+  } finally {
+    finish?.(undefined);
+    app.done();
+  }
+  // Not worse: added once the exam is done; no exam (undefined) or a broken exam: added as before.
+  for (const answer of [{ ok: true, why: '62% against 60% with today\'s instructions' }, undefined, 'throw']) {
+    const other = standIn({ tuning: { apiVersion: 1, examGate: async () => { if (answer === 'throw') throw new Error('exam down'); return answer; } } });
+    try {
+      const learned = await other.post({ action: 'learn' });
+      const skill = learned.json.proposals.find((item) => item.kind === 'skill');
+      assert.equal((await other.post({ action: 'accept', id: skill.id })).status, 200);
+      await until(async () => (await other.provider().list({ cwd: '/w/books' })).length === 1);
+      if (answer?.ok) assert.match((await other.provider().get({ locator: 'check-dates' }, { cwd: '/w/books' })).content, /Check the month/);
+    } finally {
+      other.done();
+    }
+  }
+  // Tuning Plus not there: added at once, as before.
+  const plain = standIn();
+  try {
+    const learned = await plain.post({ action: 'learn' });
+    const skill = learned.json.proposals.find((item) => item.kind === 'skill');
+    assert.match((await plain.post({ action: 'accept', id: skill.id })).json.said, /^The skill "check-dates" is added\.$/);
+  } finally {
+    plain.done();
   }
 });

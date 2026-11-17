@@ -1,0 +1,53 @@
+{
+  "name": "@local/dsh-diagram",
+  "folder": "dsh-diagram",
+  "at": "2026-11-17",
+  "provides": [
+    "diagrams"
+  ],
+  "uses": [
+    "dshHomePath",
+    "skills",
+    "tools",
+    "workingDirectory"
+  ],
+  "events": [],
+  "tools": [
+    "diagram_draw"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-diagram/status",
+    "/dsh-diagram/svg",
+    "/dsh-diagram/list"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "diagram"
+    },
+    {
+      "name": "conversation.chat.turnTail",
+      "id": "dsh-diagram"
+    }
+  ],
+  "settings": [
+    "diagram"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [
+    "diagrams"
+  ],
+  "config": [
+    "enabled",
+    "theme",
+    "folder",
+    "save",
+    "skills"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "diagram"
+  ]
+}

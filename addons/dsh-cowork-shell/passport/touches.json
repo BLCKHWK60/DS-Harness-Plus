@@ -1,0 +1,107 @@
+{
+  "name": "@local/dsh-cowork-shell",
+  "folder": "dsh-cowork-shell",
+  "at": "2026-11-17",
+  "provides": [
+    "coworkShell",
+    "coworkProjects",
+    "coworkScratch",
+    "coworkTrash"
+  ],
+  "uses": [
+    "agentPresets",
+    "agents",
+    "attachments",
+    "contents",
+    "digest",
+    "dshHomePath",
+    "files",
+    "llm",
+    "loader",
+    "modes",
+    "name",
+    "path",
+    "provider",
+    "reconWipe",
+    "remote.session",
+    "schedule",
+    "sessions",
+    "settings",
+    "shortcuts",
+    "tools",
+    "uiSession",
+    "uiWorkspace",
+    "upload",
+    "workingDirectory",
+    "workspaceRegistry",
+    "workspaces"
+  ],
+  "events": [
+    "agent/created",
+    "agent/disposed",
+    "system-prompt/assemble",
+    "agent/inbox/claimed",
+    "working-directory/access"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-cowork-shell/skills",
+    "/dsh-cowork-shell/projects",
+    "/dsh-cowork-shell/connectors",
+    "/dsh-cowork-shell/trash",
+    "/dsh-cowork-shell/scratch",
+    "/dsh-cowork-shell/scratch/keep",
+    "/dsh-automations/data",
+    "/dsh-search/match"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "cowork-start"
+    },
+    {
+      "name": "sidebar.panellist",
+      "id": "project"
+    },
+    {
+      "name": "conversation.hero.options",
+      "id": "cowork-chips"
+    },
+    {
+      "name": "conversation.hero.options",
+      "id": "cowork-place"
+    },
+    {
+      "name": "conversation.input.left",
+      "id": "cowork-scratch-mark"
+    }
+  ],
+  "settings": [
+    "coworkShell",
+    "cowork-shell",
+    "modes"
+  ],
+  "sections": [
+    "cowork-shell:project"
+  ],
+  "modes": [],
+  "storage": [
+    "scratch"
+  ],
+  "config": [
+    "tabs",
+    "maxTabs",
+    "tabOrder",
+    "hideLogos",
+    "dateTitle",
+    "wideChat",
+    "startPlaces",
+    "newKeyFollows"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "ui-sidebar",
+    "cowork-shell"
+  ]
+}

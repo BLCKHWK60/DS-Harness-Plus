@@ -1,0 +1,72 @@
+{
+  "name": "@local/dsh-research",
+  "folder": "dsh-research",
+  "at": "2026-11-17",
+  "provides": [
+    "research"
+  ],
+  "uses": [
+    "agents",
+    "coworkScratch",
+    "deepResearch",
+    "dshHomePath",
+    "modes",
+    "remote.session",
+    "session",
+    "sessions",
+    "settings",
+    "uiWorkspace"
+  ],
+  "events": [
+    "session/event",
+    "agent/created",
+    "agent/disposed"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-research/data",
+    "/dsh-content/data",
+    "/dsh-cowork-shell/scratch"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "research"
+    },
+    {
+      "name": "conversation.hero.options",
+      "id": "research-bar"
+    },
+    {
+      "name": "conversation.input.left",
+      "id": "research-controls"
+    },
+    {
+      "name": "conversation.input.dock",
+      "id": "research-progress"
+    }
+  ],
+  "settings": [
+    "modes",
+    "research"
+  ],
+  "sections": [
+    "research:selection"
+  ],
+  "modes": [
+    "research"
+  ],
+  "storage": [
+    "research"
+  ],
+  "config": [
+    "enabled",
+    "focus",
+    "folder"
+  ],
+  "instructionChars": 1660,
+  "rows": [
+    "research"
+  ]
+}

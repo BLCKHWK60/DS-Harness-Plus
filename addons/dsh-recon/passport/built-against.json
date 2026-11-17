@@ -1,0 +1,33 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agents",
+    "approval",
+    "dshHomePath",
+    "mission",
+    "modes",
+    "remote.session",
+    "session",
+    "sessionQuery",
+    "sessions",
+    "settings",
+    "subagents",
+    "tools",
+    "uddg",
+    "uiWorkspace",
+    "what"
+  ],
+  "inject": [],
+  "events": [
+    "agent/disposed",
+    "agent/pre-step",
+    "session/event",
+    "tools/pre-execute"
+  ],
+  "places": [
+    "settings.section",
+    "conversation.hero.options",
+    "conversation.input.left"
+  ]
+}

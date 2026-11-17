@@ -1,0 +1,46 @@
+{
+  "name": "@local/dsh-route-health",
+  "folder": "dsh-route-health",
+  "at": "2026-11-17",
+  "provides": [
+    "routeHealth"
+  ],
+  "uses": [
+    "agents",
+    "modelTiers",
+    "probe"
+  ],
+  "events": [
+    "agent/status",
+    "agent/created",
+    "agent/pre-step",
+    "agent/disposed"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-route-health/state"
+  ],
+  "slots": [
+    {
+      "name": "conversation.input.left",
+      "id": "route-health-badge"
+    }
+  ],
+  "settings": [],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "routes",
+    "preemptiveFallback",
+    "autoReturn",
+    "onlyWhenTierUsesRoute",
+    "blockWhenDown",
+    "commandName"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "route-health"
+  ]
+}

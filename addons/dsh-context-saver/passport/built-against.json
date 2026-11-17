@@ -1,0 +1,16 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agents",
+    "modelTiers",
+    "modes"
+  ],
+  "inject": [],
+  "events": [
+    "tools/post-execute",
+    "agent/disposed",
+    "agent/created"
+  ],
+  "places": []
+}

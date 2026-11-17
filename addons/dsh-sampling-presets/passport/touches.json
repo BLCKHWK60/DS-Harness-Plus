@@ -1,0 +1,48 @@
+{
+  "name": "@local/dsh-sampling-presets",
+  "folder": "dsh-sampling-presets",
+  "at": "2026-11-17",
+  "provides": [
+    "samplingPresets"
+  ],
+  "uses": [
+    "agents",
+    "modelTiers",
+    "modes"
+  ],
+  "events": [
+    "agent/created",
+    "agent/status",
+    "agent/request",
+    "agent/disposed"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "sampling-presets"
+    }
+  ],
+  "settings": [
+    "sampling-presets"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "enabled",
+    "presets",
+    "categories",
+    "byMode",
+    "defaultCategory",
+    "perModel",
+    "strategy",
+    "commandName"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "sampling-presets"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "remote.session"
+  ],
+  "inject": [],
+  "events": [
+    "session/event",
+    "agent/assistant-stream",
+    "agent/disposed"
+  ],
+  "places": [
+    "settings.section",
+    "conversation.input.dock",
+    "conversation.input.right",
+    "shell.overlay"
+  ]
+}

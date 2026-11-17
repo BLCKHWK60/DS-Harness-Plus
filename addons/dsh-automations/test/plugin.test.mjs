@@ -11,7 +11,7 @@ import { apply, DATA_PATH } from '../index.js';
 
 const MIN = 60 * 1000;
 
-function standIn({ noTrash = false, catalog = [], gap, modesValue = { extraModes: '{}', scheduledMode: 'cowork' }, isolated = () => false, events = {} } = {}) {
+function standIn({ noTrash = false, catalog = [], gap, modesValue = { extraModes: '{}', scheduledMode: 'cowork' }, isolated = () => false, events = {}, extra = {} } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'automations-'));
   if (gap) {
     mkdirSync(join(home, 'automations'), { recursive: true });
@@ -55,6 +55,7 @@ function standIn({ noTrash = false, catalog = [], gap, modesValue = { extraModes
     modes: { get: (id) => (String(id).startsWith('fin-') ? 'finance' : ''), isolated },
     sessionQuery: { readSession: async (id) => ({ events: events[id] ?? [] }) },
     sessions: { get: () => undefined },
+    ...extra,
   };
   const inner = {
     effect: (make) => make(),
@@ -279,6 +280,48 @@ test('Run now pressed on the page is never late, even when it starts much later 
     app.event({ id: 'sn', header: { id: 'sn' } }, { type: 'user/message', data: message });
     const view = await app.call();
     assert.equal(view.runs.find((run) => run.id === 'm-now').dueAt, undefined);
+  } finally {
+    app.done();
+  }
+});
+
+test('Creator Plus\'s saved runs are offered, and one is scheduled only into a Creator Plus conversation', async () => {
+  let on = true;
+  const creatorPlus = {
+    savedRuns: () => (on ? [{ name: 'Weekly check', sentence: 'Check after an update: notes, reporting only.' }] : []),
+    savedRunPrompt: (name) => (on && name === 'Weekly check' ? '[Creator Plus saved run: Weekly check]\nCheck after an update.' : ''),
+  };
+  const modes = { get: (id) => (String(id).startsWith('cp-') ? 'creator-plus' : 'cowork'), isolated: () => false };
+  const app = standIn({ extra: { creatorPlus, modes } });
+  try {
+    const view = await app.call();
+    assert.deepEqual(view.creatorRuns, [{ name: 'Weekly check', sentence: 'Check after an update: notes, reporting only.' }]);
+    await app.call({ action: 'creatorRun', name: 'Weekly check', sessionId: 'cp-1', time: '09:00', weekdays: [1], timeZone: 'UTC' });
+    assert.equal(app.created.length, 1);
+    assert.deepEqual(app.created[0], { title: 'Creator Plus: Weekly check', prompt: '[Creator Plus saved run: Weekly check]\nCheck after an update.', timing: { kind: 'weekly', weekly: { time: '09:00', time_zone: 'UTC', weekdays: [1] } }, target: { kind: 'session', sessionId: 'cp-1' } });
+    await app.call({ action: 'creatorRun', name: 'Weekly check', sessionId: 'cp-2', time: '07:30', weekdays: [], timeZone: 'UTC' });
+    assert.deepEqual(app.created[1].timing, { kind: 'daily', daily: { time: '07:30', time_zone: 'UTC' } });
+    assert.equal((await app.call()).tasks.find((task) => task.title === 'Creator Plus: Weekly check').createdIn, 'creator-plus');
+    // Refused: a Cowork conversation, an unknown run, a bad time or zone, Creator Plus switched off.
+    await assert.rejects(app.call({ action: 'creatorRun', name: 'Weekly check', sessionId: 'c-1', time: '09:00', timeZone: 'UTC' }).then((answer) => { if (answer.error) throw new Error(answer.error); }), /only into a Creator Plus conversation/);
+    await assert.rejects(app.call({ action: 'creatorRun', name: 'Other', sessionId: 'cp-1', time: '09:00', timeZone: 'UTC' }).then((answer) => { if (answer.error) throw new Error(answer.error); }), /no such saved run/);
+    await assert.rejects(app.call({ action: 'creatorRun', name: 'Weekly check', sessionId: 'cp-1', time: '9 am', timeZone: 'UTC' }).then((answer) => { if (answer.error) throw new Error(answer.error); }), /A time like 09:00/);
+    await assert.rejects(app.call({ action: 'creatorRun', name: 'Weekly check', sessionId: 'cp-1', time: '09:00', timeZone: 'Mars/Base' }).then((answer) => { if (answer.error) throw new Error(answer.error); }), /unknown time zone/);
+    on = false;
+    assert.deepEqual((await app.call()).creatorRuns, []);
+    await assert.rejects(app.call({ action: 'creatorRun', name: 'Weekly check', sessionId: 'cp-1', time: '09:00', timeZone: 'UTC' }).then((answer) => { if (answer.error) throw new Error(answer.error); }), /switched off/);
+    assert.equal(app.created.length, 2);
+  } finally {
+    app.done();
+  }
+});
+
+test('without Creator Plus, the page offers no saved runs', async () => {
+  const app = standIn();
+  try {
+    assert.deepEqual((await app.call()).creatorRuns, []);
+    const refused = await app.call({ action: 'creatorRun', name: 'x', sessionId: 'cp-1', time: '09:00', timeZone: 'UTC' });
+    assert.match(refused.error, /no such saved run, or Creator Plus is switched off/);
   } finally {
     app.done();
   }

@@ -1,0 +1,62 @@
+{
+  "name": "@local/dsh-code-map",
+  "folder": "dsh-code-map",
+  "at": "2026-11-17",
+  "provides": [
+    "codeMap"
+  ],
+  "uses": [
+    "agents",
+    "dshHomePath",
+    "modes",
+    "skills",
+    "tools",
+    "workingDirectory"
+  ],
+  "events": [
+    "agent/created",
+    "agent/disposed"
+  ],
+  "tools": [
+    "code_map_overview",
+    "code_map_file",
+    "code_map_find",
+    "code_map_related",
+    "code_map_read"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-code-map/status",
+    "/dsh-code-map/action"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "code-map"
+    }
+  ],
+  "settings": [
+    "code-map"
+  ],
+  "sections": [
+    "code-map"
+  ],
+  "modes": [],
+  "storage": [
+    "code-map"
+  ],
+  "config": [
+    "enabled",
+    "promptHint",
+    "maxFiles",
+    "maxFileKb",
+    "extraIgnore",
+    "dataDir",
+    "commandName",
+    "skills"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "code-map"
+  ]
+}

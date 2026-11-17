@@ -10,6 +10,7 @@
  * user's own message "write protected <device name>". Helpers of a Long run may identify and read;
  * only the conversation itself, with the user there, may adjust or write.
  */
+import { freeName } from './kit.js';
 import { realpathSync, renameSync, rmSync } from 'node:fs';
 import { basename, join, relative, sep } from 'node:path';
 import { CHANGEABLE_TEXT, adbArgs, logLines, parseBattery, parseDevices, parseProps, settingRaw, settingRefusal, settingValue, SERIAL, LOG_LINES_MAX } from './android.js';
@@ -289,8 +290,10 @@ export function buildDeviceTools({ enabled, bench, find, run, serial, approve, u
           if (!info.flashBytes) throw new Error('esptool did not say the flash size, so no backup was made.');
           const folder = bench.deviceFolder(card, 'backups');
           const at = now();
-          const first = join(folder, `${stamp(at)}-flash.bin`);
-          const second = join(folder, `.${stamp(at)}-check.bin`);
+          // Never the name of an earlier backup: esptool would write over it.
+          const base = freeName(folder, `${stamp(at)}-flash`, '', [(name) => `${name}.bin`, (name) => `.${name}-check.bin`, (name) => `${name}-second-read.bin`]);
+          const first = join(folder, `${base}.bin`);
+          const second = join(folder, `.${base}-check.bin`);
           const commands = [];
           for (const file of [first, second]) {
             const argsRead = esptoolArgs.read(port, baud, info.flashBytes, file);
@@ -303,7 +306,7 @@ export function buildDeviceTools({ enabled, bench, find, run, serial, approve, u
           const verified = a === b;
           // The second read only proves the first: it goes once compared (the backup itself stays).
           if (verified) rmSync(second, { force: true });
-          else renameSync(second, join(folder, `${stamp(at)}-flash-second-read.bin`));
+          else renameSync(second, join(folder, `${base}-second-read.bin`));
           bench.addBackup(card, { at: at.getTime(), file: basename(first), sha256: a, bytes: info.flashBytes, chip: info.chip, mac: info.mac, port, verified });
           bench.record(card, { title: verified ? 'Backup of the flash (checked)' : 'Backup of the flash (the two reads differ)', asked: 'a full backup of the flash', done: `read ${info.flash} twice`, found: verified ? `both reads equal, SHA-256 ${a}` : `the two reads differ (${a} and ${b}): the backup is not checked`, commands }, now());
           return verified

@@ -525,3 +525,44 @@ test('the owner\'s answer: your own tiers get a team too, edited on their card',
   assert.match(card, /h\(TeamEditor, \{ tierId: tier\.id, teams, versions, onChange: onTeams \}\)/);
   assert.match(client, /onTeams: saveTeams,\n\s*\}\),/);
 });
+
+test('a team member may name a Tuning Plus adapter: used only while Tuning Plus says it is on and served, else the member\'s own model', async () => {
+  const { apply, testing } = await import('../index.js');
+  const config = {
+    modelVersions: JSON.stringify([{ id: 'precise', name: 'Precise', provider: 'local', model: 'small', maxTokens: 2000 }]),
+    teams: JSON.stringify({ sonnet: { lead: { provider: 'cloud', model: 'big' }, helpers: [{ provider: 'local', model: 'small', adapter: 'A1' }], checker: { version: 'precise', adapter: 'A2' }, judge: { provider: 'local', model: 'small', adapter: '../bad id' } } }),
+  };
+  const teams = testing.readTeams(config);
+  assert.deepEqual(teams.sonnet.helpers[0], { provider: 'local', model: 'small', adapter: 'A1' });
+  assert.deepEqual(teams.sonnet.checker, { provider: 'local', model: 'small', version: 'precise', maxTokens: 2000, adapter: 'A2' });
+  assert.deepEqual(teams.sonnet.judge, { provider: 'local', model: 'small' }, 'an adapter id that is not a plain id is dropped; the member stays');
+  const start = (tuning) => {
+    let provided;
+    const agents = new Map([['c1', { id: 'c1', header: { id: 'c1' }, model: { current: () => ({ provider: 'p', model: 'm' }), select: () => {} } }]]);
+    const services = { agents: { get: (id) => agents.get(id), list: () => [...agents.values()] }, modes: { isolated: () => false, noTools: () => false }, ...(tuning ? { tuning } : {}) };
+    const ctx = {
+      on: () => () => {}, effect: (fn) => { const undo = fn(); return typeof undo === 'function' ? undo : () => {}; }, provide: (name, value) => { if (name === 'modelTiers') provided = value; }, get: (name) => services[name], inject: () => {},
+      logger: { warn: () => {}, info: () => {}, debug: () => {} }, loader: {}, tools: { register: () => () => {} },
+    };
+    apply(ctx, { ...config, activeTiers: JSON.stringify({ c1: { tier: 'sonnet', provider: 'p', model: 'm', effort: 'medium' } }) });
+    return provided;
+  };
+  // Tuning Plus not there: the member's own model, exactly as before.
+  const without = start(undefined);
+  assert.deepEqual({ ...without.teamRoute('c1', 'helper', 0) }, { provider: 'local', model: 'small' });
+  assert.deepEqual({ ...without.teamRoute('c1', 'checker') }, { provider: 'local', model: 'small', maxTokens: 2000 });
+  // On and served: the adapter's address.
+  const served = start({ apiVersion: 1, adapterRoute: (id) => (id === 'A1' ? { provider: 'mlx', model: 'small-tuned' } : undefined) });
+  assert.deepEqual({ ...served.teamRoute('c1', 'helper', 0) }, { provider: 'mlx', model: 'small-tuned', adapter: 'A1' });
+  assert.deepEqual({ ...served.teamRoute('c1', 'checker') }, { provider: 'local', model: 'small', maxTokens: 2000 }, 'A2 is off: own model');
+  assert.deepEqual({ ...served.teamRoute('c1', 'lead') }, { provider: 'cloud', model: 'big' });
+  // Anything odd: the member's own model.
+  const broken = start({ apiVersion: 1, adapterRoute: () => { throw new Error('down'); } });
+  assert.deepEqual({ ...broken.teamRoute('c1', 'helper', 0) }, { provider: 'local', model: 'small' });
+  const older = start({ apiVersion: 2, adapterRoute: () => ({ provider: 'mlx', model: 'x' }) });
+  assert.deepEqual({ ...older.teamRoute('c1', 'helper', 0) }, { provider: 'local', model: 'small' });
+  // The page keeps an adapter when the member's model is changed, and offers the field only for a member that is set.
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  assert.match(client, /value \? h\(AdapterField, \{ label, value, onSet \}\) : null/);
+  assert.match(client, /onSet\(route \? \{ \.\.\.route, \.\.\.\(value\?\.adapter \? \{ adapter: value\.adapter \} : \{\}\) \} : null\)/);
+});

@@ -126,6 +126,9 @@ export function newRun({ id, goal, mode, root, limits, checkpoint, at = Date.now
   // A Bench conversation's run (its own add-on decides): checks on or off (Settings → Bench), and
   // device ports closed to them; its workers have no commands.
   if (long?.bench && typeof long.bench === 'object') extra.bench = { checks: long.bench.checks !== false, closedPorts: long.bench.closedPorts !== false };
+  // A Creator Plus conversation's run (its own add-on decides): checks in the offline fence, no keys in
+  // their environment, workers without commands.
+  if (long?.creator && typeof long.creator === 'object') extra.creator = { cleanEnv: long.creator.cleanEnv !== false };
   // Started with the Run button: what was said in the conversation before it (for the planner and reviewer).
   const context = clip(long?.context, CONTEXT_MAX);
   if (context) extra.context = context;
@@ -518,10 +521,13 @@ export const noCommands = (run) => isLong(run) && run.long?.isolated === true;
 export const noChecks = (run) => (noCommands(run) && run.long?.offlineChecks !== true) || (isLong(run) && run.long?.bench?.checks === false);
 
 /** @returns {boolean} whether a run's checks run without the internet and see only its folder (a Recon run with checks switched on). */
-export const offlineChecks = (run) => noCommands(run) && run.long?.offlineChecks === true;
+export const offlineChecks = (run) => (noCommands(run) && run.long?.offlineChecks === true) || (isLong(run) && Boolean(run.long?.creator));
+
+/** @returns {boolean} whether a run's checks get no keys: a short environment of their own (a Creator Plus run). */
+export const cleanEnv = (run) => isLong(run) && run.long?.creator?.cleanEnv === true;
 
 /** @returns {boolean} whether a run's workers have no commands: a Recon run, or any Bench run. */
-export const workersWithoutCommands = (run) => noCommands(run) || (isLong(run) && Boolean(run.long?.bench));
+export const workersWithoutCommands = (run) => noCommands(run) || (isLong(run) && (Boolean(run.long?.bench) || Boolean(run.long?.creator)));
 
 /** @returns {boolean} whether a run's checks run with the Mac's device ports closed (a Bench run). */
 export const portsClosed = (run) => isLong(run) && run.long?.bench?.closedPorts === true;

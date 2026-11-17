@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
-import { apply, gradeLocal, stats, costOf, summarize, recommend, readSetup, planSize, promptProblem, readJsonBody } from '../index.js';
+import { apply, gradeLocal, stats, costOf, summarize, recommend, readSetup, planSize, promptProblem, readJsonBody, CANARIES } from '../index.js';
 
 const TARGETS = [
   { id: 'one', provider: 'prov-a', model: 'model-x' },
@@ -292,4 +292,20 @@ test('the Lenses suite: each Lens, as Modes sends it, on three questions, two ju
   assert.equal(promptProblem(suite.find((prompt) => prompt.grader.type === 'judge'), false), 'is graded by the judge, but no judge model is set');
   assert.match(source, /onClick: \(\) => saveSuites\(\[\.\.\.entries, \[freeName\('lenses'\), \{ category: 'lens', prompts: LENS_SUITE \}\]\]\)/);
   assert.match(source, /\{ id: 'noneOf', label: 'Contains none of these'/);
+});
+
+test('the canaries for Tuning Plus: twelve general tasks, each graded by code; a right answer passes, a wrong one fails; the service hands out copies', () => {
+  const right = { add: '42', word: 'Ready.', json: '{"a": 1}', larger: '0.9', reverse: 'tac', colours: 'Red, green, blue', translate: 'Danke', capital: 'Tokyo', count: '7', sort: '1, 2, 5, 9', yesno: 'Yes', tool: 'read' };
+  const wrong = { add: '41', word: 'I am ready to help', json: '{"a": 1, "b": 2}', larger: '0.11', reverse: 'cat', colours: 'red, yellow, blue', translate: 'merci', capital: 'Kyoto', count: '6', sort: '9, 5, 2, 1', yesno: 'No', tool: 'bash' };
+  assert.equal(CANARIES.length, 12);
+  assert.deepEqual(CANARIES.map((task) => task.id).sort(), Object.keys(right).sort());
+  for (const task of CANARIES) {
+    assert.equal(gradeLocal(task.grader, right[task.id]), 1, `${task.id}: the right answer passes`);
+    assert.equal(gradeLocal(task.grader, wrong[task.id]), 0, `${task.id}: a wrong answer fails`);
+  }
+  const { provided } = harness({});
+  const copy = provided.benchmark.canaries();
+  assert.equal(copy.length, 12);
+  copy[0].grader.expect = 'anything';
+  assert.notEqual(CANARIES[0].grader.expect, 'anything', 'the fixed set cannot be changed from outside');
 });

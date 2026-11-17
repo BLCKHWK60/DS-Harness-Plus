@@ -1,0 +1,85 @@
+{
+  "name": "@local/dsh-creator-plus",
+  "folder": "dsh-creator-plus",
+  "at": "2026-11-17",
+  "provides": [
+    "creatorPlus"
+  ],
+  "uses": [
+    "agents",
+    "approval",
+    "dshHomePath",
+    "loader",
+    "mission",
+    "modes",
+    "pluginManager",
+    "reconExports",
+    "remote.session",
+    "session",
+    "sessionQuery",
+    "settings",
+    "subagents",
+    "tools"
+  ],
+  "events": [
+    "tools/pre-execute",
+    "agent/created",
+    "agent/disposed"
+  ],
+  "tools": [
+    "creator_map",
+    "creator_passport",
+    "creator_recipe",
+    "creator_interview",
+    "creator_plan",
+    "creator_scaffold",
+    "creator_check",
+    "creator_change",
+    "creator_upkeep",
+    "creator_improve",
+    "creator_note",
+    "creator_handoff",
+    "creator_learn",
+    "creator_selftest"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-creator-plus/data",
+    "/dsh-recon/state",
+    "/dsh-notes/data",
+    "/dsh-files/data"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "creator-plus"
+    },
+    {
+      "name": "conversation.input.left",
+      "id": "creator-plus-bar"
+    }
+  ],
+  "settings": [
+    "modes",
+    "creator-plus"
+  ],
+  "sections": [
+    "creator-plus:note"
+  ],
+  "modes": [
+    "creator-plus"
+  ],
+  "storage": [],
+  "config": [
+    "enabled",
+    "logReaders",
+    "strongModels",
+    "plusFolder",
+    "savedRuns",
+    "sessionBars"
+  ],
+  "instructionChars": 2356,
+  "rows": [
+    "creator-plus"
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "name": "@local/dsh-deep-research",
+  "folder": "dsh-deep-research",
+  "at": "2026-11-17",
+  "provides": [
+    "deepResearch"
+  ],
+  "uses": [
+    "modelTiers",
+    "modes",
+    "ptcRuntime",
+    "research",
+    "session",
+    "settings",
+    "subagents",
+    "tools"
+  ],
+  "events": [
+    "tools/pre-execute",
+    "session/event"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-deep-research/progress"
+  ],
+  "slots": [],
+  "settings": [],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "enabled",
+    "toolName",
+    "roles",
+    "helperModel",
+    "depth",
+    "maxSubquestions",
+    "maxParallel",
+    "maxSources",
+    "maxMinutes",
+    "searchToolNames",
+    "fetchToolNames",
+    "requireFetched",
+    "wide"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "deep-research"
+  ]
+}

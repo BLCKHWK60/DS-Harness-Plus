@@ -1,6 +1,7 @@
 // Long run (the owner's plan, Long run part): the engine's own rules, as plain data.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { EMPTY_LAPS, NOTES_MAX, applyChecks, applyPlan, applyReview, applyUndo, applyWork, brokenChecks, finish, lapNotes, newRun, nextStep, readLong, report } from '../lib/run.js';
 
 const T0 = Date.parse('2026-11-16T01:00:00Z');
@@ -445,7 +446,7 @@ test('a Recon conversation\'s run: commands are dropped (the reviewer judges), h
 });
 
 /** A Bench conversation's Long run with stand-in helpers: the planner's answer, and what each helper was told and on which model. */
-async function benchRun({ checks, plan }) {
+async function benchRun({ checks, plan, long }) {
   const { createRunner } = await import('../runner.js');
   const { mkdtempSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
@@ -469,7 +470,7 @@ async function benchRun({ checks, plan }) {
   const agent = { id: 'bc', model: { current: () => ({ provider: 'local', model: 'home-model' }) } };
   const events = [];
   runner.onEvent((event) => events.push(event));
-  await runner.start(agent, 'look up the board', { mode: 'auto', root }, { kind: 'long', long: { minutes: 30, laps: 1, bench: { checks, closedPorts: true } } });
+  await runner.start(agent, 'look up the board', { mode: 'auto', root }, { kind: 'long', long: long ?? { minutes: 30, laps: 1, bench: { checks, closedPorts: true } } });
   return { runner, agent, seen, events, root };
 }
 
@@ -668,6 +669,139 @@ test('a helper whose turn failed and that the app never settles is closed, so th
     assert.notEqual(planned, 'HUNG', 'the step came back');
     assert.deepEqual(closed, ['child-1'], 'the stuck helper was closed');
     assert.match(planned, /1 item/, 'the planner was asked again without a thinking level, and planned');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a Creator Plus conversation\'s run: its checks run in the offline fence with no keys, its workers have no commands', { skip: false }, async () => {
+  const { rmSync, existsSync: exists } = await import('node:fs');
+  const { NO_COMMANDS_WORK, OFFLINE_CHECKS_PLAN } = await import('../lib/prompts.js');
+  const outside = `/private/tmp/mission-creator-escape-${process.pid}`;
+  process.env.MISSION_TEST_KEY = 'a-key-the-check-must-not-see';
+  const plan = { items: [{ title: 'No keys', check: 'test -z "$MISSION_TEST_KEY" && echo clean' }, { title: 'Stay inside', check: `echo x > ${outside} && echo wrote` }], checks: [] };
+  const { runner, agent, seen, root } = await benchRun({ plan, long: { minutes: 30, laps: 1, creator: { cleanEnv: true } } });
+  try {
+    await runner.step(agent, new AbortController().signal, 60000); // plan
+    const run = runner.runOf('bc');
+    assert.deepEqual(run.long.creator, { cleanEnv: true });
+    assert.ok(seen[0].prompt.includes(OFFLINE_CHECKS_PLAN), 'the planner is told the checks are fenced');
+    const first = await runner.step(agent, new AbortController().signal, 60000);
+    assert.ok(seen[1].prompt.includes(NO_COMMANDS_WORK), 'a worker in Creator Plus has no commands');
+    assert.equal(run.items[0].status, 'verified', first);
+    const second = await runner.step(agent, new AbortController().signal, 60000);
+    assert.notEqual(run.items[1].status, 'verified', second);
+    assert.equal(exists(outside), false, 'nothing written outside the run\'s folder');
+  } finally {
+    delete process.env.MISSION_TEST_KEY;
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { force: true });
+  }
+});
+
+test('the fence for checks: only the usual check programs start; launchctl, lsappinfo, open and anything unknown are refused; no launchd job', { skip: !existsSync('/usr/bin/sandbox-exec') && 'needs macOS' }, async () => {
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { offlineFence, runCommand, CHECK_PROGRAMS } = await import('../lib/shell.js');
+  const profile = offlineFence('/private/tmp/x', '/Users/someone');
+  for (const rule of ['(deny process-exec)', '(deny job-creation)', '(deny file-map-executable)', '(deny signal)', '(literal "/bin/launchctl")']) assert.ok(profile.includes(rule), rule);
+  assert.ok(!CHECK_PROGRAMS.includes('/bin/launchctl') && !CHECK_PROGRAMS.includes('/usr/bin/open'));
+  const root = mkdtempSync(join(tmpdir(), 'mission-fence-'));
+  try {
+    writeFileSync(join(root, 'findings.md'), 'alias\n');
+    assert.equal((await runCommand({ command: 'grep -q alias findings.md && wc -l findings.md && ls', root, offline: true })).ok, true, 'the usual checks work');
+    for (const command of ['/bin/launchctl managername', '/usr/bin/lsappinfo front', '/usr/bin/open -g /tmp', '/usr/bin/curl -s https://example.com']) {
+      const ran = await runCommand({ command, root, offline: true });
+      assert.equal(ran.ok, false, command);
+      assert.match(ran.output, /Operation not permitted/, command);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the checkpoint store is the host\'s: a check cannot write it, and a planted git setting runs nothing', { skip: !existsSync('/usr/bin/sandbox-exec') && 'needs macOS' }, async () => {
+  const { mkdtempSync, rmSync, writeFileSync, readFileSync, appendFileSync, mkdirSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { fence, offlineFence, runCommand } = await import('../lib/shell.js');
+  const { openCheckpoints, unsafeStoreConfig, GIT_SAFE } = await import('../lib/checkpoints.js');
+  const root = mkdtempSync(join(tmpdir(), 'mission-store-'));
+  const gitHome = mkdtempSync(join(tmpdir(), 'mission-git-home-test-'));
+  const ran = join(gitHome, 'filter-ran');
+  try {
+    writeFileSync(join(root, 'a.txt'), 'one\n');
+    const points = openCheckpoints(root, { gitHome });
+    if (!points.available) return;
+    await points.take('first');
+    // (a) Both fences close the store to checks; offline checks keep their temporary folder.
+    for (const profile of [fence(root), offlineFence(root)]) assert.match(profile, /\(deny file-write\* \(subpath "[^"]*\/\.dsh-mission"\)/);
+    for (const offline of [false, true]) {
+      const tried = await runCommand({ command: 'printf "[filter \\"x\\"]\\n\\tclean = touch FILTER\\n" >> .dsh-mission/checkpoints.git/config', root, offline });
+      assert.equal(tried.ok, false, `offline ${offline}`);
+      assert.match(tried.output, /Operation not permitted/);
+    }
+    assert.equal((await runCommand({ command: 'echo x > .dsh-mission/tmp/ok && echo written', root, offline: true })).ok, true, 'an offline check still has its temporary folder');
+    const { realpathSync } = await import('node:fs');
+    assert.deepEqual(unsafeStoreConfig(readFileSync(join(root, '.dsh-mission', 'checkpoints.git', 'config'), 'utf8'), [root, realpathSync(root)]), [], 'what git init writes is allowed');
+    assert.deepEqual(unsafeStoreConfig('[core]\n\tworktree = /somewhere/else\n', [root]), ['core.worktree'], 'a work tree elsewhere is not');
+    // (b) A setting planted anyway (by anything but a check): git is not run at all, and nothing runs.
+    writeFileSync(join(root, '.gitattributes'), '* filter=x diff=x\n');
+    appendFileSync(join(root, '.dsh-mission', 'checkpoints.git', 'config'), `[filter "x"]\n\tclean = touch '${ran}'; cat\n[diff "x"]\n\ttextconv = touch '${ran}'; cat\n`);
+    writeFileSync(join(root, 'a.txt'), 'two\n');
+    await assert.rejects(points.take('second'), /its settings were changed \(\[filter "x"\], filter\.clean/);
+    await assert.rejects(points.idOf(1), /settings were changed/);
+    await assert.rejects(points.back(1), /settings were changed/, 'not even going back');
+    assert.equal(existsSync(ran), false, 'the planted filter never ran');
+    assert.deepEqual(unsafeStoreConfig('[core]\n\tfsmonitor = /tmp/x\n[alias]\n\tst = !sh\n[gpg]\n\tprogram = x\n[include]\n\tpath = /x\n'), ['core.fsmonitor', '[alias]', 'alias.st', '[gpg]', 'gpg.program', '[include]', 'include.path']);
+    for (const flag of ['core.attributesFile=/dev/null', 'core.hooksPath=/dev/null', 'commit.gpgSign=false', 'core.fsmonitor=false', 'diff.external=']) assert.ok(GIT_SAFE.includes(flag), flag);
+    // A user-wide git setting is not read either: no global config, and git's HOME an empty folder of the host's own.
+    const other = mkdtempSync(join(tmpdir(), 'mission-store-2-'));
+    try {
+      writeFileSync(join(other, '.gitattributes'), '* filter=y\n');
+      writeFileSync(join(other, 'b.txt'), 'b\n');
+      writeFileSync(join(gitHome, '.gitconfig'), `[filter "y"]\n\tclean = touch '${ran}'; cat\n`);
+      mkdirSync(join(gitHome, 'git'), { recursive: true });
+      writeFileSync(join(gitHome, 'git', 'config'), `[filter "y"]\n\tclean = touch '${ran}'; cat\n`);
+      await openCheckpoints(other, { gitHome }).take('user-wide');
+      assert.equal(existsSync(ran), false, 'a user-wide filter never ran');
+      // Every git call carries the safe settings; every diff refuses external tools and text converters; HOME is not in the folder.
+      const log = join(gitHome, 'calls.log');
+      const fake = join(gitHome, 'git-logged');
+      writeFileSync(fake, `#!/bin/sh\nprintf '%s|HOME=%s|GLOBAL=%s\\n' "$*" "$HOME" "$GIT_CONFIG_GLOBAL" >> '${log}'\nexec /usr/bin/git "$@"\n`, { mode: 0o755 });
+      writeFileSync(join(other, 'b.txt'), 'c\n');
+      const logged = openCheckpoints(other, { git: fake, gitHome });
+      await logged.take('logged');
+      await logged.changes(await logged.idOf(1));
+      const calls = readFileSync(log, 'utf8').trim().split('\n');
+      assert.ok(calls.length >= 3);
+      for (const call of calls) {
+        for (const flag of ['core.attributesFile=/dev/null', 'core.hooksPath=/dev/null', 'commit.gpgSign=false', 'core.fsmonitor=false', 'diff.external=']) assert.ok(call.includes(flag), `${flag} in ${call}`);
+        assert.ok(call.includes(`HOME=${gitHome}|`) && call.includes('GLOBAL=/dev/null'), call);
+        if (/ diff /.test(call)) assert.ok(call.includes('--no-ext-diff') && call.includes('--no-textconv'), call);
+      }
+      assert.ok(calls.some((call) => / diff /.test(call)));
+    } finally {
+      rmSync(other, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(gitHome, { recursive: true, force: true });
+  }
+});
+
+test('a check leaves no process behind: its process group is stopped when it ends', async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { runCommand } = await import('../lib/shell.js');
+  const root = mkdtempSync(join(tmpdir(), 'mission-late-'));
+  try {
+    const ran = await runCommand({ command: '(sleep 1.5; touch late.txt) & echo started', root });
+    assert.match(ran.output, /started/);
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    assert.equal(existsSync(join(root, 'late.txt')), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

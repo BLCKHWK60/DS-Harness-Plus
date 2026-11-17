@@ -1,0 +1,10 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [],
+  "inject": [],
+  "events": [],
+  "places": [
+    "settings.action"
+  ]
+}

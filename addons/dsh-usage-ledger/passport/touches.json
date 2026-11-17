@@ -1,0 +1,44 @@
+{
+  "name": "@local/dsh-usage-ledger",
+  "folder": "dsh-usage-ledger",
+  "at": "2026-11-17",
+  "provides": [
+    "usageLedger"
+  ],
+  "uses": [
+    "days",
+    "dshHomePath"
+  ],
+  "events": [
+    "session/event"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-usage-ledger/summary"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "usage-ledger"
+    }
+  ],
+  "settings": [],
+  "sections": [],
+  "modes": [],
+  "storage": [
+    "usage-ledger"
+  ],
+  "config": [
+    "enabled",
+    "retentionDays",
+    "freeModels",
+    "modelAliases",
+    "dataDir",
+    "commandName"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "usage-ledger"
+  ]
+}

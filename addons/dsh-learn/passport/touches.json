@@ -1,0 +1,64 @@
+{
+  "name": "@local/dsh-learn",
+  "folder": "dsh-learn",
+  "at": "2026-11-17",
+  "provides": [
+    "learning"
+  ],
+  "uses": [
+    "agents",
+    "dshHomePath",
+    "modes",
+    "skills",
+    "tools"
+  ],
+  "events": [
+    "agent/created",
+    "agent/disposed"
+  ],
+  "tools": [
+    "learn_plan",
+    "learn_mark",
+    "learn_review",
+    "learn_status",
+    "learn_end"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-learn/status",
+    "/dsh-learn/overview",
+    "/dsh-learn/action"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "learn"
+    },
+    {
+      "name": "conversation.input.dock",
+      "id": "learn"
+    }
+  ],
+  "settings": [
+    "learn"
+  ],
+  "sections": [
+    "learn:session"
+  ],
+  "modes": [],
+  "storage": [
+    "learn"
+  ],
+  "config": [
+    "enabled",
+    "level",
+    "reviewSize",
+    "dataDir",
+    "skills",
+    "commandName"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "learn"
+  ]
+}

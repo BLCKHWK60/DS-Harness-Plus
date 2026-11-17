@@ -1,0 +1,46 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agentPresets",
+    "agents",
+    "attachments",
+    "contents",
+    "digest",
+    "dshHomePath",
+    "files",
+    "llm",
+    "loader",
+    "modes",
+    "name",
+    "path",
+    "provider",
+    "reconWipe",
+    "remote.session",
+    "schedule",
+    "sessions",
+    "settings",
+    "shortcuts",
+    "tools",
+    "uiSession",
+    "uiWorkspace",
+    "upload",
+    "workingDirectory",
+    "workspaceRegistry",
+    "workspaces"
+  ],
+  "inject": [],
+  "events": [
+    "agent/created",
+    "agent/disposed",
+    "system-prompt/assemble",
+    "agent/inbox/claimed",
+    "working-directory/access"
+  ],
+  "places": [
+    "settings.section",
+    "sidebar.panellist",
+    "conversation.hero.options",
+    "conversation.input.left"
+  ]
+}

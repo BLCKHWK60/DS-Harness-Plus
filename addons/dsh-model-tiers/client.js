@@ -1286,6 +1286,46 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
      * The team of a tier for the work loop (plan step S6): who leads (and takes a step that failed twice),
      * who does the steps, who checks, who judges between attempts. Each a saved model version or a model.
      */
+    /**
+     * A team member's Tuning Plus adapter (optional): the id of a shelf entry on Settings → Tuning Plus. Used only
+     * while that entry is switched on and has an address; otherwise the member's own model is used.
+     */
+    function AdapterField({ label, value, onSet }) {
+      const [text, setText] = useState(value?.adapter ?? '');
+      useEffect(() => {
+        setText(value?.adapter ?? '');
+      }, [value?.adapter]);
+      const commit = () => {
+        const next = text.trim();
+        if (next === (value?.adapter ?? '')) return;
+        const copy = { ...value };
+        if (next) copy.adapter = next;
+        else delete copy.adapter;
+        onSet(copy);
+      };
+      return h(
+        'div',
+        { className: 'dsh-mt-rolerow' },
+        h('span', { className: 'dsh-mt-rolelabel' }, ''),
+        h('input', {
+          className: 'dsh-mt-input',
+          placeholder: 'Tuning Plus adapter (its shelf id), optional',
+          title: 'Used only while that adapter is switched on and served on Settings → Tuning Plus; otherwise the model above.',
+          value: text,
+          spellCheck: false,
+          'aria-label': `${label}: Tuning Plus adapter`,
+          onChange: (event) => setText(event.target.value),
+          onBlur: commit,
+          onKeyDown: (event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              event.target.blur();
+            }
+          },
+        }),
+      );
+    }
+
     function TeamEditor({ tierId, teams, versions, onChange }) {
       const team = teams?.[tierId] ?? {};
       const helpers = Array.isArray(team.helpers) ? team.helpers.filter(Boolean) : [];
@@ -1327,7 +1367,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                 onChange: (event) => {
                   const picked = event.target.value;
                   if (!picked) onSet(null);
-                  else if (picked.startsWith('v:')) onSet({ version: picked.slice(2) });
+                  else if (picked.startsWith('v:')) onSet({ version: picked.slice(2), ...(value?.adapter ? { adapter: value.adapter } : {}) });
                   else onSet(value?.provider ? value : null);
                 },
               },
@@ -1336,7 +1376,8 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
               h('option', { value: 'route' }, 'A model, typed below'),
             ),
           ),
-          value?.version ? null : h(RoleRouteRow, { role: key, label: '', route: value?.provider ? value : null, onChange: (route) => onSet(route) }),
+          value?.version ? null : h(RoleRouteRow, { role: key, label: '', route: value?.provider ? value : null, onChange: (route) => onSet(route ? { ...route, ...(value?.adapter ? { adapter: value.adapter } : {}) } : null) }),
+          value ? h(AdapterField, { label, value, onSet }) : null,
         );
       return h(
         'details',

@@ -1,0 +1,104 @@
+{
+  "name": "@local/dsh-recon",
+  "folder": "dsh-recon",
+  "at": "2026-11-17",
+  "provides": [
+    "recon",
+    "reconWipe",
+    "reconExports"
+  ],
+  "uses": [
+    "agents",
+    "approval",
+    "dshHomePath",
+    "mission",
+    "modes",
+    "remote.session",
+    "session",
+    "sessionQuery",
+    "sessions",
+    "settings",
+    "subagents",
+    "tools",
+    "uddg",
+    "uiWorkspace",
+    "what"
+  ],
+  "events": [
+    "agent/disposed",
+    "agent/pre-step",
+    "session/event",
+    "tools/pre-execute"
+  ],
+  "tools": [
+    "recon_onion_search",
+    "recon_onion_read",
+    "recon_web_search",
+    "recon_web_read",
+    "recon_board_search",
+    "recon_board_read",
+    "recon_usenet_groups",
+    "recon_usenet_search",
+    "recon_usenet_read",
+    "recon_news_search",
+    "recon_archive_find",
+    "recon_archive_read",
+    "recon_cite"
+  ],
+  "commands": [
+    "recon"
+  ],
+  "routes": [
+    "/dsh-recon/state",
+    "/dsh-recon/door",
+    "/dsh-cowork-shell/scratch"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "recon"
+    },
+    {
+      "name": "conversation.hero.options",
+      "id": "recon-bar"
+    },
+    {
+      "name": "conversation.input.left",
+      "id": "recon-export"
+    }
+  ],
+  "settings": [
+    "modes",
+    "recon"
+  ],
+  "sections": [],
+  "modes": [
+    "recon"
+  ],
+  "storage": [
+    "recon"
+  ],
+  "config": [
+    "enabled",
+    "torPath",
+    "otherEngine",
+    "engineHost",
+    "usenetRoute",
+    "archiveOn",
+    "longChecks",
+    "archiveDirect",
+    "newsOn",
+    "webOn",
+    "usenetAccounts",
+    "usenetDefaultAccount",
+    "usenetHost",
+    "exportFolder",
+    "usenetPort",
+    "vpnConfigs",
+    "wireproxyPath"
+  ],
+  "instructionChars": 3770,
+  "rows": [
+    "recon"
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "BYDAY",
+    "FREQ",
+    "UNTIL",
+    "WKST",
+    "creatorPlus",
+    "dshHomePath",
+    "layout",
+    "mission",
+    "modes",
+    "sessionQuery",
+    "sessions",
+    "settings",
+    "uiWorkspace"
+  ],
+  "inject": [],
+  "events": [
+    "session/event"
+  ],
+  "places": [
+    "settings.section",
+    "conversation.hero.options",
+    "sidebar.panellist"
+  ]
+}

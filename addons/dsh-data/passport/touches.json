@@ -1,0 +1,62 @@
+{
+  "name": "@local/dsh-data",
+  "folder": "dsh-data",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [
+    "agents",
+    "coworkScratch",
+    "diagrams",
+    "dshHomePath",
+    "modes",
+    "settings",
+    "tools"
+  ],
+  "events": [
+    "agent/created",
+    "agent/disposed"
+  ],
+  "tools": [
+    "data_files",
+    "data_profile",
+    "data_query",
+    "data_chart",
+    "data_python",
+    "data_text",
+    "data_save_analysis",
+    "data_rerun_analysis",
+    "data_analyses"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-data/data"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "data"
+    }
+  ],
+  "settings": [
+    "modes",
+    "diagram",
+    "data"
+  ],
+  "sections": [
+    "data:folder"
+  ],
+  "modes": [
+    "data"
+  ],
+  "storage": [
+    "data"
+  ],
+  "config": [
+    "enabled",
+    "pythonSetup"
+  ],
+  "instructionChars": 3903,
+  "rows": [
+    "data"
+  ]
+}

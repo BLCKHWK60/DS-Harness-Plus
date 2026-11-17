@@ -506,7 +506,7 @@ export function apply(ctx, config) {
         } else {
           const outcome = await improve({
             store, model: now.student, repeats: now.repeats, maxEdits: now.maxEdits, thresholds: { costCeiling: now.costCeiling },
-            run, judge, budget, signal: controller.signal, onPhase,
+            run, judge, budget, signal: controller.signal, onPhase, examGate: tuningExamGate(now.student, prefix),
             review: async (packet, signal) => {
               const answer = await ask(now.reviewer, packet, { signal });
               return { text: answer.text, tokens: answer.inTokens + answer.outTokens };
@@ -539,6 +539,22 @@ export function apply(ctx, config) {
       }
     })();
     return {};
+  }
+
+  /**
+   * Tuning Plus's exam gate, when that add-on is on (an optional extra gate; without it nothing changes).
+   * @returns {Function | undefined} the gate for engine.improve.
+   */
+  function tuningExamGate(student, prefix) {
+    let tuning;
+    try {
+      tuning = ctx.get('tuning');
+    } catch {
+      return undefined;
+    }
+    if (tuning?.apiVersion !== 1 || typeof tuning.examGate !== 'function' || !student?.provider || !student?.model) return undefined;
+    const withPrefix = (notes) => [prefix, notes].filter(Boolean).join('\n\n');
+    return ({ before, after, signal, budget }) => tuning.examGate({ route: { provider: student.provider, model: student.model }, before: withPrefix(before), after: withPrefix(after), signal, budget });
   }
 
   /** @returns {object} everything the page shows. */

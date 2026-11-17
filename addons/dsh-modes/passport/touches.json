@@ -1,0 +1,116 @@
+{
+  "name": "@local/dsh-modes",
+  "folder": "dsh-modes",
+  "at": "2026-11-17",
+  "provides": [
+    "modes"
+  ],
+  "uses": [
+    "agents",
+    "coworkScratch",
+    "coworkShell",
+    "dshHomePath",
+    "goals",
+    "learning",
+    "loader",
+    "mission",
+    "modelTiers",
+    "permissionPresets",
+    "ptcRuntime",
+    "remote.session",
+    "sandboxPolicy",
+    "sessionPersistence",
+    "sessions",
+    "settings",
+    "tools",
+    "uiWorkspace",
+    "web"
+  ],
+  "events": [
+    "agent/created",
+    "schedule/resolve-agent",
+    "session/event",
+    "loader/volatile-update",
+    "agent/inbox/claimed",
+    "agent/assistant-stream",
+    "agent/turn-stopping",
+    "tools/result",
+    "agent/status",
+    "agent/pre-step",
+    "agent/disposed",
+    "tools/pre-execute"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-modes/tools"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "modes"
+    },
+    {
+      "name": "conversation.input.left",
+      "id": "mode-toggles"
+    },
+    {
+      "name": "conversation.input.left",
+      "id": "mode-select"
+    },
+    {
+      "name": "conversation.chat.assistant-actions",
+      "id": "modes-rerun"
+    }
+  ],
+  "settings": [
+    "modes",
+    "cowork-shell"
+  ],
+  "sections": [
+    "modes:mode",
+    "modes:lens"
+  ],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "modes",
+    "extraModes",
+    "defaultMode",
+    "scheduledMode",
+    "sessionModes",
+    "sessionIsolated",
+    "pruneStaleSessions",
+    "pinOnFirstTurn",
+    "sessionWeb",
+    "sessionWebLevel",
+    "verifiedSources",
+    "webMixes",
+    "sessionResearch",
+    "sessionSearchDepth",
+    "sessionDepth",
+    "sessionLens",
+    "ownLenses",
+    "depthMoved",
+    "longTools",
+    "sessionTools",
+    "searchDepth",
+    "codeMethod",
+    "coworkMethod",
+    "sessionSandboxBase",
+    "researchDepth",
+    "researchModel",
+    "sessionHelpers",
+    "rerunButton",
+    "hideFeedback",
+    "commandName",
+    "trimModes",
+    "sessionToolSets",
+    "webMarksCleared",
+    "dataTrimAdded"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "modes"
+  ]
+}

@@ -339,6 +339,52 @@ html[data-cws-tab="automations"] [class*='_composerHero']:has(.dsh-au-bar) { pos
           h('p', { className: 'dsh-au-desc' }, 'Filled green: finished. Red: failed or stopped. Orange ring: missed. Grey ring: coming. Point at a mark for its time.')));
     }
 
+    /** When a saved Creator Plus run repeats: every day, every weekday, or one day of the week (ISO: 1 = Monday). */
+    const CREATOR_DAYS = [['', 'Every day', []], ['weekdays', 'Every weekday', [1, 2, 3, 4, 5]], ...['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day, index) => [String(index + 1), `Every ${day}`, [index + 1]])];
+
+    /**
+     * Creator Plus's saved runs, offered here (Creator Plus, the owner's answer of 16 November): Schedule makes
+     * a Creator Plus conversation in Scratch for the run and an automation that sends the run there. The run
+     * changes nothing in the real setup without the user's yes: Creator Plus's own rules hold in that conversation.
+     */
+    function CreatorRuns({ runs, busy, act, appCtx }) {
+      const [plan, setPlan] = useState({});
+      const [working, setWorking] = useState('');
+      const [problem, setProblem] = useState('');
+      const of = (name) => plan[name] ?? { time: '09:00', days: '' };
+      const schedule = async (run) => {
+        setWorking(run.name);
+        setProblem('');
+        try {
+          const sessions = appCtx.get('sessions');
+          if (!sessions?.create) throw new Error('this version of the app cannot make a conversation from here');
+          const scratch = await fetch(new URL('dsh-cowork-shell/scratch', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
+          const place = scratch.ok ? String((await scratch.json()).place ?? '') : '';
+          if (!place) throw new Error('Scratch is not available here (it needs the Cowork sidebar)');
+          const sessionId = await sessions.create({ cwd: place });
+          const claim = await fetch(new URL('dsh-creator-plus/data', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ action: 'claim', sessionId, run: run.name }) });
+          if (!claim.ok) throw new Error((await claim.json().catch(() => ({}))).error || 'the conversation could not become a Creator Plus one');
+          const chosen = of(run.name);
+          const days = CREATOR_DAYS.find(([id]) => id === chosen.days)?.[2] ?? [];
+          await act({ action: 'creatorRun', name: run.name, sessionId, time: chosen.time, weekdays: days, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }, `Scheduled "${run.name}". It runs in its own Creator Plus conversation and changes nothing without your yes.`);
+        } catch (error) {
+          setProblem(`It did not work: ${error.message}`);
+        } finally {
+          setWorking('');
+        }
+      };
+      return h(React.Fragment, null,
+        h('div', { className: 'dsh-au-group' }, 'Creator Plus saved runs'),
+        h('p', { className: 'dsh-au-desc' }, 'Runs you saved on the Creator Plus bar. A scheduled one works in a Creator Plus conversation of its own, as a Long run would: it prepares changes in the trial copy only and lists them, with its questions, for you. Nothing in your setup changes without your yes.'),
+        problem ? h('p', { className: 'dsh-au-desc', 'data-error': 'true', role: 'status' }, problem) : null,
+        runs.map((run) => h('div', { key: run.name, className: 'dsh-au-row' },
+          h('div', { className: 'dsh-au-rowtext' }, h('div', { className: 'dsh-au-rowtitle' }, run.name, ' ', h('span', { className: 'dsh-au-tag' }, 'Creator Plus')), h('div', { className: 'dsh-au-rowdesc' }, run.sentence)),
+          h('div', { className: 'dsh-au-btns' },
+            h('select', { value: of(run.name).days, disabled: busy || Boolean(working), 'aria-label': `When ${run.name} runs`, onChange: (e) => setPlan({ ...plan, [run.name]: { ...of(run.name), days: e.target.value } }) }, CREATOR_DAYS.map(([id, label]) => h('option', { key: id, value: id }, label))),
+            h('input', { type: 'time', value: of(run.name).time, disabled: busy || Boolean(working), 'aria-label': `Time for ${run.name}`, onChange: (e) => setPlan({ ...plan, [run.name]: { ...of(run.name), time: e.target.value } }) }),
+            h('button', { type: 'button', className: 'dsh-au-btn', disabled: busy || Boolean(working) || !/^\d\d:\d\d$/.test(of(run.name).time), onClick: () => void schedule(run) }, working === run.name ? 'Scheduling…' : 'Schedule')))));
+    }
+
     function RunsPage({ appCtx }) {
       const { data, setData, note, setNote, alive } = useData(5000);
       const [busy, setBusy] = useState(false);
@@ -441,6 +487,8 @@ html[data-cws-tab="automations"] [class*='_composerHero']:has(.dsh-au-bar) { pos
                   h('button', { type: 'button', className: 'dsh-au-btn', 'aria-expanded': String(open === task.id), onClick: () => setOpen(open === task.id ? '' : task.id) }, open === task.id ? 'Close' : 'Details'))),
               open === task.id ? h(Detail, { task, runs, data, busy, act, appCtx }) : null);
           }),
+
+        Array.isArray(data.creatorRuns) && data.creatorRuns.length > 0 ? h(CreatorRuns, { runs: data.creatorRuns, busy, act, appCtx }) : null,
 
         h('div', { className: 'dsh-au-group' }, 'Timeline'),
         h(Timeline),

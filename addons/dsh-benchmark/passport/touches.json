@@ -1,0 +1,53 @@
+{
+  "name": "@local/dsh-benchmark",
+  "folder": "dsh-benchmark",
+  "at": "2026-11-17",
+  "provides": [
+    "benchmark"
+  ],
+  "uses": [
+    "dshHomePath",
+    "job",
+    "llm",
+    "settings"
+  ],
+  "events": [],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-benchmark/jobs",
+    "/dsh-benchmark/report",
+    "/dsh-benchmark/action"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "benchmark"
+    }
+  ],
+  "settings": [
+    "benchmark"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [
+    "benchmarks"
+  ],
+  "config": [
+    "enabled",
+    "dataDir",
+    "targets",
+    "suites",
+    "grid",
+    "judge",
+    "pricing",
+    "limits",
+    "export",
+    "commandName",
+    "acceptedMethods"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "benchmark"
+  ]
+}

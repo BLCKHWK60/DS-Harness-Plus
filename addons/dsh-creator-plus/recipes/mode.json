@@ -1,0 +1,78 @@
+{
+  "kind": "mode",
+  "label": "A tab (a mode)",
+  "when": "A new kind of work with its own method, tools and rules.",
+  "files": [
+    "package.json",
+    "cordis.patch.yml",
+    "index.js",
+    "client.js",
+    "README.md",
+    "test/<name>.test.mjs",
+    "passport/",
+    "lib/mode.js"
+  ],
+  "steps": [
+    {
+      "id": "read",
+      "mark": "must",
+      "text": "Read the brief, the plan and the part of the map the plan touches (creator_map with the plugins named). Read the README of every plugin the plan touches."
+    },
+    {
+      "id": "tests-first",
+      "mark": "must",
+      "text": "Write the tests first, from the brief, in test/<name>.test.mjs: what the plugin must do, what it must refuse, and that it changes nothing while it is switched off. Stand-ins only: no real device, network, account, model or app data."
+    },
+    {
+      "id": "mode",
+      "mark": "must",
+      "text": "lib/mode.js: MODE_ID, the tool list (an allow-list; no shell unless the brief asks and the user agreed), sandbox, startFamilies, and METHOD under 4,000 characters, in plain short rules."
+    },
+    {
+      "id": "extra-modes",
+      "mark": "must",
+      "text": "index.js: add the mode through the Modes add-on's extraModes when switched on, take it out when switched off, and move defaultMode back to cowork if it pointed at the tab (copy the pattern of dsh-bench's syncMode)."
+    },
+    {
+      "id": "tools-when",
+      "mark": "must",
+      "text": "Its tools are registered with `when` so they are offered only in this tab and its helpers; other tabs' tool lists do not change."
+    },
+    {
+      "id": "guard",
+      "mark": "must",
+      "text": "An allow-list guard for the tab's conversations: tools/pre-execute before next(), and a final ctx.tools.guard (needs inject ['tools'])."
+    },
+    {
+      "id": "icon",
+      "mark": "default",
+      "text": "The Cowork sidebar shows a dot for a tab it does not know; its icon is a separate change to dsh-cowork-shell and dsh-settings-plus, put to the user."
+    },
+    {
+      "id": "page",
+      "mark": "must",
+      "text": "client.js: Settings page with the switch and what the tab does and does not do."
+    },
+    {
+      "id": "readme",
+      "mark": "must",
+      "text": "Write README.md: what the user gets, the rules and which of them code enforces, what is not built, how it was tested and what was not. Plain words."
+    },
+    {
+      "id": "checks",
+      "mark": "must",
+      "text": "Run creator_check: the trial copy loads the plugin without errors, its tests pass, the fit check is clear (or the user decided), and the trial install works. Fix and run it again until all four pass."
+    },
+    {
+      "id": "report",
+      "mark": "must",
+      "text": "Report in plain words: what was built, what the checks showed, what was not verified, and what waits for the user's yes."
+    }
+  ],
+  "checks": [
+    "load",
+    "tests",
+    "fit",
+    "trial"
+  ]
+}

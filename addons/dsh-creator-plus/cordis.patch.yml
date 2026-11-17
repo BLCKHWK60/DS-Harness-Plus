@@ -1,0 +1,9 @@
+- insert:
+    - id: creator-plus
+      name: '@local/dsh-creator-plus'
+      config:
+        # Off until you switch it on in Settings > Creator Plus. It then adds a Creator Plus tab beside the others.
+        # Needs the Modes add-on and the Cowork sidebar. Optional:
+        #   logReaders: this-mac      # who may read the session logs: this-mac, my-network or any
+        #   plusFolder: <FOLDER>      # a Plus folder with its tests, for upkeep and changes
+        enabled: false

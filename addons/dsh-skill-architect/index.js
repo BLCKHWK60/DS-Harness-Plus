@@ -385,17 +385,78 @@ export function apply(ctx, config) {
 
   // ---- deciding on proposals (steps 79 to 82) ---------------------------------------------------
 
-  const accept = async (id, edits = {}) => {
+  /**
+   * Tuning Plus's exam, when that add-on is on and has an exam of the owner's work: the reading model answers
+   * the exam without the skill and with it. Undefined (Tuning Plus off, no exam, no reading model): as before.
+   */
+  const skillExam = async (skill) => {
+    let tuning;
+    try {
+      tuning = ctx.get('tuning');
+    } catch {
+      return undefined;
+    }
+    const route = readingRoute();
+    if (tuning?.apiVersion !== 1 || typeof tuning.examGate !== 'function' || !route || route.provider.startsWith('engine-')) return undefined;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new Error('The exam took too long.')), 20 * 60000);
+    try {
+      const result = await tuning.examGate({ route, before: '', after: `## Skill: ${skill.name}\n${skill.description ? `${skill.description}\n\n` : ''}${skill.text}`, signal: controller.signal });
+      return result && typeof result.ok === 'boolean' ? { ok: result.ok, why: String(result.why ?? '').slice(0, 300), model: route.model } : undefined;
+    } catch {
+      return undefined;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  /** Whether Tuning Plus can try a skill on the owner's exam (it may still find too few exam rows). */
+  const examAvailable = () => {
+    try {
+      const tuning = ctx.get('tuning');
+      const route = readingRoute();
+      return tuning?.apiVersion === 1 && typeof tuning.examGate === 'function' && Boolean(route) && !route.provider.startsWith('engine-');
+    } catch {
+      return false;
+    }
+  };
+  const addSkill = async (id, merged, exam, anyway) => {
+    const taken = await takenNames();
+    const reach = merged.reach === 'project' && merged.folder ? { kind: 'project', folder: merged.folder } : merged.reach === 'tab' && merged.tab ? { kind: 'tab', tab: merged.tab } : { kind: 'all' };
+    library.add({ name: merged.name, description: merged.description, text: merged.text, reach, by: 'learned', why: `Learned from your conversations: ${merged.why}${exam ? ` Your own exam (Tuning Plus): ${exam.why}.` : anyway ? ' Added anyway after the exam.' : ''}` }, (name) => taken.has(name));
+    invalidate();
+    proposals.decide(id, 'accepted');
+    return `The skill "${merged.name}" is added.${exam ? ` On your own exam (Tuning Plus) with ${exam.model}: ${exam.why}.` : ''}`;
+  };
+  const examJobs = new Set();
+  // A try that was going when the app closed is not going any more.
+  for (const item of proposals.list()) if (item.examRunning) proposals.note(item.id, { examRunning: false });
+
+  const accept = async (id, edits = {}, { anyway = false } = {}) => {
     const proposal = proposals.get(id);
     if (!proposal) throw new Error('That proposal is gone.');
     const merged = { ...proposal, ...Object.fromEntries(Object.entries(edits).filter(([, value]) => typeof value === 'string')) };
     let said = '';
     if (merged.kind === 'skill') {
-      const taken = await takenNames();
-      const reach = merged.reach === 'project' && merged.folder ? { kind: 'project', folder: merged.folder } : merged.reach === 'tab' && merged.tab ? { kind: 'tab', tab: merged.tab } : { kind: 'all' };
-      library.add({ name: merged.name, description: merged.description, text: merged.text, reach, by: 'learned', why: `Learned from your conversations: ${merged.why}` }, (name) => taken.has(name));
-      invalidate();
-      said = `The skill "${merged.name}" is added.`;
+      if (anyway || !examAvailable()) return addSkill(id, merged, undefined, anyway);
+      // One more check when Tuning Plus is on: the skill is tried on your own exam in the background (it can
+      // take minutes); it is added when it is not worse, and otherwise waits here with the result and an
+      // "Add anyway" button.
+      if (examJobs.has(id)) return 'It is being tried on your own exam (Tuning Plus); this page shows the result when it is done.';
+      examJobs.add(id);
+      proposals.note(id, { examRunning: true, examProblem: '' });
+      void (async () => {
+        try {
+          const exam = await skillExam(merged);
+          proposals.note(id, { examRunning: false, ...(exam ? { exam: { ...exam, text: merged.text, at: Date.now() } } : {}) });
+          if (!exam || exam.ok) await addSkill(id, merged, exam, false);
+        } catch (error) {
+          proposals.note(id, { examRunning: false, examProblem: String(error?.message ?? error).slice(0, 300) });
+        } finally {
+          examJobs.delete(id);
+        }
+      })();
+      return `Trying "${merged.name}" on your own exam first (Tuning Plus), with ${readingRoute()?.model ?? 'the reading model'}. It is added when it is not worse; this page shows the result when it is done.`;
     } else if (merged.kind === 'fact') {
       const memory = ctx.get('memoryStore');
       if (!memory?.add) throw new Error('Memory is off, so the fact cannot be added. Switch Memory on, or reject this.');
@@ -581,7 +642,7 @@ export function apply(ctx, config) {
                 Object.assign(out, await learn({ seen: body.seen === true }));
                 break;
               case 'accept':
-                out.said = await accept(String(body.id ?? ''), body.edits ?? {});
+                out.said = await accept(String(body.id ?? ''), body.edits ?? {}, { anyway: body.anyway === true });
                 break;
               case 'reject':
                 proposals.decide(String(body.id ?? ''), 'rejected');

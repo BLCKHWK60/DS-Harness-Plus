@@ -1,0 +1,100 @@
+{
+  "name": "@local/dsh-mission",
+  "folder": "dsh-mission",
+  "at": "2026-11-17",
+  "provides": [
+    "mission"
+  ],
+  "uses": [
+    "agents",
+    "approval",
+    "bench",
+    "coworkScratch",
+    "creatorPlus",
+    "dshHomePath",
+    "goals",
+    "modelTiers",
+    "modes",
+    "permissionPresets",
+    "recon",
+    "remote.session",
+    "routeHealth",
+    "sandboxPolicy",
+    "sessionId",
+    "settings",
+    "tools",
+    "workingDirectory",
+    "workspaces"
+  ],
+  "events": [
+    "agent/created",
+    "agent/disposed",
+    "session/event",
+    "system-prompt/assemble",
+    "agent/assistant-stream",
+    "goal/activation-changed",
+    "agent/pre-step",
+    "tools/pre-execute",
+    "tools/result",
+    "tools/post-execute"
+  ],
+  "tools": [],
+  "commands": [
+    "mission"
+  ],
+  "routes": [
+    "/dsh-mission/long"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "mission"
+    },
+    {
+      "name": "conversation.input.dock",
+      "id": "mission-run"
+    },
+    {
+      "name": "conversation.input.right",
+      "id": "mission-run-button"
+    },
+    {
+      "name": "shell.overlay",
+      "id": "mission-long"
+    }
+  ],
+  "settings": [
+    "mission"
+  ],
+  "sections": [
+    "mission:rules"
+  ],
+  "modes": [],
+  "storage": [
+    "mission"
+  ],
+  "config": [
+    "enabled",
+    "defaultMode",
+    "maxItems",
+    "maxTries",
+    "maxReviews",
+    "maxSteps",
+    "longMinutes",
+    "longLaps",
+    "longFullTime",
+    "longKeepAwake",
+    "longBattery",
+    "longRetry",
+    "longEffort",
+    "waitMinutes",
+    "roles",
+    "projects",
+    "loopTabs",
+    "callsAtOnce"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "mission"
+  ]
+}

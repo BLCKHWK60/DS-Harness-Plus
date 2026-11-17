@@ -14,7 +14,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeF
 import { basename, dirname, join } from 'node:path';
 import { OWN_FOLDER, real } from './lib/paths.js';
 import { MODE_LABELS } from './lib/guard.js';
-import { ROLES, addAsk, applyChecks, dropCommands, noChecks, noCommands, offlineChecks, portsClosed, workersWithoutCommands, applyPlan, applyReview, applyUndo, applyWork, brokenChecks, checklist, finish, isLong, lapNotes, newRun, nextStep, reopen, report, tally } from './lib/run.js';
+import { ROLES, addAsk, applyChecks, cleanEnv, dropCommands, noChecks, noCommands, offlineChecks, portsClosed, workersWithoutCommands, applyPlan, applyReview, applyUndo, applyWork, brokenChecks, checklist, finish, isLong, lapNotes, newRun, nextStep, reopen, report, tally } from './lib/run.js';
 import { conductorNote, formatPrompt, jsonOf, planPrompt, reviewPrompt, workPrompt } from './lib/prompts.js';
 import { runCommand } from './lib/shell.js';
 import { KINDS, SHAPE_NOTE, TEXT_KINDS, agreement, answerPrompt, citationCheck, goesUp, judgeOf, judgePrompt, limitedBy, loopLine, sameAnswer, questionsOf, questionsPrompt, readerCheckPrompt, readerVerdict, recipeText, revisePrompt, sameAddress, shapeCheck, sideBySide } from './lib/loop.js';
@@ -381,7 +381,7 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
       point = undefined;
     }
     const closed = portsClosed(run);
-    const ran = await runCommand({ command, root: run.root, signal, closePorts: closed, offline: offlineChecks(run) });
+    const ran = await runCommand({ command, root: run.root, signal, closePorts: closed, offline: offlineChecks(run), cleanEnv: cleanEnv(run) });
     // In Bench a check may not open a device's port: said where the user and the reviewer read it.
     const result = closed && !ran.ok && /\/dev\/(cu|tty)\.|\/dev\/r?disk|Operation not permitted/i.test(ran.output ?? '')
       ? { ...ran, output: `${ran.output}\n[${PORTS_CLOSED_NOTE}]` }

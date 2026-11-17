@@ -1,0 +1,42 @@
+{
+  "name": "@local/dsh-library",
+  "folder": "dsh-library",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [
+    "dshHomePath",
+    "tools",
+    "uiWorkspace"
+  ],
+  "events": [],
+  "tools": [
+    "library_search",
+    "library_read"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-library/data"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "library"
+    }
+  ],
+  "settings": [
+    "library"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [
+    "library"
+  ],
+  "config": [
+    "enabled",
+    "rescanMinutes"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "library"
+  ]
+}

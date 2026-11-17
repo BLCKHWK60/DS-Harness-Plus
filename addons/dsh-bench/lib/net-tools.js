@@ -7,7 +7,7 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { gate, powerOf, powerRefusal } from './gate.js';
-import { makeKit, DRY_NOTE } from './kit.js';
+import { makeKit, DRY_NOTE, freeName } from './kit.js';
 import { publishedOn, sha256Of, sourceRefusal } from './esp32.js';
 import { BROWSE_SECONDS, DNS_SD, SERVICE_TYPES, addressRefusal, currentNetwork, onMarked, parseBrowse, resolveAddress } from './network.js';
 import { DROP_BACKUP, DROP_FIRMWARE, FIRMWARE_SUM, FIRMWARE_TEST, FIRMWARE_WRITE, IDENTIFY, MAKE_BACKUP, READ_BACKUP, SETTINGS, STORAGE, UPLOAD, isSecretOption, maskedSettings, parseIdentity, parseMtd, routerSettingRule, uci, uciValue } from './router.js';
@@ -188,7 +188,7 @@ export function buildNetworkTools(options) {
           const verified = a === b && first.stdout.length > 0;
           const at = now();
           const folder = bench.deviceFolder(card, 'backups');
-          const name = `${stamp(at)}-config.tar.gz`;
+          const name = freeName(folder, `${stamp(at)}-config`, '.tar.gz');
           bench.writeBinary(join(folder, name), first.stdout);
           bench.addBackup(card, { at: at.getTime(), kind: 'router-config', file: name, sha256: a, bytes: first.stdout.length, verified });
           bench.record(card, { title: verified ? 'Configuration backup (checked)' : 'Configuration backup (the two reads differ)', asked: 'a configuration backup', done: 'sysupgrade -b, read twice', found: verified ? `both reads equal, SHA-256 ${a}` : 'the two reads differ: not checked', commands: [MAKE_BACKUP, READ_BACKUP, READ_BACKUP, DROP_BACKUP] }, now());

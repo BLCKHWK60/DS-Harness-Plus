@@ -1,0 +1,86 @@
+{
+  "name": "@local/dsh-model-tiers",
+  "folder": "dsh-model-tiers",
+  "at": "2026-11-17",
+  "provides": [
+    "modelTiers"
+  ],
+  "uses": [
+    "agentPresets",
+    "agents",
+    "dshHomePath",
+    "llm",
+    "loader",
+    "mission",
+    "modelDirectories",
+    "modes",
+    "sessionPersistence",
+    "sessions",
+    "settings",
+    "skills",
+    "subagents",
+    "systemPrompt",
+    "tools",
+    "tuning",
+    "workingDirectory"
+  ],
+  "events": [
+    "agent/created",
+    "agent/pre-step",
+    "loader/volatile-update",
+    "agent/status",
+    "agent/request",
+    "agent/request-error",
+    "agent/disposed",
+    "tools/pre-execute"
+  ],
+  "tools": [
+    "delegate_role",
+    "review_lanes",
+    "run_pipeline"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-model-tiers/catalog"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "model-tiers"
+    },
+    {
+      "name": "conversation.input.right",
+      "id": "model-tier"
+    }
+  ],
+  "settings": [
+    "model-tiers"
+  ],
+  "sections": [
+    "model-tiers"
+  ],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "tiers",
+    "maxSubagents",
+    "ultraAutoDelegate",
+    "activeTiers",
+    "modelProfiles",
+    "modelProfilesMigrated",
+    "modelVersions",
+    "startersMigrated",
+    "customTiers",
+    "projectProfiles",
+    "sessionProfiles",
+    "fallbackChains",
+    "roleModels",
+    "sessionUltra",
+    "teams",
+    "pruneStaleSessions"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "model-tiers"
+  ]
+}

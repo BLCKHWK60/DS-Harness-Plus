@@ -42,6 +42,8 @@ It is a separate plugin and does not touch Bench Lab (a community plugin; its ru
 - **Recommendation** per category and target: the highest mean score; among cells within `scoreTolerance` of it the lowest mean latency, then the lowest cost. It is marked **low confidence** with the reasons when it has fewer than `minSeeds` seeds, a spread above 0.15, or any errored run.
 - **Export** writes only confident picks, as `presets:` named `<category>-<target>` plus a `categories:` hint, for you to merge into the sampling-presets config. Nothing is applied automatically.
 
+**Canaries for Tuning Plus.** The add-on also holds twelve small general tasks (a sum, one word, a JSON object, a comparison, a reversed word, colours, a translation, a capital, a letter count, a sort, a yes/no, a tool name), each graded by code (`CANARIES` in `index.js`, service `canaries()`). Nothing here runs them: Tuning Plus asks for them to see whether a candidate became worse at everything else. With Benchmark off, Tuning Plus promotes nothing.
+
 ## Settings page
 
 Settings > **Benchmark** now sets the add-on up and runs it; no file editing is needed.

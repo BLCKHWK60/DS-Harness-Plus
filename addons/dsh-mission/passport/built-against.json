@@ -1,0 +1,44 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agents",
+    "approval",
+    "bench",
+    "coworkScratch",
+    "creatorPlus",
+    "dshHomePath",
+    "goals",
+    "modelTiers",
+    "modes",
+    "permissionPresets",
+    "recon",
+    "remote.session",
+    "routeHealth",
+    "sandboxPolicy",
+    "sessionId",
+    "settings",
+    "tools",
+    "workingDirectory",
+    "workspaces"
+  ],
+  "inject": [],
+  "events": [
+    "agent/created",
+    "agent/disposed",
+    "session/event",
+    "system-prompt/assemble",
+    "agent/assistant-stream",
+    "goal/activation-changed",
+    "agent/pre-step",
+    "tools/pre-execute",
+    "tools/result",
+    "tools/post-execute"
+  ],
+  "places": [
+    "settings.section",
+    "conversation.input.dock",
+    "conversation.input.right",
+    "shell.overlay"
+  ]
+}

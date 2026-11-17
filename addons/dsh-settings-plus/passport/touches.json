@@ -1,0 +1,30 @@
+{
+  "name": "@local/dsh-settings-plus",
+  "folder": "dsh-settings-plus",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [],
+  "events": [],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-settings-plus/index"
+  ],
+  "slots": [
+    {
+      "name": "settings.action",
+      "id": "plus-settings-search"
+    }
+  ],
+  "settings": [],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "enabled"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "settings-plus"
+  ]
+}

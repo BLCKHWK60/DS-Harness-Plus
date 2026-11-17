@@ -54,6 +54,14 @@ export function openProposals(file) {
       save();
       return added;
     },
+    /** Keep a note on a waiting proposal (Tuning Plus's exam result). @returns {boolean} whether it was there. */
+    note(id, fields) {
+      const item = list.find((entry) => entry.id === id && entry.state === 'waiting');
+      if (!item) return false;
+      Object.assign(item, fields);
+      save();
+      return true;
+    },
     /** Accepted or rejected: the quotes go, the decision stays. */
     decide(id, state) {
       const item = list.find((entry) => entry.id === id);

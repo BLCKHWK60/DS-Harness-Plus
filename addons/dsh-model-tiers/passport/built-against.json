@@ -1,0 +1,41 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agentPresets",
+    "agents",
+    "dshHomePath",
+    "llm",
+    "loader",
+    "mission",
+    "modelDirectories",
+    "modes",
+    "sessionPersistence",
+    "sessions",
+    "settings",
+    "skills",
+    "subagents",
+    "systemPrompt",
+    "tools",
+    "tuning",
+    "workingDirectory"
+  ],
+  "inject": [
+    "tools",
+    "systemPrompt"
+  ],
+  "events": [
+    "agent/created",
+    "agent/pre-step",
+    "loader/volatile-update",
+    "agent/status",
+    "agent/request",
+    "agent/request-error",
+    "agent/disposed",
+    "tools/pre-execute"
+  ],
+  "places": [
+    "settings.section",
+    "conversation.input.right"
+  ]
+}

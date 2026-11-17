@@ -1,0 +1,78 @@
+{
+  "name": "@local/dsh-scout",
+  "folder": "dsh-scout",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [
+    "agents",
+    "coworkScratch",
+    "credentials",
+    "dshHomePath",
+    "modes",
+    "pdfReader",
+    "settings",
+    "tools"
+  ],
+  "events": [
+    "agent/created",
+    "agent/disposed",
+    "session/event"
+  ],
+  "tools": [
+    "scout_sources",
+    "scout_search",
+    "scout_titles",
+    "scout_demand",
+    "scout_pay",
+    "scout_posting",
+    "scout_assess",
+    "scout_files",
+    "scout_profile",
+    "scout_report",
+    "scout_reports"
+  ],
+  "commands": [
+    "scout"
+  ],
+  "routes": [
+    "/dsh-scout/data"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "scout"
+    },
+    {
+      "name": "conversation.hero.options",
+      "id": "scout-bar"
+    }
+  ],
+  "settings": [
+    "scout",
+    "modes"
+  ],
+  "sections": [
+    "scout:selection"
+  ],
+  "modes": [
+    "scout"
+  ],
+  "storage": [
+    "scout"
+  ],
+  "config": [
+    "enabled",
+    "title",
+    "location",
+    "salary",
+    "workType",
+    "markets",
+    "folder",
+    "sourceState",
+    "extraSources"
+  ],
+  "instructionChars": 3557,
+  "rows": [
+    "scout"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agents",
+    "dshHomePath",
+    "modes",
+    "skills",
+    "tools"
+  ],
+  "inject": [
+    "tools"
+  ],
+  "events": [
+    "agent/created",
+    "agent/disposed"
+  ],
+  "places": [
+    "settings.section",
+    "conversation.input.dock"
+  ]
+}

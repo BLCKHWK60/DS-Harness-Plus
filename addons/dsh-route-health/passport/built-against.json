@@ -1,0 +1,19 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agents",
+    "modelTiers",
+    "probe"
+  ],
+  "inject": [],
+  "events": [
+    "agent/status",
+    "agent/created",
+    "agent/pre-step",
+    "agent/disposed"
+  ],
+  "places": [
+    "conversation.input.left"
+  ]
+}

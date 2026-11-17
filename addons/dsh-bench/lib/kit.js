@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 /**
  * The small helpers every Bench tool shares: the answer's shape, "switched off", one action per device
  * and one write at a time (a lock shared by all tools), the card a name means, the user's yes through the
@@ -5,6 +7,19 @@
  */
 import { gate } from './gate.js';
 import { PROGRAMS } from './run.js';
+
+/**
+ * A file or folder name in a folder that is not taken yet: the stem, else the stem with -2, -3… (two
+ * backups in the same moment never share a name, and one never replaces another).
+ * @returns {string} the free name (stem + suffix).
+ */
+export function freeName(folder, stem, suffix = '', also = []) {
+  for (let n = 1; n < 1000; n += 1) {
+    const name = `${stem}${n === 1 ? '' : `-${n}`}`;
+    if (![`${name}${suffix}`, ...also.map((extra) => extra(name))].some((candidate) => existsSync(join(folder, candidate)))) return `${name}${suffix}`;
+  }
+  throw new Error('Too many files with the same time in this folder.');
+}
 
 export const DRY_RUN_FOR_MS = 30 * 60_000;
 export const DRY_NOTE = 'The user set this device to show a dry run first: this is it. Ask again with the same values to do it.';

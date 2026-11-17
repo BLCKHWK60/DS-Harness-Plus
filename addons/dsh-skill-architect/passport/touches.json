@@ -1,0 +1,61 @@
+{
+  "name": "@local/dsh-skill-architect",
+  "folder": "dsh-skill-architect",
+  "at": "2026-11-17",
+  "provides": [
+    "skillArchitect"
+  ],
+  "uses": [
+    "agents",
+    "coworkProjects",
+    "coworkTrash",
+    "dshHomePath",
+    "llm",
+    "memoryStore",
+    "mission",
+    "modes",
+    "reconExports",
+    "remote.session",
+    "sessionQuery",
+    "settings",
+    "skills",
+    "tuning",
+    "workspaces"
+  ],
+  "events": [],
+  "tools": [],
+  "commands": [
+    "skills"
+  ],
+  "routes": [
+    "/dsh-skill-architect/data"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "skill-architect"
+    }
+  ],
+  "settings": [
+    "skillArchitect"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [
+    "skill-architect",
+    "evolve",
+    "mission"
+  ],
+  "config": [
+    "enabled",
+    "readingModel",
+    "allowInternet",
+    "nolearn",
+    "projectsOff",
+    "schedule"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "skill-architect"
+  ]
+}

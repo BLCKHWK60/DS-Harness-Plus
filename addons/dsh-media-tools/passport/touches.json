@@ -1,0 +1,31 @@
+{
+  "name": "@local/dsh-media-tools",
+  "folder": "dsh-media-tools",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [
+    "tools",
+    "workingDirectory"
+  ],
+  "events": [
+    "tools/pre-execute",
+    "tools/result"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [],
+  "slots": [],
+  "settings": [],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "enabled",
+    "images",
+    "gate"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "media-tools"
+  ]
+}

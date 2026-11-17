@@ -1,0 +1,52 @@
+{
+  "name": "@local/dsh-pdf",
+  "folder": "dsh-pdf",
+  "at": "2026-11-17",
+  "provides": [
+    "pdfReader"
+  ],
+  "uses": [
+    "dshHomePath",
+    "skills",
+    "tools",
+    "workingDirectory"
+  ],
+  "events": [],
+  "tools": [
+    "pdf_info",
+    "pdf_read",
+    "pdf_search",
+    "pdf_page_image",
+    "pdf_ocr"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-pdf/status"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "pdf"
+    }
+  ],
+  "settings": [
+    "pdf"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [
+    "pdf-reader"
+  ],
+  "config": [
+    "enabled",
+    "folders",
+    "anywhere",
+    "readChars",
+    "skills",
+    "commandName"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "pdf"
+  ]
+}

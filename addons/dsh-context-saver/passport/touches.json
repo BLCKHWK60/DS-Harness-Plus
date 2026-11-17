@@ -1,0 +1,43 @@
+{
+  "name": "@local/dsh-context-saver",
+  "folder": "dsh-context-saver",
+  "at": "2026-11-17",
+  "provides": [
+    "contextSaver"
+  ],
+  "uses": [
+    "agents",
+    "modelTiers",
+    "modes"
+  ],
+  "events": [
+    "tools/post-execute",
+    "agent/disposed",
+    "agent/created"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [],
+  "slots": [],
+  "settings": [],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "enabled",
+    "python",
+    "dataDir",
+    "minChars",
+    "minGainPercent",
+    "perTier",
+    "skipTools",
+    "retrieveToolName",
+    "helperTimeoutMs",
+    "promptSection",
+    "commandName"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "context-saver"
+  ]
+}

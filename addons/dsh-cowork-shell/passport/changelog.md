@@ -1,0 +1,29 @@
+# Changelog: @local/dsh-cowork-shell
+
+- 2026-11-17 Creator Plus: the Creator Plus tab icon
+- 2026-11-16 Content and Bench tabs; Long run checks in Bench and Recon; a run that has ended stops cleanly
+- 2026-11-16 Long run in every tab with a Run button, and the overnight work
+- 2026-11-15 Shared trash, Web On/Off and one Depth for every tab (0.59.0)
+- 2026-11-15 Trash per tab, Delete permanently, Empty trash, own tab order (0.58.0)
+- 2026-11-15 Build the owner's 26 decisions and Scout step 3 (0.57.0)
+- 2026-11-15 Full audit of every mode, grouped and searchable Settings (0.56.0)
+- 2026-11-15 Web button, tool trimming, Research tab (0.51.2-0.55.2)
+- 2026-11-14 0.51.1: Show in Finder for chats and projects
+- 2026-11-14 Scout: a mode for finding work, step 1 of 5 (0.50.0)
+- 2026-11-14 0.47.1: Global Search, search in each tab, right-click and multi-select
+- 2026-11-14 0.46.0: Engines, and Recon's export, own folder and End and wipe
+- 2026-11-14 0.43.1: Recon, an isolated tab for .onion research (steps 1 to 3 of 7)
+- 2026-11-13 0.40.0: mission runs, project types, generated instructions, one model for helpers
+- 2026-11-13 0.33.0: projects, Python and charts in Data, market tools in Finance, tabs in rows
+- 2026-11-13 0.32.0: Data mode, research in rounds with depth sliders, helper repair
+- 2026-11-12 Release 0.27.2: Finance mode, and the activity line as part of the message box
+- 2026-11-12 Release 0.25.0: automation runs page and alerts
+- 2026-11-12 Release 0.24.0: needs-you list, memory and budget guard
+- 2026-11-12 Release 0.23.0: hide the logos, show the date as the start page title
+- 2026-11-12 Release 0.22.0: archive and delete conversations from the sidebar
+- 2026-11-12 Release 0.20.0: helpers follow their conversation, Tools button, installer fix
+- 2026-11-11 Release 0.11.0: app-style pages, Arena and Benchmark setup, Code map
+- 2026-11-11 Release 0.10.0: chat without workspaces, tier rework, one model control
+- 2026-11-11 Release 0.8.0: review fixes across add-ons, sync and installer
+- 2026-11-11 DeepSeek Harness Plus 0.7.0: conversations per tab
+- 2026-11-10 DeepSeek Harness Plus 0.6.0

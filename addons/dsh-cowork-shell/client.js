@@ -1170,6 +1170,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       automations: 'M12 4a8 8 0 1 0 0 16a8 8 0 0 0 0-16zM12 8v4l3 2',
       content: 'M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4M12 20h8',
       bench: 'M8 8h8v8H8zM10 8V4M14 8V4M10 20v-4M14 20v-4M8 10H4M8 14H4M20 10h-4M20 14h-4',
+      'creator-plus': 'M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4zM18 3v4M16 5h4',
       data: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
       plus: 'M12 5v14M5 12h14',
       search: 'M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14zM16 16l4.5 4.5',
@@ -1253,7 +1254,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
 
     function glyphFor(modeId) {
-      return modeId === 'chat' || modeId === 'code' || modeId === 'cowork' || modeId === 'finance' || modeId === 'data' || modeId === 'recon' || modeId === 'scout' || modeId === 'research' || modeId === 'automations' || modeId === 'content' || modeId === 'bench' ? modeId : 'dot';
+      return modeId === 'chat' || modeId === 'code' || modeId === 'cowork' || modeId === 'finance' || modeId === 'data' || modeId === 'recon' || modeId === 'scout' || modeId === 'research' || modeId === 'automations' || modeId === 'content' || modeId === 'bench' || modeId === 'creator-plus' ? modeId : 'dot';
     }
 
     /**

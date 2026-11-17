@@ -1,0 +1,43 @@
+{
+  "name": "@local/dsh-mac",
+  "folder": "dsh-mac",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [
+    "tools",
+    "uiWorkspace"
+  ],
+  "events": [
+    "tools/pre-execute"
+  ],
+  "tools": [
+    "mac_find_files",
+    "mac_shortcuts"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-mac/data"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "mac"
+    }
+  ],
+  "settings": [
+    "mac"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "enabled",
+    "folders",
+    "shortcuts",
+    "trusted"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "mac"
+  ]
+}

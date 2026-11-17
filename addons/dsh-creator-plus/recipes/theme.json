@@ -1,0 +1,62 @@
+{
+  "kind": "theme",
+  "label": "A look (colours, type, spacing)",
+  "when": "The user wants the app or some pages to look different.",
+  "files": [
+    "package.json",
+    "cordis.patch.yml",
+    "index.js",
+    "client.js",
+    "README.md",
+    "test/<name>.test.mjs",
+    "passport/"
+  ],
+  "steps": [
+    {
+      "id": "read",
+      "mark": "must",
+      "text": "Read the brief, the plan and the part of the map the plan touches (creator_map with the plugins named). Read the README of every plugin the plan touches."
+    },
+    {
+      "id": "tests-first",
+      "mark": "must",
+      "text": "Write the tests first, from the brief, in test/<name>.test.mjs: what the plugin must do, what it must refuse, and that it changes nothing while it is switched off. Stand-ins only: no real device, network, account, model or app data."
+    },
+    {
+      "id": "variables",
+      "mark": "must",
+      "text": "Change only the app's own CSS variables (the map's look list), in a style element the client adds and removes with the switch; never the app's files."
+    },
+    {
+      "id": "readable",
+      "mark": "must",
+      "text": "Check contrast for text on its background in both light and dark."
+    },
+    {
+      "id": "undo",
+      "mark": "must",
+      "text": "Switching it off restores the look before it."
+    },
+    {
+      "id": "readme",
+      "mark": "must",
+      "text": "Write README.md: what the user gets, the rules and which of them code enforces, what is not built, how it was tested and what was not. Plain words."
+    },
+    {
+      "id": "checks",
+      "mark": "must",
+      "text": "Run creator_check: the trial copy loads the plugin without errors, its tests pass, the fit check is clear (or the user decided), and the trial install works. Fix and run it again until all four pass."
+    },
+    {
+      "id": "report",
+      "mark": "must",
+      "text": "Report in plain words: what was built, what the checks showed, what was not verified, and what waits for the user's yes."
+    }
+  ],
+  "checks": [
+    "load",
+    "tests",
+    "fit",
+    "trial"
+  ]
+}

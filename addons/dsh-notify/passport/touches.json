@@ -1,0 +1,33 @@
+{
+  "name": "@local/dsh-notify",
+  "folder": "dsh-notify",
+  "at": "2026-11-17",
+  "provides": [
+    "notify"
+  ],
+  "uses": [
+    "mission",
+    "modes"
+  ],
+  "events": [
+    "session/event"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [],
+  "slots": [],
+  "settings": [],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "enabled",
+    "rules",
+    "maxPerMinute",
+    "commandName"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "notify"
+  ]
+}

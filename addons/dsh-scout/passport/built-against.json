@@ -1,0 +1,26 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agents",
+    "coworkScratch",
+    "credentials",
+    "dshHomePath",
+    "modes",
+    "pdfReader",
+    "settings",
+    "tools"
+  ],
+  "inject": [
+    "tools"
+  ],
+  "events": [
+    "agent/created",
+    "agent/disposed",
+    "session/event"
+  ],
+  "places": [
+    "settings.section",
+    "conversation.hero.options"
+  ]
+}

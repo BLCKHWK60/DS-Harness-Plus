@@ -1,0 +1,23 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agents",
+    "dshHomePath",
+    "layout",
+    "mission",
+    "modes",
+    "remote.session",
+    "sessions",
+    "uiWorkspace",
+    "workspaces"
+  ],
+  "inject": [],
+  "events": [
+    "session/event",
+    "agent/disposed"
+  ],
+  "places": [
+    "sidebar.panellist"
+  ]
+}

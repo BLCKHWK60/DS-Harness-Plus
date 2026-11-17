@@ -718,6 +718,61 @@ test('a Long run in Bench: the card says what is closed, and the run carries Ben
   }
 });
 
+test('a Long run in Creator Plus: switched off for now, said plainly on the card; Creator Plus off or absent: as always', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const agent = app.open('cp1');
+    app.tabs.cp1 = 'creator-plus';
+    let on = true;
+    app.services.creatorPlus = { longRunRules: (id) => (on && id === 'cp1' ? { offlineChecks: true, cleanEnv: true } : undefined) };
+    let card = await app.card('GET', { sessionId: 'cp1' });
+    const tick = card.json.preflight.ticks.find((entry) => entry.key === 'creator');
+    assert.equal(tick.ok, false);
+    assert.equal(tick.required, true);
+    assert.equal(tick.text, 'Long runs in Creator Plus are switched off until their checks can run on a throwaway copy; use Thorough for now.');
+    assert.equal((await app.card('POST', { sessionId: 'cp1', action: 'save', mode: 'auto', minutes: 30, laps: 1, keepAwake: false })).status, 200);
+    assert.equal((await app.card('POST', { sessionId: 'cp1', action: 'arm' })).status, 400, 'not armed');
+    app.says(agent, 'build the hello plugin');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(existsSync(join(agent.header.cwd, '.dsh-mission', 'runs')), false, 'no run started');
+    on = false;
+    card = await app.card('GET', { sessionId: 'cp1' });
+    assert.equal(card.json.preflight.ticks.find((entry) => entry.key === 'creator'), undefined, 'Creator Plus off: no line');
+    app.open('cw2');
+    app.tabs.cw2 = 'cowork';
+    delete app.services.creatorPlus;
+    assert.equal((await app.card('GET', { sessionId: 'cw2' })).json.preflight.ticks.find((entry) => entry.key === 'creator'), undefined, 'without Creator Plus: as always');
+  } finally {
+    app.done();
+  }
+});
+
+test('Creator Plus: a plain /mission run is refused in its tab; a Long run in a folder Creator Plus refuses does not start', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const agent = app.open('cp2');
+    app.tabs.cp2 = 'creator-plus';
+    let refuse = '';
+    app.services.creatorPlus = { longRunRules: (id) => (id === 'cp2' ? { offlineChecks: true, cleanEnv: true, ...(refuse ? { refuse } : {}) } : undefined) };
+    const answer = await app.mission(agent, 'auto make every test pass and add a json option');
+    assert.equal(answer.kind, 'error');
+    assert.match(answer.text, /In the Creator Plus tab, \/mission is not available/);
+    refuse = 'This folder is Recon\'s sealed room; start Creator Plus in another folder or in Scratch.';
+    const card = await app.card('GET', { sessionId: 'cp2' });
+    const tick = card.json.preflight.ticks.find((entry) => entry.key === 'creator');
+    assert.equal(tick.ok, false);
+    assert.equal(tick.required, true);
+    assert.match(tick.text, /switched off until their checks can run on a throwaway copy/);
+    assert.equal((await app.card('POST', { sessionId: 'cp2', action: 'arm' })).status, 400, 'not armed');
+    // Elsewhere /mission is as always.
+    const other = app.open('cw3');
+    app.tabs.cw3 = 'cowork';
+    assert.doesNotMatch(JSON.stringify(await app.mission(other, 'auto make every test pass and add a json option')), /Creator Plus tab/);
+  } finally {
+    app.done();
+  }
+});
+
 test('a Long run in Recon, where Recon keeps it in its rules: its own folder, Restricted, no commands, one model, no record outside', { skip: !hasGit && 'needs git' }, async () => {
   const app = running();
   try {

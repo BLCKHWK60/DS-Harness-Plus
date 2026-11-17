@@ -1,0 +1,21 @@
+{
+  "name": "@local/dsh-shared-settings",
+  "folder": "dsh-shared-settings",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [],
+  "events": [],
+  "tools": [],
+  "commands": [],
+  "routes": [],
+  "slots": [],
+  "settings": [],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [],
+  "instructionChars": 0,
+  "rows": [
+    "shared-settings"
+  ]
+}

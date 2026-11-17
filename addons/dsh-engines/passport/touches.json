@@ -1,0 +1,52 @@
+{
+  "name": "@local/dsh-engines",
+  "folder": "dsh-engines",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [
+    "agents",
+    "dshHomePath",
+    "layout",
+    "mission",
+    "modes",
+    "remote.session",
+    "sessions",
+    "uiWorkspace",
+    "workspaces"
+  ],
+  "events": [
+    "session/event",
+    "agent/disposed"
+  ],
+  "tools": [],
+  "commands": [
+    "engine"
+  ],
+  "routes": [
+    "/dsh-engines/state"
+  ],
+  "slots": [
+    {
+      "name": "sidebar.panellist",
+      "id": "compare"
+    }
+  ],
+  "settings": [
+    "engines"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [
+    "engines"
+  ],
+  "config": [
+    "opencodePath",
+    "maxMinutes",
+    "opencodeModels",
+    "applyWhen"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "engines"
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agents",
+    "coworkScratch",
+    "coworkShell",
+    "dshHomePath",
+    "goals",
+    "learning",
+    "loader",
+    "mission",
+    "modelTiers",
+    "permissionPresets",
+    "ptcRuntime",
+    "remote.session",
+    "sandboxPolicy",
+    "sessionPersistence",
+    "sessions",
+    "settings",
+    "tools",
+    "uiWorkspace",
+    "web"
+  ],
+  "inject": [
+    "tools"
+  ],
+  "events": [
+    "agent/created",
+    "schedule/resolve-agent",
+    "session/event",
+    "loader/volatile-update",
+    "agent/inbox/claimed",
+    "agent/assistant-stream",
+    "agent/turn-stopping",
+    "tools/result",
+    "agent/status",
+    "agent/pre-step",
+    "agent/disposed",
+    "tools/pre-execute"
+  ],
+  "places": [
+    "settings.section",
+    "conversation.input.left",
+    "conversation.chat.assistant-actions"
+  ]
+}

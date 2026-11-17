@@ -267,3 +267,18 @@ test('downloads: at most 8 GB (the owner\'s choice); a larger file is refused be
     rmSync(folder, { recursive: true, force: true });
   }
 });
+
+test('two backups in the same moment never share a name, and one never replaces another', async () => {
+  const { freeName } = await import('../lib/kit.js');
+  const folder = mkdtempSync(join(tmpdir(), 'bench-names-'));
+  try {
+    assert.equal(freeName(folder, '20261117-013508-423-config', '.tar.gz'), '20261117-013508-423-config.tar.gz');
+    writeFileSync(join(folder, '20261117-013508-423-config.tar.gz'), 'first');
+    assert.equal(freeName(folder, '20261117-013508-423-config', '.tar.gz'), '20261117-013508-423-config-2.tar.gz');
+    // An ESP32 backup also checks its hidden second read.
+    writeFileSync(join(folder, '.20261117-013508-flash-check.bin'), 'x');
+    assert.equal(freeName(folder, '20261117-013508-flash', '', [(name) => `${name}.bin`, (name) => `.${name}-check.bin`]), '20261117-013508-flash-2');
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});

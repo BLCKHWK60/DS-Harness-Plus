@@ -1,0 +1,50 @@
+{
+  "name": "@local/dsh-budget",
+  "folder": "dsh-budget",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [
+    "dshHomePath",
+    "sessions",
+    "tools"
+  ],
+  "events": [
+    "session/event",
+    "agent/pre-step"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-budget/data"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "budget"
+    },
+    {
+      "name": "conversation.chat.turnTail",
+      "id": "dsh-budget"
+    }
+  ],
+  "settings": [
+    "budget"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [
+    "budget"
+  ],
+  "config": [
+    "enabled",
+    "maxSteps",
+    "maxTokens",
+    "maxMinutes",
+    "maxRepeats",
+    "dayTokens"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "budget"
+  ]
+}

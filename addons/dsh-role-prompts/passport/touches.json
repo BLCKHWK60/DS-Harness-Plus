@@ -1,0 +1,30 @@
+{
+  "name": "@local/dsh-role-prompts",
+  "folder": "dsh-role-prompts",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [
+    "agents",
+    "modelTiers",
+    "modes"
+  ],
+  "events": [
+    "agent/created",
+    "agent/disposed"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [],
+  "slots": [],
+  "settings": [],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "sections"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "role-prompts"
+  ]
+}

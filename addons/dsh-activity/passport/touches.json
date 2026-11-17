@@ -1,0 +1,77 @@
+{
+  "name": "@local/dsh-activity",
+  "folder": "dsh-activity",
+  "at": "2026-11-17",
+  "provides": [
+    "activity"
+  ],
+  "uses": [
+    "remote.session"
+  ],
+  "events": [
+    "session/event",
+    "agent/assistant-stream",
+    "agent/disposed"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-activity/status"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "activity"
+    },
+    {
+      "name": "conversation.input.dock",
+      "id": "activity"
+    },
+    {
+      "name": "conversation.input.right",
+      "id": "activity"
+    },
+    {
+      "name": "shell.overlay",
+      "id": "activity"
+    }
+  ],
+  "settings": [
+    "activity"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "enabled",
+    "design",
+    "hidden",
+    "text",
+    "figures",
+    "words",
+    "promptSpeed",
+    "context",
+    "hideIdle",
+    "still",
+    "fit",
+    "collapse",
+    "weight",
+    "tapeMinutes",
+    "tapeBlocks",
+    "tapeFade",
+    "tapeMarks",
+    "sound",
+    "soundVolume",
+    "waitSound",
+    "errorSound",
+    "soundRepeat",
+    "colors",
+    "webTools",
+    "scriptTools",
+    "commandName"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "activity"
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "name": "@local/dsh-memory",
+  "folder": "dsh-memory",
+  "at": "2026-11-17",
+  "provides": [
+    "memoryStore"
+  ],
+  "uses": [
+    "dshHomePath",
+    "tools"
+  ],
+  "events": [],
+  "tools": [
+    "remember"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-memory/data"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "memory"
+    },
+    {
+      "name": "conversation.chat.turnTail",
+      "id": "dsh-memory"
+    }
+  ],
+  "settings": [
+    "memory"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [
+    "memory",
+    "AGENTS.md"
+  ],
+  "config": [
+    "enabled",
+    "suggest"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "memory"
+  ]
+}

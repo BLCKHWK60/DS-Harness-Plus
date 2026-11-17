@@ -314,3 +314,68 @@ test('declining and outdated proposals are recorded', async () => {
   assert.equal(store.candidates().find((candidate) => candidate.id === waiting[1].id).outcome, 'outdated');
   assert.ok(!decline(store, waiting[1].id));
 });
+
+test('Tuning Plus\'s exam gate: a change worse on the owner\'s exam is refused; no exam leaves the cycle as it was', async () => {
+  const lesson = 'When unsure, still give the number you were asked for.';
+  const cycle = async (examGate) => {
+    const store = openStore(home());
+    seed(store);
+    const asked = [];
+    const outcome = await improve({
+      store, model: { provider: 'p', model: 'm' }, repeats: 3, maxEdits: 1, thresholds: {}, run: fakeModel(lesson), budget: makeBudget(0),
+      review: async () => ({ text: JSON.stringify({ edits: [{ op: 'add_entry', family: 'math', text: lesson }] }) }),
+      examGate: examGate ? async (input) => { asked.push(input); return examGate(input); } : undefined,
+    });
+    return { outcome, asked, store };
+  };
+  // Without Tuning Plus: exactly as before.
+  const plain = await cycle(undefined);
+  assert.equal(plain.outcome.candidates[0].outcome, 'awaitingApproval');
+  assert.equal(plain.outcome.candidates[0].gates.some((gate) => gate.id === 'exam'), false);
+  // No exam yet (undefined): as before.
+  const none = await cycle(async () => undefined);
+  assert.equal(none.outcome.candidates[0].outcome, 'awaitingApproval');
+  assert.equal(none.asked.length, 1);
+  assert.equal(none.asked[0].before, '', 'today\'s instructions');
+  assert.match(none.asked[0].after, /still give the number/, 'the changed instructions');
+  // The gate failing to answer: as before.
+  const broken = await cycle(async () => { throw new Error('exam down'); });
+  assert.equal(broken.outcome.candidates[0].outcome, 'awaitingApproval');
+  // Worse on the exam: refused, with the reason shown.
+  const worse = await cycle(async () => ({ ok: false, why: 'worse on the owner\'s exam: 40% against 60%' }));
+  assert.equal(worse.outcome.candidates[0].outcome, 'rejected');
+  assert.match(worse.outcome.candidates[0].note, /worse on the owner's exam/);
+  assert.equal(worse.store.active().version, 'v0001');
+  // Not worse: still waits for the owner's approval (the exam never approves by itself).
+  const fine = await cycle(async () => ({ ok: true, why: '60% against 60%' }));
+  assert.equal(fine.outcome.candidates[0].outcome, 'awaitingApproval');
+  assert.ok(fine.outcome.candidates[0].gates.find((gate) => gate.id === 'exam').pass);
+  assert.equal(fine.store.active().version, 'v0001');
+});
+
+test('Tuning Plus\'s exam calls count in the run\'s allowance; an allowance used up during the exam stops the cycle', async () => {
+  const lesson = 'When unsure, still give the number you were asked for.';
+  const base = (store, budget, examGate) => improve({
+    store, model: { provider: 'p', model: 'm' }, repeats: 3, maxEdits: 1, thresholds: {}, run: fakeModel(lesson), budget,
+    review: async () => ({ text: JSON.stringify({ edits: [{ op: 'add_entry', family: 'math', text: lesson }] }) }),
+    examGate,
+  });
+  const store = openStore(home());
+  seed(store);
+  const budget = makeBudget(0);
+  let handed;
+  await base(store, budget, async (input) => {
+    handed = input.budget;
+    input.budget.add(5000);
+    return { ok: true, why: 'fine' };
+  });
+  assert.equal(handed, budget, 'the exam gets this run\'s allowance');
+  assert.ok(budget.used >= 5000, 'its calls are counted');
+  const tight = openStore(home());
+  seed(tight);
+  await assert.rejects(base(tight, makeBudget(1e8), async (input) => {
+    input.budget.add(2e8);
+    input.budget.check();
+  }), BudgetError, 'used up: the cycle stops; the change does not wait for approval without its exam');
+  assert.equal(tight.candidates().filter((candidate) => candidate.outcome === 'awaitingApproval').length, 0);
+});

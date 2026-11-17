@@ -138,6 +138,26 @@ export function gradeLocal(grader, answer) {
 }
 
 /**
+ * The canaries (Tuning Plus plan, the exam): a fixed set of general tasks, graded by code, that shows whether
+ * a change made a model worse at everything else. Kinds of task, not anyone's choice; nothing here is run
+ * by itself: Tuning Plus asks for them (service `canaries()`) and runs them on the model in use and on a candidate.
+ */
+export const CANARIES = Object.freeze([
+  { id: 'add', prompt: 'What is 17 + 25? Answer with the number only.', grader: { type: 'regex', expect: '\\b42\\b' } },
+  { id: 'word', prompt: 'Reply with exactly one word: ready', grader: { type: 'regex', expect: '^\\W*ready\\W*$' } },
+  { id: 'json', prompt: 'Write the JSON object with one key "a" whose value is the number 1, and nothing else.', grader: { type: 'regex', expect: '^\\s*\\{\\s*"a"\\s*:\\s*1\\s*\\}\\s*$' } },
+  { id: 'larger', prompt: 'Which is larger, 0.9 or 0.11? Answer with the number only.', grader: { type: 'regex', expect: '^\\W*0\\.9\\W*$' } },
+  { id: 'reverse', prompt: 'Spell the word "cat" backwards. Answer with the word only.', grader: { type: 'regex', expect: '\\btac\\b' } },
+  { id: 'colours', prompt: 'Name the three primary colours of light, separated by commas.', grader: { type: 'regex', expect: '(?=[\\s\\S]*red)(?=[\\s\\S]*green)(?=[\\s\\S]*blue)' } },
+  { id: 'translate', prompt: 'Translate "thank you" into German. Answer with the translation only.', grader: { type: 'regex', expect: '\\bdanke\\b' } },
+  { id: 'capital', prompt: 'What is the capital of Japan? Answer in one word.', grader: { type: 'regex', expect: '\\btokyo\\b' } },
+  { id: 'count', prompt: 'How many letters are in the word "harness"? Answer with the number only.', grader: { type: 'regex', expect: '\\b7\\b' } },
+  { id: 'sort', prompt: 'Sort these numbers from smallest to largest: 5, 2, 9, 1. Answer as a list separated by commas.', grader: { type: 'regex', expect: '1\\s*,\\s*2\\s*,\\s*5\\s*,\\s*9' } },
+  { id: 'yesno', prompt: 'In the sentence "Open the Recon tab", is "Recon" written with a capital R? Answer yes or no.', grader: { type: 'regex', expect: '^\\W*yes\\b' } },
+  { id: 'tool', prompt: 'Which of these tools reads a file: read, write or bash? Answer with the tool name only.', grader: { type: 'regex', expect: '^\\W*read\\W*$' } },
+]);
+
+/**
  * Mean and sample standard deviation.
  * @param {number[]} values - numbers.
  * @returns {{mean: number, stdev: number}} statistics (stdev 0 for fewer than 2 values).
@@ -759,6 +779,10 @@ export function apply(ctx, config) {
     /** @param {string} id - job id. @returns {string} YAML fragment for dsh-sampling-presets. */
     exportPresets(id) {
       return toPresetsYaml(report(id).picks, id);
+    },
+    /** The canaries for Tuning Plus's exam: general tasks graded by code (`gradeLocal`). */
+    canaries() {
+      return CANARIES.map((task) => ({ ...task, grader: { ...task.grader } }));
     },
     /** @returns {string[]} saved job ids, newest first. */
     list() {

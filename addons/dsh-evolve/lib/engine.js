@@ -124,9 +124,12 @@ export async function baseline({ store, policy, tasks, model, repeats, force, ..
  * @param {ReturnType<typeof makeBudget>} input.budget - shared allowance.
  * @param {(phase: string, done?: number, total?: number) => void} [input.onPhase] - progress.
  * @param {AbortSignal} [input.signal] - stops the cycle.
+ * @param {(input: {before: string, after: string, signal?: AbortSignal, budget: object}) => Promise<{ok: boolean, why?: string} | undefined>} [input.examGate] -
+ *   one more gate, only when Tuning Plus is on and has the owner's exam: a change that clears every other gate is
+ *   also tried on the owner's own exam, and refused when it is worse there. Undefined (no exam): as before.
  * @returns {Promise<{summary: string, candidates: object[], diagnosis: object[]}>} what happened, in one sentence, and the proposals.
  */
-export async function improve({ store, model, repeats, maxEdits, thresholds, run, judge, review, budget, onPhase, signal }) {
+export async function improve({ store, model, repeats, maxEdits, thresholds, run, judge, review, budget, onPhase, signal, examGate }) {
   const tasks = store.tasks().filter((task) => task.enabled && task.checks.length > 0);
   const learn = tasks.filter((task) => task.split === 'learn');
   const proof = tasks.filter((task) => task.split !== 'learn');
@@ -183,9 +186,10 @@ export async function improve({ store, model, repeats, maxEdits, thresholds, run
     const description = describeEdit(edit, policy);
     const leak = leakOf(edit, tasks);
     let after = [];
+    let trial;
     if (!leak) {
       version = nextVersion(version);
-      const trial = applyEdit(policy, edit, version);
+      trial = applyEdit(policy, edit, version);
       onPhase?.(`Testing change ${index + 1} of ${parsed.edits.length}`, 0, proof.length * repeats);
       after = await measure({
         tasks: proof, policy: trial, repeats, run, judge, budget, signal,
@@ -193,6 +197,22 @@ export async function improve({ store, model, repeats, maxEdits, thresholds, run
       });
     }
     const judged = judgeCandidate({ before, after, leak, thresholds });
+    if (judged.outcome === 'awaitingApproval' && trial && typeof examGate === 'function') {
+      onPhase?.(`Trying change ${index + 1} on your own exam (Tuning Plus)`);
+      let exam;
+      try {
+        // The owner's exam has no task families: the whole playbook is tried.
+        // Its model calls count in this run's allowance like every other call (and stop it when it is used up).
+        exam = await examGate({ before: renderPolicy(policy, '*'), after: renderPolicy(trial, '*'), signal, budget });
+      } catch (error) {
+        if (signal?.aborted || error instanceof BudgetError) throw error;
+        exam = undefined;
+      }
+      if (exam && typeof exam.ok === 'boolean') {
+        judged.gates.push({ id: 'exam', name: 'Not worse on your own exam (Tuning Plus)', pass: exam.ok, note: String(exam.why ?? '').slice(0, 300) });
+        if (!exam.ok) judged.outcome = 'rejected';
+      }
+    }
     const note = judged.gates.find((gate) => !gate.pass)?.note ?? '';
     candidates.push({
       id,

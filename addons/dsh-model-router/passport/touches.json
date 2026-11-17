@@ -1,0 +1,38 @@
+{
+  "name": "@local/dsh-model-router",
+  "folder": "dsh-model-router",
+  "at": "2026-11-17",
+  "provides": [
+    "modelRouter"
+  ],
+  "uses": [
+    "llm",
+    "modelTiers",
+    "modes",
+    "routeHealth"
+  ],
+  "events": [
+    "agent/pre-step",
+    "agent/disposed"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [],
+  "slots": [],
+  "settings": [],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "enabled",
+    "candidates",
+    "routingModel",
+    "policy",
+    "prompt",
+    "commandName"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "model-router"
+  ]
+}

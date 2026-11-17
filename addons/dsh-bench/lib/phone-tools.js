@@ -17,7 +17,7 @@ import { readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { SERIAL } from './android.js';
 import { gate, powerOf, powerRefusal } from './gate.js';
-import { makeKit, DRY_NOTE } from './kit.js';
+import { makeKit, DRY_NOTE, freeName } from './kit.js';
 import { publishedOn, sha256Of, sourceRefusal } from './esp32.js';
 import { saidPhrase } from './devices.js';
 import { shownCommand } from './run.js';
@@ -105,7 +105,8 @@ export function buildPhoneTools(options) {
         if (args.dryRun === true) return `Dry run: Bench would copy the phone's shared storage (${count} files) with ${shownCommand('adb', ['-s', serial, 'pull', '-a', '/sdcard/', '<backups>/<date>-storage'])}. Nothing was copied.`;
         return exclusive([`android:${serial}`, card.slug], async () => {
           const at = now();
-          const folder = join(bench.deviceFolder(card, 'backups'), `${stamp(at)}-storage`);
+          const backups = bench.deviceFolder(card, 'backups');
+          const folder = join(backups, freeName(backups, `${stamp(at)}-storage`));
           const pulled = await run(adb, ['-s', serial, 'pull', '-a', '/sdcard/', folder], { timeoutMs: 2 * 60 * 60_000 });
           let files = 0;
           let bytes = 0;

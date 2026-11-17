@@ -8,7 +8,8 @@
  * like are neither copied nor put back.
  */
 import { execFile } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { OWN_FOLDER } from './paths.js';
 
@@ -18,6 +19,44 @@ const ALWAYS_OUT = [`/${OWN_FOLDER}/`, 'node_modules/', '.venv/', 'venv/', '__py
 const LABEL_MAX = 120;
 
 /**
+ * Settings git may never take from the store (or anywhere else): each could run a program outside a
+ * check's fence the next time the host runs git (a filter, an external diff, a text converter, a signer,
+ * a file monitor, hooks, an alias). The store's config holds only what `git init` writes.
+ */
+const STORE_KEYS = new Set(['core.repositoryformatversion', 'core.filemode', 'core.bare', 'core.logallrefupdates', 'core.ignorecase', 'core.precomposeunicode', 'core.symlinks']);
+/** Every git call: no system or user config, no attributes file, no hooks, no signing, no file monitor, no external diff. */
+export const GIT_SAFE = ['-c', 'core.hooksPath=/dev/null', '-c', 'gc.auto=0', '-c', 'core.fsmonitor=false', '-c', 'core.attributesFile=/dev/null', '-c', 'commit.gpgSign=false', '-c', 'diff.external=', '-c', 'core.pager=cat'];
+/** Diffs: never an external diff tool or a text converter. */
+const DIFF_SAFE = ['--no-ext-diff', '--no-textconv'];
+
+/**
+ * What in a store's config is not one of git init's own settings (a planted filter, diff, signer…).
+ * @param {string} text - the store's config file.
+ * @param {string[]} [worktrees] - the folder's own spellings: `core.worktree` (git init writes it) may name only these.
+ * @returns {string[]} the settings found that are not allowed ('' list: clean).
+ */
+export function unsafeStoreConfig(text, worktrees = []) {
+  const found = [];
+  let section = '';
+  for (const raw of String(text ?? '').split(/\r?\n/)) {
+    const line = raw.replace(/^\s+|\s+$/g, '');
+    if (!line || line.startsWith('#') || line.startsWith(';')) continue;
+    const head = /^\[([A-Za-z0-9.-]+)(?:\s+"[^"]*")?\]\s*(?:[#;].*)?$/.exec(line);
+    if (head) {
+      section = head[1].toLowerCase();
+      if (section !== 'core') found.push(`[${line.slice(1, -1).slice(0, 60)}]`);
+      continue;
+    }
+    const key = /^([A-Za-z][A-Za-z0-9-]*)\s*(?:=\s*(.*))?$/.exec(line);
+    const name = key ? `${section}.${key[1].toLowerCase()}` : '';
+    const value = String(key?.[2] ?? '').replace(/^"|"$/g, '');
+    if (name === 'core.worktree' && worktrees.includes(value)) continue;
+    if (!key || !STORE_KEYS.has(name)) found.push(name || line.slice(0, 60));
+  }
+  return found;
+}
+
+/**
  * @param {string} root - the conversation's folder.
  * @param {object} [hooks] - for tests.
  * @returns {object} taking, listing and going back to checkpoints.
@@ -25,17 +64,50 @@ const LABEL_MAX = 120;
 export function openCheckpoints(root, hooks = {}) {
   const store = join(root, OWN_FOLDER, 'checkpoints.git');
   const git = hooks.git ?? GIT_CANDIDATES.find((path) => existsSync(path));
+  // git's HOME: an empty folder of the host's own, never inside the conversation's folder.
+  let gitHome = hooks.gitHome ?? '';
+  const homeOf = () => {
+    if (!gitHome) gitHome = mkdtempSync(join(tmpdir(), 'mission-git-home-'));
+    mkdirSync(gitHome, { recursive: true, mode: 0o700 });
+    return gitHome;
+  };
+  /** Refuse to run git while the store's config holds anything git init did not write there. */
+  const checkStore = () => {
+    let text = '';
+    try {
+      text = readFileSync(join(store, 'config'), 'utf8');
+    } catch {
+      return;
+    }
+    let realRoot = root;
+    try {
+      realRoot = realpathSync(root);
+    } catch {
+      realRoot = root;
+    }
+    const bad = unsafeStoreConfig(text, [root, realRoot]);
+    if (bad.length > 0) throw new Error(`checkpoint store: its settings were changed (${bad.slice(0, 4).join(', ')}), which could run a program; nothing was run. Delete the folder ${OWN_FOLDER} to start the checkpoints afresh.`);
+  };
   let ready;
   // One git command at a time: two at once would fight over the store's lock.
   let queue = Promise.resolve();
 
   const run = (args, { input, allowFail = false } = {}) =>
     new Promise((resolve, reject) => {
-      const child = execFile(git, ['-c', 'core.hooksPath=/dev/null', '-c', 'gc.auto=0', '-c', 'core.fsmonitor=false', ...args], {
+      try {
+        checkStore();
+      } catch (error) {
+        reject(error);
+        return;
+      }
+      const home = homeOf();
+      const safeArgs = args[0] === 'diff' ? ['diff', ...DIFF_SAFE, ...args.slice(1)] : args;
+      const child = execFile(git, [...GIT_SAFE, ...safeArgs], {
         cwd: root,
         timeout: 120_000,
         maxBuffer: 32 * 1024 * 1024,
-        env: { PATH: '/usr/bin:/bin:/opt/homebrew/bin', HOME: join(root, OWN_FOLDER), GIT_DIR: store, GIT_WORK_TREE: root, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', LANG: 'C', GIT_AUTHOR_NAME: 'Mission', GIT_AUTHOR_EMAIL: 'mission@localhost', GIT_COMMITTER_NAME: 'Mission', GIT_COMMITTER_EMAIL: 'mission@localhost' },
+        // A clean environment: no system or user config, HOME an empty folder of the host's own.
+        env: { PATH: '/usr/bin:/bin:/opt/homebrew/bin', HOME: home, XDG_CONFIG_HOME: home, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_DIR: store, GIT_WORK_TREE: root, GIT_TERMINAL_PROMPT: '0', GIT_ATTR_NOSYSTEM: '1', LANG: 'C', GIT_AUTHOR_NAME: 'Mission', GIT_AUTHOR_EMAIL: 'mission@localhost', GIT_COMMITTER_NAME: 'Mission', GIT_COMMITTER_EMAIL: 'mission@localhost' },
       }, (error, stdout, stderr) => {
         if (error && !allowFail) reject(new Error(`checkpoint store: ${String(stderr || error.message).trim().slice(0, 300)}`));
         else resolve({ ok: !error, out: String(stdout ?? '') });

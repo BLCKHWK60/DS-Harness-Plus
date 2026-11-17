@@ -1,0 +1,43 @@
+{
+  "name": "@local/dsh-search",
+  "folder": "dsh-search",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [
+    "agents",
+    "layout",
+    "modes",
+    "sessionQuery",
+    "sessions",
+    "settings",
+    "shortcuts",
+    "uiWorkspace",
+    "workspaces"
+  ],
+  "events": [],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-search/match"
+  ],
+  "slots": [
+    {
+      "name": "shell.overlay",
+      "id": "global-search"
+    }
+  ],
+  "settings": [
+    "search"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "shortcut"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "session-query-sqlite",
+    "search"
+  ]
+}

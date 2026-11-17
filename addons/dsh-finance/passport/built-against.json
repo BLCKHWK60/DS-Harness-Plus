@@ -1,0 +1,27 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agents",
+    "credentials",
+    "diagrams",
+    "dshHomePath",
+    "modes",
+    "schedule",
+    "session",
+    "settings",
+    "skills",
+    "tools"
+  ],
+  "inject": [],
+  "events": [
+    "agent/created",
+    "agent/disposed",
+    "session/event"
+  ],
+  "places": [
+    "settings.section",
+    "conversation.hero.options",
+    "conversation.input.left"
+  ]
+}

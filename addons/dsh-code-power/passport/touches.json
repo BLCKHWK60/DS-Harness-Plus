@@ -1,0 +1,35 @@
+{
+  "name": "@local/dsh-code-power",
+  "folder": "dsh-code-power",
+  "at": "2026-11-17",
+  "provides": [
+    "candidateJudge"
+  ],
+  "uses": [
+    "modelTiers",
+    "modes",
+    "skills",
+    "subagents",
+    "tools"
+  ],
+  "events": [],
+  "tools": [],
+  "commands": [],
+  "routes": [],
+  "slots": [],
+  "settings": [],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "enabled",
+    "prReview",
+    "bestOfN",
+    "ciFix",
+    "judgeToolName"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "code-power"
+  ]
+}

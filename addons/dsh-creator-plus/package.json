@@ -1,0 +1,42 @@
+{
+  "name": "@local/dsh-creator-plus",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A Creator Plus tab that builds and improves plugins so they fit everything already installed, and keeps them working through updates: a live map of the setup, a fit check, a trial copy, backups and a way back, recipes, and proposals from the session logs. Nothing in your real setup changes without your yes. Off until you switch it on.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib/*.js",
+    "recipes/*.json",
+    "passport/**",
+    "cordis.patch.yml",
+    "README.md",
+    "locale/*.json",
+    "icon.svg",
+    "node_modules/@deepseek-ai/schemastery/**",
+    "node_modules/@deepseek-ai/cosmokit/**"
+  ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
+}

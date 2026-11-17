@@ -1,0 +1,30 @@
+{
+  "name": "@local/dsh-balance",
+  "folder": "dsh-balance",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [],
+  "events": [],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-balance/data"
+  ],
+  "slots": [
+    {
+      "name": "sidebar.footer.action",
+      "id": "dsh-balance"
+    }
+  ],
+  "settings": [],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "enabled"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "balance"
+  ]
+}

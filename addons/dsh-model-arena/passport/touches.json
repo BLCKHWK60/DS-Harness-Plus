@@ -1,0 +1,59 @@
+{
+  "name": "@local/dsh-model-arena",
+  "folder": "dsh-model-arena",
+  "at": "2026-11-17",
+  "provides": [
+    "modelArena"
+  ],
+  "uses": [
+    "candidateJudge",
+    "dshHomePath",
+    "id",
+    "llm",
+    "routeHealth"
+  ],
+  "events": [],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-model-arena/rounds",
+    "/dsh-model-arena/round",
+    "/dsh-model-arena/action"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "model-arena"
+    },
+    {
+      "name": "sidebar.panellist",
+      "id": "model-arena"
+    }
+  ],
+  "settings": [
+    "model-arena"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [
+    "arena"
+  ],
+  "config": [
+    "enabled",
+    "dataDir",
+    "candidates",
+    "maxContestants",
+    "blindByDefault",
+    "redactNames",
+    "judge",
+    "criteria",
+    "consistencyCheck",
+    "limits",
+    "storeDays",
+    "commandName"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "model-arena"
+  ]
+}

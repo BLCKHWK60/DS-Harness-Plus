@@ -1,0 +1,23 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agents",
+    "modelTiers",
+    "modes",
+    "routeHealth",
+    "subagents",
+    "tools"
+  ],
+  "inject": [
+    "tools"
+  ],
+  "events": [
+    "session/event",
+    "agent/disposed",
+    "agent/created"
+  ],
+  "places": [
+    "settings.section"
+  ]
+}

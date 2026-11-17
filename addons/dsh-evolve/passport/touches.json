@@ -1,0 +1,65 @@
+{
+  "name": "@local/dsh-evolve",
+  "folder": "dsh-evolve",
+  "at": "2026-11-17",
+  "provides": [
+    "evolve"
+  ],
+  "uses": [
+    "agents",
+    "dshHomePath",
+    "llm",
+    "modelTiers",
+    "modes",
+    "subagents",
+    "systemPrompt",
+    "tuning"
+  ],
+  "events": [
+    "agent/created",
+    "agent/disposed"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-evolve/status",
+    "/dsh-evolve/action"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "evolve"
+    }
+  ],
+  "settings": [
+    "evolve"
+  ],
+  "sections": [
+    "evolve:notes"
+  ],
+  "modes": [],
+  "storage": [
+    "evolve"
+  ],
+  "config": [
+    "enabled",
+    "target",
+    "studentProvider",
+    "studentModel",
+    "reviewerProvider",
+    "reviewerModel",
+    "judgeProvider",
+    "judgeModel",
+    "repeats",
+    "maxEdits",
+    "tokenBudget",
+    "costCeiling",
+    "applyLive",
+    "dataDir",
+    "commandName"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "evolve"
+  ]
+}

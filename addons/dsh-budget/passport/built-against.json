@@ -1,0 +1,20 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "dshHomePath",
+    "sessions",
+    "tools"
+  ],
+  "inject": [
+    "tools"
+  ],
+  "events": [
+    "session/event",
+    "agent/pre-step"
+  ],
+  "places": [
+    "settings.section",
+    "conversation.chat.turnTail"
+  ]
+}

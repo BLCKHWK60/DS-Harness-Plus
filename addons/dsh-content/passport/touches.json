@@ -1,0 +1,74 @@
+{
+  "name": "@local/dsh-content",
+  "folder": "dsh-content",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [
+    "agents",
+    "article",
+    "coworkScratch",
+    "coworkTrash",
+    "dshHomePath",
+    "modes",
+    "reconExports",
+    "sessionQuery",
+    "settings",
+    "subagents",
+    "tools"
+  ],
+  "events": [
+    "tools/pre-execute",
+    "agent/created",
+    "agent/disposed"
+  ],
+  "tools": [
+    "content_reports",
+    "content_ledger",
+    "content_rule",
+    "content_plan",
+    "content_formats",
+    "content_draft",
+    "content_check",
+    "content_approve",
+    "content_correct",
+    "content_library",
+    "content_continue",
+    "content_inventory",
+    "content_setup",
+    "content_save",
+    "content_conversations",
+    "content_bring_in"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-content/data"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "content"
+    }
+  ],
+  "settings": [
+    "modes",
+    "content"
+  ],
+  "sections": [
+    "content:folder"
+  ],
+  "modes": [
+    "content"
+  ],
+  "storage": [
+    "content",
+    "research"
+  ],
+  "config": [
+    "enabled",
+    "voiceLibrary"
+  ],
+  "instructionChars": 3437,
+  "rows": [
+    "content"
+  ]
+}

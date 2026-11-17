@@ -96,6 +96,8 @@ A proposed change is tested on the Check and Guard tasks, the same number of run
 4. **Does not make answers much longer.** Typical answer length stays under 150% of before (`costCeiling`).
 5. **You approve it.**
 
+One more gate, only when the Tuning Plus add-on is on and has an exam of your own work (at least 10 rows): a change that cleared the four gates is also tried on that exam with the whole playbook, before and after, and is stopped when it is worse there (more than 2 points). It shows as **Not worse on your own exam (Tuning Plus)** among the gates. Its model calls count in the run's token allowance like every other call; when the allowance runs out during the exam, the run stops and nothing waits for approval. Without Tuning Plus, or without enough exam rows, or when the exam cannot be taken, cycles work exactly as before. The exam never approves anything: you still do.
+
 Without at least one Check task and one Guard task, a cycle does not start: an improvement could not be proven.
 
 ## Where the approved instructions are used
@@ -155,7 +157,7 @@ Data folder (`$DSH_HOME/evolve`): `tasks.json`, `policies/v0001.json …`, `acti
 
 ## Checked
 
-- **Unit tests:** 29 (`test/`): the example sets (every expected answer and file worked out again, a wrong answer fails, 10 to 30 tasks per set), every check type, path escapes in file checks, the policy and its limits, leak detection, each gate, redaction, the reviewer packet (it contains no Check or Guard task), strict reading of the reviewer's answer, storage, a full simulated cycle with approval and going back, budget stop, refusals.
+- **Unit tests:** 31 (`test/`): the example sets (every expected answer and file worked out again, a wrong answer fails, 10 to 30 tasks per set), every check type, path escapes in file checks, the policy and its limits, leak detection, each gate, redaction, the reviewer packet (it contains no Check or Guard task), strict reading of the reviewer's answer, storage, a full simulated cycle with approval and going back, budget stop, refusals.
 - **Live, in the throwaway web profile with a scripted mock model:**
   - Set up entirely on the page: both models picked, example tasks added (0.15: the tick-box list; adding two sets, then removing one, changed the task count as expected).
   - A cycle from a 33% score: the reviewer proposed two lessons; the useful one cleared all four gates and waited; the useless one was stopped by "helps on the check tasks"; nothing changed until Approve.

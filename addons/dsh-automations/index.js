@@ -722,6 +722,7 @@ export function apply(ctx, config) {
       closed: alive.gaps().slice(-5),
       settings: { deletedToTrash: plainOf('deletedToTrash'), oldRunsToTrash: plainOf('oldRunsToTrash'), tab: plainOf('tab') },
       tabProblem,
+      creatorRuns: creatorRuns(),
       alerts: { ...settings, phoneProblem: settings.phone ? phoneProblem(settings) : '', ...alerter.status() },
     };
   };
@@ -807,6 +808,46 @@ export function apply(ctx, config) {
     if (result?.code) throw new Error(`The app refused: ${result.code}`);
   };
 
+  // ---- Creator Plus's saved runs, offered here to run on a schedule (Creator Plus, the owner's answer of 16 November) ----
+
+  /** The saved runs, when Creator Plus is installed and switched on (none otherwise). */
+  const creatorRuns = () => {
+    try {
+      const list = ctx.get('creatorPlus')?.savedRuns?.();
+      return Array.isArray(list) ? list.slice(0, 30).map((run) => ({ name: String(run?.name ?? ''), sentence: String(run?.sentence ?? '') })).filter((run) => run.name) : [];
+    } catch {
+      return [];
+    }
+  };
+  /**
+   * Schedule a saved run into a Creator Plus conversation: daily, or on ISO weekdays (1 = Monday), at a time
+   * in the user's time zone. It runs as a Long run would and changes nothing in the real setup without
+   * the user's yes (Creator Plus's own rules hold in that conversation).
+   */
+  const scheduleCreatorRun = async ({ name, sessionId, time, weekdays, timeZone }) => {
+    if (!schedule) throw new Error("The app's scheduler is not running.");
+    const creator = ctx.get('creatorPlus');
+    const prompt = typeof creator?.savedRunPrompt === 'function' ? String(creator.savedRunPrompt(String(name ?? '')) ?? '') : '';
+    if (!prompt) throw new Error('There is no such saved run, or Creator Plus is switched off.');
+    const session = String(sessionId ?? '');
+    if (!session) throw new Error('Which conversation?');
+    if (String(ctx.get('modes')?.get?.(session) ?? '') !== 'creator-plus') throw new Error('A saved run goes only into a Creator Plus conversation.');
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(time ?? ''))) throw new Error('A time like 09:00.');
+    const zone = String(timeZone ?? '');
+    try {
+      new Intl.DateTimeFormat('en', { timeZone: zone });
+    } catch {
+      throw new Error('An unknown time zone.');
+    }
+    if (!zone) throw new Error('An unknown time zone.');
+    const days = [...new Set((Array.isArray(weekdays) ? weekdays : []).map(Number).filter((day) => Number.isInteger(day) && day >= 1 && day <= 7))].sort();
+    const timing = days.length === 0 || days.length === 7 ? { kind: 'daily', daily: { time, time_zone: zone } } : { kind: 'weekly', weekly: { time, time_zone: zone, weekdays: days } };
+    const made = await schedule.create({ title: `Creator Plus: ${String(name)}`.slice(0, 120), prompt, timing, target: { kind: 'session', sessionId: session } });
+    if (made?.code) throw new Error(`The app refused: ${made.code}`);
+    if (made?.id) notes.setCreatedIn(made.id, 'creator-plus');
+    await readTasks();
+  };
+
   ctx.inject(['webServer', 'connection'], (inner) => {
     inner.effect(
       () =>
@@ -850,6 +891,7 @@ export function apply(ctx, config) {
                 else if (body?.action === 'test') sent = await alerter.test();
                 else if (['pause', 'resume', 'delete'].includes(body?.action)) await change(id, body.action, expected);
                 else if (body?.action === 'edit') await editText(id, { title: body.title, prompt: body.prompt }, expected);
+                else if (body?.action === 'creatorRun') await scheduleCreatorRun(body);
                 else if (body?.action === 'alerts' || body?.action === 'keep') {
                   if (!(await readTasks()).some((task) => String(task.id) === id)) throw new Error('That automation is gone.');
                   if (body.action === 'alerts') notes.setAlerts(id, body.alerts);

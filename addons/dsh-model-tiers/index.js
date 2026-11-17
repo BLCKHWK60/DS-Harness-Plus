@@ -555,13 +555,16 @@ function readTeams(config) {
   const versions = readModelVersions(config);
   const member = (value) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    // A Tuning Plus adapter for this member (a shelf id), kept beside its own model, which stays the fallback.
+    const adapterId = typeof value.adapter === 'string' && /^[\w.-]{1,80}$/.test(value.adapter.trim()) ? value.adapter.trim() : '';
+    const adapter = adapterId ? { adapter: adapterId } : {};
     if (typeof value.version === 'string') {
       const version = versions[value.version.trim().toLowerCase()];
-      return version ? { provider: version.provider, model: version.model, version: version.id, ...(typeof version.maxTokens === 'number' ? { maxTokens: version.maxTokens } : {}) } : undefined;
+      return version ? { provider: version.provider, model: version.model, version: version.id, ...(typeof version.maxTokens === 'number' ? { maxTokens: version.maxTokens } : {}), ...adapter } : undefined;
     }
     const provider = typeof value.provider === 'string' ? value.provider.trim() : '';
     const model = typeof value.model === 'string' ? value.model.trim() : '';
-    return provider && model ? { provider, model } : undefined;
+    return provider && model ? { provider, model, ...adapter } : undefined;
   };
   const result = {};
   for (const [tierId, team] of Object.entries(parsed).slice(0, 50)) {
@@ -2811,8 +2814,20 @@ export function apply(ctx, config) {
         const team = tier ? readTeams(config)[tier.id] : undefined;
         if (!team) return null;
         const pick = role === 'helper' ? (team.helpers.length > 0 ? team.helpers[Math.abs(Math.floor(index)) % team.helpers.length] : undefined) : team[role];
+        if (!pick) return null;
+        // A member with a Tuning Plus adapter uses it only while Tuning Plus says it is switched on and served;
+        // otherwise (Tuning Plus off, the adapter off, no address, anything odd) the member's own model.
+        if (pick.adapter) {
+          try {
+            const tuning = ctx.get('tuning');
+            const served = tuning?.apiVersion === 1 && typeof tuning.adapterRoute === 'function' ? tuning.adapterRoute(pick.adapter) : undefined;
+            if (served && typeof served.provider === 'string' && served.provider && typeof served.model === 'string' && served.model) {
+              return Object.freeze({ provider: served.provider, model: served.model, ...(pick.maxTokens ? { maxTokens: pick.maxTokens } : {}), adapter: pick.adapter });
+            }
+          } catch { /* the member's own model */ }
+        }
         // The lead is the strongest the team has; a team without one passes a step up to nobody else.
-        return pick ? Object.freeze({ provider: pick.provider, model: pick.model, ...(pick.maxTokens ? { maxTokens: pick.maxTokens } : {}) }) : null;
+        return Object.freeze({ provider: pick.provider, model: pick.model, ...(pick.maxTokens ? { maxTokens: pick.maxTokens } : {}) });
       } catch {
         return null;
       }

@@ -1,0 +1,29 @@
+{
+  "name": "@local/dsh-privacy",
+  "folder": "dsh-privacy",
+  "at": "2026-11-17",
+  "provides": [
+    "privacy"
+  ],
+  "uses": [
+    "loader"
+  ],
+  "events": [],
+  "tools": [],
+  "commands": [],
+  "routes": [],
+  "slots": [],
+  "settings": [],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "commandName"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "session-telemetry-otel",
+    "product-analytics",
+    "privacy"
+  ]
+}

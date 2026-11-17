@@ -1,0 +1,28 @@
+# Changelog: @local/dsh-modes
+
+- 2026-11-17 The rest of the Content and Bench plan: Web levels, Ultra Code and the work loop, the Recon export door, the Voice Library, and Bench's network, server, phone and Bluetooth doors
+- 2026-11-16 Content and Bench tabs; Long run checks in Bench and Recon; a run that has ended stops cleanly
+- 2026-11-16 Long run in Recon, inside Recon's rules
+- 2026-11-16 Long run in every tab with a Run button, and the overnight work
+- 2026-11-15 Web label for Research and Scout, and the Lens (0.60.0)
+- 2026-11-15 Thorough's check before finishing (0.59.1)
+- 2026-11-15 Shared trash, Web On/Off and one Depth for every tab (0.59.0)
+- 2026-11-15 Trash per tab, Delete permanently, Empty trash, own tab order (0.58.0)
+- 2026-11-15 Build the owner's 26 decisions and Scout step 3 (0.57.0)
+- 2026-11-15 Full audit of every mode, grouped and searchable Settings (0.56.0)
+- 2026-11-15 Web button, tool trimming, Research tab (0.51.2-0.55.2)
+- 2026-11-14 0.44.2: Recon reads Usenet text newsgroups (step 4 of 7)
+- 2026-11-14 0.43.1: Recon, an isolated tab for .onion research (steps 1 to 3 of 7)
+- 2026-11-14 0.40.4: Stop also stops the helpers
+- 2026-11-13 0.40.0: mission runs, project types, generated instructions, one model for helpers
+- 2026-11-13 0.34.1: Finance adviser, fold the message box, Rerun
+- 2026-11-13 0.33.0: projects, Python and charts in Data, market tools in Finance, tabs in rows
+- 2026-11-13 0.32.0: Data mode, research in rounds with depth sliders, helper repair
+- 2026-11-12 Release 0.27.2: Finance mode, and the activity line as part of the message box
+- 2026-11-12 Release 0.20.2: scheduled tasks start in their own mode
+- 2026-11-12 Release 0.20.1: add-ons under the PTC preset
+- 2026-11-12 Release 0.20.0: helpers follow their conversation, Tools button, installer fix
+- 2026-11-11 Release 0.13.0: instructions per model version, self-improvement per version
+- 2026-11-11 Release 0.11.0: app-style pages, Arena and Benchmark setup, Code map
+- 2026-11-11 Release 0.8.0: review fixes across add-ons, sync and installer
+- 2026-11-10 DeepSeek Harness Plus 0.6.0

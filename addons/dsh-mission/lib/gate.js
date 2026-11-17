@@ -56,6 +56,12 @@ export function whyNot({ isolated, tier = null, helpers = false, word, tab = '',
 export const BENCH_CHECKS_TEXT = 'Bench: the run checks its work, with the Mac\'s device ports closed to those checks. Its helpers run no commands. Checks can be switched off in Settings → Bench.';
 export const BENCH_NO_CHECKS_TEXT = 'Bench: this run checks nothing by itself (checks are switched off in Settings → Bench): the reviewer judges each item by reading. Its helpers run no commands.';
 /** A Recon Long run's checks: off (the default) or on without the internet (Settings → Recon). */
-export const RECON_CHECKS_TEXT = 'Recon: the run checks its work with commands that have no internet, see only the run\'s folder and can start no other program. Switch this off in Settings → Recon.';
+/** A Creator Plus conversation's Long run (Creator Plus decides, through its `longRunRules`). */
+export const CREATOR_CHECKS_TEXT = 'Creator Plus: the run checks its work with commands that have no internet, see only the run\'s folder, get no keys, and can start only the usual check programs (never launchctl, open or a program it wrote); its helpers run no commands.';
+/** A Long run in the Creator Plus tab: switched off for now (its checks run in the conversation's live folder). */
+export const CREATOR_LONG_OFF_TEXT = 'Long runs in Creator Plus are switched off until their checks can run on a throwaway copy; use Thorough for now.';
+/** A plain /mission run in the Creator Plus tab: refused (its checks would run outside Creator Plus's rules). */
+export const CREATOR_NO_MISSION_TEXT = 'In the Creator Plus tab, /mission is not available: its checks would run outside Creator Plus\'s rules. Use a Long run (the Run button), whose checks run fenced.';
+export const RECON_CHECKS_TEXT = 'Recon: the run checks its work with commands that have no internet, see only the run\'s folder and can start only the usual check programs (never launchctl, open or a program it wrote). Switch this off in Settings → Recon.';
 export const RECON_NO_CHECKS_TEXT = 'Recon: the run runs no commands; the reviewer judges each item by reading. Checks without the internet can be switched on in Settings → Recon.';
 export const RECON_LONG_TEXT = 'A Recon conversation: its helpers use this conversation\'s model and Recon\'s tools, with files only in the run\'s own folder in Recon\'s room, and run no programs or commands. End and wipe deletes the run too.';

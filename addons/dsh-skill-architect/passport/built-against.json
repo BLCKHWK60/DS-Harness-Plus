@@ -1,0 +1,26 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agents",
+    "coworkProjects",
+    "coworkTrash",
+    "dshHomePath",
+    "llm",
+    "memoryStore",
+    "mission",
+    "modes",
+    "reconExports",
+    "remote.session",
+    "sessionQuery",
+    "settings",
+    "skills",
+    "tuning",
+    "workspaces"
+  ],
+  "inject": [],
+  "events": [],
+  "places": [
+    "settings.section"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agents",
+    "layout",
+    "modes",
+    "sessionQuery",
+    "sessions",
+    "settings",
+    "shortcuts",
+    "uiWorkspace",
+    "workspaces"
+  ],
+  "inject": [],
+  "events": [],
+  "places": [
+    "shell.overlay"
+  ]
+}

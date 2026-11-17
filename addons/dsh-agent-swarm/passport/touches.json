@@ -1,0 +1,48 @@
+{
+  "name": "@local/dsh-agent-swarm",
+  "folder": "dsh-agent-swarm",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [
+    "agents",
+    "modelTiers",
+    "modes",
+    "routeHealth",
+    "subagents",
+    "tools"
+  ],
+  "events": [
+    "session/event",
+    "agent/disposed",
+    "agent/created"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-agent-swarm/state"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "agent-swarm"
+    }
+  ],
+  "settings": [],
+  "sections": [
+    "agent-swarm:hint"
+  ],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "enabled",
+    "toolName",
+    "swarms",
+    "pricing",
+    "defaultSwarmByMode",
+    "onRouteDown"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "agent-swarm"
+  ]
+}
