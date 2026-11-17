@@ -1,0 +1,6 @@
+- insert:
+    - id: split-plus
+      name: '@local/dsh-split-plus'
+      config:
+        # Off until you switch it on in Settings > Split Plus. It then adds a Split page to the sidebar.
+        enabled: false

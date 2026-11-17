@@ -22,6 +22,11 @@ window.__ModuleLoader__.load({
 .dsh-bn-desc { margin: 4px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 .dsh-bn-desc[data-error="true"] { color: var(--dsw-alias-state-error-primary); }
 .dsh-bn-group { margin: 24px 0 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--dsw-alias-label-secondary); }
+.dsh-bn-group[data-danger="true"] { color: var(--dsw-alias-label-error, #d93025); }
+.dsh-bn-danger { border: 1px solid var(--dsw-alias-label-error, #d93025); border-radius: 10px; padding: 4px 12px; }
+.dsh-bn-pre { font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; background: var(--dsw-alias-fill-secondary, rgba(128,128,128,.12)); border-radius: 8px; padding: 8px 10px; margin: 4px 0 10px; color: var(--dsw-alias-label-primary); user-select: text; }
+.dsh-bn-req { font-size: 12px; margin: 2px 0; color: var(--dsw-alias-label-primary); }
+.dsh-bn-req[data-found="false"] { color: var(--dsw-alias-label-secondary); }
 .dsh-bn-row { display: flex; align-items: flex-start; gap: 16px; padding: 14px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
 .dsh-bn-rowtext { flex: 1; min-width: 0; }
 .dsh-bn-rowtitle { font-size: 14px; line-height: 22px; overflow-wrap: anywhere; }
@@ -139,6 +144,39 @@ window.__ModuleLoader__.load({
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || `error ${response.status}`);
       return data;
+    }
+
+    /** Which programs Bench can use on this Mac, found or missing, with the install command (Bench never installs). */
+    function Programs({ install }) {
+      const [rows, setRows] = useState(null);
+      const [problem, setProblem] = useState('');
+      const [busy, setBusy] = useState(false);
+      const check = async () => {
+        setBusy(true);
+        setProblem('');
+        try {
+          const response = await fetch(new URL('dsh-bench/data?requirements=1', document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.error || `error ${response.status}`);
+          setRows(Array.isArray(data.rows) ? data.rows : []);
+        } catch (error) {
+          setProblem(error.message);
+        } finally {
+          setBusy(false);
+        }
+      };
+      const text = install && typeof install === 'object' ? Object.entries(install).filter(([, value]) => typeof value === 'string' && value.trim()) : [];
+      return h('div', null,
+        h('div', { className: 'dsh-bn-row' },
+          h('div', { className: 'dsh-bn-rowtext' },
+            h('div', { className: 'dsh-bn-rowtitle' }, 'Check what is installed'),
+            h('div', { className: 'dsh-bn-rowdesc' }, 'Lists every program Bench\'s tools can use, whether it is on this Mac, and the exact command for anything missing. Bench never installs anything: paste a command into Terminal yourself. (In a Bench conversation, bench_requirements gives the same list.)')),
+          h('button', { type: 'button', className: 'dsh-bn-btn', disabled: busy, onClick: () => void check() }, busy ? 'Checking…' : 'Check')),
+        problem ? h('p', { className: 'dsh-bn-desc', 'data-error': 'true' }, problem) : null,
+        rows ? h('div', { style: { margin: '4px 0 10px' } },
+          rows.map((row) => h('div', { key: row.name, className: 'dsh-bn-req', 'data-found': String(row.found === true) },
+            `${row.found ? '✓' : '✗'} ${row.name}${row.used ? ` — ${row.used}` : ''}${!row.found && row.install ? `: ${row.install}` : ''}`))) : null,
+        text.map(([key, value]) => h('pre', { key, className: 'dsh-bn-pre' }, value)));
     }
 
     async function revision(ctx) {
@@ -312,6 +350,16 @@ window.__ModuleLoader__.load({
             if (alive.current) setData((d) => ({ ...d, longChecks: d.longChecks === false }));
           }, data.longChecks === false ? 'Long run checks are on again. New Long runs in Bench check their work.' : 'Long run checks are off. New Long runs in Bench check nothing by themselves.') })),
 
+        h('div', { className: 'dsh-bn-group' }, 'Live dashboard'),
+        h('div', { className: 'dsh-bn-row' },
+          h('div', { className: 'dsh-bn-rowtext' },
+            h('div', { className: 'dsh-bn-rowtitle' }, 'Devices, live'),
+            h('div', { className: 'dsh-bn-rowdesc' }, `One card per running monitor (a car over OBD-II, a serial device, this Mac's network, a router over SSH, HID devices), updated every second. Monitors are started and stopped in a Bench conversation ("start an OBD monitor on /dev/cu.usbserial-…"). The page only shows; it starts nothing. Running now: ${Number(data.monitors) || 0}.`)),
+          h('a', { className: 'dsh-bn-btn', href: new URL(String(data.dashboard || '/dsh-bench/dashboard').replace(/^\//, ''), document.baseURI).href, target: '_blank', rel: 'noreferrer' }, 'Open the dashboard')),
+
+        h('div', { className: 'dsh-bn-group' }, 'Programs Bench uses'),
+        h(Programs, { install: data.install }),
+
         h('div', { className: 'dsh-bn-group' }, 'Open and closed in Bench'),
         h('p', { className: 'dsh-bn-desc' }, 'The same list shows under "Bench rules" in the chat box of a Bench conversation, and a Long run\'s card says which applies when it starts.'),
         h(RuleList, { rules: data.closed }),
@@ -371,7 +419,20 @@ window.__ModuleLoader__.load({
           h('li', null, 'Look-only where safety is at stake: vehicles and e-bikes, medical devices, batteries and chargers, locks, alarms, smoke detectors, heating. A card whose words name one of these is marked look-only and stays so, even if its words change later; only you lift the mark, above. The assistant is also told never to change speed limits or radio limits (transmit power, region, frequency); Bench has no tool that sets them.'),
           h('li', null, 'A device Bench has no recipe for: it drafts one at the Read level from the maker\'s pages, and you approve it above. Adjust and Write for it are not built.'),
           h('li', null, 'With Ultra Code on in the chat box, a checker (the conversation\'s own model, with no tools) reads each write plan before you are asked; its verdict is on the question. Only one write runs at a time, on one device.'),
-          h('li', null, 'Not built: changing a Bluetooth device, updating a BIOS (the maker\'s own tool does that), relocking a phone.')));
+          h('li', null, 'Not built: changing a Bluetooth device, updating a BIOS (the maker\'s own tool does that), relocking a phone.')),
+
+        h('div', { className: 'dsh-bn-group', 'data-danger': 'true' }, '⚠ Danger zone'),
+        h('div', { className: 'dsh-bn-danger' },
+          h('div', { className: 'dsh-bn-row' },
+            h('div', { className: 'dsh-bn-rowtext' },
+              h('div', { className: 'dsh-bn-rowtitle' }, 'Allow risky writes'),
+              h('div', { className: 'dsh-bn-rowdesc' }, data.allowRiskyWrites === true
+                ? 'ON. Flashing, erasing, programming, resets and commands sent to boards, debug probes, FPGAs, instruments, smart cards and iPhones run when asked. Firmware writes need no backup, source check or recovery path; any router setting (but radio limits and keys), any phone setting (still undoable) and any Windows service may be changed. Each device\'s level above and your yes on each write still apply. Stays on until you switch it off; each change is noted in the Bench folder (danger.jsonl).'
+                : 'Off (the default). The device tools\' flash, erase, program, reset and send actions refuse and say where this switch is; firmware writes need a checked backup, the recovery path and a checked source; settings and services are limited to the short lists. Switch it on to take full control: nothing is sent until you do.')),
+            h('button', { type: 'button', role: 'switch', className: 'dsh-bn-switch', 'aria-checked': data.allowRiskyWrites === true, 'aria-label': 'Allow risky writes', disabled: busy || data.enabled !== true, onClick: () => void run(async () => {
+              await setSettings(appCtx, { allowRiskyWrites: data.allowRiskyWrites !== true });
+              if (alive.current) setData((d) => ({ ...d, allowRiskyWrites: d.allowRiskyWrites !== true }));
+            }, data.allowRiskyWrites === true ? 'Allow risky writes is off again: the conditions hold.' : 'Allow risky writes is ON. It stays on until you switch it off.') }))));
     }
 
     return {

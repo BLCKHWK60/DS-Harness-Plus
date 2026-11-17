@@ -16,11 +16,11 @@ window.__ModuleLoader__.load({
 
     /** The groups, in order, and their pages in order. */
     const GROUPS = [
-      { label: 'Tabs and modes', pages: ['modes', 'research', 'finance', 'data', 'scout', 'recon', 'content', 'bench', 'creator-plus'] },
+      { label: 'Tabs and modes', pages: ['modes', 'research', 'finance', 'data', 'scout', 'recon', 'content', 'bench', 'creator-plus', 'split-plus'] },
       { label: 'Models', pages: ['model-tiers', 'sampling-presets', 'model-arena', 'benchmark'] },
       { label: 'Cost and limits', pages: ['budget', 'usage-ledger'] },
       { label: 'Agents and runs', pages: ['mission', 'agent-swarm', 'evolve', 'alerts'] },
-      { label: 'Knowledge and files', pages: ['memory', 'library', 'pdf', 'code-map', 'diagram', 'learn'] },
+      { label: 'Knowledge and files', pages: ['memory', 'library', 'pdf', 'code-map', 'diagram', 'learn', 'artifacts'] },
       { label: 'Look and this Mac', pages: ['color-schemes', 'activity', 'mac'] },
     ];
     /** Line icons, 24x24, drawn with the current colour. */
@@ -34,6 +34,8 @@ window.__ModuleLoader__.load({
       content: 'M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4M12 20h8',
       bench: 'M8 8h8v8H8zM10 8V4M14 8V4M10 20v-4M14 20v-4M8 10H4M8 14H4M20 10h-4M20 14h-4',
       'creator-plus': 'M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4zM18 3v4M16 5h4',
+      'split-plus': 'M3 4h18v16H3zM12 4v16',
+      artifacts: 'M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h4',
       'model-tiers': 'M5 18h14M7 14h10M9 10h6M11 6h2',
       'sampling-presets': 'M5 7h9M18 7h1M5 12h3M12 12h7M5 17h11M20 17h-1M16 5v4M10 10v4M18 15v4',
       'model-arena': 'M6 4l5 5M18 4l-5 5M6 20l12-12M18 20L6 8M4 6l2-2M20 6l-2-2',

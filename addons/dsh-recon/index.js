@@ -51,6 +51,7 @@ import { createBoards } from './lib/boards.js';
 import { openWipeList, wipeFiles, wipeTrashed } from './lib/wipe.js';
 import { createTor, findTor, torVersion } from './lib/tor.js';
 import { createVpn, findWireproxy, readVpnList, vpnNameOf, vpnRemoveCommandFor, vpnStoreCommandFor, vpnStored } from './lib/vpn.js';
+import { copyOtherFiles, filesNote, filesPart, listRoomFiles, namedByCalls, pickedFiles, runFolderName } from './lib/roomfiles.js';
 
 export const name = 'dsh-recon';
 
@@ -1207,11 +1208,51 @@ export function apply(ctx, config, standIns = {}) {
     if (savedChecks.size > 200) savedChecks.delete(savedChecks.keys().next().value);
     return answer;
   };
+  /**
+   * Recon conversations that are running a turn now (the owner's answer of 17 November 2026: Recon stays
+   * sealed while it runs; its export waits until the run is done). A Long run counts too, between turns.
+   */
+  const turning = new Set();
+  ctx.on('agent/status', ({ agent, status } = {}) => {
+    if (!agent?.id) return;
+    if (status === 'running') turning.add(agent.id);
+    else if (status === 'idle') turning.delete(agent.id);
+  });
+  const runningNow = (id) => {
+    if (turning.has(String(id))) return true;
+    try {
+      return ctx.get('mission')?.isRunning?.(String(id)) === true;
+    } catch {
+      return true;
+    }
+  };
+  const RUNNING_REFUSAL = 'Recon is running in this conversation: export when the run is done.';
   const newExportId = () => `E${Date.now().toString(36).slice(-4).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+  /**
+   * Which of the room's files are this conversation's own: its run folder, and what its own tool calls
+   * named (never another conversation's files, nor a run still going).
+   */
+  const roomScope = async (source) => {
+    let events = [];
+    try {
+      events = source.agent ? source.agent.session?.deriveMessages?.() ?? [] : Array.isArray(source.events) ? source.events : [];
+    } catch {
+      events = [];
+    }
+    return { own: runFolderName(source.id), named: namedByCalls(events) };
+  };
   const doorPreview = async (sessionId, what) => {
     const source = await doorSource(sessionId);
     const built = exportOf(source, what, 'preview', Date.now());
+    let files = [];
+    try {
+      files = listRoomFiles(ROOM, await roomScope(source)).map(({ path, size, text }) => ({ path, size, text }));
+    } catch {
+      files = [];
+    }
     return {
+      running: runningNow(source.id),
+      files,
       restartNote: source.restarted && built.counts.sources === 0 ? RESTART_NOTE : '',
       what: what === 'conversation' ? 'conversation' : 'report',
       counts: built.counts,
@@ -1253,16 +1294,34 @@ export function apply(ctx, config, standIns = {}) {
     const to = String(body.to ?? '');
     const at = Date.now();
     const id = newExportId();
+    if (runningNow(source.id)) throw new Error(RUNNING_REFUSAL);
     const built = exportOf(source, body.what, id, at);
-    if (built.counts.reports + built.counts.sources + built.counts.messages === 0) throw new Error('There is nothing to export: nothing was read in this conversation, and no report was kept.');
+    // The files the owner ticked in Recon's room: text goes in, quoted; any other file is copied unopened.
+    const files = pickedFiles(ROOM, body.files, await roomScope(source));
+    if (built.counts.reports + built.counts.sources + built.counts.messages + files.length === 0) throw new Error('There is nothing to export: nothing was read in this conversation, no report was kept and no file was ticked.');
+    const addFiles = (copiedTo) => {
+      if (files.length === 0) return;
+      const part = filesPart(files, copiedTo);
+      const cut = built.markdown.lastIndexOf('\n## What did not leave Recon');
+      built.markdown = cut >= 0 ? `${built.markdown.slice(0, cut)}${part.markdown}\n${built.markdown.slice(cut)}` : `${built.markdown}${part.markdown}\n`;
+      built.json.files = part.json;
+    };
     if (to === 'folder') {
       const folder = String(body.folder ?? '').trim() || exportFolderDefault();
       const real = safeExportParent(folder, [ROOM, DEFAULT_ROOM]);
+      addFiles(files.some((file) => !file.text) ? '(the files folder beside this export)' : '');
       const where = writeExportFolder(real, { id, at, markdown: built.markdown, json: built.json });
+      copyOtherFiles(files, join(where, 'files'));
       door.add({ id, at, what: built.json.what, from: agent.id, to: [{ kind: 'folder', folder: where }], addresses: built.addresses });
-      sources.note(agent.id, 'export', `door: ${built.json.what} to a folder (${built.counts.sources} sources)`);
+      sources.note(agent.id, 'export', `door: ${built.json.what} to a folder (${built.counts.sources} sources${files.length ? `; ${filesNote(files)}` : ''})`);
       return { id, where };
     }
+    if (files.some((file) => !file.text)) {
+      // Into a conversation, a file that is not text cannot go in the message: it is copied, unopened, into
+      // Recon's export folder (never the room), and the message says where.
+      const parent = safeExportParent(join(exportFolderDefault(), `recon-export-files-${id}`), [ROOM, DEFAULT_ROOM]);
+      addFiles(copyOtherFiles(files, parent));
+    } else addFiles('');
     const message = exportMessage(id, at, built.markdown);
     if (message.length > MESSAGE_MAX) throw new Error('This export is too long for one message. Send it to a folder instead.');
     if (to === 'new') {
@@ -1306,7 +1365,7 @@ export function apply(ctx, config, standIns = {}) {
             let size = 0;
             for await (const chunk of req) {
               size += chunk.length;
-              if (size > 8192) throw new Error('request too large');
+              if (size > 65536) throw new Error('request too large');
               chunks.push(chunk);
             }
             const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');

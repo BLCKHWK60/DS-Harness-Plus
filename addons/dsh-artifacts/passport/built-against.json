@@ -1,0 +1,34 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "a",
+    "b",
+    "content",
+    "diff",
+    "dshHomePath",
+    "folder",
+    "from",
+    "item",
+    "kind",
+    "match",
+    "mode",
+    "modes",
+    "session",
+    "sessions",
+    "to",
+    "uiWorkspace",
+    "v",
+    "workingDirectory"
+  ],
+  "inject": [],
+  "events": [
+    "tools/pre-execute",
+    "tools/post-execute"
+  ],
+  "places": [
+    "conversation.chat.turnTail",
+    "sidebar.panellist",
+    "settings.section"
+  ]
+}

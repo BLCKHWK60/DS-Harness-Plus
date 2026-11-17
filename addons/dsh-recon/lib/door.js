@@ -29,7 +29,7 @@ export const ADDRESSES_MAX = 3000;
 
 export const NEVER_GOES = [
   'the text of the pages Recon read (fetched pages): only their citations go',
-  "Recon's room and its temporary files",
+  "Recon's room and its temporary files (only files the user ticked in the Export window leave, listed above)",
   'the word list and the blocklists',
   'anything the screen dropped (it is never kept)',
   'VPN profiles, Usenet logins and other secrets',

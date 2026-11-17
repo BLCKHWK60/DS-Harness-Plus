@@ -158,6 +158,14 @@ The owner's answer: build it. Recon stays sealed; this is its one way out, and o
   they cannot act as instructions.
   Recon keeps no claims table, contradictions, timeline, lead list or coverage map of its own, and
   the export says so: Content builds its ledger from the report.
+- **After a run only, and only its own files** (the owner's answers of 17 November): Export is greyed
+  while the conversation runs (a turn or a Long run), and the server refuses it then too. The window
+  lists the conversation's own files in Recon's room (`lib/roomfiles.js`): everything in its run folder
+  (`run-<its id>`) and any other file its own tool calls named; never another conversation's run folder,
+  a hidden file, a link, or a file with a second name (a hard link, which could be a file from outside
+  the room). Text files are ticked and go in quoted, as Recon material; any other file (a PDF) is
+  unticked, with a warning, and is copied unopened into the export's own folder, never into the room.
+  Each file is read through its own handle, never through a link.
 - **After a restart:** the app loads a conversation only when a turn runs, so an older Recon
   conversation is recognised without it: Recon's mode and isolated by id (Modes answers by id), and a
   saved header with no parent; one being ended and wiped is not. Its export is read from its saved

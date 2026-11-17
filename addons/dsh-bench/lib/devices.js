@@ -71,7 +71,15 @@ const stamp = (at) => at.toISOString().slice(0, 19).replace(/[-:]/g, '').replace
  * @param {() => Date} [options.now] - the clock.
  * @returns {object[]} tool definitions.
  */
-export function buildDeviceTools({ enabled, bench, find, run, serial, approve, userSaid, isHelper, seen, fetchFn, sources = () => [], busy = new Set(), writePlan, undoers = {}, now = () => new Date() }) {
+export function buildDeviceTools({ enabled, bench, find, run, serial, approve, userSaid, isHelper, seen, fetchFn, sources = () => [], busy = new Set(), writePlan, undoers = {}, now = () => new Date(), risky = () => false }) {
+  /** The owner's "Allow risky writes" switch (Settings → Bench → Danger zone): no backup, source or recovery condition then. */
+  const riskyOn = () => {
+    try {
+      return risky() === true;
+    } catch {
+      return false;
+    }
+  };
   const output = {
     schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
     render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }],
@@ -243,7 +251,7 @@ export function buildDeviceTools({ enabled, bench, find, run, serial, approve, u
     name: 'bench_esp32',
     description: [
       'The ESP32 recipe, through Espressif\'s esptool (the user installs it). action "info": the chip, its features, MAC address and flash size (Identify). action "backup": the whole flash read twice and compared, kept with its SHA-256 in the device\'s backups folder (Read).',
-      'action "flash" (Write): writes a firmware file from the device\'s firmware folder at an address, only when all four conditions hold: a checked backup of this chip taken since its last write, the recovery path on its card, the firmware\'s source is the maker\'s or the official project\'s page and Bench finds the file\'s SHA-256 published there itself, and the user\'s yes on the app\'s own card, every time. Below 0x10000 (loader, partition table, stored settings) or in a part the user protected, it also needs the user\'s own message "write protected <device name>". The eFuses are never touched.',
+      'action "flash" (Write): writes a firmware file from the device\'s firmware folder at an address, only when all four conditions hold: a checked backup of this chip taken since its last write, the recovery path on its card, the firmware\'s source is the maker\'s or the official project\'s page and Bench finds the file\'s SHA-256 published there itself, and the user\'s yes on the app\'s own card, every time. Below 0x10000 (loader, partition table, stored settings) or in a part the user protected, it also needs the user\'s own message "write protected <device name>". With the user\'s "Allow risky writes" switch on, only the card\'s level and the user\'s yes remain. action "erase" (Write): erases the whole flash, only with "Allow risky writes" on. The eFuses are never touched.',
       'dryRun shows exactly what would be sent and checked, without sending anything. Bench builds every command itself.',
     ].join(' '),
     parameters: {
@@ -251,7 +259,7 @@ export function buildDeviceTools({ enabled, bench, find, run, serial, approve, u
       properties: {
         name: { type: 'string', minLength: 1, maxLength: 80 },
         port: { type: 'string', maxLength: 100 },
-        action: { type: 'string', enum: ['info', 'backup', 'flash'] },
+        action: { type: 'string', enum: ['info', 'backup', 'flash', 'erase'] },
         baud: { type: 'integer', enum: ESPTOOL_BAUDS },
         file: { type: 'string', maxLength: 200, description: 'flash: the firmware file\'s name in the device\'s firmware folder.' },
         address: { type: 'string', maxLength: 20, description: 'flash: where it goes, such as 0x10000 (an application) or 0x0 (a full image with its loader).' },
@@ -314,7 +322,24 @@ export function buildDeviceTools({ enabled, bench, find, run, serial, approve, u
             : `The two reads of ${card.name}'s flash differ, so the backup is not checked and no firmware will be written. Both copies are kept in backups/. Try again at a slower speed (baud 115200), with a short cable.`;
         });
       }
-      if (action !== 'flash') throw new Error('The action is info, backup or flash.');
+      if (action === 'erase') {
+        // The whole flash: only with the owner's switch on, at Write on the card, with the yes.
+        if (!riskyOn()) return `bench_esp32 erase changes the device, so it runs only with "Allow risky writes" switched on (Settings → Bench → Danger zone). Nothing was sent.`;
+        refuse(gate({ card, need: 'write' }));
+        const plan = `Erase the whole flash of ${card.name} on ${port} (its firmware and stored settings; the eFuses are untouched). Cannot be undone by Bench. Command: ${shownCommand('esptool', esptoolArgs.erase(port))}`;
+        if (args.dryRun === true) return `Dry run: nothing was sent.\n${plan}`;
+        const esptool = await program('esptool');
+        card = await portAgreed(exec, card, port, device);
+        await yes(exec, `Erase "${card.name}"?\n${plan}`, `erasing ${card.name}`);
+        return exclusive([port, card.slug, `write:${card.slug}`, 'write:all'], async () => {
+          const erased = await run(esptool, esptoolArgs.erase(port), { timeoutMs: 10 * 60_000 });
+          const ok = erased.code === 0;
+          bench.addWrite(card, { at: now().getTime(), file: '(erase)', sha256: '', address: '0x0', ok });
+          bench.record(card, { title: ok ? 'Flash erased' : 'Flash erase FAILED', asked: 'erase the whole flash', done: ok ? 'erase_flash' : 'erase_flash failed', found: (erased.stderr || erased.stdout).trim().split('\n').slice(-2).join(' ').slice(0, 300), commands: [shownCommand('esptool', esptoolArgs.erase(port))] }, now());
+          return ok ? `Erased the flash of ${card.name}. It holds no firmware now: flash one with action "flash".` : `The erase failed (${(erased.stderr || erased.stdout).trim().split('\n').slice(-2).join(' ').slice(0, 300)}).`;
+        });
+      }
+      if (action !== 'flash') throw new Error('The action is info, backup, flash or erase.');
 
       // ---- Write: the four conditions, the power, the protected parts, the user's yes -----------
       // A dry run sends nothing, so it is shown whatever the card allows (with what is missing).
@@ -338,11 +363,13 @@ export function buildDeviceTools({ enabled, bench, find, run, serial, approve, u
       const dry = dryFirst(exec, card, args, `flash|${card.slug}|${port}|${address}|${sum}`);
       if (!allowed.ok && !dry) throw new Error(allowed.why);
       const conditions = allowed.ok ? [] : [`permission: ${allowed.why}`];
+      // "Allow risky writes" on: the card's level and the user's yes stay; the backup, source and recovery conditions go.
+      const free = riskyOn();
       // 3. The source, and the checksum Bench itself finds published on the maker's or the project's page.
-      const why = sourceRefusal(args.source, { extra: sources(), kind: 'esp32' });
+      const why = free ? '' : sourceRefusal(args.source, { extra: sources(), kind: 'esp32' });
       const page = String(args.checksumPage ?? '').trim() || String(args.source ?? '');
       if (why) conditions.push(`firmware source: ${why}`);
-      else {
+      else if (!free) {
         const published = await publishedOn(page, sum, { fetchFn, extra: sources(), kind: 'esp32' });
         if (!published.ok) conditions.push(`firmware checksum: ${published.why}`);
       }
@@ -351,10 +378,10 @@ export function buildDeviceTools({ enabled, bench, find, run, serial, approve, u
       const lastWrite = Math.max(0, ...bench.writesOf(card).filter((entry) => entry.ok).map((entry) => Number(entry.at) || 0));
       const boundMac = card.permissions?.bound?.mac?.id ?? '';
       const backup = bench.backupsOf(card).filter((entry) => entry.verified && entry.mac && (Number(entry.at) || 0) > lastWrite && (!boundMac || entry.mac === boundMac)).at(-1);
-      if (!backup) conditions.push(lastWrite > 0 ? 'backup: firmware was written since the last checked backup; make a new one (bench_esp32 action backup)' : 'backup: there is no checked backup of this chip yet (bench_esp32 action backup)');
-      else if (address + size > backup.bytes) conditions.push(`size: the firmware from ${hex(address)} ends past the flash (${backup.bytes} bytes)`);
+      if (!backup && !free) conditions.push(lastWrite > 0 ? 'backup: firmware was written since the last checked backup; make a new one (bench_esp32 action backup)' : 'backup: there is no checked backup of this chip yet (bench_esp32 action backup)');
+      else if (backup && address + size > backup.bytes) conditions.push(`size: the firmware from ${hex(address)} ends past the flash (${backup.bytes} bytes)`);
       // 2. The recovery path.
-      if (!String(card.recovery ?? '').trim()) conditions.push('recovery path: the card names no way to bring this device back after a failed flash (put it on the card from the maker\'s documentation)');
+      if (!free && !String(card.recovery ?? '').trim()) conditions.push('recovery path: the card names no way to bring this device back after a failed flash (put it on the card from the maker\'s documentation)');
       const hit = protectedHit(address, size, rangesOf(card.permissions?.ranges));
       const commands = [esptoolArgs.info(port), esptoolArgs.write(port, baud, address, real), esptoolArgs.verify(port, baud, address, real)].map((list) => shownCommand('esptool', list));
       const plan = [
@@ -362,14 +389,15 @@ export function buildDeviceTools({ enabled, bench, find, run, serial, approve, u
         `Source: ${String(args.source ?? '').slice(0, 300)}${page !== String(args.source ?? '') ? `; checksum page: ${page.slice(0, 300)}` : ''}.`,
         backup ? `Saved first: backups/${backup.file} (checked, SHA-256 ${backup.sha256}, MAC ${backup.mac}).` : 'Saved first: nothing yet.',
         `Way back: ${String(card.recovery ?? 'none named').slice(0, 300)}`,
+        free ? '"Allow risky writes" is on: no backup, source check, recovery path or protected-part message is required.' : '',
         hit ? `Protected: this touches ${hit}.` : '',
         'Cannot be undone by Bench: a write replaces what was there; only the backup can bring it back.',
         `Commands: ${commands.join(' ; ')}`,
       ].filter(Boolean).join('\n');
       if (dry || conditions.length > 0) {
-        return [dry ? `Dry run: nothing was sent.${args.dryRun === true ? '' : ` ${DRY_NOTE}`}` : 'Not written: the conditions for a write do not hold.', plan, ...(conditions.length > 0 ? ['', 'Missing:', ...conditions.map((entry) => `- ${entry}`)] : []), hit ? `\nTo write here the user must also write, in their own message: "${protectedPhrase(card)}".` : ''].filter(Boolean).join('\n');
+        return [dry ? `Dry run: nothing was sent.${args.dryRun === true ? '' : ` ${DRY_NOTE}`}` : 'Not written: the conditions for a write do not hold.', plan, ...(conditions.length > 0 ? ['', 'Missing:', ...conditions.map((entry) => `- ${entry}`)] : []), hit && !free ? `\nTo write here the user must also write, in their own message: "${protectedPhrase(card)}".` : ''].filter(Boolean).join('\n');
       }
-      if (hit && !saidProtected(userSaid(exec), card)) throw new Error(`This write touches ${hit}, a protected part. It needs the user's own message saying "${protectedPhrase(card)}" (and a checked backup, which there is). Ask the user; do not write it for them.`);
+      if (hit && !free && !saidProtected(userSaid(exec), card)) throw new Error(`This write touches ${hit}, a protected part. It needs the user's own message saying "${protectedPhrase(card)}" (and a checked backup, which there is). Ask the user; do not write it for them.`);
       const pmset = await program('pmset');
       const powerNow = async () => {
         const power = powerRefusal(powerOf((await run(pmset, ['-g', 'batt'], { timeoutMs: 10_000 })).stdout));
@@ -384,10 +412,10 @@ export function buildDeviceTools({ enabled, bench, find, run, serial, approve, u
         await powerNow();
         if (sha256Of(real) !== sum) throw new Error('The firmware file changed after you were asked. Nothing was written; ask again.');
         const info = await espInfo(esptool, port);
-        if (!info.mac || info.mac !== backup.mac || (boundMac && info.mac !== boundMac)) throw new Error(`The chip on ${port} (MAC ${info.mac || 'not read'}) is not the one backed up (MAC ${backup.mac}). Nothing was written.`);
+        if (!info.mac || (backup && info.mac !== backup.mac) || (boundMac && info.mac !== boundMac)) throw new Error(`The chip on ${port} (MAC ${info.mac || 'not read'}) is not the one ${backup ? `backed up (MAC ${backup.mac})` : `linked to the card (MAC ${boundMac})`}. Nothing was written.`);
         const stop = (what, result) => {
           bench.addWrite(card, { at: now().getTime(), file: name, sha256: sum, address: hex(address), ok: false });
-          const text = `${what} (${(result.stderr || result.stdout).trim().split('\n').slice(-3).join(' ').slice(0, 300)}). Bench stopped and does not try again by itself.\nTo bring it back: ${String(card.recovery).slice(0, 400)}\nThe backup to restore: backups/${backup.file} (SHA-256 ${backup.sha256}), written back from 0x0 by the same tool when you decide to.`;
+          const text = `${what} (${(result.stderr || result.stdout).trim().split('\n').slice(-3).join(' ').slice(0, 300)}). Bench stopped and does not try again by itself.\nTo bring it back: ${String(card.recovery ?? 'no way back is named on the card').slice(0, 400)}\n${backup ? `The backup to restore: backups/${backup.file} (SHA-256 ${backup.sha256}), written back from 0x0 by the same tool when you decide to.` : 'There is no backup of this chip ("Allow risky writes" was on).'}`;
           bench.record(card, { title: 'Firmware write FAILED', asked: `write ${name} at ${hex(address)}`, done: what, found: text, commands }, now());
           return text;
         };
@@ -407,11 +435,11 @@ export function buildDeviceTools({ enabled, bench, find, run, serial, approve, u
         } finally {
           live.done();
         }
-        bench.record(card, { title: `Firmware written: ${name}`, asked: `write ${name} at ${hex(address)}`, before: `backups/${backup.file} (SHA-256 ${backup.sha256})`, after: `${name} (SHA-256 ${sum}) at ${hex(address)}, read back and equal`, check: `${check.ok === true ? 'passed' : check.ok === false ? 'FAILED' : 'not confirmed'}: ${check.why}`, commands, next: 'the user checks the device and signs the job off; the next write needs a new backup' }, now());
+        bench.record(card, { title: `Firmware written: ${name}`, asked: `write ${name} at ${hex(address)}`, before: backup ? `backups/${backup.file} (SHA-256 ${backup.sha256})` : 'no backup ("Allow risky writes" on)', after: `${name} (SHA-256 ${sum}) at ${hex(address)}, read back and equal`, check: `${check.ok === true ? 'passed' : check.ok === false ? 'FAILED' : 'not confirmed'}: ${check.why}`, commands, next: 'the user checks the device and signs the job off; the next write needs a new backup' }, now());
         return [
           `Written and read back: ${name} at ${hex(address)} on ${card.name}.`,
           `Start check: ${check.ok === true ? 'passed' : check.ok === false ? 'FAILED' : 'not confirmed'}: ${check.why}.`,
-          check.ok === false ? `Bench stops here. To bring it back: ${String(card.recovery).slice(0, 400)} The backup: backups/${backup.file}.` : 'The job is signed off only when you have checked the device yourself. A next write needs a new backup first.',
+          check.ok === false ? `Bench stops here. To bring it back: ${String(card.recovery ?? 'no way back is named on the card').slice(0, 400)}${backup ? ` The backup: backups/${backup.file}.` : ''}` : `The job is signed off only when you have checked the device yourself.${free ? '' : ' A next write needs a new backup first.'}`,
         ].join('\n');
       });
     }),
@@ -440,11 +468,11 @@ export function buildDeviceTools({ enabled, bench, find, run, serial, approve, u
   const shownValue = (value) => (value === null || value === undefined ? '(not set)' : clean(String(value), 200));
   const androidTool = {
     name: 'bench_android',
-    description: `Android phones and tablets connected by USB with USB debugging on, through Google's adb (the user installs it). action "devices" lists them (Identify). With a card name and a listed serial (the card is linked to that phone the first time, with the user's yes): "info" (maker, model, Android version, security patch, bootloader locked or not, battery), "logs" (the newest log lines, at most 500, kept in the device's logs; Read), "setting_get" (one setting; Read), "setting_put" (one setting, Adjust: its old value is saved first, the new one read back, and the change goes on the undo list; asks as the card says). Bench changes only these settings: ${CHANGEABLE_TEXT}. Unlocking the bootloader and flashing are not done by Bench. dryRun shows what would be sent.`,
+    description: `Android phones and tablets connected by USB with USB debugging on, through Google's adb (the user installs it). action "devices" lists them (Identify). With a card name and a listed serial (the card is linked to that phone the first time, with the user's yes): "info" (maker, model, Android version, security patch, bootloader locked or not, battery), "logs" (the newest log lines, at most 500, kept in the device's logs; Read), "setting_get" (one setting; Read), "setting_put" (one setting, Adjust: its old value is saved first, the new one read back, and the change goes on the undo list; asks as the card says). Bench changes only these settings: ${CHANGEABLE_TEXT} (with the user's "Allow risky writes" switch on: any setting with a plain value, still undoable). "battery": the battery only. Unlocking the bootloader and flashing are bench_phone's. dryRun shows what would be sent.`,
     parameters: {
       type: 'object',
       properties: {
-        action: { type: 'string', enum: ['devices', 'info', 'logs', 'setting_get', 'setting_put'] },
+        action: { type: 'string', enum: ['devices', 'info', 'battery', 'logs', 'setting_get', 'setting_put'] },
         name: { type: 'string', maxLength: 80 },
         serial: { type: 'string', maxLength: 64 },
         namespace: { type: 'string', enum: ['system', 'secure', 'global'] },
@@ -474,11 +502,15 @@ export function buildDeviceTools({ enabled, bench, find, run, serial, approve, u
       const key = String(args.key ?? '');
       if (action === 'setting_put') {
         // Checked before anything is asked or sent.
-        const whyNot = settingRefusal({ namespace, key, value: String(args.value ?? ''), change: true });
+        const whyNot = settingRefusal({ namespace, key, value: String(args.value ?? ''), change: true, risky: riskyOn() });
         if (whyNot) throw new Error(whyNot);
         refuse(gate({ card, need: 'adjust' }));
-      } else if (!['info', 'logs', 'setting_get'].includes(action)) throw new Error('The action is devices, info, logs, setting_get or setting_put.');
+      } else if (!['info', 'battery', 'logs', 'setting_get'].includes(action)) throw new Error('The action is devices, info, battery, logs, setting_get or setting_put.');
       card = await phoneFor(exec, card, serialNumber);
+      if (action === 'battery') {
+        const battery = parseBattery((await must(adb, adbArgs.battery(serialNumber), { timeoutMs: 30_000 }, 'adb could not read the battery')).stdout);
+        return [`${card.name}'s battery (${serialNumber}), as the phone reports it:`, ...Object.entries(battery).map(([name, value]) => `- ${name}: ${value}`)].join('\n');
+      }
       if (action === 'info') {
         const props = parseProps((await must(adb, adbArgs.props(serialNumber), { timeoutMs: 30_000 }, 'adb could not read the phone')).stdout);
         const battery = parseBattery((await must(adb, adbArgs.battery(serialNumber), { timeoutMs: 30_000 }, 'adb could not read the battery')).stdout);

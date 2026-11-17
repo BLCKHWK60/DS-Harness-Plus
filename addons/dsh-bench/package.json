@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A Bench mode and tab for the devices you connect to your Mac: it identifies what is plugged in by USB and its serial port without opening anything, finds the maker's documentation, and keeps a card and a logbook for each device. It changes nothing on a device yet. Off until you switch it on.",
+  "description": "A Bench mode and tab for the devices you connect to your Mac: 44 tools for boards, phones, routers, servers, debug probes, instruments, cards and tags, a live device dashboard, and a list of the programs it can use. It keeps a card and a logbook for each device. Writes follow each device's card; the owner's Allow risky writes switch lifts the backup and source conditions. Off until you switch it on.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -14,6 +14,9 @@
     "index.js",
     "client.js",
     "lib/*.js",
+    "lib/*.swift",
+    "lib/plus/*.js",
+    "lib/plus/*.swift",
     "cordis.patch.yml",
     "README.md",
     "locale/*.json",

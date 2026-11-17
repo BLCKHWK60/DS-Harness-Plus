@@ -46,10 +46,29 @@ export const ROUTER_SETTINGS = [
 export const ROUTER_NEVER = /(^|\.)(txpower|country|channel|channels|htmode|chanbw|band|legacy_rates|cell_density|noscan|key|sae_password|wpa_psk|password|encryption|ipaddr|netmask|proto)$|^(network|firewall|dropbear|uhttpd|rpcd)\./;
 export const UCI_KEY = /^[a-z][a-z0-9_]{0,30}\.(?:@[a-z_-]{1,30}\[\d{1,2}\]|[A-Za-z0-9_]{1,40})\.[A-Za-z0-9_]{1,40}$/;
 
-/** @returns {{rule: object | undefined, why: string}} the setting's rule, or why it is not changed. */
-export function routerSettingRule(key, value) {
+/** Radio limits (the law's, not Bench's) and secrets: never changed, also with "Allow risky writes" on. */
+export const ROUTER_RADIO_OR_SECRET = /(^|\.)(txpower|country|channel|channels|htmode|chanbw|band|legacy_rates|cell_density|noscan)$/;
+/** A value for any other setting with "Allow risky writes" on: one line, no control characters. */
+const FREE_VALUE = /^[^\0\n\r\u0000-\u001f\u007f]{0,200}$/;
+
+/**
+ * @param {string} key - the setting, as uci writes it.
+ * @param {string} [value] - the new value (when setting).
+ * @param {{risky?: boolean}} [options] - the owner's "Allow risky writes" switch: then any setting but
+ *   radio limits and secrets, committed in its own package and applied with reload_config.
+ * @returns {{rule: object | undefined, why: string}} the setting's rule, or why it is not changed.
+ */
+export function routerSettingRule(key, value, { risky = false } = {}) {
   const name = String(key ?? '');
   if (!UCI_KEY.test(name)) return { rule: undefined, why: 'Give the setting as uci writes it, such as system.@system[0].hostname.' };
+  if (risky) {
+    if (ROUTER_RADIO_OR_SECRET.test(name) || neverChanged(name)) return { rule: undefined, why: `${name} is a radio limit; Bench never changes it, also with "Allow risky writes" on.` };
+    if (isSecretOption(name)) return { rule: undefined, why: `${name} holds a key, a password or a PIN; it never goes through a model, also with "Allow risky writes" on. Set it on the router's own page.` };
+    const known = ROUTER_SETTINGS.find((entry) => entry.key.test(name));
+    if (known && value !== undefined && (!known.value.test(String(value)) || (known.check && !known.check(String(value))))) return { rule: undefined, why: `${String(value).slice(0, 40)} is not a value ${name} takes.` };
+    if (value !== undefined && !FREE_VALUE.test(String(value))) return { rule: undefined, why: 'A value is one line of at most 200 characters, without control characters.' };
+    return { rule: known ?? { package: name.split('.')[0], reload: 'reload_config', about: name }, why: '' };
+  }
   if (ROUTER_NEVER.test(name) || neverChanged(name)) return { rule: undefined, why: `${name} is a radio limit, a key or a setting that can lock you out of the router; Bench never changes it.` };
   const rule = ROUTER_SETTINGS.find((entry) => entry.key.test(name));
   if (!rule) return { rule: undefined, why: `Bench changes only these router settings: ${ROUTER_SETTINGS.map((entry) => entry.about).join(', ')}. ${name} is read only.` };

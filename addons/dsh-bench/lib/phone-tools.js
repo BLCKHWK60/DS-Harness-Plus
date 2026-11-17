@@ -49,7 +49,15 @@ export function fastbootFlag(result, name) {
 
 /** @param {object} options - as buildDeviceTools, and `sleep`. */
 export function buildPhoneTools(options) {
-  const { bench, run, userSaid, seen, fetchFn, sources = () => [], writePlan, sleep = (ms) => new Promise((done) => setTimeout(done, ms)), now = () => new Date() } = options;
+  const { bench, run, userSaid, seen, fetchFn, sources = () => [], writePlan, sleep = (ms) => new Promise((done) => setTimeout(done, ms)), now = () => new Date(), risky = () => false } = options;
+  /** The owner's "Allow risky writes" switch: no backup, source or recovery condition then (the unlock message stays). */
+  const free = () => {
+    try {
+      return risky() === true;
+    } catch {
+      return false;
+    }
+  };
   const kit = makeKit(options);
   const { common, safely, exclusive, cardOf, allowed, program, yes, dryFirst } = kit;
   /** The phone: listed by bench_android in this conversation, and the one its card is linked to. */
@@ -161,7 +169,7 @@ export function buildPhoneTools(options) {
         if (!permission.ok) conditions.push(`permission: ${permission.why}`);
         if (ability !== true) conditions.push('the maker does not allow unlocking this phone now (or it did not say so)');
         const backup = checkedBackup(card);
-        if (!backup) conditions.push('backup: no counted backup of its storage from the last 24 hours, made after the last write (bench_phone action backup)');
+        if (!backup && !free()) conditions.push('backup: no counted backup of its storage from the last 24 hours, made after the last write (bench_phone action backup)');
         const plan = `Unlock the bootloader of ${card.name} (${serial}). This ERASES EVERYTHING on the phone: apps, messages, accounts, photos not backed up. Saved first: ${backup ? `backups/${backup.file} (${backup.files} files; NOT apps, messages or accounts)` : 'nothing yet'}. The phone then asks on its own screen; you confirm there with its volume and power keys. Command: ${shownCommand('fastboot', fastbootArgs.unlock(serial))}`;
         if (dry || conditions.length > 0) return [dry ? `Dry run: nothing was sent.${args.dryRun === true ? '' : ` ${DRY_NOTE}`}` : 'Not unlocked: the conditions do not hold.', plan, ...(conditions.length ? ['', 'Missing:', ...conditions.map((entry) => `- ${entry}`)] : []), `\nThe user must also write, in their own message: "${unlockPhrase(card)}".`].join('\n');
         if (!saidPhrase(userSaid(exec), unlockPhrase(card))) throw new Error(`Unlocking erases the phone. It needs the user's own message saying "${unlockPhrase(card)}". Ask the user; do not write it for them.`);
@@ -196,15 +204,15 @@ export function buildPhoneTools(options) {
       if (!permission.ok && !dry) throw new Error(permission.why);
       const conditions = permission.ok ? [] : [`permission: ${permission.why}`];
       const extra = sources();
-      const sourceWhy = sourceRefusal(args.source, { extra, kind: 'phone' });
+      const sourceWhy = free() ? '' : sourceRefusal(args.source, { extra, kind: 'phone' });
       if (sourceWhy) conditions.push(`firmware source: ${sourceWhy}`);
-      else {
+      else if (!free()) {
         const published = await publishedOn(String(args.checksumPage ?? '').trim() || String(args.source), sum, { fetchFn, extra, kind: 'phone' });
         if (!published.ok) conditions.push(`firmware checksum: ${published.why}`);
       }
       const backup = checkedBackup(card);
-      if (!backup) conditions.push('backup: no counted backup of its storage (bench_phone action backup)');
-      if (!String(card.recovery ?? '').trim()) conditions.push('recovery path: the card names no way back (for a Pixel: Google\'s Android Flash Tool or the full factory image, from its bootloader)');
+      if (!backup && !free()) conditions.push('backup: no counted backup of its storage (bench_phone action backup)');
+      if (!free() && !String(card.recovery ?? '').trim()) conditions.push('recovery path: the card names no way back (for a Pixel: Google\'s Android Flash Tool or the full factory image, from its bootloader)');
       const inBoot = await inBootloader(fastboot, serial);
       const unlocked = inBoot ? fastbootFlag(await run(fastboot, fastbootArgs.unlocked(serial), { timeoutMs: 20_000 }), 'unlocked') : undefined;
       if (unlocked !== true) conditions.push(inBoot ? 'the bootloader is locked (bench_phone action unlock)' : 'the phone is not in its bootloader (bench_phone action bootloader)');

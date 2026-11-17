@@ -1,0 +1,66 @@
+{
+  "name": "@local/dsh-artifacts",
+  "folder": "dsh-artifacts",
+  "at": "2026-11-17",
+  "provides": [],
+  "uses": [
+    "a",
+    "b",
+    "content",
+    "diff",
+    "dshHomePath",
+    "folder",
+    "from",
+    "item",
+    "kind",
+    "match",
+    "mode",
+    "modes",
+    "session",
+    "sessions",
+    "to",
+    "uiWorkspace",
+    "v",
+    "workingDirectory"
+  ],
+  "events": [
+    "tools/pre-execute",
+    "tools/post-execute"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-artifacts/data"
+  ],
+  "slots": [
+    {
+      "name": "conversation.chat.turnTail",
+      "id": "dsh-artifacts"
+    },
+    {
+      "name": "sidebar.panellist",
+      "id": "artifacts"
+    },
+    {
+      "name": "settings.section",
+      "id": "artifacts"
+    }
+  ],
+  "settings": [
+    "artifacts"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "enabled",
+    "dangerShowBackups",
+    "dangerShowSealed",
+    "dangerPagesRun",
+    "dangerPagesInternet"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "artifacts"
+  ]
+}

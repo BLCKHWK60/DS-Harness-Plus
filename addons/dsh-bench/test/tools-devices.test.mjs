@@ -56,6 +56,7 @@ function world(options = {}) {
       }
       if (args.includes('write_flash')) return state.writeFails ? { code: 2, stdout: '', stderr: 'A fatal error occurred: Failed to write to target RAM' } : { code: 0, stdout: 'Hash of data verified.', stderr: '' };
       if (args.includes('verify_flash')) return { code: 0, stdout: '-- verify OK (digest matched)', stderr: '' };
+      if (args.includes('erase_flash')) return { code: 0, stdout: 'Chip erase completed successfully', stderr: '' };
     }
     if (program === 'adb') {
       if (args[0] === 'devices') return { code: 0, stdout: state.devicesOut ?? 'List of devices attached\nR58N123ABC device usb:1-1 product:panther model:Pixel_7\n', stderr: '' };
@@ -118,7 +119,7 @@ function world(options = {}) {
     inject: (_names, callback) => callback({ effect: (fn) => fn(), webServer: { register: (spec) => { route = spec.handler; return () => {}; } }, connection: { requestRejection: () => undefined } }),
     logger: { warn() {}, info() {} },
   };
-  const config = { enabled: true, folder: '' };
+  const config = { enabled: true, folder: '', ...(options.config ?? {}) };
   apply(ctx, config, {
     identify: async (onPorts) => { onPorts([{ port: '/dev/cu.SLAB_USBtoUART', ...state.usb }]); return 'USB report'; },
     find: async (id) => (state.missing.has(id) ? '' : `/fake/bin/${id}`),
@@ -549,6 +550,8 @@ test('after a write the old backup does not count; the file and the power are ch
     app.state.beforeYes = undefined;
     assert.match(await app.call('bench_esp32', { ...args, checksum: sum }), /Written and read back/);
     assert.match(await app.call('bench_esp32', args), /Not written[\s\S]*firmware was written since the last checked backup; make a new one/);
+    // A real backup takes minutes; here a moment passes, so it is plainly after the write.
+    await settle();
     await app.call('bench_esp32', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', action: 'backup' });
     assert.match(await app.call('bench_esp32', args), /Written and read back/);
     assert.equal(writes(app), 2);
@@ -803,6 +806,44 @@ test('a Recon export sent into a Bench conversation is never the user\'s words: 
     app.state.reconExports = undefined;
     assert.equal(app.state.calls.filter((entry) => entry.includes('write_flash')).length, 0);
     assert.match(await flash('write protected ESP32 board 1'), /Written and read back/, 'the user\'s own message, without an export');
+  } finally {
+    app.close();
+  }
+});
+
+test('"Allow risky writes" off: an ESP32 erase is refused and a write still needs its four conditions; on: no backup, source or recovery condition, the level and the yes stay', async () => {
+  const off = world();
+  try {
+    await settle();
+    await off.call('bench_card', { name: 'ESP32 board 1', chip: 'ESP32' });
+    await off.call('bench_usb', {});
+    assert.match(await off.call('bench_esp32', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', action: 'erase' }), /runs only with "Allow risky writes" switched on \(Settings → Bench → Danger zone\)\. Nothing was sent\./);
+    assert.equal(off.state.calls.filter((entry) => entry.includes('erase_flash')).length, 0);
+  } finally {
+    off.close();
+  }
+  const app = world({ config: { allowRiskyWrites: true } });
+  try {
+    await settle();
+    await app.call('bench_card', { name: 'ESP32 board 1', chip: 'ESP32' });
+    await app.call('bench_usb', {});
+    // At Read the card still refuses, whatever the switch.
+    assert.match(await app.call('bench_esp32', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', action: 'erase' }), /highest level is Read/);
+    assert.equal((await app.post({ action: 'permissions', name: 'ESP32 board 1', level: 'write', asks: 'ask-auto', dryRun: false, ranges: '' })).status, 200);
+    const firmware = join(app.device(), 'firmware');
+    mkdirSync(firmware, { recursive: true });
+    writeFileSync(join(firmware, 'app.bin'), Buffer.alloc(4096, 3));
+    // No backup, no recovery path, a source Bench does not know, the start of the flash: written after the yes.
+    const done = await app.call('bench_esp32', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', action: 'flash', file: 'app.bin', address: '0x0', source: 'https://forum.example.com/app.bin' });
+    assert.match(done, /Written and read back: app\.bin at 0x0/);
+    assert.match(app.state.asked.at(-1), /"Allow risky writes" is on: no backup, source check, recovery path or protected-part message is required/);
+    assert.equal(writes(app), 1);
+    app.state.approve = 'rejected';
+    assert.match(await app.call('bench_esp32', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', action: 'erase' }), /said no/);
+    app.state.approve = 'allowed-once';
+    assert.match(await app.call('bench_esp32', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', action: 'erase' }), /Erased the flash of ESP32 board 1/);
+    assert.equal(app.state.calls.filter((entry) => entry.includes('erase_flash')).length, 1);
+    assert.match(readFileSync(join(app.device(), 'logbook.md'), 'utf8'), /Flash erased/);
   } finally {
     app.close();
   }

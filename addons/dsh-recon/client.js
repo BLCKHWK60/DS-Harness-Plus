@@ -128,7 +128,21 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
       const [preview, setPreview] = useState(null);
       const [state, setState] = useState({ busy: false, error: '', done: '' });
       const [place, setPlace] = useState({ right: 12, bottom: 80 });
+      const [ticked, setTicked] = useState({});
+      const [panes, setPanes] = useState([]);
       const button = useRef(null);
+      // Recon stays sealed while it runs (the owner's answer of 17 November 2026): the button waits.
+      const statusSource = appCtx.get('uiSession')?.sessionStatus;
+      const running = React.useSyncExternalStore(
+        React.useCallback((listener) => (statusSource?.subscribe ? statusSource.subscribe(listener) : () => {}), [statusSource]),
+        React.useCallback(() => statusSource?.getSnapshot?.()?.get?.(sessionId)?.running === true, [statusSource, sessionId]),
+      );
+      // Split Plus can open this window from its Send to (a send out of Recon is this door, nothing else).
+      useEffect(() => {
+        const onAsk = (event) => { if (event?.detail?.sessionId === sessionId) setOpen(true); };
+        window.addEventListener('dsh-split-plus:recon-export', onAsk);
+        return () => window.removeEventListener('dsh-split-plus:recon-export', onAsk);
+      }, [sessionId]);
       useEffect(() => {
         let alive = true;
         if (!sessionId) return undefined;
@@ -142,6 +156,9 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
         door(undefined, { session: sessionId, what }).then((data) => {
           if (!alive) return;
           setPreview(data);
+          setTicked(Object.fromEntries((data.files ?? []).map((file) => [file.path, file.text === true])));
+          fetch(new URL('dsh-split-plus/data?openPanes=1', document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } })
+            .then((response) => (response.ok ? response.json() : {})).then((value) => { if (alive) setPanes(Array.isArray(value.openPanes) ? value.openPanes : []); }, () => {});
           if (!folder) setFolder(data.folder ?? '');
           if (!target && data.targets?.[0]) setTarget(data.targets[0].id);
           if (!(data.tabs ?? []).some((one) => one.id === tab) && data.tabs?.[0]) setTab(data.tabs[0].id);
@@ -160,7 +177,8 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
       const go = async () => {
         setState({ busy: true, error: '', done: '' });
         try {
-          const done = await door({ action: 'export', session: sessionId, what, to, tab, target, folder });
+          const files = Object.entries(ticked).filter(([, on]) => on).map(([path]) => path);
+          const done = await door({ action: 'export', session: sessionId, what, to, tab, target, folder, files });
           if (to === 'new') await sendToNew(appCtx, done);
           else if (to === 'existing') await sendToExisting(appCtx, done);
           setState({ busy: false, error: '', done: to === 'folder' ? `Exported to ${done.where}.` : `Exported (${done.id}).` });
@@ -171,7 +189,7 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
       const radio = (name, value, current, set, label) => h('label', null, h('input', { type: 'radio', name, checked: current === value, onChange: () => set(value) }), label);
       return h(React.Fragment, null,
         h('style', null, DOOR_CSS),
-        h('button', { ref: button, type: 'button', className: 'dsh-rc-ctl', 'aria-haspopup': 'dialog', 'aria-expanded': open, title: 'Export what this Recon conversation found: only you can, and only this way', onClick: () => { setState({ busy: false, error: '', done: '' }); setOpen(!open); } }, 'Export…'),
+        h('button', { ref: button, type: 'button', className: 'dsh-rc-ctl', 'aria-haspopup': 'dialog', 'aria-expanded': open, disabled: running && !open, title: running ? 'Recon is running; export when it is done' : 'Export what this Recon conversation found: only you can, and only this way', onClick: () => { setState({ busy: false, error: '', done: '' }); setOpen(!open); } }, 'Export…'),
         open ? ReactDOM.createPortal(h('div', { className: 'dsh-rc-door', role: 'dialog', 'aria-label': 'Export from Recon', style: { left: place.left, bottom: place.bottom, maxHeight: `calc(100vh - ${(place.bottom ?? 80) + 12}px)` } },
           h('style', null, DOOR_CSS),
           h('h3', null, 'Export from Recon'),
@@ -183,9 +201,16 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
             radio('dsh-rc-to', 'new', to, setTo, 'A new conversation in'),
             to === 'new' ? h('select', { value: tab, 'aria-label': 'Tab', onChange: (event) => setTab(event.target.value) }, (preview?.tabs ?? [{ id: 'content', label: 'Content' }]).map((one) => h('option', { key: one.id, value: one.id }, one.label))) : null,
             radio('dsh-rc-to', 'existing', to, setTo, 'A conversation that exists'),
-            to === 'existing' ? h('select', { value: target, 'aria-label': 'Conversation', onChange: (event) => setTarget(event.target.value) }, (preview?.targets ?? []).map((one) => h('option', { key: one.id, value: one.id }, `${one.title}${one.tab ? ` (${one.tab})` : ''}`))) : null,
+            to === 'existing' ? h('select', { value: target, 'aria-label': 'Conversation', onChange: (event) => setTarget(event.target.value) }, [...(preview?.targets ?? [])].sort((a, b) => Number(panes.includes(b.id)) - Number(panes.includes(a.id))).map((one) => h('option', { key: one.id, value: one.id }, `${panes.includes(one.id) ? 'Open pane: ' : ''}${one.title}${one.tab ? ` (${one.tab})` : ''}`))) : null,
             radio('dsh-rc-to', 'folder', to, setTo, 'A folder on this Mac (full path)'),
             to === 'folder' ? h('input', { type: 'text', spellCheck: false, value: folder, 'aria-label': 'Folder', onChange: (event) => setFolder(event.target.value) }) : null),
+          preview && (preview.files ?? []).length > 0 ? h('fieldset', null, h('legend', null, `Files in Recon's room (${preview.files.length})`),
+            h('div', { style: { color: 'var(--dsw-alias-label-secondary)', marginBottom: 4 } }, 'Text files Recon wrote go in the export, quoted as material. Any other file is copied unopened into the export\'s folder: tick one only if you know it is safe.'),
+            preview.files.map((file) => h('label', { key: file.path, style: { display: 'flex', gap: 6, alignItems: 'baseline' } },
+              h('input', { type: 'checkbox', checked: ticked[file.path] === true, onChange: (event) => setTicked({ ...ticked, [file.path]: event.target.checked }) }),
+              h('span', null, file.path),
+              h('span', { style: { color: file.text ? 'var(--dsw-alias-label-secondary)' : 'var(--dsw-alias-state-error-primary)' } }, file.text ? `text, ${Math.ceil(file.size / 1024)} KB` : `not text, ${Math.ceil(file.size / 1024)} KB: copied unopened`)))) : null,
+          preview?.running ? h('div', { className: 'err' }, 'Recon is running in this conversation: export when the run is done.') : null,
           preview ? h('div', null,
             h('fieldset', null, h('legend', null, 'What leaves Recon'), h('ul', null, preview.leaves.map((line) => h('li', { key: line }, line)))),
             h('div', { style: { marginTop: 4, color: 'var(--dsw-alias-label-secondary)' } }, preview.notKept),
@@ -199,7 +224,7 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
           state.done ? h('div', { role: 'status', style: { marginTop: 8 } }, state.done) : null,
           h('div', { className: 'row' },
             h('button', { type: 'button', className: 'dsh-rc-btn', onClick: () => setOpen(false) }, state.done ? 'Close' : 'Cancel'),
-            h('button', { type: 'button', className: 'dsh-rc-btn', disabled: state.busy || !preview || Boolean(state.done) || (preview.tooLong && to !== 'folder') || (to === 'existing' && !target), onClick: () => void go() }, state.busy ? 'Exporting…' : 'Export'))), document.body) : null);
+            h('button', { type: 'button', className: 'dsh-rc-btn', disabled: state.busy || !preview || running || preview.running === true || Boolean(state.done) || (preview.tooLong && to !== 'folder') || (to === 'existing' && !target), onClick: () => void go() }, state.busy ? 'Exporting…' : 'Export'))), document.body) : null);
     }
 
     async function call(body, session) {

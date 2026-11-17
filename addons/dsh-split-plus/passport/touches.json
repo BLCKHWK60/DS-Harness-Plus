@@ -1,0 +1,90 @@
+{
+  "name": "@local/dsh-split-plus",
+  "folder": "dsh-split-plus",
+  "at": "2026-11-17",
+  "provides": [
+    "splitLinks"
+  ],
+  "uses": [
+    "agents",
+    "cwds",
+    "dshHomePath",
+    "files",
+    "folder",
+    "ledger",
+    "links",
+    "mission",
+    "modes",
+    "openPanes",
+    "reconExports",
+    "remote.session",
+    "sessionQuery",
+    "sessions",
+    "sets",
+    "settings",
+    "systemPrompt",
+    "tools",
+    "tray",
+    "uiSession",
+    "uiWorkspace",
+    "workingDirectory",
+    "workspaces"
+  ],
+  "events": [
+    "agent/pre-step",
+    "agent/status",
+    "agent/disposed",
+    "tools/pre-execute",
+    "tools/post-execute",
+    "agent/created"
+  ],
+  "tools": [
+    "split_watch_read"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-split-plus/data",
+    "/dsh-cowork-shell/scratch",
+    "/dsh-content/data"
+  ],
+  "slots": [
+    {
+      "name": "conversation.chat.assistant-actions",
+      "id": "split-plus-send"
+    },
+    {
+      "name": "conversation.input.dock",
+      "id": "split-plus-tray"
+    },
+    {
+      "name": "sidebar.panellist",
+      "id": "split"
+    },
+    {
+      "name": "settings.section",
+      "id": "split-plus"
+    }
+  ],
+  "settings": [
+    "split-plus"
+  ],
+  "sections": [
+    "split-plus:sends"
+  ],
+  "modes": [],
+  "storage": [],
+  "config": [
+    "enabled",
+    "localAtOnce",
+    "watcherModel",
+    "dangerFileHolds",
+    "dangerSealedSends",
+    "dangerWatchSealed",
+    "dangerWatcherTools",
+    "dangerUnmarked"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "split-plus"
+  ]
+}

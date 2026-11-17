@@ -10,7 +10,7 @@ import { gate, powerOf, powerRefusal } from './gate.js';
 import { makeKit, DRY_NOTE, freeName } from './kit.js';
 import { publishedOn, sha256Of, sourceRefusal } from './esp32.js';
 import { BROWSE_SECONDS, DNS_SD, SERVICE_TYPES, addressRefusal, currentNetwork, onMarked, parseBrowse, resolveAddress } from './network.js';
-import { DROP_BACKUP, DROP_FIRMWARE, FIRMWARE_SUM, FIRMWARE_TEST, FIRMWARE_WRITE, IDENTIFY, MAKE_BACKUP, READ_BACKUP, SETTINGS, STORAGE, UPLOAD, isSecretOption, maskedSettings, parseIdentity, parseMtd, routerSettingRule, uci, uciValue } from './router.js';
+import { DROP_BACKUP, DROP_FIRMWARE, FIRMWARE_SUM, FIRMWARE_TEST, FIRMWARE_WRITE, IDENTIFY, MAKE_BACKUP, READ_BACKUP, ROUTER_SETTINGS, SETTINGS, STORAGE, UPLOAD, isSecretOption, maskedSettings, parseIdentity, parseMtd, routerSettingRule, uci, uciValue } from './router.js';
 import { SSH, aliasOf, ensureKey, forgetKeys, hasPassword, hostKeys, networkFiles, sshArgs, sshEnv, trustKeys, writeAskpass } from './ssh.js';
 import { SCRIPTS, SERVICE, SERVICE_NEVER, STARTUP, jsonOf, powershellCommand, serviceRefusal, shown } from './windows.js';
 import { mask } from './cards.js';
@@ -26,7 +26,15 @@ const stamp = (at) => at.toISOString().slice(0, 23).replace(/[-:]/g, '').replace
  * @returns {{tools: object[], undoers: Record<string, Function>}} the tools, and how bench_undo sets their changes back.
  */
 export function buildNetworkTools(options) {
-  const { bench, run, userSaid, fetchFn, sources = () => [], writePlan, sleep = (ms) => new Promise((done) => setTimeout(done, ms)), now = () => new Date() } = options;
+  const { bench, run, userSaid, fetchFn, sources = () => [], writePlan, sleep = (ms) => new Promise((done) => setTimeout(done, ms)), now = () => new Date(), risky = () => false } = options;
+  /** The owner's "Allow risky writes" switch (Settings → Bench → Danger zone). */
+  const free = () => {
+    try {
+      return risky() === true;
+    } catch {
+      return false;
+    }
+  };
   const kit = makeKit(options);
   const { common, safely, exclusive, cardOf, allowed, yes, askAsCard, dryFirst } = kit;
   const marked = () => {
@@ -135,7 +143,7 @@ export function buildNetworkTools(options) {
   };
   const routerTool = {
     name: 'bench_router',
-    description: 'A GL.iNet or OpenWrt router (the Slate 7 among them) on the user\'s network, over SSH with the user\'s own account. action "info" (release, GL.iNet version, model, uptime, storage parts; Identify), "settings" (its settings with keys masked; Read), "backup" (a configuration backup read twice and compared, kept on this Mac; Read), "get" (one setting; Read), "set" (one setting from Bench\'s short list, with undo: name, Wi-Fi network names, time zone, clock, address lease time; Adjust), "firmware" (a file from the device\'s firmware folder by the maker\'s route, sysupgrade keeping the settings; Write, the four conditions). Radio limits (transmit power, country, channel, width), keys and network addresses are never changed. The loader and the radio calibration are never written. dryRun shows what would be sent.',
+    description: 'A GL.iNet or OpenWrt router (the Slate 7 among them) on the user\'s network, over SSH with the user\'s own account. action "info" (release, GL.iNet version, model, uptime, storage parts; Identify), "settings" (its settings with keys masked; Read), "backup" (a configuration backup read twice and compared, kept on this Mac; Read), "get" (one setting; Read), "set" (one setting from Bench\'s short list, with undo: name, Wi-Fi network names, time zone, clock, address lease time; Adjust; with the user\'s "Allow risky writes" switch on, any setting but radio limits and secrets), "firmware" (a file from the device\'s firmware folder by the maker\'s route, sysupgrade keeping the settings; Write, the four conditions, which the switch lifts). Radio limits (transmit power, country, channel, width) and keys are never changed. The loader and the radio calibration are never written. dryRun shows what would be sent.',
     parameters: {
       type: 'object',
       properties: {
@@ -198,7 +206,7 @@ export function buildNetworkTools(options) {
       if (action === 'set') {
         const key = String(args.key ?? '');
         const value = String(args.value ?? '');
-        const { rule, why } = routerSettingRule(key, value);
+        const { rule, why } = routerSettingRule(key, value, { risky: free() });
         if (!rule) throw new Error(why);
         const decision = allowed(card, 'adjust');
         await identifyRouter(card);
@@ -248,17 +256,17 @@ export function buildNetworkTools(options) {
     if (!permission.ok && !dry) throw new Error(permission.why);
     const conditions = permission.ok ? [] : [`permission: ${permission.why}`];
     const extra = sources();
-    const sourceWhy = sourceRefusal(args.source, { extra, kind: 'router' });
+    const sourceWhy = free() ? '' : sourceRefusal(args.source, { extra, kind: 'router' });
     if (sourceWhy) conditions.push(`firmware source: ${sourceWhy}`);
-    else {
+    else if (!free()) {
       const published = await publishedOn(String(args.checksumPage ?? '').trim() || String(args.source), sum, { fetchFn, extra, kind: 'router' });
       if (!published.ok) conditions.push(`firmware checksum: ${published.why}`);
     }
     // A write that may have changed the router (not confirmed either way) counts as one.
     const lastWrite = Math.max(0, ...bench.writesOf(card).filter((entry) => entry.ok || entry.uncertain).map((entry) => Number(entry.at) || 0));
     const backup = bench.backupsOf(card).filter((entry) => entry.kind === 'router-config' && entry.verified && (Number(entry.at) || 0) >= lastWrite).at(-1);
-    if (!backup) conditions.push('backup: no checked configuration backup since the last firmware write (bench_router action backup)');
-    if (!String(card.recovery ?? '').trim()) conditions.push('recovery path: the card names no way back (for GL.iNet: its U-Boot recovery page, https://docs.gl-inet.com/router/en/4/faq/debrick/)');
+    if (!backup && !free()) conditions.push('backup: no checked configuration backup since the last firmware write (bench_router action backup)');
+    if (!free() && !String(card.recovery ?? '').trim()) conditions.push('recovery path: the card names no way back (for GL.iNet: its U-Boot recovery page, https://docs.gl-inet.com/router/en/4/faq/debrick/)');
     const plan = [
       `Write ${name} (SHA-256 ${sum}) to ${card.name} by sysupgrade, keeping its settings.`,
       `Source: ${String(args.source ?? '').slice(0, 300)}.`,
@@ -283,7 +291,7 @@ export function buildNetworkTools(options) {
       if (createHash('sha256').update(bytes).digest('hex') !== sum) throw new Error('The firmware file changed after you were asked. Nothing was written; ask again.');
       const stop = (what, result, uncertain = false) => {
         bench.addWrite(card, { at: now().getTime(), file: name, sha256: sum, ok: false, uncertain });
-        const text = `${what} (${String(result?.stderr || result?.stdout || '').trim().split('\n').slice(-2).join(' ').slice(0, 300)}). Bench stopped and does not try again by itself.\nTo bring it back: ${String(card.recovery).slice(0, 400)}\nThe configuration backup: backups/${backup.file}.`;
+        const text = `${what} (${String(result?.stderr || result?.stdout || '').trim().split('\n').slice(-2).join(' ').slice(0, 300)}). Bench stopped and does not try again by itself.\nTo bring it back: ${String(card.recovery ?? 'no way back is named on the card').slice(0, 400)}\n${backup ? `The configuration backup: backups/${backup.file}.` : 'There is no configuration backup ("Allow risky writes" was on).'}`;
         bench.record(card, { title: 'Firmware write FAILED', asked: `write ${name}`, done: what, found: text }, now());
         return text;
       };
@@ -323,7 +331,7 @@ export function buildNetworkTools(options) {
       const restarted = identity.uptimeSeconds !== undefined && identity.uptimeSeconds < (Date.now() - started) / 1000 + 120 && (before.uptimeSeconds === undefined || identity.uptimeSeconds < before.uptimeSeconds);
       if (!changed && !restarted) return stop('The connection ended, but the router did not restart and runs the same version: the write is NOT confirmed', undefined, true);
       bench.addWrite(card, { at: now().getTime(), file: name, sha256: sum, ok: true });
-      bench.record(card, { title: `Firmware written: ${name}`, asked: `write ${name}`, before: `backups/${backup.file}; ${before.release}${before.gl ? `, GL.iNet ${before.gl}` : ''}`, after: `${identity.release}${identity.gl ? `, GL.iNet ${identity.gl}` : ''}`, check: `the router restarted${restarted ? '' : ' (uptime not read)'} and answered${changed ? ', with a new version' : ', with the same version number'}`, commands: [UPLOAD, FIRMWARE_SUM, FIRMWARE_TEST, FIRMWARE_WRITE], next: 'the user checks the router and signs the job off; the next write needs a new backup' }, now());
+      bench.record(card, { title: `Firmware written: ${name}`, asked: `write ${name}`, before: `${backup ? `backups/${backup.file}` : 'no backup ("Allow risky writes" on)'}; ${before.release}${before.gl ? `, GL.iNet ${before.gl}` : ''}`, after: `${identity.release}${identity.gl ? `, GL.iNet ${identity.gl}` : ''}`, check: `the router restarted${restarted ? '' : ' (uptime not read)'} and answered${changed ? ', with a new version' : ', with the same version number'}`, commands: [UPLOAD, FIRMWARE_SUM, FIRMWARE_TEST, FIRMWARE_WRITE], next: 'the user checks the router and signs the job off; the next write needs a new backup' }, now());
       return `Written: ${name} on ${card.name}. It restarted and answers: ${identity.release}${identity.gl ? `, GL.iNet ${identity.gl}` : ''}. Check its admin page yourself before you sign the job off. A next write needs a new configuration backup first.`;
     });
   };
@@ -337,14 +345,14 @@ export function buildNetworkTools(options) {
   const list = (value) => (Array.isArray(value) ? value : value && typeof value === 'object' ? [value] : []);
   const serverTool = {
     name: 'bench_server',
-    description: 'The user\'s Windows server on their network, over Windows\' own SSH with their account; fixed PowerShell commands. action "info" (system, version, model, last start; Identify), "services", "updates" (pending ones), "events" (recent errors), "disks" (Read), "service" (Adjust with undo: start, stop or set how a service starts; only a service the user names in their own message; never the ones Windows or Bench\'s way in needs; a restore point first), "bios" (Bench does not update a BIOS: the maker\'s own tool does). dryRun shows what would be sent.',
+    description: 'The user\'s Windows server on their network, over Windows\' own SSH with their account; fixed PowerShell commands. action "info" (system, version, model, last start; Identify), "services", "updates" (pending ones), "events" (recent errors), "disks" (Read), "service" (Adjust with undo: start, stop, restart or set how a service starts; only a service the user names in their own message and never the ones Windows or Bench\'s way in needs, unless the user\'s "Allow risky writes" switch is on; a restore point first), "bios" (Bench does not update a BIOS: the maker\'s own tool does). dryRun shows what would be sent.',
     parameters: {
       type: 'object',
       properties: {
         name: { type: 'string', minLength: 1, maxLength: 80 },
         action: { type: 'string', enum: ['info', 'services', 'updates', 'events', 'disks', 'service', 'bios'] },
         service: { type: 'string', maxLength: 80 },
-        change: { type: 'string', enum: ['start', 'stop', 'startup'] },
+        change: { type: 'string', enum: ['start', 'stop', 'restart', 'startup'] },
         startup: { type: 'string', enum: STARTUP },
         dryRun: { type: 'boolean' },
       },
@@ -371,16 +379,16 @@ export function buildNetworkTools(options) {
       }
       if (action !== 'service') throw new Error('The action is info, services, updates, events, disks, service or bios.');
       const service = String(args.service ?? '');
-      const why = serviceRefusal(service, userSaid(exec));
+      const why = serviceRefusal(service, userSaid(exec), { risky: free() });
       if (why) throw new Error(why);
       const change = String(args.change ?? '');
-      if (!['start', 'stop', 'startup'].includes(change)) throw new Error('Say what to change: start, stop or startup.');
+      if (!['start', 'stop', 'restart', 'startup'].includes(change)) throw new Error('Say what to change: start, stop, restart or startup.');
       if (change === 'startup' && !STARTUP.includes(String(args.startup))) throw new Error(`Say how it should start: ${STARTUP.join(', ')}.`);
       const decision = allowed(card, 'adjust');
       const before = await ps(card, SCRIPTS.service(service), `${service} could not be read`);
       if (!before?.name) throw new Error(`There is no service ${service} on ${card.name}.`);
       // The name Windows answers with is checked too (a service can be reached by another spelling).
-      if (!SERVICE.test(String(before.name)) || SERVICE_NEVER.test(String(before.name))) throw new Error(`${shown(before.name, 80)} keeps Windows running, protects it or is Bench's own way in; Bench never stops or changes it.`);
+      if (!SERVICE.test(String(before.name)) || (!free() && SERVICE_NEVER.test(String(before.name)))) throw new Error(`${shown(before.name, 80)} keeps Windows running, protects it or is Bench's own way in; Bench never stops or changes it.`);
       const script = change === 'startup' ? SCRIPTS.startup(service, args.startup) : SCRIPTS[change](service);
       const plan = `On ${card.name}: ${change === 'startup' ? `set ${service} to start ${args.startup} (now ${before.startType})` : `${change} ${service} (now ${before.status})`}. A restore point is made first. Saved first: its state, on the undo list (bench_undo).`;
       if (dryFirst(exec, card, args, `server|${card.slug}|${service}|${change}|${args.startup ?? ''}`)) return `Dry run: nothing was sent.${args.dryRun === true ? '' : ` ${DRY_NOTE}`}\n${plan}`;
@@ -393,7 +401,7 @@ export function buildNetworkTools(options) {
         const after = await ps(card, SCRIPTS.service(service), `${service} could not be read back`);
         const old = { status: before.status, startType: before.startType };
         if (after?.status !== old.status || after?.startType !== old.startType) bench.addUndo(card, { at: now().getTime(), what: `service ${service}`, kind: 'windows-service', service, old, new: { status: after?.status, startType: after?.startType }, net: card.permissions?.bound?.net?.id ?? '' });
-        const ok = done.code === 0 && (change === 'startup' ? after?.startType === args.startup : after?.status === (change === 'start' ? 'Running' : 'Stopped'));
+        const ok = done.code === 0 && (change === 'startup' ? after?.startType === args.startup : after?.status === (change === 'stop' ? 'Stopped' : 'Running'));
         bench.record(card, { title: ok ? `Service changed: ${service}` : `Service NOT changed as asked: ${service}`, asked: `${change} ${service}${change === 'startup' ? ` ${args.startup}` : ''}`, before: `${old.status}, starts ${old.startType}`, after: `${after?.status}, starts ${after?.startType}`, check: ok ? 'read back as asked' : 'read back: different', found: /^BENCH-OK/.test(pointText) ? 'restore point made' : 'no restore point (the user said yes without one)' }, now());
         return ok ? `Done on ${card.name}: ${service} is now ${after.status}, starts ${after.startType}. ${/^BENCH-OK/.test(pointText) ? 'A restore point was made first.' : 'There is no restore point (you said yes without one).'} It is on the undo list.` : `${service} did not change as asked (it is ${after?.status}, starts ${after?.startType}).`;
       });
@@ -409,7 +417,7 @@ export function buildNetworkTools(options) {
   const undoers = {
     'router-setting': async (_exec, card, entry) => {
       sameDevice(card, entry);
-      const { rule } = routerSettingRule(entry.key);
+      const { rule } = routerSettingRule(entry.key, undefined, { risky: free() || !ROUTER_SETTINGS.some((known) => known.key.test(String(entry.key))) });
       if (!rule) throw new Error(`${entry.key} is no longer on Bench's list`);
       await remote(card, entry.old === null ? uci.unset(rule, entry.key) : uci.set(rule, entry.key, entry.old));
       const now_ = uciValue(await remote(card, uci.get(entry.key)));

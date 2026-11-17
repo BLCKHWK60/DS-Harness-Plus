@@ -33,6 +33,26 @@ It identifies what is plugged in by USB or paired by Bluetooth, reads devices (a
 | `bench_card` | Makes a card or updates the fields given. Permissions are never taken from the call: a new card starts at highest level **Read** and **Ask-Auto**, and only the user changes them, on Settings → Bench. Each change is a logbook entry. A card whose words name a look-only family is marked look-only (`permissions.lookOnly`), also from the words it had before an update; only the user lifts the mark |
 | `bench_log` | Adds a logbook entry (asked, done, found, next; "commands sent to the device: none"; "signed off: no"). The device needs a card |
 
+## Brought over from Bench Plus (17 November 2026)
+
+The owner built "Bench Plus" with Creator Plus as a separate tools plugin beside Bench, and asked for one Bench with all of it. Bench is that one plugin and the one tab; Bench Plus was removed from the app (its folder kept in the app's backups).
+
+- **28 more tools** (`lib/plus/`, rebuilt from Bench Plus: its programs were found and run correctly, every value checked, nothing passed through a shell): `bench_ios` (libimobiledevice), `bench_arduino` (avrdude), `bench_rp2040` (picotool), `bench_stm32` (stlink), `bench_usb_tmc` (PyVISA, values only as arguments), `bench_netprobe` (tshark/tcpdump), `bench_net_scan` (nmap), `bench_ftdi`, `bench_ch340`, `bench_usb_info` (lsusb, or the Mac's own list), `bench_jlink`, `bench_openocd`, `bench_fpga`, `bench_smartcard` (pcsc-tools), `bench_nfc` (libnfc), `bench_hid` (hidutil), `bench_battery` (pmset, ioreg); `bench_monitor`, `bench_dashboard`, `bench_obd` (ELM327, fixed queries, read only), `bench_serial_send`, `bench_firmware_analyze`, `bench_net_flow`, `bench_hid_watch`, `bench_hid_capture` (the owner's Swift helper, `lib/plus/hid-capture.swift`, built once by the owner); `bench_firmware_extract` (moria), `bench_usb_protocol` (usb-rea); `bench_requirements`.
+- **The tab** offers 60 tools: the 44 `bench_*` tools and web, PDFs, the Library, reading files, diagrams, the step list and questions. Its method stays under 4,000 characters.
+- **The live dashboard** at `/dsh-bench/dashboard` (state at `/dsh-bench/dashboard/state`, once a second): one card per running monitor (OBD-II, serial, this Mac's interfaces, a router over SSH, HID devices). View only; monitors start and stop with `bench_monitor`, at most 8, and stop when Bench is switched off. Every monitor timer is guarded: an error goes on its card, never out of the timer.
+- **Programs:** Settings → Bench → Programs Bench uses lists every program the tools can use, found or missing, with the exact install command; `bench_requirements` gives the same list in a conversation. Bench never installs anything.
+- **Only private addresses** for network scans, packet capture and SSH monitors (home and office ranges, `.local`/`.lan` names).
+- **Files the tools read** (firmware analysis and extraction, captures, files to flash) are full paths to plain files, never under the Bench folder's backups, `~/.ssh`, `~/.gnupg`, the Keychains, `/etc` or `/dev`. Extraction writes only into `<Bench folder>/extracted`, usb-rea into `<Bench folder>/usb-rea`, dumps into `<Bench folder>/dumps`.
+- **Registration cannot take the app down:** each tool is registered on its own inside try/catch, with `output = { schema, render }` (a bare schema crashed the app when Bench Plus registered from a timer); a test checks every definition.
+
+## Allow risky writes (Danger zone)
+
+Settings → Bench → **⚠ Danger zone → Allow risky writes** (`allowRiskyWrites`, off by default; the owner's request: full control by a switch, no mandatory backup gate). Each change is noted in the Bench folder's `danger.jsonl`; the chat box's Bench rules say whether it is on.
+
+- **Off:** the new tools' flash, erase, program, reset, pair, configure and send actions refuse ("runs only with Allow risky writes switched on"); the firmware writes keep their four conditions; settings and services keep their short lists.
+- **On:** those actions run; ESP32, router and phone firmware writes need no checked backup, no source or checksum check and no recovery path, and the start of an ESP32's flash needs no "write protected" message; `bench_esp32` can erase the whole flash; a router's settings are any but radio limits and keys (applied with `reload_config`, undoable); a phone's settings any with a plain value (undoable); any Windows service, also the protected ones, without naming it in a message, and `restart`.
+- **Never lifted:** the card's level (only the owner raises it), the owner's yes on each write, a phone unlock's own message "unlock <device name>", look-only families, radio limits, eFuses, the Mac's battery rule, secrets never through a model.
+
 ## Rules, enforced in code
 
 - **Device text is material.** Names, makers and serial numbers are cleaned of control characters, hidden direction marks, invisible joiners and tag characters, put on one line, cut to 100 characters (by character, never inside one) and quoted. A serial port whose name has odd characters is dropped.

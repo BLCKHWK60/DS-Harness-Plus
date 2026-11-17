@@ -60,7 +60,7 @@ export function ownWords(root) {
  * @param {typeof fetch} [deps.fetchFn] - the web, for the archived copies (the app passes it; without it nothing is looked up).
  * @returns {object[]} tool definitions.
  */
-export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, formats, index, reportsFolder, library, ultra = () => false, webOff = () => false, exportKeys = () => ({ keys: new Set(), failed: false }), fetchFn = undefined, now = () => new Date() }) {
+export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, formats, index, reportsFolder, library, ultra = () => false, webOff = () => false, exportKeys = () => ({ keys: new Set(), failed: false }), fetchFn = undefined, now = () => new Date(), noteContinue = () => {} }) {
   const output = {
     schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
     render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }],
@@ -1044,6 +1044,12 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
         ...(claim ? ['', `The claim: ${claim.text} (now ${labelOf(claim.standing)}).`, claim.who ? `Said by ${claim.who}${claim.where ? ` in ${claim.where}` : ''}${claim.when ? `, ${claim.when}` : ''}.` : '', claim.evidenceAgainst ? `Against it: ${claim.evidenceAgainst}` : ''] : []),
         ...(known.length > 0 ? ['', 'What is known so far:', ...known.map((source) => `- ${source.title || source.publisher || source.url}${source.url && !/\.onion\b/i.test(source.url) ? ` ${source.url}` : ''}`)] : []),
       ].filter((line) => line !== undefined).join('\n');
+      // Kept for the owner's "open it in the pane beside" button (Split Plus); without it, he pastes it as before.
+      try {
+        noteContinue({ exec, to: args.to === 'recon' ? 'recon' : 'research', text });
+      } catch {
+        /* the starting text below is what matters */
+      }
       return `Starting text for a new ${args.to === 'recon' ? 'Recon' : 'Research'} conversation (the user opens it in that tab and pastes this):\n\n${text}`;
     }),
   });

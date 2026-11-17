@@ -16,6 +16,7 @@
  */
 import z from '@deepseek-ai/schemastery';
 import { isAbsolute, join } from 'node:path';
+import { withoutSends } from './lib/sent.js';
 import { createConversations, textOf } from './lib/conversations.js';
 import { inReconRoom, realRoot } from './lib/folder.js';
 import { openIndex } from './lib/final.js';
@@ -176,7 +177,8 @@ export function apply(ctx, config) {
       const messages = top?.session?.deriveMessages?.() ?? [];
       // A Recon export the app put into the conversation is material, never the owner's words.
       // A message that carries the marker anywhere (sent by the export door, or pasted) counts as none of his.
-      return messages.filter((message) => message?.role === 'user' && message?.source?.kind === 'user').map((message) => ({ text: textOf(message.content) })).filter((message) => !RECON_EXPORT_LINE.test(message.text));
+      // A card sent with Split Plus's Send to is material too: only the owner's own sentence around it counts.
+      return messages.filter((message) => message?.role === 'user' && message?.source?.kind === 'user').map((message) => ({ text: textOf(message.content) })).filter((message) => !RECON_EXPORT_LINE.test(message.text)).map((message) => ({ text: withoutSends(message.text) }));
     } catch {
       return [];
     }
@@ -297,6 +299,13 @@ export function apply(ctx, config) {
   // ---- the tools: there only while Content is on ---------------------------------------------
 
   let toolsOff;
+  /** Content's own "bring a Research report in", for the Research-to-Content door of Split Plus. */
+  let reportsTool;
+  /**
+   * The newest "Continue in Research" starting text of each Content conversation (kept in memory), for Split
+   * Plus's "open it in the pane beside" button. Without Split Plus nothing reads it: the owner pastes it.
+   */
+  const continued = new Map();
   const syncTools = () => {
     const on = enabled();
     if (on && !toolsOff) {
@@ -313,13 +322,19 @@ export function apply(ctx, config) {
         }
       };
       const rootOf = (exec) => folderOf(exec?.agent);
+      const pieces = buildPieceTools({ enabled, rootOf, ownerMessages, helper, formats, index, reportsFolder, library, ultra, webOff, exportKeys, fetchFn: globalThis.fetch, noteContinue: ({ exec, to, text }) => {
+        const id = conversationOf(exec?.agent);
+        if (id) continued.set(id, { to, text: String(text ?? '').slice(0, 6000), at: Date.now() });
+      } });
+      reportsTool = pieces.find((tool) => tool.name === 'content_reports');
       toolsOff = [
         ...buildTools({ enabled, rootOf, conversationOf: (exec) => conversationOf(exec?.agent), hasOf, conversations }),
-        ...buildPieceTools({ enabled, rootOf, ownerMessages, helper, formats, index, reportsFolder, library, ultra, webOff, exportKeys, fetchFn: globalThis.fetch }),
+        ...pieces,
       ].map((tool) => tools.register(tool, { when: ({ agent }) => offered(agent) }));
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
       toolsOff = undefined;
+      reportsTool = undefined;
     }
   };
   const follow = () => {
@@ -454,6 +469,28 @@ export function apply(ctx, config) {
     if (lastError) throw lastError;
     return { text: `Continue in Content with the Research report "${name}". Bring it in (content_reports, action bring, name ${name}) and tell me what it holds and what could be built from it.` };
   };
+  /**
+   * The Research-to-Content door of Split Plus (the owner's answer of 17 November 2026): a Research report,
+   * sent by the owner from a Research pane to a Content conversation, is brought in exactly as the tab's own
+   * "bring" does (content_reports): the report and its packet as new dated files in the subject's
+   * research/reports, its sources and its packet's claims in the ledger with origin "research" and proposed
+   * standings. Only into a Content conversation that is loaded, never a sealed one.
+   */
+  const receiveFromResearch = async (sessionId, report) => {
+    if (!enabled() || !reportsTool) throw new Error('Content is switched off in Settings → Content.');
+    const id = String(sessionId ?? '').slice(0, 200);
+    if (modeOf(id) !== MODE_ID) throw new Error('That conversation is not a Content conversation.');
+    if (ctx.get('modes')?.isolated?.(id) !== false) throw new Error('That conversation is sealed.');
+    const agent = ctx.get('agents')?.get?.(id);
+    if (!agent) throw new Error('That Content conversation is not loaded yet: send a message in it first, then send the report again.');
+    const name = String(report ?? '').split('/').pop();
+    if (!listReports(reportsFolder(), 400).some((one) => one.name === name)) throw new Error('There is no such saved Research report.');
+    const done = await reportsTool.execute({ action: 'bring', name }, { agent, name: 'content_reports', arguments: { action: 'bring', name } });
+    const text = typeof done === 'string' ? done : String(done?.text ?? (Array.isArray(done?.content) ? done.content.map((part) => part?.text ?? '').join('') : ''));
+    if (/^(It did not work|Content mode is switched off)/.test(text)) throw new Error(text.replace(/^It did not work:\s*/, '').slice(0, 400));
+    return { text: `Added from Research by the user (Split Plus): ${text}` };
+  };
+
   ctx.inject(['webServer', 'connection'], (inner) => {
     inner.effect(
       () => inner.webServer.register({
@@ -485,6 +522,22 @@ export function apply(ctx, config) {
               const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
               if (body.action === 'continue') {
                 res.end(JSON.stringify({ ...view(), continued: await continueIn(body.sessionId, body.report) }));
+                return;
+              }
+              if (body.action === 'continued') {
+                // Only a Research continuation is offered (the owner's answer); Recon's stays the text to paste.
+                const entry = continued.get(String(body.sessionId ?? ''));
+                const fresh = entry && entry.to === 'research' && Date.now() - entry.at < 6 * 3_600_000 && enabled() && modeOf(String(body.sessionId)) === MODE_ID;
+                if (fresh && body.taken === true) continued.delete(String(body.sessionId));
+                res.end(JSON.stringify({ continued: fresh ? { to: entry.to, text: entry.text, at: entry.at } : null }));
+                return;
+              }
+              if (body.action === 'reports') {
+                res.end(JSON.stringify({ reports: enabled() ? listReports(reportsFolder(), 40).map((one) => ({ name: one.name, title: one.title })) : [] }));
+                return;
+              }
+              if (body.action === 'receive') {
+                res.end(JSON.stringify({ received: await receiveFromResearch(body.sessionId, body.report) }));
                 return;
               }
               throw new Error('unknown action');

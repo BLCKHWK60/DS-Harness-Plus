@@ -11,13 +11,18 @@
  *     permissions set on Settings → Bench;
  *   - a note in each Bench conversation naming the Bench folder, the devices and what is open and closed.
  *
+ *   - lib/plus: the device, dashboard, monitor, reverse-engineering and requirements tools brought over
+ *     from the owner's "Bench Plus" (17 November 2026), a live dashboard at /dsh-bench/dashboard, and
+ *     the owner's "Allow risky writes" switch (Settings → Bench → Danger zone, off by default).
+ *
  * Off until switched on in Settings > Bench. Needs the Modes add-on and the Cowork sidebar.
- * Route: `GET/POST /dsh-bench/data`.
+ * Routes: `GET/POST /dsh-bench/data`, `GET /dsh-bench/dashboard` (the page) and `/dsh-bench/dashboard/state`.
  */
 import z from '@deepseek-ai/schemastery';
 import { execFile } from 'node:child_process';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
+import { withoutSends } from './lib/sent.js';
 import { linkedText, openBench } from './lib/cards.js';
 import { buildDeviceTools } from './lib/devices.js';
 import { buildNetworkTools } from './lib/net-tools.js';
@@ -34,11 +39,16 @@ import { createSerial } from './lib/serial.js';
 import { MODE_ID, benchNote, withBench } from './lib/mode.js';
 import { buildTools } from './lib/tools.js';
 import { identifyUsb } from './lib/usb.js';
+import { INSTALL_TEXT, PLUS_TOOL_NAMES, buildPlusTools, createRegistry, dashboardHtml, dashboardState, formatRequirements, requirementRows } from './lib/plus/index.js';
+import { findPlus } from './lib/plus/programs.js';
 
 export const name = 'dsh-bench';
 /** The app's tools service: Bench's final rule is a `tools.guard`, which needs it injected. */
 export const inject = ['tools'];
 export const DATA_PATH = '/dsh-bench/data';
+/** The live dashboard (view only: monitors are started and stopped by bench_monitor) and its state. */
+export const DASHBOARD_PATH = '/dsh-bench/dashboard';
+export const DASHBOARD_STATE_PATH = '/dsh-bench/dashboard/state';
 const MODES_NS = 'modes';
 /** How long a listing of ports or phones counts: after that, Identify again. */
 const LISTED_FOR_MS = 60 * 60_000;
@@ -56,6 +66,13 @@ export const Config = z.object({
    * closed to them. Off: Bench's Long runs run no checks (the reviewer judges by reading).
    */
   longChecks: z.boolean().default(true).volatile(),
+  /**
+   * The owner's switch for writes that can damage a device (Danger zone, off by default). On: the device
+   * tools' flash, erase, program, reset and send actions run, and the backup, source and recovery
+   * conditions of the firmware writes, the short setting lists and the protected-service list are lifted.
+   * The card's level and the user's yes stay; radio limits and secrets are never changed.
+   */
+  allowRiskyWrites: z.boolean().default(false).volatile(),
 });
 
 function plain(value) {
@@ -86,6 +103,28 @@ export function apply(ctx, config, standIns = {}) {
     return isAbsolute(picked) ? picked : ownFolder;
   };
   const bench = openBench(folder);
+  /** The owner's "Allow risky writes" switch (only while Bench is on). */
+  const risky = () => enabled() && plain(config?.allowRiskyWrites) === true;
+  /** Each change of the switch is noted in the Bench folder's danger.jsonl, with the time. */
+  let riskyWas;
+  const noteDanger = () => {
+    const now = risky();
+    if (riskyWas === undefined) {
+      riskyWas = now;
+      if (!now) return;
+    } else if (riskyWas === now) return;
+    riskyWas = now;
+    try {
+      const where = folder();
+      if (!where) return;
+      mkdirSync(where, { recursive: true, mode: 0o700 });
+      appendFileSync(join(where, 'danger.jsonl'), `${JSON.stringify({ at: new Date().toISOString(), allowRiskyWrites: now })}\n`, { mode: 0o600 });
+    } catch (error) {
+      warn(`could not note the Danger zone switch (${String(error?.message ?? error)})`);
+    }
+  };
+  /** The app's address, for the dashboard's link (set when the web server is there). */
+  let originOf = () => '';
   /**
    * What each conversation listed in the last hour (the ports with the device on each, the phones) and
    * the dry runs it was shown: a port or phone is used only by the conversation that listed it.
@@ -136,6 +175,20 @@ export function apply(ctx, config, standIns = {}) {
     return standIns.identify ? standIns.identify(onPorts) : identifyUsb({ onPorts });
   };
   const fetchFn = standIns.fetch ?? globalThis.fetch;
+  /** What the tools brought over from Bench Plus need (lib/plus). */
+  const plusDeps = {
+    enabled,
+    risky,
+    benchFolder: folder,
+    find: standIns.findPlus ?? ((id) => findPlus(id)),
+    run: standIns.run ?? runFixed,
+    origin: () => originOf(),
+    now: () => Date.now(),
+    sleep: standIns.sleep ?? ((ms) => new Promise((done) => setTimeout(done, ms))),
+  };
+  /** The live monitors feeding the dashboard: every timer inside is guarded, and they stop with Bench. */
+  const registry = createRegistry(plusDeps);
+  plusDeps.registry = registry;
   const find = standIns.find ?? ((id) => findProgram(id));
   /** The firmware sources the user added on Settings → Bench (route only, never a tool). */
   const sources = () => {
@@ -184,7 +237,8 @@ export function apply(ctx, config, standIns = {}) {
         if (message?.role !== 'user' || message?.source?.kind !== 'user') continue;
         const content = message.content;
         const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map((part) => (part?.type === 'text' ? part.text : '')).join(' ') : '';
-        return carriesExport(text) ? '' : text;
+        // A card sent with Split Plus is material too: only the owner's own sentence around it counts.
+        return carriesExport(text) ? '' : withoutSends(text);
       }
     } catch {
       /* nothing said */
@@ -312,16 +366,30 @@ export function apply(ctx, config, standIns = {}) {
       const tools = ctx.get('tools');
       if (!tools?.register) return;
       // Offered only in Bench conversations and their helpers: other tabs' tool lists stay as they were.
-      const shared = { enabled, bench, find, run, serial, approve, userSaid, isHelper, seen: listingOf, fetchFn, sources, busy, writePlan, ...(standIns.sleep ? { sleep: standIns.sleep } : {}) };
+      const shared = { enabled, bench, find, run, serial, approve, userSaid, isHelper, seen: listingOf, fetchFn, sources, busy, writePlan, risky, ...(standIns.sleep ? { sleep: standIns.sleep } : {}) };
       const network = buildNetworkTools(shared);
-      const all = [...buildTools({ enabled, bench, identify }), ...buildDeviceTools({ ...shared, undoers: network.undoers }), ...network.tools, ...buildPhoneTools(shared).tools, buildRecipeTool({ bench, kit: makeKit(shared), sources })];
-      toolsOff = all.map((tool) => tools.register(tool, { when: ({ agent }) => enabled() && inBench(agent) }));
+      const all = [...buildTools({ enabled, bench, identify }), ...buildDeviceTools({ ...shared, undoers: network.undoers }), ...network.tools, ...buildPhoneTools(shared).tools, buildRecipeTool({ bench, kit: makeKit(shared), sources }), ...buildPlusTools(plusDeps)];
+      // One tool that cannot register (a bad definition) must not take the others, or the app, down.
+      toolsOff = [];
+      for (const tool of all) {
+        try {
+          toolsOff.push(tools.register(tool, { when: ({ agent }) => enabled() && inBench(agent) }));
+        } catch (error) {
+          warn(`the tool ${String(tool?.name ?? '?')} could not be registered (${String(error?.message ?? error).slice(0, 200)})`);
+        }
+      }
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
       toolsOff = undefined;
+      registry.stopAll();
     }
   };
   const follow = () => {
+    try {
+      noteDanger();
+    } catch {
+      /* noted next time */
+    }
     void syncMode();
     try {
       syncTools();
@@ -336,6 +404,7 @@ export function apply(ctx, config, standIns = {}) {
     clearInterval(timer);
     for (const dispose of toolsOff ?? []) if (typeof dispose === 'function') dispose();
     toolsOff = undefined;
+    registry.stopAll();
   }, 'bench: follow the switch');
 
   // ---- what is open and closed in Bench, for Mission and for the page ----------------------------
@@ -347,6 +416,10 @@ export function apply(ctx, config, standIns = {}) {
     { what: 'Identify and Read', open: true, why: 'Listing USB and Bluetooth devices and what announces itself on a network you marked as yours, watching a serial port (up to an hour per call), reading a nearby Bluetooth device\'s standard services when you name it, an ESP32\'s details and a checked backup, a phone\'s details, log, settings and storage backup, a router\'s and a Windows server\'s state. Opening a serial port restarts many boards: you are asked once per device.' },
     { what: 'Adjust (settings, with undo)', open: true, why: 'Only on a device whose card you set to Adjust or Write on this page, and only short lists: a phone\'s brightness, screen timeout, text size, sounds, rotation, animation speed, automatic time; a router\'s name, time zone, clock, address lease time and Wi-Fi names; a server\'s services that you name yourself (never the ones Windows or SSH need), after a restore point. Ask-Auto asks each time, Full Auto does not, Restricted refuses. Each card is linked to one device. Never on look-only devices, never radio limits or a drone\'s failsafes.' },
     { what: 'Write (firmware)', open: true, why: 'Only on a device you set to Write; asks every time, one write at a time on one device, and only with a checked backup taken since its last write, a recovery path, firmware from the maker, an official project or a source you added, whose checksum Bench finds on that page itself. ESP32 boards (the start of the flash also needs your own message "write protected <device name>"; the eFuses: never), GL.iNet and OpenWrt routers by sysupgrade (never the loader or the radio calibration), a phone\'s system image after an unlock. Bench downloads a file itself only after your yes.' },
+    risky()
+      ? { what: 'Allow risky writes (Danger zone)', open: true, why: 'ON, set by you on Settings → Bench: flashing, erasing, programming, resets and commands sent to boards, probes, instruments and cards run; firmware writes need no backup, source check or recovery path; any router setting (but radio limits and keys), any phone setting (still undoable) and any Windows service may be changed. The card\'s level and your yes on each write stay.' }
+      : { what: 'Allow risky writes (Danger zone)', open: false, why: 'Off: the conditions above hold, and the device tools\' flash, erase, program, reset and send actions refuse. You can switch it on in Settings → Bench → Danger zone.' },
+    { what: 'Device tools (iOS, AVR, Pico, STM32, J-Link, OpenOCD, FPGA, instruments, smart cards, NFC, USB, HID, battery, OBD-II, packet capture, network scan)', open: true, why: 'Reading and listing are open. Network scans and packet capture only on private (home and office) addresses. Firmware analysis and extraction never read the Bench folder\'s backups. A live dashboard of running monitors is at /dsh-bench/dashboard. bench_requirements says which programs are missing and how to install them; Bench never installs anything.' },
     { what: 'Unlocking a phone', open: true, why: 'Only when its maker allows it, at Write, with a counted backup of its storage, your own message "unlock <device name>" and your yes: it ERASES the phone. Bench never relocks a phone.' },
     { what: 'Network devices', open: true, why: 'Only on a network you marked as yours, at an address you set on this page, signing in with Bench\'s SSH key or a password kept in the Keychain, after you trusted the device\'s key.' },
     { what: 'Connecting to a Bluetooth device to change it, a BIOS update, devices outside your marked networks', open: false, why: 'Bluetooth is read only; a BIOS is updated with the maker\'s own tool; Bench never looks beyond your networks.' },
@@ -478,9 +551,55 @@ export function apply(ctx, config, standIns = {}) {
     } catch (error) {
       listProblem = String(error?.message ?? error).slice(0, 200);
     }
-    return { at: Date.now(), enabled: enabled(), problem: problem || listProblem, toolsOn: Boolean(toolsOff), folder: folder(), ownFolder: folder() === ownFolder, longChecks: checksOn(), sources: sources().map((entry) => ({ host: entry.host, path: entry.path, kind: entry.kind ?? '' })), networks: (Array.isArray(bench.readTop('networks.json')) ? bench.readTop('networks.json') : []).map((entry) => ({ label: entry.label, ssid: entry.ssid, cidr: entry.cidr, gatewayMac: entry.gatewayMac ?? '' })), publicKey: publicKey(), recipes: (Array.isArray(bench.readTop(DRAFTS)) ? bench.readTop(DRAFTS) : []).slice(-30).map((draft) => ({ id: draft.id, title: draft.title, device: draft.device, status: draft.status, read: draft.read, sources: draft.sources })), closed: closedList(), levels: LEVEL_LABEL, asks: ASK_LABEL, devices };
+    return { at: Date.now(), enabled: enabled(), allowRiskyWrites: risky(), dashboard: DASHBOARD_PATH, install: INSTALL_TEXT, plusTools: PLUS_TOOL_NAMES, monitors: registry.count(), problem: problem || listProblem, toolsOn: Boolean(toolsOff), folder: folder(), ownFolder: folder() === ownFolder, longChecks: checksOn(), sources: sources().map((entry) => ({ host: entry.host, path: entry.path, kind: entry.kind ?? '' })), networks: (Array.isArray(bench.readTop('networks.json')) ? bench.readTop('networks.json') : []).map((entry) => ({ label: entry.label, ssid: entry.ssid, cidr: entry.cidr, gatewayMac: entry.gatewayMac ?? '' })), publicKey: publicKey(), recipes: (Array.isArray(bench.readTop(DRAFTS)) ? bench.readTop(DRAFTS) : []).slice(-30).map((draft) => ({ id: draft.id, title: draft.title, device: draft.device, status: draft.status, read: draft.read, sources: draft.sources })), closed: closedList(), levels: LEVEL_LABEL, asks: ASK_LABEL, devices };
   };
   ctx.inject(['webServer', 'connection'], (inner) => {
+    originOf = () => {
+      try {
+        return String(inner.webServer?.getOrigin?.() ?? inner.webServer?.origin ?? '');
+      } catch {
+        return '';
+      }
+    };
+    // The live dashboard: a page of the app's own address, view only, and its state once a second.
+    const page = (path, answer) => inner.effect(
+      () => inner.webServer.register({
+        kind: 'exact',
+        path,
+        handler: async (req, res) => {
+          const refused = inner.connection.requestRejection(req);
+          if (refused !== undefined) {
+            res.statusCode = refused;
+            res.end();
+            return;
+          }
+          res.setHeader('cache-control', 'no-store');
+          res.setHeader('x-content-type-options', 'nosniff');
+          if (req.method !== 'GET') {
+            res.statusCode = 405;
+            res.end();
+            return;
+          }
+          try {
+            answer(res);
+          } catch (error) {
+            res.statusCode = 500;
+            res.setHeader('content-type', 'text/plain; charset=utf-8');
+            res.end(String(error?.message ?? error).slice(0, 300));
+          }
+        },
+      }),
+      `bench: ${path}`,
+    );
+    page(DASHBOARD_PATH, (res) => {
+      res.setHeader('content-type', 'text/html; charset=utf-8');
+      res.setHeader('content-security-policy', "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'");
+      res.end(dashboardHtml(DASHBOARD_STATE_PATH));
+    });
+    page(DASHBOARD_STATE_PATH, (res) => {
+      res.setHeader('content-type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify(dashboardState(registry, enabled)));
+    });
     inner.effect(
       () => inner.webServer.register({
         kind: 'exact',
@@ -564,7 +683,14 @@ export function apply(ctx, config, standIns = {}) {
                 if (process.platform === 'darwin') await new Promise((done) => execFile('/usr/bin/open', [path], () => done()));
               } else throw new Error('unknown action');
             } else if (req.method !== 'GET') throw new Error('only GET and POST');
-            const session = new URL(req.url ?? '/', 'http://local').searchParams.get('session') ?? '';
+            const query = new URL(req.url ?? '/', 'http://local').searchParams;
+            if (query.get('requirements')) {
+              // Which programs Bench can use, found or missing, with the exact install command (Bench never installs).
+              const rows = await requirementRows(plusDeps);
+              res.end(JSON.stringify({ rows, text: formatRequirements(rows) }));
+              return;
+            }
+            const session = query.get('session') ?? '';
             res.end(JSON.stringify({ ...view(), ...(session ? { session: { inBench: enabled() && modeOf(session.slice(0, 200)) === MODE_ID } } : {}) }));
             void syncMode();
           } catch (error) {

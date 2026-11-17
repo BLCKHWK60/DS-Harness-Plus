@@ -34,6 +34,7 @@ export const SCRIPTS = {
   service: (name) => `$s=Get-Service -Name ${psq(name)} -ErrorAction Stop; [pscustomobject]@{name=$s.Name; status="$($s.Status)"; startType="$($s.StartType)"} | ConvertTo-Json -Compress`,
   start: (name) => `Start-Service -Name ${psq(name)} -ErrorAction Stop; 'BENCH-OK'`,
   stop: (name) => `Stop-Service -Name ${psq(name)} -ErrorAction Stop; 'BENCH-OK'`,
+  restart: (name) => `Restart-Service -Name ${psq(name)} -Force -ErrorAction Stop; 'BENCH-OK'`,
   startup: (name, type) => {
     if (!STARTUP.includes(String(type))) throw new Error('not a startup type');
     return `Set-Service -Name ${psq(name)} -StartupType ${psq(type)} -ErrorAction Stop; 'BENCH-OK'`;
@@ -58,10 +59,17 @@ export function jsonOf(text) {
 /** A value from the server, as it is shown: cleaned and masked (material, not instructions). */
 export const shown = (value, max = 160) => mask(clean(String(value ?? ''), max));
 
-/** @returns {string} why a service may not be changed, or ''. */
-export function serviceRefusal(name, said) {
+/**
+ * @param {string} name - the service.
+ * @param {string} said - the user's own latest message.
+ * @param {{risky?: boolean}} [options] - the owner's "Allow risky writes" switch: then any service, without
+ *   naming it in their own message.
+ * @returns {string} why a service may not be changed, or ''.
+ */
+export function serviceRefusal(name, said, { risky = false } = {}) {
   const text = String(name ?? '');
   if (!SERVICE.test(text)) return 'Give the service\'s name as Windows writes it (letters, digits, . _ -).';
+  if (risky) return '';
   if (SERVICE_NEVER.test(text)) return `${text} keeps Windows running, protects it or is Bench's own way in (SSH); Bench never stops or changes it.`;
   const words = String(said ?? '').toLowerCase().split(/[\s,;:!?()"'\u2018\u2019\u201c\u201d]+/).map((word) => word.replace(/\.+$/, ''));
   if (!words.includes(text.toLowerCase())) return `Bench changes a service only when you name it in your own message. Ask the user to write its name (${text}).`;

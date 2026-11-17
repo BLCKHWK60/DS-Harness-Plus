@@ -84,9 +84,17 @@ export function parseBattery(text) {
 }
 
 /** @returns {string} why a setting may not be read or changed, or ''. */
-export function settingRefusal({ namespace, key, value, change = false }) {
+export function settingRefusal({ namespace, key, value, change = false, risky = false }) {
   if (!NAMESPACES.includes(namespace)) return `The namespace must be one of ${NAMESPACES.join(', ')}.`;
   if (!KEY.test(String(key ?? ''))) return 'A setting\'s name is letters, digits, dots and underscores only.';
+  // The owner's "Allow risky writes" switch: any setting, any plain value (still undoable), but never
+  // a radio limit or a drone's failsafe.
+  if (risky && change) {
+    const never = neverChanged(key);
+    if (never) return never;
+    if (!VALUE.test(String(value ?? ''))) return `${String(value ?? '').slice(0, 40)} is not a plain value (letters, digits and _ . : , + -).`;
+    return '';
+  }
   if (REFUSED_KEYS.test(key)) return `${key} is an identifier or one of the phone's protections (network, debugging, lock, accessibility and the like); Bench does not touch it.`;
   if (!change) return '';
   const never = neverChanged(key);

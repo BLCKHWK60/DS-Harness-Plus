@@ -1,0 +1,46 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "agents",
+    "cwds",
+    "dshHomePath",
+    "files",
+    "folder",
+    "ledger",
+    "links",
+    "mission",
+    "modes",
+    "openPanes",
+    "reconExports",
+    "remote.session",
+    "sessionQuery",
+    "sessions",
+    "sets",
+    "settings",
+    "systemPrompt",
+    "tools",
+    "tray",
+    "uiSession",
+    "uiWorkspace",
+    "workingDirectory",
+    "workspaces"
+  ],
+  "inject": [
+    "tools"
+  ],
+  "events": [
+    "agent/pre-step",
+    "agent/status",
+    "agent/disposed",
+    "tools/pre-execute",
+    "tools/post-execute",
+    "agent/created"
+  ],
+  "places": [
+    "conversation.chat.assistant-actions",
+    "conversation.input.dock",
+    "sidebar.panellist",
+    "settings.section"
+  ]
+}

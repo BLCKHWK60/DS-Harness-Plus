@@ -18,6 +18,8 @@ import { execFile, spawn } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { carriesExport } from './lib/logs.js';
+import { withoutSends } from './lib/sent.js';
 import { RUNS, SAVED_RUN_MARK, barState, runSentence, savedRunPrompt, savedRunsOf, startRefusal } from './lib/bar.js';
 import { moveRefusal, openCards } from './lib/cards.js';
 import { filesOf, mismatched } from './lib/change.js';
@@ -301,6 +303,10 @@ export function apply(ctx, config, standIns = {}) {
     if (!route) return false;
     return String(setting('strongModels') ?? '').split('\n').map((line) => line.trim()).filter(Boolean).includes(`${route.provider}/${route.model}`);
   };
+  /**
+   * The user's newest own message, as their words: a message that carries a Recon export gives none (its
+   * text is Recon's material), and a card sent with Split Plus's Send to is left out (material, never a yes).
+   */
   const userSaid = (exec) => {
     try {
       const messages = exec?.agent?.session?.deriveMessages?.() ?? [];
@@ -308,7 +314,8 @@ export function apply(ctx, config, standIns = {}) {
         const message = messages[index];
         if (message?.role !== 'user' || message?.source?.kind !== 'user') continue;
         const content = message.content;
-        return typeof content === 'string' ? content : Array.isArray(content) ? content.map((part) => (part?.type === 'text' ? part.text : '')).join(' ') : '';
+        const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map((part) => (part?.type === 'text' ? part.text : '')).join(' ') : '';
+        return carriesExport(text, logsDeps().exportsService) ? '' : withoutSends(text);
       }
     } catch {
       /* nothing said */

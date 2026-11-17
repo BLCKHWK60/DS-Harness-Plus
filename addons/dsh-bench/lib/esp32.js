@@ -210,6 +210,8 @@ export const esptoolArgs = {
   read: (port, baud, bytes, file) => ['--port', port, '--chip', 'auto', '--baud', String(baud), 'read_flash', '0x0', hex(bytes), file],
   write: (port, baud, address, file) => ['--port', port, '--chip', 'auto', '--baud', String(baud), 'write_flash', hex(address), file],
   verify: (port, baud, address, file) => ['--port', port, '--chip', 'auto', '--baud', String(baud), 'verify_flash', hex(address), file],
+  /** The whole flash erased (only with "Allow risky writes" on). The eFuses are untouched. */
+  erase: (port) => ['--port', port, '--chip', 'auto', 'erase_flash'],
 };
 
 /** @returns {number} a firmware file's size, or throws when it is not a plain file. */

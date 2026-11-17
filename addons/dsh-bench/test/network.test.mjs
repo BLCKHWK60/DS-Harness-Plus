@@ -357,7 +357,7 @@ test('the Windows server: read; a service changed only when the user names it, n
     await settle();
     await app.call('bench_card', { name: 'NAS' });
     await app.post({ action: 'network', label: 'Home', cidr: '192.168.8.0/24' });
-    await app.post({ action: 'net', name: 'NAS', address: '192.168.8.20', port: 22, user: 'Victor Admin', signIn: 'key' });
+    await app.post({ action: 'net', name: 'NAS', address: '192.168.8.20', port: 22, user: 'Sam Admin', signIn: 'key' });
     await app.post({ action: 'permissions', name: 'NAS', level: 'adjust', asks: 'full-auto', dryRun: false, ranges: '' });
     await app.call('bench_network', { action: 'key' });
     await app.call('bench_network', { action: 'trust', name: 'NAS' });

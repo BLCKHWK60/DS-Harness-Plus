@@ -6,3 +6,6 @@
         # Needs the Modes add-on and the Cowork sidebar. Optional:
         #   folder: <FOLDER>   # where cards and logbooks are kept; empty: bench in the app's data folder
         enabled: false
+        # Danger zone, off by default (Settings > Bench): writes that can damage a device without the
+        # backup and source conditions.
+        allowRiskyWrites: false
