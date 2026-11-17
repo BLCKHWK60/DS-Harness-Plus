@@ -1,0 +1,22 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "approval",
+    "benchmark",
+    "coworkTrash",
+    "dshHomePath",
+    "llm",
+    "modelTiers",
+    "modes",
+    "reconExports",
+    "sessionQuery",
+    "settings",
+    "tools"
+  ],
+  "inject": [],
+  "events": [],
+  "places": [
+    "settings.section"
+  ]
+}

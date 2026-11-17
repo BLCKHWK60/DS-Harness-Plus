@@ -15,8 +15,9 @@
  *     project's instructions, as a version). A model habit or a tab lesson is shown for you to add as your
  *     own lesson in Self-improve (filing it there by itself is not built yet).
  */
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { isAbsolute, join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import z from '@deepseek-ai/schemastery';
 import { openLibrary, readReach } from './lib/library.js';
 import { CANDIDATES_MAX, isPrivate, learnPrompt, pickConversations, proposalsOf, signalsOf, whereOf } from './lib/learn.js';
@@ -72,8 +73,17 @@ const listOf = (value) => {
   }
 };
 const trimSlash = (path) => String(path ?? '').replace(/^\/private(?=\/(tmp|var)\/)/, '').replace(/\/+$/, '');
-/** Recon's room: no learned skill there, ever. */
-const RECON_ROOM = '/tmp/dsh-recon-room';
+/**
+ * A Recon room: no learned skill there, ever. Recon's own naming rule: a dsh-recon-* folder directly in
+ * /tmp or the temporary folder (the real room, and the room a test copy of the app gets; 17 November 2026).
+ */
+const inReconRoom = (path) => {
+  // Any spelling: capitals, "//", "..", and /private before /tmp or /var (the review of step 6).
+  const tidy = (one) => resolve(String(one ?? '/')).toLowerCase().replace(/^\/private(?=\/(?:tmp|var)\/)/, '').replace(/\/+$/, '');
+  const value = tidy(path);
+  const temp = tidy(tmpdir()).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return /^\/tmp\/dsh-recon-[^/]+(?:\/|$)/.test(value) || new RegExp(`^${temp}/dsh-recon-[^/]+(?:/|$)`).test(value);
+};
 
 /**
  * @param {import('@deepseek-ai/cordis').Context} ctx - plugin context.
@@ -97,14 +107,57 @@ export function apply(ctx, config) {
   // ---- the skill provider (steps 70, 71) -------------------------------------------------------
 
   let invalidate = () => {};
-  /** Names of every other skill: a learned skill never takes one. */
-  const takenNames = async () => {
+  /**
+   * Names of every other skill: a learned skill never takes one. The app is asked for the folders where a
+   * learned skill would be offered too (the default folder and the folders of the conversations it may
+   * read, never Recon's): a skill file there wins over a learned skill of the same name and would hide it
+   * silently (17 November 2026; the owner's answer 8). Kept for 30 seconds.
+   */
+  let takenCache = { at: 0, names: null };
+  const takenNames = async ({ fresh = false } = {}) => {
+    if (!fresh && takenCache.names && Date.now() - takenCache.at < 30_000) return new Set(takenCache.names);
+    const names = new Set();
+    const skills = ctx.get('skills');
+    const add = (list) => {
+      for (const skill of list ?? []) if (skill?.name && skill.provider !== PROVIDER) names.add(String(skill.name));
+    };
     try {
-      const list = await ctx.get('skills')?.list?.({});
-      return new Set((list ?? []).filter((skill) => skill.provider !== PROVIDER).map((skill) => String(skill.name)));
+      add(await skills?.list?.({}));
+    } catch { /* none from the app's own list */ }
+    const folders = new Set();
+    const usual = ctx.get('workingDirectory')?.defaultDirectory;
+    if (typeof usual === 'string' && isAbsolute(usual)) folders.add(usual);
+    try {
+      for (const record of (await readable()).read ?? []) {
+        const cwd = record?.header?.cwd;
+        if (typeof cwd === 'string' && isAbsolute(cwd) && !inReconRoom(cwd)) {
+          folders.add(cwd);
+          // A Scratch conversation works in its own folder inside the shared one (<folder>/<its id>).
+          const id = String(record?.header?.id ?? '');
+          try {
+            if (/^[\w.-]{1,120}$/.test(id) && statSync(join(cwd, id)).isDirectory()) folders.add(join(cwd, id));
+          } catch { /* no folder of its own */ }
+        }
+        if (folders.size >= 40) break;
+      }
+    } catch { /* only the default folder */ }
+    let lease;
+    try {
+      lease = await ctx.get('agentPresets')?.acquireScope?.(undefined);
     } catch {
-      return new Set();
+      lease = undefined;
     }
+    try {
+      for (const cwd of folders) {
+        try {
+          add(await skills?.list?.({ cwd, scope: lease?.key }));
+        } catch { /* that folder is left out */ }
+      }
+    } finally {
+      await lease?.[Symbol.asyncDispose]?.();
+    }
+    takenCache = { at: Date.now(), names: [...names] };
+    return names;
   };
   /** The conversation's tab when the app says which conversation asks ('' when it cannot be told). */
   const tabOf = (options) => {
@@ -120,7 +173,7 @@ export function apply(ctx, config) {
   const shownFor = (options) => {
     if (!enabled()) return [];
     const cwd = trimSlash(options?.cwd);
-    if (cwd && (cwd === RECON_ROOM || cwd.startsWith(`${RECON_ROOM}/`))) return [];
+    if (cwd && inReconRoom(cwd)) return [];
     if (cwd && listOf(config?.projectsOff).map(trimSlash).includes(cwd)) return [];
     const tab = tabOf(options);
     if (tab === 'recon') return [];
@@ -232,7 +285,7 @@ export function apply(ctx, config) {
         } catch {
           return 'isolated (Recon)';
         }
-        if (cwd === RECON_ROOM || cwd.startsWith(`${RECON_ROOM}/`)) return 'isolated (Recon)';
+        if (inReconRoom(cwd)) return 'isolated (Recon)';
         const exported = fromRecon(id);
         if (exported) return exported;
         if (nolearn.has(id)) return 'you marked it "never learn from this"';
@@ -286,7 +339,7 @@ export function apply(ctx, config) {
           continue;
         }
         const folder = trimSlash(entry.folder);
-        if (!folder || folder === RECON_ROOM || folder.startsWith(`${RECON_ROOM}/`)) continue;
+        if (!folder || inReconRoom(folder)) continue;
         // A run of a conversation that received an export from Recon is never read; with Recon's export
         // door there, a run that does not say its conversation (an older line) is left out too.
         if (ctx.get('reconExports') && (typeof entry.conversation !== 'string' || !entry.conversation || fromRecon(entry.conversation))) continue;
@@ -421,12 +474,13 @@ export function apply(ctx, config) {
     }
   };
   const addSkill = async (id, merged, exam, anyway) => {
-    const taken = await takenNames();
+    // The final check asks afresh: a skill file written moments ago must count.
+    const taken = await takenNames({ fresh: true });
     const reach = merged.reach === 'project' && merged.folder ? { kind: 'project', folder: merged.folder } : merged.reach === 'tab' && merged.tab ? { kind: 'tab', tab: merged.tab } : { kind: 'all' };
-    library.add({ name: merged.name, description: merged.description, text: merged.text, reach, by: 'learned', why: `Learned from your conversations: ${merged.why}${exam ? ` Your own exam (Tuning Plus): ${exam.why}.` : anyway ? ' Added anyway after the exam.' : ''}` }, (name) => taken.has(name));
+    library.add({ name: merged.name, description: merged.description, text: merged.text, reach, by: 'learned', why: `Learned from your conversations: ${merged.why}${exam ? ` Your own exam (Tuner Plus): ${exam.why}.` : anyway ? ' Added anyway after the exam.' : ''}` }, (name) => taken.has(name));
     invalidate();
     proposals.decide(id, 'accepted');
-    return `The skill "${merged.name}" is added.${exam ? ` On your own exam (Tuning Plus) with ${exam.model}: ${exam.why}.` : ''}`;
+    return `The skill "${merged.name}" is added.${exam ? ` On your own exam (Tuner Plus) with ${exam.model}: ${exam.why}.` : ''}`;
   };
   const examJobs = new Set();
   // A try that was going when the app closed is not going any more.
@@ -442,7 +496,7 @@ export function apply(ctx, config) {
       // One more check when Tuning Plus is on: the skill is tried on your own exam in the background (it can
       // take minutes); it is added when it is not worse, and otherwise waits here with the result and an
       // "Add anyway" button.
-      if (examJobs.has(id)) return 'It is being tried on your own exam (Tuning Plus); this page shows the result when it is done.';
+      if (examJobs.has(id)) return 'It is being tried on your own exam (Tuner Plus); this page shows the result when it is done.';
       examJobs.add(id);
       proposals.note(id, { examRunning: true, examProblem: '' });
       void (async () => {
@@ -456,7 +510,7 @@ export function apply(ctx, config) {
           examJobs.delete(id);
         }
       })();
-      return `Trying "${merged.name}" on your own exam first (Tuning Plus), with ${readingRoute()?.model ?? 'the reading model'}. It is added when it is not worse; this page shows the result when it is done.`;
+      return `Trying "${merged.name}" on your own exam first (Tuner Plus), with ${readingRoute()?.model ?? 'the reading model'}. It is added when it is not worse; this page shows the result when it is done.`;
     } else if (merged.kind === 'fact') {
       const memory = ctx.get('memoryStore');
       if (!memory?.add) throw new Error('Memory is off, so the fact cannot be added. Switch Memory on, or reject this.');
@@ -607,17 +661,24 @@ export function apply(ctx, config) {
               chunks.push(chunk);
             }
             const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
-            const taken = await takenNames();
+            // A deleted learned skill brought back must not take a name another skill has meanwhile.
+            const backAgain = async (name) => {
+              if (library.get(name)?.deleted === true && (await takenNames({ fresh: true })).has(name)) throw new Error(`There is now another skill called "${name}" (a skill file, a plugin's or the app's). Bringing this learned skill back would hide it or be hidden by it.`);
+            };
             switch (body.action) {
-              case 'add':
+              case 'add': {
+                const taken = await takenNames({ fresh: true });
                 library.add({ name: body.name, description: body.description, text: body.text, reach: readReach(body.reach), by: 'hand' }, (skillName) => taken.has(skillName));
                 invalidate();
                 break;
+              }
               case 'update':
+                await backAgain(String(body.name ?? ''));
                 library.update(String(body.name ?? ''), { description: body.description, text: body.text, reach: body.reach === undefined ? undefined : readReach(body.reach) });
                 invalidate();
                 break;
               case 'putBack':
+                await backAgain(String(body.name ?? ''));
                 library.putBack(String(body.name ?? ''), body.version);
                 invalidate();
                 break;

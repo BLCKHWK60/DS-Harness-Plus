@@ -198,7 +198,7 @@ export async function improve({ store, model, repeats, maxEdits, thresholds, run
     }
     const judged = judgeCandidate({ before, after, leak, thresholds });
     if (judged.outcome === 'awaitingApproval' && trial && typeof examGate === 'function') {
-      onPhase?.(`Trying change ${index + 1} on your own exam (Tuning Plus)`);
+      onPhase?.(`Trying change ${index + 1} on your own exam (Tuner Plus)`);
       let exam;
       try {
         // The owner's exam has no task families: the whole playbook is tried.
@@ -209,7 +209,7 @@ export async function improve({ store, model, repeats, maxEdits, thresholds, run
         exam = undefined;
       }
       if (exam && typeof exam.ok === 'boolean') {
-        judged.gates.push({ id: 'exam', name: 'Not worse on your own exam (Tuning Plus)', pass: exam.ok, note: String(exam.why ?? '').slice(0, 300) });
+        judged.gates.push({ id: 'exam', name: 'Not worse on your own exam (Tuner Plus)', pass: exam.ok, note: String(exam.why ?? '').slice(0, 300) });
         if (!exam.ok) judged.outcome = 'rejected';
       }
     }

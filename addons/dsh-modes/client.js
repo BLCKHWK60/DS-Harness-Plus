@@ -169,6 +169,9 @@ window.__ModuleLoader__.load({
         'lens.own.hint': 'Your own Lens (Settings → Modes)',
         'own.group': 'Your own Lenses',
         'long.group': 'Long run tools',
+        'skillsoff.group': 'Skills switched off per tab',
+        'skillsoff.hint': 'In these tabs the model does not see these skills and cannot load them; typing /name still works. Tuner Plus proposes them from what each tab never uses.',
+        'skillsoff.on': 'Switch back on',
         'long.hint': 'What a Long run may use in each tab, from the start. A run stays in its tab and keeps its way of working; Depth → Long run settings can change these for one chat.',
         'long.files': 'Files and commands',
         'long.web': 'Web',
@@ -414,6 +417,9 @@ window.__ModuleLoader__.load({
         'lens.own.hint': '你自己的视角（设置 → 模式）',
         'own.group': '你自己的视角',
         'long.group': '长时运行的工具',
+        'skillsoff.group': '各标签中关闭的技能',
+        'skillsoff.hint': '在这些标签中，模型看不到这些技能，也无法加载它们；输入 /名称 仍然可用。Tuner Plus 会根据各标签从未使用的技能提出建议。',
+        'skillsoff.on': '重新打开',
         'long.hint': '每个标签中长时运行一开始可以使用什么。运行留在它的标签里，保持它的工作方式；深度 → 长时运行设置可以为某个对话更改这些。',
         'long.files': '文件和命令',
         'long.web': '联网',
@@ -1876,6 +1882,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           longTools: typeof view.longTools === 'string' ? view.longTools : '{}',
           verifiedSources: typeof view.verifiedSources === 'string' ? view.verifiedSources : '',
           webMixes: typeof view.webMixes === 'string' ? view.webMixes : '{}',
+          skillsOff: typeof view.skillsOff === 'string' ? view.skillsOff : '{}',
         });
         setDirty(false);
       }, []);
@@ -1989,6 +1996,33 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           void refreshAnswerFlags(appCtx);
         } catch (error) {
           setAnswer((prev) => ({ ...prev, [key]: !on }));
+          setMessage({ text: `${t('save.failed')}: ${error?.message ?? error}`, bad: true });
+        }
+      };
+      // Skills back on in one tab: from the setting as stored now (Tuner Plus may have changed another tab
+      // since this page loaded), so only this tab's list goes.
+      const switchBackOn = async (tabId) => {
+        try {
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            const fresh = await loadEditor(appCtx);
+            let table = {};
+            try {
+              table = JSON.parse(typeof fresh.value?.skillsOff === 'string' ? fresh.value.skillsOff : '{}') ?? {};
+            } catch {
+              table = {};
+            }
+            delete table[tabId];
+            const value = JSON.stringify(table);
+            const result = await appCtx.remote.settings.mutate(NS, [{ op: 'set', path: ['skillsOff'], value }], fresh.revision);
+            if (result.ok) {
+              setGeneral((prev) => ({ ...prev, skillsOff: value }));
+              setLoaded((prev) => ({ ...prev, revision: result.value.revision }));
+              return;
+            }
+            if (result.error.code !== 'settings/conflict') throw new Error(`${result.error.code}: ${result.error.message}`);
+          }
+          throw new Error('the settings changed meanwhile; try again');
+        } catch (error) {
           setMessage({ text: `${t('save.failed')}: ${error?.message ?? error}`, bad: true });
         }
       };
@@ -2129,6 +2163,24 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
                 h('div', null, h('b', null, tab.label), tab.isolated ? h('span', null, t('long.isolated')) : null),
                 h('div', { className: 'dsh-me-lts' }, sw(t('long.files'), files, 'files', false), sw(t('long.web'), web, 'web', tab.isolated)));
             })),
+        // Skills switched off per tab (Tuner Plus's step 14): shown only while some are, with a way back here too.
+        (() => {
+          let off = {};
+          try {
+            off = JSON.parse(general.skillsOff || '{}') ?? {};
+          } catch {
+            off = {};
+          }
+          const tabs = Object.entries(off).filter(([, names]) => Array.isArray(names) && names.length > 0);
+          if (tabs.length === 0) return null;
+          const labelOf = (id) => rows.find((row) => row.id === id)?.label?.trim() || extras.find((extra) => extra.id === id)?.label || id;
+          return h(React.Fragment, null,
+            h('div', { className: 'dsh-me-group' }, t('skillsoff.group')),
+            h('div', { className: 'dsh-me-note' }, t('skillsoff.hint')),
+            h('div', null, tabs.map(([id, names]) => h('div', { key: `skills-off-${id}`, className: 'dsh-me-toggle', 'data-skills-off': id },
+              h('div', null, h('b', null, labelOf(id)), h('span', null, names.join(', '))),
+              h('button', { type: 'button', className: 'dsh-me-btn', onClick: () => void switchBackOn(id) }, t('skillsoff.on'))))));
+        })(),
         h('div', { className: 'dsh-me-group' }, t('wl.group')),
         h(WebLevels, { t, saved: general.verifiedSources, mixes: mixesOf(general.webMixes), onSaveList: (text) => saveNow('verifiedSources', text), onSaveMixes: (text) => saveNow('webMixes', text) }),
         h('div', { className: 'dsh-me-group' }, t('own.group')),

@@ -19,7 +19,7 @@ const turn = (n, ...inner) => [event('turn/start', { turn: n }), event('request/
 const codeTurn = (n, request) => [user(request), ...turn(n, call(`e${n}`, 'edit', { file_path: `f${n}.js` }), result(`e${n}`, 'ok'), call(`t${n}`, 'bash', { command: 'npm test' }), result(`t${n}`, '9 passing'), answer('Done, tests pass.'))];
 
 /** The stand-in app. */
-function world({ enabled = true, harvest = { code: true, content: true, corrections: true }, power = true, idle = 3600, claims = 80, extra = {}, extraModes = {}, isolated = {}, providers = {}, setup } = {}) {
+function world({ enabled = true, harvest = { code: true, content: true, corrections: true }, power = true, idle = 3600, claims = 80, extra = {}, extraModes = {}, isolated = {}, providers = {}, setup, services: more = {} } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'tuning-app-'));
   const subject = join(home, 'subjects', 'heat-pumps');
   mkdirSync(join(subject, '.content'), { recursive: true });
@@ -68,6 +68,7 @@ function world({ enabled = true, harvest = { code: true, content: true, correcti
       list: () => [{ name: 'edit', plugin: 'dsh-code', parameters: { type: 'object', properties: { file_path: { type: 'string' } } } }, { name: 'bash', plugin: 'dsh-code', parameters: { type: 'object', properties: { command: { type: 'string' } } } }],
     },
     benchmark: { canaries: () => [{ id: 'add', prompt: 'What is 17 + 25?', grader: { type: 'regex', expect: '\\b42\\b' } }, { id: 'word', prompt: 'Say ready', grader: { type: 'regex', expect: 'ready' } }] },
+    ...more,
   };
   const ctx = {
     get: (name) => services[name],
@@ -169,7 +170,8 @@ test('the harvest: checked rows from the modes switched on; Recon, its helper, a
     assert.ok(summary.left.some((one) => one.id === 'e1' && /export/.test(one.why)));
     const content = summary.modes.content;
     assert.equal(content.kept + content.exam, 80, 'every ruled claim, once');
-    assert.ok(content.exam >= 8 && content.exam <= 26, `about one in five to the exam (${content.exam})`);
+    // One in five of 80 by a random salt: 16 on average; 4 to 30 holds in all but about one run in ten thousand.
+    assert.ok(content.exam >= 4 && content.exam <= 30, `about one in five to the exam (${content.exam})`);
     // Again: nothing twice.
     const again = await w.app.harvest();
     assert.equal(again.modes.content?.kept ?? 0, 0);
@@ -244,6 +246,71 @@ test('a run refuses without the trainer, with too few rows or too small an exam;
     assert.match(proposal.title, /^Rung 1: Instructions/, 'the lowest rung first');
   } finally {
     w.close();
+  }
+});
+
+test('with the skills part on, a job that comes up only sometimes is proposed as a skill (between rungs 1 and 2); off, as before', async () => {
+  const w = world({ claims: 200 });
+  try {
+    await w.app.harvest();
+    // Many more rows of other jobs in the same tab: the standings are under a quarter of them.
+    const { openStore } = await import('../lib/store.js');
+    const { makeRow } = await import('../lib/rows.js');
+    const store = openStore(() => join(w.home, 'tuning'));
+    const standings = store.rows().filter((row) => row.mode === 'content').length;
+    assert.ok(standings > 0);
+    // On, but the standings are most of what the tab gathered: a rule for every time, so instructions.
+    w.config.skills = true;
+    assert.match((await w.app.startRun({ model: 'small', goal: 'judge', sets: ['standings'], method: 'auto' })).title, /^Rung 1: Instructions/);
+    w.config.skills = false;
+    store.addRows('content', Array.from({ length: standings * 4 }, (_value, index) => makeRow({ kind: 'answer', mode: 'content', input: `Another job ${index}`, output: `Done ${index}`, proof: { check: 'made-up' }, by: {} })));
+    const off = await w.app.startRun({ model: 'small', goal: 'judge', sets: ['standings'], method: 'auto' });
+    assert.match(off.title, /^Rung 1: Instructions/, 'the skills part off: as before');
+    w.config.skills = true;
+    const on = await w.app.startRun({ model: 'small', goal: 'judge', sets: ['standings'], method: 'auto' });
+    assert.match(on.title, /^Skill: between rungs 1 and 2/);
+    assert.match(on.text, /Look for skill ideas/);
+    const look = await w.app.startRun({ model: 'small', goal: 'judge', sets: ['standings'], lookOnly: true });
+    assert.match(look.text, /a skill, between rungs 1 and 2/);
+  } finally {
+    w.close();
+  }
+});
+
+test('the night shift waits for a skills run or a skill exam (the night is not lost; the review of step 9)', async () => {
+  const w = world();
+  try {
+    w.config.nightShift = true;
+    const real = w.app.skillsPart.examRunning;
+    w.app.skillsPart.examRunning = () => true;
+    await w.app.nightTick();
+    assert.equal(existsSync(join(w.home, 'tuning', 'cards.json')), false, 'nothing done while a skills run goes');
+    w.app.skillsPart.examRunning = real;
+    await w.app.nightTick();
+    assert.ok(JSON.parse(readFileSync(join(w.home, 'tuning', 'cards.json'), 'utf8')).cards.some((card) => card.kind === 'night'), 'the night works once it is done');
+  } finally {
+    w.close();
+  }
+});
+
+test('the night shift drafts skills only with its own switch and the skills part on; what it did is on the morning card', async () => {
+  for (const [nightSkills, skills, expected] of [[false, true, false], [true, false, false], [true, true, true]]) {
+    const w = world();
+    try {
+      Object.assign(w.config, { nightShift: true, nightSkills, skills });
+      const calls = [];
+      w.app.skillsPart.nightDrafts = async (options) => {
+        calls.push(typeof options?.stopped);
+        return { ideas: 2, drafted: [{ name: 'update-changelog', exam: 'passed' }], problems: [], stopped: '' };
+      };
+      await w.app.nightTick();
+      const night = (await w.get()).cards.find((card) => card.kind === 'night');
+      assert.deepEqual(calls, expected ? ['function'] : [], `nightSkills ${nightSkills}, skills ${skills}`);
+      if (expected) assert.match(night.text, /Skill drafts: update-changelog \(exam passed\)\. They wait under Skills; nothing went live and no skill was changed\./);
+      else assert.doesNotMatch(night.text, /Skill drafts/);
+    } finally {
+      w.close();
+    }
   }
 });
 
@@ -522,5 +589,65 @@ test('14. while Tuning Plus is off the page only switches it on, changes setting
     assert.equal((await w.post({ action: 'set', field: 'enabled', value: true })).status, 200);
   } finally {
     w.close();
+  }
+});
+
+test('the service tells the Cowork Skills page each skill\'s mark only while the skills part is on; a failure gives nothing', async () => {
+  const w = world();
+  try {
+    const answer = { names: { mine: 'Mine' }, list: [{ name: 'my-notes', path: '/x/SKILL.md', provider: 'filesystem', mark: 'mine' }] };
+    w.app.skillsPart.marksList = async () => answer;
+    w.config.skills = false;
+    assert.equal(await w.app.service.skillMarks(), undefined);
+    w.config.skills = true;
+    assert.deepEqual(await w.app.service.skillMarks(), answer);
+    w.app.skillsPart.marksList = async () => { throw new Error('the list could not be read'); };
+    assert.equal(await w.app.service.skillMarks(), undefined);
+  } finally {
+    w.close();
+  }
+});
+
+test('skills per tab (step 14): your click switches off, in one tab, skills from the list; Modes keeps the list; back on in one click; with an older Modes there is no such button', async () => {
+  const off = {};
+  const calls = [];
+  const modes = {
+    apiVersion: 1,
+    get: () => 'code',
+    isolated: () => false,
+    list: () => [{ id: 'code', label: 'Code' }, { id: 'cowork', label: 'Cowork' }],
+    skillsOff: () => ({ ...off }),
+    setSkillsOff: async (tab, names) => { calls.push([tab, names]); if (names.length === 0) delete off[tab]; else off[tab] = [...names].sort(); return off[tab] ?? []; },
+  };
+  const w = world({ services: { modes } });
+  try {
+    w.config.skills = true;
+    w.app.skillsPart.sync = async () => ({ on: true, rows: [{ name: 'ego', key: 'ego|x' }, { name: 'read-pdf', key: 'read-pdf|provider:runtime' }], counts: {}, cost: { skills: 2, tokens: 40, perTab: [] } });
+    const view = (await w.post({ action: 'skillsTabOff', tab: 'code', names: ['ego'] })).json;
+    assert.deepEqual(calls, [['code', ['ego']]]);
+    assert.match(view.note, /Switched off in Code: ego\. The model there no longer sees them; your \/name still works/);
+    assert.deepEqual(view.skills.tabs.off, { code: ['ego'] });
+    assert.equal(view.skills.tabs.labels.code, 'Code');
+    // Only skills in the list, and a name is needed.
+    const refused = await w.post({ action: 'skillsTabOff', tab: 'code', names: ['made-up'] });
+    assert.match(refused.json.note ?? refused.json.error ?? '', /Not in the skill list: made-up/);
+    assert.equal(calls.length, 1);
+    await w.post({ action: 'skillsTabOff', tab: 'code', names: ['read-pdf'] });
+    assert.deepEqual(calls.at(-1), ['code', ['ego', 'read-pdf']], 'added to what is off already');
+    const back = (await w.post({ action: 'skillsTabOn', tab: 'code', names: [] })).json;
+    assert.deepEqual(calls.at(-1), ['code', []]);
+    assert.match(back.note, /Every skill is back on in Code/);
+  } finally {
+    w.close();
+  }
+  const old = world();
+  try {
+    old.config.skills = true;
+    old.app.skillsPart.sync = async () => ({ on: true, rows: [{ name: 'ego', key: 'ego|x' }], counts: {} });
+    const view = (await old.post({ action: 'skillsTabOff', tab: 'code', names: ['ego'] })).json;
+    assert.match(view.note ?? view.error ?? '', /needs the Modes add-on of this Plus version/);
+    assert.equal(view.skills?.tabs ?? null, null);
+  } finally {
+    old.close();
   }
 });

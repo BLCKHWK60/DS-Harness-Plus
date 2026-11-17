@@ -6,6 +6,7 @@
     "tuning"
   ],
   "uses": [
+    "agentPresets",
     "approval",
     "benchmark",
     "coworkTrash",
@@ -16,14 +17,21 @@
     "reconExports",
     "sessionQuery",
     "settings",
-    "tools"
+    "skills",
+    "tools",
+    "workingDirectory"
   ],
-  "events": [],
+  "events": [
+    "fs/observed",
+    "tools/pre-execute"
+  ],
   "tools": [
     "tuning_status",
     "tuning_plan",
     "tuning_start",
-    "tuning_export_set"
+    "tuning_export_set",
+    "tuning_skill_draft",
+    "tuning_skills_run"
   ],
   "commands": [],
   "routes": [
@@ -64,7 +72,10 @@
     "nightMinutes",
     "nightTrain",
     "examLimit",
-    "ownNetworkLocal"
+    "ownNetworkLocal",
+    "skills",
+    "skillExam",
+    "nightSkills"
   ],
   "instructionChars": 0,
   "rows": [

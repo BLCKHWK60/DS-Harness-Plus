@@ -1,5 +1,6 @@
 # Changelog: @local/dsh-model-tiers
 
+- 2026-11-17 The adapter field on a team member says Tuner Plus
 - 2026-11-17 The rest of the Content and Bench plan: Web levels, Ultra Code and the work loop, the Recon export door, the Voice Library, and Bench's network, server, phone and Bluetooth doors
 - 2026-11-16 Long run in every tab with a Run button, and the overnight work
 - 2026-11-15 Shared trash, Web On/Off and one Depth for every tab (0.59.0)

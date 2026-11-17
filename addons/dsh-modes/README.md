@@ -157,7 +157,7 @@ Since 0.40.3 this also holds when the conversation itself is idle and only its h
 
 A mode can be marked `isolated: true` (the Recon add-on does this). Its conversations then get
 exactly the tools the mode lists and nothing else: no web search, no Deep research, no programs,
-no helpers. The app's own notes (instruction files, the skill list) are not handed to them, and
+no helpers. The app's own notes (instruction files, the skill list, and since 17 November a skill's text when the user types `/skill-name`) are not handed to them, and
 Plus's other add-ons leave them alone. A conversation that begins in an isolated mode is isolated
 for good; one that began elsewhere can never become isolated. Other add-ons ask
 `modes.isolated(sessionId)`. The rules are in `lib/isolation.js` and tested there.
@@ -303,3 +303,11 @@ The owner's choice: **add the levels, keep the defaults.** The Web button keeps 
 - Not in Recon (isolated: its own rules and its own Web button) or Research (its web is fixed): there the levels are not offered and nothing changes.
 - Service: `webLevel(id)` ('off', a level, or undefined for On as before), `webAllows(id, address)` for tools that fetch inside themselves, and `ultraCode(id)` (asked of Model Tiers' new switch).
 - Tests: `test/weblevel.test.mjs` (lanes, the archive, each level, the owner's list and mixes, a stand-in app with a helper, Recon and Research); `test/modes.test.mjs` (the button and what a pick writes).
+
+## Skills switched off per tab (17 November, with Tuner Plus)
+
+A tab can leave out skills it never uses. Tuner Plus proposes them; you switch them off with its button, and back on there or under Settings → Modes → Skills switched off per tab. The setting is `skillsOff` (`{ tabId: [names] }`, empty at first).
+- In that tab, the model's skill list leaves them out. An open conversation gets one shorter list at its next step, and the app's repeat of the whole list is dropped.
+- A call for one is refused by a guard. Your typed `/name` still works.
+- Isolated tabs (Recon) are unchanged and cannot have such a list.
+- With nothing switched off, every step is exactly as before.

@@ -1,5 +1,6 @@
 # Changelog: @local/dsh-evolve
 
+- 2026-11-17 The exam gate's lines say Tuner Plus (the name the owner uses)
 - 2026-11-17 The rest of the Content and Bench plan: Web levels, Ultra Code and the work loop, the Recon export door, the Voice Library, and Bench's network, server, phone and Bluetooth doors
 - 2026-11-15 Full audit of every mode, grouped and searchable Settings (0.56.0)
 - 2026-11-14 0.43.1: Recon, an isolated tab for .onion research (steps 1 to 3 of 7)

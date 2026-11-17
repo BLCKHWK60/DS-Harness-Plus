@@ -60,7 +60,7 @@ say "Saved to $BACKUP_DIR"
 # and added files are copied into the backup, where they can be picked up again.
 ADDONS_NOW="$DSH_HOME/addons/deepseek-harness-plus"
 if [ -f "$ADDONS_NOW/.installed-files" ]; then
-  EDITED=$(cd "$ADDONS_NOW" && find . -type f -not -path "*/node_modules/*" -not -name ".installed-files" -not -name "VERSION" -print0 2>/dev/null | xargs -0 shasum -a 256 2>/dev/null | sort -k2 | diff - .installed-files 2>/dev/null | sed -n 's/^< [0-9a-f]*  //p')
+  EDITED=$(cd "$ADDONS_NOW" && find . -type f -not -path "*/node_modules/*" -not -name ".installed-files" -not -name "VERSION" -print0 2>/dev/null | xargs -0 shasum -a 256 2>/dev/null | sort -k2 | diff - <(sort -k2 .installed-files) 2>/dev/null | sed -n 's/^< [0-9a-f]*  //p')
   if [ -n "$EDITED" ]; then
     mkdir -p "$BACKUP_DIR/files-you-changed"
     printf '%s\n' "$EDITED" | while IFS= read -r file; do

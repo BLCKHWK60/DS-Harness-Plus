@@ -101,7 +101,7 @@ test('proposals: quotes go once you decide, or when their conversation is delete
 
 // ---- the add-on in a stand-in app -------------------------------------------------------------
 
-function standIn({ modes = true, where = 'http://127.0.0.1:9000/v1', allowInternet = false, answer, mission, reconExports, extra = {}, tuning } = {}) {
+function standIn({ modes = true, where = 'http://127.0.0.1:9000/v1', allowInternet = false, answer, mission, reconExports, extra = {}, tuning, skillsList } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'architect-'));
   const config = { enabled: true, readingModel: JSON.stringify({ provider: 'own', model: 'reader' }), allowInternet, nolearn: '[]', projectsOff: '[]' };
   let provider;
@@ -137,7 +137,7 @@ function standIn({ modes = true, where = 'http://127.0.0.1:9000/v1', allowIntern
     ...(reconExports ? { reconExports } : {}),
     ...(tuning ? { tuning } : {}),
   };
-  services.skills = { list: async () => [{ name: 'pdf', provider: 'filesystem' }], registerProvider: (make) => { provider = make({ invalidate: () => {} }); return () => {}; } };
+  services.skills = { list: skillsList ?? (async () => [{ name: 'pdf', provider: 'filesystem' }]), registerProvider: (make) => { provider = make({ invalidate: () => {} }); return () => {}; } };
   const ctx = {
     get: (name) => services[name],
     effect: (make) => make(),
@@ -404,7 +404,7 @@ test('Tuning Plus\'s exam: tried in the background (the page is not held); a ski
     const accepted = await Promise.race([app.post({ action: 'accept', id: skill.id }), new Promise((done) => setTimeout(() => done('held'), 500))]);
     assert.notEqual(accepted, 'held', 'the request is not held open for the exam');
     assert.ok(Date.now() - started < 500);
-    assert.match(accepted.json.said, /Trying "check-dates" on your own exam first \(Tuning Plus\), with reader/);
+    assert.match(accepted.json.said, /Trying "check-dates" on your own exam first \(Tuner Plus\), with reader/);
     const card = () => app.post({ action: 'candidates' }).then((out) => out.json.proposals.find((item) => item.id === skill.id));
     assert.equal((await card()).examRunning, true, 'the page shows it is being tried');
     assert.match((await app.post({ action: 'accept', id: skill.id })).json.said, /being tried/, 'a second Accept does not start it again');
@@ -448,5 +448,60 @@ test('Tuning Plus\'s exam: tried in the background (the page is not held); a ski
     assert.match((await plain.post({ action: 'accept', id: skill.id })).json.said, /^The skill "check-dates" is added\.$/);
   } finally {
     plain.done();
+  }
+});
+
+test('a skill file in a folder where the learned skill would be offered takes the name too (it would hide the learned skill); a test copy\'s Recon room is Recon\'s', async () => {
+  const asked = [];
+  const app = standIn({
+    // The app's own answers: with no folder, only the skills it serves itself; for a conversation's folder,
+    // the skill files there as well (a project file named books-rule).
+    skillsList: async (options = {}) => {
+      asked.push(options.cwd ?? '');
+      return options.cwd === '/w/books' ? [{ name: 'books-rule', provider: 'filesystem', path: '/w/books/.dsh/skills/books-rule/SKILL.md' }] : [{ name: 'pdf', provider: 'filesystem' }];
+    },
+  });
+  try {
+    const refused = await app.post({ action: 'add', name: 'books-rule', description: 'When dates matter', text: 'Check dates first.' });
+    assert.equal(refused.status, 400, 'a learned skill never takes a name a skill file has where it would be offered');
+    assert.match(refused.json.error, /already a skill called "books-rule"/);
+    assert.ok(asked.includes('/w/books'), 'the conversation\'s folder was asked');
+    assert.ok(!asked.some((cwd) => /dsh-recon/.test(cwd)), 'Recon\'s room was never asked');
+    const added = await app.post({ action: 'add', name: 'other-rule', description: 'When dates matter', text: 'Check dates first.' });
+    assert.equal(added.status, 200, JSON.stringify(added.json));
+    // A test copy's own Recon room is a Recon room too: no learned skill there.
+    assert.deepEqual(await app.provider().list({ cwd: '/private/tmp/dsh-recon-copy-0123456789ab' }), []);
+    assert.deepEqual(await app.provider().list({ cwd: '/tmp/dsh-recon-lab' }), []);
+    assert.equal((await app.provider().list({ cwd: '/w/books' })).length, 1);
+  } finally {
+    app.done();
+  }
+});
+
+test('the final name check asks afresh; a deleted learned skill is not brought back over a name taken meanwhile; every Recon spelling; Scratch folders asked', async () => {
+  let files = [];
+  const asked = [];
+  const app = standIn({
+    skillsList: async (options = {}) => {
+      asked.push(options.cwd ?? '');
+      return options.cwd ? files : [{ name: 'pdf', provider: 'filesystem' }];
+    },
+  });
+  try {
+    // A first check fills the cache; then a skill file appears: adding takes the fresh answer.
+    assert.equal((await app.post({ action: 'add', name: 'dates-first', description: 'When dates matter', text: 'Check dates.' })).status, 200);
+    files = [{ name: 'late-file', provider: 'filesystem', path: '/w/books/.dsh/skills/late-file/SKILL.md' }];
+    const late = await app.post({ action: 'add', name: 'late-file', description: 'x', text: 'y' });
+    assert.equal(late.status, 400, 'a skill file written moments ago counts');
+    // Deleted, then a skill file takes the name: putting it back is refused.
+    assert.equal((await app.post({ action: 'delete', name: 'dates-first' })).status, 200);
+    files = [{ name: 'dates-first', provider: 'filesystem', path: '/w/books/.dsh/skills/dates-first/SKILL.md' }];
+    const back = await app.post({ action: 'putBack', name: 'dates-first', version: 1 });
+    assert.equal(back.status, 400);
+    assert.match(back.json.error, /another skill called "dates-first"/);
+    // Recon rooms in any spelling get no learned skill.
+    for (const cwd of ['/PRIVATE/TMP/dsh-recon-x', '/tmp/x/../dsh-recon-x', '//tmp/dsh-recon-x', '/private/tmp/dsh-recon-room/sub']) assert.deepEqual(await app.provider().list({ cwd }), [], cwd);
+  } finally {
+    app.done();
   }
 });

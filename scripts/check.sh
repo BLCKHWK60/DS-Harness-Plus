@@ -3,12 +3,16 @@
 #   1. runs every add-on's automated tests (with the Node.js inside the app)
 #   2. installs, re-installs and uninstalls into a throwaway app-data folder, and after the
 #      install checks that the app can compose its setup with all add-ons loaded
+#   3. rehearses the Tuner Plus way back (Tuner Plus Way Back.command) in that throwaway folder
 # Usage: bash scripts/check.sh
 set -u
 HERE=$(cd "$(dirname "$0")/.." && pwd -P)
 . "$HERE/scripts/common.sh"
 find_app
-check_version
+# Even `dsh --version` may create files in the app's data folder, so it is asked inside a throwaway one.
+version_home=$(mktemp -d)
+DSH_HOME="$version_home" check_version
+rm -rf "$version_home"
 failed=0
 
 step "Add-on tests"
@@ -85,6 +89,26 @@ if bash "$HERE/scripts/install.sh" --profile check --yes --settings "$shared/" >
 else
   say "FAIL  shared settings folder"; tail -20 "$home/shared.log"; failed=1
 fi
+# The Tuner Plus way back: over a newer Tuner Plus it puts back exactly the saved 0.1.0, leaves
+# Tuner Plus's data and the setup alone, and keeps the installer's record right for the other add-ons.
+plus="$home/addons/deepseek-harness-plus"
+wayback() { bash "$HERE/scripts/tuner-way-back.sh" --profile check --yes >"$home/wayback.log" 2>&1; }
+fingerprints() { (cd "$1" && find . -type f -not -name .DS_Store -print0 | xargs -0 shasum -a 256 | sort -k2); }
+mkdir -p "$home/tuning/rows" && echo '{"id":"r1"}' >"$home/tuning/rows/code.jsonl" && echo '{"entries":[]}' >"$home/tuning/shelf.json"
+data_before=$(fingerprints "$home/tuning" | shasum); setup_before=$(shasum <"$home/profiles/check/package.json")
+sed -i '' 's/"version": "[^"]*"/"version": "99.0.0"/' "$plus/dsh-tuning/package.json" && echo '// newer' >>"$plus/dsh-tuning/index.js"
+others_before=$(grep -v '  ./dsh-tuning/' "$plus/.installed-files" | sort | shasum)
+if wayback && fingerprints "$plus/dsh-tuning" | diff -q - <(sort -k2 "$HERE/extras/way-back/dsh-tuning-0.1.0.sha256") >/dev/null \
+   && (cd "$plus" && find ./dsh-tuning -type f -not -path "*/node_modules/*" -print0 | xargs -0 shasum -a 256 | sort -k2) | diff -q - <(grep -F '  ./dsh-tuning/' "$plus/.installed-files" | sort -k2) >/dev/null \
+   && [ "$(fingerprints "$home/tuning" | shasum)" = "$data_before" ] && [ "$(shasum <"$home/profiles/check/package.json")" = "$setup_before" ] \
+   && [ "$(grep -v '  ./dsh-tuning/' "$plus/.installed-files" | sort | shasum)" = "$others_before" ] \
+   && grep -q '99.0.0' "$(ls -d "$home"/backups/deepseek-harness-plus/*-tuner-way-back | tail -1)/dsh-tuning-before/package.json" \
+   && wayback && grep -q 'already in place' "$home/wayback.log"; then
+  say "ok    Tuner Plus way back: 0.1.0 put back, its data and the setup untouched, the newer one kept in the backup"
+else
+  say "FAIL  Tuner Plus way back"; tail -20 "$home/wayback.log"; failed=1
+fi
+run install >/dev/null 2>&1 || true
 if run uninstall && [ ! -d "$home/addons/deepseek-harness-plus" ] && ! grep -q '"@local/dsh-' "$home/profiles/check/package.json"; then
   say "ok    uninstall"
 else

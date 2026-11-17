@@ -26,7 +26,8 @@
  */
 import z from '@deepseek-ai/schemastery';
 import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
+import { homedir, tmpdir, userInfo } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { nameOf, readAccounts, removeCommandFor, serviceOf, storeCommandFor } from './lib/accounts.js';
 import { onionAddressesIn, openTrail } from './lib/address.js';
@@ -69,16 +70,114 @@ export const DEFAULT_ROOM = '/private/tmp/dsh-recon-room';
  * is taken: an absolute path whose name starts with "dsh-recon-", directly inside /tmp or the
  * system's temporary folder, and not the real room's name in any spelling (/tmp is a link to
  * /private/tmp, and the Mac's disk does not tell capitals from small letters, so
- * "/tmp/dsh-recon-Room" is the real room). Anything else is ignored and the usual room is used.
- * @param {unknown} value - the variable's value.
+ * "/tmp/dsh-recon-Room" is the real room). A room asked for that is refused never falls back to the
+ * real room: it gets a throwaway room of its own instead.
+ *
+ * When no room is asked for, the real room is used only by the app on the usual data folder (the
+ * account's own ~/.dsh). An app started on another data folder (a test copy: DSH_HOME set to a
+ * throwaway folder, or HOME moved) gets a room of its own, named after that folder, so it can never
+ * empty the real one (17 November 2026: a test copy started without DSH_RECON_ROOM emptied it).
+ * @param {unknown} value - the variable's value (DSH_RECON_ROOM).
+ * @param {unknown} [dshHome] - the DSH_HOME variable, read as the app reads it (dataFolderOf).
  * @returns {string} the room's path.
  */
-export function roomFrom(value) {
+export function roomFrom(value, dshHome) {
+  const asked = String(value ?? '');
+  if (asked.trim()) return askedRoom(asked) || copyRoom(`asked:${asked}`);
+  return testCopyRoom(dataFolderOf(dshHome)) || DEFAULT_ROOM;
+}
+
+/**
+ * The data folder the app runs on, worked out exactly as the app does (dsh-home-paths,
+ * resolveDshHome): DSH_HOME as given unless it is blank, a leading ~ taken as the home folder the
+ * app sees, and otherwise .dsh in that home folder.
+ * @param {unknown} dshHome - the DSH_HOME variable.
+ * @returns {string} the folder.
+ */
+export function dataFolderOf(dshHome) {
+  const raw = typeof dshHome === 'string' && dshHome.trim().length > 0 ? dshHome : join(homedir(), '.dsh');
+  if (raw === '~') return resolve(homedir());
+  if (raw.startsWith('~/') || raw.startsWith('~\\')) return resolve(join(homedir(), raw.slice(2)));
+  return resolve(raw);
+}
+
+/** The usual data folder: .dsh in the account's own home, whatever HOME says. */
+function usualHome() {
+  let home = '';
+  try {
+    home = userInfo().homedir;
+  } catch {
+    home = homedir();
+  }
+  return join(home || homedir(), '.dsh');
+}
+
+/** A path as the disk names it: the real path of the nearest folder that exists, plus the rest. */
+function onDisk(path) {
+  const rest = [];
+  let current = resolve(path);
+  for (;;) {
+    try {
+      return join(realpathSync.native(current), ...rest);
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) return resolve(path);
+      rest.unshift(basename(current));
+      current = parent;
+    }
+  }
+}
+
+/** A throwaway room named after a key (a data folder, or a refused DSH_RECON_ROOM). */
+const copyRoom = (key) => `/private/tmp/dsh-recon-copy-${createHash('sha256').update(String(key)).digest('hex').slice(0, 12)}`;
+
+/**
+ * The room of an app running on another data folder than the usual one; '' for the usual one (or
+ * none known). The name comes from the data folder, so every test copy has its own room.
+ * @param {unknown} dataFolder - the app's data folder.
+ * @returns {string} the room's path, or ''.
+ */
+export function testCopyRoom(dataFolder) {
+  const folder = typeof dataFolder === 'string' ? dataFolder : '';
+  if (!folder.trim()) return '';
+  const real = onDisk(folder);
+  // The Mac's disk does not tell capitals from small letters.
+  if (real.toLowerCase() === onDisk(usualHome()).toLowerCase()) return '';
+  return copyRoom(real);
+}
+
+/**
+ * The room an app uses once it knows its data folder: on another data folder than the usual one, a
+ * room of its own instead of the real room (for a data folder set some other way than DSH_HOME).
+ * @param {{room: string, dataFolder?: string}} want - the room chosen so far and the app's data folder.
+ * @returns {string} the room to use.
+ */
+export function roomFor({ room, dataFolder = '' }) {
+  return room === DEFAULT_ROOM && testCopyRoom(dataFolder) ? testCopyRoom(dataFolder) : room;
+}
+
+/**
+ * Whether Recon may empty a room: never the real room while the app runs on another data folder
+ * than the usual one (a second lock behind roomFrom, for a data folder set some other way).
+ * @param {{room: string, dataFolder?: string}} want - the room and the app's data folder ('' when unknown).
+ * @returns {boolean} true when the room may be emptied.
+ */
+export function mayEmptyRoom({ room, dataFolder = '' }) {
+  if (room !== DEFAULT_ROOM) return true;
+  return !testCopyRoom(dataFolder);
+}
+
+/**
+ * A room asked for through DSH_RECON_ROOM, when it is a throwaway folder (see roomFrom).
+ * @param {unknown} value - the variable's value.
+ * @returns {string} the room's path, or ''.
+ */
+function askedRoom(value) {
   const text = String(value ?? '').trim();
-  if (!text || !isAbsolute(text)) return DEFAULT_ROOM;
+  if (!text || !isAbsolute(text)) return '';
   const path = resolve(text);
-  if (path !== text.replace(/\/+$/, '') || !/^dsh-recon-[\w.-]{1,80}$/.test(basename(path))) return DEFAULT_ROOM;
-  if (basename(path).toLowerCase() === basename(DEFAULT_ROOM).toLowerCase()) return DEFAULT_ROOM;
+  if (path !== text.replace(/\/+$/, '') || !/^dsh-recon-[\w.-]{1,80}$/.test(basename(path))) return '';
+  if (basename(path).toLowerCase() === basename(DEFAULT_ROOM).toLowerCase()) return '';
   const real = (where) => {
     try {
       return realpathSync(where);
@@ -88,11 +187,11 @@ export function roomFrom(value) {
   };
   const parent = real(dirname(path));
   const temporary = [real('/tmp'), real(tmpdir())].filter(Boolean);
-  if (!parent || !temporary.includes(parent)) return DEFAULT_ROOM;
+  if (!parent || !temporary.includes(parent)) return '';
   // A link to another folder is never taken: emptying it would empty that folder.
   try {
     const seen = lstatSync(path);
-    if (seen.isSymbolicLink() || !seen.isDirectory()) return DEFAULT_ROOM;
+    if (seen.isSymbolicLink() || !seen.isDirectory()) return '';
   } catch {
     /* not there yet: it is made when Recon starts */
   }
@@ -103,7 +202,7 @@ export function roomFrom(value) {
  * The folder every Recon conversation runs in. The app tells a model the path of its conversation's
  * folder, so this one is outside the user's home and says nothing about them. It is kept empty.
  */
-export const ROOM = roomFrom(process.env.DSH_RECON_ROOM);
+export let ROOM = roomFrom(process.env.DSH_RECON_ROOM, process.env.DSH_HOME);
 
 export const Config = z.object({
   /** The Recon mode and tab. Off leaves nothing of it in the app. */
@@ -292,7 +391,25 @@ export function apply(ctx, config, standIns = {}) {
    * Make sure the room is there, belongs to the user alone, and is empty. A room that is a link,
    * not a folder, or someone else's is left alone: emptying it could delete files elsewhere.
    */
+  // The app's data folder as the app itself reports it: a data folder set some other way than DSH_HOME
+  // (a configured path) is caught here. On another data folder than the usual one, this app takes a
+  // room of its own instead of the real room, for good (its conversations, End and wipe and the files).
+  let dataFolder = '';
+  try {
+    const home = ctx.get('dshHomePath');
+    dataFolder = typeof home === 'function' ? String(home('') ?? '') : '';
+  } catch {
+    dataFolder = '';
+  }
+  if (roomFor({ room: ROOM, dataFolder }) !== ROOM) {
+    ROOM = roomFor({ room: ROOM, dataFolder });
+    warn(`this app runs on another data folder (${dataFolder}), so Recon uses its own folder ${ROOM}, not the real one`);
+  }
   const prepareRoom = () => {
+    if (!mayEmptyRoom({ room: ROOM, dataFolder })) {
+      warn(`this app runs on another data folder (${dataFolder}), so the real Recon folder ${ROOM} was not emptied; start it with DSH_RECON_ROOM set to a throwaway "dsh-recon-" folder in /tmp`);
+      return;
+    }
     try {
       mkdirSync(ROOM, { recursive: true, mode: 0o700 });
       const seen = lstatSync(ROOM);

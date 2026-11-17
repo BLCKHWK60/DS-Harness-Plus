@@ -1,6 +1,6 @@
 # Tests: @local/dsh-modes
 
-116 tests in 7 files: test/claim.test.mjs, test/isolation.test.mjs, test/lens.test.mjs, test/long.test.mjs, test/modes.test.mjs, test/start.test.mjs, test/weblevel.test.mjs.
+126 tests in 8 files: test/claim.test.mjs, test/isolation.test.mjs, test/lens.test.mjs, test/long.test.mjs, test/modes.test.mjs, test/skilloff.test.mjs, test/start.test.mjs, test/weblevel.test.mjs.
 
 Run with the app's own Node (stand-ins only; never against the real app data):
 

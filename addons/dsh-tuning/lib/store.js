@@ -22,13 +22,13 @@ export const ROW_CAP = 50_000;
 export function folderIn(root, ...parts) {
   let dir = root;
   mkdirSync(dir, { recursive: true, mode: 0o700 });
-  if (lstatSync(dir).isSymbolicLink()) throw new Error('The Tuning Plus folder is a link; Tuning Plus does not write through links.');
+  if (lstatSync(dir).isSymbolicLink()) throw new Error('The Tuner Plus folder is a link; Tuner Plus does not write through links.');
   for (const part of parts) {
     if (!/^[A-Za-z0-9._-]{1,120}$/.test(part) || part === '.' || part === '..') throw new Error('not a folder name');
     dir = join(dir, part);
     try {
       const stat = lstatSync(dir);
-      if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`${part} in the Tuning Plus folder is ${stat.isSymbolicLink() ? 'a link' : 'a file'}.`);
+      if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`${part} in the Tuner Plus folder is ${stat.isSymbolicLink() ? 'a link' : 'a file'}.`);
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error;
       mkdirSync(dir, { mode: 0o700 });
@@ -60,7 +60,7 @@ export function writeText(file, text, within) {
     if (real !== root && !real.startsWith(`${root}${sep}`)) throw new Error('That folder is not where it should be (a link); nothing was written.');
   }
   try {
-    if (lstatSync(file).isSymbolicLink()) throw new Error(`${basename(file)} is a link; Tuning Plus does not write through links.`);
+    if (lstatSync(file).isSymbolicLink()) throw new Error(`${basename(file)} is a link; Tuner Plus does not write through links.`);
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error;
   }
@@ -129,7 +129,7 @@ export function readLines(file, max = 200_000) {
 export function openStore(rootOf) {
   const root = () => {
     const folder = String(rootOf() ?? '').trim();
-    if (!folder) throw new Error('There is no Tuning Plus folder.');
+    if (!folder) throw new Error('There is no Tuner Plus folder.');
     return folderIn(folder);
   };
   const where = () => String(rootOf() ?? '').trim();

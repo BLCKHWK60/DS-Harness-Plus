@@ -11,7 +11,7 @@ window.__ModuleLoader__.load({
     const { useCallback, useEffect, useRef, useState } = React;
 
     const NS = 'tuning';
-    const DICT = { en: { 'section.title': 'Tuning Plus' }, zh: { 'section.title': '模型调优' } };
+    const DICT = { en: { 'section.title': 'Tuner Plus' }, zh: { 'section.title': '模型调优' } };
     const when = (at) => (at ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
     const pct = (rate) => `${Math.round((Number(rate) || 0) * 100)}%`;
 
@@ -45,6 +45,11 @@ window.__ModuleLoader__.load({
 .dsh-tp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .dsh-tp-checks { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; }
 .dsh-tp-list { margin: 6px 0 0; padding-left: 18px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
+.dsh-tp-skill { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
+.dsh-tp-skill input { margin-top: 4px; }
+.dsh-tp-mark { display: inline-block; margin-left: 8px; padding: 0 6px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 6px; font-size: 11px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.dsh-tp-mark[data-mark="unsorted"] { border-color: var(--dsw-alias-state-warn-primary); color: var(--dsw-alias-state-warn-primary); }
+.dsh-tp-textarea { box-sizing: border-box; width: 100%; min-height: 120px; margin-top: 6px; padding: 8px 10px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; font: 12px/18px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--dsw-alias-label-primary); background: transparent; resize: vertical; }
 .dsh-tp-answer { margin-top: 6px; padding: 8px; border-radius: 8px; background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent); font-size: 12px; line-height: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
 `;
 
@@ -60,6 +65,168 @@ window.__ModuleLoader__.load({
     function Switch({ on, label, busy, onChange }) {
       return h('button', { type: 'button', role: 'switch', className: 'dsh-tp-switch', 'aria-checked': on === true, 'aria-label': label, disabled: busy, onClick: () => onChange(!on) });
     }
+    /**
+     * The skills part: its switch, a count for each mark, every skill the app can see with its mark, and
+     * sorting by hand (several at a time) for the ones nobody can place.
+     */
+    function SkillsSection({ skills, busy, act, set, enabled }) {
+      const [picked, setPicked] = useState([]);
+      const [opened, setOpened] = useState([]);
+      const [filter, setFilter] = useState('all');
+      const [form, setForm] = useState(null);
+      const on = skills?.on === true;
+      const rows = Array.isArray(skills?.rows) ? skills.rows : [];
+      const marks = skills?.marks ?? {};
+      const unsorted = rows.filter((row) => row.mark === 'unsorted');
+      const shared = (row) => (row.hiddenIn ?? []).length > 0 || row.hides > 0;
+      const shown = rows.filter((row) => filter === 'all' || (filter === 'shared' ? shared(row) : row.mark === filter));
+      const ordered = [...shown.filter((row) => row.mark === 'unsorted'), ...shown.filter((row) => row.mark !== 'unsorted')];
+      const last = (path) => String(path ?? '').split('/').filter(Boolean).slice(-3).join('/');
+      const sharedLine = (row) => [
+        row.hides > 0 ? `The model gets this one; it hides ${row.hides} other skill${row.hides === 1 ? '' : 's'} of the same name.` : '',
+        ...(row.hiddenIn ?? []).map((one) => `Hidden behind the ${one.byName} in ${last(one.byPlace)} in the project ${String(one.project ?? '').split('/').pop() || 'folder'}: the model never gets this one there.`),
+      ].filter(Boolean).join('\n');
+      const toggle = (key) => setPicked((now) => (now.includes(key) ? now.filter((one) => one !== key) : [...now, key]));
+      const sortAs = (mark) => { void act({ action: 'skillsSort', keys: picked, mark }, 'Sorted.').then((ok) => { if (ok) setPicked([]); }); };
+      const projects = Array.isArray(skills?.projects) ? skills.projects : [];
+      const drafts = Array.isArray(skills?.drafts) ? skills.drafts : [];
+      const openForm = () => setForm({ name: '', description: '', text: '', scope: projects.length > 0 ? 'project' : 'everywhere', project: projects[0]?.path ?? '' });
+      const chosen = form && form.scope === 'project' ? projects.find((one) => one.path === form.project) : undefined;
+      const saveDraft = () => { void act({ action: 'skillDraft', name: form.name, description: form.description, text: form.text, scope: form.scope, project: form.project }).then((ok) => { if (ok) setForm(null); }); };
+      const ladder = Array.isArray(skills?.ladder) ? skills.ladder : [];
+      const newSkill = !on ? null : form === null
+        ? h('div', null,
+          h('div', { className: 'dsh-tp-actions' },
+            h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: openForm }, 'New skill…'),
+            h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, title: 'From what was gathered: jobs done several times with a checked result, points you corrected more than once, jobs a stronger run finished, tools that failed first, plugins with lessons and no skill. Each comes as a card.', onClick: () => void act({ action: 'skillIdeas' }) }, 'Look for skill ideas')),
+          ladder.length > 0 ? h('p', { className: 'dsh-tp-desc' }, `Where a skill sits among Tuner Plus's homes: ${ladder.map((step) => (typeof step.n === 'number' ? `${step.n} ${step.name}` : step.name)).join(' · ')}. A rule that always applies belongs in instructions; know-how for one kind of job, needed only sometimes, in a skill. You can also ask for a skill in a conversation.`) : null)
+        : h('div', { className: 'dsh-tp-card' },
+          h('b', null, 'New skill'),
+          h('p', { className: 'dsh-tp-desc' }, 'It is kept as a draft in Tuner Plus\'s folder, where the app does not load it, until it goes live. It is marked Mine: you wrote it.'),
+          h('input', { className: 'dsh-tp-input wide', placeholder: 'name, like write-changelogs', value: form.name, onChange: (event) => setForm({ ...form, name: event.target.value }) }),
+          h('input', { className: 'dsh-tp-input wide', placeholder: 'When it helps, in one line (the model chooses by this)', value: form.description, onChange: (event) => setForm({ ...form, description: event.target.value }) }),
+          h('textarea', { className: 'dsh-tp-textarea', placeholder: 'What to do', value: form.text, onChange: (event) => setForm({ ...form, text: event.target.value }) }),
+          h('div', { className: 'dsh-tp-actions' },
+            h('label', { className: 'dsh-tp-field' }, 'Where it goes',
+              h('select', { className: 'dsh-tp-select', value: form.scope === 'project' ? form.project : '', onChange: (event) => setForm({ ...form, scope: event.target.value ? 'project' : 'everywhere', project: event.target.value }) },
+                projects.map((one) => h('option', { key: one.path, value: one.path }, `This project: ${one.name}`)),
+                h('option', { value: '' }, 'Everywhere (your ~/.dsh/skills)')))),
+          chosen?.git ? h('p', { className: 'dsh-tp-desc' }, `${chosen.name} is a git repository: once live, the skill file shows among its changes and could be committed with it.`) : null,
+          form.scope === 'everywhere' ? h('p', { className: 'dsh-tp-desc' }, 'Everywhere: it shows in every conversation of every tab that uses skills, and adds a line to each request there.') : null,
+          h('div', { className: 'dsh-tp-actions' },
+            h('button', { type: 'button', className: 'dsh-tp-btn', 'data-main': 'true', disabled: busy || !form.name || !form.description || !form.text, onClick: saveDraft }, 'Save as a draft'),
+            h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => setForm(null) }, 'Cancel')));
+      const exam = skills?.exam ?? {};
+      const running = exam.running ?? null;
+      const examBlocked = busy || Boolean(running) || Boolean(exam.problem);
+      const modelList = Array.isArray(exam.choices) ? exam.choices : [];
+      const routeKey = (route) => (route ? `${route.provider}/${route.model}` : '');
+      const pickModel = (role, value) => {
+        const chosen = modelList.find((one) => routeKey(one) === value);
+        const next = { floor: exam.models?.floor ?? undefined, strong: exam.models?.strong ?? undefined, [role]: chosen ? { provider: chosen.provider, model: chosen.model } : undefined };
+        void set('skillExam', next);
+      };
+      const modelSelect = (role, label) => h('label', { className: 'dsh-tp-field' }, label,
+        h('select', { className: 'dsh-tp-select', value: routeKey(exam.models?.[role]), disabled: busy || Boolean(running), onChange: (event) => pickModel(role, event.target.value) },
+          h('option', { value: '' }, role === 'floor' && !modelList.some((one) => one.here) ? 'No model on this Mac' : 'Not set'),
+          modelList.filter((one) => role !== 'floor' || one.here).map((one) => h('option', { key: routeKey(one), value: routeKey(one) }, `${routeKey(one)}${one.here ? ' (this Mac)' : ''}`))));
+      const examBlock = !on ? null : h('div', { className: 'dsh-tp-card' },
+        h('b', null, 'The skill exam'),
+        h('p', { className: 'dsh-tp-desc' }, 'Three checks before you are asked about a skill: it loads when it should and stays quiet when it should not (on both models below); your held-back tasks of its kind are done better with it than without (on the floor model, which must run on this Mac, so your tasks never leave it); and the skills near it do not get worse. The same exam on any skill, from its Health check button, is a report that changes nothing.'),
+        h('div', { className: 'dsh-tp-actions' }, modelSelect('floor', 'Floor model (on this Mac)'), modelSelect('strong', 'Strong model')),
+        exam.problem ? h('p', { className: 'dsh-tp-desc' }, exam.problem) : null,
+        running ? h('div', { className: 'dsh-tp-actions' },
+          h('span', { className: 'dsh-tp-rowdesc' }, `${running.lookOnly ? 'Health check' : 'Exam'} of ${running.name}: ${running.phase} (check ${running.step || 1} of ${running.steps || 3}).`),
+          h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => void act({ action: 'skillExamStop' }) }, 'Stop')) : null);
+      const examLine = (one) => (one.exam ? (one.exam.passed ? 'It passed its exam.' : `It did not pass its exam. ${one.exam.why ?? ''}`) : 'Not examined yet.');
+      const originLine = (one) => [
+        one.origin?.kind === 'idea' ? `From a skill idea${one.origin.night ? ', drafted by the night shift' : ''}: ${String(one.origin.title ?? '').replace(/^Skill idea: /, '')}.` : '',
+        one.origin?.kind === 'chat' ? 'Asked for in a conversation.' : '',
+        one.origin?.kind === 'bar' ? `Asked for on the bar: "${one.origin.title ?? ''}".` : '',
+        ['improve', 'merge', 'split'].includes(one.origin?.kind) ? `From the bar: ${one.origin.title ?? ''}.` : '',
+        one.outside ? `Built from outside material: ${one.outside}. Read it in full before it is used.` : '',
+      ].filter(Boolean).join(' ');
+      const retired = Array.isArray(skills?.retired) ? skills.retired : [];
+      const day = (at) => (at ? new Date(at).toLocaleDateString() : '');
+      const healthText = (row) => {
+        const h1 = row.health;
+        const used = h1.loads > 0 ? `Loaded ${h1.loads} time${h1.loads === 1 ? '' : 's'} (${h1.well} ended well${h1.owner > 0 ? `, ${h1.owner} by your /${row.name}` : ''}), last ${day(h1.last)}.` : 'Not loaded in the conversations counted.';
+        const room = `Takes about ${h1.room.tokens} tokens in every request of every tab that uses skills.`;
+        const check = h1.check ? ` Last check ${day(h1.check.at)}: ${String(h1.check.line).replace(/^[^:]*: /, '')}` : '';
+        const change = row.change?.how === 'in-place' ? ' Improve changes it where it is (with your yes).' : row.change?.how === 'copy' ? ' Improve makes a copy under the same name (the original is not touched).' : row.change ? ` It cannot be changed here: ${row.change.why}.` : '';
+        return `${used} ${room}${check}${change}`;
+      };
+      const cost = skills?.cost ?? null;
+      const costBlock = !on || !cost ? null : h('div', { className: 'dsh-tp-card' },
+        h('b', null, 'What the list costs'),
+        h('p', { className: 'dsh-tp-desc' }, `${cost.skills} skills: about ${cost.tokens} tokens with every request, in every tab that uses skills.${skills.tabs ? ' In a tab you can switch off the skills it never uses: the model there no longer sees them (your /name still works).' : ''} ${skills.healthAt ? `Uses counted ${day(skills.healthAt)} in ${skills.healthCounted} conversations Tuner Plus may read (never Recon).` : 'Uses not counted yet.'}`),
+        ...(cost.perTab ?? []).slice(0, 8).map((one) => {
+          const label = skills.tabs?.labels?.[one.tab] ?? one.tab;
+          const off = skills.tabs?.off?.[one.tab] ?? [];
+          const never = one.never.filter((name) => !off.includes(name));
+          const counted = skills.tabConversations?.[one.tab] ?? 0;
+          const may = Boolean(skills.tabs?.labels?.[one.tab]) && never.length > 0;
+          if (never.length === 0 && off.length === 0) return null;
+          return h('div', { key: one.tab },
+            never.length > 0 ? h('p', { className: 'dsh-tp-desc' }, `Never loaded in ${label} (${counted} conversation${counted === 1 ? '' : 's'} counted): ${never.slice(0, 12).join(', ')}${never.length > 12 ? ` and ${never.length - 12} more` : ''}.${may && counted < (skills.tabs?.min ?? 10) ? ` Too few conversations to propose switching them off (at least ${skills.tabs?.min ?? 10}).` : ''}`) : null,
+            off.length > 0 ? h('p', { className: 'dsh-tp-desc' }, `Switched off in ${label}: ${off.join(', ')}.`) : null,
+            h('div', { className: 'dsh-tp-actions' },
+              may && counted >= (skills.tabs?.min ?? 10) ? h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => void act({ action: 'skillsTabOff', tab: one.tab, names: never }) }, `Switch these off in ${label}`) : null,
+              off.length > 0 ? h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => void act({ action: 'skillsTabOn', tab: one.tab, names: [] }) }, `Switch back on in ${label}`) : null));
+        }),
+        ...(skills.taught ?? []).map((one) => h('div', { key: `taught-${one.name}`, className: 'dsh-tp-actions' },
+          h('span', { className: 'dsh-tp-desc' }, `Taught to your model on this Mac: ${one.name} (${one.rows} checked run${one.rows === 1 ? '' : 's'} train the harness adapter without loading it).`),
+          h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => void act({ action: 'skillTeachStop', name: one.name }) }, 'Stop teaching'))),
+        h('div', { className: 'dsh-tp-actions' }, h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => void act({ action: 'skillsHealth' }) }, 'Count uses now')));
+      const draftCards = !on ? [] : drafts.map((one) => h('div', { key: one.id, className: 'dsh-tp-card' },
+        h('b', null, `Draft: ${one.name}`),
+        h('div', { className: 'dsh-tp-rowdesc' }, `${one.description}\nGoes to ${one.scope === 'project' ? `the project ${String(one.project).split('/').pop()}` : 'everywhere'}: ${one.file}${one.git ? ' (a git repository)' : ''}.\nWritten by ${one.by === 'owner' ? 'you' : `a model${one.model ? ` (${one.model})` : ''}`}.${originLine(one) ? ` ${originLine(one)}` : ''}\n${examLine(one)}`),
+        one.replaces ? h('div', { className: 'dsh-tp-rowdesc' }, `Changes "${one.replaces.name}" ${one.replaces.how === 'in-place' ? 'where it is (its old text is kept)' : 'as a copy under the same name, which the model gets instead of the original (the original is not touched)'}.${(one.retires ?? []).length > 0 ? ' The skill merged into it is retired (kept) when you use it.' : ''}`) : null,
+        one.replaces && opened.includes(one.id) ? h('div', { className: 'dsh-tp-answer' }, `Before: ${one.replaces.before?.description ?? ''}\n\n${one.replaces.before?.text ?? ''}`) : null,
+        opened.includes(one.id) ? h('div', { className: 'dsh-tp-answer' }, `${one.replaces ? `After: ${one.description}\n\n` : ''}${one.text ?? ''}`) : null,
+        h('div', { className: 'dsh-tp-actions' },
+          h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => {
+            if (opened.includes(one.id)) setOpened((now) => now.filter((id) => id !== one.id));
+            // Showing it is recorded: no skill goes live before you have seen its whole text.
+            else void act({ action: 'skillShown', id: one.id }).then((ok) => { if (ok) setOpened((now) => [...now, one.id]); });
+          } }, opened.includes(one.id) ? 'Hide its text' : 'Show its text'),
+          one.exam?.passed === true || (one.by === 'owner' && skills.liveWithoutExam === true)
+            ? h('button', { type: 'button', className: 'dsh-tp-btn', 'data-main': 'true', disabled: busy || !opened.includes(one.id), title: opened.includes(one.id) ? '' : 'Read its whole text first (Show its text)', onClick: () => void act({ action: 'skillLive', id: one.id }) }, one.replaces ? 'Use it' : 'Put it live')
+            : h('button', { type: 'button', className: 'dsh-tp-btn', 'data-main': 'true', disabled: examBlocked, title: exam.problem || '', onClick: () => void act({ action: 'skillExam', id: one.id }) }, one.exam ? 'Run its exam again' : 'Run its exam'),
+          h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => void act({ action: 'skillDrop', id: one.id }) }, 'Drop'))));
+      return h('div', null,
+        h('div', { className: 'dsh-tp-group' }, on ? `Skills (${rows.length})` : 'Skills'),
+        h(Row, { title: 'Skills part', desc: on ? 'On. Every skill the app can see, with a mark that says where it came from. Code sets the mark from how the skill arrived; only you re-sort one, here. A model that writes a skill file asks you first.' : 'Off: Tuner Plus does nothing with skills, and works as before.' },
+          h(Switch, { on, label: 'Skills part', busy: busy || !enabled, onChange: (value) => void set('skills', value, value ? 'The skills part is on.' : 'The skills part is off.') })),
+        on && skills.problem ? h('p', { className: 'dsh-tp-desc', 'data-error': 'true' }, skills.problem) : null,
+        on && skills.intact === false ? h(Row, { title: 'The record was changed outside Tuner Plus', desc: 'So the marks its doors stamped, and your own sortings, are not trusted: those skills show as Not sorted. You can start a new record; the old one is kept beside it.' },
+          h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => void act({ action: 'skillsRestart' }) }, 'Start a new record')) : null,
+        examBlock,
+        costBlock,
+        newSkill,
+        ...draftCards,
+        on ? h('div', { className: 'dsh-tp-actions', role: 'group', 'aria-label': 'Show' },
+          [['all', `All ${rows.length}`], ...Object.entries(marks).map(([id, name]) => [id, `${name} ${skills.counts?.[id] ?? 0}`]), ['shared', `Shared names ${skills.counts?.shared ?? 0}`]].map(([id, label]) => h('button', { key: id, type: 'button', className: 'dsh-tp-btn', 'data-main': filter === id ? 'true' : 'false', 'aria-pressed': filter === id, onClick: () => setFilter(id) }, label))) : null,
+        on && filter === 'shared' && ordered.length === 0 ? h('p', { className: 'dsh-tp-desc' }, 'No two skills share a name: the model gets every skill it can see.') : null,
+        on && unsorted.length > 0 ? h('p', { className: 'dsh-tp-desc' }, 'Not sorted: nobody can show where these came from. Tick them and say what they are. Until then Tuner Plus treats them as Downloaded.') : null,
+        on && picked.length > 0 ? h('div', { className: 'dsh-tp-actions' },
+          h('span', { className: 'dsh-tp-rowdesc' }, `Mark the ${picked.length} ticked as:`),
+          Object.entries(marks).map(([id, name]) => h('button', { key: id, type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => sortAs(id) }, name))) : null,
+        on ? ordered.map((row) => h('div', { key: row.key, className: 'dsh-tp-skill' },
+          h('input', { type: 'checkbox', checked: picked.includes(row.key), disabled: busy, 'aria-label': `Pick ${row.name}`, onChange: () => toggle(row.key) }),
+          h('div', { className: 'dsh-tp-rowtext' },
+            h('div', { className: 'dsh-tp-rowtitle' }, row.name, h('span', { className: 'dsh-tp-mark', 'data-mark': row.mark }, row.markName), row.changed ? h('span', { className: 'dsh-tp-mark' }, 'Changed') : null, row.outside ? h('span', { className: 'dsh-tp-mark', title: `Built from outside material: ${row.outside}` }, 'Outside material') : null, (row.hiddenIn ?? []).length > 0 ? h('span', { className: 'dsh-tp-mark' }, 'Hidden') : null),
+            h('div', { className: 'dsh-tp-rowdesc' }, `${row.why}.${row.path ? ` ${row.path}` : ''}`),
+            shared(row) ? h('div', { className: 'dsh-tp-rowdesc' }, sharedLine(row)) : null,
+            row.copyOf ? h('div', { className: 'dsh-tp-rowdesc' }, `Your copy of "${row.copyOf.name}"${row.behind ? ': the original changed since (see its card)' : row.copyOf.seen === false ? ': its original is not shown beside it here, so a change to it is not seen yet (the check after an update comes in a later step)' : ''}.`) : null,
+            row.health ? h('div', { className: 'dsh-tp-rowdesc' }, healthText(row)) : null),
+          h('div', { className: 'dsh-tp-actions' },
+            h('button', { type: 'button', className: 'dsh-tp-btn', disabled: examBlocked, title: exam.problem || 'The skill exam on this skill, look only: a report that changes nothing', onClick: () => void act({ action: 'skillExam', key: row.key }) }, 'Health check'),
+            row.change?.how === 'in-place' ? h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, title: 'Switch it off and keep it: Put back brings it back', onClick: () => void act({ action: 'skillRetire', key: row.key }) }, 'Retire') : null))) : null,
+        on && retired.length > 0 ? h('div', { className: 'dsh-tp-group' }, `Retired (${retired.length})`) : null,
+        on ? retired.map((one) => h(Row, { key: one.id, title: one.name, desc: `Retired ${new Date(one.at).toLocaleDateString()}: switched off and kept. It was in ${one.from}.` },
+          h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => void act({ action: 'skillPutBack', id: one.id }) }, 'Put back'))) : null);
+    }
     function Row({ title, desc, children }) {
       return h('div', { className: 'dsh-tp-row' }, h('div', { className: 'dsh-tp-rowtext' }, h('div', { className: 'dsh-tp-rowtitle' }, title), desc ? h('div', { className: 'dsh-tp-rowdesc' }, desc) : null), children);
     }
@@ -74,6 +241,88 @@ window.__ModuleLoader__.load({
       const rung = bar.method === 'auto' ? 'the lowest rung that passes the exam' : (data.rungs?.find((step) => String(step.n) === bar.method)?.name ?? '').toLowerCase();
       const minutes = Number(bar.minutes) || 0;
       return `Improve ${model} at "${goal}" with ${rung}, on ${setText}${minutes > 0 ? `, for at most ${minutes >= 60 ? `${Math.round(minutes / 6) / 10} hours` : `${minutes} minutes`}` : ''}, and test it on that set's exam rows before anything is offered to you.`;
+    }
+
+    /** The skills run in one sentence, as the server says it (lib/skills/bar.js skillsRunSentence). */
+    function skillSentenceOf({ type, names, mark, markName, total, what, where, lookOnly }) {
+      if (type === 'check') {
+        if (names.length === 0) return 'Pick the skills to check.';
+        const kind = mark && mark !== 'all' && markName ? `${markName} ` : '';
+        if (names.length === 1) return `Check the skill "${names[0]}" for clashes and wrong loading. Change nothing.`;
+        if (total > 0 && names.length === total) return `Check the ${total} ${kind}skills for clashes and wrong loading. Change nothing.`;
+        const list = names.length <= 3 ? names.join(', ') : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`;
+        return `Check ${names.length} skills (${list}) for clashes and wrong loading. Change nothing.`;
+      }
+      if (type === 'new') {
+        const job = String(what ?? '').replace(/\s+/g, ' ').trim();
+        if (!job) return 'Say in one line what the new skill is for.';
+        return lookOnly ? `Look only: show the skill a model on this Mac would write for "${job}", ${where}. Nothing is written.` : `Write a new skill for "${job}", ${where}, as a draft, and run its exam. Nothing goes live without you.`;
+      }
+      if (type === 'gaps') return 'Look for jobs you do often that no skill covers, in what Tuner Plus gathered. Change nothing.';
+      const listOf = (list) => (list.length <= 3 ? list.join(', ') : `${list.slice(0, 3).join(', ')} and ${list.length - 3} more`);
+      if (type === 'improve') {
+        if (names.length === 0) return 'Pick the skills to improve.';
+        const which = names.length === 1 ? `the skill "${names[0]}"` : `${names.length} skills (${listOf(names)})`;
+        return lookOnly ? `Look only: show how a model on this Mac would improve ${which}. Nothing is written.` : `Improve ${which}: a model on this Mac writes a better version and its exam runs; yours change in place, the others get a copy under the same name. Nothing is used before you say yes.`;
+      }
+      if (type === 'merge') {
+        if (names.length === 2) return lookOnly ? `Look only: show "${names[0]}" and "${names[1]}" merged into one skill. Nothing is written.` : `Merge "${names[0]}" and "${names[1]}" into one skill: it keeps the name "${names[0]}", and "${names[1]}" is retired (kept) when you use it. Nothing is used before you say yes.`;
+        if (names.length === 1) return lookOnly ? `Look only: show "${names[0]}" split into two skills. Nothing is written.` : `Split "${names[0]}" into two skills: the first keeps its name. Nothing is used before you say yes.`;
+        return 'Pick one skill to split, or two to merge.';
+      }
+      if (type === 'retire') return names.length === 0 ? 'Pick the skills to look at.' : `Find the skills among the ${names.length} picked that were not used for 30 days, and propose to retire them (switched off and kept). Nothing is retired before you say yes.`;
+      return 'Pick a run type.';
+    }
+    /** The bar with the goal "Build or improve a skill" (step 9, as sketched): run type, mark, the skills, where it goes. */
+    function SkillBar({ data, bar, setBar, busy, act }) {
+      const skills = data.skills ?? {};
+      const rows = Array.isArray(skills.rows) ? skills.rows : [];
+      const marks = skills.marks ?? {};
+      const types = Array.isArray(skills.runTypes) ? skills.runTypes : [];
+      const projects = Array.isArray(skills.projects) ? skills.projects : [];
+      const running = skills.run ?? null;
+      const type = bar.skillType ?? 'check';
+      const mark = bar.skillMark ?? 'all';
+      const shown = rows.filter((row) => mark === 'all' || row.mark === mark);
+      const picked = bar.skillKeys ?? shown.map((row) => row.key);
+      const chosen = shown.filter((row) => picked.includes(row.key));
+      // Its own Look only: the training bar's stays as it was (the review of step 9).
+      const writes = ['new', 'improve', 'merge'].includes(type);
+      const lookOnly = writes ? bar.skillLookOnly !== false : true;
+      const picks = ['check', 'improve', 'merge', 'retire'].includes(type);
+      const place = bar.skillPlace ?? (projects[0]?.path ?? '');
+      const placeName = place ? `for the project ${place.split('/').pop()}` : 'for everywhere';
+      const sentence = skillSentenceOf({ type, names: [...new Set(chosen.map((row) => row.name))], mark, markName: marks[mark] ?? '', total: shown.length, what: bar.skillWhat ?? '', where: placeName, lookOnly });
+      const ready = type === 'merge' ? chosen.length === 1 || chosen.length === 2 : picks ? chosen.length > 0 && (type !== 'improve' || chosen.length <= 10) : type === 'new' ? Boolean(String(bar.skillWhat ?? '').trim()) : type === 'gaps';
+      const start = () => void act({ action: 'skillsRun', type, keys: chosen.map((row) => row.key), mark, what: bar.skillWhat ?? '', scope: place ? 'project' : 'everywhere', project: place, lookOnly });
+      return h('div', { className: 'dsh-tp-bar' },
+        h('label', { className: 'dsh-tp-field' }, 'Run type',
+          h('select', { className: 'dsh-tp-select', value: type, onChange: (event) => setBar({ ...bar, skillType: event.target.value }) },
+            types.map((one) => h('option', { key: one.id, value: one.id, disabled: !one.ready }, one.ready ? one.name : `${one.name} (a later step)`)))),
+        picks ? h('label', { className: 'dsh-tp-field' }, 'Mark',
+          h('select', { className: 'dsh-tp-select', value: mark, onChange: (event) => setBar({ ...bar, skillMark: event.target.value, skillKeys: null }) },
+            h('option', { value: 'all' }, `All (${rows.length})`),
+            Object.entries(marks).map(([id, name]) => h('option', { key: id, value: id }, `${name} (${rows.filter((row) => row.mark === id).length})`)))) : null,
+        h('label', { className: 'dsh-tp-field' }, 'Look only',
+          h(Switch, { on: lookOnly, label: 'Look only', busy: busy || !writes, onChange: (on) => setBar({ ...bar, skillLookOnly: on }) })),
+        picks ? h('div', { className: 'dsh-tp-checks', style: { flexBasis: '100%' } },
+          shown.length === 0 ? h('span', { className: 'dsh-tp-rowdesc' }, 'No skill has this mark.') : [
+            h('label', { key: '*' }, h('input', { type: 'checkbox', checked: chosen.length === shown.length, onChange: (event) => setBar({ ...bar, skillKeys: event.target.checked ? null : [] }) }), ` All ${shown.length} shown`),
+            ...shown.map((row) => h('label', { key: row.key },
+              h('input', { type: 'checkbox', checked: picked.includes(row.key), onChange: (event) => setBar({ ...bar, skillKeys: event.target.checked ? [...picked, row.key] : picked.filter((one) => one !== row.key) }) }),
+              ` ${row.name} `, h('span', { className: 'dsh-tp-mark', 'data-mark': row.mark }, row.markName))),
+          ]) : null,
+        type === 'new' ? h('div', { className: 'dsh-tp-actions', style: { flexBasis: '100%' } },
+          h('input', { className: 'dsh-tp-input wide', placeholder: 'What the skill is for, like "how I want changelogs written"', maxLength: 300, value: bar.skillWhat ?? '', onChange: (event) => setBar({ ...bar, skillWhat: event.target.value }) }),
+          h('label', { className: 'dsh-tp-field' }, 'Where it goes',
+            h('select', { className: 'dsh-tp-select', value: place, onChange: (event) => setBar({ ...bar, skillPlace: event.target.value }) },
+              projects.map((one) => h('option', { key: one.path, value: one.path }, `This project: ${one.name}`)),
+              h('option', { value: '' }, 'Everywhere (your ~/.dsh/skills)')))) : null,
+        h('div', { className: 'dsh-tp-sentence' }, sentence),
+        running
+          ? h('div', { className: 'dsh-tp-actions' }, h('span', { className: 'dsh-tp-rowdesc' }, `Running: ${running.sentence}${running.steps > 1 ? ` (${running.step} of ${running.steps}${running.current ? `: ${running.current}` : ''})` : ''}`), h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => void act({ action: 'skillsRunStop' }) }, 'Stop'))
+          : h('button', { type: 'button', className: 'dsh-tp-btn', 'data-main': 'true', disabled: busy || !data.enabled || !ready || Boolean(skills.exam?.running), title: skills.exam?.problem && type !== 'gaps' ? skills.exam.problem : '', onClick: start }, lookOnly ? 'Look' : 'Start'),
+        h('p', { className: 'dsh-tp-desc', style: { flexBasis: '100%' } }, 'Model, Method, Budget and Data sets are not used for this goal: the skill exam\'s floor and strong models do the work. A run reads and changes only the skills it starts with.'));
     }
 
     function TuningPage() {
@@ -98,25 +347,28 @@ window.__ModuleLoader__.load({
         void load();
         return () => { alive.current = false; };
       }, [load]);
-      // Look again every 5 seconds while a run goes, every 30 seconds otherwise (and never while hidden).
-      const running = Boolean(data?.active);
+      // Look again every 5 seconds while a run, a skills run or a skill exam goes, every 30 seconds otherwise (and never while hidden).
+      const running = Boolean(data?.active || data?.skills?.run || data?.skills?.exam?.running);
       useEffect(() => {
         const timer = setInterval(() => { if (!document.hidden) void load(); }, running ? 5000 : 30000);
         return () => clearInterval(timer);
       }, [running, load]);
 
-      if (!data) return h('div', { className: 'dsh-tp-page' }, h('style', null, CSS), h('h2', { className: 'dsh-tp-title' }, 'Tuning Plus'), h('p', { className: 'dsh-tp-desc', 'data-error': String(Boolean(error)) }, error ? `Could not load: ${error}` : 'Loading…'));
+      if (!data) return h('div', { className: 'dsh-tp-page' }, h('style', null, CSS), h('h2', { className: 'dsh-tp-title' }, 'Tuner Plus'), h('p', { className: 'dsh-tp-desc', 'data-error': String(Boolean(error)) }, error ? `Could not load: ${error}` : 'Loading…'));
 
+      /** @returns {Promise<boolean>} whether the action went through (a form keeps what was typed when it did not). */
       const act = async (body, done) => {
         setBusy(true);
         try {
           const next = await call(body);
-          if (!alive.current) return;
+          if (!alive.current) return true;
           setData(next);
           if (next.taste) setTaste(next.taste);
           setNote({ text: next.note || done || '', error: false });
+          return true;
         } catch (problem) {
           if (alive.current) setNote({ text: String(problem?.message ?? problem), error: true });
+          return false;
         } finally {
           if (alive.current) setBusy(false);
         }
@@ -129,13 +381,13 @@ window.__ModuleLoader__.load({
 
       return h('div', { className: 'dsh-tp-page' },
         h('style', null, CSS),
-        h('h2', { className: 'dsh-tp-title' }, 'Tuning Plus'),
-        h('p', { className: 'dsh-tp-desc' }, 'Models that learn from your work. Every checked step (tests that passed, a claim you ruled on, a draft you edited and approved, a device that read back) is kept as a training row with its proof. One row in five goes to a private exam made from your own work, which never trains anything. The rest builds named data sets, from which Tuning Plus proposes the cheapest fix first (instructions, then examples, then a tuned prompt) and only then trains an adapter on this Mac. Nothing is used until it beats the exam and you say yes.'),
+        h('h2', { className: 'dsh-tp-title' }, 'Tuner Plus'),
+        h('p', { className: 'dsh-tp-desc' }, 'Models that learn from your work. Every checked step (tests that passed, a claim you ruled on, a draft you edited and approved, a device that read back) is kept as a training row with its proof. One row in five goes to a private exam made from your own work, which never trains anything. The rest builds named data sets, from which Tuner Plus proposes the cheapest fix first (instructions, then examples, then a tuned prompt) and only then trains an adapter on this Mac. Nothing is used until it beats the exam and you say yes.'),
         note.text ? h('p', { className: 'dsh-tp-desc', 'data-error': String(note.error), role: 'status' }, note.text) : null,
         data.problem ? h('p', { className: 'dsh-tp-desc', 'data-error': 'true' }, data.problem) : null,
 
-        h(Row, { title: 'Tuning Plus', desc: data.enabled ? `On. Its folder: ${data.folder}.` : 'Off: nothing is gathered and its tools are not offered in the chat.' },
-          h(Switch, { on: data.enabled, label: 'Tuning Plus', busy, onChange: (on) => void set('enabled', on, on ? 'Tuning Plus is on. Switch on the modes it may learn from below.' : 'Tuning Plus is off.') })),
+        h(Row, { title: 'Tuner Plus', desc: data.enabled ? `On. Its folder: ${data.folder}.` : 'Off: nothing is gathered and its tools are not offered in the chat.' },
+          h(Switch, { on: data.enabled, label: 'Tuner Plus', busy, onChange: (on) => void set('enabled', on, on ? 'Tuner Plus is on. Switch on the modes it may learn from below.' : 'Tuner Plus is off.') })),
 
         h('div', { className: 'dsh-tp-group' }, 'What it learns from'),
         h('p', { className: 'dsh-tp-desc' }, 'Each mode starts off. Only checked steps become rows. Recon is never read, nor a conversation that received an export from Recon, a helper of either, or a conversation you marked "never learn from this" on Learned skills. Your own folders are never read. Passwords and keys are masked before a row is stored.'),
@@ -148,7 +400,12 @@ window.__ModuleLoader__.load({
         data.lastHarvest ? h('p', { className: 'dsh-tp-desc' }, `Last gathered ${when(data.lastHarvest.at)}: ${Object.entries(data.lastHarvest.modes ?? {}).map(([mode, slot]) => `${mode} ${slot.kept} rows, ${slot.exam} to the exam`).join('; ') || 'nothing new'}. ${data.lastHarvest.left?.length ? `${data.lastHarvest.left.length} conversations left out (Recon, exports, helpers, marked).` : ''}`) : null,
 
         h('div', { className: 'dsh-tp-group' }, 'The bar'),
-        h('div', { className: 'dsh-tp-bar' },
+        bar.goal === 'skill' && data.goals?.skill ? h('div', null,
+          h('div', { className: 'dsh-tp-bar' },
+            h('label', { className: 'dsh-tp-field' }, 'Goal',
+              h('select', { className: 'dsh-tp-select', value: bar.goal, onChange: (event) => setBar({ ...bar, goal: event.target.value, sets: [] }) },
+                Object.entries(data.goals ?? {}).map(([id, label]) => h('option', { key: id, value: id }, label))))),
+          h(SkillBar, { data, bar, setBar, busy, act })) : h('div', { className: 'dsh-tp-bar' },
           h('label', { className: 'dsh-tp-field' }, 'Model',
             h('select', { className: 'dsh-tp-select', value: bar.model, onChange: (event) => setBar({ ...bar, model: event.target.value }) },
               h('option', { value: '' }, 'Pick a model'),
@@ -180,8 +437,8 @@ window.__ModuleLoader__.load({
             (card.buttons ?? ['later', 'never']).map((button) => h('button', {
               key: button, type: 'button', className: 'dsh-tp-btn', disabled: busy || (button === 'taste' && !route),
               title: button === 'taste' && !route ? 'Pick the model in use on the bar first' : '',
-              onClick: () => void (button === 'taste' ? act({ action: 'taste', entry: card.entry, current: route ? { provider: route.provider, model: route.model } : null }) : act({ action: 'card', card: card.id, do: button }, button === 'promote' ? 'Promoted. Switch it on in the shelf below.' : '')),
-            }, { taste: 'Taste test', promote: 'Promote', later: 'Not now', never: 'Do not suggest this again' }[button] ?? button))))),
+              onClick: () => void (button === 'taste' ? act({ action: 'taste', entry: card.entry, current: route ? { provider: route.provider, model: route.model } : null }) : button === 'draft' ? act({ action: 'skillIdeaDraft', card: card.id }) : button === 'retire' ? act({ action: 'skillsRetire', card: card.id }) : button === 'check' ? act({ action: 'skillsUpdateCheck', card: card.id }) : button === 'teach' ? act({ action: 'skillTeach', card: card.id }) : act({ action: 'card', card: card.id, do: button }, button === 'promote' ? 'Promoted. Switch it on in the shelf below.' : '')),
+            }, { taste: 'Taste test', promote: 'Promote', draft: 'Draft it', retire: 'Retire them', check: 'Check them', teach: 'Teach it', later: 'Not now', never: 'Do not suggest this again' }[button] ?? button))))),
         taste ? h('div', { className: 'dsh-tp-card' },
           h('b', null, taste.done ? 'Taste test: done' : 'Taste test: which answer is better? (names hidden)'),
           taste.items.map((item) => h('div', { key: item.n, style: { marginTop: 10 } },
@@ -211,8 +468,10 @@ window.__ModuleLoader__.load({
             h('input', { className: 'dsh-tp-input', placeholder: 'model name there', value: draft.routes[entry.id]?.model ?? '', onChange: (event) => setDraft({ ...draft, routes: { ...draft.routes, [entry.id]: { ...draft.routes[entry.id], model: event.target.value } } }) }),
             h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy || !draft.routes[entry.id]?.provider || !draft.routes[entry.id]?.model, onClick: () => void act({ action: 'route', entry: entry.id, ...draft.routes[entry.id] }, 'Saved. A team in Settings → Model Tiers can now name it for a role.') }, 'Save its address')) : null)),
 
+        h(SkillsSection, { skills: data.skills, busy, act, set, enabled: data.enabled }),
+
         h('div', { className: 'dsh-tp-group' }, 'Trainer and models on this Mac'),
-        h(Row, { title: 'The trainer\'s Python', desc: data.python ? `${data.python}${data.pythonProblem ? ` · ${data.pythonProblem}` : ''}` : 'Not set. Tuning Plus trains with Apple\'s mlx-lm, which you install yourself in a Python of its own (for example "uv venv" then "uv pip install mlx-lm" in a folder you choose), then give its full path here (…/bin/python). Tuning Plus never installs anything and never downloads a model.' },
+        h(Row, { title: 'The trainer\'s Python', desc: data.python ? `${data.python}${data.pythonProblem ? ` · ${data.pythonProblem}` : ''}` : 'Not set. Tuner Plus trains with Apple\'s mlx-lm, which you install yourself in a Python of its own (for example "uv venv" then "uv pip install mlx-lm" in a folder you choose), then give its full path here (…/bin/python). Tuner Plus never installs anything and never downloads a model.' },
           h('input', { className: 'dsh-tp-input', placeholder: '/full/path/to/.venv/bin/python', value: draft.python ?? data.python ?? '', onChange: (event) => setDraft({ ...draft, python: event.target.value }) }),
           h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy || draft.python === null, onClick: () => void set('python', draft.python ?? '') }, 'Save')),
         h(Row, { title: 'Where each base model\'s files are', desc: Object.entries(data.modelPaths ?? {}).map(([name, path]) => `${name}: ${path}`).join('\n') || 'None yet. Training needs a model\'s MLX folder on this Mac (with config.json); its files are never changed.' },
@@ -224,7 +483,7 @@ window.__ModuleLoader__.load({
             h('option', { value: '' }, 'None'), models.map((one) => h('option', { key: `${one.provider}/${one.model}`, value: `${one.provider}/${one.model}` }, `${one.provider}/${one.model}`)))),
         h(Row, { title: 'A teacher on the internet may read rows', desc: 'Off: only a teacher on this Mac reads your rows.' },
           h(Switch, { on: data.teacherCloud, label: 'A teacher on the internet may read rows', busy, onChange: (on) => void set('teacherCloud', on) })),
-        h(Row, { title: 'Count my own network\'s machines as this Mac', desc: 'Off: only this Mac itself counts when Tuning Plus decides what may be sent to a model (exam rows, recent requests for a taste test, rows for the teacher); a model elsewhere gets only text that was already sent to it. On: a model at a home address (192.168…, .local) counts as this Mac too. Note: a proxy on your network that forwards to a cloud provider cannot be told apart from a model at home.' },
+        h(Row, { title: 'Count my own network\'s machines as this Mac', desc: 'Off: only this Mac itself counts when Tuner Plus decides what may be sent to a model (exam rows, recent requests for a taste test, rows for the teacher); a model elsewhere gets only text that was already sent to it. On: a model at a home address (192.168…, .local) counts as this Mac too. Note: a proxy on your network that forwards to a cloud provider cannot be told apart from a model at home.' },
           h(Switch, { on: data.ownNetworkLocal, label: 'Count my own network\'s machines as this Mac', busy, onChange: (on) => void set('ownNetworkLocal', on) })),
 
         h('div', { className: 'dsh-tp-group' }, 'May it train?'),
@@ -237,6 +496,8 @@ window.__ModuleLoader__.load({
         h('div', { className: 'dsh-tp-group' }, 'The night shift'),
         h(Row, { title: 'Work at night on this Mac', desc: `Only while this Mac is on power and has been unused for ${data.night?.idleMinutes ?? 15} minutes; it stops the moment you use it. It gathers, sorts, finds the weakest spot and proposes the lowest rung; it trains only the sets you allow below, and it never promotes anything: you find cards in the morning.${data.night?.last ? ` Last night: ${data.night.last}.` : ''}` },
           h(Switch, { on: data.night?.on, label: 'Night shift', busy: busy || !data.enabled, onChange: (on) => void set('nightShift', on) })),
+        data.skills?.on ? h(Row, { title: 'Draft skills at night', desc: 'At most two skill ideas a night: a model on this Mac drafts each from your examples, and it takes its exam with the skill exam\'s two models (as when you press Exam). Nothing goes live and no skill is changed: the drafts wait under Skills for your yes.' },
+          h(Switch, { on: data.night?.skills, label: 'Draft skills at night', busy: busy || !data.enabled || !data.night?.on, onChange: (on) => void set('nightSkills', on) })) : null,
         h(Row, { title: 'Sets the night shift may train', desc: (data.night?.train ?? []).map((item) => `${data.sets?.[item.set]?.name ?? item.set} on ${item.model}`).join('; ') || 'None: it trains nothing.' },
           h('select', { className: 'dsh-tp-select', value: '', disabled: busy || !bar.model, title: bar.model ? '' : 'Pick the model on the bar first', onChange: (event) => { if (event.target.value) void set('nightTrain', [...(data.night?.train ?? []).filter((item) => item.set !== event.target.value), { set: event.target.value, model: bar.model }]); } },
             h('option', { value: '' }, 'Allow a set…'), sets.map(([id, set]) => h('option', { key: id, value: id }, set.name))),
@@ -249,7 +510,7 @@ window.__ModuleLoader__.load({
           h('li', null, 'Training does not teach facts well: facts are looked up (retrieval). "Know a subject" builds retrieval first.'),
           h('li', null, 'What a model is trained on can come back out of it: adapters stay private, and your own folders are never used.'),
           h('li', null, 'Training takes the Mac it runs on. A new base model empties the shelf; the sets stay, and everything is rebuilt from them.'),
-          h('li', null, 'Your model server may not load adapters: then Tuning Plus makes a fused copy (a new model folder) or runs mlx-lm\'s own server, and you add it in Settings → Models.'),
+          h('li', null, 'Your model server may not load adapters: then Tuner Plus makes a fused copy (a new model folder) or runs mlx-lm\'s own server, and you add it in Settings → Models.'),
           h('li', null, 'An exam can be gamed: exam rows never train, the exam keeps growing, and the taste test asks you.')));
     }
 

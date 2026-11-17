@@ -1309,11 +1309,11 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         h('span', { className: 'dsh-mt-rolelabel' }, ''),
         h('input', {
           className: 'dsh-mt-input',
-          placeholder: 'Tuning Plus adapter (its shelf id), optional',
-          title: 'Used only while that adapter is switched on and served on Settings → Tuning Plus; otherwise the model above.',
+          placeholder: 'Tuner Plus adapter (its shelf id), optional',
+          title: 'Used only while that adapter is switched on and served on Settings → Tuner Plus; otherwise the model above.',
           value: text,
           spellCheck: false,
-          'aria-label': `${label}: Tuning Plus adapter`,
+          'aria-label': `${label}: Tuner Plus adapter`,
           onChange: (event) => setText(event.target.value),
           onBlur: commit,
           onKeyDown: (event) => {

@@ -12,6 +12,7 @@ import z from '@deepseek-ai/schemastery';
 import { KEEP_MS, groupLabel, jsonSize, openTrash, safeId, safeOwner, safeTab, tidyPending } from './lib/trash.js';
 import { INSTRUCTIONS_MAX, UPLOAD_MAX, addFile, canonical, listFiles, noteOf, openProjects } from './lib/projects.js';
 import { openPresets } from './lib/presets.js';
+import { askMarks, withMarks } from './lib/skill-marks.js';
 import { buildDigest, drift } from './lib/digest.js';
 import { generatePrompt, openVersions, parseGenerated, versionsDir, whereOf } from './lib/generate.js';
 import { fileURLToPath } from 'node:url';
@@ -419,7 +420,10 @@ export function apply(ctx) {
             modelInvocable: skill.invocation?.modelInvocable !== false,
             userInvocable: skill.invocation?.userInvocable !== false,
           }));
-          res.end(JSON.stringify({ at: Date.now(), folder: cwd, skills }));
+          // Tuner Plus's marks (where each skill came from), while that add-on and its skills part are on;
+          // without them the answer is exactly as before.
+          const marks = await askMarks(() => ctx.get('tuning'));
+          res.end(JSON.stringify(marks ? { at: Date.now(), folder: cwd, skills: withMarks(skills, marks), marks: marks.names } : { at: Date.now(), folder: cwd, skills }));
         } catch (error) {
           res.statusCode = 500;
           res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 300) }));

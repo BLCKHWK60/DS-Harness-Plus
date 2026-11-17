@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 export const ANSWER_SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'answer.py');
 
 /** How the owner installs the trainer (Tuning Plus never does). */
-export const HOW_TO_INSTALL = 'Tuning Plus trains with Apple\'s MLX trainer (mlx-lm), which you install yourself in a Python of its own, for example: make a folder, run "uv venv" and "uv pip install mlx-lm" in it (or "python3 -m venv .venv" and ".venv/bin/pip install mlx-lm"), then give Tuning Plus the full path of that Python (…/.venv/bin/python). Tuning Plus never installs anything.';
+export const HOW_TO_INSTALL = 'Tuner Plus trains with Apple\'s MLX trainer (mlx-lm), which you install yourself in a Python of its own, for example: make a folder, run "uv venv" and "uv pip install mlx-lm" in it (or "python3 -m venv .venv" and ".venv/bin/pip install mlx-lm"), then give Tuner Plus the full path of that Python (…/.venv/bin/python). Tuner Plus never installs anything.';
 
 /** The environment of every trainer run: no downloads, no telemetry. */
 export const OFFLINE_ENV = { HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1', HF_DATASETS_OFFLINE: '1', HF_HUB_DISABLE_TELEMETRY: '1', TOKENIZERS_PARALLELISM: 'false' };
@@ -35,7 +35,7 @@ export function pythonProblem(path) {
 export function modelProblem(path) {
   const value = String(path ?? '').trim();
   if (!value) return 'Give the folder of the base model on this Mac (an MLX model folder with config.json).';
-  if (!isAbsolute(value)) return 'Give the full path of the model\'s folder: Tuning Plus does not download models.';
+  if (!isAbsolute(value)) return 'Give the full path of the model\'s folder: Tuner Plus does not download models.';
   try {
     if (!statSync(value).isDirectory()) return 'That is not a folder.';
   } catch {

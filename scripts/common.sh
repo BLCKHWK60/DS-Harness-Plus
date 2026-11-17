@@ -42,8 +42,11 @@ check_version() {
 
 # Where the app keeps its data. Only the default location is the one the app itself uses.
 pick_home() {
-  if [ -z "${DSH_HOME:-}" ] || [ "$DSH_HOME" = "$HOME/.dsh" ]; then
-    DSH_HOME="$HOME/.dsh"; REAL_HOME=1
+  # The real data folder in any spelling ("~/.dsh/", a link to it): compared by the real path.
+  local usual="$HOME/.dsh" here=""
+  [ -n "${DSH_HOME:-}" ] && here=$(cd "$DSH_HOME" 2>/dev/null && pwd -P)
+  if [ -z "${DSH_HOME:-}" ] || [ "$DSH_HOME" = "$usual" ] || { [ -n "$here" ] && [ "$here" = "$(cd "$usual" 2>/dev/null && pwd -P)" ]; }; then
+    DSH_HOME="$usual"; REAL_HOME=1
   else
     REAL_HOME=0
   fi

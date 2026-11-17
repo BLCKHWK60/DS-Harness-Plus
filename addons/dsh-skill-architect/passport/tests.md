@@ -1,6 +1,6 @@
 # Tests: @local/dsh-skill-architect
 
-15 tests in 1 file: test/architect.test.mjs.
+17 tests in 1 file: test/architect.test.mjs.
 
 Run with the app's own Node (stand-ins only; never against the real app data):
 

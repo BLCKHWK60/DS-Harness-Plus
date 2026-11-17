@@ -51,10 +51,11 @@ test('an isolated conversation is not handed the app\'s own notes; what the user
     { role: 'user', source: { kind: 'human' }, content: 'question' },
     { role: 'user', source: { kind: 'agent-instructions' } },
     { role: 'user', source: { kind: 'skill-catalog' } },
+    { role: 'user', source: { kind: 'skill-invocation', name: 'x' } },
     { message: { source: { kind: 'runtime-context' } } },
     { role: 'assistant', content: 'answer' },
   ];
-  assert.deepEqual(dropIsolatedNotes(messages), [messages[0], messages[4]]);
+  assert.deepEqual(dropIsolatedNotes(messages), [messages[0], messages[5]]);
 });
 
 test('the service refuses a way in and a way out', () => {
@@ -63,4 +64,26 @@ test('the service refuses a way in and a way out', () => {
   assert.match(modeChangeRefusal({ wasIsolated: false, current: 'cowork', target: 'recon', targetIsolated: true, fresh: false }), /cannot become isolated/);
   assert.equal(modeChangeRefusal({ wasIsolated: false, current: 'cowork', target: 'recon', targetIsolated: true, fresh: true }), '', 'a new conversation may');
   assert.equal(modeChangeRefusal({ wasIsolated: false, current: 'cowork', target: 'code', targetIsolated: false, fresh: false }), '');
+});
+
+test('a Recon conversation is not handed a skill\'s text when the user types /skill-name; other tabs still are (17 November 2026)', async () => {
+  const { boot, makeWorld } = await import('./app.mjs');
+  const RECON = { label: 'Recon', tools: ['recon_cite'], sandbox: 'read-only', prompt: 'Recon method.', isolated: true };
+  const world = makeWorld({ pruneStaleSessions: false, extraModes: JSON.stringify({ recon: RECON }), sessionModes: JSON.stringify({ r1: 'recon', c1: 'cowork' }) });
+  const app = boot(world, { known: ['recon_cite', 'bash'] });
+  try {
+    const r1 = (await app.open('r1')).agent;
+    const c1 = (await app.open('c1')).agent;
+    const typed = { role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: '/lab-probe look into this' }] };
+    // The app adds the skill's text after the user's message (dsh-tool-skill, agent/pre-step).
+    const inserted = { role: 'user', source: { kind: 'skill-invocation', name: 'lab-probe', form: 'instructions' }, content: [{ type: 'text', text: '<skill_content name="lab-probe">PROBE</skill_content>' }] };
+    const step = (agent) => app.waterfall('agent/pre-step', { agent }, () => ({ kind: 'enter', messages: [typed, inserted] }));
+    const recon = await step(r1);
+    assert.equal(recon.kind, 'enter');
+    assert.deepEqual(recon.messages.map((message) => message.source.kind), ['user'], 'what the user typed stays; the skill\'s text does not reach Recon');
+    const cowork = await step(c1);
+    assert.deepEqual(cowork.messages.map((message) => message.source.kind), ['user', 'skill-invocation'], 'Cowork still gets the skill');
+  } finally {
+    app.stop();
+  }
 });

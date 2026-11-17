@@ -1,6 +1,6 @@
 # Tests: @local/dsh-cowork-shell
 
-133 tests in 8 files: test/generate.test.mjs, test/presets.test.mjs, test/projects.test.mjs, test/scratch.test.mjs, test/shared-trash.test.mjs, test/start-home.test.mjs, test/trash-route.test.mjs, test/trash.test.mjs.
+136 tests in 9 files: test/generate.test.mjs, test/presets.test.mjs, test/projects.test.mjs, test/scratch.test.mjs, test/shared-trash.test.mjs, test/skill-marks.test.mjs, test/start-home.test.mjs, test/trash-route.test.mjs, test/trash.test.mjs.
 
 Run with the app's own Node (stand-ins only; never against the real app data):
 

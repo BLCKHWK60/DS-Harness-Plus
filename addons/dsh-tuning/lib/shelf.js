@@ -60,7 +60,7 @@ export function recordExam(shelf, id, exam, at = Date.now()) {
  */
 export function promote(shelf, id, { ownerSaidYes, at = Date.now() }) {
   const entry = find(shelf, id);
-  if (ownerSaidYes !== true) throw new Error('Promotion needs your yes on the Tuning Plus page.');
+  if (ownerSaidYes !== true) throw new Error('Promotion needs your yes on the Tuner Plus page.');
   if (!entry.exam?.decision?.ok) throw new Error('This entry has not passed its exam, so it cannot be promoted.');
   entry.state = 'promoted';
   entry.history.push({ at, what: 'promoted by the owner' });

@@ -1,5 +1,6 @@
 # Changelog: @local/dsh-cowork-shell
 
+- 2026-11-17 Skills page: while Tuner Plus and its skills part are on, a mark beside each skill (where it came from) and a filter by mark, named in the page's language; without them the page and its answer are exactly as before (Tuner Plus is asked for at most 3 seconds)
 - 2026-11-17 Creator Plus: the Creator Plus tab icon
 - 2026-11-16 Content and Bench tabs; Long run checks in Bench and Recon; a run that has ended stops cleanly
 - 2026-11-16 Long run in every tab with a Run button, and the overnight work

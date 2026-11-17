@@ -1,0 +1,73 @@
+{
+  "name": "@local/dsh-tuning",
+  "folder": "dsh-tuning",
+  "at": "2026-11-17",
+  "provides": [
+    "tuning"
+  ],
+  "uses": [
+    "approval",
+    "benchmark",
+    "coworkTrash",
+    "dshHomePath",
+    "llm",
+    "modelTiers",
+    "modes",
+    "reconExports",
+    "sessionQuery",
+    "settings",
+    "tools"
+  ],
+  "events": [],
+  "tools": [
+    "tuning_status",
+    "tuning_plan",
+    "tuning_start",
+    "tuning_export_set"
+  ],
+  "commands": [],
+  "routes": [
+    "/dsh-tuning/data"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "tuning"
+    }
+  ],
+  "settings": [
+    "tuning"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [
+    "tuning",
+    "evolve",
+    "research",
+    "bench",
+    "content",
+    "mission",
+    "creator-plus"
+  ],
+  "config": [
+    "enabled",
+    "harvest",
+    "folder",
+    "python",
+    "models",
+    "teacher",
+    "teacherCloud",
+    "providers",
+    "anthropicOpenEnded",
+    "nightShift",
+    "idleMinutes",
+    "nightMinutes",
+    "nightTrain",
+    "examLimit",
+    "ownNetworkLocal"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "tuning"
+  ]
+}

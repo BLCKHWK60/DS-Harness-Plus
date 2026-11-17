@@ -310,3 +310,7 @@ When instructions written by a model are saved, a mark of the folder (file names
 - **Tested (0.47.0):** lab run in the app: filter by title, text search, pick two with Cmd-click
   and with Shift-click, archive two, rename one, delete two archived ones into the trash.
 - **Not verified:** on a large real history.
+
+## Since 17 November: marks on the Skills page
+
+While Tuner Plus and its skills part are on, the Skills page shows each skill's mark (where it came from: Default, Downloaded, Plus, AI-made, Mine, Not sorted) and a filter by mark, in the page's language. Tuner Plus is asked for at most 3 seconds and answers from its last look. Without it (absent, off, failing or slow), the page and its answer are exactly as before.

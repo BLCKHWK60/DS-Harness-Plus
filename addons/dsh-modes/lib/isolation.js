@@ -93,10 +93,11 @@ export function isolatedRunMask({ tools, child = false, files = true, off = fals
 
 /**
  * The app's own notes an isolated conversation is not handed: the instruction files of the folder
- * and of the app's home (where Memory keeps what it remembers), the list of skills, and the
- * description of the session with its folder and addresses.
+ * and of the app's home (where Memory keeps what it remembers), the list of skills, a skill's text
+ * the app adds when the user types /skill-name (the app does not check whether the conversation may
+ * load skills; 17 November 2026), and the description of the session with its folder and addresses.
  */
-export const ISOLATED_DROPS = new Set(['agent-instructions', 'skill-catalog', 'runtime-context']);
+export const ISOLATED_DROPS = new Set(['agent-instructions', 'skill-catalog', 'skill-invocation', 'runtime-context']);
 
 /**
  * @param {object[]} messages - the messages a step is about to take in.

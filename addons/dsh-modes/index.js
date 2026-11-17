@@ -11,6 +11,7 @@
  * middle of a turn.
  */
 import { randomUUID } from 'node:crypto';
+import { dirname, resolve as resolvePath } from 'node:path';
 import z from '@deepseek-ai/schemastery';
 import { LEVEL_NAMES, VERIFIED_START, addressesIn, addressesOf, levelAllows, mixesOf, pickedLevel, verifiedList } from './lib/weblevel.js';
 import { IMAGE_TOOLS, WEB_TOOLS, goesOnline, imageToolsOffline, longRunMask, longToolsFor, oldWebMarks, parentIdOf, programGoesOnline, researchTab, rootOf, toolMaskFor, webFor, webReaching } from './lib/mask.js';
@@ -18,12 +19,13 @@ import { trashedIds } from './lib/trashed.js';
 import { fromScheduler, scheduledModeId } from './lib/scheduled.js';
 import { PROGRAM_TOOL, programNote, programOnly, SLOW_TOOLS } from './lib/ptc.js';
 import { helpersBelow, onlyStopNotes, stoppedByUser } from './lib/stop.js';
-import { CORE, FAMILIES, FIND_TOOL, brings, catalog as trimCatalog, mentioned, others as trimOthers, resolveRequest, skillFamilies } from './lib/trim.js';
+import { CORE, FAMILIES, FIND_TOOL, appOfficeFolder, brings, catalog as trimCatalog, mentioned, others as trimOthers, resolveRequest, skillFamilies, skillFolderIn } from './lib/trim.js';
 import { RUN_OVER_LIMIT, RUN_OVER_TEXT, RUN_STEP_TOOL, dropIsolatedNotes, heldMode, isolatedMayRun, isolatedRunMask, modeChangeRefusal } from './lib/isolation.js';
 import { DEPTH_CHECK_KIND, DEPTH_CHECK_PROMPT, DEPTH_CHECK_REFUSAL, DEPTH_CHECK_SUMMARY, promptText } from './lib/prompt.js';
 import { lensIdIn, lensTextIn, ownLensesOf } from './lib/lens.js';
 import { movedSince, readBase, readEntry, sandboxStep } from './lib/sandbox.js';
 import { beforeFirstMessage, sidebarTabs, tabCount } from './lib/tabs.js';
+import { offIn, withOff, withoutOffSkills, lastSeenCatalog } from './lib/skilloff.js';
 
 export { CODE_METHOD, COWORK_METHOD, DEPTH_CHECK_PROMPT, DEPTH_PROMPTS, DEPTH_SEARCH_PROMPTS, ISOLATED_DEPTH_PROMPTS, ISOLATED_LEVEL_PROMPTS, ISOLATED_OFF_PROMPT, SEARCH_DEPTH_PROMPTS } from './lib/prompt.js';
 
@@ -31,6 +33,8 @@ export const name = 'modes';
 /** The chat box asks here which tools the model can call in a conversation (header `x-dsh-session`). */
 export const TOOLS_PATH = '/dsh-modes/tools';
 export const inject = ['tools'];
+/** The app's Contents folder (…/DeepSeek Harness.app/Contents), where its own Office skills live. */
+const APP_CONTENTS = resolvePath(dirname(process.execPath), '..');
 
 /** Modes that exist until the user supplies their own `modes` JSON. */
 const BUILTIN_MODES = {
@@ -133,6 +137,11 @@ export const Config = z.object({
   sessionModes: z.string().default('{}').volatile(),
   /** Conversations that began in an isolated mode (id -> true). They stay isolated whatever happens to the mode. */
   sessionIsolated: z.string().default('{}').volatile(),
+  /**
+   * Skills switched off per tab, as JSON `{ tabId: [skill names] }` (Tuner Plus's step 14). In that tab the model
+   * does not see them in its skill list and cannot load them; the owner's own /name still works. Empty: as before.
+   */
+  skillsOff: z.string().default('{}').volatile(),
   /** Drop per-session entries whose Session is no longer stored, once per start. */
   pruneStaleSessions: z.boolean().default(true),
   /**
@@ -655,8 +664,8 @@ export function apply(ctx, config) {
       const waiting = [...(agent.inbox?.nextTurn ?? []), ...(agent.inbox?.nextStep ?? [])];
       // Not the app's context, and not Thorough's check (its words name a research run).
       const said = waiting.filter((message) => message?.role === 'user' && message?.source?.kind !== 'runtime-context' && message?.source?.kind !== DEPTH_CHECK_KIND).map((message) => textOf(message)).join('\n');
-      // A skill the user started (/office-pptx) brings its family as well.
-      const skills = waiting.filter((message) => message?.source?.kind === 'skill-invocation').flatMap((message) => skillFamilies(message.source.name));
+      // A skill the user started (/office-pptx) brings its family as well, when it is the app's own.
+      const skills = waiting.filter((message) => message?.source?.kind === 'skill-invocation' && appOfficeFolder(skillFolderIn(textOf(message)), APP_CONTENTS)).flatMap((message) => skillFamilies(message.source.name));
       if (addTools(agent.id, [...mentioned(said), ...skills]).length > 0) refreshTools(agent);
     } catch (error) {
       ctx.logger.warn(`modes: could not read which tools a message needs: ${error?.message ?? error}`);
@@ -1646,6 +1655,40 @@ export function apply(ctx, config) {
       return { kind: 'reject' };
     }
   });
+  // Skills switched off in a tab (Tuner Plus's step 14): the skill list the app hands a conversation leaves
+  // them out, and a list the model already sees is not sent again. Isolated conversations get no list at all
+  // (above). Nothing switched off: the step is left exactly as it is.
+  // Registered outermost (prepend), so it sees the list the app adds, whatever the order the add-ons loaded in.
+  ctx.on('agent/pre-step', async ({ agent }, next) => {
+    const decision = await next();
+    try {
+      if (!agent?.id || decision?.kind !== 'enter' || !Array.isArray(decision.messages) || isIsolated(agent.id)) return decision;
+      const off = offIn(readObject(config.skillsOff), modeOf(agent.id)?.id);
+      if (off.size === 0) return decision;
+      const result = withoutOffSkills(decision.messages, off, () => lastSeenCatalog(agent.session));
+      if (result.unknown) ctx.logger.warn('modes: the skill list was not in the form Modes knows, so it was left whole');
+      return result.changed ? { ...decision, messages: result.messages } : decision;
+    } catch (error) {
+      ctx.logger.warn(`modes: could not leave out the skills switched off in this tab: ${error?.message ?? error}`);
+      return decision;
+    }
+  }, { prepend: true });
+  // A call for a switched-off skill is refused by a guard (it holds whatever other add-ons answer); the
+  // listener below says the same when the guard service is not there.
+  const skillOffReason = (exec) => {
+    if (!exec?.agent?.id || exec.name !== 'skill') return undefined;
+    const name = typeof exec.arguments?.name === 'string' ? exec.arguments.name.trim() : '';
+    const mode = modeOf(exec.agent.id);
+    if (!name || !offIn(readObject(config.skillsOff), mode?.id).has(name)) return undefined;
+    return `The skill "${name}" is switched off in the ${mode?.label ?? 'this'} tab, so it is not loaded here. Do the task without it. (The user can switch it back on.)`;
+  };
+  ctx.effect(() => (typeof ctx.tools?.guard === 'function' ? ctx.tools.guard((exec) => {
+    try {
+      return skillOffReason(exec);
+    } catch {
+      return undefined;
+    }
+  }) : undefined), 'modes: skills switched off per tab');
   // Loading tools as needed: a family the model added with tools_find is there from its next step
   // on. (The tools of the step are already chosen when this runs; the user's own words are read
   // earlier, when the turn starts: see wordsAddTools.)
@@ -1663,6 +1706,10 @@ export function apply(ctx, config) {
     try {
       const agent = exec?.agent;
       if (!agent?.id || exec.name !== 'skill' || result?.isError || !trimmed(agent.id, modeOf(agent.id))) return;
+      // Only the app's own Office skills: a skill of the same name from a project or the shared
+      // folder (it wins over the app's) brings nothing (17 November 2026).
+      const loaded = result?.value;
+      if (loaded?.provider !== 'dsh-office' || !appOfficeFolder(loaded?.resourceBase?.path, APP_CONTENTS)) return;
       if (addTools(agent.id, skillFamilies(exec.arguments?.name)).length === 0) return;
       refreshTools(agent);
       const top = ctx.get('agents')?.get?.(topOf(agent.id));
@@ -1925,6 +1972,7 @@ export function apply(ctx, config) {
   }
 
   /** Mode API for other plugins and the command. */
+  let skillsOffChain = Promise.resolve();
   const modes = {
     apiVersion: 1,
     /** @returns {Array<{id: string, label: string}>} the available modes. */
@@ -2013,6 +2061,31 @@ export function apply(ctx, config) {
      * @param {string} sessionId - Agent id.
      * @returns {boolean}
      */
+    /** @returns {Record<string, string[]>} the skills switched off per tab (`{ tabId: [names] }`). */
+    skillsOff() {
+      const table = readObject(config.skillsOff);
+      return Object.fromEntries(Object.keys(readModes(config)).map((id) => [id, [...offIn(table, id)]]).filter(([, names]) => names.length > 0));
+    },
+    /**
+     * Switch off exactly these skills in one tab (an empty list switches them all back on). The owner's click
+     * on Tuner Plus's page or Modes' own page; never a model's.
+     * @returns {Promise<string[]>} the tab's switched-off skills now.
+     */
+    async setSkillsOff(tabId, names) {
+      const id = String(tabId ?? '');
+      if (!readModes(config)[id]) throw new Error(`There is no tab "${id}".`);
+      if (readModes(config)[id].isolated === true) throw new Error('An isolated tab gets no skill list at all.');
+      // One change at a time, each from the setting as it is then.
+      const run = skillsOffChain.catch(() => {}).then(async () => {
+        const settings = ctx.get('settings');
+        if (!settings) throw new Error('The settings cannot be written now.');
+        const next = withOff(readObject(config.skillsOff), id, names);
+        await settings.mutate('modes', [{ op: 'set', path: ['skillsOff'], value: JSON.stringify(next) }]);
+        return [...offIn(next, id)];
+      });
+      skillsOffChain = run;
+      return run;
+    },
     isolated(sessionId) {
       return isIsolated(sessionId);
     },
@@ -2329,6 +2402,19 @@ export function apply(ctx, config) {
         }),
       'modes: GET tools route',
     );
+  });
+
+  // A skill switched off in this tab is not loaded by the model (it may still know its name from an older list).
+  ctx.on('tools/pre-execute', async (exec, next) => {
+    const decision = await next();
+    if (decision?.kind && decision.kind !== 'allow') return decision;
+    try {
+      const reason = skillOffReason(exec);
+      return reason ? { kind: 'deny', reason } : decision;
+    } catch (error) {
+      report(error);
+      return decision;
+    }
   });
 
   // The app's own sub-agent tool lets the model name a model for a helper. With "one model for

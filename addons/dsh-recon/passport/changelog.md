@@ -1,5 +1,6 @@
 # Changelog: @local/dsh-recon
 
+- 2026-11-17 A test copy on another data folder gets a room of its own and never empties the real room
 - 2026-11-17 The rest of the Content and Bench plan: Web levels, Ultra Code and the work loop, the Recon export door, the Voice Library, and Bench's network, server, phone and Bluetooth doors
 - 2026-11-16 Content and Bench tabs; Long run checks in Bench and Recon; a run that has ended stops cleanly
 - 2026-11-16 Recon: WireGuard, the ordinary web, back channels; the map method; a stalled run fixed

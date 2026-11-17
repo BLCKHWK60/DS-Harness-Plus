@@ -28,17 +28,20 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { EXAM_MIN, mark, pct, promotable, promptOf, runExam, weakestSpot } from './lib/exam.js';
-import { QUIET_MS, lastTimeOf, rowsFromLedger, rowsFromLibrary, rowsFromRun, rowsFromTurns, turnsOf } from './lib/harvest.js';
+import { QUIET_MS, closedTool, lastTimeOf, rowsFromLedger, rowsFromLibrary, rowsFromRun, rowsFromTurns, signedInTool, turnsOf } from './lib/harvest.js';
 import { rowsFromBench, rowsFromCorrections, rowsFromCreator, rowsFromData, rowsFromPacket } from './lib/harvest-more.js';
-import { ADAPTER_MIN, GOALS, RUNGS, proposeRung, runSentence } from './lib/ladder.js';
+import { ADAPTER_MIN, GOALS, RUNGS, SKILL_HOME, homes, proposeRung, runSentence } from './lib/ladder.js';
+import { RUN_TYPES, SKILL_GOAL, WHAT_MAX } from './lib/skills/bar.js';
+import { MARKS } from './lib/skills/marks.js';
 import { lessonsFrom, toolsKey } from './lib/lessons.js';
 import { IDLE, POWER, idleSeconds, mayWork, mustStop, onPower } from './lib/night.js';
 import { qaRows } from './lib/qa.js';
 import { forExam, mayTrain } from './lib/rows.js';
-import { TASK_SETS, buildSets, examApart, trainerRows } from './lib/sets.js';
+import { TASK_SETS, buildSets, dropRepeats, examApart, trainerRows } from './lib/sets.js';
 import { markDue, newEntry, promote, rebuildPlan, recordExam, routeOf, setOn, setRoles, setServing, staleEntries } from './lib/shelf.js';
 import { folderIn, openStore, readJson, readLines, writeJson, writeText } from './lib/store.js';
 import { newRound, pairsOf, recordPick, roundView, tally } from './lib/taste.js';
+import { openSkills } from './lib/skills/part.js';
 import { CHECKPOINT, ISOLATED, OFFLINE_ENV, answerArgs, emptyFolder, fingerprint, folderBytes, freeBytes, fuseArgs, inside, modelProblem, progressOf, pythonProblem, runPython, serveArgs, trainArgs } from './lib/trainer.js';
 
 export const name = 'dsh-tuning';
@@ -98,6 +101,21 @@ export const Config = z.object({
    * apart from a model on the owner's network.
    */
   ownNetworkLocal: z.boolean().default(false).volatile(),
+  /**
+   * The skills part (marks and records of every skill; later: writing and examining skills). Off: Tuner Plus is
+   * what it was before; nothing of the part runs, writes or asks.
+   */
+  skills: z.boolean().default(false).volatile(),
+  /**
+   * The two models of the skill exam, as JSON `{ floor: { provider, model }, strong: { provider, model } }`: the
+   * floor model must run on this Mac (the owner's held-back tasks never leave it); the strong one may be any.
+   */
+  skillExam: z.string().default('{}').volatile(),
+  /**
+   * The night shift drafts skills too (off at first; needs the night shift and the skills part): at most two
+   * skill ideas a night, each drafted by a model on this Mac and examined. Nothing goes live, nothing is edited.
+   */
+  nightSkills: z.boolean().default(false).volatile(),
 });
 
 function plain(value) {
@@ -190,12 +208,13 @@ export function apply(ctx, config, standIns = {}) {
     return where === 'this Mac' || (where === 'own network' && plain(config?.ownNetworkLocal) === true);
   };
   /** Ask a model in the app; its token use is counted when the caller keeps an allowance. */
-  const askModel = standIns.askModel ?? (async (route, text, signal, spend) => {
+  const askModel = standIns.askModel ?? (async (route, text, signal, spend, options = {}) => {
     const llm = ctx.get('llm');
     if (!llm?.stream) throw new Error('The app\'s model service is not available.');
     let answer = '';
     let usage;
-    for await (const chunk of llm.stream({ provider: route.provider, model: route.model, messages: [{ role: 'user', content: [{ type: 'text', text }] }], signal })) {
+    // The skill exam asks for steady answers (temperature 0); every other caller sends what it always sent.
+    for await (const chunk of llm.stream({ provider: route.provider, model: route.model, messages: [{ role: 'user', content: [{ type: 'text', text }] }], ...(typeof options?.temperature === 'number' ? { temperature: options.temperature } : {}), signal })) {
       if (chunk.type === 'text-delta') answer += chunk.text;
       else if (chunk.type === 'usage') usage = chunk.usage;
       else if (chunk.type === 'finish' && chunk.reason?.kind === 'error') throw new Error(chunk.reason.failure?.message ?? 'The model reported an error.');
@@ -295,7 +314,7 @@ export function apply(ctx, config, standIns = {}) {
       if (!id) continue;
       const top = topOf(id);
       const reason = why(id, header) || (top !== id ? why(top, byId.get(top)?.header ?? {}) : '');
-      if (reason) left.push({ id, why: reason, cwd: trimSlash(header.cwd) });
+      if (reason) left.push({ id, why: reason, cwd: trimSlash(header.cwd), top });
       else read.push({ id, header, top, mode: String(modeMap[top] ?? ctx.get('modes')?.get?.(top) ?? '') });
     }
     return { known: true, why: '', read, left };
@@ -348,7 +367,7 @@ export function apply(ctx, config, standIns = {}) {
    * @returns {Promise<object>} what was found, kept, sent to the exam and left out (with reasons).
    */
   const harvest = async ({ signal } = {}) => {
-    if (!enabled()) throw new Error('Tuning Plus is switched off in Settings → Tuning Plus.');
+    if (!enabled()) throw new Error('Tuner Plus is switched off in Settings → Tuner Plus.');
     if (harvesting) return harvesting;
     harvesting = (async () => {
       const summary = { at: now(), modes: {}, conversations: 0, left: [], problems: [] };
@@ -530,7 +549,11 @@ export function apply(ctx, config, standIns = {}) {
   const rowsOfSets = (ids) => {
     const sets = setsNow();
     const wanted = new Set(ids.flatMap((id) => sets[id]?.ids ?? []));
-    return store.rows().filter((row) => wanted.has(row.id));
+    // Skill first, adapter later (step 15): the taught skills' loading left out (only while the skills part is on).
+    const rows = store.rows().filter((row) => wanted.has(row.id));
+    const trainer = skillsPart.forTrainer(rows);
+    // Rows that became alike once a taught skill's loading is left out train once.
+    return trainer === rows ? rows : dropRepeats(trainer).kept;
   };
   /** The exam with every row that repeats a pool row (the same text, or nearly) left out. */
   const examNow = () => examApart(store.exam(), store.rows());
@@ -538,11 +561,15 @@ export function apply(ctx, config, standIns = {}) {
   const examFor = (ids) => {
     const specs = ids.map((id) => TASK_SETS[id]).filter(Boolean);
     const subjects = ids.filter((id) => id.startsWith('subject-'));
-    return examNow().filter((row) => specs.some((spec) => spec.takes(row)) || subjects.some((id) => `subject-${String(row.from?.subject ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)}` === id));
+    // Kept apart from training as the trainer will see both (a taught skill's loading left out of each).
+    const all = store.rows();
+    const pool = skillsPart.forTrainer(all);
+    const exam = pool === all ? examNow() : examApart(skillsPart.forTrainer(store.exam()), pool);
+    return exam.filter((row) => specs.some((spec) => spec.takes(row)) || subjects.some((id) => `subject-${String(row.from?.subject ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)}` === id));
   };
   const lines = (list) => (list.length > 0 ? `${list.map((row) => JSON.stringify(row)).join('\n')}\n` : '');
   const writeSet = (id, purpose) => {
-    if (!enabled()) throw new Error('Tuning Plus is switched off in Settings → Tuning Plus.');
+    if (!enabled()) throw new Error('Tuner Plus is switched off in Settings → Tuner Plus.');
     const set = setsNow()[id];
     if (!set) throw new Error('There is no such set.');
     const out = trainerRows(rowsOfSets([id]), { ...rules(), purpose: purpose ?? set.purpose });
@@ -681,9 +708,21 @@ export function apply(ctx, config, standIns = {}) {
    * One run from the bar (or the night shift): look only, a proposal for the lowest rung, or a trained candidate.
    * @param {{model: string, goal: string, sets?: string[], method?: string, minutes?: number, lookOnly?: boolean, settings?: object, by?: string}} input
    */
+  /**
+   * Whether the work is one kind of job that comes up only sometimes (its rows are under a quarter of the
+   * rows of their tabs): then a skill fits better than instructions. Only while the skills part is on.
+   */
+  const skillHint = (setRows) => {
+    if (!skillsOn() || !Array.isArray(setRows) || setRows.length === 0) return {};
+    const modes = new Set(setRows.map((row) => row.mode));
+    const all = store.rows().filter((row) => modes.has(row.mode)).length;
+    return { skills: true, sometimes: all > 0 && setRows.length / all < 0.25 };
+  };
   const startRun = async (input, { signal: outer, stopIf } = {}) => {
-    if (!enabled()) throw new Error('Tuning Plus is switched off in Settings → Tuning Plus.');
+    if (!enabled()) throw new Error('Tuner Plus is switched off in Settings → Tuner Plus.');
     if (active) throw new Error(`A run is going: ${active.sentence}`);
+    // Also while an exam winds down after the skills part was switched off (with no exam this never refuses).
+    if (skillsPart.examRunning()) throw new Error('A skill exam is running on this Mac; start the run when it is done (or stop it on the page).');
     const goal = GOALS[input.goal] ? input.goal : 'find';
     const sets = (Array.isArray(input.sets) && input.sets.length > 0 ? input.sets : GOALS[goal].sets).filter((id) => setsNow()[id] || TASK_SETS[id]).slice(0, 10);
     const minutes = Math.min(24 * 60, Math.max(0, Math.round(Number(input.minutes) || 0)));
@@ -711,13 +750,17 @@ export function apply(ctx, config, standIns = {}) {
       // Look only: what it would do, and what the exam says today; it trains nothing.
       if (input.lookOnly === true || goal === 'find' || GOALS[goal].kind === 'retrieval') {
         active.phase = 'looking';
-        const proposal = proposeRung({ failures: [], tried: [], setRows: trainable.length, kind: trainable[0]?.kind ?? '' });
-        return addCard({ kind: 'look', title: `Look only: ${GOALS[goal].name}`, text: `${sentence}\nSets: ${sets.map((one) => `${setsNow()[one]?.name ?? one} (${setsNow()[one]?.rows ?? 0} rows, ${setsNow()[one]?.mayTrain ?? 0} may train)`).join('; ') || 'none yet'}. Exam rows that fit: ${exam.length}.\nThe lowest rung that could help: ${proposal.rung}, ${RUNGS[proposal.rung].name} (${proposal.why}).${GOALS[goal].kind === 'retrieval' ? '\nKnow a subject: facts are best looked up; build retrieval from the subject\'s reports first.' : ''}`, key: `look-${goal}-${sets.join(',')}` });
+        const proposal = proposeRung({ failures: [], tried: [], setRows: trainable.length, kind: trainable[0]?.kind ?? '', ...skillHint(setRows) });
+        return addCard({ kind: 'look', title: `Look only: ${GOALS[goal].name}`, text: `${sentence}\nSets: ${sets.map((one) => `${setsNow()[one]?.name ?? one} (${setsNow()[one]?.rows ?? 0} rows, ${setsNow()[one]?.mayTrain ?? 0} may train)`).join('; ') || 'none yet'}. Exam rows that fit: ${exam.length}.\nThe lowest rung that could help: ${proposal.home === 'skill' ? `a skill, between rungs 1 and 2 (${proposal.why}). Make one under Skills on this page, or ask for one in a conversation` : `${proposal.rung}, ${RUNGS[proposal.rung].name} (${proposal.why})`}.${GOALS[goal].kind === 'retrieval' ? '\nKnow a subject: facts are best looked up; build retrieval from the subject\'s reports first.' : ''}`, key: `look-${goal}-${sets.join(',')}` });
       }
       const method = String(input.method ?? 'auto');
-      const rung = method === 'auto' ? proposeRung({ failures: [], tried: (input.tried ?? []).map(Number), setRows: trainable.length, kind: trainable[0]?.kind ?? '', flat: [1, 2, 3].filter(() => input.flat === true) }).rung : Number(method);
+      const auto = method === 'auto' ? proposeRung({ failures: [], tried: (input.tried ?? []).map(Number), setRows: trainable.length, kind: trainable[0]?.kind ?? '', flat: [1, 2, 3].filter(() => input.flat === true), ...skillHint(setRows) }) : undefined;
+      const rung = auto ? auto.rung : Number(method);
+      if (auto?.home === 'skill') {
+        return addCard({ kind: 'proposal', title: `${SKILL_HOME.name}: between rungs 1 and 2`, text: `${sentence}\nThe cheapest home is a skill: ${SKILL_HOME.what}. ${auto.why}. Make one under Skills on this page (New skill, or Look for skill ideas), or ask for one in a conversation; it takes its exam before you decide.`, key: `rung-skill-${goal}` });
+      }
       if (rung <= 3) {
-        return addCard({ kind: 'proposal', title: `Rung ${rung}: ${RUNGS[rung].name}`, text: `${sentence}\nThe lowest rung that could help is ${RUNGS[rung].name}: ${RUNGS[rung].what}. It lives in ${RUNGS[rung].where}${rung === 0 ? '' : ', which Tuning Plus examines with your exam before you approve a change'}.`, key: `rung-${rung}-${goal}` });
+        return addCard({ kind: 'proposal', title: `Rung ${rung}: ${RUNGS[rung].name}`, text: `${sentence}\nThe lowest rung that could help is ${RUNGS[rung].name}: ${RUNGS[rung].what}. It lives in ${RUNGS[rung].where}${rung === 0 ? '' : ', which Tuner Plus examines with your exam before you approve a change'}.`, key: `rung-${rung}-${goal}` });
       }
       // Rung 4 or 5: train a candidate on this Mac.
       const problem = pythonProblem(python()) || modelProblem(modelPaths()[input.model]);
@@ -730,7 +773,7 @@ export function apply(ctx, config, standIns = {}) {
       const entryId = `A${now().toString(36)}`;
       const dir = store.folder('shelf', entryId);
       const data = store.folder('shelf', entryId, 'data');
-      if (inside(dir, base)) throw new Error('Tuning Plus\'s folder is inside the base model\'s folder; pick another folder, so the base model is never changed.');
+      if (inside(dir, base)) throw new Error('Tuner Plus\'s folder is inside the base model\'s folder; pick another folder, so the base model is never changed.');
       const out = trainerRows(trainable, { ...rules(), purpose });
       writeText(join(data, 'train.jsonl'), lines(out.train), store.root());
       writeText(join(data, 'valid.jsonl'), lines(out.valid), store.root());
@@ -838,7 +881,7 @@ export function apply(ctx, config, standIns = {}) {
   };
   /** Serve an adapter: a fused copy (any MLX server serves it) or mlx-lm's own server on this Mac. */
   const serve = async (entryId, way) => {
-    if (!enabled()) throw new Error('Tuning Plus is switched off in Settings → Tuning Plus.');
+    if (!enabled()) throw new Error('Tuner Plus is switched off in Settings → Tuner Plus.');
     const shelf = store.shelf();
     const entry = shelf.entries.find((one) => one.id === entryId);
     if (!entry) throw new Error('There is no such entry on the shelf.');
@@ -938,7 +981,7 @@ export function apply(ctx, config, standIns = {}) {
     return out;
   };
   const startTaste = async (entryId, currentRoute) => {
-    if (!enabled()) throw new Error('Tuning Plus is switched off in Settings → Tuning Plus.');
+    if (!enabled()) throw new Error('Tuner Plus is switched off in Settings → Tuner Plus.');
     const shelf = store.shelf();
     const entry = shelf.entries.find((one) => one.id === entryId);
     if (!entry?.exam?.decision?.ok) throw new Error('Only a candidate that passed its exam gets a taste test.');
@@ -991,7 +1034,7 @@ export function apply(ctx, config, standIns = {}) {
     return `dsh-${prefix}`;
   };
   const buildLessons = () => {
-    if (!enabled()) throw new Error('Tuning Plus is switched off in Settings → Tuning Plus.');
+    if (!enabled()) throw new Error('Tuner Plus is switched off in Settings → Tuner Plus.');
     const defs = new Map(toolDefs().map((tool) => [tool.name, tool.parameters ?? tool.inputSchema]));
     const lookups = { schemaOf: (tool) => defs.get(tool), pluginOf };
     // Lessons from training rows train; lessons from exam rows stay in the exam: a lesson keeps its row's side.
@@ -1036,9 +1079,9 @@ export function apply(ctx, config, standIns = {}) {
   // ---- question-and-answer rows (T12) ------------------------------------------------------------------
 
   const buildQa = async ({ signal, most = 20 } = {}) => {
-    if (!enabled()) throw new Error('Tuning Plus is switched off in Settings → Tuning Plus.');
+    if (!enabled()) throw new Error('Tuner Plus is switched off in Settings → Tuner Plus.');
     const route = teacherRoute();
-    if (!route) throw new Error('Pick the teacher model on Settings → Tuning Plus first.');
+    if (!route) throw new Error('Pick the teacher model on Settings → Tuner Plus first.');
     if (!onThisMac(route.provider) && plain(config?.teacherCloud) !== true) throw new Error('The teacher model does not run on this Mac; tick "A teacher on the internet may read rows" first, or pick a model on this Mac.');
     const passages = [];
     const dir = reportsFolder();
@@ -1076,7 +1119,8 @@ export function apply(ctx, config, standIns = {}) {
   const nightTick = async () => {
     if (nightBusy || !enabled()) return;
     const { power, idle } = await machine();
-    const may = mayWork({ on: plain(config?.nightShift) === true, power, idle, idleMinutes: Math.max(1, Number(plain(config?.idleMinutes)) || 15), busy: Boolean(active || harvesting) });
+    // A skills run or a skill exam going: the night waits for it (it is not a lost night).
+    const may = mayWork({ on: plain(config?.nightShift) === true, power, idle, idleMinutes: Math.max(1, Number(plain(config?.idleMinutes)) || 15), busy: Boolean(active || harvesting || skillsPart.examRunning()) });
     if (!may.ok) return;
     const today = new Date(now()).toISOString().slice(0, 10);
     if (store.state().nightDone === today) return;
@@ -1104,6 +1148,14 @@ export function apply(ctx, config, standIns = {}) {
             const proposal = proposeRung({ setRows: biggest[1].mayTrain, kind: '' });
             notes.push(`Biggest set: ${biggest[1].name} (${biggest[1].mayTrain} rows may train). Lowest rung that could help: ${RUNGS[proposal.rung].name} (${proposal.why}).`);
           }
+        },
+        async () => {
+          if (plain(config?.nightSkills) !== true || !skillsOn()) return;
+          const result = await skillsPart.nightDrafts({ stopped }).catch((error) => ({ ideas: 0, drafted: [], problems: [String(error?.message ?? error)], stopped: '' }));
+          notes.push([
+            result.drafted.length > 0 ? `Skill drafts: ${result.drafted.map((one) => `${one.name} (exam ${one.exam})`).join(', ')}. They wait under Skills; nothing went live and no skill was changed.` : `Skill drafts: none${result.ideas === 0 ? ' (no skill idea waiting)' : ''}.`,
+            result.problems.length > 0 ? `Not drafted: ${result.problems.slice(0, 3).join('; ')}.` : '',
+          ].filter(Boolean).join(' '));
         },
         ...(Array.isArray(readObject(config?.nightTrain, [])) ? readObject(config?.nightTrain, []) : []).slice(0, 2).filter((item) => item?.set && item?.model).map((item) => async () => {
           const result = await startRun({ model: item.model, goal: Object.entries(GOALS).find(([, goal]) => goal.sets.includes(item.set))?.[0] ?? 'harness', sets: [item.set], method: '4', minutes: Math.max(10, Number(plain(config?.nightMinutes)) || 120), by: 'night shift' }, { stopIf: stopped }).catch((error) => ({ error }));
@@ -1142,6 +1194,17 @@ export function apply(ctx, config, standIns = {}) {
         return undefined;
       }
     },
+    /**
+     * Each skill's mark (where it came from), for the Cowork sidebar's Skills page: names, files and marks,
+     * never a skill's text. Undefined while the skills part is off (the page then shows no marks).
+     */
+    async skillMarks() {
+      try {
+        return skillsOn() ? ((await skillsPart.marksList()) ?? undefined) : undefined;
+      } catch {
+        return undefined;
+      }
+    },
     /** The shelf's entries a team may name (switched on, served). */
     adapters() {
       try {
@@ -1173,9 +1236,133 @@ export function apply(ctx, config, standIns = {}) {
     }
   };
   const isHelper = (exec) => Boolean(exec?.agent?.header?.parentSession ?? exec?.agent?.session?.header?.parentSession);
+
+  // ---- the skills part (its own switch; off: nothing of it runs, writes or asks) -----------------------
+  const skillsOn = () => enabled() && plain(config?.skills) === true;
+  const hasCard = (key) => {
+    try {
+      const all = cards();
+      return all.never.includes(key) || all.cards.some((card) => card.key === key);
+    } catch {
+      return false;
+    }
+  };
+  /** What the skill exam uses of Tuner Plus as it is: its models, the "this Mac" rule, the exam rows, the canaries. */
+  const steady = { temperature: 0 };
+  const examDeps = {
+    models: () => readObject(config?.skillExam),
+    here: onThisMac,
+    ask: (route, text, signal, spend) => askModel(route, text, signal, spend, steady),
+    examRows: () => examNow().filter((row) => ['label', 'answer', 'qa', 'pair', 'toolcalls', 'toolfix'].includes(row.kind)),
+    answerRow: (route, instructions, row, signal, spend) => askModel(route, asText(promptOf(row), instructions), signal, spend, steady),
+    // A canary run goes on past errors: once the exam is stopped, the canaries left are not asked.
+    canaries: (route, instructions, signal, spend) => runCanaries((row) => (signal?.aborted ? Promise.resolve('') : askModel(route, asText(promptOf(row), instructions), signal, spend, steady))),
+    busy: () => (active ? active.sentence : ''),
+    // The harvest's own check for a Recon export in a conversation (the health count reads none of those).
+    exportIn,
+  };
+  const skillsPart = openSkills({ ctx, store, on: skillsOn, now, warn, addCard, hasCard, readable, exam: examDeps, standIns: standIns.skills ?? {} });
+  /**
+   * The models the skill exam may use: the app's own list of every provider's models (asked at most once a
+   * minute, three seconds per provider at most), and the ones Tuner Plus already knows; each says whether it
+   * runs on this Mac (only those can be the floor model).
+   */
+  let appModelsCache = { at: -Infinity, list: [], pending: null };
+  /** Every provider asked at once, three seconds in all; a provider that does not answer by then is left out. */
+  const readAppModels = async () => {
+    const llm = ctx.get('llm');
+    let providersNow = [];
+    try {
+      providersNow = typeof llm?.listModels === 'function' ? llm?.listProviders?.() ?? [] : [];
+    } catch {
+      providersNow = [];
+    }
+    let timer;
+    const late = new Promise((done) => {
+      timer = setTimeout(() => done('late'), 3000);
+      timer.unref?.();
+    });
+    try {
+      const lists = await Promise.all(providersNow.slice(0, 40).map(async (provider) => {
+        const id = String(provider?.id ?? '');
+        if (!id) return [];
+        const models = await Promise.race([Promise.resolve().then(() => llm.listModels(id)).catch(() => []), late]);
+        return (Array.isArray(models) ? models.slice(0, 60) : []).filter((model) => model?.id).map((model) => ({ provider: id, model: String(model.id), label: String(model.name ?? model.id) }));
+      }));
+      return lists.flat();
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  /** At most once a minute; the page never waits for it again once a list is there (it is read again behind it). */
+  const appModels = async () => {
+    if (now() - appModelsCache.at < 60_000) return appModelsCache.list;
+    appModelsCache.pending ??= readAppModels().then((list) => {
+      appModelsCache = { at: now(), list, pending: null };
+      return list;
+    }, () => {
+      appModelsCache.pending = null;
+      return appModelsCache.list;
+    });
+    return appModelsCache.at === -Infinity ? appModelsCache.pending : appModelsCache.list;
+  };
+  const examChoices = async () => {
+    const seen = new Map();
+    for (const one of [...(await appModels()), ...knownModels()]) {
+      const key = `${one.provider}/${one.model}`;
+      if (!seen.has(key)) seen.set(key, { provider: one.provider, model: one.model, label: one.label ?? one.model, here: onThisMac(one.provider) });
+    }
+    return [...seen.values()].slice(0, 200);
+  };
+  /** The skills view with what changes while it is cached: the drafts and the exam. */
+  let healthAsked = 0;
+  const withExam = async (value) => {
+    if (value?.on === true && now() - healthAsked > 3_600_000 && now() - (value.healthAt ?? 0) > 3_600_000) {
+      healthAsked = now();
+      void skillsPart.refreshHealth().catch((error) => warn(`could not count the skills' uses: ${String(error?.message ?? error)}`));
+    }
+    return withExamView(value);
+  };
+  /**
+   * Modes' switch for skills per tab (step 14), when that Modes is there: the skills switched off in each tab,
+   * set only by the owner's click. Undefined with an older Modes or none.
+   */
+  const modesSkills = () => {
+    try {
+      const modes = ctx.get('modes');
+      return modes?.apiVersion === 1 && typeof modes.skillsOff === 'function' && typeof modes.setSkillsOff === 'function' ? modes : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  /** A tab's skills are proposed for switching off only from at least this many of its conversations. */
+  const TAB_OFF_MIN = 10;
+  const tabsView = () => {
+    const modes = modesSkills();
+    if (!modes) return null;
+    try {
+      return { off: modes.skillsOff(), labels: Object.fromEntries(modes.list().map((one) => [one.id, one.label])), min: TAB_OFF_MIN };
+    } catch {
+      return null;
+    }
+  };
+  const withExamView = async (value) => (value?.on === true ? { ...value, tabs: tabsView(), drafts: skillsPart.drafts(), exam: { running: skillsPart.examState(), problem: skillsPart.examProblem(), models: skillsPart.examModels(), choices: await examChoices() }, ladder: homes(true).map((step) => ({ n: step.n, name: step.name, what: step.what })), run: skillsPart.skillsRunState(), runTypes: RUN_TYPES } : value);
+  // The page looks again every 30 seconds: the list is made again at most every 20 seconds, and at once after an action.
+  let skillsCache = { at: 0, value: null };
+  const skillsView = async ({ fresh = false } = {}) => {
+    if (!skillsOn()) return { on: false };
+    if (!fresh && skillsCache.value && now() - skillsCache.at < 20_000) return skillsCache.value;
+    try {
+      const value = await skillsPart.sync();
+      skillsCache = { at: now(), value };
+      return value;
+    } catch (error) {
+      return { on: true, problem: String(error?.message ?? error).slice(0, 300), rows: [], counts: {} };
+    }
+  };
   const output = { schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] }, render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }] };
   const safely = (work) => async (args, exec) => {
-    if (!enabled()) return { text: 'Tuning Plus is switched off in Settings → Tuning Plus.' };
+    if (!enabled()) return { text: 'Tuner Plus is switched off in Settings → Tuner Plus.' };
     try {
       return { text: await work(args ?? {}, exec) };
     } catch (error) {
@@ -1187,7 +1374,7 @@ export function apply(ctx, config, standIns = {}) {
     const exam = store.exam();
     const shelf = store.shelf().entries ?? [];
     return [
-      `Data sets: ${Object.values(sets).map((set) => `${set.name} ${set.rows} rows (${set.mayTrain} may train)`).join('; ') || 'none yet (switch harvesting on for a mode on Settings → Tuning Plus)'}.`,
+      `Data sets: ${Object.values(sets).map((set) => `${set.name} ${set.rows} rows (${set.mayTrain} may train)`).join('; ') || 'none yet (switch harvesting on for a mode on Settings → Tuner Plus)'}.`,
       `Exam: ${exam.length} rows of your own work (never trained on).`,
       `Shelf: ${shelf.map((entry) => `${entry.name} (${entry.state})`).join('; ') || 'empty'}.`,
       active ? `Running now: ${active.sentence} (${active.phase}).` : 'Nothing is running.',
@@ -1196,22 +1383,22 @@ export function apply(ctx, config, standIns = {}) {
   const tools = [
     {
       name: 'tuning_status',
-      description: 'Tuning Plus: what has been gathered (data sets and their rows), the size of the owner\'s private exam, the shelf of adapters and tuned prompts, and what is running. Read only.',
+      description: 'Tuner Plus: what has been gathered (data sets and their rows), the size of the owner\'s private exam, the shelf of adapters and tuned prompts, and what is running. Read only.',
       parameters: { type: 'object', properties: {}, additionalProperties: false },
       execute: safely(async () => statusText()),
     },
     {
       name: 'tuning_plan',
-      description: 'Tuning Plus, look only: for a plain-words request such as "make my model better at my blog posts", say the run in one sentence, which sets it would use, what the exam says today and the lowest rung that could help. Trains nothing.',
+      description: 'Tuner Plus, look only: for a plain-words request such as "make my model better at my blog posts", say the run in one sentence, which sets it would use, what the exam says today and the lowest rung that could help. Trains nothing.',
       parameters: { type: 'object', properties: { model: { type: 'string', maxLength: 200 }, goal: { type: 'string', enum: Object.keys(GOALS) }, sets: { type: 'array', items: { type: 'string', maxLength: 60 }, maxItems: 10 } }, required: ['goal'], additionalProperties: false },
       execute: safely(async (args) => {
         const card = await startRun({ model: String(args.model ?? ''), goal: args.goal, sets: args.sets, lookOnly: true, by: 'chat' });
-        return card ? `${card.title}\n${card.text}\nTo train, the owner starts the run from the bar on Settings → Tuning Plus or asks tuning_start.` : 'Nothing to report.';
+        return card ? `${card.title}\n${card.text}\nTo train, the owner starts the run from the bar on Settings → Tuner Plus or asks tuning_start.` : 'Nothing to report.';
       }),
     },
     {
       name: 'tuning_start',
-      description: 'Tuning Plus: start a run the owner asked for in plain words (train a candidate, or propose the lowest rung). The owner is asked on the app\'s own card with the run in one sentence; nothing is promoted without the exam and the owner\'s yes on the Tuning Plus page.',
+      description: 'Tuner Plus: start a run the owner asked for in plain words (train a candidate, or propose the lowest rung). The owner is asked on the app\'s own card with the run in one sentence; nothing is promoted without the exam and the owner\'s yes on the Tuner Plus page.',
       parameters: { type: 'object', properties: { model: { type: 'string', maxLength: 200 }, goal: { type: 'string', enum: Object.keys(GOALS) }, sets: { type: 'array', items: { type: 'string', maxLength: 60 }, maxItems: 10 }, method: { type: 'string', enum: ['auto', '1', '2', '3', '4', '5'] }, minutes: { type: 'integer', minimum: 5, maximum: 1440 } }, required: ['model', 'goal'], additionalProperties: false },
       execute: safely(async (args, exec) => {
         if (isHelper(exec)) throw new Error('Only the conversation itself starts a run, with the owner there.');
@@ -1219,12 +1406,12 @@ export function apply(ctx, config, standIns = {}) {
         const answer = await approve(exec, `${sentence}\nThis uses this Mac while it runs.`);
         if (answer !== 'allowed-once') throw new Error(answer === 'rejected' ? 'The owner said no.' : `The owner could not be asked (${answer}).`);
         void startRun({ model: args.model, goal: args.goal, sets: args.sets, method: args.method ?? 'auto', minutes: args.minutes ?? 60, by: 'chat' }).catch((error) => addCard({ kind: 'candidate', title: 'The run did not finish', text: String(error?.message ?? error).slice(0, 400) }));
-        return `Started: ${sentence} The result comes as a card on Settings → Tuning Plus.`;
+        return `Started: ${sentence} The result comes as a card on Settings → Tuner Plus.`;
       }),
     },
     {
       name: 'tuning_export_set',
-      description: 'Tuning Plus: write one data set out as files in the format the trainer reads (train.jsonl, valid.jsonl, pairs.jsonl when it has pairs, and flags.json), in Tuning Plus\'s own folder. Only rows that may train; exam rows never.',
+      description: 'Tuner Plus: write one data set out as files in the format the trainer reads (train.jsonl, valid.jsonl, pairs.jsonl when it has pairs, and flags.json), in Tuner Plus\'s own folder. Only rows that may train; exam rows never.',
       parameters: { type: 'object', properties: { set: { type: 'string', maxLength: 60 } }, required: ['set'], additionalProperties: false },
       execute: safely(async (args) => {
         const result = writeSet(String(args.set));
@@ -1232,9 +1419,106 @@ export function apply(ctx, config, standIns = {}) {
       }),
     },
   ];
+  /** A skill from plain words (step 8): only while the skills part is on, never in Recon or a helper. */
+  /**
+   * Whether a skill may be made from this conversation: the harvest's own reading rules, on everything the
+   * model has seen (this conversation with the turns a fork copied in, and its helpers' conversations).
+   * @returns {Promise<string>} why not, or ''.
+   */
+  const conversationRefusal = async (exec) => {
+    if (isHelper(exec)) return 'Only the conversation itself makes a skill, with the owner there.';
+    if (isolatedAgent(exec?.agent)) return 'Never in Recon.';
+    const id = String(exec?.agent?.id ?? '');
+    const found = await readable();
+    if (!found.known) return found.why;
+    const left = found.left.find((one) => one.id === id);
+    if (left) return `Tuner Plus does not learn from this conversation (${left.why}), so no skill is made from it.`;
+    if (!found.read.some((one) => one.id === id)) return 'This conversation is not among the ones Tuner Plus may read, so no skill is made from it.';
+    // A helper left out (an export from Recon, marked, trashed) counts against the conversation it reported to.
+    const leftHelper = found.left.find((one) => one.top === id && one.id !== id);
+    if (leftHelper) return `A helper of this conversation is left out (${leftHelper.why}), so no skill is made from it.`;
+    // Every helper is read; with more than can be read, nothing is made (never a check that gives up open).
+    const helpers = found.read.filter((one) => one.top === id && one.id !== id).map((one) => one.id);
+    if (helpers.length > 100) return 'This conversation has more helpers than Tuner Plus reads (100), so no skill is made from it.';
+    for (const one of [id, ...helpers]) {
+      const log = await ctx.get('sessionQuery').readSession(one);
+      const events = Array.isArray(log?.events) ? log.events : [];
+      if (exportIn(events)) return 'This conversation holds an export from Recon, so no skill is made from it.';
+      if (turnsOf(events, 0).some((turn) => turn.tools.some((call) => signedInTool(call.name) || closedTool(call.name)))) return `${one === id ? 'This conversation' : 'A helper of this conversation'} used a signed-in source (a connector), or Bench's or Recon's own tools, so no skill is made from it.`;
+    }
+    return '';
+  };
+  /** The conversation's own working folder (for "this project"). */
+  const conversationFolder = async (exec) => {
+    let cwd = '';
+    try {
+      cwd = String((await ctx.get('workingDirectory')?.ensure?.(exec.agent, exec.signal)) ?? '');
+    } catch { /* the conversation's folder below */ }
+    return isAbsolute(cwd) ? cwd : String(exec?.agent?.header?.cwd ?? exec?.agent?.session?.header?.cwd ?? '');
+  };
+  const skillTools = [
+    {
+      name: 'tuning_skill_draft',
+      description: 'Tuner Plus: when the owner asks in plain words for a skill (for example "make a skill for how I want changelogs written", or "make a skill from how we set up the last three plugins"), write it and save it as a draft: a name (lowercase words joined by hyphens), one line saying when it helps, and the steps. It is not live: on Settings → Tuner Plus it takes its exam, the owner reads it, and only the owner puts it live. Never put a password, key or token in it, nor anything from a signed-in source (a connector) or from Recon. When the owner pointed at a page, a document or a repository to build it from, name it as source.',
+      parameters: { type: 'object', properties: { name: { type: 'string', maxLength: 64 }, description: { type: 'string', maxLength: 500 }, text: { type: 'string', maxLength: 20000 }, where: { type: 'string', enum: ['project', 'everywhere'] }, source: { type: 'string', maxLength: 500 } }, required: ['name', 'description', 'text'], additionalProperties: false },
+      execute: safely(async (args, exec) => {
+        if (!skillsOn()) throw new Error('The skills part of Tuner Plus is switched off.');
+        // While a run from the bar lasts, only its own skills (the boundary).
+        const outside = skillsPart.scopeRefusal(String(args.name ?? ''));
+        if (outside) throw new Error(outside);
+        const refused = await conversationRefusal(exec);
+        if (refused) throw new Error(refused);
+        const id = String(exec?.agent?.id ?? '');
+        const where = args.where === 'everywhere' ? 'everywhere' : 'project';
+        const cwd = await conversationFolder(exec);
+        const config = exec?.agent?.session?.requestHeader?.()?.config ?? {};
+        const made = await skillsPart.draft({ name: args.name, description: args.description, text: args.text, scope: where, project: where === 'project' ? cwd : '', by: 'model', model: config.provider && config.model ? `${config.provider}/${config.model}` : '', origin: { kind: 'chat', session: id, source: typeof args.source === 'string' ? args.source : '' } });
+        return `Saved as a draft: ${made.name} (${made.scope === 'project' ? `for this project, ${made.file}` : 'for everywhere'}). It is not live. On Settings → Tuner Plus, under Skills, the owner runs its exam, reads its whole text and decides.${made.outside ? ' It is marked as built from outside material.' : ''}${made.masked > 0 ? ` ${made.masked} secret${made.masked === 1 ? ' was' : 's were'} masked.` : ''}`;
+      }),
+    },
+    {
+      name: 'tuning_skills_run',
+      description: 'Tuner Plus, skills: run what its bar runs with the goal "Build or improve a skill". type "check": a health report of the skills named (or of every skill with one mark), changes nothing; "gaps": jobs the owner does often that no skill covers, as idea cards, changes nothing; "new": a model on this Mac writes a new skill as a draft for what the owner described; "improve": better versions of the skills named (the owner\'s own change in place, others get a copy under the same name); "merge": two skills named become one, or one named is split in two; "retire": proposes retiring the named skills not used for 30 days (the owner decides on the card). new, improve and merge are asked first on the app\'s card, write drafts only, and each takes its exam; nothing is used before the owner\'s yes on the page. lookOnly shows and writes nothing. A run reads and changes only the skills it starts with. How often each skill was used is on Settings → Tuner Plus, under Skills. Results come as cards there.',
+      parameters: { type: 'object', properties: { type: { type: 'string', enum: ['check', 'gaps', 'new', 'improve', 'merge', 'retire'] }, skills: { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 60 }, mark: { type: 'string', enum: ['all', ...MARKS] }, what: { type: 'string', maxLength: WHAT_MAX }, where: { type: 'string', enum: ['project', 'everywhere'] }, lookOnly: { type: 'boolean' } }, required: ['type'], additionalProperties: false },
+      execute: safely(async (args, exec) => {
+        if (!skillsOn()) throw new Error('The skills part of Tuner Plus is switched off.');
+        if (isHelper(exec)) throw new Error('Only the conversation itself starts a skills run, with the owner there.');
+        if (isolatedAgent(exec?.agent)) throw new Error('Never in Recon.');
+        const running = skillsPart.skillsRunState();
+        if (running) throw new Error(`A run is going: ${running.sentence} It reads and changes only the skills it started with; wait for it, or stop it on Settings → Tuner Plus.`);
+        const type = String(args.type ?? '');
+        const where = args.where === 'project' ? 'project' : 'everywhere';
+        let project = '';
+        if (type === 'new') {
+          // The owner's words come from this conversation: the harvest's reading rules hold.
+          const refused = await conversationRefusal(exec);
+          if (refused) throw new Error(refused);
+          if (where === 'project') project = await conversationFolder(exec);
+        }
+        const want = { type, names: Array.isArray(args.skills) ? args.skills.map(String) : [], mark: typeof args.mark === 'string' ? args.mark : 'all', what: String(args.what ?? ''), scope: where, project, lookOnly: args.lookOnly === true, by: 'chat' };
+        if (['new', 'improve', 'merge'].includes(type) && !want.lookOnly) {
+          // Checked first, so the owner is asked only about a run that can start, with its very sentence.
+          const plan = await skillsPart.planSkillsRun(want);
+          const answer = await approve(exec, plan.sentence);
+          if (answer !== 'allowed-once') throw new Error(answer === 'rejected' ? 'The owner said no.' : `The owner could not be asked (${answer}).`);
+        }
+        const started = await skillsPart.startSkillsRun(want);
+        return `Started: ${started.sentence} The result comes as a card on Settings → Tuner Plus.`;
+      }),
+    },
+  ];
+  let skillToolsOff;
   let toolsOff;
   const syncTools = () => {
     const registry = ctx.get('tools');
+    // The skills part's tool: offered only while the part is on (off: no new tool at all).
+    if (skillsOn() && !skillToolsOff && registry?.register) {
+      // Never offered to a helper or in Recon.
+      skillToolsOff = skillTools.map((tool) => registry.register({ ...tool, output, isConcurrencySafe: () => false, timeoutMs: 120_000 }, { when: ({ agent }) => skillsOn() && !isolatedAgent(agent) && !(agent?.header?.parentSession ?? agent?.session?.header?.parentSession) }));
+    } else if (!skillsOn() && skillToolsOff) {
+      for (const dispose of skillToolsOff) if (typeof dispose === 'function') dispose();
+      skillToolsOff = undefined;
+    }
     if (enabled() && !toolsOff && registry?.register) {
       toolsOff = tools.map((tool) => registry.register({ ...tool, output, isConcurrencySafe: () => tool.name !== 'tuning_start', timeoutMs: 120_000 }, { when: ({ agent }) => enabled() && !isolatedAgent(agent) }));
     } else if (!enabled() && toolsOff) {
@@ -1248,6 +1532,7 @@ export function apply(ctx, config, standIns = {}) {
   ctx.effect?.(() => () => {
     clearInterval(follow);
     for (const dispose of toolsOff ?? []) if (typeof dispose === 'function') dispose();
+    for (const dispose of skillToolsOff ?? []) if (typeof dispose === 'function') dispose();
   }, 'tuning: tools');
 
   // ---- the page's data ----------------------------------------------------------------------------------
@@ -1291,7 +1576,7 @@ export function apply(ctx, config, standIns = {}) {
       shelf: shelf.map((entry) => ({ ...entry, serving: servers.has(entry.id) })),
       cards: cardList.cards.filter((card) => !card.done).slice(0, 40),
       active: active ? { sentence: active.sentence, phase: active.phase, started: active.started, progress: active.progress ?? null } : null,
-      goals: Object.fromEntries(Object.entries(GOALS).map(([id, goal]) => [id, goal.name])),
+      goals: { ...Object.fromEntries(Object.entries(GOALS).map(([id, goal]) => [id, goal.name])), ...(skillsOn() ? { [SKILL_GOAL.id]: SKILL_GOAL.name } : {}) },
       rungs: RUNGS,
       models: knownModels(),
       modelPaths: modelPaths(),
@@ -1304,16 +1589,16 @@ export function apply(ctx, config, standIns = {}) {
       teacherCloud: plain(config?.teacherCloud) === true,
       providers: providersSeen.map((provider) => ({ provider, on: providers()[provider] !== false })),
       anthropicOpenEnded: plain(config?.anthropicOpenEnded) === true,
-      night: { on: plain(config?.nightShift) === true, idleMinutes: Number(plain(config?.idleMinutes)) || 15, minutes: Number(plain(config?.nightMinutes)) || 120, train: readObject(config?.nightTrain, []), last: store.state().nightDone ?? '' },
+      night: { skills: plain(config?.nightSkills) === true, on: plain(config?.nightShift) === true, idleMinutes: Number(plain(config?.idleMinutes)) || 15, minutes: Number(plain(config?.nightMinutes)) || 120, train: readObject(config?.nightTrain, []), last: store.state().nightDone ?? '' },
       canaries: Boolean(canaryTasks()),
     };
   };
-  const SETTABLE = { enabled: 'boolean', harvest: 'json', folder: 'string', python: 'string', models: 'json', teacher: 'json', teacherCloud: 'boolean', providers: 'json', anthropicOpenEnded: 'boolean', nightShift: 'boolean', idleMinutes: 'number', nightMinutes: 'number', nightTrain: 'json', examLimit: 'number', ownNetworkLocal: 'boolean' };
+  const SETTABLE = { enabled: 'boolean', harvest: 'json', folder: 'string', python: 'string', models: 'json', teacher: 'json', teacherCloud: 'boolean', providers: 'json', anthropicOpenEnded: 'boolean', nightShift: 'boolean', idleMinutes: 'number', nightMinutes: 'number', nightTrain: 'json', nightSkills: 'boolean', examLimit: 'number', ownNetworkLocal: 'boolean', skills: 'boolean', skillExam: 'json' };
   /** What the page may do while Tuning Plus is off: switch it on, change settings, and stop or switch off. */
   const WHILE_OFF = new Set(['set', 'stop', 'stopServing']);
   const setSetting = async (field, value) => {
     const kind = SETTABLE[field];
-    if (!kind) throw new Error('not a setting of Tuning Plus');
+    if (!kind) throw new Error('not a setting of Tuner Plus');
     let stored = value;
     if (kind === 'boolean') stored = value === true;
     else if (kind === 'number') stored = Number(value) || 0;
@@ -1366,12 +1651,13 @@ export function apply(ctx, config, standIns = {}) {
               let size = 0;
               for await (const chunk of req) {
                 size += chunk.length;
-                if (size > 65536) throw new Error('request too large');
+                // A new skill's text (20,000 characters in any script) fits.
+                if (size > 262144) throw new Error('request too large');
                 chunks.push(chunk);
               }
               const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
               const action = String(body.action ?? '');
-              if (!enabled() && !WHILE_OFF.has(action) && !(action === 'switch' && body.on !== true)) throw new Error('Tuning Plus is switched off in Settings → Tuning Plus. Switch it on first.');
+              if (!enabled() && !WHILE_OFF.has(action) && !(action === 'switch' && body.on !== true)) throw new Error('Tuner Plus is switched off in Settings → Tuner Plus. Switch it on first.');
               if (action === 'set') await setSetting(String(body.field ?? ''), body.value);
               else if (action === 'harvest') {
                 const summary = await harvest();
@@ -1408,12 +1694,81 @@ export function apply(ctx, config, standIns = {}) {
               } else if (action === 'qa') {
                 const result = await buildQa({});
                 note = `Questions from reference material: ${result.rows.length} kept, ${result.dropped} dropped by the check.`;
+              } else if (action === 'skillsSort') {
+                const n = skillsPart.sort(body.keys, String(body.mark ?? ''));
+                note = `${n} skill${n === 1 ? '' : 's'} sorted.`;
+              } else if (action === 'skillsRestart') {
+                note = skillsPart.restartRecord();
+              } else if (action === 'skillDraft') {
+                const made = await skillsPart.draft({ name: body.name, description: body.description, text: body.text, scope: String(body.scope ?? ''), project: String(body.project ?? ''), by: 'owner' });
+                note = `The draft "${made.name}" is kept in Tuner Plus's folder, where the app does not load it.${made.masked > 0 ? ` ${made.masked} secret${made.masked === 1 ? ' was' : 's were'} masked.` : ''}${made.git ? ' Its project is a git repository: once live, the skill file shows among its changes.' : ''}`;
+              } else if (action === 'skillLive') {
+                const live = await skillsPart.goLive(String(body.id ?? ''));
+                note = `The skill "${live.name}" is live: ${live.file}.${live.git ? ' This project is a git repository: the file shows among its changes.' : ''}`;
+              } else if (action === 'skillExam') {
+                const started = await skillsPart.startExam({ draft: String(body.id ?? ''), key: String(body.key ?? '') });
+                note = started.lookOnly ? `The health check of "${started.name}" is running (look only: nothing is changed). Its result comes as a card.` : `The exam of "${started.name}" is running. Its result comes as a card, and on the draft.`;
+              } else if (action === 'skillsRun') {
+                const started = await skillsPart.startSkillsRun({ type: String(body.type ?? ''), keys: Array.isArray(body.keys) ? body.keys.map(String) : [], mark: String(body.mark ?? 'all'), what: String(body.what ?? ''), scope: body.scope === 'project' ? 'project' : 'everywhere', project: String(body.project ?? ''), lookOnly: body.lookOnly === true, by: 'page' });
+                note = `Started: ${started.sentence} The result comes as a card below.`;
+              } else if (action === 'skillsHealth') {
+                const counted = await skillsPart.refreshHealth({ most: 400 });
+                note = `Uses counted in ${Object.keys(counted.sessions ?? {}).length} conversations Tuner Plus may read.`;
+              } else if (action === 'skillRetire') {
+                note = `"${skillsPart.retireKey(String(body.key ?? ''))}" is retired: switched off and kept. Put back is under Skills.`;
+              } else if (action === 'skillPutBack') {
+                note = `"${skillsPart.putBack(String(body.id ?? ''))}" is back where it was.`;
+              } else if (action === 'skillsRetire') {
+                const result = skillsPart.retireFromCard(String(body.card ?? ''));
+                note = `${result.done.length > 0 ? `Retired (switched off and kept): ${result.done.join(', ')}.` : 'Nothing was retired.'}${result.problems.length > 0 ? ` Not retired: ${result.problems.slice(0, 3).join(' ')}` : ''}`;
+              } else if (action === 'skillTeach') {
+                const name = skillsPart.teachFromCard(String(body.card ?? ''));
+                note = `"${name}" is taught: its checked runs train the harness adapter without loading it, from the next training run. The skill stays as it is.`;
+              } else if (action === 'skillTeachStop') {
+                note = `"${skillsPart.stopTeaching(String(body.name ?? ''))}" is no longer taught: its runs train with its loading again.`;
+              } else if (action === 'skillsTabOff' || action === 'skillsTabOn') {
+                // Skills per tab (step 14): the owner's click; Modes keeps the list and does the leaving out.
+                const modes = modesSkills();
+                if (!modes) throw new Error('Choosing skills per tab needs the Modes add-on of this Plus version.');
+                const tab = String(body.tab ?? '');
+                const names = (Array.isArray(body.names) ? body.names : []).map(String).slice(0, 500);
+                const known = action === 'skillsTabOff' ? new Set(((await skillsView()).rows ?? []).map((row) => row.name)) : new Set();
+                // Read after every wait, so a change made meanwhile is kept.
+                const now = new Set(modes.skillsOff()[tab] ?? []);
+                let next;
+                if (action === 'skillsTabOff') {
+                  const unknown = names.filter((name) => !known.has(name));
+                  if (names.length === 0 || unknown.length > 0) throw new Error(unknown.length > 0 ? `Not in the skill list: ${unknown.slice(0, 3).join(', ')}.` : 'No skill was named.');
+                  next = [...new Set([...now, ...names])];
+                } else {
+                  next = names.length === 0 ? [] : [...now].filter((name) => !names.includes(name));
+                }
+                const done = await modes.setSkillsOff(tab, next);
+                const label = modes.list().find((one) => one.id === tab)?.label ?? tab;
+                note = done.length > 0 ? `Switched off in ${label}: ${done.join(', ')}. The model there no longer sees them; your /name still works. Open conversations there get the shorter list at their next step.` : `Every skill is back on in ${label}.`;
+              } else if (action === 'skillsUpdateCheck') {
+                const started = await skillsPart.checkFromCard(String(body.card ?? ''));
+                note = `Started: ${started.sentence} The result comes as a card below.`;
+              } else if (action === 'skillsRunStop') {
+                note = skillsPart.stopSkillsRun() ? 'Stopping the run.' : 'No skills run is going.';
+              } else if (action === 'skillIdeas') {
+                const ideas = await skillsPart.findIdeas();
+                note = ideas.length === 0 ? 'No new skill ideas in what was gathered. Ideas come from checked work, corrections, runs a stronger model finished, tools that failed first, and plugins with lessons.' : `${ideas.length} skill idea${ideas.length === 1 ? '' : 's'}: see the cards under Results.`;
+              } else if (action === 'skillIdeaDraft') {
+                const made = await skillsPart.draftFromIdea(String(body.card ?? ''));
+                note = `The draft "${made.name}" was written (${made.scope === 'project' ? `for the project ${String(made.project).split('/').pop()}` : 'for everywhere'}). It waits under Skills for its exam.`;
+              } else if (action === 'skillShown') {
+                skillsPart.markShown(String(body.id ?? ''));
+              } else if (action === 'skillExamStop') {
+                note = skillsPart.stopExam() ? 'Stopping the exam.' : 'No exam is running.';
+              } else if (action === 'skillDrop') {
+                note = `The draft "${skillsPart.dropDraft(String(body.id ?? ''))}" was dropped.`;
               } else if (action === 'rebuild') {
                 const plan = rebuildPlan(store.shelf(), String(body.model ?? ''));
                 note = plan.length === 0 ? 'Nothing to rebuild for that base model.' : `To rebuild on ${body.model}: ${plan.map((one) => one.name).join('; ')}. Start each from the bar with that model; each goes through its exam again.`;
               } else throw new Error('unknown action');
             } else if (req.method !== 'GET') throw new Error('only GET and POST');
-            res.end(JSON.stringify({ ...view(), ...extra, note }));
+            res.end(JSON.stringify({ ...view(), skills: await withExam(await skillsView({ fresh: req.method === 'POST' })), ...extra, note }));
           } catch (error) {
             res.statusCode = 400;
             res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 400) }));
@@ -1424,7 +1779,7 @@ export function apply(ctx, config, standIns = {}) {
     );
   });
 
-  return { harvest, refreshSets, examGate, startRun, stopRun, buildLessons, buildQa, nightTick, pickTaste, startTaste, writeSet, view, service, cardAction, serve };
+  return { harvest, refreshSets, examGate, startRun, stopRun, buildLessons, buildQa, nightTick, pickTaste, startTaste, writeSet, view, service, cardAction, serve, skillsPart, skillsView };
 }
 
 export const testing = { mark };

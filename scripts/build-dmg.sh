@@ -23,7 +23,7 @@ FOLDER="$STAGE/DeepSeek Harness Plus"
 mkdir -p "$FOLDER" "$ROOT/dist"
 
 git archive HEAD | tar -x -C "$FOLDER"
-chmod +x "$FOLDER/Install.command" "$FOLDER/Uninstall.command"
+chmod +x "$FOLDER/Install.command" "$FOLDER/Uninstall.command" "$FOLDER/Tuner Plus Way Back.command"
 
 rm -f "$OUT"
 hdiutil create -quiet -volname "DeepSeek Harness Plus ${VERSION}" -srcfolder "$FOLDER" -fs HFS+ -format UDZO -imagekey zlib-level=9 "$OUT"

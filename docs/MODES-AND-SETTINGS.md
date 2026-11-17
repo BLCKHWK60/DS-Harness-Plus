@@ -214,7 +214,7 @@ A family only brings tools that exist. For example the finance family brings not
    - With an argument it takes a family, a tool name or plain words ("read a PDF").
    - Added tools are there from the model's next step.
 2. **Your message names them.** The words are read when the turn starts, so the model has the tools from its first step (`wordsAddTools` in `addons/dsh-modes/index.js`).
-3. **An Office skill loads.** Whether the model loads it or you type `/office-…`, the office family is added (core-2). The bare word "excel" no longer adds the Office tools; "excel file", "excel sheet" or "excel workbook" does.
+3. **An Office skill loads.** Whether the model loads it or you type `/office-…`, the office family is added (core-2). Since 17 November only the app's own Office skills do this: a skill of the same name from a project or the shared folder (which wins over the app's) adds nothing (`appOfficeFolder` in `addons/dsh-modes/lib/trim.js`). The bare word "excel" no longer adds the Office tools; "excel file", "excel sheet" or "excel workbook" does.
 
 What changed in `tools_find` in this run:
 - It matches a request against every tool the app knows, not only the tools on offer. So a tool that is in no family can be added by its name or by words from its description (core-1, x-4). The image tools are an example.
@@ -261,6 +261,35 @@ Where the added tools are kept:
 - `/goal` needs the goals family. That family loads only when a message contains the word "goal" (likely).
 - A Mission run needs `mission_step` (see Mission).
 - These limits now apply to Data too, since it loads tools as needed by default.
+
+### Skills per tab (17 November, Tuner Plus's step 14)
+
+**In short:** you can switch off, in one tab, skills that tab never uses. The model there no longer sees them, and every other tab keeps the full list.
+
+- **Where:** Tuner Plus's page, in the card "What the list costs". For each tab it names the skills never loaded there and how many conversations were counted. From 10 counted conversations, a "Switch these off in <tab>" button appears. "Switch back on" is there, and also in Settings → Modes, so the way back does not need Tuner Plus.
+- **What happens in that tab** (`addons/dsh-modes/lib/skilloff.js`):
+  - The skill list the app hands a conversation loses those skills' lines. An open conversation gets one shorter list at its next step.
+  - The app's own re-sending of the whole list is dropped while the model already has the shorter one, so no tokens are spent twice. In the lab, a 5-turn conversation got the list once.
+  - With every skill switched off, the model is told there are none, in the app's own words.
+  - A call for a switched-off skill is refused with a plain sentence. The refusal is a guard (`ctx.tools.guard`), so it holds whatever other add-ons answer.
+  - Your own typed `/name` still works.
+- **Unchanged:**
+  - With nothing switched off, every step is exactly as before.
+  - Recon and other isolated tabs still get no skill list at all, and cannot be given a switched-off list.
+  - A list in a form Modes does not know is left whole, with a warning in the log.
+- **Known limit:** a tab you remove keeps its list. Settings → Modes shows it by its id, where it can be cleared.
+
+### Tuner Plus's skills part (17 November; its own switch, off at first)
+
+Tuner Plus marks every skill by where it came from: Default, Downloaded, Plus, AI-made, Mine or Not sorted. With your yes it builds, examines and looks after skills. The full account is `docs/TUNER-PLUS-SKILLS-PHASE1.md`. Its settings, in Settings → Tuner Plus:
+
+- `tuning.skills` (off): the whole skills part.
+- `tuning.skillExam`: the exam's two models. The floor model must be on this Mac; the strong one may be any.
+- `tuning.nightSkills` (off): the night shift drafts at most two skill ideas a night and examines them. It never spends on a model elsewhere, and nothing goes live.
+
+It also adds two things elsewhere:
+- **Cowork sidebar → Skills:** each skill's mark, and a filter by mark.
+- **After an update:** one card lists the skills that changed, went away or are new.
 
 ### The Tools switch and the PTC preset
 
@@ -472,7 +501,7 @@ Where the added tools are kept:
 - **Where it is available:**
   - The skills are listed wherever the skill tool is.
   - `judge_candidates` is in the helpers family. It is held to the tier's sub-agent gate and follows the models chip.
-  - Chat offers neither, since it has no tools. Research and Scout do not list them. Recon gets no skill list at all.
+  - Chat offers neither, since it has no tools. Research and Scout do not list them. Recon gets no skill list at all, and since 17 November no skill text either when you type `/skill-name` there.
 - **Settings** (configuration file only):
   - Code power on/off;
   - PR review lanes;
@@ -597,6 +626,7 @@ Recon adds two protections of its own:
 | Mode for conversations that have not chosen one (`modes.defaultMode`) | Settings → Modes; also written by every sidebar tab click and by Engines' compare page | cowork | The mode a new conversation starts in. With the sidebar on, it is the selected tab. |
 | Mode cards: Tools, File sandbox, Tier for this mode, Prompt (`modes.modes`) | Settings → Modes | Chat: no tools, read only. Cowork: all tools, left as it is. Code: all tools, write in the workspace. | What each mode allows and adds. The tier applies to new conversations in the mode and to switches into it. The prompt is at most 4,000 characters. A card beyond the tab count says it has no sidebar tab. "Add mode", "Remove" and "Restore built-in modes" are here too. |
 | Depth for new conversations (and those that never picked one) (`modes.searchDepth`) | Settings → Modes → New conversations; chat box → Depth button (picking a Depth sets it) | standard | The Depth new conversations start with, and the Depth of every conversation that never picked one (before 0.59.0: the Web level; a stored Deep counts as Thorough). |
+| Skills switched off per tab (`modes.skillsOff`, JSON `{ tabId: [names] }`) | Tuner Plus's page (cost card: "Switch these off in <tab>", "Switch back on"); Settings → Modes → Skills switched off per tab ("Switch back on") | empty | In that tab the model's skill list leaves them out and a call for one is refused; your typed /name still works. Isolated tabs cannot have one. See "Skills per tab" above. |
 | Mode for scheduled tasks (`modes.scheduledMode`) | Settings → Modes → New conversations (new in 0.57.0) | cowork | The mode of a conversation that a scheduled task opens. Offers the mode cards and the add-on modes that are not isolated. |
 | Tabs in the sidebar (`cowork-shell.maxTabs`) | Settings → Modes → Sidebar, shown only while the Cowork sidebar is on (new in 0.57.0) | 3 | How many of the mode cards get a tab, 1 to 5. Add-on modes always get one. |
 | Code: Plus's working method (`modes.codeMethod`) | Settings → Modes → Built-in working methods (new in 0.57.0) | on | Code's built-in method while its prompt is empty. |
@@ -2158,7 +2188,8 @@ How to report:
 **App notes dropped before each step.** `ISOLATED_DROPS` in `addons/dsh-modes/lib/isolation.js`, applied in a pre-step hook in `addons/dsh-modes/index.js`, removes messages whose source kind is:
 - `agent-instructions` (the folder's AGENTS.md and the one in the app's home, where Memory writes);
 - `skill-catalog`;
-- `runtime-context`.
+- `skill-invocation` (a skill's text the app adds when you type `/skill-name`; the app adds it without checking whether the tab may load skills. Added 17 November, after a lab run showed it reaching a Recon conversation);
+- `runtime-context` (listed, but the app adds this note after the hook runs, so it still arrives: see the next paragraph; confirmed again in a lab run on 17 November).
 
 The add-on README says the app still tells the model its own install path and local address, and the folder path, which is Recon's room. The app's base text still names workflows and MCP servers, which cannot be called.
 

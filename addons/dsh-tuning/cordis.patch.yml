@@ -2,6 +2,6 @@
     - id: tuning
       name: '@local/dsh-tuning'
       config:
-        # Off until you switch it on in Settings > Tuning Plus, and then each mode is harvested only when you
+        # Off until you switch it on in Settings > Tuner Plus, and then each mode is harvested only when you
         # switch it on there. Training runs only on this Mac, from a Python with mlx-lm that you install yourself.
         enabled: false

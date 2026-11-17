@@ -59,7 +59,13 @@ export function turnsOf(events, inherited = 0) {
     switch (event?.type) {
       case 'user/message': {
         const kind = data.message?.source?.kind ?? data.source?.kind ?? 'user';
-        if (kind === 'user') pending = textOf(data.message);
+        // The app writes turn/start first and delivers the owner's message inside that turn (dsh-agent-loop);
+        // older logs had it just before. It belongs to the open turn until that turn has done any work, else to
+        // the next one (found while building step 10 of the skills part, 17 November).
+        if (kind === 'user') {
+          if (current && !current.worked && !current.ended) current.request = textOf(data.message);
+          else pending = textOf(data.message);
+        }
         break;
       }
       case 'turn/start':
@@ -72,6 +78,7 @@ export function turnsOf(events, inherited = 0) {
         break;
       case 'tool/call':
         if (current) {
+          current.worked = true;
           const call = { name: String(data.name ?? ''), args: argsOf(data.arguments), error: false, result: '', callId: String(data.callId ?? '') };
           current.tools.push(call);
           if (call.callId) calls.set(call.callId, call);
@@ -88,6 +95,7 @@ export function turnsOf(events, inherited = 0) {
       }
       case 'assistant/message':
         if (current) {
+          current.worked = true;
           const text = textOf(data.message);
           if (text) current.answer = text;
         }
@@ -96,6 +104,7 @@ export function turnsOf(events, inherited = 0) {
         if (current) {
           current.end = String(data.reason?.kind ?? '');
           current.at = timeOf(event);
+          current.ended = true;
         }
         break;
       default:

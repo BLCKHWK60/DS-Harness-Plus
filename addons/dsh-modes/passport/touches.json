@@ -107,7 +107,8 @@
     "trimModes",
     "sessionToolSets",
     "webMarksCleared",
-    "dataTrimAdded"
+    "dataTrimAdded",
+    "skillsOff"
   ],
   "instructionChars": 0,
   "rows": [

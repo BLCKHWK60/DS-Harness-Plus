@@ -113,6 +113,15 @@ of yours. The app tells a model the path of its conversation's folder; this one 
 home and says nothing about you. It is emptied whenever Recon starts. A room that has turned into a
 link, is not a folder or is not yours is left alone, not emptied.
 
+An app started on another data folder than the usual one (a test copy: `DSH_HOME` set to a
+throwaway folder, or `HOME` moved) gets a room of its own, `/private/tmp/dsh-recon-copy-<12 letters>`,
+named after that folder; the data folder is read exactly as the app reads it and compared with the
+account's own home. A data folder set some other way is caught when the app reports it, and the copy
+switches to its own room then (`roomFrom`, `dataFolderOf`, `testCopyRoom`, `roomFor`,
+`mayEmptyRoom`). A `DSH_RECON_ROOM` that is refused also gets a throwaway room of its own, never the
+real one. 17 November 2026, after a test copy emptied the real room; tightened after an independent
+review the same day.
+
 Tests move the room with the environment variable `DSH_RECON_ROOM`, so they never empty the room
 the running app uses. Only a folder whose name starts with `dsh-recon-`, directly in `/tmp` or the
 system's temporary folder, and not a link, is taken; anything else is ignored. The real room's own

@@ -1,5 +1,7 @@
 # Changelog: @local/dsh-modes
 
+- 2026-11-17 Skills switched off per tab (setting skillsOff, empty at first; Tuner Plus's step 14): in that tab the model's skill list leaves them out (an open conversation gets one shorter list at its next step, and the app's whole list is not sent again), a call for one is refused by a guard, your typed /name still works; isolated tabs unchanged and refused; Settings → Modes shows them with Switch back on (written from the stored setting, so another tab's list is kept). Reviewed: 6 points, 5 fixed with tests; the sixth (a removed tab keeps its list, shown and cleared on this page) left as it is
+- 2026-11-17 Recon conversations no longer get a skill's text when the user types /skill-name; the Office tool family comes only with the app's own Office skills
 - 2026-11-17 The rest of the Content and Bench plan: Web levels, Ultra Code and the work loop, the Recon export door, the Voice Library, and Bench's network, server, phone and Bluetooth doors
 - 2026-11-16 Content and Bench tabs; Long run checks in Bench and Recon; a run that has ended stops cleanly
 - 2026-11-16 Long run in Recon, inside Recon's rules

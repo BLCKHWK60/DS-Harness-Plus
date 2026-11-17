@@ -94,6 +94,33 @@ test('the harvest from a conversation: tests that passed, a finished turn, a fai
   assert.equal(turnsOf(events, events.length).length, 0);
 });
 
+test('the harvest reads the app\'s real order too: the turn starts, then the owner\'s message comes in it; each request stays with its own turn', () => {
+  // As DeepSeek Harness 0.2.2 writes it (dsh-agent-loop): turn/start, then the delivered user/message, then the work.
+  const real = (n, said, ...inner) => [event('turn/start', { turn: n }), event('request/header', { header: { config: { provider: 'local', model: 'small' } } }), user(said), ...inner, event('turn/end', { turn: n, reason: { kind: 'completed' } })];
+  const events = [
+    ...real(1, 'fix the date parser', call('a', 'edit', { file_path: 'x.js', old: 'b' }), result('a', 'ok'), call('c', 'bash', { command: 'npm test' }), result('c', '12 passing'), answer('Fixed; tests pass.')),
+    ...real(2, 'list the files', call('d', 'glob', { pattern: '*.js' }), result('d', 'x.js'), answer('x.js')),
+    ...real(3, 'no, I said the markdown files', call('e', 'glob', { pattern: '*.md' }), result('e', 'a.md'), answer('a.md')),
+  ];
+  const turns = turnsOf(events);
+  assert.deepEqual(turns.map((one) => one.request), ['fix the date parser', 'list the files', 'no, I said the markdown files']);
+  assert.deepEqual(turns.map((one) => one.corrected), [false, true, false], 'the owner corrected turn 2 in his next message');
+  const rows = rowsFromTurns(turns, { mode: 'code', session: 's1', quiet: true });
+  const tested = rows.find((row) => row.proof.check === 'tests');
+  assert.equal(tested.input[0].content, 'fix the date parser', 'the request of its own turn, not the one before');
+  assert.ok(!rows.some((row) => row.output.includes('*.js')), 'the corrected turn is not a row');
+  const md = rows.find((row) => row.output.includes('*.md'));
+  assert.equal(md.input[0].content, 'no, I said the markdown files');
+  // The owner's correction becomes a pair with the turn it corrected.
+  const pairs = rowsFromCorrections(turns, { mode: 'corrections', session: 's1', quiet: true });
+  assert.equal(pairs.length, 1);
+  assert.equal(pairs[0].input[0].content, 'list the files');
+  assert.equal(pairs[0].proof.detail, 'no, I said the markdown files');
+  // A message sent while the turn already works waits for the next turn (it is not this turn's request).
+  const steered = turnsOf([...real(1, 'first', call('x', 'glob', { pattern: '*' }), user('later words'), result('x', 'ok'), answer('ok'))]);
+  assert.equal(steered[0].request, 'first');
+});
+
 test('the harvest from a Mission run: a checked item, a failed try (never trains), the cheapest model that passed; Recon and Bench runs are not read', () => {
   const run = { id: 'r1', goal: 'add a hello file', items: [{ id: '1', title: 'Greeting file', detail: 'hello.txt', doneWhen: 'it says hello', report: 'Wrote hello.txt.', evidence: 'grep ok' }] };
   const log = [

@@ -88,6 +88,15 @@ window.__ModuleLoader__.load({
         'skills.unavailable': 'The skill list could not be read.',
         'skills.model': 'assistant can use',
         'skills.user': '/ command',
+        'skills.allMarks': 'All marks',
+        'skills.markFilter': 'Show skills by where they came from',
+        'skills.markHint': 'Where this skill came from, as Tuner Plus sorted it',
+        'skills.mark.default': 'Default',
+        'skills.mark.downloaded': 'Downloaded',
+        'skills.mark.plus': 'Plus',
+        'skills.mark.ai': 'AI-made',
+        'skills.mark.mine': 'Mine',
+        'skills.mark.unsorted': 'Not sorted',
         'refresh': 'Refresh',
         'chips.label': 'Suggestions',
         'place.label': 'Where this conversation works',
@@ -386,6 +395,15 @@ window.__ModuleLoader__.load({
         'skills.unavailable': '无法读取技能列表。',
         'skills.model': '助手可用',
         'skills.user': '/ 命令',
+        'skills.allMarks': '全部来源',
+        'skills.markFilter': '按来源显示技能',
+        'skills.markHint': '这个技能的来源（由 Tuner Plus 分类）',
+        'skills.mark.default': '默认',
+        'skills.mark.downloaded': '下载',
+        'skills.mark.plus': 'Plus',
+        'skills.mark.ai': 'AI 生成',
+        'skills.mark.mine': '我的',
+        'skills.mark.unsorted': '未分类',
         'refresh': '刷新',
         'chips.label': '建议',
         'place.label': '这个对话在哪里工作',
@@ -3593,10 +3611,13 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       addForm);
     }
 
+    /** Tuner Plus's six marks (where a skill came from), named in this page's own words. */
+    const MARK_IDS = ['default', 'downloaded', 'plus', 'ai', 'mine', 'unsorted'];
     function SkillsPage({ appCtx }) {
       const t = appCtx.locale.bind(NS);
       const [state, setState] = useState({ status: 'loading', data: null });
       const [query, setQuery] = useState('');
+      const [markFilter, setMarkFilter] = useState('');
       const load = useCallback(async () => {
         try {
           const response = await fetch(new URL('dsh-cowork-shell/skills', document.baseURI), { headers: { accept: 'application/json' } });
@@ -3608,19 +3629,28 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       }, []);
       useEffect(() => { void load(); }, [load]);
       const words = query.trim().toLowerCase();
-      const skills = (state.data?.skills ?? []).filter((skill) => !words
-        || `${skill.name} ${skill.description} ${skill.whenToUse}`.toLowerCase().includes(words));
+      // Tuner Plus's marks, only while it sends them: a filter by mark and a mark beside each name.
+      // A mark's name in the page's language when it is one of Tuner Plus's six, else as Tuner Plus sent it.
+      const markName = (id, sent) => (MARK_IDS.includes(id) ? t(`skills.mark.${id}`) : String(sent ?? id));
+      const marks = state.data?.marks && typeof state.data.marks === 'object' ? Object.entries(state.data.marks).filter(([, name]) => typeof name === 'string').map(([id, name]) => [id, markName(id, name)]) : [];
+      const markOn = marks.some(([id]) => id === markFilter) ? markFilter : '';
+      const skills = (state.data?.skills ?? []).filter((skill) => (!words
+        || `${skill.name} ${skill.description} ${skill.whenToUse}`.toLowerCase().includes(words))
+        && (!markOn || skill.mark === markOn));
       return h(PageFrame, {
         title: t('skills.title'), hint: t('skills.hint'),
         actions: h('button', { type: 'button', className: 'cws-btn', onClick: () => void load() }, t('refresh')),
       },
       h('input', { className: 'cws-search', type: 'search', placeholder: t('skills.search'), 'aria-label': t('skills.search'), value: query, onChange: (e) => setQuery(e.target.value) }),
+      marks.length > 0 ? h('select', { className: 'cws-search', 'aria-label': t('skills.markFilter'), value: markOn, onChange: (e) => setMarkFilter(e.target.value) },
+        h('option', { value: '' }, t('skills.allMarks')),
+        marks.map(([id, name]) => h('option', { key: id, value: id }, `${name} (${(state.data?.skills ?? []).filter((skill) => skill.mark === id).length})`))) : null,
       state.status === 'error' ? h('p', { className: 'cws-note' }, t('skills.unavailable')) : null,
       state.status === 'ready' ? h('div', { className: 'cws-card' },
         skills.length ? skills.map((skill) => h('div', { key: skill.name, className: 'cws-item' },
           h('span', { className: 'cws-glyph', 'aria-hidden': true }, h(Glyph, { name: 'sparkle', size: 16 })),
           h('div', { className: 'cws-item-main' },
-            h('div', { className: 'cws-item-name' }, skill.name),
+            h('div', { className: 'cws-item-name' }, skill.name, skill.markName ? h('span', { className: 'cws-chip', style: { marginLeft: 8 }, title: t('skills.markHint') }, markName(skill.mark, skill.markName)) : null),
             skill.description ? h('div', { className: 'cws-item-sub cws-clamp', title: skill.description }, skill.description) : null,
             skill.path ? h('div', { className: 'cws-item-sub', title: skill.path }, skill.path) : null),
           skill.userInvocable ? h('span', { className: 'cws-chip' }, t('skills.user')) : null,

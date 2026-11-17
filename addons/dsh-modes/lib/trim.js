@@ -96,6 +96,42 @@ export function brings(entry, offered) {
   return offered.some((name) => !CORE.includes(name) && (name === entry || inFamily(entry, name)));
 }
 
+/** The line the app writes above a loaded skill's own words when the skill lives in a folder. */
+const FOLDER_LINE = 'Base directory for this skill: ';
+
+/**
+ * Whether a skill's folder is one of the app's own Office skills, inside the app's package:
+ * <app>/Contents/Resources/…/dsh-skill-office/assets/office[-docx|-pptx|-xlsx]. A skill of the same
+ * name anywhere else (a file in a project or in the shared folder, which wins over the app's) is not.
+ * @param {unknown} folder - the skill's folder.
+ * @param {string} contents - the app's Contents folder.
+ * @returns {boolean} true for the app's own.
+ */
+export function appOfficeFolder(folder, contents) {
+  const value = String(folder ?? '');
+  const root = String(contents ?? '').replace(/\/+$/, '');
+  if (!root || !value.startsWith(`${root}/Resources/`) || value.split('/').includes('..')) return false;
+  return /\/dsh-skill-office\/assets\/office(?:-[a-z]+)?$/.test(value);
+}
+
+/**
+ * The folder the app names in a loaded skill's text, read only from the part the app writes above
+ * the skill's own words (<skill_resources>), so a skill's text cannot claim another folder.
+ * @param {unknown} text - the text of the message the app added.
+ * @returns {string} the folder, or ''.
+ */
+export function skillFolderIn(text) {
+  const value = String(text ?? '');
+  const start = value.indexOf('<skill_resources>');
+  const end = value.indexOf('</skill_resources>');
+  const words = value.indexOf('<skill_instructions>');
+  if (start < 0 || end < start || (words >= 0 && words < end)) return '';
+  // Only the first line the app writes there, and only when it names a folder: another kind of
+  // skill (a web address, a description) could hold a line that looks like it (the review, 17 November).
+  const first = value.slice(start + '<skill_resources>'.length, end).replace(/^\n/, '').split('\n')[0] ?? '';
+  return first.startsWith(FOLDER_LINE) ? first.slice(FOLDER_LINE.length).trim() : '';
+}
+
 /** The families a loaded skill brings with it. */
 export function skillFamilies(skill) {
   const name = String(skill ?? '');

@@ -1,0 +1,4 @@
+# Changelog: @local/dsh-tuning
+
+- 2026-11-17 Review fixes: secrets masked in every spelling and inside tool arguments; the exam kept apart from training rows; the real writer of each text; whole Content folders checked for Recon exports; the night shift stops inside a run; Bench and Recon turns never rows; safe writes and isolated Python; limits and cleanup; the newest turn waits; own network off by default; both canary runs; a sturdier mlx-lm server; exam calls in Self-improve's allowance; Learned skills' exam in the background; nothing while off
+- 2026-11-17 Tuning Plus T0 to T13: rows with proof, the exam, data sets, the ladder, the bar, adapters on this Mac, the shelf, the taste test, the night shift, lessons, questions from reference material; exam gate in Self-improve and Learned skills, canaries in Benchmark, adapters per team role in Model Tiers

@@ -133,8 +133,9 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
   const ctx = {
     logger: { warn: () => {}, info: () => {}, error: () => {} },
     get: (name) => (name === 'modes' ? service : services[name]),
-    on: (name, handler) => {
-      handlers.set(name, [...(handlers.get(name) ?? []), handler]);
+    on: (name, handler, options) => {
+      // As the app: `prepend` puts a listener outermost.
+      handlers.set(name, options?.prepend ? [handler, ...(handlers.get(name) ?? [])] : [...(handlers.get(name) ?? []), handler]);
       return () => {};
     },
     effect: (start) => {
@@ -204,6 +205,8 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
     tierCalls,
     tierSelected,
     waterfall,
+    /** Another add-on listens too, registered after Modes (as the app's own skill add-on may be). */
+    listen: (name, handler, options) => ctx.on(name, handler, options),
     /** The conversation is closed: its live Agent goes away. */
     close: async (agent) => {
       agents.delete(agent.id);
@@ -244,7 +247,7 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
     /** A model reply stopped at the output limit (`agent/assistant-stream`). */
     cutOff: (agent) => emit('agent/assistant-stream', { agent, frame: { type: 'chunk', chunk: { type: 'finish', reason: { kind: 'max-tokens' } } } }),
     /** A tool's final result (`tools/result`). */
-    toolResult: (agent, name, result) => emit('tools/result', { name, agent, arguments: {} }, result),
+    toolResult: (agent, name, result, args = {}) => emit('tools/result', { name, agent, arguments: args }, result),
     /** The app asks before a turn closes (`agent/turn-stopping`); `aborted` is the turn's signal. */
     turnStopping: (agent, turn, { aborted = false } = {}) => {
       const controller = new AbortController();
