@@ -22,7 +22,14 @@ test('the page code registers its page and its bar, and asks for the services it
     slots: { inject: (_name, fn) => fn(), register: (entry) => { registered.push(entry); return () => {}; } },
   };
   plugin.apply(ctx);
-  assert.deepEqual(registered.map((entry) => `${entry.name}#${entry.id}`), ['settings.section#creator-plus', 'conversation.input.left#creator-plus-bar']);
+  assert.deepEqual(registered.map((entry) => `${entry.name}#${entry.id}`), ['settings.section#creator-plus', 'conversation.input.left#creator-plus-bar', 'conversation.hero.options#creator-plus-options', 'conversation.input.dock#creator-plus-strip']);
+  // Under the chat box in the one options area every mode shares (18 November 2026): start page and started conversation.
+  assert.match(SOURCE, /strip: 'start' \}/);
+  assert.match(SOURCE, /strip: 'chat' \}/);
+  assert.match(SOURCE, /h\(Area, \{ mode: 'creator-plus', place: strip === 'start' \? 'start' : 'chat'/);
+  // It never lingers on another tab: forgotten when the conversation changes, hidden on another sidebar tab.
+  assert.match(SOURCE, /setView\(null\);\s*setState\(null\);\s*setOpen\(false\);/);
+  assert.match(SOURCE, /if \(otherTab\('creator-plus'\)\) return null;/);
   for (const service of ['remote.session', 'remote.settings']) if (SOURCE.includes(`'${service}'`) || SOURCE.includes(`.${service.split('.')[1]}.`)) assert.ok(plugin.inject.includes(service), service);
 });
 

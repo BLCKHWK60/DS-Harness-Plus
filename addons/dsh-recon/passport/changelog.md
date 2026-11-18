@@ -1,5 +1,10 @@
 # Changelog: @local/dsh-recon
 
+- 2026-11-18 Moving out of Recon: Move to opens a new, ordinary conversation of the picked tab with the whole Recon conversation and a copy of its own room files (door action `move`, lib/move.js); the original stays in Recon; works for locked conversations too
+- 2026-11-18 Cloud models are your choice: Settings → Recon → Models → Cloud models, Ask each time (default, /recon cloud per conversation), Always or Never (`cloudModels`); local and own-network models unchanged
+- 2026-11-18 Export… no longer lingers on other tabs: forgotten at once when the conversation changes, and hidden on another sidebar tab
+- 2026-11-18 Status dots: WireGuard, I2P (not set up yet) and each of your own sources allowed in Recon, beside Tor and Usenet, with the reason on hover; no request sent to draw them
+- 2026-11-18 The one Web selector in Recon: its tools follow the source ticks and Recon's networks (Tor, Usenet; I2P not set up yet), web results of unticked kinds left out; the owner's own sources marked for Recon read with recon_other_search and recon_other_read through WireGuard only, logins hidden; Settings → Recon → Hidden networks; all isolation rules kept
 - 2026-11-17 A test copy on another data folder gets a room of its own and never empties the real room
 - 2026-11-17 The rest of the Content and Bench plan: Web levels, Ultra Code and the work loop, the Recon export door, the Voice Library, and Bench's network, server, phone and Bluetooth doors
 - 2026-11-16 Content and Bench tabs; Long run checks in Bench and Recon; a run that has ended stops cleanly

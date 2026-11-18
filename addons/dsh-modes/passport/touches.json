@@ -1,7 +1,7 @@
 {
   "name": "@local/dsh-modes",
   "folder": "dsh-modes",
-  "at": "2026-11-17",
+  "at": "2026-11-18",
   "provides": [
     "modes"
   ],
@@ -24,7 +24,8 @@
     "settings",
     "tools",
     "uiWorkspace",
-    "web"
+    "web",
+    "credentials"
   ],
   "events": [
     "agent/created",
@@ -38,12 +39,17 @@
     "agent/status",
     "agent/pre-step",
     "agent/disposed",
-    "tools/pre-execute"
+    "tools/pre-execute",
+    "tools/post-execute"
   ],
-  "tools": [],
+  "tools": [
+    "other_search",
+    "other_read"
+  ],
   "commands": [],
   "routes": [
-    "/dsh-modes/tools"
+    "/dsh-modes/tools",
+    "/dsh-modes/other"
   ],
   "slots": [
     {
@@ -61,6 +67,10 @@
     {
       "name": "conversation.chat.assistant-actions",
       "id": "modes-rerun"
+    },
+    {
+      "name": "settings.section",
+      "id": "web-sources"
     }
   ],
   "settings": [
@@ -108,7 +118,12 @@
     "sessionToolSets",
     "webMarksCleared",
     "dataTrimAdded",
-    "skillsOff"
+    "skillsOff",
+    "sessionWebSources",
+    "academicSources",
+    "newsSources",
+    "otherSources",
+    "modeStart"
   ],
   "instructionChars": 0,
   "rows": [

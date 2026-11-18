@@ -4,3 +4,9 @@
       config:
         # Groups, icons and a search field in the Settings window. Switch off under Plugins to go back to the plain list.
         enabled: true
+        # The small gear beside Send that opens the current mode's settings in a popup.
+        modeGear: true
+        # The Export button beside the gear: this conversation as a file (Markdown, text, HTML, JSON) at three levels.
+        exportButton: true
+        # A mode's own extra buttons (Bench rules, Creator Plus, Focus, Finance, Recon's Export) sit in the gear's popup, not in the chat box.
+        extrasInGear: true

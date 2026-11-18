@@ -30,6 +30,8 @@ window.__ModuleLoader__.load({
 }
 .dsh-rc-btn:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .dsh-rc-btn:disabled { opacity: .5; cursor: default; }
+.dsh-rc-btns { flex: none; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.dsh-rc-btn[data-on="true"] { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
 .dsh-rc-switch {
   flex: none; position: relative; width: 36px; height: 20px; padding: 2px; border: 0; border-radius: 999px; cursor: pointer;
   background: var(--dsw-alias-border-l3, var(--dsw-alias-border-l2)); transition: background .12s ease;
@@ -145,6 +147,10 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
       }, [sessionId]);
       useEffect(() => {
         let alive = true;
+        // Another conversation: Export… goes at once and comes back only if this one is a Recon conversation
+        // (it lingered on other tabs).
+        setRecon(false);
+        setOpen(false);
         if (!sessionId) return undefined;
         call(undefined, sessionId).then((data) => { if (alive) setRecon(data?.conversation?.recon === true); }, () => {});
         return () => { alive = false; };
@@ -173,7 +179,10 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
         document.addEventListener('keydown', key, true);
         return () => document.removeEventListener('keydown', key, true);
       }, [open]);
-      if (!recon) return h('style', null, DOOR_CSS);
+      // With the Cowork sidebar the selected tab is the conversation's mode, known at once: another tab never shows the door.
+      const shownTab = typeof document?.documentElement?.getAttribute === 'function' ? document.documentElement.getAttribute('data-cws-tab') : null;
+      const otherTab = Boolean(shownTab) && shownTab !== 'recon';
+      if (!recon || otherTab) return h('style', null, DOOR_CSS);
       const go = async () => {
         setState({ busy: true, error: '', done: '' });
         try {
@@ -339,6 +348,26 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
       if (usenet.route !== 'direct') pills.push({ key: 'usenet', text: 'Usenet off', state: 'none', title: 'Switch it on in Settings → Recon → Usenet.' });
       else if (accounts.length === 0) pills.push({ key: 'usenet', text: 'Usenet on, no account yet', state: 'warn', title: 'Add an account in Settings → Recon → Usenet.' });
       else pills.push({ key: 'usenet', text: `Usenet on, ${accounts.length} account${accounts.length === 1 ? '' : 's'}`, state: 'ok', title: 'Direct encrypted connections to your news servers, not through Tor.' });
+      // WireGuard: Recon's way out for everything that is not Tor (the ordinary web, Usenet, your own sources).
+      const vpn = data?.vpn ?? {};
+      const vpnState = vpn.status?.state ?? 'off';
+      const tried = Array.isArray(vpn.status?.tried) ? vpn.status.tried.map((one) => `${one.name}: ${one.why}`).join('; ') : '';
+      if (!Array.isArray(vpn.configs) || vpn.configs.length === 0) pills.push({ key: 'wireguard', text: 'WireGuard not set up', state: 'none', title: 'Nothing outside Tor is sent until a WireGuard configuration is added in Settings → Recon → WireGuard (or a conversation allows /recon direct).' });
+      else if (vpnState === 'ready') pills.push({ key: 'wireguard', text: 'WireGuard connected', state: 'ok', title: `Through ${vpn.status.name || 'your tunnel'}.` });
+      else if (vpnState === 'starting') pills.push({ key: 'wireguard', text: 'WireGuard connecting', state: 'warn', title: 'Recon is starting its tunnel.' });
+      else if (vpnState === 'failed') pills.push({ key: 'wireguard', text: 'WireGuard did not connect', state: 'error', title: tried ? `Tried: ${tried}. Settings → Recon → WireGuard → Test.` : 'Settings → Recon → WireGuard → Test shows why.' });
+      else pills.push({ key: 'wireguard', text: 'WireGuard starts when needed', state: 'ok', title: `${vpn.configs.length} configuration${vpn.configs.length === 1 ? '' : 's'} set up; Recon starts the tunnel when something outside Tor is needed.` });
+      // I2P: shown so the list is complete; a later step builds it.
+      pills.push({ key: 'i2p', text: 'I2P not set up yet', state: 'none', title: 'A later step adds I2P to Recon.' });
+      // Your own sources allowed in Recon (Settings → Web sources → May be used in Recon): read through WireGuard only.
+      const noTunnel = !Array.isArray(vpn.configs) || vpn.configs.length === 0 || vpnState === 'failed';
+      for (const own of Array.isArray(data?.others) ? data.others : []) {
+        const key = `other-${own.name}`;
+        if (!own.kept) pills.push({ key, text: own.name, state: 'none', title: 'Its login is not kept yet: Settings → Web sources → Other sources.' });
+        else if (own.last && own.last.ok === false) pills.push({ key, text: own.name, state: 'error', title: `The last read did not work: ${own.last.why}` });
+        else if (noTunnel) pills.push({ key, text: own.name, state: 'none', title: 'Read only through WireGuard, which is not working or not set up.' });
+        else pills.push({ key, text: own.name, state: 'ok', title: own.last?.ok ? 'Your own source. The last read worked, through WireGuard.' : 'Your own source, ready: read through WireGuard when a conversation asks.' });
+      }
       if (more.archive === true) pills.push({ key: 'archive', text: more.archiveDirect ? 'Internet Archive read directly' : 'Internet Archive through Tor', state: 'none', title: more.archiveDirect ? 'Copies are read straight from the Archive, which sees this Mac\'s internet address. Settings → Recon → More sources.' : 'Copies are read through Tor; the Archive refuses most such reads. Settings → Recon → More sources.' });
       let hint = 'Isolated: nothing from other conversations comes in, and nothing of it goes to them. Type /recon for details.';
       let warn = false;
@@ -352,9 +381,9 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
       } else {
         const where = talk.where === 'local' ? 'on this Mac' : talk.where === 'network' ? 'in your network' : talk.where === 'cloud' ? 'in the cloud' : 'place unknown';
         pills.push({ key: 'model', text: `${talk.model}, ${where}`, state: talk.may ? 'ok' : 'warn', title: talk.provider ? `Provider: ${talk.provider}` : '' });
-        pills.push({ key: 'findings', text: talk.may ? 'Findings go to this model' : 'Findings held back', state: talk.may ? 'ok' : 'warn', title: talk.may ? (talk.agreed ? 'You agreed with /recon cloud, for this conversation and this model.' : 'This model runs on your own machines.') : 'Type /recon cloud to agree for this conversation.' });
+        pills.push({ key: 'findings', text: talk.may ? 'Findings go to this model' : 'Findings held back', state: talk.may ? 'ok' : 'warn', title: talk.may ? (talk.agreed ? (data?.cloudModels === 'always' ? 'Settings → Recon → Models allows cloud models without asking.' : 'You agreed with /recon cloud, for this conversation and this model.') : 'This model runs on your own machines.') : data?.cloudModels === 'never' ? 'Cloud models are switched off in Settings → Recon → Models.' : 'Type /recon cloud to agree for this conversation.' });
         if (!talk.may) {
-          hint = 'What Recon finds is not sent to this model. Type /recon cloud to agree for this conversation, or pick a model on this Mac or in your own network.';
+          hint = data?.cloudModels === 'never' ? 'What Recon finds is not sent to this model: cloud models are switched off in Settings → Recon → Models. Pick a model on this Mac or in your own network.' : 'What Recon finds is not sent to this model. Type /recon cloud to agree for this conversation, or pick a model on this Mac or in your own network.';
           warn = true;
         }
       }
@@ -525,6 +554,15 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
           h('button', { type: 'button', role: 'switch', className: 'dsh-rc-switch', 'aria-checked': String(data.enabled), 'aria-label': 'Show the Recon tab', disabled: busy, onClick: () => void flip(!data.enabled) })),
         note.text ? h('p', { className: 'dsh-rc-desc', 'data-error': String(note.error) }, note.text) : null,
 
+        // Hidden networks (the one Web selector, 18 November 2026): what only Recon reaches. Set up as before in
+        // the groups below; a conversation picks which ones it uses with the Web button's ticks.
+        h('div', { className: 'dsh-rc-group', 'data-rc-hidden-networks': '' }, 'Hidden networks: Tor, Usenet, I2P'),
+        h('p', { className: 'dsh-rc-desc' }, 'Only Recon ever reaches these; no other tab has them. Tor is set up under Connection, Usenet under Usenet, and what leaves Tor goes through WireGuard, all as before. Which of them a Recon conversation uses is ticked on its Web button, under "Recon\'s networks", beside the same source ticks every tab has (verified sources, forums, your own other sources and so on). Your own other sources are set up on Settings → Web sources; only those with "May be used in Recon" switched on are read here, and only through WireGuard.'),
+        h('div', { className: 'dsh-rc-row', 'data-rc-i2p': '' },
+          h('div', { className: 'dsh-rc-rowtext' },
+            h('div', { className: 'dsh-rc-rowtitle' }, 'I2P'),
+            h('div', { className: 'dsh-rc-rowdesc' }, 'Not set up yet. A later step adds it; until then its tick on the Web button is greyed out.'))),
+
         h('div', { className: 'dsh-rc-group' }, 'Connection'),
         h('div', { className: 'dsh-rc-row' },
           h('div', { className: 'dsh-rc-rowtext' },
@@ -659,7 +697,7 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
           item(`Only these tools: ${(data.tools ?? []).join(', ')}.`),
           item('No programs, no shell, no files, no memory, no skills and no Deep research. The ordinary web only through Recon\'s own web tools and the WireGuard tunnel. Helpers only in a Long run, inside Recon\'s rules.'),
           item('No project instructions, no AGENTS.md, no notes from other add-ons.'),
-          item('It can never be switched to another tab\'s mode, and a conversation of another tab can never become a Recon conversation.'),
+          item('It is never switched to another tab\'s mode in place. Move to in its ⋯ menu in the sidebar opens it as a new, ordinary conversation of that tab, with this conversation and a copy of its own files; this one stays here, unchanged. A conversation of another tab can never become a Recon conversation.'),
           item('If Recon is switched off, its old conversations stay locked with no tools at all.')),
 
         h('div', { className: 'dsh-rc-group' }, 'Searching and reading'),
@@ -673,10 +711,19 @@ html[data-cws-tab="recon"] [class*='_composerHero']:has(.dsh-rc-bar) .cws-chips 
         h('div', { className: 'dsh-rc-group' }, 'Models'),
         h('ul', { className: 'dsh-rc-list' },
           item('A model on this Mac or in your own network gets what Recon finds without a question.'),
-          item('Any other model counts as cloud. Recon then hands over nothing until you type /recon cloud in that conversation. The agreement holds for that conversation and that model, and is forgotten when the app is closed.'),
+          item('Any other model counts as cloud. What it gets is set just below: by default Recon hands over nothing until you type /recon cloud in that conversation. The agreement holds for that conversation and that model, and is forgotten when the app is closed.'),
           item('A conversation that already holds what Recon found takes no step on a cloud model you did not agree to, also after switching models, in a Rerun copy, or once its history was condensed. The step stops with a message; nothing is sent. Condensing a long conversation itself sends the history to the model the app uses for condensing, which Recon does not check: use a local one for it.'),
           item('Your own questions go to whichever model you picked, as in every tab.'),
           item('Type /recon in a Recon conversation to see its model and what is allowed.')),
+        h('div', { className: 'dsh-rc-row' },
+          h('div', { className: 'dsh-rc-rowtext' },
+            h('div', { className: 'dsh-rc-rowtitle' }, 'Cloud models'),
+            h('div', { className: 'dsh-rc-rowdesc' }, 'Whether a model outside your own machines gets what Recon finds. Ask each time (the default): only after you type /recon cloud in that conversation. Always: without asking, in every Recon conversation. Never: not even after /recon cloud. A model on this Mac or in your own network always gets it.')),
+          h('div', { className: 'dsh-rc-btns', role: 'radiogroup', 'aria-label': 'Cloud models' },
+            [['ask', 'Ask each time'], ['always', 'Always'], ['never', 'Never']].map(([value, label]) => h('button', {
+              key: value, type: 'button', role: 'radio', className: 'dsh-rc-btn', 'aria-checked': String((data.cloudModels ?? 'ask') === value), 'data-on': String((data.cloudModels ?? 'ask') === value), disabled: busy || !data.enabled,
+              onClick: () => void save({ cloudModels: value }, value === 'always' ? 'Cloud models get what Recon finds without asking.' : value === 'never' ? 'Cloud models never get what Recon finds.' : 'Cloud models get what Recon finds only after /recon cloud in that conversation.'),
+            }, label)))),
 
         h('div', { className: 'dsh-rc-group' }, 'Good to know'),
         h('ul', { className: 'dsh-rc-list' },

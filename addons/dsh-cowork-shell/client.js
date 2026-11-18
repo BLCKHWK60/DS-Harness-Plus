@@ -41,6 +41,8 @@ window.__ModuleLoader__.load({
         'look.title.greeting': 'Show the greeting as the title',
         'look.chat.wide': 'Wide chat area',
         'look.chat.normal': 'Normal chat area',
+        'look.tabs.icons': 'Icon alone when a tab name does not fit',
+        'look.tabs.names': 'Always show tab names',
         'look.failed': 'Could not save that setting.',
         'tabs.arrange': 'Arrange tabs',
         'tabs.arrange.hint': 'Drag a tab to move it, or use the arrow keys on it.',
@@ -114,6 +116,9 @@ window.__ModuleLoader__.load({
         'move.to': 'Move to {tab}',
         'move.label': 'Move "{title}" to another tab',
         'move.failed': 'Could not move the conversation.',
+        'move.recon': 'Opened as a new {tab} conversation; the Recon original stays in Recon.',
+        'move.reconFiles': 'Opened as a new {tab} conversation, with its {n} file(s) copied out of Recon; the Recon original stays in Recon.',
+        'move.reconFailed': 'Could not move it out of Recon: {why}',
         'archive': 'Archive',
         'find.placeholder': 'Search {tab}…',
         'find.hint': 'Titles as you type. Press Enter to search the text of messages too.',
@@ -127,6 +132,9 @@ window.__ModuleLoader__.load({
         'ctx.rename.save': 'Save',
         'ctx.reveal': 'Show in Finder',
         'reveal.failed': 'Could not show it in Finder.',
+        'proj.remove': 'Remove project',
+        'proj.remove.sure': 'Remove the project "{name}" from the list?\n\nOnly its entry goes. The folder and its files are not touched, and any conversations left in it appear under Ungrouped.',
+        'proj.remove.failed': 'Could not remove the project: {message}',
         'ctx.archive.n': 'Archive {n} conversations',
         'ctx.delete.n': 'Delete {n} conversations',
         'ctx.restore': 'Put back in the list',
@@ -348,6 +356,8 @@ window.__ModuleLoader__.load({
         'look.title.greeting': '用问候语作标题',
         'look.chat.wide': '加宽对话区域',
         'look.chat.normal': '恢复对话区域宽度',
+        'look.tabs.icons': '标签名称放不下时只显示图标',
+        'look.tabs.names': '始终显示标签名称',
         'look.failed': '无法保存该设置。',
         'tabs.arrange': '排列标签',
         'tabs.arrange.hint': '拖动标签即可移动，或在标签上使用方向键。',
@@ -421,6 +431,9 @@ window.__ModuleLoader__.load({
         'move.to': '移到 {tab}',
         'move.label': '把“{title}”移到其他标签页',
         'move.failed': '无法移动该对话。',
+        'move.recon': '已作为新的“{tab}”对话打开；Recon 中的原对话保持不变。',
+        'move.reconFiles': '已作为新的“{tab}”对话打开，并从 Recon 复制了 {n} 个文件；Recon 中的原对话保持不变。',
+        'move.reconFailed': '无法移出 Recon：{why}',
         'archive': '归档',
         'find.placeholder': '搜索{tab}…',
         'find.hint': '输入时按标题筛选。按回车同时搜索消息内容。',
@@ -434,6 +447,9 @@ window.__ModuleLoader__.load({
         'ctx.rename.save': '保存',
         'ctx.reveal': '在访达中显示',
         'reveal.failed': '无法在访达中显示。',
+        'proj.remove': '移除项目',
+        'proj.remove.sure': '要从列表中移除项目“{name}”吗？\n\n只移除列表中的条目，文件夹及其文件不受影响，其中剩余的对话会显示在“未分组”下。',
+        'proj.remove.failed': '无法移除项目：{message}',
         'ctx.archive.n': '归档 {n} 个对话',
         'ctx.delete.n': '删除 {n} 个对话',
         'ctx.restore': '放回列表',
@@ -990,6 +1006,9 @@ html[data-cws-wide] [class*='_composerStack']:not([class*='_composerHero'] *) [c
 /* More than three tabs: rows of three, so every name has room. */
 .cws-tabs[data-many='true']{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
 .cws-tabs[data-many='true'] .cws-tab{gap:5px;padding:0 4px}
+/* Names always shown (default): each tab is as wide as its icon and name and the rows wrap, so no name is ever cut or hidden. */
+.cws-tabs[data-wrap='true']{flex-wrap:wrap}
+.cws-tabs[data-wrap='true'] .cws-tab{flex:1 1 auto;min-width:max-content;max-width:100%;gap:5px;padding:0 8px}
 .cws-tabs[data-editing='true']{border-style:dashed}
 .cws-tabs[data-editing='true'] .cws-tab{cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none;outline:1px dashed var(--dsw-alias-border-l3);outline-offset:-3px}
 .cws-tabs[data-editing='true'] .cws-tab[data-dragging='true']{cursor:grabbing;opacity:.55}
@@ -1110,6 +1129,10 @@ html[data-cws-wide] [class*='_composerStack']:not([class*='_composerHero'] *) [c
 .cws-start-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:0.5px solid var(--dsw-alias-border-l1,rgba(127,127,127,.2))}
 .cws-start-key{display:flex;align-items:center;gap:6px;font-size:13px}
 .cws-scratch-mark{display:inline-flex;align-items:center;height:24px;padding:0 8px;border:0.5px dashed var(--dsw-alias-border-l2);border-radius:12px;color:var(--dsw-alias-label-secondary);font-size:12px;white-space:nowrap}
+html[data-dsh-uniform="true"] [data-slot="conversation.input.left"] .cws-scratch-mark{display:none}
+.cws-place-strip{display:flex;justify-content:flex-start;padding:0 4px 6px}
+html:not([data-dsh-uniform="true"]) .cws-place-strip{display:none}
+.cws-place-folder{max-width:240px;overflow:hidden;text-overflow:ellipsis;border-style:solid !important}
 .cws-lib{display:flex;flex-direction:column;gap:1px;padding-bottom:8px}
 .cws-lib-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 6px 4px;color:var(--dsw-alias-label-secondary);font-size:12px;font-weight:500}
 .cws-lib-allbar{padding-top:4px}
@@ -1128,6 +1151,7 @@ html[data-cws-wide] [class*='_composerStack']:not([class*='_composerHero'] *) [c
 .cws-ctx button{display:block;width:100%;padding:6px 10px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;text-align:left;cursor:pointer}
 .cws-ctx button:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .cws-ctx button[data-danger="true"]{color:var(--dsw-alias-state-error-primary)}
+.cws-ctx button[disabled]{opacity:.45;cursor:default}.cws-ctx button[disabled]:hover{background:transparent}
 .cws-ctx input{width:100%;box-sizing:border-box;height:28px;margin:2px 0 4px;padding:0 8px;border:0.5px solid var(--dsw-alias-border-l2);border-radius:7px;font:inherit;font-size:13px;color:var(--dsw-alias-label-primary);background:transparent}
 .cws-ctx hr{margin:4px 2px;border:0;border-top:0.5px solid var(--dsw-alias-border-l1)}
 .cws-proj-list .cws-conv-main{padding-left:34px}
@@ -1280,7 +1304,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
      * tab layout. One store for the whole page, refreshed on demand and every 10 seconds.
      */
     function createModel(ctx) {
-      let state = { modes: FALLBACK_MODES, extra: [], selected: readLocal(), tabs: DEFAULT_TABS, maxTabs: 3, hideLogos: false, dateTitle: false, wideChat: false, tabOrder: [], startPlaces: '', newKeyFollows: true, modesOn: false, error: '', sessionModes: {} };
+      let state = { modes: FALLBACK_MODES, extra: [], selected: readLocal(), tabs: DEFAULT_TABS, maxTabs: 3, hideLogos: false, dateTitle: false, wideChat: false, iconOnlyTabs: false, tabOrder: [], startPlaces: '', newKeyFollows: true, modesOn: false, error: '', notice: '', sessionModes: {}, sessionIsolated: {} };
       const listeners = new Set();
       const emit = () => { for (const l of listeners) l(); };
       const set = (patch) => {
@@ -1329,6 +1353,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
               patch.hideLogos = mine.value?.hideLogos === true;
               patch.dateTitle = mine.value?.dateTitle === true;
               patch.wideChat = mine.value?.wideChat === true;
+              patch.iconOnlyTabs = mine.value?.iconOnlyTabs === true;
               patch.tabOrder = readOrder(mine.value?.tabOrder);
               patch.startPlaces = typeof mine.value?.startPlaces === 'string' ? mine.value.startPlaces : '';
               patch.newKeyFollows = mine.value?.newKeyFollows !== false;
@@ -1346,6 +1371,8 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
               .map(([id, value]) => ({ id, label: value && typeof value.label === 'string' && value.label.trim() ? value.label.trim() : id }));
             patch.modesOn = true;
             if (started === clicks) patch.sessionModes = readObject(modesNs.value?.sessionModes);
+            // Which conversations began in Recon (Modes keeps it for good): Move to opens those as new ones.
+            patch.sessionIsolated = readObject(modesNs.value?.sessionIsolated);
             const current = modesNs.value?.defaultMode;
             if (started === clicks && selecting === 0 && typeof current === 'string' && [...patch.modes, ...patch.extra].some((m) => m.id === current)) {
               patch.selected = current;
@@ -1427,7 +1454,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         }
       }
 
-      /** Switch one of this add-on's own on/off settings (`hideLogos`, `dateTitle`, `wideChat`). */
+      /** Switch one of this add-on's own on/off settings (`hideLogos`, `dateTitle`, `wideChat`, `iconOnlyTabs`). */
       async function setOption(key, value) {
         const before = state[key];
         optionWrites += 1;
@@ -1468,6 +1495,11 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         move,
         setOption,
         fail: (message) => set({ error: String(message) }),
+        /** A plain line under the tabs for a while (what a move out of Recon did). */
+        note: (message) => {
+          set({ notice: String(message) });
+          setTimeout(() => { if (state.notice === String(message)) set({ notice: '' }); }, 15000);
+        },
       };
     }
 
@@ -2063,6 +2095,18 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         window.localStorage.setItem(LAST_KEY, JSON.stringify({ ...all, [tab]: id }));
       } catch { /* private mode: tabs then open their start page */ }
     }
+    /**
+     * Whether a tab may open again the conversation it remembers: only one of its own. Tabs that start
+     * in the same place share the app's one empty draft there, so the draft one tab remembers can get
+     * its first message in another tab (a Scout research run stayed on screen in Chat and Finance).
+     * An empty draft, or one whose mode is not recorded or not a shown tab, opens as before.
+     */
+    function reopensIn(tabId, id, session, state, tabIds) {
+      if (!session) return false;
+      if (session.blank) return true;
+      const recorded = state?.sessionModes?.[id];
+      return !(typeof recorded === 'string' && tabIds.includes(recorded) && recorded !== tabId);
+    }
 
     function ago(t, ms) {
       if (!Number.isFinite(ms)) return '';
@@ -2324,6 +2368,23 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       for (const ws of lib.workspaces) for (const id of ws.sessionIds ?? []) homeOf[id] = ws;
       /** The tab a conversation shows in now and the tab its folder gives: kept with it when it is deleted. */
       const tabOf = (id) => ({ tab: tabOfSession(id, lib.byId[id], homeOf[id] ?? null, state, tabIds), fallbackTab: guessTab(homeOf[id] ?? null) });
+      /**
+       * Move to: a conversation that began in Recon opens as a new conversation of the picked tab, with the
+       * Recon one and its own files (moveOutOfRecon); the original stays in Recon. Any other moves as before.
+       */
+      const moveTo = async (ids, modeId) => {
+        const fromRecon = modeId === 'recon' ? [] : ids.filter((id) => fromReconRow(id, lib.byId[id], state));
+        const rest = ids.filter((id) => !fromRecon.includes(id));
+        if (rest.length > 0) await model.move(rest, modeId);
+        for (const id of fromRecon) {
+          try {
+            const done = await moveOutOfRecon(appCtx, library, model, id, modeId);
+            model.note(t(done.files > 0 ? 'move.reconFiles' : 'move.recon', { tab: done.label, n: done.files }));
+          } catch (problem) {
+            model.fail(t('move.reconFailed', { why: String(problem?.message ?? problem).slice(0, 200) }));
+          }
+        }
+      };
       // This tab's own Trash list (each tab lists only what was deleted from it).
       const binHere = bin.items.filter((item) => inTabTrash(item, state, tabIds, selected.id));
       const projects = [];
@@ -2675,11 +2736,30 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         if (!ws?.path) return;
         setMenu({ x: Math.min(event.clientX, window.innerWidth - 290), y: Math.min(event.clientY, window.innerHeight - 120), ids: [], project: ws, rename: null });
       };
+      /**
+       * Take a project off the app's list (the app's own workspace delete). Only its entry goes: the folder and
+       * its files are never touched (the owner's choice). The default workspace, Scratch and Recon's room stay.
+       */
+      const projectRemovable = (ws) => !!ws?.workspaceId && !hidden.has(roomKey(ws.path)) && !rooms.has(roomKey(ws.path))
+        && defaultWorkspace([ws]) === null;
+      const removeProject = async (ws) => {
+        setMenu(null);
+        if (!window.confirm(t('proj.remove.sure', { name: ws.title || ws.path || t('untitled') }))) return;
+        try {
+          await appCtx.get('workspaces').delete(ws.workspaceId);
+          void model.refresh();
+        } catch (error) {
+          model.fail(t('proj.remove.failed', { message: String(error?.message ?? error) }));
+        }
+      };
       const menuView = () => {
         if (!menu) return null;
         if (menu.project) {
           return h('div', { className: 'cws-ctx', role: 'menu', style: { left: menu.x, top: menu.y } },
-            h('button', { type: 'button', role: 'menuitem', title: menu.project.path, onClick: () => void reveal(menu.project.path) }, t('ctx.reveal')));
+            h('button', { type: 'button', role: 'menuitem', title: menu.project.path, onClick: () => void reveal(menu.project.path) }, t('ctx.reveal')),
+            projectRemovable(menu.project)
+              ? h('button', { type: 'button', role: 'menuitem', 'data-danger': 'true', title: menu.project.path, onClick: () => void removeProject(menu.project) }, t('proj.remove'))
+              : null);
         }
         const ids = menu.ids.filter((id) => lib.byId[id]);
         if (ids.length === 0) return null;
@@ -2845,7 +2925,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           sess.blank ? null : h(MoveMenu, {
             t, tabs, current: tabOfSession(id, sess, ws, state, tabIds),
             label: t(flat ? 'promote.label' : 'move.label', { title }),
-            onMove: (modeId) => void model.move([id], modeId),
+            onMove: (modeId) => void moveTo([id], modeId),
             promote: flat,
             // Never a room (Recon's is emptied at every start) or Scratch itself.
             projects: flat || isScratchRow(id) ? lib.workspaces.filter((ws) => !rooms.has(roomKey(ws.path)) && !hidden.has(roomKey(ws.path))) : undefined,
@@ -2898,7 +2978,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
                 h('span', { className: 'cws-count' }, String(ids.length))),
               h('button', { type: 'button', className: 'cws-mini', title: t('proj.new'), 'aria-label': t('proj.new'), onClick: () => { try { appCtx.layout.selectPanel(null); } catch { /* */ } uw?.startSession?.(ws.workspaceId); } }, '+'),
               h('button', { type: 'button', className: 'cws-mini', title: t('proj.open'), 'aria-label': t('proj.open'), onClick: () => openProject(ws.workspaceId) }, '⚙'),
-              h(MoveMenu, { t, tabs, current: selected.id, label: t('proj.move', { title: ws.title || '' }), onMove: (modeId) => void model.move(all.filter((id) => !lib.byId[id]?.blank), modeId) })),
+              h(MoveMenu, { t, tabs, current: selected.id, label: t('proj.move', { title: ws.title || '' }), onMove: (modeId) => void moveTo(all.filter((id) => !lib.byId[id]?.blank), modeId) })),
             isOpen ? h('div', { className: 'cws-proj-list' }, list(ids, ws.workspaceId, ws)) : null);
         }),
         scratchRows.length ? h(React.Fragment, null,
@@ -2923,6 +3003,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const room = response.ok ? String((await response.json()).room ?? '') : '';
       if (!room) return false;
       rooms.add(roomKey(room));
+      isolatedRooms.add(roomKey(room));
       const same = (path) => String(path ?? '').replace(/^\/private(?=\/tmp\/)/, '').replace(/\/+$/, '') === room.replace(/^\/private(?=\/tmp\/)/, '').replace(/\/+$/, '');
       let ws = (library.get().workspaces ?? []).find((entry) => entry && same(entry.path));
       if (!ws) {
@@ -2966,6 +3047,106 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     }
     const roomKey = (path) => String(path ?? '').replace(/^\/private(?=\/tmp\/)/, '').replace(/\/+$/, '');
     const rooms = new Set([roomKey('/tmp/dsh-recon-room')]);
+    /** Isolated tabs' own rooms only (Recon's), not Scratch: a conversation there belongs to that tab alone. */
+    const isolatedRooms = new Set([roomKey('/tmp/dsh-recon-room')]);
+    /** Whether a folder is an isolated room or inside one (by its path). */
+    function inIsolatedRoom(cwd) {
+      const here = roomKey(cwd);
+      return Boolean(here) && [...isolatedRooms].some((room) => here === room || here.startsWith(`${room}/`));
+    }
+    /**
+     * Whether a tab may open a remembered conversation by its folder: the room tab (Recon) only one in its
+     * room, every other tab none there. Tabs share the app's empty draft of a folder, so without this a
+     * Recon start page could open a draft of Code's folder, or Code one in Recon's room (18 November 2026).
+     */
+    function placeFits(tabId, session) {
+      return (startPlaceOf(tabId) === 'room') === inIsolatedRoom(session?.cwd);
+    }
+    /**
+     * Learn Recon's room once, up front: a test copy's room is not the usual one, and until it is known
+     * another tab could start a conversation there. Without an answer the usual room stays the only one.
+     */
+    async function learnRoom() {
+      try {
+        const response = await fetch(new URL('dsh-recon/state?session=-', document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
+        const room = response.ok ? String((await response.json()).room ?? '') : '';
+        if (!room) return;
+        rooms.add(roomKey(room));
+        isolatedRooms.add(roomKey(room));
+      } catch { /* Recon is not there: nothing to learn */ }
+    }
+    /**
+     * Start a conversation of the room tab (Recon), only in its room: asked again twice when the room
+     * cannot be reached, and never in another folder (the app's own choice is the open conversation's
+     * folder, where it would share that folder's draft). Without the room nothing starts.
+     */
+    function startRecon(appCtx, library, tabId, options) {
+      const attempt = (left) => startInRoom(appCtx, library, tabId, options).then(
+        (done) => { if (!done && left > 0) setTimeout(() => attempt(left - 1), 1000); },
+        () => { if (left > 0) setTimeout(() => attempt(left - 1), 1000); },
+      );
+      void attempt(2);
+    }
+    /** Whether a conversation began in Recon (Modes marks it for good) and has run: Move to opens it as a new one. */
+    function fromReconRow(id, session, state) {
+      return state?.sessionIsolated?.[id] === true && !session?.blank;
+    }
+    /**
+     * Move a conversation that began in Recon to another tab (the owner's choice, 18 November 2026). A
+     * conversation cannot change its folder, and Recon's room is shared and emptied at every start, so a
+     * NEW conversation of the tab opens in that tab's usual place (Scratch, or its project; never a room).
+     * Recon copies the conversation's own files out of the room beside it and writes the whole
+     * conversation there; the new one gets it as its first message. The original stays in Recon.
+     * @returns {Promise<{label: string, files: number}>} the tab's name and how many files were copied.
+     */
+    async function moveOutOfRecon(appCtx, library, model, id, tabId) {
+      const sessions = appCtx.get('sessions');
+      const remote = appCtx.get('remote.session');
+      const workspace = appCtx.get('uiWorkspace');
+      if (!sessions?.create || !remote?.prompt || !workspace?.openSession) throw new Error('this version of the app cannot open a conversation from here');
+      const label = tabsOf(model.get()).find((m) => m.id === tabId)?.label ?? tabId;
+      let cwd = '';
+      let scratch = false;
+      if (startPlaceOf(tabId) === 'scratch') {
+        try {
+          const response = await fetch(new URL('dsh-cowork-shell/scratch', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
+          const answer = response.ok ? await response.json() : {};
+          cwd = String(answer.place ?? '');
+          if (cwd) {
+            scratchPlace.path = cwd;
+            rooms.add(roomKey(cwd));
+            hidden.add(roomKey(cwd));
+            scratch = true;
+            if (!(library.get().workspaces ?? []).some((entry) => entry && roomKey(entry.path) === roomKey(cwd))) {
+              const made = await appCtx.get('workspaces').create({ path: cwd });
+              try { await appCtx.get('workspaces').rename(made.workspaceId, String(answer.title || 'Scratch')); } catch { /* the folder's own name is fine */ }
+            }
+          }
+        } catch { cwd = ''; }
+      }
+      if (!cwd) {
+        const home = homeFor(library.get(), tabId);
+        cwd = home && !inIsolatedRoom(home.path) ? String(home.path ?? '') : '';
+      }
+      if (!cwd || inIsolatedRoom(cwd)) throw new Error('there is no folder to open it in');
+      const child = await sessions.create({ cwd });
+      const title = String(library.get().byId?.[id]?.displayTitle ?? '').trim();
+      const response = await fetch(new URL('dsh-recon/door', document.baseURI), {
+        method: 'POST', cache: 'no-store', credentials: 'same-origin',
+        headers: { accept: 'application/json', 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'move', session: id, tab: tabId, sessionId: child, folder: scratch ? `${cwd}/${child}` : cwd, title }),
+      });
+      const done = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(done.error || `error ${response.status}`);
+      const sent = await remote.prompt({ requestId: globalThis.crypto?.randomUUID?.() ?? `move-${Date.now()}`, sessionId: child, mode: 'queue', content: [{ type: 'text', text: done.message }] });
+      // Named after the original (the first line of the message is the export mark, not a title).
+      try { await remote.rename?.({ sessionId: child, title: `From Recon: ${title || 'Untitled conversation'}`.slice(0, 80) }); } catch { /* the app's own title stays */ }
+      void model.select(tabId, label);
+      try { appCtx.layout.selectPanel(null); } catch { /* already on the conversation */ }
+      workspace.openSession(child);
+      if (sent && sent.ok === false) throw new Error(sent.error?.message ?? 'the conversation was not sent');
+      return { label: done.label || label, files: Number(done.files) || 0 };
+    }
     /** Projects Plus keeps out of its own project lists: the hidden Scratch place (learnScratch). */
     const hidden = new Set();
 
@@ -3108,7 +3289,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       };
       const place = startPlaceOf(tabId);
       if (place === 'room') {
-        startInRoom(appCtx, library, tabId).then((done) => { if (!done) appCtx.uiWorkspace.startSession(undefined); }, () => appCtx.uiWorkspace.startSession(undefined));
+        startRecon(appCtx, library, tabId);
         return;
       }
       // Scratch, when the page can reach it; otherwise the usual folder, so a New click always starts something.
@@ -3182,7 +3363,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       useLayoutEffectSafe(() => {
         const list = tabsRef.current;
         const keep = (ids) => setIconOnly((prev) => (prev.key === ids.join(',') ? prev : { key: ids.join(','), ids: new Set(ids) }));
-        if (!wide || !list || typeof ResizeObserver !== 'function') { keep([]); return undefined; }
+        if (!wide || !state.iconOnlyTabs || !list || typeof ResizeObserver !== 'function') { keep([]); return undefined; }
         const pen = document.createElement('canvas').getContext('2d');
         const measure = () => keep(iconOnlyIds(shownTabs, list.querySelectorAll('[role=tab]'), (el) => getComputedStyle(el), pen));
         measure();
@@ -3190,7 +3371,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         watch.observe(list);
         void document.fonts?.ready?.then(measure, () => {});
         return () => watch.disconnect();
-      }, [wide, tabsKey]);
+      }, [wide, tabsKey, state.iconOnlyTabs]);
       const layout = state.tabs;
       const claimed = new Set(Object.values(layout).flatMap((tab) => (Array.isArray(tab?.pages) ? tab.pages : [])));
       const own = (Array.isArray(layout[selected.id]?.pages) ? layout[selected.id].pages : [])
@@ -3246,14 +3427,26 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         const tab = tabOfSession(id, sess, ws, now, usualTabsOf(now).map((m) => m.id));
         // A conversation opened from another tab's list (Needs you, Show all) is remembered for its own tab.
         writeLast(sess.blank ? selectedRef.current : tab, id);
-      }, [libSnap.currentId, libSnap.ok]);
+        // Asked again once the draft has its first message and its mode is recorded, so the tab it now
+        // belongs to remembers it (the draft may have been opened from another tab). Its mode is learnt
+        // at once, not at the next 10-second refresh, so no other tab reopens it in the meantime.
+        if (!sess.blank && now.sessionModes?.[id] === undefined) {
+          const timer = setTimeout(() => void model.refresh(), 700);
+          return () => clearTimeout(timer);
+        }
+        return undefined;
+      }, [libSnap.currentId, libSnap.ok, libSnap.currentId ? !!libSnap.byId[libSnap.currentId]?.blank : null, libSnap.currentId ? state.sessionModes?.[libSnap.currentId] : undefined]);
       const switchTab = (m) => {
         void model.select(m.id, m.label);
         const snap = library.get();
         if (!snap.ok) return;
         const last = readLast()[m.id];
         const sess = last ? snap.byId[last] : null;
-        const gone = !sess || snap.archived.includes(last) || trash.get().items.some((item) => item.id === last || (Array.isArray(item.ids) && item.ids.includes(last)));
+        const gone = !sess || snap.archived.includes(last) || trash.get().items.some((item) => item.id === last || (Array.isArray(item.ids) && item.ids.includes(last)))
+          // Another tab's conversation (also when it is the open one) is not reopened here: the start page is.
+          || !reopensIn(m.id, last, sess, model.get(), usualTabsOf(model.get()).map((x) => x.id))
+          // Recon opens only a conversation in its room, and no other tab one there.
+          || !placeFits(m.id, sess);
         try { appCtx.layout.selectPanel(null); } catch { /* already on the conversation */ }
         if (!gone && last !== snap.currentId) {
           try { appCtx.get('uiWorkspace').openSession(last); return; } catch { /* fall through to a new one */ }
@@ -3361,7 +3554,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         h('span', { className: 'cws-glyph', 'aria-hidden': true }, renderFactorySlot('sidebar.panel.icon', { id: p.id, size: wide ? 16 : 18, active: active === p.id })),
         wide ? h('span', { className: 'cws-label' }, p.label) : null));
 
-      const tabList = h('div', { ref: tabsRef, className: 'cws-tabs', 'data-many': wide && tabs.length > 3 ? 'true' : undefined, 'data-editing': arranging ? 'true' : undefined, role: 'tablist', 'aria-label': t('tabs.label'), 'aria-orientation': wide ? 'horizontal' : 'vertical', 'aria-describedby': arranging ? 'cws-arrange-hint' : undefined, onKeyDown: onTabKey },
+      const tabList = h('div', { ref: tabsRef, className: 'cws-tabs', 'data-many': wide && tabs.length > 3 && state.iconOnlyTabs ? 'true' : undefined, 'data-wrap': wide && tabs.length > 3 && !state.iconOnlyTabs ? 'true' : undefined, 'data-editing': arranging ? 'true' : undefined, role: 'tablist', 'aria-label': t('tabs.label'), 'aria-orientation': wide ? 'horizontal' : 'vertical', 'aria-describedby': arranging ? 'cws-arrange-hint' : undefined, onKeyDown: onTabKey },
         // Every tab shows its full name when pointed at: in the folded rail to its right, in the wide
         // sidebar above it, so it never covers the tabs below (rows of three). Not while arranging.
         shownTabs.map((m) => h(Tooltip, { key: m.id, label: m.label, show: true, disabled: arranging, side: wide ? 'top' : 'right', portal: wide },
@@ -3390,6 +3583,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           extra: [
             { key: 'logos', label: t(state.hideLogos ? 'look.logos.show' : 'look.logos.hide'), run: () => void model.setOption('hideLogos', !state.hideLogos) },
             { key: 'title', label: t(state.dateTitle ? 'look.title.greeting' : 'look.title.date'), run: () => void model.setOption('dateTitle', !state.dateTitle) },
+            { key: 'tabnames', label: t(state.iconOnlyTabs ? 'look.tabs.names' : 'look.tabs.icons'), run: () => void model.setOption('iconOnlyTabs', !state.iconOnlyTabs) },
             { key: 'wide', label: t(state.wideChat ? 'look.chat.normal' : 'look.chat.wide'), run: () => void model.setOption('wideChat', !state.wideChat) },
           ],
         })
@@ -3413,6 +3607,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         tabList,
         arrangeBar,
         state.error ? h('div', { className: 'cws-error', role: 'status' }, state.error) : null,
+        state.notice ? h('div', { className: 'cws-error cws-note', role: 'status' }, state.notice) : null,
         h('button', { type: 'button', className: 'cws-new', onClick: startSession, 'aria-keyshortcuts': shortcut?.aria },
           h('span', { className: 'cws-glyph', 'aria-hidden': true }, h(Glyph, { name: 'plus', size: 16 })), h('span', { className: 'cws-label' }, newLabel),
           shortcut ? h('span', { className: 'cws-kbd', 'aria-hidden': true }, UI.ShortcutKeys ? h(UI.ShortcutKeys, { keys: shortcut.keys }) : shortcut.keys.join('')) : null),
@@ -3722,7 +3917,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             }
             // Recon's chips start in its room, like its New button.
             if (selected.id === 'recon') {
-              startInRoom(appCtx, library, selected.id, options).then((done) => { if (!done) appCtx.uiWorkspace.startSession(undefined, options); }, () => appCtx.uiWorkspace.startSession(undefined, options));
+              startRecon(appCtx, library, selected.id, options);
               return;
             }
             let home = null;
@@ -3802,15 +3997,57 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         h('button', { type: 'button', 'aria-pressed': !here, title: t('place.folder.hint'), onClick: toFolder }, t('place.folder')));
     }
 
-    /** Scratch (step 37): a small 'Scratch' mark in the chat box of a Scratch conversation. */
-    function ScratchMark({ appCtx, library, sessionId }) {
-      const lib = useSyncExternalStore(library.subscribe, library.get);
+    /**
+     * Where this conversation lives: "Scratch", or the project's name (not in Chat, which has no folders,
+     * and not in Recon's room). With the same chat box in every mode (Modes → Chat box, on by default) it
+     * is a chip ABOVE the chat box at the top left (`PlaceStrip`, in the input dock), never inside the box.
+     * With the switch off the old small "Scratch" mark is back in the box, only for a Scratch conversation.
+     */
+    function placeOf({ appCtx, library, sessionId }) {
+      const lib = library.get();
       const id = sessionId ?? lib.currentId;
-      if (!id || !scratchPlace.path) return null;
-      const ws = (lib.workspaces ?? []).find((item) => (item.sessionIds ?? []).includes(id));
-      if (!(ws && hidden.has(roomKey(ws.path))) && !inScratch(lib.byId?.[id]?.cwd)) return null;
+      if (!id) return null;
       const t = appCtx.locale.bind(NS);
-      return h('span', { className: 'cws-scratch-mark', title: t('place.scratch.hint') }, t('place.scratch'));
+      const ws = (lib.workspaces ?? []).find((item) => (item.sessionIds ?? []).includes(id));
+      const scratch = Boolean(scratchPlace.path) && ((ws && hidden.has(roomKey(ws.path))) || inScratch(lib.byId?.[id]?.cwd));
+      if (scratch) return { scratch: true, name: t('place.scratch'), title: t('place.scratch.hint') };
+      if (!ws || rooms.has(roomKey(ws.path)) || document.documentElement.hasAttribute('data-cws-plain-chat')) return null;
+      const path = String(ws.path ?? '');
+      return { scratch: false, name: String(ws.title ?? '').trim() || path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path, title: path };
+    }
+
+    /** The old small mark in the chat box (only a Scratch conversation, and only with the switch off). */
+    function ScratchMark(props) {
+      useSyncExternalStore(props.library.subscribe, props.library.get);
+      const place = placeOf(props);
+      return place?.scratch ? h('span', { className: 'cws-scratch-mark', title: place.title }, place.name) : null;
+    }
+
+    /** The place chip above the chat box, top left. Not on the start page: there the app's own folder chip is. */
+    function PlaceStrip(props) {
+      useSyncExternalStore(props.library.subscribe, props.library.get);
+      const ref = useRef(null);
+      const [start, setStart] = useState(false);
+      useEffect(() => {
+        const stack = ref.current?.closest('[data-slot="conversation.input.dock"]')?.parentElement;
+        const onStart = Boolean(stack?.querySelector('[data-slot="conversation.hero.workspace"]'));
+        if (onStart !== start) setStart(onStart);
+        // The chip lines up with the left edge of the chat box, whatever the window's width.
+        const align = () => {
+          const card = stack?.querySelector('[data-composer-card]');
+          const mine = ref.current;
+          if (!card || !mine) return;
+          const inset = Math.max(0, Math.round(card.getBoundingClientRect().left - mine.getBoundingClientRect().left));
+          mine.style.paddingLeft = `${inset}px`;
+        };
+        align();
+        window.addEventListener('resize', align);
+        return () => window.removeEventListener('resize', align);
+      });
+      const place = placeOf(props);
+      if (!place || start) return h('span', { ref, hidden: true });
+      return h('div', { ref, className: 'cws-place-strip', 'data-cws-place-strip': '' },
+        h('span', { className: `cws-scratch-mark${place.scratch ? '' : ' cws-place-folder'}`, title: place.title }, place.name));
     }
 
     const CHIP_ICONS = {"slides": "M4 5h16v11H4zM12 16v4M8 20h8", "website": "M4 5h16v14H4zM4 9h16M7 7h.01M9 7h.01", "app": "M8 3h8v18H8zM11 18h2", "spreadsheet": "M4 5h16v14H4zM4 10h16M4 15h16M10 5v14", "chart": "M5 19V9M10 19V5M15 19v-7M20 19v-4M4 19h17", "research": "M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.3 15.3 20 20", "game": "M6 9h12a3 3 0 0 1 3 3v2a3 3 0 0 1-5.4 1.8L14 14h-4l-1.6 1.8A3 3 0 0 1 3 14v-2a3 3 0 0 1 3-3zM8 11v2M7 12h2M16 12h.01M18 12h.01", "spark": "M12 4l1.8 5.2L19 11l-5.2 1.8L12 18l-1.8-5.2L5 11l5.2-1.8z"};
@@ -3822,9 +4059,92 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
     function LinkIcon({ size }) { return h(Glyph, { name: 'link', size }); }
     function SparkleIcon({ size }) { return h(Glyph, { name: 'sparkle', size }); }
 
+    // ---- One options area for every mode (the owner's rule of 18 November 2026) ----------------------------
+    // A mode's own options (Scout's fields, Finance's selection, Creator Plus's run and plugins) sit UNDER the chat
+    // box, in the same place and with the same look in every mode: on the start page and in a started conversation.
+    // The add-ons render their fields inside this one component (window.__dshOptionsArea) with these classes:
+    // dsh-opt-pick (a field, drop-down or button), dsh-opt-chip (a chip with ×), dsh-opt-break (a new line),
+    // dsh-opt-hint (the one-line summary). Each mode keeps its own behaviour; only the place and the look are shared.
+    const OPTIONS_CSS = `
+.dsh-opt-area { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; box-sizing: border-box; }
+.dsh-opt-area[data-place="start"] { position: absolute; top: 100%; left: 0; right: 0; margin-top: 20px; }
+[class*='_composerHero']:has(.dsh-opt-area[data-place="start"]) { position: relative; }
+[class*='_composerHero']:has(.dsh-opt-area[data-place="start"]) .cws-chips { margin-top: calc(var(--dsh-opt-area, 110px) + 36px); }
+.dsh-opt-area[data-place="chat"] { order: 2; width: 100%; margin-top: 10px; padding: 0 4px 12px; }
+/* In a started conversation the area is there only while the chat box is the same in every mode and the modes' own
+   buttons have left the box (Modes' switch, Settings helper's gear); otherwise those buttons are in the box as before. */
+html:not([data-dsh-uniform="true"][data-dsh-gear="on"][data-dsh-extras="on"]) .dsh-opt-area[data-place="chat"] { display: none !important; }
+.dsh-opt-pick {
+  box-sizing: border-box; height: 36px; padding: 0 12px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 12px; font: inherit; font-size: 14px;
+  color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base, transparent); cursor: pointer; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+input.dsh-opt-pick { cursor: text; width: 190px; max-width: 190px; }
+button.dsh-opt-pick { display: inline-flex; align-items: center; gap: 6px; }
+button.dsh-opt-pick[aria-pressed="true"] { border-color: var(--dsw-alias-brand-primary); background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent); }
+.dsh-opt-pick:disabled { opacity: .5; cursor: default; }
+.dsh-opt-pick:focus { outline: 1px solid var(--dsw-alias-brand-primary); }
+.dsh-opt-chip { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 6px 0 12px; border-radius: 15px; font-size: 13px; background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); }
+.dsh-opt-chip button { width: 20px; height: 20px; border: 0; border-radius: 50%; padding: 0; cursor: pointer; font: inherit; line-height: 20px; color: var(--dsw-alias-label-secondary); background: transparent; }
+.dsh-opt-chip button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dsh-opt-break { flex-basis: 100%; height: 0; }
+.dsh-opt-hint { flex-basis: 100%; text-align: center; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.dsh-opt-hint[data-error="true"] { color: var(--dsw-alias-state-error-primary); }
+`;
+
+    /** The sidebar's selected tab, kept up to date (html[data-cws-tab]). */
+    function useShownTab() {
+      const read = () => document.documentElement.getAttribute('data-cws-tab') ?? '';
+      const [tab, setTab] = useState(read);
+      useEffect(() => {
+        const watch = new MutationObserver(() => setTab(read()));
+        watch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-cws-tab'] });
+        setTab(read());
+        return () => watch.disconnect();
+      }, []);
+      return tab;
+    }
+
+    /**
+     * The options area under the chat box. `mode`: the tab it belongs to (nothing on another tab). `place`: 'start'
+     * (the start page, slot conversation.hero.options) or 'chat' (a started conversation, slot conversation.input.dock,
+     * drawn after the box). A 'chat' area shows nothing on a start page, so the two never show together.
+     */
+    function OptionsArea({ mode, place = 'start', label, children }) {
+      const tab = useShownTab();
+      const ref = useRef(null);
+      const [onStart, setOnStart] = useState(false);
+      // A 'chat' area: is this the start page? (checked after every drawing, as the place chip does)
+      useEffect(() => {
+        const node = ref.current;
+        if (!node || place !== 'chat') return;
+        const stack = node.closest('[data-slot="conversation.input.dock"]')?.parentElement;
+        const start = Boolean(stack?.querySelector('[data-slot="conversation.hero.workspace"]'));
+        if (start !== onStart) setOnStart(start);
+      });
+      const showing = tab === mode && !(place === 'chat' && onStart);
+      useEffect(() => {
+        const node = ref.current;
+        if (!node || place !== 'start') return undefined;
+        // Only the area that shows tells the start page how much room to keep (the other tabs' areas are hidden).
+        if (node.hidden || typeof ResizeObserver !== 'function') return undefined;
+        const root = document.documentElement;
+        const watch = new ResizeObserver(() => root.style.setProperty('--dsh-opt-area', `${Math.round(node.getBoundingClientRect().height)}px`));
+        watch.observe(node);
+        return () => { watch.disconnect(); root.style.removeProperty('--dsh-opt-area'); };
+      }, [showing, place]);
+      if (!showing) return h('span', { ref, hidden: true });
+      return h('div', { ref, className: 'dsh-opt-area', 'data-place': place, 'data-mode': mode, role: 'group', 'aria-label': label },
+        h('style', null, OPTIONS_CSS), children);
+    }
+
     return {
+      OptionsArea,
+      OPTIONS_CSS,
       inject: ['slots', 'layout', 'uiWorkspace', 'locale', 'remote', 'remote.settings', 'remote.session'],
       apply(ctx) {
+        // The one options area, for the modes' add-ons (see OptionsArea).
+        window.__dshOptionsArea = OptionsArea;
+        ctx.effect(() => () => { if (window.__dshOptionsArea === OptionsArea) delete window.__dshOptionsArea; });
         ctx.effect(() => ctx.locale.register(NS, DICT));
         const style = document.createElement('style');
         style.setAttribute('data-cowork-shell-style', '');
@@ -3838,6 +4158,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         const trash = createTrash();
         const projects = createProjects();
         void learnScratch();
+        void learnRoom();
         const shared = () => ({ appCtx: ctx, model, pages, library, trash, projects });
         // Cmd-N (the app's New Session) follows the open tab's start place while that switch is on; the
         // app's own action comes back when it is off or this add-on stops. As Global Search does for Cmd-K.
@@ -3924,6 +4245,9 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         ctx.effect(() => ctx.slots.inject('conversation.input.left', () => ctx.slots.register({
           name: 'conversation.input.left', id: 'cowork-scratch-mark', order: -30, inject: shared,
         }, ScratchMark)), 'cowork-shell: Scratch mark');
+        ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
+          name: 'conversation.input.dock', id: 'cowork-place-strip', order: -50, inject: shared,
+        }, PlaceStrip)), 'cowork-shell: place chip above the chat box');
         ctx.effect(() => ctx.slots.inject('shell.leading', () => ctx.slots.register({
           name: 'shell.leading', locale: NS, inject: shared,
         }, Leading)), 'cowork-shell: macOS hidden-sidebar controls');

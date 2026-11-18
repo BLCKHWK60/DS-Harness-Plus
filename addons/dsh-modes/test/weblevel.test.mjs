@@ -86,12 +86,12 @@ test('on a stand-in app: a picked level limits what a tool opens, in the convers
     for (const id of ['c1', 'c2', 'c3', 'r1', 's1']) await app.open(id);
     await app.open('h1', { header: { parentSession: 'c1' } });
     const fetch = (id, url) => app.guard({ name: 'web_fetch', agent: { id }, arguments: { url } });
-    assert.match(fetch('c1', 'https://www.example.com/a'), /Web is at Verified[\s\S]*www\.example\.com was not opened/);
+    assert.match(fetch('c1', 'https://www.example.com/a'), /Web sources are only verified sources, which leaves out ordinary sites: www\.example\.com was not opened/);
     assert.equal(fetch('c1', 'https://www.reuters.com/a'), undefined);
-    assert.match(fetch('h1', 'https://www.example.com/a'), /Web is at Verified/, 'a helper follows its conversation');
+    assert.match(fetch('h1', 'https://www.example.com/a'), /Web sources are only verified sources/, 'a helper follows its conversation');
     assert.equal(app.guard({ name: 'web_search', agent: { id: 'c1' }, arguments: { query: 'heat pumps' } }), undefined, 'searching lists results as usual');
     assert.equal(fetch('c2', 'https://www.reddit.com/r/x'), undefined, 'On as before: no limit');
-    assert.doesNotMatch(String(fetch('r1', 'https://www.example.com/a')), /Web is at/, 'Recon keeps its own rules (its own refusal, not a level)');
+    assert.doesNotMatch(String(fetch('r1', 'https://www.example.com/a')), /Web sources are/, 'Recon keeps its own rules (its own refusal, not a level)');
     assert.equal(fetch('s1', 'https://www.example.com/a'), undefined, 'Research keeps its own web');
     const service = app.service();
     assert.equal(service.webLevel('c1'), 'verified');
@@ -103,8 +103,8 @@ test('on a stand-in app: a picked level limits what a tool opens, in the convers
     assert.equal(service.webAllows('c2', 'https://www.example.com/'), undefined);
     assert.equal(service.ultraCode('c2'), true);
     assert.equal(service.ultraCode('c1'), false);
-    assert.match(app.prompt('c1'), /Web level: Verified\. Pages you open must be only sources on the verified list/);
-    assert.doesNotMatch(app.prompt('c2'), /Web level/);
+    assert.match(app.prompt('c1'), /Web sources: only verified sources\. Search results of other kinds are removed/);
+    assert.doesNotMatch(app.prompt('c2'), /Web sources/);
   } finally {
     app.stop();
   }
@@ -172,12 +172,12 @@ test('on a stand-in app, after review: commands and programs follow the level; a
   try {
     for (const id of ['c1', 'c2', 'c3', 'r1']) await app.open(id);
     const bash = (id, command) => app.guard({ name: 'bash', agent: { id }, arguments: { command } });
-    assert.match(bash('c1', 'curl -s https://www.reddit.com/r/x.json'), /Web is at Verified[\s\S]*forums and boards/);
+    assert.match(bash('c1', 'curl -s https://www.reddit.com/r/x.json'), /only verified sources, which leaves out forums and boards/);
     assert.equal(bash('c1', 'curl -s https://www.reuters.com/x'), undefined, 'an address on the list');
     assert.match(bash('c1', 'pip install requests'), /goes online without a web address Modes can check/);
     assert.equal(bash('c1', 'ls -la'), undefined, 'a command that stays here');
     assert.equal(bash('c3', 'pip install requests'), undefined, 'Everything');
-    assert.match(app.guard({ name: 'run_code', agent: { id: 'c1' }, arguments: { code: "await fetch('https://www.reddit.com/r/x.json')" } }), /Web is at Verified/);
+    assert.match(app.guard({ name: 'run_code', agent: { id: 'c1' }, arguments: { code: "await fetch('https://www.reddit.com/r/x.json')" } }), /Web sources are only verified sources/);
     // The button on Off kept the level; a Long run with the web on does not bring it back.
     assert.equal(app.guard({ name: 'web_fetch', agent: { id: 'c2' }, arguments: { url: 'https://www.reddit.com/r/x' } }), undefined);
     assert.equal(app.service().webLevel('c2'), undefined);

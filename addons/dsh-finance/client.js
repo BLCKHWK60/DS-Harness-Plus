@@ -180,17 +180,10 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
       const { data, setData, alive } = useData();
       const [draft, setDraft] = useState(null);
       const [failed, setFailed] = useState('');
-      const bar = useRef(null);
       const shown = Boolean(data && data.enabled === true);
-      useEffect(() => {
-        const node = bar.current;
-        if (!node || typeof ResizeObserver !== 'function') return undefined;
-        const root = document.documentElement;
-        const watch = new ResizeObserver(() => root.style.setProperty('--dsh-fn-bar', `${Math.round(node.getBoundingClientRect().height)}px`));
-        watch.observe(node);
-        return () => { watch.disconnect(); root.style.removeProperty('--dsh-fn-bar'); };
-      }, [shown]);
-      if (!shown) return h('style', null, CSS);
+      // The one options area under the chat box, shared by every mode (Cowork sidebar, 18 November 2026): its place and look.
+      const Area = window.__dshOptionsArea;
+      if (!shown || !Area) return h('style', null, CSS);
       const selection = data.selection ?? {};
       const save = async (values) => {
         setData((d) => ({ ...d, selection: { ...d.selection, ...values } }));
@@ -209,25 +202,25 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
         setDraft(null);
         if (next !== (selection.subject ?? '')) void save({ subject: next });
       };
-      const select = (label, value, options, onChange) => h('select', { className: 'dsh-fn-pick', 'aria-label': label, title: label, value, onChange: (event) => onChange(event.target.value) },
+      const select = (label, value, options, onChange) => h('select', { className: 'dsh-opt-pick', 'aria-label': label, title: label, value, onChange: (event) => onChange(event.target.value) },
         options.map((option) => h('option', { key: option.id, value: option.id }, option.label)));
       const markets = (data.markets ?? []).includes(selection.market) ? data.markets : [...(data.markets ?? []), selection.market];
       const summary = selection.kind === 'market'
         ? `The whole market, ${selection.market}`
         : selection.subject ? `${selection.subject}, ${selection.market}` : `No ${selection.kind} chosen yet: name it here or in your message`;
 
-      return h('div', { ref: bar, className: 'dsh-fn-bar', role: 'group', 'aria-label': 'What to research' },
+      return h(Area, { mode: 'finance', place: 'start', label: 'What to research' },
         h('style', null, CSS),
         select('Kind of subject', selection.kind, data.kinds ?? [], (kind) => save({ kind })),
         h('input', {
-          className: 'dsh-fn-pick', list: 'dsh-fn-watchlist', value: subject, placeholder: SUBJECT_HINTS[selection.kind] ?? 'Subject', 'aria-label': 'Subject', spellCheck: false, autoCorrect: 'off',
+          className: 'dsh-opt-pick', list: 'dsh-fn-watchlist', value: subject, placeholder: SUBJECT_HINTS[selection.kind] ?? 'Subject', 'aria-label': 'Subject', spellCheck: false, autoCorrect: 'off',
           onChange: (event) => setDraft(event.target.value), onBlur: commitSubject, onKeyDown: (event) => { if (event.key === 'Enter') event.target.blur(); },
         }),
         h('datalist', { id: 'dsh-fn-watchlist' }, (data.watchlist ?? []).map((name) => h('option', { key: name, value: name }))),
         select('Market', selection.market, markets.map((market) => ({ id: market, label: market })), (market) => save({ market })),
         select('Focus', selection.focus, data.focuses ?? [], (focus) => save({ focus })),
         select('Period', selection.period, data.periods ?? [], (period) => save({ period })),
-        h('div', { className: 'dsh-fn-hint', 'data-error': String(Boolean(failed)) }, failed || (data.adviser === true ? `${summary}. Adviser on.` : `${summary}. Research, not advice.`)));
+        h('div', { className: 'dsh-opt-hint', 'data-error': String(Boolean(failed)) }, failed || (data.adviser === true ? `${summary}. Adviser on.` : `${summary}. Research, not advice.`)));
     }
 
     /** What the subject box in the chat box shows while it is empty. */
@@ -292,7 +285,12 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
      * period. Shown once the conversation has started; before that the start page's drop-downs are
      * the selection. A change is saved as this conversation's own selection and shown at once.
      */
-    function FinanceControls({ sessionId }) {
+    /** The selection of a started Finance conversation under the chat box, in the one options area every mode shares. */
+    function FinanceStrip({ sessionId }) {
+      return h(FinanceControls, { sessionId, strip: true });
+    }
+
+    function FinanceControls({ sessionId, strip = false }) {
       const [view, setView] = useState(null);
       const [busy, setBusy] = useState(false);
       const [draft, setDraft] = useState(null);
@@ -339,6 +337,9 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
         return () => { current = false; clearTimeout(timer); listeners.delete(tick); };
       }, [sessionId]);
       if (!sessionId || !view || view.enabled !== true || view.session?.shown !== true || view.session.id !== sessionId) return null;
+      // With the Cowork sidebar the selected tab is the conversation's mode, known at once: another tab never shows this.
+      const tab = typeof document?.documentElement?.getAttribute === 'function' ? document.documentElement.getAttribute('data-cws-tab') : null;
+      if (tab && tab !== 'finance') return null;
       const selection = view.session.selection ?? {};
       const pick = async (values) => {
         pending.current += 1;
@@ -374,6 +375,30 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
       const kinds = [...(view.kinds ?? []), ...(selection.kind === 'brief' ? [{ id: 'brief', label: 'Scheduled brief' }] : [])];
       const markets = ((view.markets ?? []).includes(selection.market) ? view.markets : [...(view.markets ?? []), selection.market]).map((market) => ({ id: market, label: market }));
       const field = (label, items, value, key) => h(ChatDrop, { label, items, value, busy, field: key, onPick: (id) => void pick({ [key]: id }) });
+      // Under the chat box (the one options area every mode shares): the same fields and look as the start page, for
+      // this conversation's own selection. A change counts from the assistant's next step, as in the chat box before.
+      const Area = strip ? window.__dshOptionsArea : null;
+      if (strip) {
+        if (!Area) return null;
+        const select = (label, value, items, key) => h('select', { className: 'dsh-opt-pick', 'aria-label': label, title: `${label}. ${CHAT_NOTE}`, value, disabled: busy, 'data-field': key, onChange: (event) => void pick({ [key]: event.target.value }) },
+          items.map((item) => h('option', { key: item.id, value: item.id }, item.label)));
+        return h(Area, { mode: 'finance', place: 'chat', label: 'What this Finance conversation is about' },
+          select('Kind of subject', selection.kind, kinds, 'kind'),
+          h('input', {
+            className: 'dsh-opt-pick', list: listId, value: subject, placeholder: SUBJECT_SHORT[selection.kind] ?? 'Subject', disabled: busy,
+            'aria-label': 'Subject', title: `Subject. ${CHAT_NOTE}`, spellCheck: false, autoCorrect: 'off', maxLength: 80,
+            onChange: (event) => setDraft(event.target.value), onBlur: commitSubject,
+            onKeyDown: (event) => {
+              if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); event.target.blur(); }
+              if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); dropDraft.current = true; setDraft(null); event.target.blur(); }
+            },
+          }),
+          h('datalist', { id: listId }, (view.watchlist ?? []).map((name) => h('option', { key: name, value: name }))),
+          select('Market', selection.market, markets, 'market'),
+          select('Focus', selection.focus, view.focuses ?? [], 'focus'),
+          select('Period', selection.period, view.periods ?? [], 'period'),
+          h('div', { className: 'dsh-opt-hint', 'data-error': String(Boolean(failed)) }, failed || 'For this conversation: a change counts from the next answer. The start page sets where new conversations start.'));
+      }
       return h('span', { className: 'dsh-fn-chat' },
         h('style', null, CSS),
         h('span', { className: 'dsh-fn-ctls', role: 'group', 'aria-label': 'What this Finance conversation is about', 'data-error': String(Boolean(failed)) },
@@ -710,6 +735,8 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
         ctx.effect(() => ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({ name: 'conversation.hero.options', id: 'finance-bar', order: 40 }, () => h(FinanceBar, { appCtx: ctx }))));
         // After the mode and Web controls of the Modes add-on (orders -22 and -21).
         ctx.effect(() => ctx.slots.inject('conversation.input.left', () => ctx.slots.register({ name: 'conversation.input.left', id: 'finance-selection', order: -19, label: () => 'Finance selection' }, (props) => h(FinanceControls, { ...props, appCtx: ctx }))));
+        // The same selection as a strip right above the chat box, under the place chip (order -50), in Finance only.
+        ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'finance-strip', order: -40 }, (props) => h(FinanceStrip, { sessionId: props?.sessionId }))));
       },
     };
   },

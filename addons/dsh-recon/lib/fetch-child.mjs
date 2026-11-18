@@ -245,6 +245,25 @@ function dechunk(body) {
  *   `user` (keeps conversations on separate circuits), `verify`, `maxBytes`, `timeoutMs`.
  * @returns {Promise<object>} `{ok: true, status, type, title, text, links, bytes, cut}`, `{ok: true, status, redirect}`, or `{ok: false, why}`.
  */
+/**
+ * The login headers of one of the user's own sources (Recon's recon_other_*): only on a direct, encrypted
+ * connection through the forwarder (WireGuard), never through Tor; only a login, a cookie or one key header,
+ * each on one line.
+ * @returns {string[]} the header lines.
+ */
+export function loginLines(req, forward, secure) {
+  const given = req?.headers;
+  if (!given || typeof given !== 'object' || !forward || !secure) return [];
+  const lines = [];
+  for (const [name, value] of Object.entries(given).slice(0, 3)) {
+    if (!/^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,64}$/.test(name) || ['host', 'connection', 'content-length', 'transfer-encoding', 'accept-encoding'].includes(name.toLowerCase())) continue;
+    const text = String(value ?? '');
+    if (!text || text.length > 8000 || /[\r\n\u0000]/.test(text)) continue;
+    lines.push(`${name}: ${text}`);
+  }
+  return lines;
+}
+
 export async function get(req) {
   const url = new URL(String(req.url));
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return { ok: false, why: 'only http and https addresses are read' };
@@ -348,6 +367,7 @@ export async function get(req) {
         'Accept-Language: en-US,en;q=0.5',
         'Accept-Encoding: identity',
         'Connection: close',
+        ...loginLines(req, forward, secure),
         '',
         '',
       ].join('\r\n'),

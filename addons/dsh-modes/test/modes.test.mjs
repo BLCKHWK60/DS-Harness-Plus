@@ -632,19 +632,20 @@ test('Depth is kept per conversation like the Web level: cleaned up, carried int
   assert.ok(ALWAYS_SKIP.includes('modes.depthMoved'), 'each Mac moves its own Web levels once');
   const index = JSON.parse(readFileSync(new URL('../../dsh-settings-plus/settings-index.json', import.meta.url), 'utf8'));
   assert.ok((Array.isArray(index) ? index : index.entries ?? []).some((entry) => entry.field === 'modes.sessionDepth'));
-  // The button: in every tab (Research, Scout and Recon too), only not while all tools are off.
-  assert.match(source, /^\s*off \? null : h\(DepthButton, \{\s*t, depth: sessionDepthNow, kind: depthKind\(modeDef\),/m, 'nothing but tools off hides it');
+  // The button: in every tab (Research, Scout and Recon too). With Tools off it stays greyed (same chat box in every
+  // mode, 18 November 2026); only with that switch off does Tools off hide it, as before.
+  assert.match(source, /^\s*off && !uniform \? null : h\(DepthButton, \{\s*t, depth: sessionDepthNow, kind: depthKind\(modeDef\), busy: state\.busy, disabled: off,/m, 'nothing but tools off (with the switch off) hides it');
   assert.doesNotMatch(source, /researchTab \|\| off \? null : h\(DepthButton/);
   assert.match(source, /onPick: \(picked\) => void pickSetting\('depth', picked\)/);
   // A pick is stored (Standard too, against a start that differs) and becomes where new conversations start.
   assert.match(source, /const depths = \{ \.\.\.readObject\(current\.sessionDepth\), \[sessionId\]: picked \};\s*return \[\{ op: 'set', path: \['sessionDepth'\], value: JSON\.stringify\(depths\) \}, \{ op: 'set', path: \['searchDepth'\], value: picked \}\];/);
-  // Web keeps Off and On; the plan's levels (step S1) are added beside them, and On stays as before.
-  assert.match(source, /const LEVELS = \['off', 'on'\];/);
-  assert.match(source, /const ops = \[\{ op: 'set', path: \['sessionWeb'\], value: JSON\.stringify\(webs\) \}\];/);
-  for (const key of ['web.verified', 'web.verified.hint', 'web.openweb', 'web.openweb.hint', 'web.everything', 'web.everything.hint', 'web.custom', 'web.custom.hint', 'web.levels']) {
-    assert.equal(source.split('\n').filter((line) => line.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
-  }
-  for (const key of ['depth.label', 'depth.quick', 'depth.standard', 'depth.thorough', 'depth.quick.hint', 'depth.thorough.hint', 'depth.note', 'depth.note.research', 'depth.quick.hint.research', 'depth.standard.hint.research', 'depth.thorough.hint.research', 'depth.note.isolated', 'depth.quick.hint.isolated', 'depth.standard.hint.isolated', 'depth.thorough.hint.isolated', 'depth.standard.hint', 'depth.title', 'depth.open', 'new.depth', 'new.depth.hint', 'web.on', 'web.on.hint']) {
+  // Web keeps Off and All (today's On), with the source ticks beside them (the one Web selector, 18 November 2026).
+  assert.match(source, /onWrite: \(picked\) => void pickSetting\('sources', picked\)/);
+  // The former Web button's levels and Settings → Modes → Web levels are gone from the client (18 November 2026):
+  // older picks are read as ticks (wsNow), and their texts left with them.
+  assert.match(source, /return \[\{ op: 'set', path: \['sessionWeb'\], value: JSON\.stringify\(webs\) \}\];/, 'Off writes only the Web switch');
+  assert.doesNotMatch(source, /function webLevelOf\(|function mixesOf\(|function WebLevels\(|kind === 'web'|'wl\.[a-zA-Z]+':|'lane\.[a-z]+':|'web\.(?:verified|openweb|everything|custom|levels|always)[a-z.]*':/);
+  for (const key of ['depth.label', 'depth.quick', 'depth.standard', 'depth.thorough', 'depth.quick.hint', 'depth.thorough.hint', 'depth.note', 'depth.note.research', 'depth.quick.hint.research', 'depth.standard.hint.research', 'depth.thorough.hint.research', 'depth.note.isolated', 'depth.quick.hint.isolated', 'depth.standard.hint.isolated', 'depth.thorough.hint.isolated', 'depth.standard.hint', 'depth.title', 'depth.open', 'new.depth', 'new.depth.hint']) {
     assert.equal(source.split('\n').filter((line) => line.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
   }
   assert.doesNotMatch(source.split('\n').find((line) => line.includes("'depth.label':") && /[一-鿿]/.test(line)), /深度/, 'not the Web level Deep\'s word');
@@ -717,27 +718,14 @@ test('the chat box: a Web pick writes only On or Off; a Depth pick is kept for t
     throw new Error(`unbalanced braces in ${name}`);
   };
   const line = (name) => source.match(new RegExp(`^\\s*const ${name} = .*;$`, 'm'))[0];
-  const { depthNow, settingOps, startDepthOf, webLevelOf } = new Function(`${cut('readObject')}\n${line('DEPTHS')}\n${line('depthOf')}\n${cut('startDepthOf')}\n${cut('depthNow')}\n${cut('webLevelOf')}\n${cut('settingOps')}\nreturn { depthNow, settingOps, startDepthOf, webLevelOf };`)();
+  const { depthNow, settingOps, startDepthOf } = new Function(`${cut('readObject')}\n${line('DEPTHS')}\n${line('depthOf')}\n${cut('startDepthOf')}\n${cut('depthNow')}\n${cut('settingOps')}\nreturn { depthNow, settingOps, startDepthOf };`)();
   // Settings → Modes shows the start as the Depth button does (a stored Deep is Thorough).
   assert.equal(startDepthOf('deep'), 'thorough');
   assert.equal(startDepthOf('quick'), 'quick');
   assert.equal(startDepthOf(undefined), 'standard');
   assert.match(source, /searchDepth: startDepthOf\(view\.searchDepth\),/);
-  // The Web button: Off while all tools are off or the web is; a level the conversation picked; else On.
-  assert.equal(webLevelOf(false, true), 'on');
-  assert.equal(webLevelOf(false, false), 'off');
-  assert.equal(webLevelOf(true, true), 'off');
-  assert.equal(webLevelOf(false, true, 'verified', {}), 'verified');
-  assert.equal(webLevelOf(false, false, 'verified', {}), 'off', 'Off wins over a kept level');
-  assert.equal(webLevelOf(false, true, 'custom:Mine', { Mine: ['verified'] }), 'custom:Mine');
-  assert.equal(webLevelOf(false, true, 'custom:Gone', {}), 'on', 'a removed mix: as before');
-  assert.equal(webLevelOf(false, true, 'nonsense', {}), 'on');
-  assert.match(source, /h\(WebButton, \{ t, level: webLevelOf\(off, web, modeDef\.isolated === true \? undefined : readObject\(state\.view\.sessionWebLevel\)\[sessionId\], mixesOf\(state\.view\.webMixes\)\),/);
-  // A pick writes On or Off as before; On clears a level; a level turns the web on and is kept; Off leaves the level for later.
-  const after = (picked, current) => Object.fromEntries(settingOps('web', picked, current, 's1').map((op) => [op.path[0], JSON.parse(op.value)]));
-  assert.deepEqual(after('on', { sessionWeb: '{}', sessionWebLevel: '{"s1":"verified","s2":"open"}' }), { sessionWeb: { s1: true }, sessionWebLevel: { s2: 'open' } });
-  assert.deepEqual(after('open', { sessionWeb: '{"s1":false}', sessionWebLevel: '{}' }), { sessionWeb: { s1: true }, sessionWebLevel: { s1: 'open' } });
-  assert.deepEqual(after('off', { sessionWeb: '{}', sessionWebLevel: '{"s1":"verified"}' }), { sessionWeb: { s1: false } });
+  assert.match(source, /h\(WebSources, \{\s*t, appCtx, view: state\.view, sessionId, modeId: current,/);
+  // What a Web pick writes is the Web selector's (wsOps; the selector's own test).
   // Recon (an isolated tab) gets its own list texts: Depth there sets only how hard it searches.
   // The row shortens its names also when a button on its first line is squeezed (the app's access-level
   // button shrinks, and its name then ran under the next one), in both ways the row is fitted.
@@ -796,8 +784,6 @@ test('the chat box: a Web pick writes only On or Off; a Depth pick is kept for t
   assert.equal(depthNow({ searchDepth: 'thorough', sessionDepth: JSON.stringify({ other: 'quick' }) }, 's'), 'thorough');
   assert.equal(depthNow({ sessionDepth: JSON.stringify({ s: 'deep' }) }, 's'), 'standard', 'nothing unknown shown');
   // What a pick writes.
-  assert.deepEqual(settingOps('web', 'on', { sessionWeb: JSON.stringify({ x: false }) }, 's'), [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify({ x: false, s: true }) }, { op: 'set', path: ['sessionWebLevel'], value: '{}' }], 'On as before (and no level)');
-  assert.deepEqual(settingOps('web', 'off', {}, 's'), [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify({ s: false }) }]);
   assert.deepEqual(settingOps('depth', 'thorough', { sessionDepth: JSON.stringify({ x: 'quick' }) }, 's'), [
     { op: 'set', path: ['sessionDepth'], value: JSON.stringify({ x: 'quick', s: 'thorough' }) },
     { op: 'set', path: ['searchDepth'], value: 'thorough' },
@@ -811,29 +797,64 @@ test('the page code parses: an apostrophe inside a quoted text once took every M
   assert.doesNotThrow(() => new Function(source));
 });
 
-test('Research and Scout show a fixed "Web · Always on" label (step 21): no list, nothing to change, Off with tools off', async () => {
+test('the one Web selector (18 November 2026): the same chip in every tab; Research and Scout cannot pick Off; ticks, labels and writes as the host reads them', async () => {
   const { readFileSync } = await import('node:fs');
   const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
-  assert.match(source, /researchTab \? h\(WebAlways, \{ t, off: off \|\| lockedHere \}\) : h\(WebButton, \{/);
-  // A Recon conversation moved into Research or Scout is locked with no tools (heldMode): the label reads Off there.
-  assert.match(source, /const lockedHere = readObject\(state\.view\.sessionIsolated\)\[sessionId\] === true && modeDef\.isolated !== true;/);
-  // Off looks off (dimmed), and the fixed label gets no hover highlight.
-  assert.match(source, /\.dsh-mt \.pair\[data-fixed\] button\[aria-pressed='false'\]\{opacity:\.5\}/);
-  assert.match(source, /:not\(\[aria-disabled='true'\]\)\{background:var\(--dsw-alias-interactive-bg-hover\)\}/);
-  const start = source.indexOf('function WebAlways(');
-  const body = source.slice(start, source.indexOf('\n    }\n', start));
-  assert.match(body, /const name = t\(off \? 'web\.off' : 'web\.always'\);/);
-  assert.match(body, /'aria-disabled': 'true'/);
-  assert.match(body, /title: off \? t\('tools\.blocked'\) : t\('web\.always\.hint'\)/);
-  assert.doesNotMatch(body, /onClick|createPortal|onPick/, 'no list and nothing to pick');
-  for (const key of ['web.always', 'web.always.open', 'web.always.hint']) {
-    assert.equal(source.split('\n').filter((line) => line.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+  const cut = (name) => {
+    const start = source.indexOf(`function ${name}(`);
+    assert.ok(start >= 0, `client.js has no function ${name}`);
+    return source.slice(start, source.indexOf('\n    }\n', start) + 6);
+  };
+  const line = (name) => source.split('\n').find((text) => text.trim().startsWith(`const ${name} =`));
+  const { wsNow, wsLabel, wsOps, wsSelections } = new Function(`${cut('readObject')}\n${['WS_KINDS', 'WS_NETS', 'WS_NETS_READY', 'WS_SHORT', 'WS_LEVEL_TICKS', 'WS_LANE_TICKS'].map(line).join('\n')}\n${cut('wsTicks')}\n${cut('wsAll')}\n${cut('wsSelections')}\n${cut('wsNow')}\n${cut('wsLabel')}\n${cut('wsOps')}\nreturn { wsNow, wsLabel, wsOps, wsSelections };`)();
+  const sources = await import('../lib/sources.js');
+  assert.match(source, new RegExp(`const WS_KINDS = ${JSON.stringify(sources.KINDS).replace(/"/g, "'").replace(/[[\]]/g, '\\$&').replace(/,/g, ', ')};`), 'the client\'s ticks are the host\'s');
+  assert.match(source, new RegExp(`const WS_NETS = ${JSON.stringify(sources.NETS).replace(/"/g, "'").replace(/[[\]]/g, '\\$&').replace(/,/g, ', ')};`));
+  // What the chip shows.
+  const all = [...sources.KINDS];
+  assert.deepEqual(wsNow({ sessionWebSources: '{}', sessionWebLevel: '{}' }, 's1'), all, 'nothing stored: All');
+  assert.deepEqual(wsNow({ sessionWebSources: '{"s1":["forums","verified"]}' }, 's1'), ['verified', 'forums']);
+  assert.deepEqual(wsNow({ sessionWebSources: '{}', sessionWebLevel: '{"s1":"open"}' }, 's1'), ['verified', 'academic', 'news', 'sites'], 'an older level reads as ticks');
+  assert.deepEqual(wsNow({ sessionWebSources: '{}', sessionWebLevel: '{"s1":"open"}' }, 's1', { research: true }), all, 'not in a research tab');
+  assert.deepEqual(wsNow({ sessionWebSources: '{}', sessionWebLevel: '{"s1":"custom:Mine"}', webMixes: '{"Mine":["verified","channels"]}' }, 's1'), ['verified', 'social']);
+  assert.deepEqual(wsNow({ sessionWebSources: '{"r1":["tor","usenet"]}' }, 'r1', { recon: true }), ['tor', 'usenet']);
+  assert.deepEqual(wsNow({ sessionWebSources: '{}' }, 'r1', { recon: true }), [...all, 'tor', 'usenet'], 'Recon\'s All has its networks (not I2P)');
+  for (const [webOn, ticks, recon, saved, want] of [
+    [false, all, false, {}, 'Off'], [true, all, false, {}, 'All'], [true, ['verified', 'forums'], false, {}, 'Verified + Forums'],
+    [true, ['verified', 'academic', 'news'], false, {}, '3 sources'], [true, ['verified', 'social'], false, { Mine: ['verified', 'social'] }, 'Mine'],
+    [true, ['tor', 'usenet'], true, {}, 'Tor + Usenet'], [true, all, true, {}, '8 sources'],
+  ]) {
+    assert.equal(wsLabel(webOn, ticks, recon, saved), want);
+    if (webOn) assert.equal(sources.ticksLabel(ticks, { recon, selections: saved }), want, 'the host says the same');
   }
-  // The prompt is unchanged: Research and Scout still get no web note and no searching note (research-1, scout-9).
+  assert.deepEqual(wsSelections('{"A":["verified"],"":["news"],"B":["bogus"]}'), { A: ['verified'] });
+  // What a pick writes: this conversation only; All clears its ticks and any older level; none ticked is Off.
+  const after = (picked, current) => Object.fromEntries(wsOps(picked, current, 's1').map((op) => [op.path[0], JSON.parse(op.value)]));
+  assert.deepEqual(after({ ticks: ['forums', 'verified'] }, { sessionWeb: '{}', sessionWebSources: '{}', sessionWebLevel: '{"s1":"open"}' }), { sessionWeb: { s1: true }, sessionWebSources: { s1: ['verified', 'forums'] }, sessionWebLevel: {} });
+  assert.deepEqual(after({ ticks: undefined }, { sessionWeb: '{"s1":false}', sessionWebSources: '{"s1":["news"],"s2":["news"]}', sessionWebLevel: '{}' }), { sessionWeb: { s1: true }, sessionWebSources: { s2: ['news'] }, sessionWebLevel: {} });
+  assert.deepEqual(after({ ticks: [...all] }, { sessionWeb: '{}', sessionWebSources: '{"s1":["news"]}' }).sessionWebSources, {}, 'every tick is All');
+  assert.deepEqual(after({ off: true }, { sessionWeb: '{}', sessionWebSources: '{"s1":["news"]}' }), { sessionWeb: { s1: false } }, 'Off keeps the ticks for later');
+  assert.deepEqual(after({ ticks: [] }, { sessionWeb: '{}' }), { sessionWeb: { s1: false } }, 'nothing ticked is Off');
+  assert.deepEqual(after({ ticks: ['tor'], recon: true }, { sessionWeb: '{}' }).sessionWebSources, { s1: ['tor'] });
+  // The chip: the same in every tab, inside the shared row's markup; Research and Scout cannot pick Off.
+  assert.doesNotMatch(source, /function WebAlways\(|function WebButton\(/, 'one Web selector, not two');
+  const body = cut('WebSources');
+  assert.match(body, /h\('span', \{ className: 'pair', 'data-kind': 'search', 'data-ws': '' \},/);
+  assert.match(body, /h\('span', \{ className: 'lbl' \}, t\('web\.label'\)\), h\('span', \{ className: 'lbl lvl' \}, `· \$\{value\}`\)/);
+  assert.match(body, /disabled: busy \|\| research, title: research \? t\('ws\.off\.research'\)/);
+  assert.match(body, /kind === 'i2p' \? \{ disabled: true, hint: t\('ws\.h\.i2p'\) \}/, 'I2P is shown, not set up yet');
+  assert.match(body, /recon \? h\('div', \{ className: 'head' \}, t\('ws\.nets'\)\) : null/, 'the networks only in Recon');
+  assert.match(source, /recon: modeDef\.isolated === true, research: researchTab, webOn: web \|\| researchTab,\s*disabled: off \|\| lockedHere,/);
+  assert.match(source, /\{ name: 'settings\.section', id: 'web-sources', order: 101, label: \(\) => t\('ws\.title'\) \}/);
+  for (const key of ['ws.title', 'ws.off.research', 'ws.h.i2p', 'wsp.other.hint', 'wsp.o.recon']) {
+    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+  }
+  // The prompt of Research and Scout is unchanged while their ticks are All (research-1, scout-9).
   const { promptText, DEPTH_SEARCH_PROMPTS } = await import('../lib/prompt.js');
   const text = promptText({ mode: { id: 'research', tools: ['deep_research', 'web_search', 'web_fetch'], prompt: 'Research method.' }, web: true, depth: 'thorough' });
   assert.doesNotMatch(text, /Web is on for this conversation/);
   assert.ok(!text.includes(DEPTH_SEARCH_PROMPTS.thorough));
+  assert.doesNotThrow(() => new Function(source));
 });
 
 test('only the app\'s own Office skills bring the Office tools: one of the same name from a project or the shared folder does not (17 November 2026)', async () => {
@@ -883,4 +904,34 @@ test('a loaded skill named office adds the Office tools in a conversation that l
   } finally {
     app.stop();
   }
+});
+
+test('the same chat box in every mode (a switch, on by default): the buttons\' words follow the window\'s width alone, and the other controls of the seat go on a second line (17 November 2026)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  const host = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  // A switch with a generic default (on), saved at once like the two answer switches; Off keeps the former shrinking.
+  assert.match(host, /uniformBox: z\.boolean\(\)\.default\(true\)\.volatile\(\)/);
+  assert.match(client, /const uniform = state\.view\?\.uniformBox !== false;/);
+  assert.match(client, /Toggle\(t\('box\.uniform'\), t\('box\.uniform\.hint'\), answer\.uniform, \(on\) => void flipAnswer\('uniformBox', 'uniform', on\)\)/);
+  assert.match(client, /const fit = \(\) => \(uniform \? fitUniform\(\)/);
+  assert.match(client, /const fitClassic = \(\) => \{/, 'the former shrinking stays, for Off and for a window too narrow');
+  for (const key of ['box.group', 'box.uniform', 'box.uniform.hint']) {
+    assert.equal(client.split('\n').filter((line) => line.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+  }
+  // The step is chosen with the other controls of the seat hidden and the model name in full, then they come back.
+  const start = client.indexOf('const fitUniform = () => {');
+  const body = client.slice(start, client.indexOf('const fit = () =>', start));
+  assert.match(body, /child\.style\.display = 'none'/);
+  assert.match(body, /for \(const \[child, display\] of kept\) child\.style\.display = display;/, 'what was hidden for the measuring is put back');
+  assert.match(body, /row\.removeAttribute\('data-model-compact'\)/);
+  assert.match(body, /left\.setAttribute\('data-dsh-below', ''\)/);
+  assert.match(body, /coreUp\(\)/, 'the core buttons must stay on the first line');
+  assert.match(body, /left\.setAttribute\('data-dsh-wrap', ''\)/, 'a narrower window: the row wraps as the app does, the others under the core buttons');
+  assert.match(body, /fitClassic\(\);\s*\};/, 'a window too narrow even for two lines falls back');
+  // Nothing of other add-ons is edited: only their place in the row (CSS) and one width for the access button.
+  assert.match(client, /\[data-dsh-below\]::after\{content:'';order:4;flex:0 0 100%;height:0\}/);
+  assert.match(client, /\[data-dsh-below\] \[data-slot="conversation\.input\.left"\] > :not\(\.dsh-mt\):not\(style\),\[data-dsh-wrap\] \[data-slot="conversation\.input\.left"\] > :not\(\.dsh-mt\):not\(style\)\{order:5\}/);
+  assert.match(client, /\[data-dsh-pin\] \[data-slot="conversation\.input\.permission"\] > \*\{min-width:156px/);
+  assert.match(client, /\[data-dsh-wrap\]\{flex-wrap:wrap !important;row-gap:6px\}/);
 });

@@ -52,6 +52,11 @@ Off until you switch it on at **Settings → Recon**. Needs the Modes add-on and
 - Any other model counts as cloud, and so does one whose place cannot be told. The tools then hand
   over nothing until you type `/recon cloud` in that conversation. That holds for that
   conversation and that model, and is forgotten when the app is closed.
+- Since 18 November 2026 that is your choice: Settings → Recon → Models → Cloud models
+  (`cloudModels`): Ask each time (the default, as above), Always (no question, in every Recon
+  conversation) or Never (not even after `/recon cloud`). Local and own-network models always
+  get it. `mayReceive` in `lib/model.js` takes the choice as `policy`; tests in
+  `test/cloud-models.test.mjs`.
 - What Recon already found is in the conversation's history, and every step sends the history
   to the model picked at that moment. So a conversation that holds Recon findings takes no step
   on a cloud model you did not agree to: switched to another model, copied with Rerun, or with
@@ -134,6 +139,19 @@ one by what the disk says (the same folder, not the same spelling).
 - A Recon conversation in any other folder has its tools switched off, and says why.
 
 ## Export
+
+**Moving a conversation to another tab (18 November 2026, the owner's choice).** "Move to" in the
+sidebar on a Recon conversation opens a NEW, ordinary conversation of the picked tab in that tab's
+usual place (Scratch, or its project; never a room). The app cannot change a conversation's folder,
+and the room is shared and emptied at every start, so the conversation is not moved in place. The
+door's `move` action (`doorMove`, `lib/move.js`) copies the conversation's own files out of the room
+(its run folder and files its tool calls named; never another conversation's) into
+`<new folder>/from-recon-<id>/files`, writes the whole conversation there as `conversation.md`, claims
+the new conversation for the tab, and records the move as an export into it (the export rules hold
+there). The page sends the conversation as the first message and names the new one "From Recon:
+<title>". The original stays in Recon, unchanged; its room files go at the next start as always, the
+copies stay. Locked conversations move the same way. `/mode` still refuses in place and points to Move to.
+
 
 `/recon export` writes one text file: the research log, every source with its citation and its
 text, and what the assistant wrote.
@@ -517,3 +535,21 @@ Mission asks `ctx.get('recon').runs()`: without it an isolated conversation is l
 - **Back channels** (`lib/boards.js`): `recon_board_search` / `recon_board_read` for 4chan (a board's live catalog and threads), 4chan archives (desuarchive, b4k, palanq; FoolFuuka's search and thread reader), Reddit (PullPush for words, Arctic Shift by subreddit or author; posts read with their comments, by an id a search showed), public Telegram channels (`t.me/s/<name>`, with its own search, only a channel the conversation was shown), Hacker News (Algolia), Lemmy (lemmy.world), Mastodon hashtags (mastodon.social), GitHub issue search, and Have I Been Pwned's list of known breaches. Checked on 16 November 2026; not usable without a login, a key or a "prove you are human" page (which Recon does not get past): Discord, Bluesky, reddit.com itself, 4plebs, archived.moe, thebarchive, Disboard, and every paste search tried.
 - **The map**: Recon's method looks at the ground around a subject (other names, people, groups, places, events, the topic) and ends with a map of connections.
 - **Known limit**: the trail stops a page from making the model build an address; a page can still offer many links and ask the model to open them in an order. The word screen and the fence (everything from a source is marked as material, not instructions) are what stand against that.
+
+## The one Web selector, and your own sources in Recon (18 November 2026)
+
+Recon's Web button is now the same selector as every tab's (Modes' README, "One Web selector in every tab"): Off, All, and the same source ticks, plus a group only Recon has, **Recon's networks**: Tor (.onion), Usenet, and I2P (greyed: not set up yet; a later step builds it). Settings → Recon has a **Hidden networks: Tor, Usenet, I2P** section at the top that says so; Tor, Usenet and WireGuard are set up as before in the groups below it. Only Recon ever reaches these networks.
+
+**What a tick does here** (`lib/ticks.js`). The ticks are stored by Modes with the conversation's other marks (`sessionWebSources`); Recon's tools ask `modes.webSources(id)` and refuse, before anything is sent, a call whose source is not ticked (the answer begins "Not among this conversation's Recon sources", so it counts as one that did not run):
+- `recon_onion_*`: Tor. `recon_usenet_*`: Usenet. `recon_news_search` (GDELT): News.
+- `recon_web_search`: any kind of page except the archives; its results of unticked kinds are left out, and the answer says how many.
+- `recon_web_read`, `recon_archive_find`, `recon_archive_read`: the kinds of the page's address (Modes' lists; an archived copy is judged by the page it copies).
+- `recon_board_*`: Forums and boards, or Social media and channels for Telegram and Mastodon.
+- `recon_other_*`: Other. `recon_cite` and Ultra Code need nothing.
+All (nothing ticked away) is Recon exactly as before. The ticks only take tools away: Recon still has only its own tools, its folder, its filters, its model rules and its Web Off. Examples the owner gave: "only Usenet and Tor" and "only Tor and verified sources".
+
+**Your own sources in Recon** (`lib/other.js`, tools `recon_other_search`, `recon_other_read`). Only the sources on Settings → Web sources → Other sources whose "May be used in Recon" switch is on (off at first). Modes keeps them and hands Recon one source's request (`reconOtherRequest`: addresses, login headers, the parts to hide); Recon reads it through the locked process **only through the WireGuard tunnel**: never straight, not even after `/recon direct`, and never through Tor (`tunnelOnly` in `lib/clearnet.js`; the locked process sends a login only on an encrypted connection through the forwarder, `loginLines` in `lib/fetch-child.mjs`). Text only, the same word screen and page filters, links only on the source's own site (shown as paths), a redirect to another site not followed. The model sees the source's name: the login, key, cookie and a secret address (its site too) are replaced by the name in brackets in everything it reads and in the research log. The method's rule 5 now says only these sources use a stored login. Tools: 15 (13 before).
+
+Tests: `test/websources.test.mjs` (each tool's tick, the examples, a refusal counted as not run, results left out, your own sources through WireGuard only with the login hidden, the locked process's login lines).
+
+**Status dots (18 November 2026, the owner's request).** The start page's status bar has a dot for every service Recon can use, with the reason when you hover over it: Tor (as before), Usenet (as before), **WireGuard** (grey: not set up; green: connected, or set up and started when needed; amber: connecting; red: did not connect, with what was tried), **I2P** (grey: not set up yet), and **each of your own sources allowed in Recon** (green: its login is kept and WireGuard is set up; red: its last read failed, with why; grey: no login kept yet, or no working tunnel). It uses only what Recon already knows: WireGuard's own status, the last read of each source (in memory, with the login taken out) and Modes' `reconOtherStatus()` (whether a login is kept, looked up on this Mac). No request is sent to draw it. Choosing which of these a conversation uses stays on the Web button.

@@ -1,5 +1,7 @@
 # Changelog: @local/dsh-finance
 
+- 2026-11-18 Start page and started conversation: the selection is under the chat box in the one options area every mode shares (the strip above the box is gone); a started conversation's fields change only that conversation, from the next answer, as before
+- 2026-11-18 A started Finance conversation shows its selection as a strip right above the chat box (all five parts from 1000 px wide, with "A change counts for this conversation, from the next answer."), while the chat box is the same in every mode; the in-box pill comes back with that switch off; hidden at once on another sidebar tab
 - 2026-11-15 Build the owner's 26 decisions and Scout step 3 (0.57.0)
 - 2026-11-15 Full audit of every mode, grouped and searchable Settings (0.56.0)
 - 2026-11-14 0.43.1: Recon, an isolated tab for .onion research (steps 1 to 3 of 7)

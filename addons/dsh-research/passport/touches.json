@@ -39,10 +39,6 @@
       "id": "research-bar"
     },
     {
-      "name": "conversation.input.left",
-      "id": "research-controls"
-    },
-    {
       "name": "conversation.input.dock",
       "id": "research-progress"
     }
@@ -63,7 +59,8 @@
   "config": [
     "enabled",
     "focus",
-    "folder"
+    "folder",
+    "focusMoved"
   ],
   "instructionChars": 1660,
   "rows": [

@@ -128,6 +128,9 @@ window.__ModuleLoader__.load({
         'rerun.none': 'This answer cannot be rerun: its question was not found.',
         'rerun.failed': 'The rerun could not be started',
         'rerun.files': 'Rerun started. Pictures and files attached to the question were not sent again; add them if they are needed.',
+        'box.group': 'Chat box',
+        'box.uniform': 'Same chat box in every mode',
+        'box.uniform.hint': 'The buttons read the same in every mode: how much of their words show (Web · On, Depth, One model, Tools on) depends on the window\'s width alone, and the access button keeps one width. The other controls (the route badge, the Scratch mark and the buttons a mode adds: Creator Plus, Bench rules, Export, Focus, the Finance pill) go on a second line, under the same core buttons, when the row is full. The model button and Run have one width in every mode, Depth stays (greyed) when Tools are off, and Run stays (greyed) where a Long run cannot start. Off: each mode shrinks its own row as before.',
         'answer.group': 'Buttons under an answer',
         'web.label': 'Web',
         'depth.label': 'Depth',
@@ -168,6 +171,22 @@ window.__ModuleLoader__.load({
         'lens.web.off': 'Web is Off here: this Lens labels anything it could not check as an inference or a guess. Switch Web on to check facts.',
         'lens.own.hint': 'Your own Lens (Settings → Modes)',
         'own.group': 'Your own Lenses',
+        'start.group': 'Starting values for new conversations',
+        'start.hint': 'What the Web, Depth, Models and Tools buttons read when a conversation begins in each mode. "Usual" leaves what the mode does now (and the settings above). A button you press in a conversation replaces its starting value. Only that conversation changes, and nothing here widens what a mode may use: its tools, sandbox and blocks stay as set on its card.',
+        'start.web': 'Web',
+        'start.depth': 'Depth',
+        'start.helpers': 'Models',
+        'start.tools': 'Tools',
+        'start.usual': 'Usual',
+        'start.web.off': 'Off',
+        'start.web.on': 'On',
+        'start.web.verified': 'Verified',
+        'start.web.open': 'Open web',
+        'start.web.everything': 'Everything',
+        'start.helpers.same': 'One model',
+        'start.helpers.roles': 'Different models',
+        'start.tools.off': 'Off',
+        'start.isolated': 'Keeps its own web rules: only Off applies here.',
         'long.group': 'Long run tools',
         'skillsoff.group': 'Skills switched off per tab',
         'skillsoff.hint': 'In these tabs the model does not see these skills and cannot load them; typing /name still works. Tuner Plus proposes them from what each tab never uses.',
@@ -198,52 +217,107 @@ window.__ModuleLoader__.load({
         'depth.quick.hint.research': 'Short work; a research run takes about 10 minutes, with up to 4 helpers.',
         'depth.standard.hint.research': 'As the method says; a research run takes about 25 minutes, with up to 6 helpers.',
         'depth.thorough.hint.research': 'A short plan and a check before finishing; a research run takes about 45 minutes, with up to 8 helpers. Slower.',
-        'web.title': 'Web access',
-        'web.open': 'Web access: {0}. Click to change.',
-        'web.off': 'Off',
-        'web.quick': 'Quick',
-        'web.standard': 'Standard',
-        'web.thorough': 'Thorough',
-        'web.deep': 'Deep',
-        'web.off.hint': 'No web search or page reading, and no other tools or programs that go online, such as Finance\'s data tools or an outside image service. Connectors stay on and can still reach the internet. The model answers from what it knows and from your files.',
-        'web.quick.hint': 'One search, answer from the results. Fastest.',
-        'web.standard.hint': 'A few searches; opens the pages that matter.',
-        'web.thorough.hint': 'Several searches; reads at least 5 pages from different sites and cites each.',
-        'web.deep.hint': '10+ searches, at least 10 pages read, facts cross-checked between sources. Slower.',
-        'web.note': 'For this conversation only: whether the model may go online. How much it searches is set by Depth. In-depth research with many helpers is in the Research tab.',
-        'web.on': 'On',
-        'web.on.hint': 'As before: the model may search the web, read pages and use other tools and programs that go online, with no limit beyond the tab\'s own. How much it searches is set by Depth.',
-        'web.verified': 'Verified',
-        'web.verified.hint': 'Only pages on the verified list: official bodies, courts and registers, research publishers, wire services and public broadcasters, archives. Edit the list on Settings → Modes.',
-        'web.openweb': 'Open web',
-        'web.openweb.hint': 'Verified sources and ordinary sites. Not forums and boards, public groups and channels, or the Reddit archives.',
-        'web.everything': 'Everything',
-        'web.everything.hint': 'Every kind of source, forums and channels too. Like On, and named as a level.',
-        'web.custom': 'Custom',
-        'web.custom.hint': 'Your own mix: {0}.',
-        'web.levels': 'A level limits which pages a tool may open; searching lists results as usual, and a result of another kind is named as a lead. Your own mixes are made on Settings → Modes.',
-        'wl.group': 'Web levels',
-        'wl.hint': 'The Web button keeps Off and On (On is as before). A conversation can also pick a level: Verified opens only the list below; Open web adds ordinary sites; Everything adds forums, groups and channels and the Reddit archives; or one of your own mixes. A level limits which pages a tool may open; searching lists results as usual. Recon and Research keep their own web.',
-        'wl.list': 'Verified list: one site per line (a line starting with a dot, such as .gov, means every site ending so)',
-        'wl.bad': 'Not a site: {0}. These lines are left out.',
-        'wl.saveList': 'Save list',
-        'wl.listSaved': 'Verified list saved.',
-        'wl.mixes': 'Your own mixes: tick the kinds of source a mix may open.',
-        'wl.name': 'Name',
-        'wl.remove': 'Remove',
-        'wl.add': 'Add a mix',
-        'wl.saveMixes': 'Save mixes',
-        'wl.mixesSaved': 'Mixes saved. Pick one on a conversation\'s Web button.',
-        'wl.noName': 'Give each mix a name.',
-        'wl.sameName': 'Two mixes have the same name.',
-        'lane.verified': 'verified sources',
-        'lane.sites': 'ordinary sites',
-        'lane.forums': 'forums and boards',
-        'lane.channels': 'groups and channels',
-        'lane.archives': 'Reddit archives',
-        'web.always': 'Always on',
-        'web.always.open': 'Web access: {0}. Fixed in this tab.',
-        'web.always.hint': 'Always on in this tab: searching is its work. Only the Tools switch takes the web away. How much it searches is set by Depth.',
+        'ws.title': 'Web sources',
+        'ws.open': 'Web: {0}. Click to change.',
+        'ws.off': 'Off',
+        'ws.all': 'All',
+        'ws.off.hint': 'No web for this conversation: no search, no pages, and no other tools or programs that go online. Connectors stay on.',
+        'ws.all.hint': 'Every kind of source, as before.',
+        'ws.off.research': 'This tab needs the web: searching is its work. Switch Tools off to stop it.',
+        'ws.kinds': 'Sources (tick any mix)',
+        'ws.nets': 'Recon\'s networks',
+        'ws.k.verified': 'Verified sources',
+        'ws.k.academic': 'Academic papers',
+        'ws.k.news': 'News',
+        'ws.k.sites': 'Ordinary sites',
+        'ws.k.forums': 'Forums and boards',
+        'ws.k.social': 'Social media and channels',
+        'ws.k.archives': 'Archives',
+        'ws.k.other': 'Other',
+        'ws.k.tor': 'Tor (.onion)',
+        'ws.k.usenet': 'Usenet',
+        'ws.k.i2p': 'I2P',
+        'ws.h.verified': 'Official bodies, courts, registers, statistics, wire services, public broadcasters.',
+        'ws.h.academic': 'Journals, preprints, PubMed, universities.',
+        'ws.h.news': 'News organisations and wire services, with dates.',
+        'ws.h.sites': 'Everything else: companies, blogs, shops, documentation.',
+        'ws.h.forums': 'Reddit, Stack Exchange, Hacker News and other forums.',
+        'ws.h.social': 'X, YouTube, Telegram, Mastodon, Facebook and the like.',
+        'ws.h.archives': 'Removed Reddit posts (pullpush, arctic-shift).',
+        'ws.h.other': 'Your own sources: sites with a login, a key or a private address.',
+        'ws.h.tor': '.onion search and pages, through Tor.',
+        'ws.h.usenet': 'Text newsgroups, with your news server account.',
+        'ws.h.i2p': 'Not set up yet.',
+        'ws.other.none': 'None set up yet: Settings → Web sources.',
+        'ws.other.none.recon': 'None allowed in Recon yet: Settings → Web sources.',
+        'ws.saved': 'Saved selections',
+        'ws.saveAs': 'Save as…',
+        'ws.name': 'Name',
+        'ws.save': 'Save',
+        'ws.saved.done': 'Saved. It is in this list in every tab.',
+        'ws.start': 'Use for new {0} conversations',
+        'ws.started': 'New {0} conversations start with these.',
+        'ws.edit': 'Edit sources…',
+        'ws.note': 'For this conversation only. Results of unticked kinds are left out and their pages are not opened. Connectors stay on. How much it searches is set by Depth.',
+        'ws.note.recon': 'For this conversation only. Recon\'s tools for unticked sources refuse. Recon keeps all its rules.',
+        'wsp.moved': 'Web levels are now the Web selector\'s source ticks. Their lists, your saved selections and your own other sources are on Settings → Web sources.',
+        'wsp.open': 'Open Web sources',
+        'wsp.loading': 'Loading…',
+        'wsp.head': 'What the Web button\'s ticks mean, in every tab. A conversation picks its ticks on the Web button; nothing here changes a conversation until you tick.',
+        'wsp.lists': 'Lists',
+        'wsp.lists.hint': 'One site or address ending per line (".gov" covers every site ending so). A site can be on more than one list. Forums, social media and the Reddit archives are known by name; anything on no list is an ordinary site.',
+        'wsp.saveList': 'Save list',
+        'wsp.listSaved': 'List saved.',
+        'wsp.saved.hint': 'Selections you saved from the Web button, one click each there. Rename, change or remove them here. Recon\'s networks count only in Recon.',
+        'wsp.add': 'Add a selection',
+        'wsp.saveSelections': 'Save selections',
+        'wsp.saved.bad': 'Each selection needs its own name and at least one tick.',
+        'wsp.saved.saved': 'Selections saved.',
+        'wsp.starts': 'Starting ticks per tab',
+        'wsp.starts.hint': 'Set from the Web button with "Use for new … conversations". A tab without one starts with All.',
+        'wsp.starts.none': 'Every tab starts with All.',
+        'wsp.starts.clear': 'Back to All',
+        'wsp.starts.cleared': 'That tab starts with All again.',
+        'wsp.other': 'Other sources',
+        'wsp.other.hint': 'Your own sources that others may not have: a site with a login, a key or a private address. Every tab can use them while Other is ticked. The model only ever sees a source\'s name: logins, keys, cookies and private addresses are kept in the app\'s secret store (as Finance\'s keys are) or in the macOS Keychain, your choice per source, and taken out of everything the model reads. Sites that sign in through their own web form are not supported; copy the sign-in cookie from your browser instead.',
+        'wsp.o.name': 'Name',
+        'wsp.o.login': 'Login',
+        'wsp.o.store': 'Secrets kept in',
+        'wsp.login.none': 'None',
+        'wsp.login.basic': 'User name and password',
+        'wsp.login.header': 'Key in a header',
+        'wsp.login.cookie': 'Browser cookie',
+        'wsp.login.secret-address': 'The address is secret',
+        'wsp.store.app': 'The app\'s secret store',
+        'wsp.store.keychain': 'macOS Keychain',
+        'wsp.o.secretAddress': 'The address is kept as a secret below. Put {query} where search words go, or leave it out for a start page.',
+        'wsp.o.search': 'Search address (with {query})',
+        'wsp.o.start': 'Start address',
+        'wsp.o.header': 'Header name',
+        'wsp.o.recon': 'May be used in Recon (only through Recon\'s own WireGuard route)',
+        'wsp.o.keptApp': 'Kept in the app\'s secret store. Typed once, never shown again.',
+        'wsp.o.keptKeychain': 'Kept in the macOS Keychain. Typed once, never shown again.',
+        'wsp.o.saveFirst': 'Save the sources first; then type its login here.',
+        'wsp.part.user': 'User name',
+        'wsp.part.basic': 'Password',
+        'wsp.part.header': 'Key',
+        'wsp.part.cookie': 'Cookie',
+        'wsp.part.secret-address': 'Secret address',
+        'wsp.o.kept': 'kept',
+        'wsp.o.keep': 'Keep',
+        'wsp.o.isKept': 'Kept.',
+        'wsp.o.notKept': 'Not kept yet.',
+        'wsp.o.test': 'Test',
+        'wsp.o.remove': 'Remove',
+        'wsp.o.tested': 'It answered (status {0}): {1}',
+        'wsp.o.failed': 'It did not work: {0}',
+        'wsp.o.removed': 'Source removed, and what was kept for it forgotten.',
+        'wsp.o.keptNow': 'Kept.',
+        'wsp.o.unnamed': 'A source',
+        'wsp.o.add': 'Add a source',
+        'wsp.o.save': 'Save sources',
+        'wsp.o.saved': 'Sources saved.',
+        'wsp.recon': 'Recon\'s own networks (Tor, Usenet; I2P not set up yet) are set up on Settings → Recon → Hidden networks, and only Recon uses them.',
         'trim.group': 'Load tools as needed',
         'trim.hint': 'A mode switched on below starts each conversation with the core tools only (files, shell, step list, questions, skills, web) and a tool that adds the others when needed: PDF, data, finance, diagrams, scheduling, helpers and more. Your message adds them too when it names them ("read this PDF"). Requests are far smaller, so local models answer sooner. Added tools stay for the rest of the conversation.',
         'trim.mode': '{mode}: load tools as needed',
@@ -376,6 +450,9 @@ window.__ModuleLoader__.load({
         'rerun.none': '无法重新运行此回答：找不到对应的问题。',
         'rerun.failed': '无法开始重新运行',
         'rerun.files': '已开始重新运行。问题中附带的图片和文件未再次发送，如有需要请重新添加。',
+        'box.group': '聊天框',
+        'box.uniform': '所有模式使用相同的聊天框',
+        'box.uniform.hint': '各模式中的按钮显示得一样：按钮文字显示多少（Web · On、Depth、One model、Tools on）只取决于窗口宽度，权限按钮保持固定宽度。模式自己添加的按钮（Creator Plus、Bench rules、Export、Focus、Finance 标签）在一行放不下时，会排到第二行，位于相同的核心按钮之后。模型按钮和 Run 在每个模式中宽度相同；工具关闭时 Depth 仍在原处（变灰）；无法开始长时间运行时 Run 也仍在原处（变灰）。关闭：每个模式像以前一样各自收缩。',
         'answer.group': '回答下方的按钮',
         'web.label': '联网',
         'depth.label': '细致度',
@@ -416,6 +493,22 @@ window.__ModuleLoader__.load({
         'lens.web.off': '此处联网已关闭：此视角会把无法核实的内容标为推断或猜测。开启联网以核实事实。',
         'lens.own.hint': '你自己的视角（设置 → 模式）',
         'own.group': '你自己的视角',
+        'start.group': '新对话的起始值',
+        'start.hint': '每个模式中的对话开始时，Web、Depth、Models 和 Tools 按钮显示什么。“通常”保持模式现在的做法（以及上面的设置）。你在对话中按下按钮会替换它的起始值，只影响那个对话；这里的设置不会扩大模式可以使用的范围：工具、沙箱和限制仍按它的卡片设置。',
+        'start.web': 'Web',
+        'start.depth': 'Depth',
+        'start.helpers': 'Models',
+        'start.tools': 'Tools',
+        'start.usual': '通常',
+        'start.web.off': '关',
+        'start.web.on': '开',
+        'start.web.verified': '已验证',
+        'start.web.open': '开放网络',
+        'start.web.everything': '全部',
+        'start.helpers.same': '一个模型',
+        'start.helpers.roles': '不同的模型',
+        'start.tools.off': '关',
+        'start.isolated': '保持自己的网络规则：这里只有“关”有效。',
         'long.group': '长时运行的工具',
         'skillsoff.group': '各标签中关闭的技能',
         'skillsoff.hint': '在这些标签中，模型看不到这些技能，也无法加载它们；输入 /名称 仍然可用。Tuner Plus 会根据各标签从未使用的技能提出建议。',
@@ -446,52 +539,107 @@ window.__ModuleLoader__.load({
         'depth.quick.hint.research': '简短的工作；一次研究运行约 10 分钟，最多 4 个助手。',
         'depth.standard.hint.research': '按方法进行；一次研究运行约 25 分钟，最多 6 个助手。',
         'depth.thorough.hint.research': '先做简短计划，完成前检查；一次研究运行约 45 分钟，最多 8 个助手。较慢。',
-        'web.title': '联网访问',
-        'web.open': '联网访问：{0}。点击更改。',
-        'web.off': '关闭',
-        'web.quick': '快速',
-        'web.standard': '标准',
-        'web.thorough': '深入',
-        'web.deep': '深度',
-        'web.off.hint': '不搜索、不读网页，其他联网的工具和程序（例如财经的数据工具或外部图像服务）也会关闭。连接器仍然开启，仍可访问互联网。模型根据已有知识和你的文件回答。',
-        'web.quick.hint': '一次搜索，根据结果回答。最快。',
-        'web.standard.hint': '几次搜索；打开关键页面。',
-        'web.thorough.hint': '多次搜索；阅读至少 5 个不同网站的页面并逐一注明出处。',
-        'web.deep.hint': '10 次以上搜索，至少阅读 10 个页面，在不同来源间交叉核实事实。较慢。',
-        'web.note': '仅对本对话生效：模型是否可以联网。搜索多少由细致度决定。多助手的深入研究请使用"研究"标签页。',
-        'web.on': '开启',
-        'web.on.hint': '与以前相同：模型可以搜索网页、阅读页面，并使用其他联网的工具和程序，除本标签页自身的限制外没有其他限制。搜索多少由细致度决定。',
-        'web.verified': '已核实',
-        'web.verified.hint': '只打开已核实列表中的页面：官方机构、法院和登记处、研究出版方、通讯社和公共广播、档案馆。在 设置 → 模式 中编辑列表。',
-        'web.openweb': '开放网络',
-        'web.openweb.hint': '已核实来源和普通网站。不包括论坛、公开群组和频道或 Reddit 存档。',
-        'web.everything': '全部',
-        'web.everything.hint': '所有类型的来源，包括论坛和频道。与"开启"相同，但作为一个级别。',
-        'web.custom': '自定义',
-        'web.custom.hint': '你自己的组合：{0}。',
-        'web.levels': '级别限制工具可以打开哪些页面；搜索照常列出结果，其他类型的结果作为线索列出。自定义组合在 设置 → 模式 中创建。',
-        'wl.group': '联网级别',
-        'wl.hint': '联网按钮保留"关闭"和"开启"（"开启"与以前相同）。对话也可以选择一个级别："已核实"只打开下面列表中的网站；"开放网络"加上普通网站；"全部"再加上论坛、群组和频道以及 Reddit 存档；或者你自己的组合。级别限制工具可以打开哪些页面；搜索照常列出结果。侦察和研究保留各自的联网方式。',
-        'wl.list': '已核实列表：每行一个网站（以点开头的行，例如 .gov，表示所有以此结尾的网站）',
-        'wl.bad': '不是网站：{0}。这些行将被忽略。',
-        'wl.saveList': '保存列表',
-        'wl.listSaved': '已保存核实列表。',
-        'wl.mixes': '你自己的组合：勾选组合可以打开的来源类型。',
-        'wl.name': '名称',
-        'wl.remove': '删除',
-        'wl.add': '添加组合',
-        'wl.saveMixes': '保存组合',
-        'wl.mixesSaved': '组合已保存。在对话的联网按钮上选择。',
-        'wl.noName': '请为每个组合命名。',
-        'wl.sameName': '有两个组合同名。',
-        'lane.verified': '已核实来源',
-        'lane.sites': '普通网站',
-        'lane.forums': '论坛',
-        'lane.channels': '群组和频道',
-        'lane.archives': 'Reddit 存档',
-        'web.always': '始终开启',
-        'web.always.open': '联网访问：{0}。此标签页中固定。',
-        'web.always.hint': '此标签页中始终开启：搜索就是它的工作。只有工具开关能关闭联网。搜索多少由细致度决定。',
+        'ws.title': '联网来源',
+        'ws.open': '联网：{0}。点击更改。',
+        'ws.off': '关闭',
+        'ws.all': '全部',
+        'ws.off.hint': '本对话不联网：不搜索、不打开网页，也不运行其他联网的工具或程序。连接器保持开启。',
+        'ws.all.hint': '所有类型的来源，与以前相同。',
+        'ws.off.research': '此标签页需要联网：搜索就是它的工作。关闭"工具"即可停止。',
+        'ws.kinds': '来源（可任意组合）',
+        'ws.nets': '侦察的网络',
+        'ws.k.verified': '已核实来源',
+        'ws.k.academic': '学术论文',
+        'ws.k.news': '新闻',
+        'ws.k.sites': '普通网站',
+        'ws.k.forums': '论坛',
+        'ws.k.social': '社交媒体和频道',
+        'ws.k.archives': '存档',
+        'ws.k.other': '其他',
+        'ws.k.tor': 'Tor（.onion）',
+        'ws.k.usenet': 'Usenet',
+        'ws.k.i2p': 'I2P',
+        'ws.h.verified': '官方机构、法院、登记处、统计、通讯社、公共广播。',
+        'ws.h.academic': '期刊、预印本、PubMed、大学。',
+        'ws.h.news': '新闻机构和通讯社，带日期。',
+        'ws.h.sites': '其他一切：公司、博客、商店、文档。',
+        'ws.h.forums': 'Reddit、Stack Exchange、Hacker News 等论坛。',
+        'ws.h.social': 'X、YouTube、Telegram、Mastodon、Facebook 等。',
+        'ws.h.archives': '已删除的 Reddit 帖子（pullpush、arctic-shift）。',
+        'ws.h.other': '你自己的来源：需要登录、密钥或私密地址的网站。',
+        'ws.h.tor': '通过 Tor 搜索和阅读 .onion 网站。',
+        'ws.h.usenet': '文本新闻组，使用你的新闻服务器账户。',
+        'ws.h.i2p': '尚未设置。',
+        'ws.other.none': '尚未设置：设置 → 联网来源。',
+        'ws.other.none.recon': '尚无允许在侦察中使用的来源：设置 → 联网来源。',
+        'ws.saved': '已保存的组合',
+        'ws.saveAs': '另存为…',
+        'ws.name': '名称',
+        'ws.save': '保存',
+        'ws.saved.done': '已保存。它出现在每个标签页的列表中。',
+        'ws.start': '用于新的{0}对话',
+        'ws.started': '新的{0}对话将以这些来源开始。',
+        'ws.edit': '编辑来源…',
+        'ws.note': '仅对本对话生效。未勾选类型的结果会被略去，其页面不会被打开。连接器保持开启。搜索多少由细致度决定。',
+        'ws.note.recon': '仅对本对话生效。未勾选来源的侦察工具会拒绝。侦察保留其所有规则。',
+        'wsp.moved': '联网级别现在是联网选择器中的来源勾选。其列表、你保存的组合和你自己的其他来源在 设置 → 联网来源。',
+        'wsp.open': '打开联网来源',
+        'wsp.loading': '加载中…',
+        'wsp.head': '联网按钮上各个勾选在每个标签页中的含义。对话在联网按钮上选择勾选；在你勾选之前，这里不会改变任何对话。',
+        'wsp.lists': '列表',
+        'wsp.lists.hint': '每行一个网站或地址结尾（".gov" 涵盖所有以此结尾的网站）。一个网站可以出现在多个列表中。论坛、社交媒体和 Reddit 存档按名称识别；不在任何列表中的是普通网站。',
+        'wsp.saveList': '保存列表',
+        'wsp.listSaved': '列表已保存。',
+        'wsp.saved.hint': '你从联网按钮保存的组合，在那里一键使用。可在此重命名、修改或删除。侦察的网络只在侦察中有效。',
+        'wsp.add': '添加组合',
+        'wsp.saveSelections': '保存组合',
+        'wsp.saved.bad': '每个组合需要自己的名称和至少一个勾选。',
+        'wsp.saved.saved': '组合已保存。',
+        'wsp.starts': '各标签页的初始勾选',
+        'wsp.starts.hint': '在联网按钮上用"用于新的…对话"设置。没有设置的标签页以"全部"开始。',
+        'wsp.starts.none': '每个标签页都以"全部"开始。',
+        'wsp.starts.clear': '恢复为全部',
+        'wsp.starts.cleared': '该标签页重新以"全部"开始。',
+        'wsp.other': '其他来源',
+        'wsp.other.hint': '别人可能没有的你自己的来源：需要登录、密钥或私密地址的网站。勾选"其他"时，每个标签页都可以使用。模型只看到来源的名称：登录信息、密钥、Cookie 和私密地址保存在应用的密钥存储（与财务的密钥相同）或 macOS 钥匙串中，每个来源由你选择，并从模型读取的所有内容中删除。不支持通过自身网页表单登录的网站；请改为从浏览器复制登录 Cookie。',
+        'wsp.o.name': '名称',
+        'wsp.o.login': '登录方式',
+        'wsp.o.store': '密钥保存在',
+        'wsp.login.none': '无',
+        'wsp.login.basic': '用户名和密码',
+        'wsp.login.header': '请求头中的密钥',
+        'wsp.login.cookie': '浏览器 Cookie',
+        'wsp.login.secret-address': '地址本身是秘密',
+        'wsp.store.app': '应用的密钥存储',
+        'wsp.store.keychain': 'macOS 钥匙串',
+        'wsp.o.secretAddress': '地址作为秘密保存在下方。在搜索词的位置放 {query}，起始页则不放。',
+        'wsp.o.search': '搜索地址（含 {query}）',
+        'wsp.o.start': '起始地址',
+        'wsp.o.header': '请求头名称',
+        'wsp.o.recon': '可在侦察中使用（只通过侦察自己的 WireGuard 线路）',
+        'wsp.o.keptApp': '保存在应用的密钥存储中。只输入一次，不再显示。',
+        'wsp.o.keptKeychain': '保存在 macOS 钥匙串中。只输入一次，不再显示。',
+        'wsp.o.saveFirst': '先保存来源，然后在这里输入其登录信息。',
+        'wsp.part.user': '用户名',
+        'wsp.part.basic': '密码',
+        'wsp.part.header': '密钥',
+        'wsp.part.cookie': 'Cookie',
+        'wsp.part.secret-address': '私密地址',
+        'wsp.o.kept': '已保存',
+        'wsp.o.keep': '保存',
+        'wsp.o.isKept': '已保存。',
+        'wsp.o.notKept': '尚未保存。',
+        'wsp.o.test': '测试',
+        'wsp.o.remove': '删除',
+        'wsp.o.tested': '它有回应（状态 {0}）：{1}',
+        'wsp.o.failed': '没有成功：{0}',
+        'wsp.o.removed': '来源已删除，为它保存的内容也已清除。',
+        'wsp.o.keptNow': '已保存。',
+        'wsp.o.unnamed': '一个来源',
+        'wsp.o.add': '添加来源',
+        'wsp.o.save': '保存来源',
+        'wsp.o.saved': '来源已保存。',
+        'wsp.recon': '侦察自己的网络（Tor、Usenet；I2P 尚未设置）在 设置 → 侦察 → 隐藏网络 中设置，只有侦察使用它们。',
         'trim.group': '按需加载工具',
         'trim.hint': '在下方开启的模式在每次对话开始时只加载核心工具（文件、终端、步骤列表、提问、技能、网页），并提供一个按需添加其他工具的工具：PDF、数据、财经、图表、日程、助手等。消息中提到时也会自动添加。请求小得多，本地模型响应更快。添加的工具在对话剩余部分保留。',
         'trim.mode': '{mode}：按需加载工具',
@@ -561,6 +709,7 @@ window.__ModuleLoader__.load({
 .dsh-me-toggle b { display: block; font-size: 14px; line-height: 22px; font-weight: 400; color: var(--dsw-alias-label-primary); }
 .dsh-me-toggle span { display: block; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
 .dsh-me-lts { display: flex; flex: none; gap: 14px; align-items: center; }
+.dsh-me-lts[data-wrap] { flex: 1 1 auto; flex-wrap: wrap; justify-content: flex-end; gap: 8px 14px; }
 .dsh-me-lt { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--dsw-alias-label-secondary); }
 .dsh-me-sw:disabled { opacity: .4; cursor: default; }
 .dsh-me-sw { flex: none; position: relative; width: 36px; height: 20px; padding: 2px; border: 0; border-radius: 999px; cursor: pointer; background: var(--dsw-alias-border-l3, var(--dsw-alias-border-l2)); transition: background .12s ease; }
@@ -847,6 +996,25 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
 
     const TOGGLE_CSS = `
 .dsh-mt{display:inline-flex;gap:6px;align-items:center}
+/* Same chat box in every mode (uniformBox): the access button keeps one width, and the other controls of the seat (route badge, Scratch mark, add-on buttons) move to a second line when the row is full. */
+[data-dsh-pin] [data-slot="conversation.input.permission"] > *{min-width:156px;display:inline-flex;justify-content:flex-start}
+[data-dsh-below]{flex:1 1 0 !important;flex-wrap:wrap !important;row-gap:6px;align-self:flex-start;padding-top:3px}
+[data-dsh-below] ~ *{align-self:flex-start}
+[data-dsh-below]::after{content:'';order:4;flex:0 0 100%;height:0}
+[data-dsh-wrap]{flex-wrap:wrap !important;row-gap:6px}
+[data-dsh-below] [data-slot="conversation.input.left"] > :not(.dsh-mt):not(style),[data-dsh-wrap] [data-slot="conversation.input.left"] > :not(.dsh-mt):not(style){order:5}
+/* The same row in every mode (18 November): the model button (its name differs per mode; cut with "…", in full on hover) and
+   Run ("Run" or "Running") have one width in every mode, so Run, Export and the gear sit in the same place everywhere. While
+   the step is chosen (data-dsh-measure, set for a moment only) the other parts whose width changes from one conversation to
+   the next count at one fixed width each: the Web and Depth values ("· Off", "· Always on", "· Thorough"), "One model" / "2 models", "Tools on" / "off". So the step follows the
+   box's width alone, and the real parts are never wider than counted (the caps), so the row always fits. */
+html[data-dsh-uniform="true"] .dsh-mc-trigger{width:140px;max-width:140px;box-sizing:border-box}
+html[data-dsh-uniform="true"] .dsh-mc-trigger .dsh-mc-chevron{margin-left:auto}
+html[data-dsh-uniform="true"] .dsh-ms-runbtn{min-width:84px;box-sizing:border-box;justify-content:center}
+[data-dsh-measure] .dsh-mt:not([data-f1]) .lvl{display:inline-block !important;width:6.5em !important}
+[data-dsh-measure] .dsh-mt:not([data-f1]) button[data-helpers] .lbl{display:inline-block;min-width:5em}
+[data-dsh-measure] .dsh-mt:not([data-f2]) button[data-tools] .lbl{display:inline-block;min-width:4.3em}
+html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-overflow:ellipsis}
 .dsh-mt button{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:13px;white-space:nowrap}
 .dsh-mt button[aria-pressed='true']{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary);background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent)}
 .dsh-mt button:disabled{opacity:.5;cursor:default}
@@ -949,9 +1117,17 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       const root = useRef(null);
       const shown = state.status === 'ready' && Boolean(sessionId) && state.view?.sessionWeb !== undefined;
       const marks = shown ? `${state.view.searchDepth}|${state.view.sessionSearchDepth}|${state.view.sessionDepth}|${state.view.sessionLens}|${state.view.sessionWeb}|${state.view.sessionTools}` : '';
+      const uniform = state.view?.uniformBox !== false;
+      // The Cowork sidebar's place chip reads this (its order and the folder name only with the switch on).
+      useEffect(() => { document.documentElement.setAttribute('data-dsh-uniform', String(uniform)); }, [uniform]);
       useLayoutEffect(() => {
         const el = root.current;
         if (!el) return undefined;
+        // Our own second-line marks (set by the last fit) make the left group a wrapping row too: take them off
+        // first, or a refit (Tools switched, a new Depth) takes the left group for the row and the core
+        // buttons end up on a line of their own.
+        el.parentElement?.parentElement?.removeAttribute('data-dsh-below');
+        el.parentElement?.parentElement?.removeAttribute('data-dsh-wrap');
         // The row that wraps is the nearest ancestor laid out as a wrapping flex row.
         let row = el.parentElement;
         for (let i = 0; i < 6 && row && getComputedStyle(row).flexWrap !== 'wrap'; i += 1) row = row.parentElement;
@@ -984,7 +1160,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           for (let step = 1; step <= LEVELS; step += 1) el.toggleAttribute(`data-f${step}`, step <= level);
           el.dataset.fit = String(level);
         };
-        const fit = () => {
+        const fitClassic = () => {
           for (let level = 0; level <= LEVELS; level += 1) {
             set(level);
             if (!wrapped()) return;
@@ -997,6 +1173,89 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
             if (first && !crowded(first)) return;
           }
         };
+        // The same chat box in every mode (Settings → Modes, "Same chat box in every mode"): the step is
+        // chosen on the core buttons alone (what other add-ons put beside them is left out of the
+        // measuring, and the access button counts at one fixed width), so it follows the window's width
+        // and nothing else. The other controls of the seat (the route badge, the Scratch mark, the buttons
+        // add-ons bring) then go on a second line when the row is full. Only a window too narrow even for that falls back to the former shrinking.
+        const slot = el.parentElement;
+        const left = slot?.parentElement;
+        // The parts that differ per conversation (model name, Run or Running, the buttons' values) are
+        // measured at one fixed width each (CSS data-dsh-measure), so the same box width gives the same
+        // step in every mode (the owner's rule, 18 November). The attribute is there only while measuring.
+        const fitUniform = () => {
+          row.setAttribute('data-dsh-measure', '');
+          try {
+            measureUniform();
+          } finally {
+            row.removeAttribute('data-dsh-measure');
+          }
+        };
+        const measureUniform = () => {
+          if (!slot || !left || left !== row.firstElementChild) return fitClassic();
+          left.removeAttribute('data-dsh-below');
+          left.removeAttribute('data-dsh-wrap');
+          // Others' controls in the same seat (the route badge, the Scratch mark, the add-ons' buttons).
+          const others = [...slot.children].filter((child) => child !== el && !/^(STYLE|SCRIPT)$/.test(child.tagName));
+          const kept = others.map((child) => [child, child.style.display]);
+          const hideOthers = () => { for (const child of others) child.style.display = 'none'; };
+          const showOthers = () => { for (const [child, display] of kept) child.style.display = display; };
+          // The first step at which the core buttons share a line with the right-hand group; -1 if none does.
+          const firstFit = () => {
+            for (let step = 0; step <= LEVELS; step += 1) {
+              set(step);
+              if (!wrapped()) return step;
+            }
+            return -1;
+          };
+          // The app shows the model's name in full or as an icon by its own measuring; the first try
+          // measures with the name in full and the access button at one width, so that what is chosen
+          // here does not depend on either and holds in every mode.
+          const compact = row.hasAttribute('data-model-compact');
+          row.setAttribute('data-dsh-pin', '');
+          row.removeAttribute('data-model-compact');
+          hideOthers();
+          let level = firstFit();
+          const roomy = level >= 0;
+          if (!roomy) {
+            // A narrower window: the model's name takes its own width again (the access button keeps its one
+            // width unless the app itself turns it into an icon, below 560 px); the same measuring (core
+            // buttons alone), and as far as the first line holds the names. The row then wraps as the app
+            // does, with the other controls of the seat under the core buttons.
+            if (compact) row.setAttribute('data-model-compact', '');
+            if (row.getBoundingClientRect().width < 560) row.removeAttribute('data-dsh-pin');
+            level = firstFit();
+            if (level < 0) {
+              for (let step = 0; step <= LEVELS; step += 1) {
+                set(step);
+                const first = row.firstElementChild;
+                if (first && !crowded(first)) { level = step; break; }
+              }
+            }
+            if (level < 0) level = LEVELS;
+            set(level);
+            showOthers();
+            left.setAttribute('data-dsh-wrap', '');
+            return;
+          }
+          set(level);
+          showOthers();
+          if (!wrapped()) return;
+          // Full: the other controls of the seat move to a second line.
+          left.setAttribute('data-dsh-below', '');
+          // The core buttons must stay on the first line; if not, one more step down, as far as it goes.
+          const add = left.firstElementChild;
+          const coreUp = () => !add || el.getBoundingClientRect().top <= add.getBoundingClientRect().top + 8;
+          for (let step = level; step <= LEVELS; step += 1) {
+            set(step);
+            if (!wrapped() && coreUp()) return;
+          }
+          left.removeAttribute('data-dsh-below');
+          row.removeAttribute('data-dsh-pin');
+          if (compact) row.setAttribute('data-model-compact', '');
+          fitClassic();
+        };
+        const fit = () => (uniform ? fitUniform() : (row.removeAttribute('data-dsh-pin'), left?.removeAttribute('data-dsh-below'), left?.removeAttribute('data-dsh-wrap'), fitClassic()));
         fit();
         if (typeof ResizeObserver !== 'function') return undefined;
         let frame = 0;
@@ -1012,7 +1271,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           cancelAnimationFrame(frame);
           observer.disconnect();
         };
-      }, [shown, marks, sessionId]);
+      }, [shown, marks, sessionId, uniform]);
 
       // Older host halves have no switches; show nothing then.
       if (state.status !== 'ready' || !sessionId || !state.view || state.view.sessionWeb === undefined) return null;
@@ -1074,7 +1333,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           void refresh();
         }
       };
-      // Research and Scout always have the web and search in their own way: a fixed "Always on" label there.
+      // Research and Scout always have the web: their Web selector cannot pick Off.
       // A conversation once isolated (Recon) and now in a tab that is not is locked by the host (heldMode): no tools.
       const lockedHere = readObject(state.view.sessionIsolated)[sessionId] === true && modeDef.isolated !== true;
       const researchTab = Array.isArray(tools) && tools.includes('deep_research');
@@ -1102,14 +1361,19 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       return h(React.Fragment, null,
         h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
         h('span', { className: 'dsh-mt', ref: root },
-          // Research and Scout always have the web (searching is their work): a fixed label, Off only with tools off.
-          // A Recon conversation moved into another tab is locked by the host with no tools at all: Off.
-          researchTab ? h(WebAlways, { t, off: off || lockedHere }) : h(WebButton, { t, level: webLevelOf(off, web, modeDef.isolated === true ? undefined : readObject(state.view.sessionWebLevel)[sessionId], mixesOf(state.view.webMixes)), mixes: modeDef.isolated === true ? undefined : mixesOf(state.view.webMixes), disabled: off, busy: state.busy, onPick: (picked) => void pickSetting('web', picked) }),
+          // The Web selector: the same in every tab (Research and Scout cannot pick Off: searching is their work).
+          // A Recon conversation moved into another tab is locked by the host with no tools at all: Off, greyed.
+          h(WebSources, {
+            t, appCtx, view: state.view, sessionId, modeId: current, modeLabel: modeDef.label ?? current,
+            recon: modeDef.isolated === true, research: researchTab, webOn: web || researchTab,
+            disabled: off || lockedHere, busy: state.busy, onWrite: (picked) => void pickSetting('sources', picked),
+          }),
           // Depth: how much work this conversation gets (how much it searches, helpers, planning, checks,
           // reviews; in Research and Scout also the size of a research run). The same in every tab (the
-          // owner's rule); only its list texts fit the tab. Not while all tools are off (nothing is sent then).
-          off ? null : h(DepthButton, {
-            t, depth: sessionDepthNow, kind: depthKind(modeDef), busy: state.busy,
+          // owner's rule); only its list texts fit the tab. While all tools are off nothing is sent: with the same
+          // chat box in every mode it stays in its place, greyed out (like Web); without, it goes, as before.
+          off && !uniform ? null : h(DepthButton, {
+            t, depth: sessionDepthNow, kind: depthKind(modeDef), busy: state.busy, disabled: off,
             lens: lensNow(state.view, sessionId), own: ownLensesOf(state.view.ownLenses), webOff: !researchTab && !web,
             onPick: (picked) => void pickSetting('depth', picked),
             onPickLens: (picked) => void pickSetting('lens', picked),
@@ -1203,44 +1467,26 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       return Array.isArray(mode?.tools) && mode.tools.includes('deep_research') ? 'research' : undefined;
     }
     /**
-     * What the Web button shows: Off while all tools are off or the web is; a level the conversation
-     * picked (plan step S1); else On, as before.
-     * @returns {string} 'off', 'on', 'verified', 'open', 'everything' or 'custom:<name>'.
-     */
-    function webLevelOf(off, web, picked, mixes) {
-      if (off || !web) return 'off';
-      if (picked === 'verified' || picked === 'open' || picked === 'everything') return picked;
-      if (typeof picked === 'string' && picked.startsWith('custom:') && mixes && Array.isArray(mixes[picked.slice(7)])) return picked;
-      return 'on';
-    }
-    const LANE_LABELS = { verified: 'verified sources', sites: 'ordinary sites', forums: 'forums and boards', channels: 'groups and channels', archives: 'Reddit archives' };
-    /** The owner's saved Custom mixes, from the setting's JSON text. */
-    function mixesOf(text) {
-      const value = readObject(text);
-      const out = {};
-      // The same cleanup as the host's (lib/weblevel.js mixName), so a picked mix is the one the host finds.
-      for (const [name, lanes] of Object.entries(value).slice(0, 20)) {
-        const clean = String(name).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 40);
-        if (clean && Array.isArray(lanes)) out[clean] = [...new Set(lanes.filter((lane) => LANE_LABELS[lane]))];
-      }
-      return out;
-    }
-    /**
-     * The settings a pick writes: Web On or Off for this conversation only (how much it searches is
-     * Depth); a Depth for this conversation, which is also where new conversations start.
+     * The settings a pick writes: the Web selector's ticks for this conversation (or a saved selection, or a
+     * tab's starting ticks); the Lens; a Depth for this conversation, which is also where new conversations start.
      */
     function settingOps(kind, picked, current, sessionId) {
-      if (kind === 'web') {
-        // Off and On as before; a level turns the web on and is kept for this conversation (plan step S1).
-        const webs = { ...readObject(current.sessionWeb), [sessionId]: picked !== 'off' };
-        const ops = [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify(webs) }];
-        if (picked !== 'off') {
-          const levels = { ...readObject(current.sessionWebLevel) };
-          if (picked === 'on') delete levels[sessionId];
-          else levels[sessionId] = picked;
-          ops.push({ op: 'set', path: ['sessionWebLevel'], value: JSON.stringify(levels) });
+      if (kind === 'sources') {
+        // Save the ticks as a named selection (shared by every tab).
+        if (picked.save) {
+          const saved = { ...readObject(current.webMixes), [picked.save]: picked.ticks };
+          return [{ op: 'set', path: ['webMixes'], value: JSON.stringify(saved) }];
         }
-        return ops;
+        // New conversations in this tab start with these ticks (All: the tab's usual start again).
+        if (picked.start) {
+          const starts = { ...readObject(current.modeStart) };
+          const entry = { ...(starts[picked.start] ?? {}) };
+          if (!picked.ticks || wsAll(picked.ticks, picked.recon === true)) delete entry.sources;
+          else entry.sources = picked.ticks;
+          starts[picked.start] = entry;
+          return [{ op: 'set', path: ['modeStart'], value: JSON.stringify(starts) }];
+        }
+        return wsOps(picked, current, sessionId);
       }
       if (kind === 'lens') {
         // For this conversation only; Default stores nothing.
@@ -1252,22 +1498,112 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       const depths = { ...readObject(current.sessionDepth), [sessionId]: picked };
       return [{ op: 'set', path: ['sessionDepth'], value: JSON.stringify(depths) }, { op: 'set', path: ['searchDepth'], value: picked }];
     }
-    // Since 0.59.0 the Web button's Off and On; how much the model searches is Depth. The levels after
-    // them are the plan's (step S1), added beside them: On stays as before.
-    const LEVELS = ['off', 'on'];
-    const WEB_LEVELS = [['verified', 'verified'], ['open', 'openweb'], ['everything', 'everything']];
+    /** The Web selector's ticks (Modes' lib/sources.js has the same lists; a test keeps them the same). */
+    const WS_KINDS = ['verified', 'academic', 'news', 'sites', 'forums', 'social', 'archives', 'other'];
+    const WS_NETS = ['tor', 'usenet', 'i2p'];
+    const WS_NETS_READY = ['tor', 'usenet'];
+    const WS_SHORT = { verified: 'Verified', academic: 'Academic', news: 'News', sites: 'Sites', forums: 'Forums', social: 'Social', archives: 'Archives', other: 'Other', tor: 'Tor', usenet: 'Usenet', i2p: 'I2P' };
+    /** The older levels and Custom mix lanes, read as ticks (as the host reads them). */
+    const WS_LEVEL_TICKS = { verified: ['verified'], open: ['verified', 'academic', 'news', 'sites'], everything: ['verified', 'academic', 'news', 'sites', 'forums', 'social', 'archives'] };
+    const WS_LANE_TICKS = { verified: ['verified'], sites: ['sites'], forums: ['forums'], channels: ['social'], archives: ['archives'] };
+    /** @returns {string[]} a stored list as ticks, in the popup's order (an older mix's lanes mapped). */
+    function wsTicks(list, recon = false) {
+      if (!Array.isArray(list)) return [];
+      const out = new Set();
+      for (const item of list) {
+        const name = String(item);
+        if (WS_KINDS.includes(name) || (recon && WS_NETS.includes(name))) out.add(name);
+        else for (const kind of WS_LANE_TICKS[name] ?? []) out.add(kind);
+      }
+      return [...WS_KINDS, ...(recon ? WS_NETS : [])].filter((kind) => out.has(kind));
+    }
+    /** @returns {boolean} whether ticks are All: every kind, and in Recon every network that can be used. */
+    function wsAll(ticks, recon = false) {
+      return WS_KINDS.every((kind) => ticks.includes(kind)) && (!recon || WS_NETS_READY.every((net) => ticks.includes(net)));
+    }
+    /** @returns {Record<string, string[]>} the saved selections (an older Custom mix's lanes read as ticks). */
+    function wsSelections(text) {
+      const out = {};
+      for (const [name, list] of Object.entries(readObject(text)).slice(0, 20)) {
+        const clean = String(name).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 40);
+        const ticks = wsTicks(list, true);
+        if (clean && ticks.length > 0) out[clean] = ticks;
+      }
+      return out;
+    }
+    /**
+     * A conversation's ticks as the selector shows them: its own, else an older level it picked (not in Recon
+     * or a research tab), else All (every tick).
+     * @returns {string[]}
+     */
+    function wsNow(view, sessionId, { recon = false, research = false } = {}) {
+      const every = [...WS_KINDS, ...(recon ? WS_NETS_READY : [])];
+      const own = readObject(view.sessionWebSources)[sessionId];
+      if (Array.isArray(own)) return wsTicks(own, recon);
+      if (recon || research) return every;
+      const picked = readObject(view.sessionWebLevel)[sessionId];
+      if (typeof picked === 'string' && WS_LEVEL_TICKS[picked]) return [...WS_LEVEL_TICKS[picked]];
+      if (typeof picked === 'string' && picked.startsWith('custom:')) {
+        const mix = wsSelections(view.webMixes)[picked.slice(7)];
+        if (mix) return wsTicks(mix, false);
+      }
+      return every;
+    }
+    /** @returns {string} the chip's value: Off, All, one or two short names, "N sources", or a saved selection's name. */
+    function wsLabel(webOn, ticks, recon = false, selections = {}) {
+      if (!webOn) return 'Off';
+      if (wsAll(ticks, recon)) return 'All';
+      const same = Object.entries(selections).find(([, list]) => list.length === ticks.length && list.every((kind) => ticks.includes(kind)));
+      if (same) return same[0];
+      if (ticks.length <= 2) return ticks.map((kind) => WS_SHORT[kind]).join(' + ');
+      return `${ticks.length} sources`;
+    }
+    /**
+     * What a pick in the Web selector writes, for this conversation only.
+     * @param {{off?: boolean, ticks?: string[], recon?: boolean}} picked - Off; or ticks (every tick, or none: see below).
+     * @returns {Array<{op: 'set', path: string[], value: string}>}
+     */
+    function wsOps(picked, current, sessionId) {
+      const webs = { ...readObject(current.sessionWeb) };
+      // Off, or nothing left ticked: the web goes off; the ticks are kept for later.
+      if (picked.off || (Array.isArray(picked.ticks) && picked.ticks.length === 0)) {
+        webs[sessionId] = false;
+        return [{ op: 'set', path: ['sessionWeb'], value: JSON.stringify(webs) }];
+      }
+      webs[sessionId] = true;
+      const sources = { ...readObject(current.sessionWebSources) };
+      const ticks = wsTicks(picked.ticks, picked.recon === true);
+      if (!picked.ticks || wsAll(ticks, picked.recon === true)) delete sources[sessionId];
+      else sources[sessionId] = ticks;
+      // An older level of this conversation is replaced by the pick (so All does not bring it back).
+      const levels = { ...readObject(current.sessionWebLevel) };
+      delete levels[sessionId];
+      return [
+        { op: 'set', path: ['sessionWeb'], value: JSON.stringify(webs) },
+        { op: 'set', path: ['sessionWebSources'], value: JSON.stringify(sources) },
+        { op: 'set', path: ['sessionWebLevel'], value: JSON.stringify(levels) },
+      ];
+    }
 
-    /** The Web button in the chat box, and its list: Off, On, the levels and the owner's own mixes. */
-    function WebButton({ t, level, mixes, disabled, busy, onPick }) {
+    /**
+     * The Web selector (18 November 2026): the same chip and popup in every tab, Research, Scout and Recon
+     * included. Off, All, and combinable source ticks; in Recon also its networks (Tor, Usenet, I2P not set up
+     * yet). Saved selections, "save as", "use for new conversations here", and a door to Settings → Web sources.
+     * The chip keeps the shared row's markup (span.pair[data-kind="search"], .lbl and .lbl.lvl), whose width
+     * the uniform row caps; the full text is in the title.
+     */
+    function WebSources({ t, appCtx, view, sessionId, modeId, modeLabel, recon, research, webOn, disabled, busy, onWrite }) {
       const [open, setOpen] = useState(false);
       const [place, setPlace] = useState({ left: 12, bottom: 80 });
+      const [naming, setNaming] = useState(null);
+      const [said, setSaid] = useState('');
       const button = useRef(null);
       const panel = useRef(null);
-      // Placed before the list is drawn, so it never shows for a moment in the corner while the page is busy.
       useLayoutEffect(() => {
         if (!open) return undefined;
         const rect = button.current?.getBoundingClientRect();
-        if (rect) setPlace({ left: Math.max(12, Math.min(rect.left - 20, window.innerWidth - 332)), bottom: window.innerHeight - rect.top + 8 });
+        // Above the chip, never past the window's top: the list scrolls inside the room there is.
+        if (rect) setPlace({ left: Math.max(12, Math.min(rect.left - 20, window.innerWidth - 352)), bottom: window.innerHeight - rect.top + 8, room: Math.max(220, rect.top - 20) });
         const away = (event) => {
           if (panel.current?.contains(event.target) || button.current?.contains(event.target)) return;
           setOpen(false);
@@ -1280,47 +1616,319 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           document.removeEventListener('keydown', key, true);
         };
       }, [open]);
-      const levelKey = WEB_LEVELS.find(([id]) => id === level)?.[1];
-      const name = level.startsWith('custom:') ? level.slice(7) : t(`web.${levelKey ?? level}`);
-      const options = [
-        ...LEVELS.map((id) => ({ id, label: t(`web.${id}`), hint: t(`web.${id}.hint`) })),
-        ...(mixes ? WEB_LEVELS.map(([id, key]) => ({ id, label: t(`web.${key}`), hint: t(`web.${key}.hint`) })) : []),
-        ...(mixes ? Object.entries(mixes).map(([mix, lanes]) => ({ id: `custom:${mix}`, label: mix, hint: t('web.custom.hint').replace('{0}', lanes.map((lane) => t(`lane.${lane}`)).join(', ') || '—') })) : []),
-      ];
-      return h('span', { className: 'pair', 'data-kind': 'search' },
+      const ticks = wsNow(view, sessionId, { recon, research });
+      const selections = wsSelections(view.webMixes);
+      const usable = Object.fromEntries(Object.entries(selections).filter(([, list]) => recon || list.some((kind) => WS_KINDS.includes(kind))));
+      const value = wsLabel(webOn && !disabled, ticks, recon, usable);
+      let ownSources = [];
+      try {
+        ownSources = JSON.parse(typeof view.otherSources === 'string' ? view.otherSources : '[]');
+      } catch {
+        ownSources = [];
+      }
+      const otherCount = (Array.isArray(ownSources) ? ownSources : []).filter((one) => one && (!recon || one.recon === true)).length;
+      const full = webOn && !disabled ? (wsAll(ticks, recon) ? t('ws.all.hint') : ticks.map((kind) => t(`ws.k.${kind}`)).join(', ')) : t('ws.off.hint');
+      const tick = (kind, on) => onWrite({ ticks: on ? [...ticks, kind] : ticks.filter((one) => one !== kind), recon });
+      const row = (kind, extra = {}) => h('label', { key: kind, className: 'ws-tick', 'data-ws-kind': kind, 'aria-disabled': String(Boolean(extra.disabled)) },
+        h('input', { type: 'checkbox', checked: webOn && ticks.includes(kind) && !extra.disabled, disabled: busy || extra.disabled, onChange: (event) => tick(kind, event.target.checked) }),
+        h('span', null, h('b', null, t(`ws.k.${kind}`)), h('small', null, extra.hint ?? t(`ws.h.${kind}`))));
+      const openSettings = () => {
+        setOpen(false);
+        openWebSourcesPage(appCtx);
+      };
+      return h('span', { className: 'pair', 'data-kind': 'search', 'data-ws': '' },
         h('button', {
-          ref: button, type: 'button', 'aria-pressed': level !== 'off', 'aria-expanded': open, 'aria-haspopup': 'dialog', disabled: disabled || busy,
-          title: disabled ? t('tools.blocked') : t('web.open').replace('{0}', name), 'aria-label': t('web.open').replace('{0}', name),
-          onClick: () => setOpen(!open),
-        }, icon('search'), h('span', { className: 'lbl' }, t('web.label')), h('span', { className: 'lbl lvl' }, `· ${name}`)),
+          ref: button, type: 'button', 'aria-pressed': webOn && !disabled, 'aria-expanded': open, 'aria-haspopup': 'dialog', disabled: disabled || busy,
+          title: disabled ? t('tools.blocked') : `${t('ws.open').replace('{0}', value)} ${full}`, 'aria-label': t('ws.open').replace('{0}', value),
+          onClick: () => { setOpen(!open); setSaid(''); setNaming(null); },
+        }, icon('search'), h('span', { className: 'lbl' }, t('web.label')), h('span', { className: 'lbl lvl' }, `· ${value}`)),
         open
           ? ReactDOM.createPortal(
-              h('div', { ref: panel, className: 'dsh-mt-pop', role: 'dialog', 'aria-label': t('web.title'), style: { left: place.left, bottom: place.bottom } },
-                h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
-                h('div', { className: 'title' }, t('web.title')),
-                h('div', { className: 'opts', role: 'listbox', 'aria-label': t('web.title'), style: { maxHeight: 'calc(100vh - 160px)', overflowY: 'auto' } },
-                  options.map((option) => h('button', { key: option.id, type: 'button', role: 'option', 'aria-selected': option.id === level, 'aria-current': String(option.id === level), disabled: busy, onClick: () => { setOpen(false); onPick(option.id); } },
-                    h('b', null, option.label), h('small', null, option.hint)))),
-                h('p', { className: 'hint' }, t('web.note')),
-                mixes ? h('p', { className: 'hint' }, t('web.levels')) : null),
+              h('div', { ref: panel, className: 'dsh-mt-pop', 'data-ws-pop': '', role: 'dialog', 'aria-label': t('ws.title'), style: { left: place.left, bottom: place.bottom, width: 340, maxHeight: place.room ?? 'calc(100vh - 120px)' } },
+                h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS + WS_CSS } }),
+                h('div', { className: 'title' }, t('ws.title')),
+                h('div', { className: 'seg', role: 'group', 'aria-label': t('ws.title') },
+                  h('button', { type: 'button', 'aria-pressed': !webOn, disabled: busy || research, title: research ? t('ws.off.research') : t('ws.off.hint'), onClick: () => onWrite({ off: true }) }, t('ws.off')),
+                  h('button', { type: 'button', 'aria-pressed': webOn && wsAll(ticks, recon), disabled: busy, title: t('ws.all.hint'), onClick: () => onWrite({ ticks: undefined, recon }) }, t('ws.all'))),
+                research ? h('p', { className: 'hint' }, t('ws.off.research')) : null,
+                h('div', { className: 'head' }, t('ws.kinds')),
+                h('div', { className: 'ws-list' }, WS_KINDS.map((kind) => row(kind, kind === 'other' && otherCount === 0 ? { hint: t(recon ? 'ws.other.none.recon' : 'ws.other.none') } : {}))),
+                recon ? h('div', { className: 'head' }, t('ws.nets')) : null,
+                recon ? h('div', { className: 'ws-list' }, WS_NETS.map((kind) => row(kind, kind === 'i2p' ? { disabled: true, hint: t('ws.h.i2p') } : {}))) : null,
+                Object.keys(usable).length > 0 ? h('div', { className: 'head' }, t('ws.saved')) : null,
+                Object.keys(usable).length > 0 ? h('div', { className: 'chips' }, Object.entries(usable).map(([name, list]) => h('button', {
+                  key: name, type: 'button', 'aria-selected': webOn && list.length === ticks.length && list.every((kind) => ticks.includes(kind)), disabled: busy,
+                  title: list.map((kind) => t(`ws.k.${kind}`)).join(', '), onClick: () => onWrite({ ticks: list.filter((kind) => recon || WS_KINDS.includes(kind)), recon }),
+                }, name))) : null,
+                h('div', { className: 'ws-foot' },
+                  naming === null
+                    ? h('button', { type: 'button', disabled: busy || !webOn, onClick: () => setNaming('') }, t('ws.saveAs'))
+                    : h('span', { className: 'ws-name' },
+                        h('input', { value: naming, maxLength: 40, placeholder: t('ws.name'), 'aria-label': t('ws.name'), autoFocus: true, onChange: (event) => setNaming(event.target.value), onKeyDown: (event) => { if (event.key === 'Enter' && naming.trim()) { onWrite({ save: naming.trim().slice(0, 40), ticks }); setNaming(null); setSaid(t('ws.saved.done')); } } }),
+                        h('button', { type: 'button', disabled: busy || !naming.trim(), onClick: () => { onWrite({ save: naming.trim().slice(0, 40), ticks }); setNaming(null); setSaid(t('ws.saved.done')); } }, t('ws.save'))),
+                  h('button', { type: 'button', disabled: busy || !modeId, onClick: () => { onWrite({ start: modeId, ticks: webOn ? ticks : undefined, recon }); setSaid(t('ws.started').replace('{0}', modeLabel)); } }, t('ws.start').replace('{0}', modeLabel)),
+                  h('button', { type: 'button', onClick: openSettings }, t('ws.edit'))),
+                said ? h('p', { className: 'hint', role: 'status' }, said) : null,
+                h('p', { className: 'hint' }, t(recon ? 'ws.note.recon' : 'ws.note'))),
               document.body,
             )
           : null);
     }
+    /** Opens Settings → Web sources (the window's own store; nothing happens where it cannot be reached). */
+    function openWebSourcesPage(appCtx) {
+      try {
+        const store = appCtx.slots.entries('sidebar.settings').find((item) => item.store)?.store?.create?.();
+        const actions = store?.actions;
+        if (typeof actions?.openSection === 'function') return void actions.openSection('web-sources');
+        if (typeof actions?.open === 'function') actions.open();
+        if (typeof actions?.select === 'function') actions.select('web-sources');
+      } catch {
+        /* the Settings window cannot be opened from here: the hints name the page */
+      }
+    }
+    /** The kinds of login of the owner's own sources, and where their secrets are kept (Modes' lib/other.js). */
+    const OS_LOGINS = ['none', 'basic', 'header', 'cookie', 'secret-address'];
+    const OS_PARTS = { none: [], basic: ['user', 'secret'], header: ['secret'], cookie: ['secret'], 'secret-address': ['secret'] };
+    /** @returns {Array<object>} the stored sources, as rows to edit. */
+    function osRows(text) {
+      let list = [];
+      try {
+        list = JSON.parse(typeof text === 'string' ? text || '[]' : '[]');
+      } catch {
+        list = [];
+      }
+      return (Array.isArray(list) ? list : []).filter((one) => one && typeof one === 'object').map((one) => ({
+        id: String(one.id ?? ''), name: String(one.name ?? ''), search: String(one.search ?? ''), start: String(one.start ?? ''),
+        login: OS_LOGINS.includes(one.login) ? one.login : 'none', header: String(one.header ?? ''), store: one.store === 'keychain' ? 'keychain' : 'app', recon: one.recon === true,
+      }));
+    }
+    /** @returns {string} what is wrong with a row ('' when it can be saved); the host checks again. */
+    function osProblem(row, rows) {
+      const name = row.name.trim();
+      if (!name) return 'needs a name';
+      if (rows.filter((other) => other.name.trim().toLowerCase() === name.toLowerCase()).length > 1) return 'has the same name as another source';
+      const address = (text, query) => {
+        if (!text.trim()) return '';
+        try {
+          const url = new URL(text.trim().replace('{query}', 'q'));
+          if (url.protocol !== 'https:' && url.protocol !== 'http:') return 'an address must start with https://';
+          if (url.username || url.password) return 'a login goes in the login fields, not in the address';
+        } catch {
+          return 'has an address that cannot be read';
+        }
+        return query && !text.includes('{query}') ? 'needs {query} in its search address, where the words go' : '';
+      };
+      if (row.login !== 'secret-address') {
+        if (!row.search.trim() && !row.start.trim()) return 'needs a search address or a start address';
+        const bad = address(row.search, true) || address(row.start, false);
+        if (bad) return bad;
+      }
+      if (row.login === 'header' && (!/^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,64}$/.test(row.header) || ['host', 'cookie', 'connection', 'content-length'].includes(row.header.toLowerCase()))) return 'needs the name of the header its key is sent in (for example X-Api-Key)';
+      return '';
+    }
+
+    /** One of the owner's own sources, on Settings → Web sources: what it is, its login, and where that is kept. */
+    function OtherSourceCard({ t, row, saved, kept, onChange, onRemove, onKeep, onTest, tested, busy }) {
+      const [typed, setTyped] = useState({});
+      const field = (key, label, props = {}) => h('label', { className: 'dsh-me-field wide' }, h('span', null, label),
+        h('input', { className: 'dsh-me-in', value: row[key], spellCheck: false, onChange: (event) => onChange({ ...row, [key]: event.target.value }), ...props }));
+      const parts = OS_PARTS[row.login] ?? [];
+      return h('section', { className: 'dsh-me-card', 'data-other-source': row.id },
+        h('div', { className: 'dsh-me-row' },
+          h('label', { className: 'dsh-me-field' }, h('span', null, t('wsp.o.name')), h('input', { className: 'dsh-me-in', value: row.name, maxLength: 40, onChange: (event) => onChange({ ...row, name: event.target.value }) })),
+          h('label', { className: 'dsh-me-field' }, h('span', null, t('wsp.o.login')),
+            h('select', { className: 'dsh-me-sel', value: row.login, onChange: (event) => onChange({ ...row, login: event.target.value }) }, OS_LOGINS.map((id) => h('option', { key: id, value: id }, t(`wsp.login.${id}`))))),
+          h('label', { className: 'dsh-me-field' }, h('span', null, t('wsp.o.store')),
+            h('select', { className: 'dsh-me-sel', value: row.store, disabled: row.login === 'none', onChange: (event) => onChange({ ...row, store: event.target.value }) },
+              h('option', { value: 'app' }, t('wsp.store.app')), h('option', { value: 'keychain' }, t('wsp.store.keychain'))))),
+        row.login === 'secret-address' ? h('div', { className: 'dsh-me-note' }, t('wsp.o.secretAddress')) : field('search', t('wsp.o.search'), { placeholder: 'https://<SITE>/search?q={query}' }),
+        row.login === 'secret-address' ? null : field('start', t('wsp.o.start'), { placeholder: 'https://<SITE>/' }),
+        row.login === 'header' ? field('header', t('wsp.o.header'), { placeholder: 'X-Api-Key', maxLength: 64 }) : null,
+        h('label', { className: 'dsh-me-lt' }, h('input', { type: 'checkbox', checked: row.recon, onChange: (event) => onChange({ ...row, recon: event.target.checked }) }), ` ${t('wsp.o.recon')}`),
+        parts.length > 0 ? h('div', { className: 'dsh-me-note' }, saved ? t(row.store === 'keychain' ? 'wsp.o.keptKeychain' : 'wsp.o.keptApp') : t('wsp.o.saveFirst')) : null,
+        saved ? parts.map((part) => h('div', { key: part, className: 'dsh-me-row' },
+          h('label', { className: 'dsh-me-field' }, h('span', null, t(`wsp.part.${row.login === 'basic' && part === 'user' ? 'user' : row.login}`)),
+            h('input', { className: 'dsh-me-in', type: part === 'user' ? 'text' : 'password', autoComplete: 'off', spellCheck: false, value: typed[part] ?? '', placeholder: kept?.[part] ? t('wsp.o.kept') : '', onChange: (event) => setTyped((prev) => ({ ...prev, [part]: event.target.value })) })),
+          h('button', { type: 'button', className: 'dsh-me-btn', disabled: busy || !(typed[part] ?? '').trim(), onClick: async () => { if (await onKeep(part, typed[part])) setTyped((prev) => ({ ...prev, [part]: '' })); } }, t('wsp.o.keep')),
+          h('span', { className: 'dsh-me-note' }, kept?.[part] ? t('wsp.o.isKept') : t('wsp.o.notKept')))) : null,
+        h('div', { className: 'dsh-me-row' },
+          saved ? h('button', { type: 'button', className: 'dsh-me-btn', disabled: busy, onClick: onTest }, t('wsp.o.test')) : null,
+          h('button', { type: 'button', className: 'dsh-me-btn', disabled: busy, onClick: onRemove }, t('wsp.o.remove'))),
+        tested ? h('div', { className: 'dsh-me-note', 'data-bad': String(!tested.ok) }, tested.ok ? t('wsp.o.tested').replace('{0}', String(tested.status)).replace('{1}', `${tested.title ? `${tested.title}: ` : ''}${tested.text}`.slice(0, 300)) : t('wsp.o.failed').replace('{0}', tested.why)) : null);
+    }
 
     /**
-     * Research's and Scout's Web label (step 21): the web is always on there, so it reads "Always on"
-     * (Off while the Tools switch is off), has no list, and cannot be changed; its hint says why.
+     * Settings → Web sources (18 November 2026): the lists the kinds are judged by, the saved selections, each
+     * tab's starting ticks, and the owner's own other sources with their logins (kept in the app's secret store
+     * or the macOS Keychain, never in the settings). Recon's own networks are on Settings → Recon.
      */
-    function WebAlways({ t, off }) {
-      const name = t(off ? 'web.off' : 'web.always');
-      return h('span', { className: 'pair', 'data-kind': 'search', 'data-fixed': '' },
-        h('button', {
-          type: 'button', 'aria-pressed': !off, 'aria-disabled': 'true',
-          title: off ? t('tools.blocked') : t('web.always.hint'), 'aria-label': t('web.always.open').replace('{0}', name),
-          style: { cursor: 'default' },
-        }, icon('search'), h('span', { className: 'lbl' }, t('web.label')), h('span', { className: 'lbl lvl' }, `· ${name}`)));
+    function WebSourcesPage({ appCtx }) {
+      const t = appCtx.locale.bind('modes');
+      const [view, setView] = useState(null);
+      const [failed, setFailed] = useState('');
+      const [lists, setLists] = useState({});
+      const [selections, setSelections] = useState([]);
+      const [rows, setRows] = useState([]);
+      const [kept, setKept] = useState({});
+      const [tested, setTested] = useState({});
+      const [note, setNote] = useState(null);
+      const [busy, setBusy] = useState(false);
+      const refresh = useCallback(async () => {
+        try {
+          const got = await load(appCtx);
+          setView(got.value);
+          setLists({ verifiedSources: got.value.verifiedSources ?? '', academicSources: got.value.academicSources ?? '', newsSources: got.value.newsSources ?? '' });
+          setSelections(Object.entries(wsSelections(got.value.webMixes)).map(([name, ticks]) => ({ name, ticks })));
+          setRows(osRows(got.value.otherSources));
+          const status = await fetch(new URL('dsh-modes/other', document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } }).then((response) => (response.ok ? response.json() : null)).catch(() => null);
+          setKept(status?.kept ?? {});
+        } catch (error) {
+          setFailed(String(error?.message ?? error));
+        }
+      }, [appCtx]);
+      useEffect(() => void refresh(), [refresh]);
+      const save = async (key, value, done) => {
+        setBusy(true);
+        try {
+          const ops = [{ op: 'set', path: [key], value }];
+          let fresh = await load(appCtx);
+          let result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
+          if (!result.ok && result.error.code === 'settings/conflict') {
+            fresh = await load(appCtx);
+            result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
+          }
+          if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+          setView(result.value.value);
+          setNote({ bad: false, text: done });
+          return true;
+        } catch (error) {
+          setNote({ bad: true, text: `${t('save.failed')}: ${error?.message ?? error}` });
+          return false;
+        } finally {
+          setBusy(false);
+        }
+      };
+      const post = async (body) => {
+        const response = await fetch(new URL('dsh-modes/other', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify(body) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || `error ${response.status}`);
+        setKept(data.kept ?? {});
+        return data;
+      };
+      if (failed) return h('div', { className: 'dsh-me-page' }, h('style', { dangerouslySetInnerHTML: { __html: CSS } }), h('div', { className: 'dsh-me-note', 'data-bad': 'true' }, failed));
+      if (!view) return h('div', { className: 'dsh-me-page' }, h('style', { dangerouslySetInnerHTML: { __html: CSS } }), h('div', { className: 'dsh-me-note' }, t('wsp.loading')));
+      const savedRows = osRows(view.otherSources);
+      const problems = rows.map((row) => osProblem(row, rows));
+      const rowsDirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+      const listEditor = (key, label) => h('label', { key, className: 'dsh-me-field wide' }, h('span', null, label),
+        h('textarea', { className: 'dsh-me-ta', rows: 6, spellCheck: false, value: lists[key] ?? '', onChange: (event) => setLists((prev) => ({ ...prev, [key]: event.target.value })) }),
+        h('div', { className: 'dsh-me-row' }, h('button', { type: 'button', className: 'dsh-me-btn', 'data-main': 'true', disabled: busy || (lists[key] ?? '') === (view[key] ?? ''), onClick: () => void save(key, lists[key] ?? '', t('wsp.listSaved')) }, t('wsp.saveList'))));
+      const starts = Object.entries(readObject(view.modeStart)).filter(([, entry]) => Array.isArray(entry?.sources));
+      const modeName = (id) => readObject(view.modes)[id]?.label ?? readObject(view.extraModes)[id]?.label ?? BUILTIN[id]?.label ?? id;
+      return h('div', { className: 'dsh-me-page', 'data-web-sources-page': '' },
+        h('style', { dangerouslySetInnerHTML: { __html: CSS } }),
+        h('div', { className: 'dsh-me-head' }, h('h2', null, t('ws.title')), h('p', null, t('wsp.head'))),
+        note ? h('div', { className: 'dsh-me-note', 'data-bad': String(note.bad), role: 'status' }, note.text) : null,
+        h('div', { className: 'dsh-me-group' }, t('wsp.lists')),
+        h('div', { className: 'dsh-me-note' }, t('wsp.lists.hint')),
+        listEditor('verifiedSources', t('ws.k.verified')),
+        listEditor('academicSources', t('ws.k.academic')),
+        listEditor('newsSources', t('ws.k.news')),
+        h('div', { className: 'dsh-me-group' }, t('ws.saved')),
+        h('div', { className: 'dsh-me-note' }, t('wsp.saved.hint')),
+        selections.map((row, index) => h('section', { key: index, className: 'dsh-me-card', 'data-web-mix': '' },
+          h('div', { className: 'dsh-me-row' },
+            h('label', { className: 'dsh-me-field' }, h('span', null, t('ws.name')), h('input', { className: 'dsh-me-in', value: row.name, maxLength: 40, onChange: (event) => setSelections((prev) => prev.map((item, at) => (at === index ? { ...item, name: event.target.value } : item))) })),
+            h('button', { type: 'button', className: 'dsh-me-btn', onClick: () => setSelections((prev) => prev.filter((_, at) => at !== index)) }, t('wsp.o.remove'))),
+          h('div', { className: 'dsh-me-row' }, [...WS_KINDS, ...WS_NETS.filter((kind) => kind !== 'i2p')].map((kind) => h('label', { key: kind, className: 'dsh-me-lt' },
+            h('input', { type: 'checkbox', checked: row.ticks.includes(kind), onChange: (event) => { const on = event.target.checked; setSelections((prev) => prev.map((item, at) => (at === index ? { ...item, ticks: wsTicks(on ? [...item.ticks, kind] : item.ticks.filter((one) => one !== kind), true) } : item))); } }),
+            ` ${t(`ws.k.${kind}`)}`))))),
+        h('div', { className: 'dsh-me-row' },
+          selections.length >= 20 ? null : h('button', { type: 'button', className: 'dsh-me-btn', onClick: () => setSelections((prev) => [...prev, { name: '', ticks: ['verified'] }]) }, t('wsp.add')),
+          h('button', { type: 'button', className: 'dsh-me-btn', 'data-main': 'true', disabled: busy, onClick: () => {
+            const names = selections.map((row) => row.name.trim());
+            if (names.some((name) => !name) || new Set(names.map((name) => name.toLowerCase())).size !== names.length || selections.some((row) => row.ticks.length === 0)) {
+              setNote({ bad: true, text: t('wsp.saved.bad') });
+              return;
+            }
+            void save('webMixes', JSON.stringify(Object.fromEntries(selections.map((row) => [row.name.trim().slice(0, 40), row.ticks]))), t('wsp.saved.saved'));
+          } }, t('wsp.saveSelections'))),
+        h('div', { className: 'dsh-me-group' }, t('wsp.starts')),
+        h('div', { className: 'dsh-me-note' }, t('wsp.starts.hint')),
+        starts.length === 0 ? h('div', { className: 'dsh-me-note' }, t('wsp.starts.none')) : starts.map(([id, entry]) => h('div', { key: id, className: 'dsh-me-row' },
+          h('span', { className: 'dsh-me-note' }, `${modeName(id)}: ${entry.sources.map((kind) => t(`ws.k.${kind}`)).join(', ') || t('ws.off')}`),
+          h('button', { type: 'button', className: 'dsh-me-btn', disabled: busy, onClick: () => { const next = { ...readObject(view.modeStart) }; const one = { ...next[id] }; delete one.sources; next[id] = one; void save('modeStart', JSON.stringify(next), t('wsp.starts.cleared')); } }, t('wsp.starts.clear')))),
+        h('div', { className: 'dsh-me-group' }, t('wsp.other')),
+        h('div', { className: 'dsh-me-note' }, t('wsp.other.hint')),
+        rows.map((row, index) => h(OtherSourceCard, {
+          key: row.id, t, row, busy, kept: kept[row.id], tested: tested[row.id],
+          saved: savedRows.some((one) => one.id === row.id && one.login === row.login && one.store === row.store) && !problems[index],
+          onChange: (next) => setRows((prev) => prev.map((item) => (item.id === row.id ? next : item))),
+          onRemove: async () => {
+            const next = rows.filter((item) => item.id !== row.id);
+            setRows(next);
+            if (savedRows.some((one) => one.id === row.id)) {
+              if (await save('otherSources', JSON.stringify(next.filter((item) => savedRows.some((one) => one.id === item.id)).map((item) => savedRows.find((one) => one.id === item.id))), t('wsp.o.removed'))) {
+                await post({ action: 'forget', id: row.id }).catch(() => undefined);
+              }
+            }
+          },
+          onKeep: async (part, value) => {
+            setBusy(true);
+            try {
+              await post({ action: 'secret', id: row.id, part, value });
+              setNote({ bad: false, text: t('wsp.o.keptNow') });
+              return true;
+            } catch (error) {
+              setNote({ bad: true, text: String(error?.message ?? error) });
+              return false;
+            } finally {
+              setBusy(false);
+            }
+          },
+          onTest: async () => {
+            setBusy(true);
+            try {
+              const data = await post({ action: 'test', id: row.id });
+              setTested((prev) => ({ ...prev, [row.id]: data.tested }));
+            } catch (error) {
+              setTested((prev) => ({ ...prev, [row.id]: { ok: false, why: String(error?.message ?? error) } }));
+            } finally {
+              setBusy(false);
+            }
+          },
+        })),
+        problems.some(Boolean) ? h('div', { className: 'dsh-me-note', 'data-bad': 'true' }, problems.map((problem, index) => (problem ? `${rows[index].name.trim() || t('wsp.o.unnamed')} ${problem}.` : '')).filter(Boolean).join(' ')) : null,
+        h('div', { className: 'dsh-me-row' },
+          rows.length >= 30 ? null : h('button', { type: 'button', className: 'dsh-me-btn', onClick: () => setRows((prev) => [...prev, { id: Math.random().toString(36).slice(2, 10).replace(/[^a-z0-9]/g, 'x').padEnd(8, '0'), name: '', search: '', start: '', login: 'none', header: '', store: 'app', recon: false }]) }, t('wsp.o.add')),
+          h('button', { type: 'button', className: 'dsh-me-btn', 'data-main': 'true', disabled: busy || !rowsDirty || problems.some(Boolean), onClick: async () => {
+            // A source whose login or store changed loses what was kept for it, so nothing stays behind in the old place.
+            const changed = savedRows.filter((one) => rows.some((row) => row.id === one.id && (row.login !== one.login || row.store !== one.store)));
+            const clean = rows.map((row) => ({ id: row.id, name: row.name.trim(), search: row.login === 'secret-address' ? '' : row.search.trim(), start: row.login === 'secret-address' ? '' : row.start.trim(), login: row.login, header: row.login === 'header' ? row.header.trim() : '', store: row.login === 'none' ? 'app' : row.store, recon: row.recon }));
+            if (await save('otherSources', JSON.stringify(clean), t('wsp.o.saved'))) {
+              for (const one of changed) await post({ action: 'forget', id: one.id }).catch(() => undefined);
+              void refresh();
+            }
+          } }, t('wsp.o.save'))),
+        h('div', { className: 'dsh-me-note' }, t('wsp.recon')));
     }
+
+    /** The selector's own look, beside the shared popup's. */
+    const WS_CSS = `
+.dsh-mt-pop[data-ws-pop]{overflow:auto}
+.dsh-mt-pop .ws-list{display:flex;flex-direction:column;gap:1px;margin:2px -6px 0}
+.dsh-mt-pop .ws-tick{display:flex;align-items:flex-start;gap:8px;padding:5px 8px;border-radius:10px;cursor:pointer}
+.dsh-mt-pop .ws-tick:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dsh-mt-pop .ws-tick[aria-disabled='true']{opacity:.55;cursor:default}
+.dsh-mt-pop .ws-tick input{margin:3px 0 0;accent-color:var(--dsw-alias-brand-primary)}
+.dsh-mt-pop .ws-tick b{display:block;font-size:13px;line-height:18px;font-weight:600}
+.dsh-mt-pop .ws-tick small{display:block;font-size:12px;line-height:16px;color:var(--dsw-alias-label-secondary)}
+.dsh-mt-pop .ws-foot{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.dsh-mt-pop .ws-foot button{height:26px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:transparent;font:inherit;font-size:12px;cursor:pointer;color:var(--dsw-alias-label-primary)}
+.dsh-mt-pop .ws-foot button:disabled{opacity:.5;cursor:default}
+.dsh-mt-pop .ws-name{display:flex;gap:6px}
+.dsh-mt-pop .ws-name input{width:130px;height:26px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:transparent;font:inherit;font-size:12px;color:inherit}
+`;
 
     /**
      * The Depth button in the chat box, and its list: Quick, Standard, Thorough. How much care the
@@ -1376,7 +1984,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       return { tipFor, tip: node, clear };
     }
 
-    function DepthButton({ t, depth, kind, lens = 'default', own = [], webOff = false, busy, onPick, onPickLens, onLongRun }) {
+    function DepthButton({ t, depth, kind, lens = 'default', own = [], webOff = false, busy, disabled = false, onPick, onPickLens, onLongRun }) {
       const [open, setOpen] = useState(false);
       const [place, setPlace] = useState({ left: 12, bottom: 80, maxHeight: 520 });
       const button = useRef(null);
@@ -1412,8 +2020,8 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       // Short words in the list; the full explanations are the slow tooltips (step: "less text in the Depth list").
       return h('span', { className: 'pair', 'data-kind': 'depth' },
         h('button', {
-          ref: button, type: 'button', 'aria-expanded': open, 'aria-haspopup': 'dialog', disabled: busy, 'data-depth': depth, 'data-lens': lens,
-          title: open_, 'aria-label': open_,
+          ref: button, type: 'button', 'aria-expanded': open, 'aria-haspopup': 'dialog', disabled: busy || disabled, 'data-depth': depth, 'data-lens': lens,
+          title: disabled ? t('tools.blocked') : open_, 'aria-label': open_,
           onClick: () => setOpen(!open),
         }, icon('depth'), h('span', { className: 'lbl' }, t('depth.label')), h('span', { className: 'lbl lvl' }, lens === 'default' ? `· ${name}` : `· ${name} · ${lensName}`)),
         open
@@ -1799,51 +2407,6 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         note ? h('div', { className: 'dsh-me-note', 'data-bad': String(note.bad) }, note.text) : null);
     }
 
-    /**
-     * Web levels on Settings → Modes (plan step S1): the verified list and the owner's own mixes. The
-     * levels are picked on each conversation's Web button; On stays as before.
-     */
-    function WebLevels({ t, saved, mixes, onSaveList, onSaveMixes }) {
-      const [text, setText] = useState(saved ?? '');
-      const [rows, setRows] = useState(() => Object.entries(mixes).map(([name, lanes]) => ({ name, lanes })));
-      const [note, setNote] = useState(null);
-      const mixesKey = JSON.stringify(mixes);
-      useEffect(() => setText(saved ?? ''), [saved]);
-      useEffect(() => setRows(Object.entries(JSON.parse(mixesKey)).map(([name, lanes]) => ({ name, lanes }))), [mixesKey]);
-      const lines = String(text).split('\n').map((line) => line.replace(/#.*/, '').trim()).filter(Boolean);
-      const bad = lines.filter((line) => !/^\.?[a-z0-9.-]{2,253}$/i.test(line));
-      const names = rows.map((row) => String(row.name).trim());
-      const mixProblem = names.some((name) => !name) ? t('wl.noName') : new Set(names.map((name) => name.toLowerCase())).size !== names.length ? t('wl.sameName') : '';
-      const saveMixes = async () => {
-        if (mixProblem) { setNote({ bad: true, text: mixProblem }); return; }
-        const value = {};
-        for (const row of rows.slice(0, 20)) value[String(row.name).trim().slice(0, 40)] = row.lanes;
-        const ok = await onSaveMixes(JSON.stringify(value));
-        setNote(ok ? { bad: false, text: t('wl.mixesSaved') } : null);
-      };
-      return h('div', { className: 'dsh-me-own', 'data-web-levels': '' },
-        h('div', { className: 'dsh-me-note' }, t('wl.hint')),
-        h('label', { className: 'dsh-me-field wide' }, h('span', null, t('wl.list')),
-          h('textarea', { className: 'dsh-me-ta', value: text, rows: 8, spellCheck: false, onChange: (event) => { setText(event.target.value); setNote(null); } })),
-        bad.length > 0 ? h('div', { className: 'dsh-me-note', 'data-bad': 'true' }, t('wl.bad').replace('{0}', bad.slice(0, 3).join(', '))) : null,
-        h('div', { className: 'dsh-me-row' },
-          h('button', { type: 'button', className: 'dsh-me-btn', 'data-main': 'true', disabled: text === (saved ?? ''), onClick: async () => { const ok = await onSaveList(text); setNote(ok ? { bad: false, text: t('wl.listSaved') } : null); } }, t('wl.saveList'))),
-        h('div', { className: 'dsh-me-note' }, t('wl.mixes')),
-        rows.map((row, index) => h('section', { key: index, className: 'dsh-me-card', 'data-web-mix': '' },
-          h('div', { className: 'dsh-me-row' },
-            h('label', { className: 'dsh-me-field' }, h('span', null, t('wl.name')),
-              h('input', { className: 'dsh-me-in', value: row.name, maxLength: 40, onChange: (event) => { const name = event.target.value; setRows((prev) => prev.map((item, at) => (at === index ? { ...item, name } : item))); setNote(null); } })),
-            h('button', { type: 'button', className: 'dsh-me-btn', onClick: () => { setRows((prev) => prev.filter((_, at) => at !== index)); setNote(null); } }, t('wl.remove'))),
-          h('div', { className: 'dsh-me-row' },
-            Object.keys(LANE_LABELS).map((lane) => h('label', { key: lane, className: 'dsh-me-lt' },
-              h('input', { type: 'checkbox', checked: row.lanes.includes(lane), onChange: (event) => { const on = event.target.checked; setRows((prev) => prev.map((item, at) => (at === index ? { ...item, lanes: on ? [...new Set([...item.lanes, lane])] : item.lanes.filter((x) => x !== lane) } : item))); setNote(null); } }),
-              h('span', null, ` ${t(`lane.${lane}`)}`)))))),
-        h('div', { className: 'dsh-me-row' },
-          rows.length >= 20 ? null : h('button', { type: 'button', className: 'dsh-me-btn', onClick: () => { setRows((prev) => [...prev, { name: '', lanes: ['verified'] }]); setNote(null); } }, t('wl.add')),
-          h('button', { type: 'button', className: 'dsh-me-btn', 'data-main': 'true', disabled: JSON.stringify(rows.map((row) => [row.name, row.lanes])) === JSON.stringify(Object.entries(JSON.parse(mixesKey))), onClick: () => void saveMixes() }, t('wl.saveMixes'))),
-        note ? h('div', { className: 'dsh-me-note', 'data-bad': String(note.bad) }, note.text) : null);
-    }
-
     function ModesPage({ appCtx }) {
       const t = appCtx.locale.bind('modes');
       const [loaded, setLoaded] = useState({ status: 'loading' });
@@ -1853,7 +2416,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       const [dirty, setDirty] = useState(false);
       const [busy, setBusy] = useState(false);
       const [message, setMessage] = useState(null);
-      const [answer, setAnswer] = useState({ rerun: true, thumbs: false });
+      const [answer, setAnswer] = useState({ rerun: true, thumbs: false, uniform: true });
       const [trim, setTrim] = useState(['cowork', 'code', 'data']);
       const [extraModes, setExtraModes] = useState([]);
       // Settings that save at once: where new conversations start, and the built-in working methods.
@@ -1869,7 +2432,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         setRows(toRows(base));
         setBroken(invalid);
         setDefaultMode(typeof view.defaultMode === 'string' ? view.defaultMode : 'cowork');
-        setAnswer({ rerun: view.rerunButton !== false, thumbs: view.hideFeedback === true });
+        setAnswer({ rerun: view.rerunButton !== false, thumbs: view.hideFeedback === true, uniform: view.uniformBox !== false });
         setTrim(Array.isArray(view.trimModes) ? view.trimModes : ['cowork', 'code', 'data']);
         setExtraModes(extraModesOf(view));
         setGeneral({
@@ -1880,6 +2443,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
           coworkMethod: view.coworkMethod !== false,
           ownLenses: ownLensesOf(view.ownLenses).map(({ name, text }) => ({ name, text })),
           longTools: typeof view.longTools === 'string' ? view.longTools : '{}',
+          modeStart: typeof view.modeStart === 'string' ? view.modeStart : '{}',
           verifiedSources: typeof view.verifiedSources === 'string' ? view.verifiedSources : '',
           webMixes: typeof view.webMixes === 'string' ? view.webMixes : '{}',
           skillsOff: typeof view.skillsOff === 'string' ? view.skillsOff : '{}',
@@ -2124,6 +2688,43 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
               ...(choices.some((choice) => choice.id === general.scheduledMode) ? [] : [{ value: general.scheduledMode, label: t('new.scheduled.gone', { id: general.scheduledMode }) }]),
             ],
             (value) => void saveNow('scheduledMode', value))),
+        // Starting values per mode: what the Web, Depth, Models and Tools buttons read when a conversation begins in it.
+        h('div', { className: 'dsh-me-group' }, t('start.group')),
+        h('div', { className: 'dsh-me-note' }, t('start.hint')),
+        h('div', null,
+          [...rows.map((row) => ({ id: row.id, label: row.label.trim() || row.id, isolated: false })), ...extras.map((extra) => ({ id: extra.id, label: extra.label, isolated: extra.isolated }))]
+            .filter((tab) => tab.id)
+            .map((tab) => {
+              let saved = {};
+              try {
+                saved = JSON.parse(general.modeStart || '{}') ?? {};
+              } catch {
+                saved = {};
+              }
+              const own = saved[tab.id] && typeof saved[tab.id] === 'object' ? saved[tab.id] : {};
+              const set = (key, value) => {
+                const entry = { ...own, [key]: value };
+                if (!value) delete entry[key];
+                const next = { ...saved };
+                if (Object.keys(entry).length === 0) delete next[tab.id];
+                else next[tab.id] = entry;
+                void saveNow('modeStart', JSON.stringify(next));
+              };
+              const pick = (key, values, label) => h('label', { className: 'dsh-me-lt', key },
+                h('span', null, t(`start.${key}`)),
+                h('select', { className: 'dsh-me-sel', value: own[key] ?? '', 'aria-label': `${tab.label}: ${t(`start.${key}`)}`, onChange: (event) => set(key, event.target.value) },
+                  h('option', { value: '' }, t('start.usual')),
+                  values.map((value) => h('option', { key: value, value }, label(value)))));
+              // An isolated mode (Recon) keeps its own web rules: only Off is a start there.
+              const webValues = tab.isolated ? ['off'] : ['off', 'on', 'verified', 'open', 'everything'];
+              return h('div', { key: `start-${tab.id}`, className: 'dsh-me-toggle', 'data-start': tab.id },
+                h('div', null, h('b', null, tab.label), tab.isolated ? h('span', null, t('start.isolated')) : null),
+                h('div', { className: 'dsh-me-lts', 'data-wrap': 'true' },
+                  pick('web', webValues, (value) => t(`start.web.${value}`)),
+                  pick('depth', ['quick', 'standard', 'thorough'], (value) => t(`depth.${value}`)),
+                  pick('helpers', ['same', 'roles'], (value) => t(`start.helpers.${value}`)),
+                  pick('tools', ['off'], (value) => t(`start.tools.${value}`))));
+            })),
         // The tab count is the Cowork sidebar's: shown only while the sidebar is on.
         shell ? h('div', { className: 'dsh-me-group' }, t('tabs.group')) : null,
         shell
@@ -2181,10 +2782,15 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
               h('div', null, h('b', null, labelOf(id)), h('span', null, names.join(', '))),
               h('button', { type: 'button', className: 'dsh-me-btn', onClick: () => void switchBackOn(id) }, t('skillsoff.on'))))));
         })(),
-        h('div', { className: 'dsh-me-group' }, t('wl.group')),
-        h(WebLevels, { t, saved: general.verifiedSources, mixes: mixesOf(general.webMixes), onSaveList: (text) => saveNow('verifiedSources', text), onSaveMixes: (text) => saveNow('webMixes', text) }),
+        // The web levels moved to their own page (18 November 2026): Settings → Web sources.
+        h('div', { className: 'dsh-me-group' }, t('ws.title')),
+        h('div', { className: 'dsh-me-note' }, t('wsp.moved')),
+        h('div', { className: 'dsh-me-row' }, h('button', { type: 'button', className: 'dsh-me-btn', onClick: () => openWebSourcesPage(appCtx) }, t('wsp.open'))),
         h('div', { className: 'dsh-me-group' }, t('own.group')),
         h(OwnLenses, { t, saved: general.ownLenses ?? [], onSave: (list) => saveNow('ownLenses', list) }),
+        h('div', { className: 'dsh-me-group' }, t('box.group')),
+        h('div', null,
+          Toggle(t('box.uniform'), t('box.uniform.hint'), answer.uniform, (on) => void flipAnswer('uniformBox', 'uniform', on))),
         h('div', { className: 'dsh-me-group' }, t('answer.group')),
         h('div', null,
           Toggle(t('answer.rerun'), t('answer.rerun.hint'), answer.rerun, (on) => void flipAnswer('rerunButton', 'rerun', on)),
@@ -2319,6 +2925,15 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
             ctx.slots.register(
               { name: 'settings.section', id: 'modes', order: 100, label: () => t('section.title') },
               (props) => h(ModesPage, { ...props, appCtx: ctx }),
+            ),
+          ),
+        );
+        // Settings → Web sources (18 November 2026): the one Web selector's lists, saved selections and other sources.
+        ctx.effect(() =>
+          ctx.slots.inject('settings.section', () =>
+            ctx.slots.register(
+              { name: 'settings.section', id: 'web-sources', order: 101, label: () => t('ws.title') },
+              (props) => h(WebSourcesPage, { ...props, appCtx: ctx }),
             ),
           ),
         );

@@ -77,8 +77,9 @@ test('Research has no Depth of its own any more: the Modes Depth button, the sam
   assert.doesNotMatch(client, /label: 'Depth'/, 'no Depth dropdown or segments of its own');
   assert.match(host, /ctx\.get\('modes'\)\?\.depthOf\?\.\(sessionId\)/);
   assert.match(client, /The same Depth as in every tab/);
-  // The chat box keeps only Focus, with nothing about Depth or run times (the Depth list says those).
-  assert.match(client, /h\(DropButton, \{ label: 'Focus', items: view\.focuses \?\? \[\], value: view\.session\.focus \?\? view\.focus, busy, onPick: \(id\) => void pickFocus\(id\) \}\)/);
+  // Nothing of Research's own in the chat box any more: Focus is the Web selector's ticks (18 November 2026).
+  assert.doesNotMatch(client, /id: 'research-controls'|function ResearchControls\(|label: 'Focus'/);
+  assert.match(client, /'Sources \(formerly Focus\)'/);
   // Good to know: the Depth button, not the Web button, sets how much the assistant searches by itself.
   const good = /'The helpers search with your web search provider\.[^']*'/.exec(client)?.[0] ?? '';
   assert.match(good, /the Depth button in the chat box sets how much the assistant searches by itself/);

@@ -38,5 +38,6 @@ test('the Recon tab has a greeting and starter chips, the same on both halves', 
 test('Recon\'s chips start a conversation in Recon\'s own folder, like its New button', () => {
   const { source } = clientTabs();
   const chips = source.slice(source.indexOf('function HeroChips('), source.indexOf('const CHIP_ICONS'));
-  assert.match(chips, /if \(selected\.id === 'recon'\) \{\s*startInRoom\(appCtx, library, selected\.id, options\)/);
+  // Through startRecon (18 November 2026): the room only, never the app's own choice of folder.
+  assert.match(chips, /if \(selected\.id === 'recon'\) \{\s*startRecon\(appCtx, library, selected\.id, options\)/);
 });

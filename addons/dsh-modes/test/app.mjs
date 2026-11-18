@@ -61,12 +61,14 @@ export async function settle() {
  * @param {Set<string>} [options.ultra] - conversations with Ultra Code on, as Model Tiers tells (no set: Model Tiers cannot say).
  * @returns {object} the running app.
  */
-export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0, home, goals, failWrite, chat, studying, scratch, mission, ultra } = {}) {
+export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0, home, goals, failWrite, chat, studying, scratch, mission, ultra, credentials } = {}) {
   const { config } = world;
   const handlers = new Map();
   const agents = new Map();
   const disposers = [];
   const guards = [];
+  /** Tools Modes registers (name -> { definition, options }). */
+  const registered = new Map();
   const tierCalls = [];
   /** Tier changes that reached the model (`agent.model.select`), in order. */
   const tierSelected = [];
@@ -112,6 +114,8 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
     ...(studying ? { learning: { studying: (id) => studying.has(id) } } : {}),
     // Mission's service (a test gives `longRun(id)`): the tools of a Long run on in a conversation.
     ...(mission ? { mission } : {}),
+    // The app's secret store (a test gives a stand-in: resolve, describe, set, unset).
+    ...(credentials ? { credentials } : {}),
     // The Cowork sidebar's Scratch service: the folder a Scratch conversation is kept to.
     ...(scratch ? { coworkScratch: { folderOf: (agent) => (scratch.has(agent?.id) ? `/home/scratch/${agent.id}` : '') } } : {}),
     ...(world.presets
@@ -157,7 +161,10 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
         guards.push(guard);
         return () => {};
       },
-      register: () => () => {},
+      register: (definition, options) => {
+        registered.set(definition.name, { definition, options });
+        return () => registered.delete(definition.name);
+      },
       restrict: () => () => {},
     },
   };
@@ -232,6 +239,8 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
       agent.phase = { kind: 'idle', lastTurn: 1 };
       await emit('agent/status', { agent, status: 'idle' });
     },
+    /** A tool Modes registered: its definition, and whether it is offered to an agent (`when`). */
+    tool: (name) => registered.get(name),
     /** What the tool guards answer to a call. */
     guard: (exec) => {
       for (const guard of guards) {

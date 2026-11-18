@@ -84,11 +84,12 @@ export const MAP_ANALYZE = '- Which names, groups, places or events came up as c
 /** What the writer is told about the map. */
 export const MAP_WRITE = '- Then a section headed exactly "## Map of connections": one line for each person, group, place, event or topic tied to the subject, saying what it is, how it connects, its sources as [n], and how sure the link is (shown by one source, several sources agree, or only suggested). Leave out a connection no finding shows.';
 
-export function planPrompt(question, depth, today, focus = 'web') {
+export function planPrompt(question, depth, today, focus = 'web', sources = '') {
   return [
     'RESEARCH_PLAN',
     `Plan the research for the question below. Today is ${today}.`,
     focusNote(focus),
+    String(sources ?? '').trim(),
     `Split it into 3 to ${depth.subquestions} sub-questions that together answer it and overlap as little as possible. Cover different angles where they apply: the basic facts and definitions; the numbers; the most recent developments; the primary sources (official documents, filings, papers, statistics); and the strongest criticism or contrary evidence.`,
     MAP_PLAN,
     'For each sub-question give 2 or 3 search queries as you would type them into a search engine: short, specific, with the names, dates and terms a good source would use. Vary the wording between them.',
@@ -129,11 +130,13 @@ export function tasksOf(list, most) {
  * @param {string} spec.today - today's date.
  * @returns {string} the instruction.
  */
-export function searchPrompt({ question, task, round, depth, searchTools, fetchTools, tried = [], known = [], today, focus = 'web' }) {
+export function searchPrompt({ question, task, round, depth, searchTools, fetchTools, tried = [], known = [], today, focus = 'web', sources = '' }) {
   const parts = [
     'RESEARCH_SEARCH',
     `Research ONE sub-question on the web with ${searchTools.join(', ')} and ${fetchTools.join(', ')}. Today is ${today}.`,
     ...(focusNote(focus) ? [focusNote(focus)] : []),
+    // The conversation's Web sources (the one Web selector): which kinds of page count, and how to search for them.
+    ...(String(sources ?? '').trim() ? [String(sources).trim()] : []),
     'How to work:',
     '- Run several searches, not one. Start with the suggested queries, then write better ones from what the results show: the exact names, terms, dates and document titles that good sources use.',
     '- Open the pages. A search result\'s snippet is not a source: fetch every page you cite, and do not cite a page you did not fetch.',

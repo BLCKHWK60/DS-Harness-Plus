@@ -306,6 +306,11 @@ export const Config = z.object({
   tabOrder: z.array(z.string()).default([]).volatile(),
   /** Hide the DeepSeek logo and name at the top of the sidebar and the logo on the start page. */
   hideLogos: z.boolean().default(false).volatile(),
+  /**
+   * Tab names in the wide sidebar. Off (default): every tab shows its icon and its name; tabs take the width of their
+   * name and wrap onto more rows. On: tabs sit in rows of three and a name that does not fit shows the icon alone.
+   */
+  iconOnlyTabs: z.boolean().default(false).volatile(),
   /** Show today's date as the start page title instead of the tab's greeting. */
   dateTitle: z.boolean().default(false).volatile(),
   /** Let the conversation and the message box use the whole width of the window instead of a centred column. */

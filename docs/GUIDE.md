@@ -17,7 +17,7 @@ Installing, updating and removing are in the [README](../README.md). The history
 | **Top of the sidebar** | The tabs: Chat, Cowork, Code, and Finance, Data, Research, Scout and Recon once you switch them on. With more than three they sit in rows of three. How many of your own modes get a tab is set in Settings → Modes. |
 | **Sidebar, under the tabs** | The tab's own pages (Automations, Connectors, Skills, Plugins…), then its projects and conversations, then the Trash. |
 | **Bottom of the sidebar** | Your DeepSeek balance, and **More** (Settings, look options). |
-| **Chat box, left** | Web, Depth, the models chip, Tools (Depth is in every tab and hidden only while Tools are off; in Research and Scout the Web label reads Always on and cannot be changed, and Research adds Focus; in a Finance conversation: its selection too). |
+| **Chat box, left** | Web, Depth, the models chip, Tools (the same in every tab. Web is one selector everywhere: Off, All or any mix of sources; in Research and Scout Off is greyed; in Recon it also has Tor, Usenet and I2P. In a Finance conversation: its selection too). |
 | **Chat box, right** | The model button: model, effort, tier. |
 | **Above the chat box** | The activity line, with the arrow that folds the chat box away. |
 | **Under an answer** | Copy, Rerun, Branch, usage, and pictures the assistant drew. |
@@ -53,7 +53,7 @@ A tab is a way of working. Clicking a tab returns you to the conversation you la
 |---|---|---|
 | **Web** | Whether the assistant may use the internet in this conversation. | Click and pick **On** or **Off**. Off takes away web search, page reading and other tools that go online (an outside image service too), and stops commands and programs that go online; connectors you added stay on and can still reach the internet. In Research and Scout it reads **Always on** and cannot be changed: they always have the web (Off only while Tools are off). |
 | **Depth** | How much work the conversation gets: how much it searches when Web is on, planning, checks and reviews. | Click and pick **Quick**, **Standard** or **Thorough** (at least ten searches and ten pages read, key facts checked in two sources, a short plan, and one review by a helper in tabs that can start helpers; just before the turn ends the model gets one check and fixes only what is missing, shown as a grey row). The Depth you pick is also where new conversations start (also set in Settings → Modes). It is the same in every tab: in Recon it also sets how hard Recon searches, and in Research and Scout (and any deep research run) it sets the size of a research run: about 10, 25 or 45 minutes. How hard the model thinks is the **Effort** on the model button. |
-| **Focus** (Research tab) | Where a research run looks first: Web, News or Academic. | Pick in the chat box of a Research conversation. How long the run takes is the Depth button. A research run works in rounds with helper agents and ends in a cited report. |
+| **Web sources** (every tab) | Which kinds of source a conversation may use: verified sources, academic papers, news, ordinary sites, forums, social media, archives, and Other (your own sources with a login, key or private address). Any mix. Recon also has Tor, Usenet and I2P. | The Web button in the chat box. Settings → Web sources holds the lists, your saved selections and your own sources. Research's former Focus is these ticks. |
 | **Selection** (Finance tab) | What a Finance conversation is about: kind, subject, market, focus, period. | Shown once the conversation has started. Press a part to change it, for this conversation only. |
 | **Models chip** | Shows whether helper agents use this conversation's model (**One model**) or others as well (an amber **3 models**). | Click to switch for this conversation. One model is the default and needs the least memory. |
 | **Tools** | Shows what the assistant can and cannot call right now, with one switch for all tools. | Click to see the list. |
@@ -137,7 +137,7 @@ Switch it on in **Settings → Finance** and open the Finance tab. Pick subject,
 
 Switch it on in **Settings → Research** (it needs the Deep research add-on) and open the Research tab. A question that needs outside facts gets a full run; a quick fact that one or two pages settle is looked up directly.
 
-- Pick **Depth** (Quick, about 10 minutes; Standard, about 25; Thorough, about 45) and **Focus** (Web, News, Academic) in the chat box.
+- Pick **Depth** (Quick, about 10 minutes; Standard, about 25; Thorough, about 45) and the **Web** sources (for example only Academic papers, or News) in the chat box.
 - Helper agents plan, search and read in rounds; progress shows above the chat box. The report cites its sources by number and ends with three follow-up questions as buttons.
 - Each source is marked **read**, **seen only in search results, not read**, or **not read, and not seen in search results**. Findings from pages no helper read stay in the report, labelled in the sentence. The check makes sure every citation is in the source list; it does not compare claims with the pages.
 - A Research conversation runs Read Only. Reports are saved; Settings → Research lists them, with **Show in Finder**.
@@ -262,6 +262,7 @@ Chat, Cowork and Code tabs at the top of the left sidebar, each with its own sec
 | `hideLogos` | `false` | Hide the DeepSeek logo and name at the top of the sidebar and the logo on the start page. |
 | `dateTitle` | `false` | Show today's date as the start page title instead of the tab's greeting. |
 | `wideChat` | `false` | Let the conversation and the message box use the whole width of the window instead of a centred column. |
+| `iconOnlyTabs` | `false` | Tab names in the wide sidebar. Off: every tab shows its icon and name and the tabs wrap onto more rows. On: rows of three, and a tab whose name does not fit shows its icon alone. |
 | `startPlaces` | `''` | Start places (Scratch step 44) as JSON: `{ tabId: 'scratch' \| 'folder' }`, over the defaults (every tab but Code starts in Scratch; Recon always in its room). Set on Settings → Start places. |
 | `newKeyFollows` | `true` | Cmd-N (the app's New Session) starts in the open tab's start place. Off: the app's own choice. |
 

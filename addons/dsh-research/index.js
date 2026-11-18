@@ -24,8 +24,13 @@ const MODES_NS = 'modes';
 export const Config = z.object({
   /** The Research mode and tab. Off leaves nothing of it in the app. */
   enabled: z.boolean().default(false).volatile(),
-  /** Where a run looks first: web, news or academic. */
+  /**
+   * Where a run looked first before the one Web selector (18 November 2026): web, news or academic. Read once to
+   * carry it over into the Web selector's ticks (`focusMoved`); the chat box no longer sets it.
+   */
   focus: z.string().default('web').volatile(),
+  /** Each conversation's Focus and this starting Focus have been carried over into the Web selector's ticks (once). */
+  focusMoved: z.boolean().default(false).volatile(),
   /** Where reports are saved. Empty: `research/reports` in the app's home. */
   folder: z.string().default('').volatile(),
 });
@@ -42,6 +47,21 @@ function plain(value) {
   return value;
 }
 const focusOf = (value) => (FOCUSES.some((item) => item.id === value) ? value : 'web');
+/** A Focus as Web selector ticks (the owner's choice: News and Academic become "only", like every tick). */
+export const FOCUS_TICKS = { news: ['verified', 'news'], academic: ['verified', 'academic'] };
+/**
+ * The focus a run's helpers are told, from the conversation's Web sources: Academic or News when those are
+ * the only kinds of page ticked besides verified sources; else Web (no extra words).
+ * @param {string[] | undefined} ticks - the conversation's ticks (undefined: All).
+ * @returns {'web' | 'news' | 'academic'}
+ */
+export function focusFromTicks(ticks) {
+  if (!Array.isArray(ticks)) return 'web';
+  const pages = ticks.filter((kind) => !['verified', 'other', 'tor', 'usenet', 'i2p'].includes(kind));
+  if (pages.length === 1 && pages[0] === 'academic') return 'academic';
+  if (pages.length === 1 && pages[0] === 'news') return 'news';
+  return 'web';
+}
 
 export function apply(ctx, config) {
   const warn = (text) => ctx.logger?.warn?.(`research: ${text}`);
@@ -143,7 +163,10 @@ export function apply(ctx, config) {
     }
   };
   void syncMode();
-  const timer = setInterval(() => void syncMode(), 3000);
+  const timer = setInterval(() => {
+    void syncMode();
+    void moveFocus();
+  }, 3000);
   timer.unref?.();
   ctx.effect(() => () => clearInterval(timer), 'research: follow the switch');
 
@@ -165,13 +188,57 @@ export function apply(ctx, config) {
     }
   };
   const rootOf = (agent) => String(agent?.header?.parentSession ?? agent?.session?.header?.parentSession ?? agent?.id ?? '');
-  const focusFor = (id) => focusOf(pins[id] ?? plain(config?.focus));
+  /** A conversation's focus: from its Web sources (the one Web selector); before the carry-over, its old pin. */
+  const focusFor = (id) => {
+    const modes = ctx.get('modes');
+    if (plain(config?.focusMoved) === true && typeof modes?.webSources === 'function') return focusFromTicks(modes.webSources(id));
+    return focusOf(pins[id] ?? plain(config?.focus));
+  };
+
+  // ---- the carry-over into the Web selector (once) -------------------------------------------
+  // Each conversation's News or Academic focus becomes its ticks (unless it has its own), and a starting
+  // focus other than Web becomes the Research tab's starting ticks. Nothing is removed: the pins file and
+  // the old setting stay as they are.
+  let moving = false;
+  const moveFocus = async () => {
+    if (moving || plain(config?.focusMoved) === true) return;
+    const modes = ctx.get('modes');
+    const service = ctx.get('settings');
+    if (typeof modes?.carryWebSources !== 'function' || !service?.mutate) return;
+    moving = true;
+    try {
+      for (const [id, focus] of Object.entries(pins)) {
+        if (FOCUS_TICKS[focus]) await modes.carryWebSources(id, FOCUS_TICKS[focus]);
+      }
+      const start = focusOf(plain(config?.focus));
+      const row = service.describe?.().find((entry) => entry.ns === MODES_NS);
+      if (FOCUS_TICKS[start] && row?.value?.modeStart !== undefined) {
+        let starts = {};
+        try {
+          starts = JSON.parse(String(row.value.modeStart || '{}')) ?? {};
+        } catch {
+          starts = {};
+        }
+        if (!Array.isArray(starts[MODE_ID]?.sources)) {
+          starts[MODE_ID] = { ...(starts[MODE_ID] ?? {}), sources: FOCUS_TICKS[start] };
+          await service.mutate(MODES_NS, [{ op: 'set', path: ['modeStart'], value: JSON.stringify(starts) }]);
+        }
+      }
+      await service.mutate('research', [{ op: 'set', path: ['focusMoved'], value: true }]);
+    } catch (error) {
+      warn(`could not carry the Focus over into the Web selector: ${String(error?.message ?? error).slice(0, 160)}`);
+    } finally {
+      moving = false;
+    }
+  };
+  void moveFocus();
 
   ctx.on('session/event', (session, event) => {
     try {
       if (event?.type !== 'turn/start' || session?.header?.origin === 'subagent') return;
       const id = session?.id;
-      if (!id || !enabled() || pins[id] || !inResearch(id)) return;
+      // After the carry-over a conversation's focus is its Web sources: nothing to pin.
+      if (!id || !enabled() || pins[id] || !inResearch(id) || plain(config?.focusMoved) === true) return;
       pin(id, focusOf(plain(config?.focus)));
     } catch (error) {
       warn(`could not remember a conversation's focus: ${String(error?.message ?? error)}`);

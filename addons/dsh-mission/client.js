@@ -581,13 +581,17 @@ html[data-dsh-long-run] [data-goal-bar] { display: none !important; }
       const [card, setCard] = useState(null);
       const [tip, setTip] = useState('');
       const [busy, setBusy] = useState(false);
+      // Mission switched off in its settings: no Run in any mode (the row stays the same everywhere).
+      const [off, setOff] = useState(false);
       const ref = useRef(null);
       const load = useCallback(async () => {
         if (!sessionId) return;
         try {
           setCard(await longCall('GET', { sessionId }));
-        } catch {
+          setOff(false);
+        } catch (failure) {
           setCard(null);
+          setOff(/switched off/i.test(String(failure?.message ?? '')));
         }
       }, [sessionId]);
       useEffect(() => {
@@ -611,7 +615,20 @@ html[data-dsh-long-run] [data-goal-bar] { display: none !important; }
           setTip(`The Long run did not start: ${error.text}`);
         }
       }, [error?.at]);
-      if (!card || card.runButton !== true) return null;
+      if (!card || card.runButton !== true) {
+        // The same chat box in every mode (Modes, Settings → Modes → Chat box): Run keeps its place in every
+        // mode, greyed out where a Long run cannot start, and says why. With that switch off: hidden, as before.
+        const uniform = typeof document !== 'undefined' && document.documentElement.getAttribute('data-dsh-uniform') === 'true';
+        if (off || !uniform) return null;
+        const why = card
+          ? 'A Long run cannot start in this conversation: Recon keeps runs out unless its settings allow them, and a helper\'s conversation never starts one.'
+          : 'Run starts a Long run. It is not ready in this conversation yet: send a message first (after a restart a conversation wakes up with its next message), then Run works.';
+        return h('span', { className: 'dsh-ms-runbtn-wrap', ref, 'data-dsh-run-idle': '', title: why },
+          h('style', null, CSS),
+          h('button', { type: 'button', className: 'dsh-ms-runbtn', disabled: true, title: why, 'aria-label': `Run a Long run (not available here). ${why}` },
+            h('svg', { viewBox: '0 0 16 16', width: 12, height: 12, 'aria-hidden': true }, h('path', { d: 'M4.5 2.8v10.4c0 .6.7 1 1.2.6l8-5.2c.5-.3.5-1 0-1.3l-8-5.2c-.5-.3-1.2 0-1.2.7z', fill: 'currentColor' })),
+            'Run'));
+      }
       const live = card.run?.status === 'running';
       const s = card.saved ?? {};
       const summary = `${s.minutes ?? '?'} min, ${s.laps ?? '?'} laps${s.tools ? `, ${[s.tools.files ? 'files' : '', s.tools.web ? 'web' : ''].filter(Boolean).join(' and ') || 'no extra tools'}` : ''}`;

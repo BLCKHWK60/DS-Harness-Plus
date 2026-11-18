@@ -1,5 +1,6 @@
 # Changelog: @local/dsh-mission
 
+- 2026-11-18 Run keeps its place in every mode (with Modes' "Same chat box in every mode" on): greyed out, with the reason on hover, where a Long run cannot start (Recon without its say-so, a helper's conversation, a conversation not yet running after a restart); hidden only when Mission is switched off (then in every mode) or that switch is off (as before)
 - 2026-11-17 Creator Plus: a Long run in a Creator Plus conversation checks its work in the offline fence, without keys
 - 2026-11-17 The rest of the Content and Bench plan: Web levels, Ultra Code and the work loop, the Recon export door, the Voice Library, and Bench's network, server, phone and Bluetooth doors
 - 2026-11-16 Content and Bench tabs; Long run checks in Bench and Recon; a run that has ended stops cleanly

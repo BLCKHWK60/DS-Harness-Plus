@@ -75,7 +75,7 @@ export function allowed(known, added) {
 
 /** Tools the app knows that are neither core nor in a family: listed by name in the catalog. */
 export function others(known) {
-  return known.filter((name) => !CORE.includes(name) && !familyOf(name) && !['web_search', 'web_fetch', 'run_code'].includes(name));
+  return known.filter((name) => !CORE.includes(name) && !familyOf(name) && !['web_search', 'web_fetch', 'run_code', 'other_search', 'other_read'].includes(name));
 }
 
 /** Whether a tool is one of a family's. */

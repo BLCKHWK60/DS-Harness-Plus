@@ -8,6 +8,12 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const ReactDOM = require('react-dom');
     const h = React.createElement;
+
+    /** @returns {boolean} the Cowork sidebar shows another tab than this mode's (no sidebar: false, the server decides). */
+    const otherTab = (mode) => {
+      const tab = typeof document?.documentElement?.getAttribute === 'function' ? document.documentElement.getAttribute('data-cws-tab') : null;
+      return Boolean(tab) && tab !== mode;
+    };
     const { useCallback, useEffect, useRef, useState } = React;
 
     const NS = 'bench';
@@ -86,6 +92,9 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         let alive = true;
         let timer;
+        // Another conversation: forget the last one's answer at once (Bench rules lingered on other tabs).
+        setView(null);
+        setOpen(false);
         const tick = async () => {
           try {
             const response = await fetch(new URL(`dsh-bench/data${sessionId ? `?session=${encodeURIComponent(sessionId)}` : ''}`, document.baseURI), { cache: 'no-store', credentials: 'same-origin' });
@@ -115,6 +124,8 @@ window.__ModuleLoader__.load({
         };
       }, [open]);
       if (!view || view.enabled !== true || !view.session?.inBench) return null;
+      // With the Cowork sidebar the selected tab is the conversation's mode, known at once: another tab never shows this.
+      if (otherTab('bench')) return null;
       const rules = Array.isArray(view.closed) ? view.closed : [];
       const shut = rules.filter((rule) => !rule.open).length;
       return h(React.Fragment, null,

@@ -122,6 +122,8 @@ Earlier versions filtered a mode's tool list against the tools visible to plugin
 - The app has no way to erase or replace an answer inside a conversation; that is why a rerun is a copy.
 - Attachments are not sent again: only text parts are. The button shows a line saying so when the question had other parts.
 - **Settings:** `rerunButton` (default on) and `hideFeedback` (default off), as two switches at the top of Settings → Modes that save at once. Hiding is a style rule on the app's two feedback buttons (they are the only buttons with `aria-pressed` in that slot); the app's plugin list is read-only, so the feedback part itself cannot be switched off.
+- **Same chat box in every mode:** `uniformBox` (default on; Settings → Modes → Chat box) makes the Web, Depth, Models and Tools buttons read the same in every mode: the shrink step is chosen with the other controls of the seat hidden, the model's name in full and the access button held at one width (`[data-dsh-pin]`), so it depends on the window's width alone. When the real row is then full, the route badge moves to a second line (`[data-dsh-below]`, CSS order only). The place (Scratch or the project) is a chip above the box (Cowork Shell), and a mode's own buttons (Creator Plus, Bench rules, Export for Recon, Focus, the Finance pill) are in the gear's popup (Settings helper, `extrasInGear`), so the box itself holds the same buttons in every mode; those add-ons are not edited. A window too narrow even for that, or the switch Off, uses the former shrinking.
+- **Starting values per mode:** `modeStart` (JSON, empty at first; `lib/start.js`; Settings → Modes → Starting values for new conversations) sets what Web, Depth, Models (One model / Different models) and Tools (Off) read in a conversation that begins in a mode. The host writes them once, when the conversation starts (`seedStart`, from `agent/created`), into `sessionWeb`/`sessionWebLevel`/`sessionDepth`/`sessionHelpers`/`sessionTools` where the conversation has no value yet, so the page, the prompt and the tool lists read them like a pick made by hand, which replaces them later. "Usual" (nothing) changes nothing. An isolated mode (Recon) honours only Web Off; no value widens a mode's tools or sandbox. The page also sets `data-dsh-uniform` on the document for the Cowork sidebar's place chip.
 - **Tested (0.34.0)** in the test setup with a stand-in model: a rerun of the seventh answer made a copy with the six earlier turns and the question once, without the old answer; after choosing another model the copy ran on that model; a rerun of a conversation's only answer opened a new conversation in the same folder and mode; the thumbs switch hid the thumbs. Not tested: a question with attachments, a very long conversation (more than one window of events), the Mac app.
 
 ## Since 0.40.0: one model or different models for helpers
@@ -303,6 +305,50 @@ The owner's choice: **add the levels, keep the defaults.** The Web button keeps 
 - Not in Recon (isolated: its own rules and its own Web button) or Research (its web is fixed): there the levels are not offered and nothing changes.
 - Service: `webLevel(id)` ('off', a level, or undefined for On as before), `webAllows(id, address)` for tools that fetch inside themselves, and `ultraCode(id)` (asked of Model Tiers' new switch).
 - Tests: `test/weblevel.test.mjs` (lanes, the archive, each level, the owner's list and mixes, a stand-in app with a helper, Recon and Research); `test/modes.test.mjs` (the button and what a pick writes).
+
+## One Web selector in every tab (18 November 2026)
+
+The owner's request: one Web selector that looks and works the same in every tab, Research, Scout and Recon included, with every level of web access in it, as sources you can combine.
+
+**The chip** reads `Web · Off`, `Web · All`, one or two short names (`Web · Verified + Forums`), `Web · 4 sources`, or a saved selection's name. It keeps the shared row's markup (`span.pair[data-kind="search"]`, `.lbl`, `.lbl.lvl`); the uniform row caps the value at 6.5em and the full text is in the button's title. `WebSources` in `client.js` replaces the former `WebButton` and Research's fixed `WebAlways` label.
+
+**The popup:** Off and All; the source ticks, any mix; in Recon only, a second group "Recon's networks" (Tor, Usenet, and I2P greyed as not set up yet); the saved selections, one click each; "Save as…"; "Use for new <tab> conversations" (writes `modeStart[mode].sources`, lib/start.js); "Edit sources…" (Settings → Web sources). In Research and Scout, Off is greyed: searching is their work, and the Tools switch is what stops it.
+
+| Tick | What counts |
+| --- | --- |
+| Verified sources | sites on the verified list (`verifiedSources`) |
+| Academic papers | sites on the academic list (`academicSources`, new; journals, preprints, PubMed, universities) |
+| News | sites on the news list (`newsSources`, new; wire services, broadcasters, newspapers) |
+| Ordinary sites | anything on no list and of no other kind |
+| Forums and boards | Reddit, Stack Exchange, Hacker News, forum.* and the like |
+| Social media and channels | X, YouTube, Telegram, Mastodon, Facebook, Bluesky and the like (the former "groups and channels") |
+| Archives | the Reddit archives of removed posts |
+| Other | the owner's own sources (below) |
+
+One site can be two kinds (a wire service is verified and news); a page passes when any of its kinds is ticked. A copy (the Internet Archive, archive.today, readers) is judged by the page it shows, as before. A page that cannot be told apart opens only when every kind of page is ticked.
+
+**How a selection changes the search** (`lib/sources.js`, wired in `index.js`):
+1. The model is told the ticks and how to word its searches for them (`sourcesSaid`; Research's former News and Academic words live here now).
+2. `web_search` results of unticked kinds are taken out before the model sees them (a `tools/post-execute` listener; the search service's own summary goes too when anything was taken out), with one line saying how many. The result card you see keeps them all.
+3. Opening a page of an unticked kind is refused (`tools.guard`, the conversation and its helpers), and so is a command or program that goes online with no address to check unless every kind of page is ticked.
+4. Deep research's planner and searchers get the same note (`modes.webSourcesSaid`).
+
+**Stored:** `sessionWebSources` (`{ id: [ticks] }`, missing = All; carried into Rerun copies with the other marks and pruned with them). All is the web as before: no limit and no words, so nothing changes until a box is unticked. A conversation that picked one of the older levels outside Recon and the research tabs reads it as ticks (Verified: verified; Open web: verified, academic, news, ordinary sites; Everything: every kind of page; a Custom mix: its lanes) and is never written over. The saved selections are the former Custom mixes (`webMixes`, now holding ticks; an older mix's "channels" is read as social media). Settings → Modes → Web levels moved to its own page.
+
+**Settings → Web sources** (`settings.section` id `web-sources`): the three lists, the saved selections, each tab's starting ticks (with "Back to All"), and **Other sources**.
+
+**Other sources** (`lib/other.js`): the owner's own sources others may not have, shared by every tab. Each has a name, a search address with `{query}` and/or a start address, a kind of login (none, user name and password, a key in a header, a browser cookie, or a secret address), where its secrets are kept, and "May be used in Recon" (off at first). The settings (`otherSources`) hold no secret. The secrets go into the app's secret store (`ctx.get('credentials')`, names `DSH_OTHER_SOURCE_<ID>_SECRET` / `_USER`, as Finance's keys) by default, or into the macOS Keychain (service `dsh-other-source-<id>`, written through `security -i` so the value never shows on a command line), the owner's choice per source. They are typed once on the page (route `POST /dsh-modes/other`: `secret`, `forget`, `test`; `GET` says only which are kept) and never shown again. Changing a source's login or store, or removing it, forgets what was kept for it in both places. Sites that sign in through their own web form are not supported; a copied cookie is the way round.
+- Tools `other_search` (source name, words) and `other_read` (source name, a link on that source, a part), registered while at least one source exists, offered outside Recon while Other is ticked (All ticks it), and with the web like `web_search` (a list mode gets them while its web is on; Web Off takes them away). They read text only, on the source's own site (a redirect elsewhere is not followed), no login over plain http except on this Mac or a private network. The model gives a name, never an address or a login; every secret part (the password and user, the key, each cookie value, the secret address, its site and long path or query parts) is replaced by `[name]` in the page, its links (shown as paths), errors and test results.
+- A guard refuses, in every tab, a call that reads the app's secret store file (`.credentials.yaml`), these sources' Keychain items through `security`, or the Keychain dump. Writing or editing a file that mentions them is not refused. A barrier, not a wall.
+- Service, for Recon: `reconOtherNames()`, `reconOtherRequest(name)` (only sources allowed in Recon), `reconOtherStatus()` (each such source's name, kind of login and whether its login is kept, looked up on this Mac only; for Recon's status bar).
+
+**Recon** keeps all its rules; the ticks only take tools away. Its tools ask `modes.webSources(id)` (networks included) and `modes.webKinds(address)`; see Recon's README. Modes gives a Recon conversation one line naming its ticks.
+
+**Service:** `webSources(id)`, `webKinds(address)`, `webSourcesSaid(id)`, `carryWebSources(id, ticks)` (Research's carry-over; never over a conversation's own ticks), `webAllows(id, address)` (now by the ticks); `webLevel(id)` is kept for older callers.
+
+**Client tidy-up (18 November, later):** the former Web button's code and Settings → Modes → Web levels (`WebLevels`, `webLevelOf`, `mixesOf`, the `web` pick and their texts) are removed from `client.js`; older picks are still read as ticks (`wsNow`, and the host's `sourcesNow`).
+
+**Tests:** `test/sources.test.mjs` (kinds, combined ticks, older levels and mixes, labels, the results filter, the note, start values, the masks, Other sources' parsing, both secret stores, scrubbing, reading, and two stand-in apps), `test/weblevel.test.mjs` and `test/modes.test.mjs` (the chip and what a pick writes, kept in step with `lib/sources.js`).
 
 ## Skills switched off per tab (17 November, with Tuner Plus)
 

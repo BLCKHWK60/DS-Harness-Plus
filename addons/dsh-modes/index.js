@@ -24,6 +24,9 @@ import { RUN_OVER_LIMIT, RUN_OVER_TEXT, RUN_STEP_TOOL, dropIsolatedNotes, heldMo
 import { DEPTH_CHECK_KIND, DEPTH_CHECK_PROMPT, DEPTH_CHECK_REFUSAL, DEPTH_CHECK_SUMMARY, promptText } from './lib/prompt.js';
 import { lensIdIn, lensTextIn, ownLensesOf } from './lib/lens.js';
 import { movedSince, readBase, readEntry, sandboxStep } from './lib/sandbox.js';
+import { normalizeStart, startOps } from './lib/start.js';
+import { OTHER_TOOLS, SECRET_MARKS, WRITE_TOOLS, linkOn, openSecrets, otherSourcesOf, partsOf, readSource, requestOf, scrub, showPage } from './lib/other.js';
+import { ACADEMIC_START, KINDS, NETS, NEWS_START, PAGE_KINDS, kindsOf, filterSearchText, isAll, listsOf, selectionsOf, sourcesAllow, sourcesSaid, tickedWords, ticksFromLevel, ticksOf } from './lib/sources.js';
 import { beforeFirstMessage, sidebarTabs, tabCount } from './lib/tabs.js';
 import { offIn, withOff, withoutOffSkills, lastSeenCatalog } from './lib/skilloff.js';
 
@@ -32,6 +35,8 @@ export { CODE_METHOD, COWORK_METHOD, DEPTH_CHECK_PROMPT, DEPTH_PROMPTS, DEPTH_SE
 export const name = 'modes';
 /** The chat box asks here which tools the model can call in a conversation (header `x-dsh-session`). */
 export const TOOLS_PATH = '/dsh-modes/tools';
+/** Settings → Web sources asks here which secrets of the owner's own sources are kept, and keeps or forgets one. */
+export const OTHER_PATH = '/dsh-modes/other';
 export const inject = ['tools'];
 /** The app's Contents folder (…/DeepSeek Harness.app/Contents), where its own Office skills live. */
 const APP_CONTENTS = resolvePath(dirname(process.execPath), '..');
@@ -159,8 +164,28 @@ export const Config = z.object({
   sessionWebLevel: z.string().default('{}').volatile(),
   /** The verified list (Web level Verified): one host or address ending per line. Its own list; Settings → Modes. */
   verifiedSources: z.string().default(VERIFIED_START).volatile(),
-  /** The owner's Custom Web mixes as JSON: `{ name: ['verified', 'sites', 'forums', 'channels', 'archives'] }`. Settings → Modes. */
+  /**
+   * The owner's saved Web selections as JSON: `{ name: ['verified', 'forums', …] }` (lib/sources.js KINDS, and in
+   * Recon its networks). Earlier Custom mixes keep working: their lanes are read as ticks ("channels" is social).
+   * Saved from the Web popup; edited on Settings → Web sources.
+   */
   webMixes: z.string().default('{}').volatile(),
+  /**
+   * Per-conversation Web sources as JSON: `{ sessionId: ['verified', 'forums', …] }` (the one Web selector, 18
+   * November 2026). Missing = All: the web as before, or, for a conversation that picked one of the older levels
+   * (`sessionWebLevel`), that level read as ticks. Only while the Web is on. lib/sources.js.
+   */
+  sessionWebSources: z.string().default('{}').volatile(),
+  /** The academic list (Web source Academic papers): one host or ending per line. Settings → Web sources. */
+  academicSources: z.string().default(ACADEMIC_START).volatile(),
+  /** The news list (Web source News): one host or ending per line. Settings → Web sources. */
+  newsSources: z.string().default(NEWS_START).volatile(),
+  /**
+   * The owner's own other sources (Web source Other) as JSON: `[{ id, name, search, start, login, header, store, recon }]`
+   * (lib/other.js). No secret is ever kept here: logins, keys, cookies and secret addresses are in the app's
+   * secret store or the macOS Keychain, by each source's `store`. Settings → Web sources → Other sources.
+   */
+  otherSources: z.string().default('[]').volatile(),
   /** Obsolete: the old per-conversation Deep research switch, no longer offered or read (kept so older settings files still load). Old entries are pruned with the others. */
   sessionResearch: z.string().default('{}').volatile(),
   /** Obsolete since 0.59.0: each conversation's former Web level, moved into `sessionDepth` once (`depthMoved`). Kept so older settings files still load. */
@@ -229,6 +254,21 @@ export const Config = z.object({
   rerunButton: z.boolean().default(true).volatile(),
   /** Hide the app's thumbs-up and thumbs-down buttons under answers. */
   hideFeedback: z.boolean().default(false).volatile(),
+  /**
+   * The chat box looks the same in every mode (on by default): the buttons' words (Web · On, Depth, One
+   * model, Tools on) shrink by the window's width alone, not by what else a mode puts in the row, and the
+   * buttons add-ons bring (Creator Plus, Bench rules, Export, Focus, the Finance pill) go on a second line
+   * when the row is full, after the same core buttons. Off: the former per-row shrinking.
+   */
+  uniformBox: z.boolean().default(true).volatile(),
+  /**
+   * Starting values per mode as JSON: `{ modeId: { web, depth, helpers, tools } }` (lib/start.js). What the Web,
+   * Depth, Models and Tools buttons read in a conversation that begins in the mode; a missing or empty value
+   * is the usual one (the mode's own default, or the one setting for all modes). Written into the
+   * conversation's own settings when it starts, so a pick made by hand later replaces it.
+   * Settings → Modes → Starting values for new conversations.
+   */
+  modeStart: z.string().default('{}').volatile(),
   /** Name of the slash command that switches modes. */
   commandName: z.string().default('mode'),
   /**
@@ -722,21 +762,71 @@ export function apply(ctx, config) {
     return pickedLevel(readObject(config.sessionWebLevel)[top], mixesOf(plain(config.webMixes)));
   }
 
-  /** A command or program that goes online with no address to check, while a level below Everything is picked. */
-  const LEVEL_COMMAND = 'The conversation\'s Web level is below Everything, and this command or program goes online without a web address Modes can check, so it was not run. Use the web tools for pages, or tell the user: they can pick Everything (or On) on the Web button.';
+  /** The lists the Web sources are judged by (Settings → Web sources). */
+  function sourceLists() {
+    return listsOf({ verified: plain(config.verifiedSources), academic: plain(config.academicSources), news: plain(config.newsSources) });
+  }
 
-  /** @returns {string} the note a conversation gets about its Web level ('' for On as before). */
+  /**
+   * The conversation's Web sources (the one Web selector, 18 November 2026) while its web is on: the ticks, or
+   * undefined for All (no limit, as before). Every tab follows its own ticks, Research, Scout and Recon too. A
+   * conversation with no ticks stored that picked one of the older levels outside Recon and the research tabs
+   * reads that level as ticks (it is never written over). Recon's networks count only in Recon.
+   * @param {string} sessionId - Agent id (a helper follows its conversation).
+   * @returns {string[] | undefined}
+   */
+  function sourcesNow(sessionId) {
+    const top = topOf(sessionId);
+    const mode = modeOf(top);
+    if (!mode) return undefined;
+    // The Web button on Off keeps the ticks for later; they apply only while it is not on Off.
+    if (readObject(config.sessionWeb)[top] === false) return undefined;
+    const recon = mode.isolated === true;
+    if (!recon) {
+      const long = longRunOf(top);
+      if (long ? !long.web : !webOn(top, mode)) return undefined;
+    }
+    const own = readObject(config.sessionWebSources)[top];
+    if (own !== undefined) {
+      const ticks = ticksOf(own, { recon });
+      return !ticks || isAll(ticks, { recon }) ? undefined : ticks;
+    }
+    if (recon || researchTab(mode.tools)) return undefined;
+    const ticks = ticksFromLevel(readObject(config.sessionWebLevel)[top], selectionsOf(plain(config.webMixes)));
+    return ticks && !isAll(ticks) ? ticks : undefined;
+  }
+
+  /** The owner's own sources (Web source Other, lib/other.js): what the settings hold, never a secret. */
+  function otherList() {
+    return otherSourcesOf(plain(config.otherSources));
+  }
+  /** Where the sources' secrets are kept: the app's secret store or the macOS Keychain, per source. */
+  const secrets = openSecrets({ credentials: () => ctx.get('credentials') });
+  /** @returns {Promise<object>} one source's addresses, login headers and the parts to take out of what the model sees. */
+  const otherRequest = (source) => requestOf(source, (part) => secrets.get(source, part));
+  /** @returns {object | undefined} a source by the name the model gives (any case). */
+  const otherNamed = (name, list = otherList()) => list.find((source) => source.name.toLowerCase() === String(name ?? '').trim().toLowerCase());
+
+  /** @returns {string[]} the names of the owner's own sources a conversation may use (in Recon only those allowed there). */
+  function otherNames(recon = false) {
+    return otherList().filter((source) => !recon || source.recon).map((source) => source.name);
+  }
+
+  /** A command or program that goes online with no address to check, while not every kind of page is ticked. */
+  const LEVEL_COMMAND = 'Not every kind of web source is ticked for this conversation, and this command or program goes online without a web address Modes can check, so it was not run. Use the web tools for pages, or tell the user: they can pick All on the Web button.';
+
+  /** @returns {string} the note a conversation gets about its Web sources ('' for All, as before). */
   function levelSaid(sessionId) {
-    const level = levelOf(sessionId);
-    if (!level) return '';
-    const what = level.level === 'verified'
-      ? 'only sources on the verified list (official bodies, courts and registers, research publishers, wire services and public broadcasters, archives)'
-      : level.level === 'open'
-        ? 'verified sources and ordinary sites, not forums and boards, public groups and channels, or the Reddit archives'
-        : level.level === 'everything'
-          ? 'every kind of source'
-          : `the lanes of the user's Custom mix "${level.name}"`;
-    return `\n\nWeb level: ${level.level === 'custom' ? 'Custom' : LEVEL_NAMES[level.level]}. Pages you open must be ${what}. Search as usual; a result of another kind is a lead to name to the user, not to open. The user widens the level on the Web button.`;
+    const top = topOf(sessionId);
+    const mode = modeOf(top);
+    const ticks = sourcesNow(sessionId);
+    if (!ticks) return '';
+    if (mode?.isolated) {
+      const nets = ticks.filter((kind) => NETS.includes(kind));
+      const kinds = ticks.filter((kind) => KINDS.includes(kind));
+      return `\n\nRecon sources for this conversation: ${tickedWords([...kinds, ...nets])}. The recon tools for sources that are not ticked refuse, and web results of other kinds are left out.${kinds.includes('other') && otherNames(true).length > 0 ? ` The user's own sources allowed in Recon: ${otherNames(true).map((name) => `"${name}"`).join(', ')} (recon_other_search, recon_other_read).` : ''} If the research needs another source, say so; the user ticks more on the Web button.`;
+    }
+    return sourcesSaid(ticks, { other: otherNames(false) });
   }
 
   /** @returns {boolean} whether an isolated conversation's Web button is on Off (its own searching is then off). */
@@ -951,6 +1041,25 @@ export function apply(ctx, config) {
   }
 
   /**
+   * A conversation that starts in a mode gets that mode's starting values (Settings → Modes → Starting
+   * values for new conversations) into its own settings, where a field has none yet. Never throws.
+   * @param {object} agent - the new conversation's Agent.
+   * @param {object} mode - its mode.
+   * @returns {Promise<void>}
+   */
+  async function seedStart(agent, mode) {
+    try {
+      const entry = readObject(config.modeStart)[mode.id];
+      if (!entry) return;
+      const ops = startOps(normalizeStart(entry, { isolated: mode.isolated === true }), config, agent.id);
+      if (ops.length === 0) return;
+      await ctx.get('settings')?.mutate('modes', ops);
+    } catch (error) {
+      ctx.logger.warn(`modes: starting values of ${mode?.id} not applied (${error?.message ?? error})`);
+    }
+  }
+
+  /**
    * Before a conversation's first message: the tier it had before a mode's tier was put on, and that
    * tier (`{before, set}`). A move to a mode without a tier then puts `before` back: a conversation an
    * Automation task opens is created in the selected tab's mode before its task's mode is known.
@@ -1024,43 +1133,152 @@ export function apply(ctx, config) {
     });
   }
 
-  // The Web level (plan step S1): a tool that opens an address the conversation's level does not cover
-  // is refused, in the conversation and its helpers; so is a command or a program that goes online
-  // without an address to check (below Everything). On as before (no level picked) changes nothing.
+  // The Web sources (the one Web selector): a tool that opens an address of a kind that is not ticked is
+  // refused, in the conversation and its helpers; so is a command or a program that goes online without an
+  // address to check (unless every kind of page is ticked). All (nothing stored) changes nothing. Recon keeps
+  // its own rules: its tools ask Modes themselves (service `webSources`). The owner's own sources are Other's,
+  // judged by their own tools, not by the kind of their address.
   ctx.effect(
     () =>
       ctx.tools.guard((exec) => {
-        let level;
+        let ticks;
         try {
           const id = exec?.agent?.id;
-          if (!id) return undefined;
-          level = levelOf(id);
+          if (!id || modeOf(topOf(id))?.isolated) return undefined;
+          ticks = sourcesNow(id);
         } catch {
           return undefined;
         }
-        if (!level) return undefined;
+        if (!ticks) return undefined;
         try {
           const name = String(exec.name ?? '');
+          if (OTHER_TOOLS.includes(name)) return ticks.includes('other') ? undefined : OTHER_UNTICKED;
           const args = exec.arguments ?? {};
-          const verified = verifiedList(plain(config.verifiedSources));
+          const lists = sourceLists();
           let addresses = addressesOf(args);
           if (SHELL_TOOLS.has(name) || name === PROGRAM_TOOL) {
             const text = String(name === PROGRAM_TOOL ? (typeof args === 'string' ? args : args.code ?? '') : (typeof args === 'string' ? args : args.command ?? args.cmd ?? args.script ?? args.text ?? ''));
             const written = addressesIn(text);
             addresses = [...addresses, ...written];
             const online = name === PROGRAM_TOOL ? programGoesOnline(text) : goesOnline(text);
-            if (online && written.length === 0 && level.level !== 'everything') return LEVEL_COMMAND;
+            if (online && written.length === 0 && !PAGE_KINDS.every((kind) => ticks.includes(kind))) return LEVEL_COMMAND;
           }
           for (const address of addresses) {
-            const decision = levelAllows({ ...level, verified, address });
+            const decision = sourcesAllow({ ticks, lists, address });
             if (!decision.ok) return decision.why;
           }
           return undefined;
         } catch {
-          return 'Modes could not check this call against the conversation\'s Web level, so it was not run.';
+          return 'Modes could not check this call against the conversation\'s Web sources, so it was not run.';
         }
       }),
-    'modes: web level',
+    'modes: web sources',
+  );
+  // Search results of kinds that are not ticked are taken out before the model sees them (web_search, in
+  // the conversation and its helpers; Recon filters its own results). The search service's own summary goes
+  // too when anything was taken out. The result card the user sees keeps every result.
+  ctx.on('tools/post-execute', async (exec, result, next) => {
+    const decision = await next();
+    try {
+      if (exec?.name !== 'web_search' || decision?.kind !== 'accept' || decision.value !== undefined || result?.isError) return decision;
+      const id = exec?.agent?.id;
+      if (!id || modeOf(topOf(id))?.isolated) return decision;
+      const ticks = sourcesNow(id);
+      if (!ticks) return decision;
+      const sources = Array.isArray(result?.value?.sources) ? result.value.sources : [];
+      const blocks = decision.content ?? result.content;
+      if (!Array.isArray(blocks) || sources.length === 0) return decision;
+      const lists = sourceLists();
+      const answer = typeof result.value.content === 'string' ? result.value.content : '';
+      let changed = false;
+      const out = blocks.map((block) => {
+        if (block?.type !== 'text' || typeof block.text !== 'string') return block;
+        const filtered = filterSearchText(block.text, sources, ticks, lists, answer);
+        if (filtered.left === 0) return block;
+        changed = true;
+        return { ...block, text: filtered.text };
+      });
+      return changed ? { ...decision, content: out } : decision;
+    } catch {
+      return decision;
+    }
+  });
+  // The owner's own sources (Web source Other): two tools, offered while at least one source is set up and
+  // Other is ticked (All ticks it), outside Recon (Recon has its own, through its own route). The web switch
+  // and the tool mask decide the rest, as for web_search. The model gives a source's name, never an address
+  // or a login; whatever comes back has every secret part taken out.
+  const OTHER_UNTICKED = 'Other is not ticked in this conversation\'s Web sources, so the user\'s own sources are not used. The user ticks Other on the Web button.';
+  const otherOffered = (id) => {
+    if (!id || otherList().length === 0) return false;
+    if (modeOf(topOf(id))?.isolated) return false;
+    const ticks = sourcesNow(id);
+    return !ticks || ticks.includes('other');
+  };
+  const otherTool = (name) => ({
+    name,
+    description: name === 'other_search'
+      ? 'Search one of the user\'s own sources (sites they set up with their own login, key or private address). Give the source\'s name exactly as listed and the search words. Returns the source\'s result page as text, with links on that source.'
+      : 'Read a page of one of the user\'s own sources. Give the source\'s name exactly as listed and, optionally, a link as other_search or an earlier page gave it (a path on that source). Without a link it reads the source\'s start page. Long pages come in parts.',
+    parameters: name === 'other_search'
+      ? { type: 'object', properties: { source: { type: 'string', maxLength: 60, description: 'The source\'s name.' }, query: { type: 'string', maxLength: 300, description: 'The search words.' } }, required: ['source', 'query'], additionalProperties: false }
+      : { type: 'object', properties: { source: { type: 'string', maxLength: 60, description: 'The source\'s name.' }, link: { type: 'string', maxLength: 2000, description: 'A link on the source, as given (a path such as /item/12).' }, part: { type: 'integer', minimum: 1, maximum: 200, description: 'Which part of a long page (1 first).' } }, required: ['source'], additionalProperties: false },
+    output: {
+      schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+      render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }],
+    },
+    isConcurrencySafe: () => true,
+    timeoutMs: 60_000,
+    execute: async (args) => {
+      const list = otherList();
+      const source = otherNamed(args?.source, list);
+      if (!source) return { text: `There is no source named "${String(args?.source ?? '').slice(0, 60)}". The user's own sources: ${list.map((one) => `"${one.name}"`).join(', ') || 'none'}.` };
+      let request;
+      try {
+        request = await otherRequest(source);
+      } catch (error) {
+        return { text: String(error?.message ?? error) };
+      }
+      const hide = request.hide;
+      try {
+        let address;
+        if (name === 'other_search') {
+          const words = String(args?.query ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+          if (!words) return { text: 'Give a few words to search for.' };
+          if (!request.search) return { text: `"${source.name}" has no search address. Read its pages with other_read instead.` };
+          address = request.search.replace('{query}', encodeURIComponent(words));
+        } else {
+          const base = request.start || new URL(request.search.replace('{query}', '')).origin;
+          const target = linkOn(base, args?.link);
+          if (!target.ok) return { text: target.why };
+          address = target.url;
+        }
+        const page = await readSource(address, request.headers);
+        if (!page.ok) return { text: scrub(`"${source.name}" could not be read: ${page.why}.`, hide, source.name) };
+        return { text: showPage({ name: source.name, page, part: args?.part, hide, hideHost: request.hideHost }) };
+      } catch (error) {
+        return { text: scrub(`"${source.name}" could not be read: ${String(error?.message ?? error).slice(0, 200)}`, hide, source.name) };
+      }
+    },
+  });
+  for (const name of OTHER_TOOLS) {
+    ctx.effect(() => ctx.tools.register(otherTool(name), { when: ({ agent }) => otherOffered(agent?.id) }), `modes: ${name} tool`);
+  }
+  // The secrets of the owner's own sources stay out of a model's reach: a command, a program or a tool call
+  // that reads the app's secret store file, these sources' Keychain items or the whole Keychain is refused,
+  // in every tab. A barrier, not a wall: a command written to hide what it does is not caught.
+  ctx.effect(
+    () =>
+      ctx.tools.guard((exec) => {
+        try {
+          if (!exec?.agent?.id || OTHER_TOOLS.includes(exec.name) || WRITE_TOOLS.includes(exec.name)) return undefined;
+          const args = exec.arguments;
+          const text = typeof args === 'string' ? args : JSON.stringify(args ?? {});
+          return SECRET_MARKS.test(text.slice(0, 200_000)) ? 'This call names the place where the user\'s secrets (logins, keys, cookies) are kept, so it was not run. Secrets are never read or shown in a conversation; the user manages them on Settings → Web sources.' : undefined;
+        } catch {
+          return undefined;
+        }
+      }),
+    'modes: secrets stay out of reach',
   );
   // The app's PTC preset offers `run_code` whatever the mask says. With nothing to call, a program is refused,
   // so "Tools off" and a mode without tools mean the same in every preset.
@@ -1298,6 +1516,7 @@ export function apply(ctx, config) {
       // A conversation just created (not one reloaded) takes its mode's tier from its first message.
       const starting = source === 'startup' && fresh.has(agent.id) && isTopLevel(agent);
       await applyMode(agent, modeOf(agent.id), false, { starting });
+      if (starting) await seedStart(agent, modeOf(agent.id));
     } catch (error) {
       report(error);
     }
@@ -1939,7 +2158,7 @@ export function apply(ctx, config) {
       // Without an app home there is no trash (the Cowork sidebar keeps it there).
       const trashed = typeof home === 'function' ? trashedIds(home('trash', 'conversations')) : new Set();
       if (trashed === null) return;
-      const fields = ['sessionModes', 'sessionWeb', 'sessionWebLevel', 'sessionResearch', 'sessionSearchDepth', 'sessionDepth', 'sessionLens', 'sessionTools', 'sessionHelpers', 'sessionIsolated', 'sessionToolSets', 'sessionSandboxBase'];
+      const fields = ['sessionModes', 'sessionWeb', 'sessionWebLevel', 'sessionWebSources', 'sessionResearch', 'sessionSearchDepth', 'sessionDepth', 'sessionLens', 'sessionTools', 'sessionHelpers', 'sessionIsolated', 'sessionToolSets', 'sessionSandboxBase'];
       const ids = new Set(fields.flatMap((field) => Object.keys(readObject(config[field]))));
       const gone = new Set();
       for (const sessionId of ids) {
@@ -2185,11 +2404,105 @@ export function apply(ctx, config) {
      */
     webAllows(sessionId, address) {
       try {
-        const level = levelOf(sessionId);
-        if (!level) return undefined;
-        return levelAllows({ ...level, verified: verifiedList(plain(config.verifiedSources)), address }).ok;
+        const ticks = sourcesNow(sessionId);
+        if (!ticks) return undefined;
+        return sourcesAllow({ ticks, lists: sourceLists(), address }).ok;
       } catch {
         return undefined;
+      }
+    },
+    /**
+     * The conversation's Web sources (the one Web selector): its ticks, or undefined for All (no limit, as
+     * before) and while the Web is Off. In Recon the ticks include its networks (tor, usenet, i2p); Recon's
+     * tools ask here and refuse what is not ticked.
+     * @param {string} sessionId - Agent id (a helper follows its conversation).
+     * @returns {string[] | undefined}
+     */
+    webSources(sessionId) {
+      try {
+        return sourcesNow(sessionId);
+      } catch {
+        return undefined;
+      }
+    },
+    /**
+     * The conversation's Web sources in words, for helpers that search for it (Deep research's planner and
+     * searchers): which kinds are ticked and how to word searches for them. '' for All, and in Recon.
+     * @param {string} sessionId - Agent id.
+     * @returns {string}
+     */
+    webSourcesSaid(sessionId) {
+      try {
+        if (modeOf(topOf(sessionId))?.isolated) return '';
+        return sourcesSaid(sourcesNow(sessionId), { other: otherNames(false) }).trim();
+      } catch {
+        return '';
+      }
+    },
+    /**
+     * The kinds an address belongs to (verified, academic, news, sites, forums, social, archives, or
+     * unknown), by the lists on Settings → Web sources. For tools that judge results themselves (Recon).
+     * @param {string} address - a web address.
+     * @returns {string[]}
+     */
+    webKinds(address) {
+      try {
+        return kindsOf(address, sourceLists());
+      } catch {
+        return [];
+      }
+    },
+    /**
+     * Sets a conversation's ticks once, unless it has its own (Research carries a conversation's former Focus
+     * over with this). Undefined or every tick: All.
+     * @param {string} sessionId - the conversation.
+     * @param {string[] | undefined} ticks - the ticks.
+     * @returns {Promise<boolean>} whether anything was written.
+     */
+    async carryWebSources(sessionId, ticks) {
+      const id = String(sessionId ?? '');
+      if (!id || readObject(config.sessionWebSources)[id] !== undefined) return false;
+      const clean = ticksOf(ticks);
+      if (!clean || isAll(clean)) return false;
+      const next = { ...readObject(config.sessionWebSources), [id]: clean };
+      await ctx.get('settings')?.mutate?.('modes', [{ op: 'set', path: ['sessionWebSources'], value: JSON.stringify(next) }]);
+      return true;
+    },
+    /**
+     * The owner's own sources Recon may use (each source's "May be used in Recon" switch): names only.
+     * @returns {string[]}
+     */
+    reconOtherNames() {
+      return otherNames(true);
+    },
+    /**
+     * For Recon's status bar: each source it may use, whether its login is kept (looked up on this Mac only,
+     * never sent anywhere, never the login itself) and its kind of login.
+     * @returns {Promise<Array<{name: string, login: string, kept: boolean}>>}
+     */
+    async reconOtherStatus() {
+      const out = [];
+      for (const source of otherList().filter((one) => one.recon)) {
+        let kept = true;
+        for (const part of partsOf(source.login)) if (!(await secrets.has(source, part).catch(() => false))) kept = false;
+        out.push({ name: source.name, login: source.login, kept });
+      }
+      return out;
+    },
+    /**
+     * For Recon only: what a request to one of the sources it may use needs (its addresses, its login headers
+     * and the parts to take out of what the model sees). Recon sends it only through its own route.
+     * @param {string} name - the source's name, as the model gave it.
+     * @returns {Promise<{name: string, search: string, start: string, headers: Record<string, string>, hide: string[], hideHost: string} | {error: string}>}
+     */
+    async reconOtherRequest(name) {
+      const list = otherList().filter((source) => source.recon);
+      const source = otherNamed(name, list);
+      if (!source) return { error: `There is no source named "${String(name ?? '').slice(0, 60)}" that may be used in Recon. Those that may: ${list.map((one) => `"${one.name}"`).join(', ') || 'none'}.` };
+      try {
+        return { name: source.name, ...(await otherRequest(source)) };
+      } catch (error) {
+        return { error: String(error?.message ?? error) };
       }
     },
     /**
@@ -2401,6 +2714,82 @@ export function apply(ctx, config) {
           },
         }),
       'modes: GET tools route',
+    );
+    // Settings → Web sources → Other sources: which secrets are kept (never the secrets themselves), keeping
+    // and forgetting one, and a test read. The sources themselves are saved as settings by the page.
+    inner.effect(
+      () =>
+        inner.webServer.register({
+          kind: 'exact',
+          path: OTHER_PATH,
+          handler: async (req, res) => {
+            const refused = inner.connection.requestRejection(req);
+            if (refused !== undefined) {
+              res.statusCode = refused;
+              res.end();
+              return;
+            }
+            if (req.method !== 'GET' && req.method !== 'POST') {
+              res.statusCode = 405;
+              res.setHeader('allow', 'GET, POST');
+              res.end();
+              return;
+            }
+            res.setHeader('content-type', 'application/json; charset=utf-8');
+            res.setHeader('cache-control', 'no-store');
+            try {
+              let extra = {};
+              if (req.method === 'POST') {
+                const chunks = [];
+                let size = 0;
+                for await (const chunk of req) {
+                  size += chunk.length;
+                  if (size > 32_768) throw new Error('request too large');
+                  chunks.push(chunk);
+                }
+                const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+                const id = String(body?.id ?? '');
+                const source = otherList().find((one) => one.id === id);
+                switch (body?.action) {
+                  case 'secret': {
+                    if (!source) throw new Error('Save the source first, then its secret.');
+                    const part = body.part === 'user' ? 'user' : 'secret';
+                    if (!partsOf(source.login).includes(part)) throw new Error('This kind of login does not use that.');
+                    await secrets.set(source, part, String(body.value ?? ''));
+                    break;
+                  }
+                  case 'forget':
+                    // Works for a source that was just removed too, so no secret is left behind (both places).
+                    if (!/^[a-z0-9]{1,24}$/.test(id)) throw new Error('unknown source');
+                    for (const part of ['user', 'secret']) await secrets.unset(source ?? { id, store: 'app', name: id }, part);
+                    break;
+                  case 'test': {
+                    if (!source) throw new Error('unknown source');
+                    const request = await otherRequest(source);
+                    const address = request.search ? request.search.replace('{query}', encodeURIComponent('test')) : request.start;
+                    const page = await readSource(address, request.headers);
+                    extra = page.ok
+                      ? { tested: { ok: true, status: page.status, title: scrub(page.title, request.hide, source.name).slice(0, 120), text: scrub(page.text, request.hide, source.name).slice(0, 400) } }
+                      : { tested: { ok: false, why: scrub(page.why, request.hide, source.name) } };
+                    break;
+                  }
+                  default:
+                    throw new Error('unknown action');
+                }
+              }
+              const kept = {};
+              for (const source of otherList()) {
+                kept[source.id] = {};
+                for (const part of partsOf(source.login)) kept[source.id][part] = await secrets.has(source, part).catch(() => false);
+              }
+              res.end(JSON.stringify({ kept, keychain: process.platform === 'darwin', ...extra }));
+            } catch (error) {
+              res.statusCode = req.method === 'POST' ? 400 : 500;
+              res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 300) }));
+            }
+          },
+        }),
+      'modes: Other sources route',
     );
   });
 

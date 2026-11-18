@@ -10,6 +10,12 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const ReactDOM = require('react-dom');
     const h = React.createElement;
+
+    /** @returns {boolean} the Cowork sidebar shows another tab than this mode's (no sidebar: false, the server decides). */
+    const otherTab = (mode) => {
+      const tab = typeof document?.documentElement?.getAttribute === 'function' ? document.documentElement.getAttribute('data-cws-tab') : null;
+      return Boolean(tab) && tab !== mode;
+    };
     const { useEffect, useLayoutEffect, useRef, useState } = React;
 
     const NS = 'creator-plus';
@@ -84,7 +90,7 @@ window.__ModuleLoader__.load({
     }
 
     /** The bar: what to work on, and what to do (only in a Creator Plus conversation). */
-    function CreatorBar({ sessionId, appCtx }) {
+    function CreatorBar({ sessionId, appCtx, strip = false }) {
       const [view, setView] = useState(null);
       const [open, setOpen] = useState(false);
       const [state, setState] = useState(null);
@@ -96,6 +102,11 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         let alive = true;
         let timer;
+        // Another conversation: forget the last one's answer at once, so its bar never shows here while the
+        // next answer is on its way (it lingered up to 20 s on other tabs).
+        setView(null);
+        setState(null);
+        setOpen(false);
         const tick = async () => {
           let mine = false;
           try {
@@ -106,7 +117,10 @@ window.__ModuleLoader__.load({
             /* tried again shortly */
           }
           // A conversation of another tab asks seldom: it only has to notice when it becomes a Creator Plus one.
-          if (alive) timer = setTimeout(tick, document.hidden ? 30000 : mine ? 8000 : 20000);
+          // The Creator Plus tab is open but the answer says otherwise: a new conversation whose mode the server has not
+          // caught up with yet (a second or two). Ask again soon, so the options under the box come at once, not in 20 s.
+          const catchingUp = !mine && document.documentElement?.getAttribute?.('data-cws-tab') === 'creator-plus';
+          if (alive) timer = setTimeout(tick, document.hidden ? 30000 : mine ? 8000 : catchingUp ? 1500 : 20000);
         };
         if (sessionId) void tick();
         return () => { alive = false; clearTimeout(timer); };
@@ -131,6 +145,9 @@ window.__ModuleLoader__.load({
         };
       }, [open]);
       if (!view || view.enabled !== true || !view.session?.inCreator || !state) return null;
+      // With the Cowork sidebar the selected tab is the conversation's mode, known at once (the server's answer can be a
+      // moment behind for a new conversation): another tab never shows this bar.
+      if (otherTab('creator-plus')) return null;
       const runs = Array.isArray(view.runs) ? view.runs : [];
       const run = runs.find((entry) => entry.id === state.run) ?? runs[0];
       const plugins = view.map?.plugins ?? [];
@@ -158,10 +175,7 @@ window.__ModuleLoader__.load({
       };
       const toggle = (name) => save({ ...state, all: false, selection: state.selection.includes(name) ? state.selection.filter((item) => item !== name) : [...state.selection, name] });
       const reconPicked = state.selection.some((name) => /dsh-recon$/.test(name));
-      return h(React.Fragment, null,
-        h('style', null, CSS),
-        h('button', { ref: button, type: 'button', className: 'dsh-cp-ctl', 'aria-haspopup': 'dialog', 'aria-expanded': open, title: sentenceOf(state, runs), onClick: () => setOpen(!open) }, `Creator Plus · ${run?.label ?? ''}`),
-        open ? ReactDOM.createPortal(
+      const window_ = open ? ReactDOM.createPortal(
           h('div', { ref: panel, className: 'dsh-cp-pop', role: 'dialog', 'aria-label': 'Creator Plus bar', style: { left: place.left, bottom: place.bottom, maxHeight: `calc(100vh - ${place.bottom + 12}px)`, overflowY: 'auto' } },
             h('style', null, CSS),
             h('div', { className: 'title' }, 'What to do'),
@@ -186,7 +200,36 @@ window.__ModuleLoader__.load({
               h('button', { type: 'button', className: 'dsh-cp-btn', disabled: !runName.trim(), onClick: async () => { try { const data = await call({ action: 'saveRun', name: runName, state }, sessionId); setNote(data.note ?? ''); setRunName(''); } catch (problem) { setNote(problem.message); } } }, 'Save run')),
             (view.savedRuns ?? []).length ? h('div', { className: 'dsh-cp-desc', style: { marginTop: 8 } }, 'Saved runs: ', (view.savedRuns ?? []).map((saved) => h('button', { key: saved.name, type: 'button', className: 'dsh-cp-btn', style: { marginRight: 4 }, onClick: () => void save({ ...state, ...saved.state }) }, saved.name))) : null,
             note ? h('div', { className: 'dsh-cp-desc', role: 'status' }, note) : null),
-          document.body) : null);
+          document.body) : null;
+      if (strip) {
+        // Under the chat box, in the one options area every mode shares (the owner's rule of 18 November 2026): on the
+        // start page and in a started conversation, with the same field, drop-down and chip look as Scout and Finance.
+        // The same choices as before; "Start or save…" opens the same window as the bar in the chat box.
+        const Area = window.__dshOptionsArea;
+        if (!Area) return null;
+        const short = (name) => name.replace(/^@local\//, '').replace(/^@deepseek-ai\//, '');
+        const others = plugins.filter((plugin) => !state.selection.includes(plugin.name));
+        return h(Area, { mode: 'creator-plus', place: strip === 'start' ? 'start' : 'chat', label: 'What Creator Plus does in this conversation' },
+          h('style', null, CSS),
+          h('select', { className: 'dsh-opt-pick', value: state.run, 'aria-label': 'What to do', title: run?.does ?? 'What to do', onChange: (event) => void save({ ...state, run: event.target.value }) }, runs.map((entry) => h('option', { key: entry.id, value: entry.id }, entry.label))),
+          state.all === true
+            ? h('span', { className: 'dsh-opt-chip' }, 'All plugins', h('button', { type: 'button', 'aria-label': 'Remove all plugins', title: 'Remove all plugins', onClick: () => void save({ ...state, all: false, selection: [] }) }, '×'))
+            : state.selection.map((name) => h('span', { key: name, className: 'dsh-opt-chip' }, short(name), h('button', { type: 'button', 'aria-label': `Remove ${short(name)}`, title: `Remove ${short(name)}`, onClick: () => void toggle(name) }, '×'))),
+          state.all === true ? null : h('select', { className: 'dsh-opt-pick', 'aria-label': 'Add a plugin', value: '', onChange: (event) => { const picked = event.target.value; if (picked === '*all') void save({ ...state, all: true, selection: plugins.map((plugin) => plugin.name) }); else if (picked) void toggle(picked); } },
+            h('option', { value: '' }, '+ Plugin'),
+            h('option', { value: '*all' }, 'All plugins (on purpose)'),
+            others.map((plugin) => h('option', { key: plugin.name, value: plugin.name }, `${plugin.locked ? '🔒 ' : ''}${short(plugin.name)}${plugin.enabled ? '' : ' (off)'}`))),
+          h('button', { type: 'button', className: 'dsh-opt-pick', 'aria-pressed': state.lookOnly === true, title: 'Look only: read and report; prepare no change, not even in the trial copy', onClick: () => void save({ ...state, lookOnly: !state.lookOnly }) }, 'Look only'),
+          run?.logs ? h('select', { className: 'dsh-opt-pick', 'aria-label': 'Logs from', title: 'Logs from', value: state.logsFrom, onChange: (event) => void save({ ...state, logsFrom: event.target.value }) },
+            [['last', 'Logs since the last run'], ['7', 'Logs of 7 days'], ['30', 'Logs of 30 days'], ['all', 'All logs']].map(([id, label]) => h('option', { key: id, value: id }, label))) : null,
+          h('button', { ref: button, type: 'button', className: 'dsh-opt-pick', 'aria-haspopup': 'dialog', 'aria-expanded': open, onClick: () => setOpen(!open) }, 'Start or save…'),
+          h('div', { className: 'dsh-opt-hint' }, note || sentenceOf(state, runs)),
+          window_);
+      }
+      return h(React.Fragment, null,
+        h('style', null, CSS),
+        h('button', { ref: button, type: 'button', className: 'dsh-cp-ctl', 'aria-haspopup': 'dialog', 'aria-expanded': open, title: sentenceOf(state, runs), onClick: () => setOpen(!open) }, `Creator Plus · ${run?.label ?? ''}`),
+        window_);
     }
 
     /** One result card with its buttons. */
@@ -353,6 +396,10 @@ window.__ModuleLoader__.load({
         const t = ctx.locale.bind(NS);
         ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'creator-plus', order: 117, label: () => t('section.title') }, (props) => h(CreatorPage, { ...props, appCtx: ctx }))));
         ctx.effect(() => ctx.slots.inject('conversation.input.left', () => ctx.slots.register({ name: 'conversation.input.left', id: 'creator-plus-bar', order: -16, label: () => 'Creator Plus' }, (props) => h(CreatorBar, { sessionId: props?.sessionId, appCtx: ctx }))));
+        // The same choices under the chat box, in the one options area every mode shares (Cowork sidebar): on the start
+        // page (beside Scout's and Finance's fields) and in a started conversation. The box's row stays the same in every mode.
+        ctx.effect(() => ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({ name: 'conversation.hero.options', id: 'creator-plus-options', order: 45 }, (props) => h(CreatorBar, { sessionId: props?.sessionId, appCtx: ctx, strip: 'start' }))));
+        ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'creator-plus-strip', order: -40 }, (props) => h(CreatorBar, { sessionId: props?.sessionId, appCtx: ctx, strip: 'chat' }))));
       },
     };
   },

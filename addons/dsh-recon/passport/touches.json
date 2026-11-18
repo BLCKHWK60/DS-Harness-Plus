@@ -43,6 +43,8 @@
     "recon_news_search",
     "recon_archive_find",
     "recon_archive_read",
+    "recon_other_search",
+    "recon_other_read",
     "recon_cite"
   ],
   "commands": [

@@ -14,6 +14,14 @@
     {
       "name": "settings.action",
       "id": "plus-settings-search"
+    },
+    {
+      "name": "conversation.input.right",
+      "id": "plus-export"
+    },
+    {
+      "name": "conversation.input.right",
+      "id": "plus-mode-gear"
     }
   ],
   "settings": [],
@@ -21,7 +29,10 @@
   "modes": [],
   "storage": [],
   "config": [
-    "enabled"
+    "enabled",
+    "modeGear",
+    "exportButton",
+    "extrasInGear"
   ],
   "instructionChars": 0,
   "rows": [

@@ -1,5 +1,6 @@
 # Changelog: @local/dsh-scout
 
+- 2026-11-18 Its start-page fields are drawn in the one options area every mode shares (same place, same look); behaviour unchanged
 - 2026-11-16 Long run in every tab with a Run button, and the overnight work
 - 2026-11-15 Web label for Research and Scout, and the Lens (0.60.0)
 - 2026-11-15 Build the owner's 26 decisions and Scout step 3 (0.57.0)

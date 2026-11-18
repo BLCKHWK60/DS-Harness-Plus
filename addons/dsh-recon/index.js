@@ -25,7 +25,7 @@
  * whether it may receive findings, for the status bar on the Recon tab's start page.
  */
 import z from '@deepseek-ai/schemastery';
-import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir, tmpdir, userInfo } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
@@ -33,13 +33,15 @@ import { nameOf, readAccounts, removeCommandFor, serviceOf, storeCommandFor } fr
 import { onionAddressesIn, openTrail } from './lib/address.js';
 import { MODE_ID, TOOLS, withRecon } from './lib/mode.js';
 import { CLAIM_MAX, DRAFTS, DRAFT_MAX, SEARCH_MS, SUB_MAX, ULTRA_TOOL, isRecipeHelperTask, judgeAccepted, judgeTask, materialOf, wideSearch, writerTask } from './lib/ultra.js';
-import { mayReceive, openConsent, providerPlace, staysHome } from './lib/model.js';
+import { cloudPolicy, mayReceive, openConsent, providerPlace, staysHome } from './lib/model.js';
 import { exportText, writeExport } from './lib/export.js';
 import { MARKER_RE, MESSAGE_MAX, NEVER_GOES, NOT_KEPT, WARNINGS, addressKey, addressesIn, buildExport, covers, decoded, exportMessage, exportsInText, isOnion, openDoor, safeExportParent, sharesRun, urlsIn, writeExportFolder } from './lib/door.js';
 import { openForward } from './lib/forward.js';
 import { login, loginName } from './lib/keychain.js';
 import { AHMIA, createOnion } from './lib/onion.js';
 import { runLocked } from './lib/sandbox.js';
+import { createReconOther } from './lib/other.js';
+import { resultAllowed } from './lib/ticks.js';
 import { openBlocklist } from './lib/screen.js';
 import { openSources } from './lib/sources.js';
 import { findingsIn } from './lib/restore.js';
@@ -52,7 +54,8 @@ import { createBoards } from './lib/boards.js';
 import { openWipeList, wipeFiles, wipeTrashed } from './lib/wipe.js';
 import { createTor, findTor, torVersion } from './lib/tor.js';
 import { createVpn, findWireproxy, readVpnList, vpnNameOf, vpnRemoveCommandFor, vpnStoreCommandFor, vpnStored } from './lib/vpn.js';
-import { copyOtherFiles, filesNote, filesPart, listRoomFiles, namedByCalls, pickedFiles, runFolderName } from './lib/roomfiles.js';
+import { copyOtherFiles, copyRoomFile, filesNote, filesPart, listRoomFiles, namedByCalls, pickedFiles, runFolderName } from './lib/roomfiles.js';
+import { MOVE_FOLDER, buildMove, messagesFromEvents } from './lib/move.js';
 
 export const name = 'dsh-recon';
 
@@ -269,6 +272,12 @@ export const Config = z.object({
   vpnConfigs: z.array(z.object({ id: z.string().default(''), label: z.string().default('') })).default([]).volatile(),
   /** Where the wireproxy program is. Empty looks in the usual places (Homebrew). Plus does not install it. */
   wireproxyPath: z.string().default('').volatile(),
+  /**
+   * Cloud models in a Recon conversation (18 November 2026, the owner's choice): 'ask' (the default) hands
+   * what Recon finds to a cloud model only after /recon cloud in that conversation; 'always' without asking;
+   * 'never' not at all. A model on this Mac or in your own network always gets it.
+   */
+  cloudModels: z.union([z.const('ask'), z.const('always'), z.const('never')]).default('ask').volatile(),
 });
 
 function plain(value) {
@@ -311,6 +320,8 @@ export function apply(ctx, config, standIns = {}) {
   const usenetDefault = () => String(plain(config?.usenetDefaultAccount) ?? '');
   /** Whether the Internet Archive is read directly (the default) rather than through Tor. */
   const archiveDirect = () => plain(config?.archiveDirect) !== false;
+  /** Settings → Recon → Models: whether a cloud model gets what Recon finds (ask in each conversation, always, never). */
+  const cloudModels = () => cloudPolicy(plain(config?.cloudModels));
   const web = createWeb({ port: () => onion.port(), run: runLocked, sources, on: () => ({ archive: plain(config?.archiveOn) === true, news: plain(config?.newsOn) === true }), archiveDirect, forward: (host, port, id) => clearForward(host, port, id) });
   // ---- WireGuard: the way out for everything that is not Tor ------------------------------------
   const vpnList = () => readVpnList(plain(config?.vpnConfigs));
@@ -344,7 +355,25 @@ export function apply(ctx, config, standIns = {}) {
   const usenet = createUsenet({ run: runLocked, route: usenetRoute, accounts: usenetAccounts, defaultAccount: usenetDefault, login, forward: clearForward, sources });
   /** The ordinary web's addresses each conversation was shown (search results, links on pages it read, your messages). */
   const webTrail = openWebTrail();
-  const clearnet = createClearnet({ run: runLocked, forward: clearForward, sources, trail: webTrail, on: () => plain(config?.webOn) !== false });
+  /** The Web button's ticks for a conversation (Modes keeps them; undefined is All, Recon as before). */
+  const ticksOf = (id) => {
+    try {
+      return ctx.get('modes')?.webSources?.(id);
+    } catch {
+      return undefined;
+    }
+  };
+  /** The kinds of an address (verified, news, forums, …) by Modes' lists on Settings → Web sources. */
+  const kindsOf = (address) => {
+    try {
+      return ctx.get('modes')?.webKinds?.(address) ?? [];
+    } catch {
+      return [];
+    }
+  };
+  const clearnet = createClearnet({ run: runLocked, forward: clearForward, sources, trail: webTrail, on: () => plain(config?.webOn) !== false, allow: (id, url) => resultAllowed(url, ticksOf(id), kindsOf) });
+  // The user's own sources allowed in Recon: read through the WireGuard tunnel only (lib/other.js).
+  const other = createReconOther({ fetch: clearnet.fetch, request: async (name) => (await ctx.get('modes')?.reconOtherRequest?.(name)) ?? { error: 'The user\'s own sources are not available (the Modes add-on is not running).' }, sources });
   // Boards, forums and public channels that search engines miss (lib/boards.js), the same way out.
   const boards = createBoards({ fetch: clearnet.fetch, sources, trail: webTrail, on: clearnet.on });
   /** Whether each account has a login in the Keychain, looked up now and then for the page. Only the fact, never a login. */
@@ -520,7 +549,7 @@ export function apply(ctx, config, standIns = {}) {
   const gate = (agent) => {
     // The model the agent uses; the agreement is the conversation's (a helper uses the same model).
     const { route, place } = modelOf(agent);
-    return mayReceive({ place, route, id: topIdOf(agent), consent });
+    return mayReceive({ place, route, id: topIdOf(agent), consent, policy: cloudModels() });
   };
 
   /** Conversations whose record was rebuilt from their saved history since Recon started. */
@@ -759,7 +788,7 @@ export function apply(ctx, config, standIns = {}) {
       const tools = ctx.get('tools');
       if (!tools?.register) return;
       // A helper's searches and reads belong to its conversation: one numbering of sources, one log, one export.
-      toolsOff = buildTools({ enabled, inRecon: (exec) => inRecon(exec?.agent), inRoom: (exec) => inRoom(exec?.agent), gate: (exec) => gate(exec?.agent), onion, clearnet, boards, usenet, web, sources, idOf: (exec) => topIdOf(exec?.agent), restore: (exec) => restore(topOf(exec?.agent)) }).map((tool) => tools.register(tool));
+      toolsOff = buildTools({ enabled, inRecon: (exec) => inRecon(exec?.agent), inRoom: (exec) => inRoom(exec?.agent), gate: (exec) => gate(exec?.agent), onion, clearnet, boards, usenet, web, sources, idOf: (exec) => topIdOf(exec?.agent), restore: (exec) => restore(topOf(exec?.agent)), ticks: (exec) => ticksOf(topIdOf(exec?.agent)), kinds: kindsOf, other }).map((tool) => tools.register(tool));
       // Ultra Code's fixed recipe: offered only to the conversation itself, only while Ultra Code is on.
       toolsOff.push(tools.register(ultraTool, { when: ({ agent }) => !(agent?.header?.parentSession ?? agent?.session?.header?.parentSession) && ultraOn(agent) && inRecon(agent) }));
     } else if (!on && toolsOff) {
@@ -834,9 +863,9 @@ export function apply(ctx, config, standIns = {}) {
     const chosen = payload?.modelSelection;
     const route = chosen?.provider && chosen?.model ? { provider: String(chosen.provider), model: String(chosen.model) } : undefined;
     const place = providerPlace(settingsOf('llm-pi-ai')?.providers, route?.provider);
-    if (mayReceive({ place, route, id: topIdOf(agent), consent }).ok || !holdsRecon(agent)) return next();
+    if (mayReceive({ place, route, id: topIdOf(agent), consent, policy: cloudModels() }).ok || !holdsRecon(agent)) return next();
     const who = !route ? 'not known' : `${route.model} (${place.name || route.provider}), ${place.where === 'cloud' ? 'in the cloud' : 'at a place Recon cannot tell, treated as cloud'}`;
-    const agree = enabled() && inRecon(agent) ? ', or type /recon cloud to agree to this model for this conversation' : '';
+    const agree = cloudModels() === 'never' ? ' (cloud models are switched off in Settings → Recon → Models)' : enabled() && inRecon(agent) ? ', or type /recon cloud to agree to this model for this conversation' : '';
     throw new Error(`This conversation holds what Recon found, and its model is ${who}. Nothing was sent. Pick a model on this computer or in your own network${agree}, then send your message again.`);
   });
   // Mentions of other conversations: an isolated conversation takes in none, and none takes in an
@@ -898,7 +927,7 @@ export function apply(ctx, config, standIns = {}) {
       inRoom(agent) ? 'Folder: Recon\'s own empty folder. The model is told no path of yours.' : 'Folder: a folder of yours, so the tools are OFF in this conversation. Start a new one with the New button in the Recon tab.',
       `Tools: only ${TOOLS.join(', ')}. No programs, files, memory, helpers or other modes; a Long run (the Run button) adds helpers on this conversation's model, with file tools in the run's own folder in the room, and no programs or commands.`,
       `Model: ${model}${where ? `, ${where}` : ''}.`,
-      allowed.ok ? (staysHome(place) ? 'What Recon finds stays on your own machines.' : 'You agreed that what Recon finds goes to this cloud model, for this conversation.') : 'What Recon finds is NOT sent to this model. Type /recon cloud to agree for this conversation, or pick a local model.',
+      allowed.ok ? (staysHome(place) ? 'What Recon finds stays on your own machines.' : cloudModels() === 'always' ? 'What Recon finds goes to this cloud model: Settings → Recon → Models allows cloud models without asking.' : 'You agreed that what Recon finds goes to this cloud model, for this conversation.') : cloudModels() === 'never' ? 'What Recon finds is NOT sent to this model: cloud models are switched off in Settings → Recon → Models. Pick a local model.' : 'What Recon finds is NOT sent to this model. Type /recon cloud to agree for this conversation, or pick a local model.',
       `Outside Tor (the Internet Archive read directly, Usenet, the ordinary web): ${clearWayText(topIdOf(agent))}.`,
       `Network: .onion sites through Recon's own Tor (${tor.status().state}). Usenet: ${usenetRoute() === 'direct' ? `encrypted connections, ${clearWayText(topIdOf(agent))}; accounts: ${usenetAccounts().map((account) => `${nameOf(account)} (${account.host || 'no server yet'}:${account.port})`).join(', ') || '(none set yet)'}` : 'off (Settings → Recon → Usenet)'}.`,
       `The ordinary web: ${plain(config?.webOn) !== false ? `on, ${clearWayText(topIdOf(agent))}` : 'off (Settings → Recon → More sources)'}.`,
@@ -1457,6 +1486,91 @@ export function apply(ctx, config, standIns = {}) {
     }
     throw new Error('Pick where it goes: a new conversation, one that exists, or a folder.');
   };
+  /**
+   * A conversation that began in Recon, for a move to another tab: Recon's own, or one held locked
+   * (moved before 18 November 2026, or Recon switched off). A conversation moved INTO Recon after it ran
+   * elsewhere holds nothing of Recon's and moves as any other. Allowed with Recon off, so none is stuck.
+   */
+  const moveSource = async (sessionId) => {
+    const id = String(sessionId ?? '').slice(0, 200);
+    if (ended.has(id) || wipeList.has(id)) throw new Error('This conversation was ended and wiped.');
+    const service = modes();
+    const mode = service?.get?.(id);
+    if (service?.isolated?.(id) !== true || (mode !== MODE_ID && mode !== 'isolated-locked')) throw new Error('Only a conversation that began in Recon moves this way.');
+    let agent;
+    try {
+      agent = ctx.get('agents')?.get?.(id);
+    } catch {
+      agent = undefined;
+    }
+    if (agent) {
+      if (topIdOf(agent) !== id) throw new Error('A helper does not move on its own.');
+      return { id, agent };
+    }
+    let surface;
+    try {
+      surface = await ctx.get('sessionQuery').readSurface(id);
+    } catch (error) {
+      throw new Error(`The conversation's saved messages could not be read (${String(error?.code ?? error?.message ?? error).slice(0, 80)}).`);
+    }
+    const header = surface?.session ?? {};
+    if (header.parentSession || header.origin === 'subagent') throw new Error('A helper does not move on its own.');
+    return { id, events: surface?.events ?? [] };
+  };
+  /**
+   * Move a Recon conversation to another tab (the owner's choice, 18 November 2026): the page made a new
+   * conversation in that tab's usual place; it becomes one of that tab, its own files are copied out of
+   * the room into `<folder>/from-recon-<id>/files`, the whole conversation is written beside them as
+   * conversation.md, and the first message carries it. The original stays in Recon, unchanged.
+   */
+  const doorMove = async (body) => {
+    const source = await moveSource(body.session);
+    if (runningNow(source.id)) throw new Error('Recon is running in this conversation: move it when the run is done.');
+    const tab = String(body.tab ?? '');
+    const target = doorTabs().find((one) => one.id === tab);
+    if (!target) throw new Error('A conversation moves to a tab other than Recon.');
+    const child = String(body.sessionId ?? '').slice(0, 200);
+    if (!child || child === source.id) throw new Error('The new conversation is missing.');
+    const parent = safeExportParent(String(body.folder ?? ''), [ROOM, DEFAULT_ROOM]);
+    const id = newExportId();
+    const at = Date.now();
+    const where = join(parent, MOVE_FOLDER(id));
+    mkdirSync(where, { recursive: true, mode: 0o700 });
+    const scope = await roomScope(source);
+    let files = [];
+    try {
+      const offered = existsSync(ROOM) ? listRoomFiles(ROOM, scope) : [];
+      files = offered.length > 0 ? pickedFiles(ROOM, offered.map((file) => file.path), scope) : [];
+    } catch {
+      files = [];
+    }
+    const copied = [];
+    const skipped = [];
+    for (const file of files) {
+      try {
+        const into = join(where, 'files', file.path);
+        mkdirSync(dirname(into), { recursive: true, mode: 0o700 });
+        copyRoomFile(file.full, file.path, into);
+        copied.push(file.path);
+      } catch (error) {
+        skipped.push({ path: file.path, why: String(error?.message ?? error).slice(0, 120) });
+      }
+    }
+    let messages = [];
+    try {
+      messages = source.agent ? source.agent.session?.deriveMessages?.() ?? [] : messagesFromEvents(source.events);
+    } catch {
+      messages = [];
+    }
+    const built = buildMove({ title: String(body.title ?? '').slice(0, 200), messages, tabLabel: target.label || tab, folder: where, files: copied, skipped, at, max: MESSAGE_MAX - 400 });
+    writeFileSync(join(where, 'conversation.md'), built.full, { mode: 0o600, flag: 'wx' });
+    await claimFor(child, tab);
+    // Recorded as an export into the new conversation, so the export rules hold there (onion addresses never
+    // opened outside Recon, others after a yes, nothing into Memory).
+    door.add({ id, at, what: 'move', from: source.id, to: [{ kind: 'conversation', id: child, tab }], addresses: addressesIn(built.full) });
+    sources.note(source.id, 'export', `moved to a new ${tab} conversation (${copied.length} file${copied.length === 1 ? '' : 's'} copied)`);
+    return { id, tab, label: target.label || tab, message: exportMessage(id, at, built.message), folder: where, files: copied.length, skipped: skipped.length };
+  };
   ctx.inject(['webServer', 'connection'], (inner) => {
     inner.effect(
       () => inner.webServer.register({
@@ -1488,6 +1602,10 @@ export function apply(ctx, config, standIns = {}) {
             const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
             if (body.action === 'export') {
               res.end(JSON.stringify(await doorExport(body)));
+              return;
+            }
+            if (body.action === 'move') {
+              res.end(JSON.stringify(await doorMove(body)));
               return;
             }
             if (body.action === 'claim') {
@@ -1529,6 +1647,8 @@ export function apply(ctx, config, standIns = {}) {
                 const { route, place } = modelOf(agent);
                 if (!route) return { kind: 'error', text: 'Pick a model in the chat box first.' };
                 if (staysHome(place)) return { kind: 'success', text: 'This conversation\'s model runs on your own machines. Nothing to agree to.' };
+                if (cloudModels() === 'never') return { kind: 'error', text: 'Cloud models are switched off for Recon (Settings → Recon → Models). Pick a model on this computer or in your own network, or change that setting.' };
+                if (cloudModels() === 'always') return { kind: 'success', text: 'Nothing to agree to: Settings → Recon → Models allows cloud models in every Recon conversation.' };
                 consent.agree(agent.id, route);
                 return { kind: 'success', text: `Agreed: what Recon finds in this conversation is sent to ${route.model} (${place.name || route.provider}). This holds for this conversation and this model until the app is closed.` };
               }
@@ -1607,6 +1727,24 @@ export function apply(ctx, config, standIns = {}) {
     };
   };
 
+  /**
+   * The user's own sources Recon may use, for the status bar: name, whether the login is kept (Modes looks on
+   * this Mac only) and how the last read went. Looked up at most every 30 seconds; no request is sent for it.
+   */
+  let othersSeen = [];
+  let othersAt = 0;
+  const lookForOthers = () => {
+    if (Date.now() - othersAt < 30_000) return;
+    othersAt = Date.now();
+    const modes = ctx.get('modes');
+    if (typeof modes?.reconOtherStatus !== 'function') {
+      othersSeen = [];
+      return;
+    }
+    void Promise.resolve(modes.reconOtherStatus()).then((list) => {
+      othersSeen = (Array.isArray(list) ? list : []).slice(0, 30).map((one) => ({ name: String(one?.name ?? ''), login: String(one?.login ?? ''), kept: one?.kept === true }));
+    }, () => {});
+  };
   /** @param {object} [options] - `light`: leave out the Keychain look-up (the start page asks often and needs no logins). */
   const view = ({ light = false } = {}) => {
     const path = torBin();
@@ -1619,13 +1757,18 @@ export function apply(ctx, config, standIns = {}) {
       lookForVpns();
     }
     const accounts = usenetAccounts();
+    lookForOthers();
     return {
+      // Recon's own sources for the status bar (the one Web selector): each with its last read, if any.
+      others: othersSeen.map((one) => ({ ...one, last: other.last(one.name) ?? null })),
+      i2p: { ready: false },
       vpn: {
         bin: wireproxyBin(),
         configs: vpnList().map((entry, index) => ({ ...entry, name: vpnNameOf(entry, index), stored: hasVpn.get(entry.id) === true, storeCommand: vpnStoreCommandFor(entry.id), removeCommand: vpnRemoveCommandFor(entry.id) })),
         status: vpn.status(),
         test: vpnTest,
       },
+      cloudModels: cloudModels(),
       more: { longChecks: plain(config?.longChecks) === true, web: plain(config?.webOn) !== false, archive: plain(config?.archiveOn) === true, archiveDirect: archiveDirect(), news: plain(config?.newsOn) === true, archiveHost: ARCHIVE, newsHost: NEWS },
       room: ROOM,
       exportFolder: exportFolder(),

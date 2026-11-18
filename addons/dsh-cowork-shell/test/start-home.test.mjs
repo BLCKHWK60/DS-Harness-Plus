@@ -276,9 +276,23 @@ test('a tab whose name does not fit shows its icon alone, measured as if selecte
   // Wiring in the sidebar.
   assert.match(source, /keep\(iconOnlyIds\(shownTabs, list\.querySelectorAll\('\[role=tab\]'\), \(el\) => getComputedStyle\(el\), pen\)\)/);
   assert.match(source, /watch\.observe\(list\);/);
-  assert.match(source, /\}, \[wide, tabsKey\]\);/);
+  assert.match(source, /\}, \[wide, tabsKey, state\.iconOnlyTabs\]\);/);
   assert.match(source, /'aria-label': arranging \? t\('tabs\.arrange\.move', \{ tab: m\.label \}\) : \(wide && !iconOnly\.ids\.has\(m\.id\) \? undefined : m\.label\)/);
   assert.match(source, /wide && !iconOnly\.ids\.has\(m\.id\) \? h\('span', null, m\.label\) : null/);
+});
+
+test('tab names: every tab keeps its name by default (tabs wrap); the icon-alone mode is a switch that is off', () => {
+  // Default: no tab is measured, so none can lose its name.
+  assert.match(source, /if \(!wide \|\| !state\.iconOnlyTabs \|\| !list \|\| typeof ResizeObserver !== 'function'\) \{ keep\(\[\]\); return undefined; \}/);
+  assert.match(source, /'data-many': wide && tabs\.length > 3 && state\.iconOnlyTabs \? 'true' : undefined, 'data-wrap': wide && tabs\.length > 3 && !state\.iconOnlyTabs \? 'true' : undefined/);
+  assert.match(source, /iconOnlyTabs: false, tabOrder/, 'off in the starting state');
+  assert.match(source, /patch\.iconOnlyTabs = mine\.value\?\.iconOnlyTabs === true;/, 'read from the settings, off when missing');
+  assert.match(source, /model\.setOption\('iconOnlyTabs', !state\.iconOnlyTabs\)/, 'a switch in the More menu');
+  // Wrapping tabs are as wide as their name, never narrower, and never wider than the row.
+  assert.match(source, /\.cws-tabs\[data-wrap='true'\]\{flex-wrap:wrap\}/);
+  assert.match(source, /\.cws-tabs\[data-wrap='true'\] \.cws-tab\{flex:1 1 auto;min-width:max-content;max-width:100%/);
+  const server = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  assert.match(server, /iconOnlyTabs: z\.boolean\(\)\.default\(false\)\.volatile\(\)/, 'the setting exists and defaults to off');
 });
 
 const ordering = new Function(`${functionText('readOrder')}\n${functionText('orderTabs')}\n${functionText('mergeOrder')}\n${functionText('moveId')}\nreturn { readOrder, orderTabs, mergeOrder, moveId };`)();

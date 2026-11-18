@@ -6,6 +6,8 @@ import { allowed as trimAllowed } from './trim.js';
 
 /** Web tools the Search switch turns on or off. */
 export const WEB_TOOLS = ['web_search', 'web_fetch'];
+/** The owner's own sources (Web source Other, lib/other.js): offered with the web, only while Other is ticked. */
+export const OTHER_TOOLS = ['other_search', 'other_read'];
 /** The tool the Deep research switch makes available. Its helpers do the searching. */
 export const RESEARCH_TOOL = 'deep_research';
 
@@ -22,6 +24,8 @@ export const WEB_REACHING = {
     'recon_onion_search', 'recon_onion_read', 'recon_usenet_groups', 'recon_usenet_search', 'recon_usenet_read', 'recon_news_search', 'recon_archive_find', 'recon_archive_read',
     // Recon's ordinary-web and board tools and its Ultra Code search go online too: Off leaves only recon_cite.
     'recon_web_search', 'recon_web_read', 'recon_board_search', 'recon_board_read', 'recon_ultra',
+    // The owner's own sources (Web source Other), in every tab and in Recon.
+    'other_search', 'other_read', 'recon_other_search', 'recon_other_read',
   ],
   prefixes: ['finance_'],
 };
@@ -95,9 +99,10 @@ const helperLeaves = (tool) => tool.startsWith('library_') || RESEARCH_HELPER_LE
  * @param {boolean} want.off - the conversation's tools are switched off altogether.
  * @param {boolean} want.child - the agent is a helper started by the conversation, not the conversation itself.
  * @param {string[]} [want.offline] - other tools that reach the internet, taken away with the web.
+ * @param {string[]} [want.withWeb] - tools a list mode is also allowed while the web is on (the owner's own sources, when the app has them).
  * @returns {{allow?: string[], deny?: string[]} | null} the mask, or null for no restriction.
  */
-export function maskFor({ tools, web, research, off, child, offline = [] }) {
+export function maskFor({ tools, web, research, off, child, offline = [], withWeb = [] }) {
   if (off) return { allow: [] };
   // A helper of a research conversation (the Research tab) is the one that searches: it needs the
   // web tools whatever the conversation's own web level says.
@@ -109,7 +114,7 @@ export function maskFor({ tools, web, research, off, child, offline = [] }) {
   const leftToHelper = (tool) => !(child && research && helperLeaves(tool));
   const base = tools === 'none' ? [] : tools.filter((tool) => !WEB_TOOLS.includes(tool) && leftToHelper(tool) && (needsWeb || (tool !== RESEARCH_TOOL && !offline.includes(tool))));
   const allow = [...base];
-  if (needsWeb) allow.push(...WEB_TOOLS);
+  if (needsWeb) allow.push(...WEB_TOOLS, ...withWeb);
   return { allow: [...new Set(allow)] };
 }
 
@@ -256,13 +261,14 @@ export function imageToolsOffline({ baseUrl, names = IMAGE_TOOLS } = {}) {
  */
 export function toolMaskFor({ mode, trimmed = false, known = [], added = [], web = false, research = false, off = false, child = false, fenced = [], webOff = false, online = [] }) {
   const offline = [...new Set([...webReaching(known), ...online.filter((name) => known.includes(name))])];
+  const withWeb = OTHER_TOOLS.filter((name) => known.includes(name));
   if (trimmed) {
     const listed = trimAllowed(known, added);
-    const mask = maskFor({ tools: listed, web, research, off: false, child, offline });
+    const mask = maskFor({ tools: listed, web, research, off: false, child, offline, withWeb });
     return { allow: mask.allow.filter((name) => !fenced.includes(name)) };
   }
   if (mode.isolated) return isolatedMask({ tools: mode.tools, off, child, webOff });
-  const mask = maskFor({ tools: mode.tools, web, research, off, child, offline });
+  const mask = maskFor({ tools: mode.tools, web, research, off, child, offline, withWeb });
   // The tools of an isolated mode belong to that mode alone: no other conversation is offered them.
   if (fenced.length === 0) return mask;
   if (!mask) return { deny: fenced };

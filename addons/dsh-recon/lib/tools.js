@@ -4,6 +4,7 @@
  * Searching and reading .onion sites go through lib/onion.js, Usenet through lib/usenet.js.
  */
 import { MODE_TOOLS, TOOLS } from './mode.js';
+import { UNTICKED, untickedRefusal } from './ticks.js';
 
 /**
  * How a tool's answer starts when the tool did not run (below, and mayReceive in lib/model.js).
@@ -23,6 +24,9 @@ const NOT_RUN = [
   'No draft was written',
   'The action is search or report',
   "Recon's web is off",
+  // A tool whose source is not ticked on the Web button (lib/ticks.js).
+  UNTICKED,
+  'Your own sources are read in Recon only',
 ];
 
 /** The marker the app's compaction puts around its summary of earlier history. */
@@ -84,16 +88,19 @@ export function* answersOf(messages) {
  *   `restore(exec)` (rebuild the conversation's record from its saved history, once after a restart; lib/restore.js).
  * @returns {object[]} the tool definitions.
  */
-export function buildTools({ enabled, inRecon, inRoom, gate, onion, clearnet, boards, usenet, web, sources, idOf, restore }) {
+export function buildTools({ enabled, inRecon, inRoom, gate, onion, clearnet, boards, usenet, web, sources, idOf, restore, ticks = () => undefined, kinds = () => [], other }) {
   const output = {
     schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
     render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }],
   };
-  const guarded = (work) => async (args, exec) => {
+  const guarded = (work, name) => async (args, exec) => {
     try {
       if (!enabled()) return { text: 'Recon is switched off in Settings → Recon.' };
       if (!inRecon(exec)) return { text: 'This tool works only in a conversation of the Recon tab. It was not run.' };
       if (!inRoom(exec)) return { text: 'This Recon conversation runs in a folder of the user\'s, so its tools are off: the model would be told that folder\'s path. Nothing was sent. Tell the user to start a new conversation with the New button in the Recon tab; it then runs in Recon\'s own empty folder.' };
+      // The Web button's ticks (the one Web selector): a source that is not ticked is not used.
+      const unticked = untickedRefusal({ name, args: args ?? {}, ticks: ticks(exec), kinds });
+      if (unticked) return { text: unticked };
       const allowed = gate(exec);
       if (!allowed.ok) return { text: allowed.why };
       // After a restart, earlier sources and shown addresses come back before the first tool runs.
@@ -118,6 +125,8 @@ export function buildTools({ enabled, inRecon, inRoom, gate, onion, clearnet, bo
     recon_news_search: ['Search the GDELT Project\'s index of worldwide news coverage for a topic. Gives titles, addresses, publishers and dates; not the articles themselves.', { query: text(200, 'What to look for, in a few words. Put an exact phrase in double quotes.'), days: { type: 'integer', minimum: 1, maximum: 90, description: 'How many days back. Leave out for 7.' }, language: text(20, 'Only coverage in this language, as an English word: english, german, spanish. Leave out for all.') }, ['query']],
     recon_archive_find: ['List the dated copies the Internet Archive holds of a web page. Use it before recon_archive_read.', { address: text(500, 'The page\'s address on the web.'), from: text(10, 'Earliest date, YYYY or YYYY-MM-DD.'), to: text(10, 'Latest date, YYYY or YYYY-MM-DD.') }, ['address']],
     recon_archive_read: ['Read the text of one Internet Archive copy of a web page. Text only. This is the only way to read a page from the normal web here. Long pages come in parts.', { address: text(500, 'The page\'s address on the web.'), timestamp: text(14, 'The copy\'s timestamp, as recon_archive_find lists it.'), part: { type: 'integer', minimum: 1, maximum: 40, description: 'Which part of a long page. Leave out for the first.' } }, ['address', 'timestamp']],
+    recon_other_search: ['Search one of the user\'s own sources that they allowed in Recon (a site with their own login, key or private address), through the user\'s WireGuard tunnel only. Give the source\'s name exactly as listed and the search words.', { source: text(60, 'The source\'s name.'), query: text(300, 'The search words.') }, ['source', 'query']],
+    recon_other_read: ['Read a page of one of the user\'s own sources that they allowed in Recon, through the user\'s WireGuard tunnel only. Give the source\'s name and, optionally, a link as a search or page of that source gave it. Long pages come in parts.', { source: text(60, 'The source\'s name.'), link: text(2000, 'A link on that source, as given (a path such as /item/12).'), part: { type: 'integer', minimum: 1, maximum: 40, description: 'Which part of a long page. Leave out for the first.' } }, ['source']],
     recon_cite: ['Give the full citation of something read in this conversation: source, author and date as shown, when it was retrieved, and the fingerprint of its text.', { source: text(600, 'The source\'s number (S3), its .onion address or its Message-ID.') }, ['source']],
   };
   const work = {
@@ -133,6 +142,8 @@ export function buildTools({ enabled, inRecon, inRoom, gate, onion, clearnet, bo
     recon_news_search: (args, exec) => web.news(idOf(exec), args.query, { days: args.days, language: args.language }),
     recon_archive_find: (args, exec) => web.archiveFind(idOf(exec), args.address, { from: args.from, to: args.to }),
     recon_archive_read: (args, exec) => web.archiveRead(idOf(exec), args.address, args.timestamp, args.part),
+    recon_other_search: (args, exec) => other.search(idOf(exec), args.source, args.query),
+    recon_other_read: (args, exec) => other.read(idOf(exec), args.source, args.link, args.part),
     recon_cite: async (args, exec) => {
       const source = sources.find(idOf(exec), args.source);
       if (source) return sources.cite(source);
@@ -142,6 +153,6 @@ export function buildTools({ enabled, inRecon, inRoom, gate, onion, clearnet, bo
   };
   return TOOLS.map((name) => {
     const [description, properties, required] = defs[name];
-    return { name, description, parameters: { type: 'object', properties, required, additionalProperties: false }, ...common, execute: guarded(work[name]) };
+    return { name, description, parameters: { type: 'object', properties, required, additionalProperties: false }, ...common, execute: guarded(work[name], name) };
   });
 }

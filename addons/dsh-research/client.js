@@ -208,94 +208,14 @@ html[data-cws-wide] .dsh-rs-dock { max-width: calc(100% - 2 * var(--dsh-composer
         return () => { watch.disconnect(); root.style.removeProperty('--dsh-rs-bar'); };
       }, [shown]);
       if (!shown) return h('style', null, CSS);
-      // Depth and Focus are in the chat box (ResearchControls); here only what needs saying.
+      // Depth and the sources are the chat box's own buttons (Modes); here only what needs saying.
       if (!data.problem) return h('style', null, CSS);
       return h('div', { ref: bar, className: 'dsh-rs-bar', role: 'status' },
         h('style', null, CSS),
         h('div', { className: 'dsh-rs-hint', 'data-error': 'true' }, data.problem));
     }
 
-    /** One dropdown in the chat box: a button with its value, and a list with a line on each choice. */
-    function DropButton({ label, items, value, busy, note, onPick }) {
-      const [open, setOpen] = useState(false);
-      const [place, setPlace] = useState({ left: 12, bottom: 80 });
-      const button = useRef(null);
-      const panel = useRef(null);
-      useEffect(() => {
-        if (!open) return undefined;
-        const rect = button.current?.getBoundingClientRect();
-        if (rect) setPlace({ left: Math.max(12, Math.min(rect.left - 20, window.innerWidth - 332)), bottom: window.innerHeight - rect.top + 8 });
-        const away = (event) => {
-          if (panel.current?.contains(event.target) || button.current?.contains(event.target)) return;
-          setOpen(false);
-        };
-        const key = (event) => event.key === 'Escape' && setOpen(false);
-        document.addEventListener('pointerdown', away, true);
-        document.addEventListener('keydown', key, true);
-        return () => {
-          document.removeEventListener('pointerdown', away, true);
-          document.removeEventListener('keydown', key, true);
-        };
-      }, [open]);
-      const chosen = items.find((item) => item.id === value) ?? items[0];
-      return h(React.Fragment, null,
-        h('button', { ref: button, type: 'button', className: 'dsh-rs-ctl', 'aria-haspopup': 'dialog', 'aria-expanded': open, disabled: busy, title: `${label}: ${chosen?.label ?? ''}. ${chosen?.about ?? ''}`, onClick: () => setOpen(!open) },
-          h('span', null, label), h('span', { className: 'v' }, `· ${chosen?.label ?? ''}`),
-          h('svg', { width: 10, height: 10, viewBox: '0 0 10 10', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }, h('path', { d: 'M2 6.5 5 3.5 8 6.5' }))),
-        open
-          ? ReactDOM.createPortal(
-              h('div', { ref: panel, className: 'dsh-rs-pop', role: 'dialog', 'aria-label': label, style: { left: place.left, bottom: place.bottom } },
-                h('style', null, CSS),
-                h('div', { className: 'title' }, label),
-                h('div', { className: 'opts', role: 'listbox', 'aria-label': label },
-                  items.map((item) => h('button', { key: item.id, type: 'button', role: 'option', 'aria-selected': item.id === value, 'aria-current': String(item.id === value), onClick: () => { setOpen(false); onPick(item.id); } },
-                    h('b', null, item.label), h('small', null, item.about)))),
-                note ? h('div', { className: 'note' }, note) : null),
-              document.body,
-            )
-          : null);
-    }
-
-    /** Focus in the chat box of a Research conversation (Depth is the Modes add-on's button there, as in every tab). */
-    function ResearchControls({ appCtx, sessionId }) {
-      const [view, setView] = useState(null);
-      const [busy, setBusy] = useState(false);
-      useEffect(() => {
-        let alive = true;
-        let timer;
-        const tick = async () => {
-          try {
-            const response = await fetch(new URL(`dsh-research/data${sessionId ? `?session=${encodeURIComponent(sessionId)}` : ''}`, document.baseURI), { cache: 'no-store', credentials: 'same-origin' });
-            if (response.ok && alive) setView(await response.json());
-          } catch {
-            /* tried again shortly */
-          }
-          // tick also runs when another control calls tell(): restart the one chain, never start a second.
-          clearTimeout(timer);
-          if (alive) timer = setTimeout(tick, document.hidden ? 15000 : 4000);
-        };
-        void tick();
-        listeners.add(tick);
-        return () => { alive = false; clearTimeout(timer); listeners.delete(tick); };
-      }, [sessionId]);
-      if (!view || view.enabled !== true || !view.session?.inResearch) return null;
-      const pickFocus = async (id) => {
-        setBusy(true);
-        setView((v) => ({ ...v, focus: id, session: { ...v.session, focus: id } }));
-        try {
-          // With the conversation in the query the reply says it is a Research one, so the controls stay.
-          setView(await post({ action: 'focus', sessionId, focus: id }, `?session=${encodeURIComponent(sessionId)}`));
-          tell();
-        } catch {
-          /* the next refresh shows what is saved */
-        } finally {
-          setBusy(false);
-        }
-      };
-      return h('span', { className: 'dsh-rs-ctls' },
-        h('style', null, CSS),
-        h(DropButton, { label: 'Focus', items: view.focuses ?? [], value: view.session.focus ?? view.focus, busy, onPick: (id) => void pickFocus(id) }));
-    }
+    // The Focus dropdown that sat in the chat box is gone (18 November 2026): Focus is the Web selector's ticks.
 
     /** The latest Deep research run of a conversation. */
     function useRun(sessionId) {
@@ -380,6 +300,17 @@ html[data-cws-wide] .dsh-rs-dock { max-width: calc(100% - 2 * var(--dsh-composer
       return h('button', { type: 'button', role: 'switch', className: 'dsh-rs-switch', 'aria-checked': on === true, 'aria-label': label, onClick: () => onChange(!on) });
     }
 
+    /** Opens Settings → Web sources (Modes' page), through the Settings window's own store. */
+    function openWebSources(appCtx) {
+      try {
+        const actions = appCtx.slots.entries('sidebar.settings').find((item) => item.store)?.store?.create?.()?.actions;
+        if (typeof actions?.openSection === 'function') return void actions.openSection('web-sources');
+        if (typeof actions?.select === 'function') actions.select('web-sources');
+      } catch {
+        /* the page names where to go */
+      }
+    }
+
     function ResearchPage({ appCtx }) {
       const { data, setData, error, load } = useData();
       const [note, setNote] = useState({ text: '', error: false });
@@ -408,8 +339,9 @@ html[data-cws-wide] .dsh-rs-dock { max-width: calc(100% - 2 * var(--dsh-composer
           h(Switch, { on: data.enabled === true, label: 'Show the Research tab', onChange: (on) => void save(NS, { enabled: on }, on ? 'Switched on. The Research tab appears in the sidebar in a moment.' : 'Switched off.') })),
         h('div', { className: 'dsh-rs-group' }, 'Depth and focus'),
         h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Depth'), h('div', { className: 'dsh-rs-rowdesc' }, `The same Depth as in every tab: pick it with the Depth button in the chat box; Settings → Modes sets where new conversations start. For a research run it sets how long the run takes and how many helpers work at once: ${(data.depths ?? []).map((item) => `${item.label}, ${item.about.charAt(0).toLowerCase()}${item.about.slice(1)}`).join(' ')}${data.programMinutes ? ` ${programNote(data.programMinutes)}` : ''}`))),
-        h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Focus'), h('div', { className: 'dsh-rs-rowdesc' }, 'Where a run looks first. A conversation keeps the focus it started with.')),
-          h(Segments, { items: data.focuses ?? [], value: data.focus, label: 'Focus', onPick: (id) => void save(NS, { focus: id }, 'Focus saved.') })),
+        // Focus is now the Web selector's ticks (18 November 2026): the same Web button as every tab.
+        h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Sources (formerly Focus)'), h('div', { className: 'dsh-rs-rowdesc' }, 'Pick them with the Web button in the chat box, the same as in every tab: tick Academic papers, News or any mix. Its "Use for new Research conversations" sets where new ones start. A run\'s helpers are told which kinds count, and results of other kinds are left out. Each conversation\'s earlier Focus was carried over: News is now News and verified sources, Academic is Academic papers and verified sources.')),
+          h('button', { type: 'button', className: 'dsh-rs-btn', onClick: () => openWebSources(appCtx) }, 'Web sources…')),
         h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Model for the helpers'), h('div', { className: 'dsh-rs-rowdesc' }, (data.helperModels ?? []).find((item) => item.id === data.helperModel)?.hint ?? '')),
           h(Segments, { items: data.helperModels ?? [], value: data.helperModel, label: 'Model for the helpers', onPick: (id) => void save('modes', { researchModel: id }, 'Saved. It also applies to Mission, Agent swarm and the other helper tools, unless a conversation chose otherwise.') })),
         h('div', { className: 'dsh-rs-group' }, 'Saved reports'),
@@ -432,7 +364,7 @@ html[data-cws-wide] .dsh-rs-dock { max-width: calc(100% - 2 * var(--dsh-composer
         const t = ctx.locale.bind(NS);
         ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'research', order: 110, label: () => t('section.title') }, (props) => h(ResearchPage, { ...props, appCtx: ctx }))));
         ctx.effect(() => ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({ name: 'conversation.hero.options', id: 'research-bar', order: 42 }, () => h(ResearchBar, { appCtx: ctx }))));
-        ctx.effect(() => ctx.slots.inject('conversation.input.left', () => ctx.slots.register({ name: 'conversation.input.left', id: 'research-controls', order: -20, label: () => 'Depth and focus' }, (props) => h(ResearchControls, { ...props, appCtx: ctx }))));
+        // The Focus dropdown (research-controls) is gone from the chat box: Focus is the Web selector's ticks now.
         ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'research-progress', order: 4 }, (props) => h(ProgressDock, { ...props, appCtx: ctx }))));
       },
     };

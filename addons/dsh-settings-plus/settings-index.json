@@ -2971,15 +2971,17 @@
   "page": "research",
   "pageLabel": "Research",
   "heading": "Depth and focus",
-  "label": "Focus",
-  "description": "Where a run looks first: Web, News or Academic. A conversation keeps the focus it started with.",
-  "kind": "segments",
+  "label": "Sources (formerly Focus)",
+  "description": "Focus is now the Web selector's ticks: pick Academic papers, News or any mix with the Web button in the chat box, as in every tab. The old setting is read once to carry it over.",
+  "kind": "info",
   "keywords": [
    "focus",
    "web",
    "news",
    "academic",
-   "papers"
+   "papers",
+   "sources",
+   "ticks"
   ],
   "configOnly": false,
   "field": "research.focus"
@@ -3930,6 +3932,25 @@
   ],
   "configOnly": false,
   "field": "recon.archiveDirect"
+ },
+ {
+  "page": "recon",
+  "pageLabel": "Recon",
+  "heading": "Models",
+  "label": "Cloud models",
+  "description": "Whether a model outside your own machines gets what Recon finds: Ask each time (the default, /recon cloud in that conversation), Always, or Never. A model on this Mac or in your own network always gets it.",
+  "kind": "segments",
+  "keywords": [
+   "cloudModels",
+   "cloud",
+   "model",
+   "consent",
+   "/recon cloud",
+   "local only",
+   "privacy"
+  ],
+  "configOnly": false,
+  "field": "recon.cloudModels"
  },
  {
   "page": "recon",
@@ -14364,6 +14385,23 @@
   "field": "settings-plus.enabled"
  },
  {
+  "page": "none",
+  "pageLabel": "Settings helper",
+  "heading": "",
+  "label": "Mode settings gear on/off",
+  "description": "Off hides the small gear beside Send that opens the current mode's settings in a popup. Default on.",
+  "kind": "switch",
+  "keywords": [
+   "modeGear",
+   "settings plus",
+   "gear",
+   "popup",
+   "mode settings"
+  ],
+  "configOnly": true,
+  "field": "settings-plus.modeGear"
+ },
+ {
   "page": "cowork-start",
   "pageLabel": "Start places",
   "heading": "",
@@ -14537,5 +14575,262 @@
   ],
   "configOnly": false,
   "field": "automations.oldRunsToTrash"
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "",
+  "label": "Same chat box in every mode",
+  "description": "On: the chat box has the same buttons in the same places in every mode, and the place (Scratch or the project) is a chip above the box at the top left. Off: the old, mode by mode layout. Saves at once.",
+  "kind": "switch",
+  "keywords": [
+   "uniformBox",
+   "same chat box",
+   "uniform",
+   "layout",
+   "buttons",
+   "place chip",
+   "scratch"
+  ],
+  "configOnly": false,
+  "field": "modes.uniformBox"
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "",
+  "label": "Starting values for new conversations",
+  "description": "Per mode: what the Web, Depth, Models and Tools buttons start as in a new conversation. \"Usual\" leaves the mode's own default. A button pressed later replaces the starting value.",
+  "kind": "section",
+  "keywords": [
+   "modeStart",
+   "starting values",
+   "web",
+   "depth",
+   "models",
+   "tools",
+   "new conversation"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "web-sources",
+  "pageLabel": "Web sources",
+  "heading": "Lists",
+  "label": "Verified sources",
+  "description": "Sites that count as verified sources (official bodies, courts, registers, statistics, wire services, public broadcasters), one site or ending per line.",
+  "kind": "text",
+  "keywords": [
+   "verified",
+   "official",
+   "list",
+   "web",
+   "sources",
+   "tick"
+  ],
+  "configOnly": false,
+  "field": "modes.verifiedSources"
+ },
+ {
+  "page": "web-sources",
+  "pageLabel": "Web sources",
+  "heading": "Lists",
+  "label": "Academic papers",
+  "description": "Sites that count as academic papers (journals, preprints, PubMed, universities), one per line.",
+  "kind": "text",
+  "keywords": [
+   "academic",
+   "papers",
+   "journals",
+   "preprints",
+   "arxiv",
+   "list"
+  ],
+  "configOnly": false,
+  "field": "modes.academicSources"
+ },
+ {
+  "page": "web-sources",
+  "pageLabel": "Web sources",
+  "heading": "Lists",
+  "label": "News",
+  "description": "Sites that count as news (news organisations, wire services), one per line.",
+  "kind": "text",
+  "keywords": [
+   "news",
+   "newspapers",
+   "wire",
+   "list"
+  ],
+  "configOnly": false,
+  "field": "modes.newsSources"
+ },
+ {
+  "page": "web-sources",
+  "pageLabel": "Web sources",
+  "heading": "Saved selections",
+  "label": "Saved selections",
+  "description": "Source ticks you saved from the Web button, one click each there; rename, change or remove them here. Earlier Custom mixes are listed here too.",
+  "kind": "list",
+  "keywords": [
+   "saved",
+   "selection",
+   "mix",
+   "custom",
+   "web",
+   "ticks"
+  ],
+  "configOnly": false,
+  "field": "modes.webMixes"
+ },
+ {
+  "page": "web-sources",
+  "pageLabel": "Web sources",
+  "heading": "Starting ticks per tab",
+  "label": "Starting ticks per tab",
+  "description": "Which source ticks new conversations in a tab start with. Set from the Web button (\"Use for new … conversations\"); a tab without one starts with All.",
+  "kind": "list",
+  "keywords": [
+   "start",
+   "new conversations",
+   "default",
+   "ticks",
+   "web"
+  ],
+  "configOnly": false,
+  "field": "modes.modeStart"
+ },
+ {
+  "page": "web-sources",
+  "pageLabel": "Web sources",
+  "heading": "Other sources",
+  "label": "Other sources",
+  "description": "Your own sources others may not have: sites with a login, a key, a cookie or a secret address. Used while Other is ticked. Logins are kept in the app's secret store or the macOS Keychain, never in the settings; the model sees only the source's name.",
+  "kind": "list",
+  "keywords": [
+   "other",
+   "own",
+   "login",
+   "password",
+   "key",
+   "cookie",
+   "secret",
+   "private",
+   "keychain",
+   "source"
+  ],
+  "configOnly": false,
+  "field": "modes.otherSources"
+ },
+ {
+  "page": "web-sources",
+  "pageLabel": "Web sources",
+  "heading": "Other sources",
+  "label": "May be used in Recon",
+  "description": "Per source: lets Recon read it, only through Recon's own WireGuard tunnel. Off at first.",
+  "kind": "switch",
+  "keywords": [
+   "recon",
+   "other",
+   "own",
+   "wireguard"
+  ],
+  "configOnly": false,
+  "field": "modes.otherSources"
+ },
+ {
+  "page": "web-sources",
+  "pageLabel": "Web sources",
+  "heading": "",
+  "label": "Web sources per conversation",
+  "description": "Each conversation's source ticks, picked on the Web button in the chat box (Off, All, or any mix). Missing is All, the web as before.",
+  "kind": "json",
+  "keywords": [
+   "web",
+   "sources",
+   "ticks",
+   "per conversation",
+   "selector"
+  ],
+  "configOnly": true,
+  "field": "modes.sessionWebSources"
+ },
+ {
+  "page": "none",
+  "pageLabel": "Settings helper",
+  "heading": "",
+  "label": "Export button on/off",
+  "description": "Off hides the Export button beside the gear: this conversation as a file (Markdown, text, HTML, JSON, PDF) at three levels, up to the full session log. Default on.",
+  "kind": "switch",
+  "keywords": [
+   "exportButton",
+   "export",
+   "download",
+   "session log",
+   "markdown",
+   "pdf",
+   "html",
+   "json",
+   "troubleshooting"
+  ],
+  "configOnly": true,
+  "field": "settings-plus.exportButton"
+ },
+ {
+  "page": "none",
+  "pageLabel": "Settings helper",
+  "heading": "",
+  "label": "A mode's extra buttons in the gear's popup",
+  "description": "On: a mode's own buttons (Bench rules, Creator Plus, Focus and Academic, the Finance selection, Recon's Export) are in the gear's popup instead of the chat box. Needs the gear on and \"Same chat box in every mode\" on. Default on.",
+  "kind": "switch",
+  "keywords": [
+   "extrasInGear",
+   "gear",
+   "bench rules",
+   "creator plus",
+   "focus",
+   "academic",
+   "finance",
+   "export",
+   "chat box"
+  ],
+  "configOnly": true,
+  "field": "settings-plus.extrasInGear"
+ },
+ {
+  "page": "recon",
+  "pageLabel": "Recon",
+  "heading": "Hidden networks: Tor, Usenet, I2P",
+  "label": "Hidden networks",
+  "description": "What only Recon reaches: Tor and Usenet (set up below, as before) and I2P (not set up yet). A Recon conversation picks which ones it uses on its Web button.",
+  "kind": "info",
+  "keywords": [
+   "tor",
+   "usenet",
+   "i2p",
+   "onion",
+   "hidden",
+   "networks",
+   "recon"
+  ],
+  "configOnly": false,
+  "field": "recon.enabled"
+ },
+ {
+  "page": "research",
+  "pageLabel": "Research",
+  "heading": "",
+  "label": "Research focus carried over",
+  "description": "Each Research conversation's Focus was carried over once into its Web selector ticks (News: news and verified sources; Academic: academic papers and verified sources).",
+  "kind": "switch",
+  "keywords": [
+   "focus",
+   "carried",
+   "moved",
+   "research"
+  ],
+  "configOnly": true,
+  "field": "research.focusMoved"
  }
 ]

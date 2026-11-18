@@ -166,18 +166,11 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
       const { data, setData, alive } = useData();
       const [drafts, setDrafts] = useState({});
       const [note, setNote] = useState({ text: '', error: false });
-      const bar = useRef(null);
       const shown = Boolean(data && data.enabled === true);
       const upload = useUpload((next, count) => { setData(next); setNote({ text: `${count === 1 ? 'File' : `${count} files`} added to the Scout folder.`, error: false }); tell(); }, (text) => setNote({ text, error: true }));
-      useEffect(() => {
-        const node = bar.current;
-        if (!node || typeof ResizeObserver !== 'function') return undefined;
-        const root = document.documentElement;
-        const watch = new ResizeObserver(() => root.style.setProperty('--dsh-sc-bar', `${Math.round(node.getBoundingClientRect().height)}px`));
-        watch.observe(node);
-        return () => { watch.disconnect(); root.style.removeProperty('--dsh-sc-bar'); };
-      }, [shown]);
-      if (!shown) return h('style', null, CSS);
+      // The one options area under the chat box, shared by every mode (Cowork sidebar, 18 November 2026): its place and look.
+      const Area = window.__dshOptionsArea;
+      if (!shown || !Area) return h('style', null, CSS);
       const selection = data.selection ?? {};
       const save = async (values) => {
         setData((d) => ({ ...d, selection: { ...d.selection, ...values } }));
@@ -190,7 +183,7 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
         }
       };
       const field = (key, placeholder, label) => h('input', {
-        className: 'dsh-sc-pick', value: drafts[key] ?? selection[key] ?? '', placeholder, 'aria-label': label, title: label, spellCheck: false, autoCorrect: 'off',
+        className: 'dsh-opt-pick', value: drafts[key] ?? selection[key] ?? '', placeholder, 'aria-label': label, title: label, spellCheck: false, autoCorrect: 'off',
         onChange: (event) => setDrafts((d) => ({ ...d, [key]: event.target.value })),
         onBlur: () => {
           if (drafts[key] === undefined) return;
@@ -205,22 +198,21 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
       const files = Array.isArray(data.files) ? data.files : [];
       const summary = `${markets.length === 0 ? 'No market chosen' : `Searching ${markets.join(', ')}`}. ${files.length === 0 ? 'Add a resume or LinkedIn export (PDF) if you like.' : `${files.length} file${files.length === 1 ? '' : 's'} in the Scout folder.`} Nothing is sent or applied for.`;
 
-      return h('div', { ref: bar, className: 'dsh-sc-bar', role: 'group', 'aria-label': 'What work to look for' },
-        h('style', null, CSS),
+      return h(Area, { mode: 'scout', place: 'start', label: 'What work to look for' },
         field('title', 'Work, e.g. data engineer', 'Job title or kind of work'),
         field('location', 'Where, or remote', 'Location'),
         field('salary', 'Pay, e.g. 90k EUR', 'Pay target'),
-        h('select', { className: 'dsh-sc-pick', 'aria-label': 'Work type', title: 'Work type', value: selection.workType ?? 'any', onChange: (event) => void save({ workType: event.target.value }) },
+        h('select', { className: 'dsh-opt-pick', 'aria-label': 'Work type', title: 'Work type', value: selection.workType ?? 'any', onChange: (event) => void save({ workType: event.target.value }) },
           ['any', ...(data.workTypes ?? [])].map((type) => h('option', { key: type, value: type }, TYPE_LABELS[type] ?? type))),
-        h('div', { className: 'dsh-sc-break' }),
-        markets.map((market) => h('span', { key: market, className: 'dsh-sc-chip' }, market,
+        h('div', { className: 'dsh-opt-break' }),
+        markets.map((market) => h('span', { key: market, className: 'dsh-opt-chip' }, market,
           h('button', { type: 'button', 'aria-label': `Remove ${market}`, title: `Remove ${market}`, onClick: () => void save({ markets: markets.filter((other) => other !== market) }) }, '×'))),
-        others.length > 0 ? h('select', { className: 'dsh-sc-pick', 'aria-label': 'Add a market', value: '', onChange: (event) => { if (event.target.value) void save({ markets: [...markets, event.target.value] }); } },
+        others.length > 0 ? h('select', { className: 'dsh-opt-pick', 'aria-label': 'Add a market', value: '', onChange: (event) => { if (event.target.value) void save({ markets: [...markets, event.target.value] }); } },
           h('option', { value: '' }, '+ Market'),
           others.map((market) => h('option', { key: market, value: market }, market))) : null,
-        h('button', { type: 'button', className: 'dsh-sc-pick', disabled: upload.busy, onClick: upload.pick, title: 'Add a resume, LinkedIn export (PDF) or notes to the Scout folder' }, upload.busy ? 'Adding…' : '+ Files'),
+        h('button', { type: 'button', className: 'dsh-opt-pick', disabled: upload.busy, onClick: upload.pick, title: 'Add a resume, LinkedIn export (PDF) or notes to the Scout folder' }, upload.busy ? 'Adding…' : '+ Files'),
         upload.element,
-        h('div', { className: 'dsh-sc-hint', 'data-error': String(note.error) }, note.text || summary));
+        h('div', { className: 'dsh-opt-hint', 'data-error': String(note.error) }, note.text || summary));
     }
 
     function Switch({ on, label, onChange }) {

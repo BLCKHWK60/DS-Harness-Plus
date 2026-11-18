@@ -205,7 +205,7 @@ function readRoomText(full, name) {
 }
 
 /** Copy a room file through its own handle into a new file (never over one, never through a link). */
-function copyRoomFile(full, name, target) {
+export function copyRoomFile(full, name, target) {
   const { fd, size } = openRoomFile(full, name);
   if (size > COPY_MAX_BYTES) {
     closeSync(fd);

@@ -7,7 +7,7 @@ This brief was written by Creator Plus from the plugin's own files. Its README b
 ## What it must keep doing
 
 - The services it gives other plugins: coworkShell, coworkProjects, coworkScratch, coworkTrash.
-- Its settings: tabs, maxTabs, tabOrder, hideLogos, dateTitle, wideChat, startPlaces, newKeyFollows.
+- Its settings: tabs, maxTabs, tabOrder, hideLogos, dateTitle, wideChat, iconOnlyTabs, startPlaces, newKeyFollows.
 
 ## Its README
 
@@ -108,6 +108,7 @@ The list reads the app's own project and conversation data in the browser. If th
 **Logos, date and width.** The sidebar's **More** menu ends with three switches, saved with your settings:
 
 - **Hide DeepSeek logos / Show DeepSeek logos** (`hideLogos`): removes the logo and name at the top of the sidebar and the logo on the start page.
+- **Icon alone when a tab name does not fit / Always show tab names** (`iconOnlyTabs`): off by default, every tab shows its name and the tabs wrap onto more rows; on, rows of three and an icon alone where a name does not fit.
 - **Show the date as the title / Show the greeting as the title** (`dateTitle`): the start page title becomes today's date, written like "11 November, 2026" in English and as the language's own long date otherwise. It replaces the greeting on every tab.
 - **Wide chat area / Normal chat area** (`wideChat`): the app keeps the conversation and the message box in a centred column about 800 pixels wide. This lets both use the width of the window (with a margin). The start page keeps its own size. It works through two CSS rules on the app's own class names (`_scrollBody` › `_column`, `_composerStack` › `_card`), so a later app version may need them adjusted.
 

@@ -536,6 +536,13 @@ export function apply(ctx, config) {
       }
       const focus = Object.hasOwn(FOCUS, tab.focus) ? tab.focus : Object.hasOwn(FOCUS, args.focus) ? args.focus : 'web';
       const run = startRun(parent.id, { question: question.slice(0, 300), depth: depth.label, focus, rounds: depth.rounds, minutes });
+      // The conversation's Web sources (Modes' one Web selector): the planner and searchers are told which kinds count.
+      let kindsSaid = '';
+      try {
+        kindsSaid = String(ctx.get('modes')?.webSourcesSaid?.(parent.id) ?? '').slice(0, 2000);
+      } catch {
+        kindsSaid = '';
+      }
       try {
       /**
        * A helper's answer as JSON with `key`; a helper that answered in prose instead (small local models
@@ -543,7 +550,7 @@ export function apply(ctx, config) {
        */
       const answerJson = (text, key, label) => jsonOrAsk(text, key, async (prompt) => (await runChild({ role: roles.planner, label: `${label} (format)`, parent, run, signal: signalFor(), prompt })).text, extractJson);
       // 1. Plan: sub-questions, each with search queries.
-      const planned = await runChild({ role: roles.planner, label: 'Research plan', parent, run, signal: signalFor(), prompt: planPrompt(question, depth, today, focus) });
+      const planned = await runChild({ role: roles.planner, label: 'Research plan', parent, run, signal: signalFor(), prompt: planPrompt(question, depth, today, focus, kindsSaid) });
       let tasks = tasksOf((await answerJson(planned.text, 'subquestions', 'Research plan'))?.subquestions, depth.subquestions);
       if (tasks.length === 0) tasks = [{ question, queries: [], why: '' }];
 
@@ -620,7 +627,7 @@ export function apply(ctx, config) {
               parent,
               run,
               signal: signalFor(),
-              prompt: searchPrompt({ question, task, round, depth, searchTools, fetchTools, tried: triedBefore, known, today, focus }),
+              prompt: searchPrompt({ question, task, round, depth, searchTools, fetchTools, tried: triedBefore, known, today, focus, sources: kindsSaid }),
             });
             const label = `Research ${depth.rounds > 1 ? `round ${round}, ` : ''}${index + 1}/${tasks.length}`;
             return { task, ...searchAnswer(await answerJson(answer.text, 'findings', label), depth.findings), log: fetchLog(answer.childId) };
@@ -678,7 +685,7 @@ export function apply(ctx, config) {
           const task = counterTask(finding.claim);
           const label = `Research counter-search ${index + 1}/${key.length}`;
           try {
-            const answer = await runChild({ role: roles.searcher, label, parent, run, signal: signalFor(), prompt: searchPrompt({ question, task, round: round + 1, depth, searchTools, fetchTools, tried: triedBefore, known: [finding.claim.slice(0, 160)], today, focus }) });
+            const answer = await runChild({ role: roles.searcher, label, parent, run, signal: signalFor(), prompt: searchPrompt({ question, task, round: round + 1, depth, searchTools, fetchTools, tried: triedBefore, known: [finding.claim.slice(0, 160)], today, focus, sources: kindsSaid }) });
             return { task, ...searchAnswer(await answerJson(answer.text, 'findings', label), depth.findings), log: fetchLog(answer.childId) };
           } catch (error) {
             failures.push(`counter-search ${index + 1}: ${error?.message ?? error}`);
