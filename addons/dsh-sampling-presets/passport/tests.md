@@ -1,6 +1,6 @@
 # Tests: @local/dsh-sampling-presets
 
-No tests yet.
+Suites: test/presets.test.mjs, test/page.test.mjs.
 
 Run with the app's own Node (stand-ins only; never against the real app data):
 

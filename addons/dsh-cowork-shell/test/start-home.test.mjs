@@ -392,9 +392,9 @@ test('a drag lives only while arranging, follows the pointer on the window, and 
 
 /** The sidebar's settings model, run against a stand-in settings service that refuses stale writes. */
 function modelWith({ readDelay = 5, writeDelay = 20 } = {}) {
-  const make = new Function('window', `const NS = 'coworkShell'; const SETTINGS_NS = 'cowork-shell'; const MODES_NS = 'modes'; const LOCAL_KEY = 'k';
+  const make = new Function('window', 'dshPoll', `const NS = 'coworkShell'; const SETTINGS_NS = 'cowork-shell'; const MODES_NS = 'modes'; const LOCAL_KEY = 'k';
     const FALLBACK_MODES = [{ id: 'chat', label: 'Chat' }]; const DEFAULT_TABS = {};
-    ${functionText('readObject')}\n${functionText('readOrder')}\n${constLine('DEFAULT_START_PLACES')}\n${functionText('startPlacesOf')}\n${constLine('startPlaceTable')}\n${functionText('createModel')}\nreturn createModel;`)({ localStorage: { getItem: () => null, setItem() {} } });
+    ${functionText('readObject')}\n${functionText('readOrder')}\n${constLine('DEFAULT_START_PLACES')}\n${functionText('startPlacesOf')}\n${constLine('startPlaceTable')}\n${functionText('createModel')}\nreturn createModel;`)({ localStorage: { getItem: () => null, setItem() {} } }, { settings: (ctx, options) => ctx.remote.settings.describe(options?.fresh === true ? undefined : undefined) });
   const store = { revision: 1, value: { tabOrder: [] } };
   const wait = (ms) => new Promise((done) => setTimeout(done, ms));
   let writing = Promise.resolve();

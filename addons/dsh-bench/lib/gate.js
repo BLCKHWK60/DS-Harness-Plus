@@ -51,10 +51,10 @@ export function gate({ card, need }) {
   const asks = card?.permissions?.asks in ASK_LABEL ? card.permissions.asks : 'ask-auto';
   if (need === 'identify') return { ok: true, ask: false, why: '' };
   const family = need === 'adjust' || need === 'write' ? lookOnlyFamily(card) : '';
-  if (family) return { ok: false, ask: false, why: `${card.name} is one of the ${family}, which Bench only reads: nothing is changed on it, whatever its card says.` };
-  if (ORDER[level] < ORDER[need]) return { ok: false, ask: false, why: `${card.name}'s highest level is ${LEVEL_LABEL[level]}, so ${LEVEL_LABEL[need]} is not allowed. Only the user can raise it, on Settings → Bench.` };
+  if (family) return { ok: false, ask: false, why: `${card.name} is one of the ${family}, which Devices only reads: nothing is changed on it, whatever its card says.` };
+  if (ORDER[level] < ORDER[need]) return { ok: false, ask: false, why: `${card.name}'s highest level is ${LEVEL_LABEL[level]}, so ${LEVEL_LABEL[need]} is not allowed. Only the user can raise it, on Settings → Devices.` };
   if (need === 'read') return { ok: true, ask: false, why: '' };
-  if (asks === 'restricted') return { ok: false, ask: false, why: `${card.name} is set to Restricted: only Identify and Read. Only the user can change that, on Settings → Bench.` };
+  if (asks === 'restricted') return { ok: false, ask: false, why: `${card.name} is set to Restricted: only Identify and Read. Only the user can change that, on Settings → Devices.` };
   if (need === 'write') return { ok: true, ask: true, why: '' };
   return { ok: true, ask: asks !== 'full-auto', why: '' };
 }

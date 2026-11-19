@@ -14,7 +14,7 @@ export const TASK_SETS = {
   'source-grades': { name: 'Source grades', about: 'A source that was opened and its grade (Research)', purpose: 'narrow', takes: (row) => row.kind === 'label' && row.mode === 'research' },
   router: { name: 'Router', about: 'A step and the cheapest model that passed it (the work loop)', purpose: 'narrow', takes: (row) => row.kind === 'router' },
   voice: { name: 'Voice', about: 'The writer\'s draft beside your version, and your corrections (preference pairs)', purpose: 'open', takes: (row) => row.kind === 'pair' },
-  'device-recipes': { name: 'Device recipes', about: 'What a device reports and the recipe that fitted (Bench)', purpose: 'narrow', takes: (row) => row.kind === 'label' && row.mode === 'bench' },
+  'device-recipes': { name: 'Device recipes', about: 'What a device reports and the recipe that fitted (Devices)', purpose: 'narrow', takes: (row) => row.kind === 'label' && row.mode === 'bench' },
   answers: { name: 'Checked answers', about: 'A request and an answer that passed its check (Mission items, Research passages, Creator Plus builds)', purpose: 'open', takes: (row) => row.kind === 'answer' },
   qa: { name: 'Subject questions', about: 'Questions built from reference material, each checked against its source', purpose: 'open', takes: (row) => row.kind === 'qa' },
 };

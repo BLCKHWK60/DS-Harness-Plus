@@ -188,6 +188,7 @@ test('search finds passages by stem, without accents, best first', () => {
 
 test('at most three passages come from one document', () => {
   const library = openLibrary(':memory:');
+  library.addFolder('/d');
   library.put({ folder: '/d', path: '/d/big.txt', mtime: 1, size: 1 }, Array.from({ length: 10 }, (_, i) => ({ where: `line ${i}`, text: `inflation paragraph ${i}` })));
   library.put({ folder: '/d', path: '/d/small.txt', mtime: 1, size: 1 }, [{ where: 'line 1', text: 'inflation once' }]);
   const hits = library.search('inflation', { limit: 20 }).hits;
@@ -207,6 +208,7 @@ test('reading on from a passage', () => {
   assert.equal(library.read('/docs/nope.pdf'), undefined);
 
   const long = openLibrary(':memory:');
+  long.addFolder('/d');
   long.put({ folder: '/d', path: '/d/long.txt', mtime: 1, size: 1 }, Array.from({ length: 12 }, (_, i) => ({ where: `line ${i * 10 + 1}`, text: `Piece ${i}. ${'x'.repeat(1100)}` })));
   const first = long.read('/d/long.txt');
   assert.ok(first.text.startsWith('[line 1]\nPiece 0.'));
@@ -330,4 +332,51 @@ test('the tools answer in plain text the assistant can quote from', async () => 
   assert.match((await emptySearch.execute({ query: 'x' })).text, /no folders yet/);
   empty.close();
   library.close();
+});
+
+test('B3: a folder removed during a scan is not read on, and stays out of every search', async () => {
+  const dir = temp();
+  writeFileSync(join(dir, 'a.txt'), 'alpha words');
+  writeFileSync(join(dir, 'b.txt'), 'beta words');
+  writeFileSync(join(dir, 'c.txt'), 'gamma words');
+  const library = openLibrary(':memory:');
+  library.addFolder(dir);
+  const reads = [];
+  const indexer = createIndexer({
+    library,
+    read: async (path, kind) => {
+      reads.push(path.slice(dir.length + 1));
+      // The user clicks Remove while the first document is being read.
+      if (reads.length === 1) library.removeFolder(dir);
+      return extract(path, kind);
+    },
+  });
+  await indexer.sync();
+  assert.equal(reads.length, 1, 'the other documents of the removed folder were not read');
+  for (const word of ['alpha', 'beta', 'gamma']) assert.equal(library.search(word).hits.length, 0, `${word} is not searchable`);
+  assert.deepEqual(library.stats(), {});
+  library.close();
+});
+
+test("B3: rows of a folder that is no longer added are deleted when the index opens", async () => {
+  const home = temp();
+  const file = join(home, 'library.sqlite');
+  const first = openLibrary(file);
+  first.addFolder('/docs/a');
+  first.put({ folder: '/docs/a', path: '/docs/a/x.txt', mtime: 1, size: 1 }, [{ where: 'page 1', text: 'leftover words' }]);
+  assert.equal(first.search('leftover').hits.length, 1);
+  first.close();
+  // An older build left the rows behind: the folder is gone from the list, its rows stay.
+  const { DatabaseSync } = await import("node:sqlite");
+  const raw = new DatabaseSync(file);
+  raw.exec("DELETE FROM folders WHERE path = '/docs/a'");
+  raw.close();
+  const again = openLibrary(file);
+  assert.equal(again.search('leftover').hits.length, 0);
+  assert.deepEqual(again.stats(), {});
+  const check = new DatabaseSync(file);
+  assert.equal(check.prepare('SELECT COUNT(*) AS n FROM files').get().n, 0);
+  assert.equal(check.prepare('SELECT COUNT(*) AS n FROM passages').get().n, 0);
+  check.close();
+  again.close();
 });

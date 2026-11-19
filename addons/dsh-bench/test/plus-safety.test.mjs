@@ -122,7 +122,7 @@ test('network tools reach private addresses only: nmap, capture, SSH and LAN ins
       ['-6', '-sn', 'fe80::1%en0'],
     ]);
     assert.ok(app.calls.every((entry) => !entry.args.some((arg) => /^--script|^-sC$|^-O$|^-A$/.test(arg))), 'no NSE scripts, no -O, no -A');
-    assert.match(await app.call('bench_net_scan', { action: 'os-detect', target: '192.168.1.10' }), /needs root, and Bench never runs anything as root, so nothing was run/);
+    assert.match(await app.call('bench_net_scan', { action: 'os-detect', target: '192.168.1.10' }), /needs root, and Devices never runs anything as root, so nothing was run/);
     assert.equal(app.calls.length, 5);
     // The address rules themselves.
     for (const good of ['10.0.0.1', '172.16.5.4', '172.31.255.255', '192.168.8.1', '169.254.1.1', '100.64.0.1', 'fd00::1', 'fe80::1', 'nas.local', 'router.lan', 'box.home', 'srv.internal', 'raspberrypi']) assert.ok(lanAddress(good), good);
@@ -136,7 +136,7 @@ test('network tools reach private addresses only: nmap, capture, SSH and LAN ins
   }
 });
 
-test('files: a full path to a plain file, never a link, the Bench folder\'s backups, ~/.ssh, /etc or /dev, and capped', async () => {
+test('files: a full path to a plain file, never a link, the Devices folder\'s backups, ~/.ssh, /etc or /dev, and capped', async () => {
   const app = world();
   try {
     const good = app.file(join(app.root, 'work', 'fw.bin'));
@@ -183,8 +183,8 @@ test('ports, speeds, hexadecimal addresses, counts and names are checked', async
       await refusedNothingRan(app, 'bench_obd', { action: 'read', port }, /not a serial port/);
       await refusedNothingRan(app, 'bench_monitor', { action: 'start', source: 'serial', port });
     }
-    await refusedNothingRan(app, 'bench_serial_send', { action: 'send', port: '/dev/cu.usbserial-1', baud: 12345, command: 'AT' }, /not one Bench uses/);
-    await refusedNothingRan(app, 'bench_ch340', { action: 'baud-test', port: '/dev/cu.wchusbserial1420', baud: 74880 }, /not one Bench uses/);
+    await refusedNothingRan(app, 'bench_serial_send', { action: 'send', port: '/dev/cu.usbserial-1', baud: 12345, command: 'AT' }, /not one Devices uses/);
+    await refusedNothingRan(app, 'bench_ch340', { action: 'baud-test', port: '/dev/cu.wchusbserial1420', baud: 74880 }, /not one Devices uses/);
     for (const address of ['0x123456789', '08000000', 'abc', '0x', '0x8000000;reset']) await refusedNothingRan(app, 'bench_stm32', { action: 'read', address, size: 16 }, /hexadecimal/);
     await refusedNothingRan(app, 'bench_stm32', { action: 'read', size: 0 });
     await refusedNothingRan(app, 'bench_stm32', { action: 'read', size: 99_999_999 });
@@ -230,7 +230,7 @@ test('bench_usb_tmc: the Python source is constant; the resource and command rea
     }
     // PyVISA missing: the install steps, nothing installed.
     app.state.reply.python3 = { code: 3, stdout: 'BENCH_NO_PYVISA ModuleNotFoundError\n' };
-    assert.match(await app.call('bench_usb_tmc', { action: 'list' }), /PyVISA is not installed .*pip install pyvisa pyvisa-py pyusb.*Bench never installs anything/);
+    assert.match(await app.call('bench_usb_tmc', { action: 'list' }), /PyVISA is not installed .*pip install pyvisa pyvisa-py pyusb.*Devices never installs anything/);
   } finally {
     app.close();
   }
@@ -250,9 +250,9 @@ test('device output is cleaned, masked and cut; a missing program is named with 
 
     const missing = world({ missing: ['avrdude', 'nmap', 'hid-capture', 'tshark', 'tcpdump'] });
     try {
-      assert.equal(await missing.call('bench_arduino', { action: 'info', part: 'm328p', programmer: 'usbasp' }), 'avrdude is not on this Mac (Bench uses it for bench_arduino). Install it yourself in Terminal: brew install avrdude. Bench never installs anything.');
-      assert.match(await missing.call('bench_net_scan', { action: 'discover', target: '192.168.1.0/24' }), /Install it yourself in Terminal: brew install nmap\. Bench never installs anything\./);
-      assert.match(await missing.call('bench_hid_capture', { seconds: 2 }), /swiftc -O ".*hid-capture\.swift" -o ".*bench"\/bin\/hid-capture -framework IOKit -framework Foundation\. Bench never installs anything\./);
+      assert.equal(await missing.call('bench_arduino', { action: 'info', part: 'm328p', programmer: 'usbasp' }), 'avrdude is not on this Mac (Devices uses it for bench_arduino). Install it yourself in Terminal: brew install avrdude. Devices never installs anything.');
+      assert.match(await missing.call('bench_net_scan', { action: 'discover', target: '192.168.1.0/24' }), /Install it yourself in Terminal: brew install nmap\. Devices never installs anything\./);
+      assert.match(await missing.call('bench_hid_capture', { seconds: 2 }), /swiftc -O ".*hid-capture\.swift" -o ".*bench"\/bin\/hid-capture -framework IOKit -framework Foundation\. Devices never installs anything\./);
       assert.match(await missing.call('bench_netprobe', { action: 'list-interfaces' }), /tcpdump is not on this Mac/);
       assert.equal(missing.calls.length, 0, 'nothing ran');
     } finally {

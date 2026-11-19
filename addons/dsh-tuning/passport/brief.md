@@ -43,7 +43,7 @@ Each mode has its own switch, and each starts off.
 | Content | your rulings on claims (never a claim brought in from Recon), and your edits beside the writer's drafts from the Voice Library |
 | Research | a passage and the claim it supports, only from a source that was opened; source grades |
 | Finance and Data | a question and the query that answered it, when the analysis was saved or run again with nothing moved |
-| Bench | what a device reports and the recipe that fitted, for devices whose read was checked; never a write command |
+| Devices | what a device reports and the recipe that fitted, for devices whose read was checked; never a write command |
 | The work loop | each step and the cheapest model that passed it (for the router) |
 | Corrections | in any mode: the answer before you corrected it beside the answer after |
 | Creator Plus | a brief and the plugin that passed its checks; an error, its cause and its fix (from `<app data>/creator-plus/builds/*.json` when Creator Plus writes them) |

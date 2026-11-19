@@ -5,6 +5,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DEFAULT_MARKETS, MARKETS, WORK_TYPES } from './registry.js';
+import { readJsonStore } from './json-store.js';
 
 const clip = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 
@@ -55,11 +56,7 @@ export function selectionNote(selection, { profile, files, reports, model } = {}
 /** Which selection each conversation started with. Kept in a small file. */
 export function openPins(file, max = 500) {
   let table = {};
-  try {
-    if (file && existsSync(file)) table = JSON.parse(readFileSync(file, 'utf8')) ?? {};
-  } catch {
-    table = {};
-  }
+  if (file) table = readJsonStore(file, () => ({}), { label: 'the choices Scout kept for each conversation', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
   const write = () => {
     if (!file) return;
     try {

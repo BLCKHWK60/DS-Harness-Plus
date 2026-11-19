@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { OWN_FOLDER, isInside, outsideInCommand, pathsOf, real } from '../lib/paths.js';
-import { decide, modeOf, rulesNote } from '../lib/guard.js';
+import { decide, mayChangeFiles, modeOf, rulesNote } from '../lib/guard.js';
 import { GIT_CANDIDATES, openCheckpoints } from '../lib/checkpoints.js';
 
 const fresh = () => realpathSync(mkdtempSync(join(tmpdir(), 'dsh-mission-')));
@@ -529,6 +529,240 @@ test('one model for everything is the default; the roles\' models need the conve
     assert.match(text, /Models: 3 different models: planner tier-plan, worker tier-implement, reviewer mission-review\. They may be loaded at the same time\./);
     await runner.step(agent('b'), new AbortController().signal, 5000);
     assert.equal(used.at(-1), 'tier-plan');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('checkpoints are refused for a home, Documents or system folder, in plain words, and nothing is written there', async () => {
+  const home = fresh();
+  try {
+    mkdirSync(join(home, 'Documents'));
+    mkdirSync(join(home, 'Library', 'Mobile Documents'), { recursive: true });
+    mkdirSync(join(home, 'project'));
+    writeFileSync(join(home, 'Documents', 'a.txt'), 'x');
+    const { tooBroad } = await import('../lib/checkpoints.js');
+    for (const broad of [home, join(home, 'Documents'), join(home, 'Library', 'Mobile Documents'), '/', '/Applications', dirname(home)]) assert.ok(tooBroad(broad, home), `${broad} is too broad`);
+    assert.ok(!tooBroad(join(home, 'project'), home));
+    assert.ok(!tooBroad(join(home, 'Documents', 'project'), home));
+
+    for (const folder of [home, join(home, 'Documents')]) {
+      const points = openCheckpoints(folder, { homeDir: home });
+      const point = await points.take('Start');
+      assert.equal(point.skipped, true);
+      assert.equal(point.number, 0);
+      assert.match(point.reason, /Checkpoints are off for this folder: it is too broad/);
+      assert.match(point.reason, /Long run, works without them/);
+      assert.equal(existsSync(join(folder, OWN_FOLDER)), false, 'no hidden store is made in a broad folder');
+      // Everything that reads checkpoints answers "nothing" instead of failing, so a run goes on.
+      assert.deepEqual(await points.since(''), { changed: [], deleted: [], added: [] });
+      assert.deepEqual(await points.list(), []);
+      assert.equal(await points.idOf(1), '');
+      assert.equal(await points.changes(''), '');
+      assert.deepEqual(await points.files(), { files: [], more: false });
+      assert.match(await points.why(), /too broad/);
+      await assert.rejects(points.back(1), /too broad/);
+    }
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a folder with too many files or too many bytes is refused and its store is removed again; a small one still works', async (t) => {
+  if (!GIT_CANDIDATES.some((path) => existsSync(path))) return t.skip('no git here');
+  const home = fresh();
+  const gitHome = fresh();
+  try {
+    const big = join(home, 'big');
+    mkdirSync(big);
+    for (let n = 0; n < 12; n += 1) writeFileSync(join(big, `f${n}.txt`), 'x');
+    const small = join(home, 'small');
+    mkdirSync(small);
+    writeFileSync(join(small, 'a.txt'), 'x');
+
+    const { MAX_FILES, MAX_BYTES } = await import('../lib/checkpoints.js');
+    assert.equal(MAX_FILES, 20000);
+    assert.equal(MAX_BYTES, 2 * 1024 * 1024 * 1024);
+    // Too many files (the limit lowered for the test).
+    const many = openCheckpoints(big, { homeDir: home, gitHome, maxFiles: 10 });
+    const refused = await many.take('Start');
+    assert.equal(refused.skipped, true);
+    assert.match(refused.reason, /Checkpoints are off for this folder: it holds 12 files \(the limit is 10\)/);
+    assert.equal(existsSync(join(big, OWN_FOLDER)), false, 'the store made for counting is removed again');
+    // Too many bytes.
+    writeFileSync(join(big, 'huge.bin'), Buffer.alloc(4096));
+    const heavy = await openCheckpoints(big, { homeDir: home, gitHome, maxBytes: 1024 }).take('Start');
+    assert.match(heavy.reason, /it holds more than/);
+    assert.equal(existsSync(join(big, OWN_FOLDER)), false);
+    // What the project ignores does not count.
+    writeFileSync(join(big, '.gitignore'), 'f*.txt\nhuge.bin\n');
+    const counted = await openCheckpoints(big, { homeDir: home, gitHome, maxFiles: 10, maxBytes: 1024 }).take('Start');
+    assert.equal(counted.skipped, undefined);
+    const ok = await openCheckpoints(small, { homeDir: home, gitHome }).take('Start');
+    assert.equal(ok.skipped, undefined);
+    assert.equal(ok.number, 1);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(gitHome, { recursive: true, force: true });
+  }
+});
+
+test('Apple\'s stand-in git without the Command Line Tools gives a plain "install them" answer, not an error', async () => {
+  const folder = fresh();
+  try {
+    const none = openCheckpoints(folder, { git: '', homeDir: '/nowhere' });
+    const point = await none.take('Start');
+    assert.equal(point.skipped, true);
+    assert.match(point.reason, /xcode-select --install/);
+    assert.match(point.reason, /Everything else works without checkpoints/);
+    assert.equal(existsSync(join(folder, OWN_FOLDER)), false);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+// ---- the regression fixes (review of Phases 1-3, items 5 and 6) ----
+
+test('Apple\'s stand-in git (no Command Line Tools) is refused with the "install them" words; with the tools present it works', async (t) => {
+  if (!existsSync('/usr/bin/git')) return t.skip('no /usr/bin/git here');
+  const folder = fresh();
+  const gitHome = fresh();
+  try {
+    writeFileSync(join(folder, 'a.txt'), 'x');
+    // The very program Apple ships, with the tools check failing (what a Mac without the tools answers).
+    const standIn = openCheckpoints(folder, { git: '/usr/bin/git', xcodeSelect: '/usr/bin/false', gitHome, homeDir: '/nowhere' });
+    const point = await standIn.take('Start');
+    assert.equal(point.skipped, true);
+    assert.match(point.reason, /xcode-select --install/);
+    assert.equal(existsSync(join(folder, OWN_FOLDER)), false, 'git was never run');
+    assert.match(standIn.peek(), /xcode-select --install/);
+    // The same program with the check passing: checkpoints work.
+    const there = openCheckpoints(folder, { git: '/usr/bin/git', xcodeSelect: '/usr/bin/true', gitHome, homeDir: '/nowhere' });
+    assert.equal((await there.take('Start')).number, 1);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+    rmSync(gitHome, { recursive: true, force: true });
+  }
+});
+
+test('more places count as too broad: Pictures, Music, Movies, the cloud drives, a disk\'s top folder; a project inside is fine', async () => {
+  const { tooBroad } = await import('../lib/checkpoints.js');
+  const home = '/Users/someone';
+  for (const broad of ['Pictures', 'Music', 'Movies', 'Dropbox', 'Google Drive', 'OneDrive', 'Library/Mobile Documents/com~apple~CloudDocs', 'Library/CloudStorage', 'Library/CloudStorage/GoogleDrive-me@example.com', 'Library/CloudStorage/OneDrive-Personal', 'Library/CloudStorage/Dropbox'].map((name) => join(home, name)).concat(['/Volumes', '/Volumes/Backup'])) assert.ok(tooBroad(broad, home), `${broad} is too broad`);
+  for (const fine of ['Pictures/shoot', 'Dropbox/work/app', 'Library/CloudStorage/GoogleDrive-me@example.com/My Drive'].map((name) => join(home, name)).concat(['/Volumes/Backup/project', '/tmp/project'])) assert.ok(!tooBroad(fine, home), `${fine} is fine`);
+});
+
+test('a folder refused as too big stays refused after a restart, also when a .dsh-mission folder already existed', async (t) => {
+  if (!GIT_CANDIDATES.some((path) => existsSync(path))) return t.skip('no git here');
+  const home = fresh();
+  const gitHome = fresh();
+  try {
+    const big = join(home, 'big');
+    mkdirSync(join(big, OWN_FOLDER), { recursive: true });
+    writeFileSync(join(big, OWN_FOLDER, 'note.txt'), 'kept');
+    for (let n = 0; n < 12; n += 1) writeFileSync(join(big, `f${n}.txt`), 'x');
+    const first = await openCheckpoints(big, { homeDir: home, gitHome, maxFiles: 10 }).take('Start');
+    assert.equal(first.skipped, true);
+    assert.equal(existsSync(join(big, OWN_FOLDER, 'checkpoints.git')), false, 'the store made for counting is gone');
+    assert.equal(existsSync(join(big, OWN_FOLDER, 'note.txt')), true, 'what was already in that folder stays');
+    // A restart: a new object, the folder is still too big, nothing was copied.
+    const again = await openCheckpoints(big, { homeDir: home, gitHome, maxFiles: 10 }).take('Start');
+    assert.equal(again.skipped, true);
+    assert.match(again.reason, /it holds 12 files/);
+    assert.equal(existsSync(join(big, OWN_FOLDER, 'checkpoints.git')), false);
+    // And a store that exists but holds no checkpoint is counted too (an older version left one behind).
+    mkdirSync(join(big, OWN_FOLDER, 'checkpoints.git'), { recursive: true });
+    const { execFileSync } = await import('node:child_process');
+    execFileSync(GIT_CANDIDATES.find((path) => existsSync(path)), ['init', '--quiet', join(big, OWN_FOLDER, 'checkpoints.git')]);
+    const left = await openCheckpoints(big, { homeDir: home, gitHome, maxFiles: 10 }).take('Start');
+    assert.equal(left.skipped, true, 'an empty store does not skip the size check');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(gitHome, { recursive: true, force: true });
+  }
+});
+
+test('old checkpoints in a folder now judged too broad stay reachable: listed and gone back to, none is added', async (t) => {
+  if (!GIT_CANDIDATES.some((path) => existsSync(path))) return t.skip('no git here');
+  const home = fresh();
+  const gitHome = fresh();
+  try {
+    // A folder that was a project when its checkpoints were taken (its own home folder was elsewhere), and is "Documents" now.
+    const folder = join(home, 'Documents');
+    mkdirSync(folder);
+    writeFileSync(join(folder, 'a.txt'), 'one');
+    const before = openCheckpoints(folder, { homeDir: '/somewhere/else', gitHome });
+    assert.equal((await before.take('Old')).number, 1);
+    writeFileSync(join(folder, 'a.txt'), 'two');
+    writeFileSync(join(folder, 'new.txt'), 'made later');
+    // Now the rule applies to it.
+    const points = openCheckpoints(folder, { homeDir: home, gitHome });
+    assert.match(points.peek(), /Checkpoints kept earlier can still be listed/);
+    const list = await points.list();
+    assert.equal(list.length, 1);
+    assert.equal(list[0].label, 'Old');
+    const refused = await points.take('New');
+    assert.equal(refused.skipped, true, 'no new checkpoint is taken');
+    assert.match(refused.reason, /too broad to copy/);
+    assert.equal((await points.list()).length, 1, 'still one');
+    assert.match(await points.why(), /Checkpoints kept earlier/);
+    assert.deepEqual(await points.since(list[0].id), { changed: [], deleted: [], added: [] }, 'the folder is not scanned');
+    const went = await points.back(1);
+    assert.equal(went.readOnly, true);
+    assert.equal(went.saved, 0);
+    assert.equal(readFileSync(join(folder, 'a.txt'), 'utf8'), 'one', 'the file is back as it was');
+    assert.equal(readFileSync(join(folder, 'new.txt'), 'utf8'), 'made later', 'a file made later is left alone');
+    assert.equal((await points.list()).length, 1, 'going back added nothing (that would copy the folder)');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(gitHome, { recursive: true, force: true });
+  }
+});
+
+test('a command is told apart: readers run freely, anything that could change a file is asked about', () => {
+  const free = ['ls -la', 'cat src/a.js | grep -n foo', 'git status', 'git diff HEAD~1', 'git log --oneline -5', 'find . -name "*.js"', 'echo hello', 'pwd && ls', 'grep -r todo . 2>&1', 'cat a.txt > /dev/null', 'git config --get user.name', 'sed -n "1,5p" a.txt'];
+  const asked = ['rm -rf build', 'npm test', 'echo hi > out.txt', 'cat a >> b', 'sed -i "" "s/a/b/" f.txt', 'find . -name "*.tmp" -delete', 'find . -exec rm {} ;', 'git checkout -- .', 'git commit -am x', 'git branch -D x', 'mv a b', 'cp a b', 'touch x', 'ls $(rm -rf x)', 'ls `touch x`', 'tee out.txt', 'python3 build.py', 'ls; rm x', 'ls && npm install', 'sort -o out.txt a.txt', 'cat <<EOF'];
+  for (const command of free) assert.equal(mayChangeFiles(command), false, `${command} only reads`);
+  for (const command of asked) assert.equal(mayChangeFiles(command), true, `${command} could change files`);
+});
+
+test('the model\'s rules tell the truth: with no undo they say so, and ask the model to tell the user; with checkpoints they keep the old text', () => {
+  const root = '/tmp/project';
+  const reason = 'Checkpoints are off for this folder: it is too broad.';
+  for (const mode of ['restricted', 'ask']) {
+    const note = rulesNote(mode, root, reason);
+    assert.match(note, /no undo is available in this folder/);
+    assert.match(note, /tell the user once, in plain words, that this folder has no undo/i);
+    assert.doesNotMatch(note, /is undone at once/);
+    assert.doesNotMatch(note, /A checkpoint of the folder is taken/);
+    assert.match(note, /No checkpoints are taken of this folder/);
+    const normal = rulesNote(mode, root);
+    assert.match(normal, /is undone at once/);
+    assert.match(normal, /A checkpoint of the folder is taken/);
+  }
+  assert.match(rulesNote('restricted', root, reason), /asked before every command that could change a file/);
+  assert.match(rulesNote('ask', root, reason), /not stopped from changing existing files/);
+  assert.match(rulesNote('auto', root, reason), /No checkpoints are taken of this folder/);
+});
+
+test('a run in a folder without checkpoints does not say "undo with /mission back 0", and its report does not either', async () => {
+  const { createRunner } = await import('../runner.js');
+  const root = fresh();
+  try {
+    const goal = { id: 'g', revision: 1, phase: 'active' };
+    let made = false;
+    const goals = { create: () => { made = true; return goal; }, get: () => (made ? goal : undefined), pause: () => {}, resume: () => {}, complete: () => {}, clear: () => {} };
+    const ctx = { get: (name) => ({ goals, subagents: {}, modelTiers: { resolveTier: () => ({ id: 't' }), roleRoute: () => undefined } })[name] };
+    const settings = () => ({ limits: { maxItems: 12, maxTries: 3, maxReviews: 0, maxSteps: 60, waitMinutes: 3 }, roles: {}, projects: {} });
+    for (const [number, expect] of [[0, false], [4, true]]) {
+      const points = { take: async () => (number ? { id: 'p', number, fresh: true } : { id: '', number: 0, fresh: false, skipped: true, reason: 'Checkpoints are off for this folder.' }), files: async () => ({ files: [], more: false }), idOf: async () => '', changes: async () => '' };
+      const runner = createRunner(ctx, { settings, pointsOf: () => points, afterCommand: async () => [], warn: () => {}, home: undefined });
+      made = false;
+      const text = await runner.start({ id: `x${number}`, model: { current: () => ({ provider: 'p', model: 'm' }) } }, 'do one small thing', { mode: 'auto', root });
+      assert.doesNotMatch(text, /back 0/);
+      if (expect) assert.match(text, /To undo everything it changes: \/mission back 4/);
+      else assert.match(text, /No checkpoints are kept of this folder, so what it changes cannot be undone with \/mission back\./);
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

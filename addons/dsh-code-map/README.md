@@ -1,4 +1,7 @@
-# Code map
+# Code map (part of "Code tools")
+
+**Code tools** is one Settings page with two add-ons behind it: **Code map** (this add-on: the map of your project and four reverse-engineer guides) and **Code power** (reviews and fixes: four guides and a blind judge; see `../dsh-code-power`). Code map's page is called "Code tools" and shows a tab for each add-on of the pair that is installed; Code power's settings are the "Reviews and fixes" tab. Each add-on works alone: with only Code map there is no second tab, and with only Code power it has a page of its own. Folder names, setting names, tool names and saved data did not change. When Code map is switched off, its five tools are no longer offered to the model at all (before, they were offered and answered "switched off").
+
 
 Add-on `@local/dsh-code-map` (dsh 0.2.2-rc.1). Two things:
 

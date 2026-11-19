@@ -25,8 +25,9 @@ export const name = 'notify';
 
 const REASONS = ['completed', 'error', 'aborted', 'blocked', 'interrupted'];
 
+// The three fields the Settings page changes are `.volatile()`: the host half reads them at every use, so a save applies at once.
 export const Config = z.object({
-  enabled: z.boolean().default(true),
+  enabled: z.boolean().default(true).volatile(),
   rules: z
     .array(
       z.object({
@@ -40,8 +41,9 @@ export const Config = z.object({
         command: z.array(z.string()).required(),
       }),
     )
-    .default([]),
-  maxPerMinute: z.number().min(1).max(600).default(20),
+    .default([])
+    .volatile(),
+  maxPerMinute: z.number().min(1).max(600).default(20).volatile(),
   commandName: z.string().default('notify'),
 });
 
@@ -148,12 +150,24 @@ export function fill(arg, values) {
  * @param {object} config - plugin config.
  */
 export function apply(ctx, config) {
-  const cfg = plain(config) ?? {};
-  if (cfg.enabled === false) return;
-  const rules = Array.isArray(cfg.rules) ? cfg.rules : [];
-  checkRules(rules);
-  const commandName = String(cfg.commandName ?? 'notify').trim();
-  const maxPerMinute = Number(cfg.maxPerMinute) || 20;
+  const first = plain(config) ?? {};
+  checkRules(Array.isArray(first.rules) ? first.rules : []); // a rules list written by hand that cannot run fails at load, as before
+  const commandName = String(first.commandName ?? 'notify').trim();
+  /** The settings as they are now (the Settings page changes them while the app runs). */
+  const live = () => plain(config) ?? {};
+  /** The rules that can run now; a list that cannot run (never saved by the page) fires nothing. */
+  const currentRules = () => {
+    const cfg = live();
+    if (cfg.enabled === false || !Array.isArray(cfg.rules)) return [];
+    try {
+      checkRules(cfg.rules);
+      return cfg.rules;
+    } catch (error) {
+      ctx.logger?.warn?.(String(error?.message ?? error));
+      return [];
+    }
+  };
+  const rulesNow = () => currentRules();
   const startedAt = Date.now();
 
   /** Session id -> turn start time (ms). */
@@ -175,7 +189,7 @@ export function apply(ctx, config) {
     const now = Date.now();
     if (!options.force) {
       recent = recent.filter((time) => now - time < 60000);
-      if (recent.length >= maxPerMinute || now - (lastFired.get(rule.id) ?? 0) < (Number(rule.minIntervalSeconds) || 0) * 1000) {
+      if (recent.length >= (Number(live().maxPerMinute) || 20) || now - (lastFired.get(rule.id) ?? 0) < (Number(rule.minIntervalSeconds) || 0) * 1000) {
         stats.skippedRate += 1;
         return false;
       }
@@ -223,12 +237,12 @@ export function apply(ctx, config) {
     }
   };
   // The end of a run fires the turnEnd rules once, as one finished turn of its conversation.
-  if (rules.some((rule) => rule.on === 'turnEnd')) {
+  {
     ctx.inject(['mission'], (inner) => {
       try {
         inner.effect(() => inner.mission.onEvent?.((event) => {
           if (event.type !== 'finished') return;
-          for (const rule of rules) {
+          for (const rule of rulesNow()) {
             if (rule.on !== 'turnEnd' || !(rule.reasons ?? ['completed', 'error']).includes('completed')) continue;
             // A Recon conversation's run is named only "Recon" (its folder holds the conversation's id).
             let sealed = false;
@@ -246,9 +260,11 @@ export function apply(ctx, config) {
     });
   }
 
-  if (rules.length) {
+  {
     ctx.on('session/event', (session, event) => {
       try {
+        const rules = rulesNow();
+        if (!rules.length) return;
         const stamp = event?.time ? new Date(event.time).getTime() : Date.now();
         if (Number.isFinite(stamp) && stamp < startedAt - 5000) return; // history being replayed
         const id = session?.id;
@@ -288,7 +304,7 @@ export function apply(ctx, config) {
     });
   }
 
-  ctx.effect(() => ctx.provide('notify', Object.freeze({ apiVersion: 1, rules: () => rules.map((rule) => rule.id), test: (id) => testRule(id), stats: () => ({ ...stats }) })), 'notify service');
+  ctx.effect(() => ctx.provide('notify', Object.freeze({ apiVersion: 1, rules: () => rulesNow().map((rule) => rule.id), test: (id) => testRule(id), stats: () => ({ ...stats }) })), 'notify service');
 
   /**
    * Fire a rule with a sample event, ignoring rate limits.
@@ -296,6 +312,7 @@ export function apply(ctx, config) {
    * @returns {string} what was started.
    */
   function testRule(id) {
+    const rules = rulesNow();
     if (!rules.length) throw new Error('no rules configured');
     const chosen = id ? rules.filter((rule) => rule.id === id) : rules;
     if (!chosen.length) throw new Error(`no rule "${id}". Rules: ${rules.map((rule) => rule.id).join(', ')}`);
@@ -314,9 +331,15 @@ export function apply(ctx, config) {
           handler: async ({ rawInput }) => {
             const [verb, arg] = String(rawInput ?? '').trim().split(/\s+/);
             try {
+              const rules = rulesNow();
               if (verb === 'test') return { kind: 'success', text: testRule(arg) };
               if (!verb || verb === 'status') {
-                if (!rules.length) return { kind: 'success', text: 'No notification rules configured.' };
+                if (!rules.length) {
+                  const kept = Array.isArray(live().rules) ? live().rules : [];
+                  if (kept.length && live().enabled === false) return { kind: 'success', text: `Notifications are off. ${kept.length === 1 ? '1 rule is' : `${kept.length} rules are`} kept (${kept.map((rule) => rule?.id ?? '?').join(', ')}) but nothing runs. Switch "Run commands" on under Settings → Alerts to use ${kept.length === 1 ? 'it' : 'them'} again.` };
+                  if (kept.length) return { kind: 'success', text: `${kept.length === 1 ? '1 rule is' : `${kept.length} rules are`} kept (${kept.map((rule) => rule?.id ?? '?').join(', ')}) but nothing runs: the list cannot be used as it is. Check it under Settings → Alerts.` };
+                  return { kind: 'success', text: 'No notification rules configured.' };
+                }
                 const lines = rules.map((rule) => `${rule.id}: on ${rule.on}${rule.on === 'turnEnd' ? ` (${(rule.reasons ?? ['completed', 'error']).join('/')}${rule.minSeconds ? `, at least ${rule.minSeconds}s` : ''})` : ''}`);
                 lines.push(`Started ${stats.fired}, failed ${stats.failed}${stats.lastError ? ` (last: ${stats.lastError})` : ''}, skipped by rate limit ${stats.skippedRate}.`);
                 return { kind: 'success', text: lines.join('\n') };

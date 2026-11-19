@@ -169,6 +169,9 @@ test('the text: short codes, words, figures, and what is switched off', () => {
   assert.equal(labelOf(all, { ...base, hidden: ['tool', 'web', 'script', 'sub', 'other'], promptSpeed: false, context: false }).text, 'TG 42 t/s · 378 tokens');
   assert.deepEqual(shownKinds(all, { hidden: ['write'] }), ['tool', 'web', 'script', 'sub', 'other']);
 
+  // In words mode no short code is left anywhere in the line (the "PP" speed used to stay).
+  assert.equal(labelOf(demoSnapshot('reason'), { ...base, words: true }).text, 'Thinking 38 t/s · 6s · Prompt speed 1,850 t/s · context 12.4k');
+  assert.doesNotMatch(labelOf(all, { ...base, words: true }).text, /\b(?:TG|PP|BG|OC|ctx)\b/);
   assert.equal(labelOf(demoSnapshot('prompt'), base).text, 'PP 3.2s · ~12.4k tokens · last 1,850 t/s · ctx 12.4k');
   assert.equal(labelOf(demoSnapshot('reason'), base).text, 'Thinking 38 t/s · 6s · PP 1,850 t/s · ctx 12.4k');
   assert.equal(labelOf(demoSnapshot('wait'), base).text, 'Waiting for you: bash 12s · BG 1 · 40s');
@@ -232,4 +235,10 @@ test('settings are read with safe defaults, and sessions are placed in the tree'
   assert.deepEqual(placeOf({ id: 'c', header: { parentSession: { id: 'a' } } }), { id: 'c', parent: 'a', top: false });
   assert.deepEqual(placeOf({ id: 'd', header: { origin: 'subagent', delegationDepth: 1 } }), { id: 'd', parent: null, top: false });
   assert.equal(placeOf({}), undefined);
+});
+
+test('the message box is never folded before a status has loaded (the unfold arrow needs one)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  assert.match(source, /const folded = useFolded\(\) && canFold && Boolean\(snap\);/);
 });

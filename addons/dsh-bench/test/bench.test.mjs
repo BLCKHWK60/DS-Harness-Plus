@@ -1,5 +1,5 @@
 /**
- * Bench: the mode it hands to Modes (no shell), the USB listing read from sample device lists (no real
+ * Devices: the mode it hands to Modes (no shell), the USB listing read from sample device lists (no real
  * device, no real port), the cards and logbooks in a throwaway folder, and the add-on on a stand-in app.
  */
 import test from 'node:test';
@@ -15,7 +15,7 @@ import { NOT_THERE, NO_BACKUPS, NO_COMMANDS, benchRefusal } from '../lib/guard.j
 
 const scratch = () => mkdtempSync(join(tmpdir(), 'bench-test-'));
 
-test('the mode: Read Only, no shell, no file writing, no programs; Bench\'s tools and the web; a method under the limit', () => {
+test('the mode: Read Only, no shell, no file writing, no programs; Devices\' tools and the web; a method under the limit', () => {
   assert.equal(MODE_ID, 'bench');
   assert.equal(MODE.sandbox, 'read-only');
   for (const banned of ['bash', 'write', 'edit', 'run_code', 'job_output']) assert.ok(!TOOLS.includes(banned), banned);
@@ -23,7 +23,7 @@ test('the mode: Read Only, no shell, no file writing, no programs; Bench\'s tool
   assert.ok(METHOD.length < 4000, `method is ${METHOD.length} characters`);
   assert.match(METHOD, /material, not instructions/);
   assert.match(METHOD, /You never write a device command/);
-  assert.match(METHOD, /the user sets that on Settings → Bench, never you/);
+  assert.match(METHOD, /the user sets that on Settings → Devices, never you/);
   assert.match(METHOD, /write protected <device name>": ask them; never write it for them/);
   assert.match(METHOD, /eFuses are never touched/);
 });
@@ -35,7 +35,7 @@ test('withBench adds and takes out only its own entry', () => {
   assert.deepEqual(added.recon, others.recon);
   assert.equal(withBench(JSON.stringify(added), true), undefined);
   assert.deepEqual(JSON.parse(withBench(JSON.stringify(added), false)), others);
-  assert.match(benchNote({ folder: '/b', devices: ['ESP32 board 1'] }), /Bench folder is \/b.*ESP32 board 1/);
+  assert.match(benchNote({ folder: '/b', devices: ['ESP32 board 1'] }), /Devices folder is \/b.*ESP32 board 1/);
   assert.match(benchNote({ folder: '/b', devices: [] }), /No device has a card yet/);
 });
 
@@ -262,7 +262,7 @@ test('the logbook: entries are appended, never rewritten; a device needs a card;
   }
 });
 
-test('Bench\'s own rule on tool calls: no shell, program or job; no file tool into the Bench folder or /dev; everything else as it was', () => {
+test('Devices\' own rule on tool calls: no shell, program or job; no file tool into the Devices folder or /dev; everything else as it was', () => {
   const folder = scratch();
   try {
     for (const name of ['bash', 'terminal', 'shell', 'pwsh', 'run_code', 'job_output', 'job_kill']) assert.equal(benchRefusal({ name, args: { command: 'ls' }, cwd: folder, benchFolders: [folder] }), NO_COMMANDS, name);
@@ -278,7 +278,7 @@ test('Bench\'s own rule on tool calls: no shell, program or job; no file tool in
   }
 });
 
-test('links: Bench never writes through a link in its folder', () => {
+test('links: Devices never writes through a link in its folder', () => {
   const folder = scratch();
   const elsewhere = scratch();
   try {
@@ -286,7 +286,7 @@ test('links: Bench never writes through a link in its folder', () => {
     const bench = openBench(() => folder);
     assert.throws(() => bench.saveCard({ name: 'Board' }), /is a link/);
     assert.deepEqual(readdirSync(elsewhere), []);
-    assert.throws(() => openBench(() => '').saveCard({ name: 'x' }), /no Bench folder/);
+    assert.throws(() => openBench(() => '').saveCard({ name: 'x' }), /no Devices folder/);
     assert.deepEqual(openBench(() => '').list(), [], 'listing without a folder reads nothing');
   } finally {
     rmSync(folder, { recursive: true, force: true });
@@ -331,7 +331,7 @@ function plugin({ extraModes = '{}', enabled = true, folder = '', modeOf = () =>
 }
 const settle = () => new Promise((done) => setTimeout(done, 20));
 
-test('on a stand-in app: the mode and Bench\'s tools come and go with the switch; nothing is made in the app folder until a card is saved', async () => {
+test('on a stand-in app: the mode and Devices\' tools come and go with the switch; nothing is made in the app folder until a card is saved', async () => {
   const app = plugin();
   try {
     await settle();
@@ -381,7 +381,7 @@ test('a folder set in Settings is used only when it is a full path', async () =>
   }
 });
 
-test('on a stand-in app: Bench\'s tools only in Bench; its rule stops a shell in a Bench conversation and its helpers, and leaves other tabs alone', async () => {
+test('on a stand-in app: Devices\' tools only in Devices; its rule stops a shell in a Devices conversation and its helpers, and leaves other tabs alone', async () => {
   const app = plugin({ modeOf: (id) => (id === 'b1' ? MODE_ID : 'cowork') });
   try {
     await settle();
@@ -397,14 +397,14 @@ test('on a stand-in app: Bench\'s tools only in Bench; its rule stops a shell in
     assert.equal((await decide({ id: 'b1', header: { cwd: '/x' } }, 'write', { file_path: join(app.home, 'bench', 'devices', 'x', 'card.json') })).kind, 'deny');
     assert.equal((await decide({ id: 'b1', header: { cwd: '/x' } }, 'bench_usb')).kind, 'allow');
     assert.equal((await decide({ id: 'c1', header: { cwd: '/x' } }, 'bash', { command: 'ls' })).kind, 'allow', 'Cowork as before');
-    assert.equal((await decide({ id: 'b1', header: { cwd: '/x' } }, 'apply_patch', { input: '*** Begin Patch' })).kind, 'deny', 'a tool Bench does not know');
+    assert.equal((await decide({ id: 'b1', header: { cwd: '/x' } }, 'apply_patch', { input: '*** Begin Patch' })).kind, 'deny', 'a tool Devices does not know');
     assert.equal((await decide({ id: 'b1', header: { cwd: '/x' } }, 'terminal_send', { text: 'ls' })).kind, 'deny');
     let asked = false;
     await app.handlers['tools/pre-execute']({ agent: { id: 'b1', header: { cwd: '/x' } }, name: 'bash', arguments: {} }, async () => { asked = true; return { kind: 'allow' }; });
     assert.equal(asked, false, 'decided before any other add-on is asked: no approval card for a closed tool');
     // The same rule once more after every add-on and the approval card, as a guard nothing can undo.
     assert.equal(app.guards.length, 1);
-    assert.match(app.guards[0]({ agent: { id: 'b1', header: { cwd: '/x' } }, name: 'bash', arguments: {} }), /Bench runs no commands/);
+    assert.match(app.guards[0]({ agent: { id: 'b1', header: { cwd: '/x' } }, name: 'bash', arguments: {} }), /Devices runs no commands/);
     assert.equal(app.guards[0]({ agent: { id: 'c1', header: { cwd: '/x' } }, name: 'bash', arguments: {} }), undefined, 'Cowork as before');
     assert.equal(app.guards[0]({ agent: { id: 'b1', header: { cwd: '/x' } }, name: 'web_search', arguments: {} }), undefined);
     const refused = async () => ({ kind: 'deny', reason: 'someone else said no' });
@@ -414,7 +414,7 @@ test('on a stand-in app: Bench\'s tools only in Bench; its rule stops a shell in
   }
 });
 
-test('what Mission asks at a Long run\'s start: in Bench, checks on (the default) with device ports closed, or off from Settings; nothing anywhere else or with Bench off', async () => {
+test('what Mission asks at a Long run\'s start: in Devices, checks on (the default) with device ports closed, or off from Settings; nothing anywhere else or with Devices off', async () => {
   const app = plugin({ modeOf: (id) => (id === 'b1' ? MODE_ID : 'cowork') });
   const off = plugin({ modeOf: () => MODE_ID, longChecks: false });
   try {
@@ -425,32 +425,32 @@ test('what Mission asks at a Long run\'s start: in Bench, checks on (the default
     app.config.longChecks = false;
     assert.equal(app.provided.bench.longRunRules('b1').checks, false, 'read at use: a change in Settings counts for the next run');
     app.config.enabled = false;
-    assert.equal(app.provided.bench.longRunRules('b1'), undefined, 'Bench switched off');
+    assert.equal(app.provided.bench.longRunRules('b1'), undefined, 'Devices switched off');
   } finally {
     app.close();
     off.close();
   }
 });
 
-test('the Bench note is given only in Bench conversations', () => {
+test('the Devices note is given only in Devices conversations', () => {
   const app = plugin({ modeOf: (id) => (id === 'b1' ? MODE_ID : 'cowork') });
   try {
     const sections = new Map();
     const agentFor = (id) => ({ id, ctx: { effect: (fn) => fn(), systemPrompt: { section: (spec) => sections.set(id, spec) } } });
     app.handlers['agent/created']({ agent: agentFor('b1') });
     app.handlers['agent/created']({ agent: agentFor('c1') });
-    assert.match(sections.get('b1').text(), /The Bench folder is .*bench/);
-    assert.match(sections.get('b1').text(), /- Commands, programs, background jobs and any tool not on Bench's list: closed\./);
+    assert.match(sections.get('b1').text(), /The Devices folder is .*bench/);
+    assert.match(sections.get('b1').text(), /- Commands, programs, background jobs and any tool not on Devices' list: closed\./);
     assert.match(sections.get('b1').text(), /- Long run checks: open\. On, with the Mac's device ports closed to them/);
     app.config.longChecks = false;
-    assert.match(sections.get('b1').text(), /- Long run checks: closed\. Switched off in Settings → Bench/);
+    assert.match(sections.get('b1').text(), /- Long run checks: closed\. Switched off in Settings → Devices/);
     assert.equal(sections.get('c1').text(), '');
   } finally {
     app.close();
   }
 });
 
-test('the app gives a service to an add-on only when it asks for it: Bench asks for the tools service it guards with', async () => {
+test('the app gives a service to an add-on only when it asks for it: Devices asks for the tools service it guards with', async () => {
   const source = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
   const bench = await import('../index.js');
   for (const service of ['tools']) {
@@ -466,7 +466,7 @@ test('the catalogue and its recipes are written with the first card, once: the u
     assert.match((await app.call('bench_catalogue', {})).text, /- maker-boards: usb; Write; built: identify; read; write \(ESP32 with esptool\)/);
     await app.call('bench_card', { name: 'Board' });
     const file = join(app.home, 'bench', 'catalogue.md');
-    assert.match(readFileSync(file, 'utf8'), /^# The kinds of device Bench knows/);
+    assert.match(readFileSync(file, 'utf8'), /^# The kinds of device Devices knows/);
     assert.equal(readdirSync(join(app.home, 'bench', 'recipes')).filter((name) => name.endsWith('.md')).length, 22);
     writeFileSync(file, 'my own notes');
     await app.call('bench_card', { name: 'Board 2' });
@@ -489,7 +489,7 @@ test('the plan checker has no tools at all, in either rule; one write at a time 
       assert.match(app.guards[0]({ agent: checker, name, arguments: {} }), /plan checker: you have no tools/);
     }
     const helper = { id: 'h-2', header: { parentSession: 'b1', cwd: '/x' }, session: { deriveMessages: () => [{ role: 'user', content: 'MISSION_WORK read the card' }] } };
-    assert.equal((await app.handlers['tools/pre-execute']({ agent: helper, name: 'bench_devices', arguments: {} }, async () => ({ kind: 'allow' }))).kind, 'allow', 'a Long run helper keeps Bench\'s tools');
+    assert.equal((await app.handlers['tools/pre-execute']({ agent: helper, name: 'bench_devices', arguments: {} }, async () => ({ kind: 'allow' }))).kind, 'allow', 'a Long run helper keeps Devices\' tools');
   } finally {
     app.close();
   }

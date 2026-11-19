@@ -33,6 +33,9 @@ export { decodeSegment }
 export const LATE_MODE_ID = 'isolated-late'
 
 /** Why push and pull are held while the Modes add-on cannot be asked. */
+/** Why push and pull wait while Recon's list of moved conversations is damaged. */
+export const RECON_DAMAGED_REASON = 'Sync did not run: Recon\'s list of conversations moved out of Recon (door.json) is damaged, so Sync cannot tell which ones must never be synced. Recon kept a copy and says how to repair it (Settings → Recon). Nothing was sent or received.'
+
 export const UNKNOWN_REASON = 'Sync did not run: the Modes add-on is not running, and it is what tells Sync which conversations are isolated (Recon), which are never synced. Switch Modes on, or wait a moment after the app starts, and try again.'
 
 /** Thrown inside Sync's lock when nobody can say which conversations are isolated: nothing is copied, removed or sent. */
@@ -157,12 +160,12 @@ export function excludeFor(ids) {
 
 /**
  * Read which conversations are isolated now, and which are Scratch (lib/scratch.mjs): both are never synced.
- * @param {object} services - the app's services, each optional: `settings`, `modes`, `agents`, `sessionPersistence`;
+ * @param {object} services - the app's services, each optional: `settings`, `modes`, `agents`, `sessionPersistence`, `reconMoved`;
  *   and `scratchPlace`, the Scratch place ('' or missing: no Scratch rule).
  * @returns {Promise<{known: boolean, reason?: string, ids: Set<string>, scratch: Set<string>, exclude: (rel: string) => boolean}>}
  *   `known` false when the Modes add-on cannot be asked: then nothing may be pushed or pulled.
  */
-export async function readIsolation({ settings, modes, agents, sessionPersistence, scratchPlace = '' } = {}) {
+export async function readIsolation({ settings, modes, agents, sessionPersistence, scratchPlace = '', reconMoved } = {}) {
   const none = unknownIsolation()
   /** @returns {object | undefined} the Modes add-on's settings now. */
   const modesSettings = () => {
@@ -198,6 +201,20 @@ export async function readIsolation({ settings, modes, agents, sessionPersistenc
     open = []
   }
   const ids = isolatedIds({ modes: value, open, isolated: (id) => modes?.isolated?.(id) === true && modes?.get?.(id) !== LATE_MODE_ID, parents })
+  // Recon's list of moved conversations is damaged (it keeps a copy and says so on its page): which conversations
+  // were moved cannot be told, and they must never be synced, so nothing is synced until it is repaired.
+  try {
+    if (reconMoved?.damaged?.() === true) return { ...none, reason: RECON_DAMAGED_REASON }
+  } catch {
+    // Recon cannot say: its list is used as it is below.
+  }
+  // A conversation Recon's "Move to" opened holds Recon's summary: never synced either (the Recon add-on says which).
+  // The list is readable whether Recon is switched on or off, so Sync never waits for Recon; with no Recon add-on there is none.
+  try {
+    for (const id of reconMoved?.list?.() ?? []) if (typeof id === 'string' && id) ids.add(id)
+  } catch {
+    // Recon cannot say: Modes' marks and the open conversations still hold.
+  }
   const isolatedFile = excludeFor(ids)
   const scratch = scratchOf({ place: typeof scratchPlace === 'string' ? scratchPlace : '', listed })
   const scratchFile = scratchExclude(scratch, sessionIdOf)

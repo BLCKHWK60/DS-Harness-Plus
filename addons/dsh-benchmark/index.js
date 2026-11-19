@@ -72,7 +72,7 @@ export const Config = z.object({
     .default({ maxParallel: 1, timeoutMs: 120000, maxJobMinutes: 60, maxCloudUsdPerJob: 0 })
     .volatile(),
   export: z.object({ minSeeds: z.number().min(1).max(50).default(3), scoreTolerance: z.number().min(0).max(1).default(0.02) }).default({ minSeeds: 3, scoreTolerance: 0.02 }),
-  commandName: z.string().default('bench'),
+  commandName: z.string().default('benchmark'),
   /**
    * Where the work loop pays, as the owner accepted it from a methods job (plan step S7), as JSON
    * `{ category: wayId }`. Advice only: Benchmark switches nothing on by itself; Mission shows it.
@@ -831,7 +831,7 @@ export function apply(ctx, config) {
 
   // Read-only routes for the browser page (client.js): behind the connection fence (Host/Origin
   // check and the login cookie), GET only. They return scores, timings, token counts and cost;
-  // never prompts, answers or keys. Starting and cancelling a job stays with /bench.
+  // never prompts, answers or keys. Starting and cancelling a job stays with /benchmark.
   ctx.inject(['webServer', 'connection'], (inner) => {
     /**
      * Wrap a handler with the fence, the GET-only check and JSON output.
@@ -974,8 +974,37 @@ export function apply(ctx, config) {
     );
   });
 
-  const commandName = String(plain(config.commandName) ?? "bench").trim();
+  const commandName = String(plain(config.commandName) ?? "benchmark").trim();
   if (commandName) {
+    /** One answer for a typed command: the shared handler, with the old name's one-time hint in front when typed as /bench. */
+    const handle = async ({ rawInput }) => {
+      const [verb, arg] = String(rawInput ?? '').trim().split(/\s+/);
+      try {
+        if (verb === 'run') return { kind: 'success', text: `Started job ${benchmark.start(arg)}. Check it with /${commandName} status <job>.` };
+        if (verb === 'methods') {
+          const [, suiteName, smallId, largeId] = String(rawInput ?? '').trim().split(/\s+/);
+          return { kind: 'success', text: `Started job ${benchmark.startMethods(suiteName, smallId, largeId)}: the suite run three ways (one pass, the work loop, a large model). /${commandName} report <job> shows the scorecard.` };
+        }
+        if (verb === 'status') {
+          const id = arg ?? [...new Set([...jobs.keys(), ...benchmark.list()])].sort().pop();
+          const s = benchmark.status(id);
+          return { kind: 'success', text: `Job ${s.id} (${s.suite}): ${s.state}, ${s.done}/${s.total} runs, ${s.errors} errors.` };
+        }
+        if (verb === 'report') return { kind: 'success', text: benchmark.report(arg).text };
+        if (verb === 'export') return { kind: 'success', text: benchmark.exportPresets(arg) };
+        if (verb === 'cancel') {
+          benchmark.cancel(arg);
+          return { kind: 'success', text: `Cancel requested for ${arg}.` };
+        }
+        if (verb === 'list' || !verb) return { kind: 'success', text: `Suites: ${Object.keys(live().suites).join(', ') || 'none (create one in Settings > Benchmark)'}\nJobs: ${benchmark.list().join(', ') || 'none'}` };
+        return { kind: 'error', text: `Usage: /${commandName} run <suite> | status [job] | report <job> | export <job> | cancel <job> | list` };
+      } catch (error) {
+        return { kind: 'error', text: error.message };
+      }
+    };
+    /** The old name /bench (Benchmark's command before Plus 1.0) keeps working; Devices uses no slash command. */
+    const OLD_NAME = 'bench';
+    let hinted = false;
     ctx.inject(['commands'], (inner) => {
       inner.effect(
         () =>
@@ -983,34 +1012,27 @@ export function apply(ctx, config) {
             name: commandName,
             description: 'Benchmark: `run <suite>`, `methods <suite> <small> <large>`, `status [job]`, `report <job>`, `export <job>`, `cancel <job>`, `list`',
             input: { hint: 'run <suite> | methods <suite> <small> <large> | status | report <job> | export <job> | cancel <job> | list' },
-            handler: async ({ rawInput }) => {
-              const [verb, arg] = String(rawInput ?? '').trim().split(/\s+/);
-              try {
-                if (verb === 'run') return { kind: 'success', text: `Started job ${benchmark.start(arg)}. Check it with /${commandName} status <job>.` };
-                if (verb === 'methods') {
-                  const [, suiteName, smallId, largeId] = String(rawInput ?? '').trim().split(/\s+/);
-                  return { kind: 'success', text: `Started job ${benchmark.startMethods(suiteName, smallId, largeId)}: the suite run three ways (one pass, the work loop, a large model). /${commandName} report <job> shows the scorecard.` };
-                }
-                if (verb === 'status') {
-                  const id = arg ?? [...new Set([...jobs.keys(), ...benchmark.list()])].sort().pop();
-                  const s = benchmark.status(id);
-                  return { kind: 'success', text: `Job ${s.id} (${s.suite}): ${s.state}, ${s.done}/${s.total} runs, ${s.errors} errors.` };
-                }
-                if (verb === 'report') return { kind: 'success', text: benchmark.report(arg).text };
-                if (verb === 'export') return { kind: 'success', text: benchmark.exportPresets(arg) };
-                if (verb === 'cancel') {
-                  benchmark.cancel(arg);
-                  return { kind: 'success', text: `Cancel requested for ${arg}.` };
-                }
-                if (verb === 'list' || !verb) return { kind: 'success', text: `Suites: ${Object.keys(live().suites).join(', ') || 'none (create one in Settings > Benchmark)'}\nJobs: ${benchmark.list().join(', ') || 'none'}` };
-                return { kind: 'error', text: 'Usage: /bench run <suite> | status [job] | report <job> | export <job> | cancel <job> | list' };
-              } catch (error) {
-                return { kind: 'error', text: error.message };
-              }
-            },
+            handler: handle,
           }),
         'benchmark command',
       );
+      if (commandName !== OLD_NAME) {
+        inner.effect(
+          () =>
+            inner.commands.register({
+              name: OLD_NAME,
+              description: `The old name of /${commandName} (same commands)`,
+              input: { hint: 'run <suite> | status | report <job> | export <job> | cancel <job> | list' },
+              handler: async (input) => {
+                const answer = await handle(input);
+                if (hinted) return answer;
+                hinted = true;
+                return { ...answer, text: `/${OLD_NAME} is now called /${commandName}; the old name still works. (This hint is shown once.)\n${answer.text}` };
+              },
+            }),
+          'benchmark old command name',
+        );
+      }
     });
   }
 }

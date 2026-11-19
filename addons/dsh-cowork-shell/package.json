@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A MindsHub-style left sidebar: Chat, Cowork and Code tabs at the top, each with its own sections, New chat / task / code task, your projects and Settings. Replaces the app's own sidebar while it is on; removing it brings the normal sidebar back.",
+  "description": "A tabbed left sidebar: Chat, Cowork and Code tabs at the top, each with its own sections, New chat / task / code task, your projects and Settings. Replaces the app's own sidebar while it is on; removing it brings the normal sidebar back.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

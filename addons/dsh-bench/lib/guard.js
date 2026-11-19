@@ -32,11 +32,11 @@ export const ALLOWED = new Set([
 const PATH_KEYS = ['file_path', 'path', 'file', 'filename', 'directory', 'dir', 'folder', 'cwd', 'notebook_path', 'target', 'source', 'destination', 'output', 'output_path', 'input_path'];
 const LIST_KEYS = ['files', 'paths', 'file_paths'];
 
-export const NO_COMMANDS = 'Bench runs no commands and no programs, also during a Long run: it reaches a device only through its own tools (bench_usb and the cards). Nothing was run. This is fixed in Bench (the user sees it under "Bench rules" in the chat box). Tell the user it is closed, and say what you would do and why, in plain words.';
-export const NOT_ALLOWED = 'This tool is closed in Bench: a Bench conversation uses Bench\'s own tools, the web, PDFs, the Library, reading files, diagrams, the step list and questions (and, in a Long run, writing files outside the Bench folder). Nothing was run. Tell the user it is closed in Bench.';
-export const NO_BACKUPS = 'The Bench folder (cards, logbooks, backups, logs) is read only through Bench\'s own tools: backups can hold Wi-Fi and other keys and are never shown to a model. Nothing was read. bench_devices shows a card and what its backups are.';
-export const NOT_THERE = 'Bench\'s file tools never write into the Bench folder (cards and logbooks are kept by bench_card and bench_log) or into /dev (a device\'s port). Nothing was written.';
-export const NO_DEVICE_FILES = 'A file under /dev is a device: Bench reaches devices only through its own tools. Nothing was read.';
+export const NO_COMMANDS = 'Devices runs no commands and no programs, also during a Long run: it reaches a device only through its own tools (bench_usb and the cards). Nothing was run. This is fixed in Devices (the user sees it under "Devices rules" in the chat box). Tell the user it is closed, and say what you would do and why, in plain words.';
+export const NOT_ALLOWED = 'This tool is closed in Devices: a Devices conversation uses Devices\' own tools, the web, PDFs, the Library, reading files, diagrams, the step list and questions (and, in a Long run, writing files outside the Devices folder). Nothing was run. Tell the user it is closed in Devices.';
+export const NO_BACKUPS = 'The Devices folder (cards, logbooks, backups, logs) is read only through Devices\' own tools: backups can hold Wi-Fi and other keys and are never shown to a model. Nothing was read. bench_devices shows a card and what its backups are.';
+export const NOT_THERE = 'Devices\' file tools never write into the Devices folder (cards and logbooks are kept by bench_card and bench_log) or into /dev (a device\'s port). Nothing was written.';
+export const NO_DEVICE_FILES = 'A file under /dev is a device: Devices reaches devices only through its own tools. Nothing was read.';
 
 /** A path in its real spelling; a path that does not exist yet takes the real spelling of the part that does. */
 function real(path) {

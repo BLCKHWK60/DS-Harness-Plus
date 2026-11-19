@@ -1,6 +1,6 @@
 # Tests: @local/dsh-context-saver
 
-No tests yet.
+Suites: test/saver.test.mjs.
 
 Run with the app's own Node (stand-ins only; never against the real app data):
 

@@ -7,12 +7,15 @@
 #   3. unregisters every Plus add-on with the app's own tool (dsh plugin remove)
 #   4. deletes <app data>/addons/deepseek-harness-plus
 #
-# Your own settings for these add-ons (if you added any) stay in place and do nothing;
-# installing again picks them up.
+# It removes the add-ons only. What stays is printed at the end: your conversations, the add-ons'
+# own data folders, Keychain passwords, a shared settings file, trashed conversations and the saved
+# setup copies. An optional last step ("also remove my Plus data") can remove the data folders; it
+# lists each folder with its size, asks twice and the default is No.
 #
 # Options:
-#   --yes              answer yes to every question
+#   --yes              answer yes to every question (it never answers the data step)
 #   --profile <name>   remove from another app profile (default: desktop)
+#   --remove-data      go straight to the optional data step (also when no add-ons are left to remove)
 #   --help             show this text
 set -u
 
@@ -21,11 +24,13 @@ HERE=$(cd "$(dirname "$0")/.." && pwd -P)
 
 PROFILE=desktop
 ASSUME_YES=0
+REMOVE_DATA=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --yes|-y) ASSUME_YES=1 ;;
     --profile) shift; PROFILE=${1:?--profile needs a name} ;;
-    --help|-h) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --remove-data) REMOVE_DATA=1 ;;
+    --help|-h) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) fail "Unknown option: $1 (try --help)" ;;
   esac
   shift
@@ -50,8 +55,15 @@ INSTALLED=$(app_node -e '
 EXTRA=$(stale_addons "$PROFILE_DIR/package.json" "$ADDONS_DIR" "$INSTALLED")
 [ -n "$EXTRA" ] && INSTALLED=$(printf '%s\n%s\n' "$INSTALLED" "$EXTRA" | grep . | sort -u)
 
+DATA=$(plus_lib data "$HERE/addon-tiers.json" "$DSH_HOME")
+
 if [ -z "$INSTALLED" ] && [ ! -d "$ADDONS_DIR" ]; then
   say "Nothing to remove: no $PLUS_NAME add-ons are installed."
+  if [ "$REMOVE_DATA" = 1 ]; then
+    make_sure_app_is_closed
+    print_what_stays "$DATA"
+    offer_data_removal "$DATA"
+  fi
   exit 0
 fi
 make_sure_app_is_closed
@@ -79,9 +91,14 @@ fi
 step "Deleting the add-on files"
 rm -rf "$ADDONS_DIR"
 say "Removed $ADDONS_DIR"
+# A marker, so a later install knows this person had Plus before: it is then an update (no new-install defaults, no
+# setup card, no Simple view), whatever happens to the data folders. Written after the add-ons are gone.
+printf 'Plus was uninstalled here on %s. A later install treats this as an update, not a first install.\n' "$(date '+%Y-%m-%d %H:%M')" >"$DSH_HOME/backups/deepseek-harness-plus/uninstalled.txt" 2>/dev/null || true
 
 step "Done"
-say "$PLUS_NAME is removed. Your conversations are untouched."
+say "The $PLUS_NAME add-ons are removed (every add-on in the Plus folder, Recon too if you had it)."
 say "Your setup from before this step is saved in:"
 say "  $BACKUP_DIR"
+print_what_stays "$DATA"
+offer_data_removal "$DATA"
 exit 0

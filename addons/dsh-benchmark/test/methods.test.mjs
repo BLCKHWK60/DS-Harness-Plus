@@ -130,7 +130,7 @@ test('on a stand-in app: a methods job runs every way, the report has the scorec
   assert.equal(accepted.status, 200);
   assert.deepEqual(mutated[0], ['benchmark', [{ op: 'set', path: ['acceptedMethods'], value: '{"facts":"small-loop-standard"}' }]]);
   assert.equal((await post({ action: 'accept', category: 'facts', way: 'rm -rf' })).status, 400);
-  assert.match((await commands.bench.handler({ rawInput: `report ${started.json.id}` })).text, /Ways of working/);
+  assert.match((await commands.benchmark.handler({ rawInput: `report ${started.json.id}` })).text, /Ways of working/);
 });
 
 test('review fix 9: the cost of calls made before a failure is counted; a judge-graded suite says the judge overlaps', async () => {

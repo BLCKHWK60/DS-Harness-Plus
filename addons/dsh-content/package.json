@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A Content mode and tab for writing books, articles, blog posts, scripts and podcast or video outlines from your material: a subject folder with numbered drafts that are never overwritten, an inventory of what the folder holds, and other conversations brought in as material. Off until you switch it on.",
+  "description": "Beta: A Content mode and tab for writing books, articles, blog posts, scripts and podcast or video outlines from your material: a subject folder with numbered drafts that are never overwritten, an inventory of what the folder holds, and other conversations brought in as material. Off until you switch it on.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

@@ -31,7 +31,7 @@ export function draftText(draft) {
   return [
     `# Recipe draft: ${draft.title}`,
     '',
-    `Status: ${draft.status === 'approved' ? 'approved by you at the Read level' : draft.status === 'declined' ? 'declined by you' : 'a draft: it is not used until you approve it on Settings → Bench'}.`,
+    `Status: ${draft.status === 'approved' ? 'approved by you at the Read level' : draft.status === 'declined' ? 'declined by you' : 'a draft: it is not used until you approve it on Settings → Devices'}.`,
     `Made for: ${draft.device} · ${new Date(draft.at).toISOString().slice(0, 16).replace('T', ' ')} UTC`,
     '',
     '## How it is identified',
@@ -48,7 +48,7 @@ export function draftText(draft) {
     '',
     '## Adjust and Write',
     '',
-    'Not built for a new recipe. Bench adds them only from the maker\'s or the open project\'s own documentation, when you ask, in a later version.',
+    'Not built for a new recipe. Devices adds them only from the maker\'s or the open project\'s own documentation, when you ask, in a later version.',
     '',
   ].join('\n');
 }
@@ -66,7 +66,7 @@ export function buildRecipeTool({ bench, kit, sources = () => [], now = () => ne
   const text = { type: 'string', maxLength: 1500 };
   return {
     name: 'bench_recipe',
-    description: 'For a device that is not in the catalogue (bench_catalogue describe found no family). action "draft": a Read-level recipe from what the device reports and the maker\'s manual you found with the web tools: how it is identified, what can be read and through which of Bench\'s doors, and the sources (the maker\'s pages first; a forum may explain, never be a step). It is saved as a draft the user reads, and used only after the user approves it on Settings → Bench. Adjust and Write steps never come from a draft: for a new recipe they are not built. action "list": the drafts and their status. Bench never runs a step of a recipe by itself.',
+    description: 'For a device that is not in the catalogue (bench_catalogue describe found no family). action "draft": a Read-level recipe from what the device reports and the maker\'s manual you found with the web tools: how it is identified, what can be read and through which of Devices\' doors, and the sources (the maker\'s pages first; a forum may explain, never be a step). It is saved as a draft the user reads, and used only after the user approves it on Settings → Devices. Adjust and Write steps never come from a draft: for a new recipe they are not built. action "list": the drafts and their status. Devices never runs a step of a recipe by itself.',
     parameters: {
       type: 'object',
       properties: {
@@ -85,7 +85,7 @@ export function buildRecipeTool({ bench, kit, sources = () => [], now = () => ne
       if (args.action === 'list') {
         const list = drafts();
         if (list.length === 0) return 'No recipe drafts yet.';
-        return ['Recipe drafts (the user approves them on Settings → Bench):', ...list.map((draft) => `- ${draft.id}: ${draft.title} for ${draft.device}, ${draft.status}`)].join('\n');
+        return ['Recipe drafts (the user approves them on Settings → Devices):', ...list.map((draft) => `- ${draft.id}: ${draft.title} for ${draft.device}, ${draft.status}`)].join('\n');
       }
       if (args.action !== 'draft') throw new Error('The action is draft or list.');
       const card = cardOf(args.name);
@@ -99,8 +99,8 @@ export function buildRecipeTool({ bench, kit, sources = () => [], now = () => ne
       const draft = { id, title, device: card.name, at: now().getTime(), identify, read, sources: found, status: 'draft' };
       bench.writeTop(DRAFTS, [...drafts(), draft].slice(-100));
       bench.writeOnce('recipes/drafts', `${id}.md`, draftText(draft));
-      bench.record(card, { title: 'Recipe draft made', asked: `a recipe for ${title}`, done: `saved as recipes/drafts/${id}.md`, next: 'the user reads it and approves or declines it on Settings → Bench' }, now());
-      return `Saved the draft "${title}" (${id}) as recipes/drafts/${id}.md, at the Read level. It is used only after the user approves it on Settings → Bench. Adjust and Write are not built for a new recipe.${found.some((source) => !source.official) ? ' Some sources are not the maker\'s pages: they are marked as explaining, never as a step.' : ''}`;
+      bench.record(card, { title: 'Recipe draft made', asked: `a recipe for ${title}`, done: `saved as recipes/drafts/${id}.md`, next: 'the user reads it and approves or declines it on Settings → Devices' }, now());
+      return `Saved the draft "${title}" (${id}) as recipes/drafts/${id}.md, at the Read level. It is used only after the user approves it on Settings → Devices. Adjust and Write are not built for a new recipe.${found.some((source) => !source.official) ? ' Some sources are not the maker\'s pages: they are marked as explaining, never as a step.' : ''}`;
     }),
   };
 }

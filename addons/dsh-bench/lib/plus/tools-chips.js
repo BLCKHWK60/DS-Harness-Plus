@@ -76,7 +76,7 @@ const SIGNATURES = { '1e950f': 'ATmega328P', '1e9514': 'ATmega328', '1e9516': 'A
 
 function avrBase(args) {
   const part = typeof args.part === 'string' ? args.part : '';
-  if (!part) throw new Error('Give the chip as avrdude names it: part (for example m328p for an Uno or Nano, m2560 for a Mega, m32u4 for a Leonardo, t85 for an ATtiny85). Bench never guesses it');
+  if (!part) throw new Error('Give the chip as avrdude names it: part (for example m328p for an Uno or Nano, m2560 for a Mega, m32u4 for a Leonardo, t85 for an ATtiny85). Devices never guesses it');
   if (part.startsWith('-') || !PART.test(part) || /^auto$/i.test(part)) throw new Error(`${quoted(part)} is not an avrdude part name such as m328p, m2560, m32u4 or t85`);
   const programmer = oneOf(args.programmer, PROGRAMMERS, 'programmer (arduino for an Uno or Nano, wiring for a Mega, avr109 for a Leonardo, usbasp, avrisp, …)');
   const out = ['-p', part, '-c', programmer];
@@ -101,7 +101,7 @@ const avrFailure = (result, what) => {
 function benchArduino(deps) {
   return {
     name: 'bench_arduino',
-    description: 'AVR boards and chips (Uno, Nano, Mega, Leonardo, ATtiny…) with avrdude. Read-only: info (avrdude -v), read-signature, read-fuses (real values need an ISP programmer such as usbasp; through a bootloader they read as 0 or fail), verify (compares a .hex or .bin with the chip). Writing: flash-hex and flash-bin need "Allow risky writes". Always give part (m328p, m2560, m32u4, t85…) and programmer (arduino, wiring, avr109, usbasp…): Bench never guesses them. Opening a serial port restarts the board.',
+    description: 'AVR boards and chips (Uno, Nano, Mega, Leonardo, ATtiny…) with avrdude. Read-only: info (avrdude -v), read-signature, read-fuses (real values need an ISP programmer such as usbasp; through a bootloader they read as 0 or fail), verify (compares a .hex or .bin with the chip). Writing: flash-hex and flash-bin need "Allow risky writes". Always give part (m328p, m2560, m32u4, t85…) and programmer (arduino, wiring, avr109, usbasp…): Devices never guesses them. Opening a serial port restarts the board.',
     parameters: {
       type: 'object',
       properties: {
@@ -201,7 +201,7 @@ function benchRp2040(deps) {
 function benchStm32(deps) {
   return {
     name: 'bench_stm32',
-    description: 'STM32 boards through an ST-LINK, with the open stlink tools. Read-only: info (st-info --probe), read (st-flash read: a dump of size bytes from address, kept in the Bench folder\'s dumps), verify (reads the flash back and compares its SHA-256 with a .bin). Writing (needs "Allow risky writes"): write (st-flash write of a .bin at address, or a .hex, then a reset) and erase (the whole flash).',
+    description: 'STM32 boards through an ST-LINK, with the open stlink tools. Read-only: info (st-info --probe), read (st-flash read: a dump of size bytes from address, kept in the Devices folder\'s dumps), verify (reads the flash back and compares its SHA-256 with a .bin). Writing (needs "Allow risky writes"): write (st-flash write of a .bin at address, or a .hex, then a reset) and erase (the whole flash).',
     parameters: {
       type: 'object',
       properties: {
@@ -271,7 +271,7 @@ const jlinkScript = (lines) => `${lines.join('\n')}\n`;
 function benchJlink(deps) {
   return {
     name: 'bench_jlink',
-    description: 'SEGGER J-Link probes, with JLinkExe and a command file Bench writes itself (never the model\'s text). Read-only: info (the probe), connect (connects to the chip), memory-read (mem32: count 32-bit words from address), register-read (regs; the CPU must be halted for most chips, and Bench does not halt it). cpu-reset (r, then g) changes the device and needs "Allow risky writes". device is J-Link\'s name for the chip (STM32F103C8, nRF52840_xxAA, …).',
+    description: 'SEGGER J-Link probes, with JLinkExe and a command file Devices writes itself (never the model\'s text). Read-only: info (the probe), connect (connects to the chip), memory-read (mem32: count 32-bit words from address), register-read (regs; the CPU must be halted for most chips, and Devices does not halt it). cpu-reset (r, then g) changes the device and needs "Allow risky writes". device is J-Link\'s name for the chip (STM32F103C8, nRF52840_xxAA, …).',
     parameters: {
       type: 'object',
       properties: {

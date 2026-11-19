@@ -14,7 +14,8 @@ test('the adviser method fits the Modes limit and drops the research-only rule',
   assert.ok(!ADVISER_METHOD.includes('This is research, not advice'));
   assert.ok(!ADVISER_METHOD.includes('Do not tell the user to buy'));
   assert.match(ADVISER_METHOD, /7\. Advise\./);
-  assert.match(ADVISER_METHOD, /Never add a disclaimer/);
+  assert.match(ADVISER_METHOD, /AI output, not regulated advice\./);
+  assert.ok(!/Never add a disclaimer/.test(ADVISER_METHOD));
   assert.match(ADVISER_METHOD, /your call\.$/);
 });
 
@@ -33,14 +34,15 @@ test('skills are reworded for the adviser; briefs stay research only', () => {
   assert.equal(skills.length, SKILLS.length);
   for (const skill of skills) {
     assert.ok(!/research, not advice/.test(skill.content), skill.name);
-    assert.match(skill.content, /add no disclaimer/);
+    assert.match(skill.content, /AI output, not regulated advice/);
+    assert.ok(!/add no disclaimer/.test(skill.content), skill.name);
   }
   assert.ok(SKILLS.every((skill) => /research, not advice/.test(skill.content)));
   // A brief is saved once and outlives the switch, so it never carries the adviser's wording;
   // the adviser note overrides its research-only line while the adviser is on.
   const brief = briefPrompt('NVIDIA', 'Global', 'weekdays');
   assert.match(brief, /research, not advice/);
-  assert.ok(!/add no disclaimer/.test(brief));
+  assert.ok(!/AI output, not regulated advice/.test(brief));
   assert.match(adviserNote(''), /replaces any line elsewhere \(in a skill, a scheduled task/);
   // A brief saved with the adviser's wording before is reworded; a current one is left alone.
   const old = brief.replace('This is research, not advice: do not say buy, sell or hold.', "End with your recommendation as the user's adviser, and add no disclaimer.");
@@ -72,17 +74,17 @@ test('the profile is kept, added to, and never pushed past its limit', () => {
   }
 });
 
-test('the note carries the profile and forbids disclaimers', () => {
+test('the note carries the profile and the one-line AI note', () => {
   const note = adviserNote('Goals: retire at 60.');
-  assert.match(note, /Never open or close with a disclaimer/);
+  assert.match(note, /End every answer with one short last line, exactly: "AI output, not regulated advice\."/);
+  assert.ok(!/Never open or close with a disclaimer|Never write that you are not a licensed/.test(note));
   assert.match(note, /The client's profile:\nGoals: retire at 60\./);
   assert.match(note, /finance_profile_save/);
   assert.match(adviserNote(''), /profile is empty\. Advise anyway/);
-  // The answer comes first: no question in place of it, and no question card.
+  // Asking is allowed when one missing fact would change the call; there is no "never ask" rule.
   for (const text of [note, adviserNote('')]) {
-    assert.match(text, /Answer first, always/);
-    assert.match(text, /never use ask_user_question/);
-    assert.ok(!/ask for (it|the few facts)/.test(text));
+    assert.match(text, /you may ask for it briefly/);
+    assert.ok(!/never use ask_user_question|Never reply with a question|Answer first, always/.test(text));
   }
   assert.ok(!adviserNote('', false).includes('finance_profile_save'));
   assert.ok(!/\n\n\n/.test(adviserNote('', false)));
@@ -97,7 +99,7 @@ test('with Tools off, the note saves nothing and says figures are from memory', 
   assert.ok(!/sources you fetched/.test(off), off);
   assert.match(off, /Tools are off, so nothing can be fetched: every figure is from memory and is marked as such/);
   // The rest of the note is unchanged.
-  assert.match(off, /Never open or close with a disclaimer/);
+  assert.match(off, /AI output, not regulated advice/);
   assert.match(off, /The client's profile:\nGoals: retire at 60\./);
   assert.ok(!/\n\n\n/.test(off));
 });

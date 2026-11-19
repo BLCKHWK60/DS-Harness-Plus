@@ -13,17 +13,17 @@ export const PROGRAMS = {
   esptool: {
     names: ['esptool.py', 'esptool'],
     places: ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), '.local', 'bin'), join(homedir(), 'Library', 'Python', '3.12', 'bin'), join(homedir(), 'Library', 'Python', '3.11', 'bin')],
-    get: 'Install esptool yourself, for example with `brew install esptool` or `pipx install esptool` in Terminal (Espressif\'s own tool: https://github.com/espressif/esptool). Bench never installs anything.',
+    get: 'Install esptool yourself, for example with `brew install esptool` or `pipx install esptool` in Terminal (Espressif\'s own tool: https://github.com/espressif/esptool). Devices never installs anything.',
   },
   adb: {
     names: ['adb'],
     places: ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), 'Library', 'Android', 'sdk', 'platform-tools')],
-    get: 'Install Android\'s platform tools yourself, for example with `brew install android-platform-tools` (Google\'s download: https://developer.android.com/tools/releases/platform-tools). Bench never installs anything.',
+    get: 'Install Android\'s platform tools yourself, for example with `brew install android-platform-tools` (Google\'s download: https://developer.android.com/tools/releases/platform-tools). Devices never installs anything.',
   },
   fastboot: {
     names: ['fastboot'],
     places: ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), 'Library', 'Android', 'sdk', 'platform-tools')],
-    get: 'Install Android\'s platform tools yourself, for example with `brew install android-platform-tools` (it brings adb and fastboot). Bench never installs anything.',
+    get: 'Install Android\'s platform tools yourself, for example with `brew install android-platform-tools` (it brings adb and fastboot). Devices never installs anything.',
   },
   unzip: { names: ['unzip'], places: ['/usr/bin'], get: 'unzip is part of macOS; it is missing from /usr/bin.' },
   stty: { names: ['stty'], places: ['/bin'], get: 'stty is part of macOS; it is missing from /bin.' },

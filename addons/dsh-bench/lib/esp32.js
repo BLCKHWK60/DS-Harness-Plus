@@ -62,7 +62,7 @@ export function ownSourceOf(text, kind) {
   }
   if (url.protocol !== 'https:') throw new Error('A firmware source must be an https address.');
   if (url.username || url.password) throw new Error('A source address carries no name or password.');
-  if (!/^[a-z0-9.-]{1,200}$/i.test(url.hostname) || !url.hostname.includes('.')) throw new Error('That is not a web address Bench can use as a source.');
+  if (!/^[a-z0-9.-]{1,200}$/i.test(url.hostname) || !url.hostname.includes('.')) throw new Error('That is not a web address Devices can use as a source.');
   if (url.hostname.toLowerCase() === 'github.com' && !GITHUB_RELEASES.test(url.pathname)) throw new Error('A GitHub source is one project\'s releases page, such as https://github.com/<org>/<project>/releases/.');
   return { host: url.hostname.toLowerCase(), path: url.pathname.slice(0, 300) || '/', kind };
 }
@@ -80,7 +80,7 @@ export function sourceRefusal(source, { extra = [], kind } = {}) {
   const list = OFFICIAL.filter((entry) => !kind || entry.kind === kind);
   if (list.some((entry) => entry.host.test(host) && (!entry.path || entry.path.test(url.pathname)))) return '';
   if (ownSource(url, extra, kind)) return '';
-  return `${host}${url.pathname.slice(0, 60)} is not ${kind ? `a source Bench knows for ${kind === 'esp32' ? 'ESP32 boards' : kind === 'router' ? 'routers' : 'phones'}` : 'a source Bench knows'} (${list.map((entry) => entry.about).join(', ')}), nor one the user added for them on Settings → Bench. Firmware from a forum, a chat, another kind of device's source or a download site is never flashed.`;
+  return `${host}${url.pathname.slice(0, 60)} is not ${kind ? `a source Devices knows for ${kind === 'esp32' ? 'ESP32 boards' : kind === 'router' ? 'routers' : 'phones'}` : 'a source Devices knows'} (${list.map((entry) => entry.about).join(', ')}), nor one the user added for them on Settings → Devices. Firmware from a forum, a chat, another kind of device's source or a download site is never flashed.`;
 }
 
 /** GitHub's own download hosts, where a release file's address on github.com leads. */
@@ -110,7 +110,7 @@ export async function publishedOn(page, sum, { fetchFn = globalThis.fetch, timeo
   } catch {
     return { ok: false, why: 'give the address of the page that publishes the checksum' };
   }
-  if (typeof fetchFn !== 'function') return { ok: false, why: 'Bench cannot reach the web here' };
+  if (typeof fetchFn !== 'function') return { ok: false, why: 'Devices cannot reach the web here' };
   for (let step = 0; step < 6; step += 1) {
     const refused = stepRefusal(url, step === 0, extra, kind);
     if (refused) return { ok: false, why: `${url.hostname}: ${refused}` };
@@ -123,7 +123,7 @@ export async function publishedOn(page, sum, { fetchFn = globalThis.fetch, timeo
     const status = Number(response?.status ?? 0);
     if (status >= 300 && status < 400) {
       const next = response.headers?.get?.('location');
-      if (!next) return { ok: false, why: 'the page sent Bench elsewhere without saying where' };
+      if (!next) return { ok: false, why: 'the page sent Devices elsewhere without saying where' };
       url = new URL(next, url);
       continue;
     }
@@ -135,7 +135,7 @@ export async function publishedOn(page, sum, { fetchFn = globalThis.fetch, timeo
       ? { ok: true, why: '' }
       : { ok: false, why: `the page does not show this file's SHA-256 (${sum}), so it is not the published file, or the checksum is on another page of the same project` };
   }
-  return { ok: false, why: 'the page sent Bench elsewhere too many times' };
+  return { ok: false, why: 'the page sent Devices elsewhere too many times' };
 }
 
 /** @returns {{chip: string, features: string, mac: string, flash: string, flashBytes: number | undefined}} what flash_id said. */
@@ -193,7 +193,7 @@ export function protectedHit(address, bytes, ranges = []) {
   if (address < PROTECTED_END) return `the loader, the partition table and the stored settings (below ${hex(PROTECTED_END)})`;
   const end = address + bytes;
   const hit = ranges.find(([start, stop]) => address < stop && end > start);
-  return hit ? `a part you protected on Settings → Bench (${hex(hit[0])}-${hex(hit[1])})` : '';
+  return hit ? `a part you protected on Settings → Devices (${hex(hit[0])}-${hex(hit[1])})` : '';
 }
 
 /** What a board printing this after a write says about its start. */

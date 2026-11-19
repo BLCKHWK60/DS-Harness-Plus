@@ -48,3 +48,9 @@ A refactor request on the small route: step 1 on the small model, step 2 on the 
 ## Not verified
 
 Routing quality with a real small model (all answers were scripted; the spec's 8-of-10 scripted-prompt target needs real models); the median added latency; `stickyTurns` across several turns in one session and the stand-down rule (needs a long session; covered by unit checks only for stickiness); Tier candidates (`setSessionTier` path); the route-health interplay; the spec's `allowEscalation`, `localOnly` and benchmark replay.
+
+## Tests
+
+Run from the Plus folder with the app's own Node. `test/router.test.mjs` (settings defaults, the candidate checks, the routing-answer reader, the decision rules, the add-on on a stand-in app: switching, a failing or doubtful routing model, manual choices respected, steps after the first, isolated conversations, route health, `/router`, and starter tiers that have no model of their own: routing now keeps working after the first turn instead of switching itself off).
+
+Fixed with its test: with starter tiers (no model of their own) the router switched itself off after one turn, because it looked for the tier's model, which is empty. It now recognises such a tier by the tier the conversation is on.

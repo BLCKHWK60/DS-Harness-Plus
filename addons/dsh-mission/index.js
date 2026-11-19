@@ -28,7 +28,7 @@ import z from '@deepseek-ai/schemastery';
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join, sep } from 'node:path';
 import { BENCH_CHECKS_TEXT, BENCH_NO_CHECKS_TEXT, CREATOR_LONG_OFF_TEXT, CREATOR_NO_MISSION_TEXT, ISOLATED_TEXT, RECON_CHECKS_TEXT, RECON_NO_CHECKS_TEXT, READ_ONLY_LONG_TEXT, READ_ONLY_TABS, RECON_LONG_TEXT, whyNot } from './lib/gate.js';
-import { COMMAND_TOOLS, MODES, MODE_LABELS, WRITE_TOOLS, decide, modeOf, rulesNote } from './lib/guard.js';
+import { COMMAND_TOOLS, MODES, MODE_LABELS, WRITE_TOOLS, decide, mayChangeFiles, modeOf, rulesNote } from './lib/guard.js';
 import { exists, isInside, pathsOf, real, shown } from './lib/paths.js';
 import { GIT_CANDIDATES, openCheckpoints } from './lib/checkpoints.js';
 import { covered, openState } from './lib/state.js';
@@ -365,6 +365,24 @@ export function apply(ctx, config) {
     },
     isRunning: (id) => runnerRef.current?.isOn(String(id ?? '')) === true,
     /**
+     * For Budget guard: the id of the Long run that is working in a conversation right now ('' for none: no run, an ordinary
+     * /mission run, or a Long run that is paused). The Long run's own allowance applies only while this is not empty, and its
+     * counts run across the whole run, not per round.
+     * @returns {string} the run's id.
+     */
+    longRunId: (id) => {
+      try {
+        const key = String(id ?? '');
+        const run = runnerRef.current?.runOf?.(key);
+        if (!run || run.status !== 'running' || !isLong(run)) return '';
+        const agent = agentById(key);
+        if (!agent || runnerRef.current.paused(agent)) return '';
+        return String(run.id ?? '');
+      } catch {
+        return '';
+      }
+    },
+    /**
      * The tools of a Long run in a conversation, for Modes: a run that has not ended (also paused).
      * @returns {{files: boolean, web: boolean} | undefined} undefined when none, or for a run from before tools were chosen.
      */
@@ -457,6 +475,18 @@ export function apply(ctx, config) {
     if (!stores.has(root)) stores.set(root, openCheckpoints(root, typeof home === 'function' ? { gitHome: join(home('mission'), 'git-home') } : {}));
     return stores.get(root);
   };
+  /**
+   * Why no undo is available in a folder ('' when checkpoints work or are not known to fail). Starts the look the first time, so a
+   * conversation's rules tell the truth from its first turn on, also in a conversation that had a mode on before a restart.
+   */
+  const noUndoOf = (root) => {
+    const points = pointsOf(root);
+    void points.why().catch(() => {});
+    return points.peek();
+  };
+  /** Conversations that were told (once) that this folder has no undo; and, per conversation, the commands the user allowed. */
+  const toldNoUndo = new Set();
+  const allowedCommands = new Map();
   /** Conversation id -> the checkpoint being taken at the start of its turn. */
   const settling = new Map();
   const settle = (id, work) => {
@@ -490,7 +520,7 @@ export function apply(ctx, config) {
                 if (!guard) return '';
                 // The conversation's own model conducts a run; its helpers do the work.
                 const conducting = guard.id === agent.id ? runner.note(agent.id, viaProgram(agent)) : '';
-                return [rulesNote(guard.entry.mode, guard.entry.root), conducting].filter(Boolean).join('\n\n');
+                return [rulesNote(guard.entry.mode, guard.entry.root, noUndoOf(guard.entry.root)), conducting].filter(Boolean).join('\n\n');
               } catch {
                 return '';
               }
@@ -806,7 +836,7 @@ export function apply(ctx, config) {
     }
     ticks.push({ key: 'model', ok: model, text: modelText, required: false });
     const budget = settingsOf('budget');
-    ticks.push({ key: 'budget', ok: true, required: false, text: budget ? `Budget guard counts each lap's rounds on their own (at most ${Number(budget.maxSteps) || 300} requests per round)${Number(budget.dayTokens) > 0 ? `, and ${budget.dayTokens} tokens a day` : ''}.` : 'Budget guard is off.' });
+    ticks.push({ key: 'budget', ok: true, required: false, text: budget ? `Budget guard gives a Long run its own allowance (${Number(budget.maxLongSteps) || 5000} requests, ${Number(budget.maxLongTokens) || 60000000} tokens) in place of the ordinary limits${Number(budget.dayTokens) > 0 ? `, and still stops at ${budget.dayTokens} tokens a day` : ''}.` : 'Budget guard is off.' });
     const alerts = settingsOf('automations');
     const channel = alerts ? alerts.mac !== false || (alerts.phone === true && String(alerts.ntfyTopic ?? '').trim() !== '') : false;
     ticks.push({ key: 'alerts', ok: channel, required: false, text: channel ? 'You will be told when it ends, needs you, or stops.' : 'No alert channel: switch on Mac or phone alerts in Settings → Alerts to be told.' });
@@ -970,6 +1000,17 @@ export function apply(ctx, config) {
     }
   };
 
+  // What the user typed into each conversation (the last few messages). A Long run that waited for its conversation (Run pressed
+  // in a new chat) starts only in a conversation that really received those words, never in whichever chat looks first.
+  const saidIn = new Map();
+  const norm = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
+  const rememberSaid = (id, text) => {
+    const list = saidIn.get(id) ?? [];
+    list.push(norm(text));
+    saidIn.set(id, list.slice(-5));
+    while (saidIn.size > 200) saidIn.delete(saidIn.keys().next().value);
+  };
+
   // Your messages (step 64): after a press of Run the next one starts a Long run with it as the goal;
   // while a Long run works, each one is kept for its helpers' next step.
   ctx.on('session/event', (session, event) => {
@@ -982,6 +1023,7 @@ export function apply(ctx, config) {
       // only what they wrote around it counts (added for Split Plus, 17 November 2026).
       const text = withoutSends(said).trim();
       const material = text === said.trim() ? '' : said;
+      rememberSaid(id, text);
       if (armed.has(id)) {
         // A card alone is no goal: the press waits for the user's own words.
         if (!text && material) return;
@@ -1072,6 +1114,7 @@ export function apply(ctx, config) {
       // The Run button: not in an isolated conversation (Recon), and not in a helper.
       runButton: (!isolated(agent.id) || reconRuns(agent.id)) && !parentOf(agent),
       armed: armed.has(agent.id) || starting.has(agent.id),
+      busy: Boolean(agent.status && agent.status !== 'idle'),
       startError: startErrors.get(agent.id) ?? null,
     };
   };
@@ -1199,6 +1242,10 @@ export function apply(ctx, config) {
             if (action === 'start') {
               const goalText = String(body.goal ?? '').trim();
               if (goalText.split(/\s+/).length < 3) throw new Error('Say what the run should do in a few words.');
+              // Not while the conversation is still answering (the first answer of a new chat, for one).
+              if (agent.status && agent.status !== 'idle') throw new Error('This conversation is still answering. The Long run can start when it is done.');
+              // A run that waited for its message: only in the conversation that got exactly those words.
+              if (body.afterMessage === true && !(saidIn.get(agent.id) ?? []).includes(norm(goalText))) throw new Error('This conversation did not get those words, so no Long run was started here.');
               said = await startLong(agent, goalText, body);
             } else if (action === 'save') {
               // Depth → Long run settings: kept for this chat, used by its Run button.
@@ -1213,7 +1260,7 @@ export function apply(ctx, config) {
               // The Run button: the next message of yours here is the goal (it arrives as a user/message event).
               if (parentOf(agent)) throw new Error('Only a conversation of your own can start a Long run.');
               // Only while it is not answering: a message sent meanwhile waits in the queue, past the press.
-              if (agent.status && agent.status !== 'idle') throw new Error('Wait until the conversation is done answering, then press Run.');
+              if (agent.status && agent.status !== 'idle') throw new Error('Wait until the conversation is done answering, then press Long run.');
               const check = preflight(agent);
               if (!check.ok) throw new Error(check.ticks.find((tick) => tick.required && tick.ok !== true)?.text ?? 'Not ready.');
               disarm(agent.id);
@@ -1357,7 +1404,20 @@ export function apply(ctx, config) {
       if (COMMAND_TOOLS.has(exec.name)) {
         const text = String(exec.arguments?.command ?? '').replace(/\s+/g, ' ').slice(0, 70);
         const point = await pointsOf(entry.root).take(`Before: ${text}`);
-        pending.set(exec.callId, { id, root, point: point.id });
+        if (point.skipped && entry.mode !== 'auto') {
+          // No undo here: a command's change to an existing file cannot be put back. Restricted asks before a command that could
+          // change files (the same card as every other question, once per exact command); Ask-Auto says so, once, in the command's result.
+          const command = String(exec.arguments?.command ?? exec.arguments?.cmd ?? exec.arguments?.script ?? '');
+          const allowed = allowedCommands.get(id) ?? new Set();
+          if (entry.mode === 'restricted' && mayChangeFiles(command) && !allowed.has(command)) {
+            const outcome = await askUser(exec, `Restricted mode: ${point.reason} If this command changes or deletes a file, it cannot be put back. Run it?\n${command.replace(/\s+/g, ' ').slice(0, 300)}`, id);
+            if (outcome !== 'allowed-once') return { kind: 'deny', reason: refusal(outcome, 'this command (it could change files, and there is no undo in this folder)') };
+            allowed.add(command);
+            allowedCommands.set(id, allowed);
+            while (allowed.size > 200) allowed.delete(allowed.keys().next().value);
+          }
+        }
+        pending.set(exec.callId, { id, root, point: point.id, noUndo: point.skipped ? point.reason : '' });
         if (pending.size > 500) pending.delete(pending.keys().next().value);
       }
       return decision ?? { kind: 'allow' };
@@ -1389,7 +1449,14 @@ export function apply(ctx, config) {
     const entry = state.get(before.id);
     if (!entry) return decision;
     try {
-      const back = await afterCommand(before.id, before.point);
+      const back = before.point ? await afterCommand(before.id, before.point) : [];
+      // Said once per conversation, in plain words, in the first command's result (the model passes it on to the user).
+      if (before.noUndo && !toldNoUndo.has(before.id) && entry.mode !== 'auto') {
+        toldNoUndo.add(before.id);
+        const said = `Mission: ${before.noUndo} So a change this command makes to a file the user has not approved is NOT undone here. Tell the user this once, in plain words, in your next reply.`;
+        const content = Array.isArray(decision?.content) ? decision.content : Array.isArray(result?.content) ? result.content : undefined;
+        if (back.length === 0 && content) return { kind: 'accept', content: [...content, { type: 'text', text: `\n[${said}]` }], ...(decision?.additionalContexts ? { additionalContexts: decision.additionalContexts } : {}) };
+      }
       if (back.length === 0) return decision;
       const listed = back.slice(0, 30).join(', ') + (back.length > 30 ? ` and ${back.length - 30} more` : '');
       const notice = [
@@ -1536,7 +1603,9 @@ export function apply(ctx, config) {
     let note = '';
     try {
       const point = await pointsOf(root).take(`${MODE_LABELS[mode]} mode switched on`);
-      note = ` Checkpoint ${point.number} holds the folder as it is now.`;
+      note = point.skipped
+        ? ` ${point.reason} Without checkpoints, a change a command makes to a file you have not approved is not put back.`
+        : ` Checkpoint ${point.number} holds the folder as it is now.`;
     } catch (error) {
       note = ` No checkpoint could be taken: ${String(error?.message ?? error).slice(0, 200)}`;
     }
@@ -1595,10 +1664,15 @@ export function apply(ctx, config) {
               if (!root) return { kind: 'error', text: 'This conversation has no folder.' };
               if (word === 'checkpoint') {
                 const point = await pointsOf(root).take(rest.join(' ') || 'Taken by you');
+                if (point.skipped) return { kind: 'success', text: point.reason };
                 return { kind: 'success', text: point.fresh ? `Checkpoint ${point.number} taken.` : `Nothing changed since checkpoint ${point.number}; it stands for now too.` };
               }
               if (word === 'checkpoints' || word === 'list') {
                 const list = await pointsOf(root).list(20);
+                if (list.length === 0) {
+                  const why = await pointsOf(root).why();
+                  if (why) return { kind: 'success', text: why };
+                }
                 if (list.length === 0) return { kind: 'success', text: 'There are no checkpoints yet. One is taken when a mode is switched on.' };
                 return { kind: 'success', text: `${list[0].number} checkpoint${list[0].number === 1 ? '' : 's'}. Click to see them, newest first.\nFolder: ${root}\n${list.map((point) => `${String(point.number).padStart(4)}  ${when(point.at)}  ${point.label}`).join('\n')}\n\nGo back with /mission back <number>.` };
               }
@@ -1606,6 +1680,7 @@ export function apply(ctx, config) {
                 const number = Number(rest[0]);
                 if (!Number.isInteger(number)) return { kind: 'error', text: 'Say which one: /mission back 12. List them with /mission checkpoints.' };
                 const went = await pointsOf(root).back(number);
+                if (went.readOnly) return { kind: 'success', text: `The files of checkpoint ${went.number} (${went.label}) were put back. This folder is now too broad for new checkpoints, so the state before was not saved and this cannot be undone with /mission back. Files that were made after that checkpoint were left as they are.` };
                 return { kind: 'success', text: `Went back to checkpoint ${went.number}. Undo with /mission back ${went.saved}.\nThe folder is as it was at checkpoint ${went.number} (${went.label}).\nHow it was a moment ago is kept as checkpoint ${went.saved}.\nFiles your project ignores (build output and the like) were left alone.` };
               }
               // Anything else is a goal. A mode named first applies to it: "/mission auto make the tests pass".

@@ -45,9 +45,33 @@ test('config checks', () => {
   assert.throws(() => checkRules([{ id: 'a', on: 'turnEnd', command: ['x'] }, { id: 'a', on: 'approval', command: ['x'] }]), /duplicate/);
 });
 
-test('inert with no rules: no listener at all', () => {
+test('inert with no rules: nothing runs', async () => {
   const h = harness({});
-  assert.equal(h.hasListener(), false);
+  h.emit(top, 'turn/start', { turn: 1 });
+  h.emit(top, 'turn/end', { turn: 1, reason: { kind: 'completed' } });
+  await h.settle();
+  assert.equal(h.runs.length, 0);
+});
+
+test('the Settings page changes the rules while the app runs (read at every use)', async () => {
+  const config = { rules: [] };
+  const h = harness(config);
+  h.emit(top, 'turn/end', { turn: 1, reason: { kind: 'completed' } });
+  await h.settle();
+  assert.equal(h.runs.length, 0);
+  config.rules = [rule()];
+  h.emit(top, 'turn/end', { turn: 2, reason: { kind: 'completed' } });
+  await h.settle();
+  assert.equal(h.runs.length, 1);
+  config.enabled = false;
+  h.emit(top, 'turn/end', { turn: 3, reason: { kind: 'completed' } });
+  await h.settle();
+  assert.equal(h.runs.length, 1);
+  config.enabled = true;
+  config.rules = [{ id: 'bad', on: 'turnEnd', command: [] }]; // cannot run: fires nothing, throws nothing
+  h.emit(top, 'turn/end', { turn: 4, reason: { kind: 'completed' } });
+  await h.settle();
+  assert.equal(h.runs.length, 1);
 });
 
 test('turn end: runs the command without a shell, message in args and env', async () => {
@@ -163,6 +187,10 @@ test('/notify test fires ignoring limits; /notify shows status', async () => {
   assert.equal((await run('test nope')).kind, 'error');
   assert.equal((await run('wat')).kind, 'error');
   assert.match((await harness({}).commands.notify.handler({ rawInput: '' })).text, /No notification rules/);
+  // Switched off with rules saved: they are kept, and the answer says so.
+  const off = (await harness({ enabled: false, rules: [rule(), { id: 'r2', on: 'approval', command: ['x'] }] }).commands.notify.handler({ rawInput: '' })).text;
+  assert.match(off, /Notifications are off\. 2 rules are kept \(r1, r2\)/);
+  assert.doesNotMatch(off, /No notification rules/);
 });
 
 test('a run\'s rounds are quiet; the run\'s end fires the rule once', async () => {

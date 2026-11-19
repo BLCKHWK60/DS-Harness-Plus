@@ -27,11 +27,11 @@ export function firmwareName(url, given) {
  * @returns {Promise<{temp: string, sum: string, bytes: number, from: string}>} the unchecked file.
  */
 export async function download({ url, folder, fetchFn = globalThis.fetch, extra = [], kind, max = FIRMWARE_MAX, timeoutMs = 30 * 60_000, signal }) {
-  if (typeof fetchFn !== 'function') throw new Error('Bench cannot reach the web here.');
+  if (typeof fetchFn !== 'function') throw new Error('Devices cannot reach the web here.');
   let at = new URL(String(url ?? ''));
   let response;
   for (let step = 0; ; step += 1) {
-    if (step > 5) throw new Error('the address sent Bench elsewhere too many times');
+    if (step > 5) throw new Error('the address sent Devices elsewhere too many times');
     const refused = stepRefusal(at, step === 0, extra, kind);
     if (refused) throw new Error(`${at.hostname}: ${refused}`);
     const limit = AbortSignal.timeout(timeoutMs);
@@ -39,7 +39,7 @@ export async function download({ url, folder, fetchFn = globalThis.fetch, extra 
     const status = Number(response?.status ?? 0);
     if (status >= 300 && status < 400) {
       const next = response.headers?.get?.('location');
-      if (!next) throw new Error('the address sent Bench elsewhere without saying where');
+      if (!next) throw new Error('the address sent Devices elsewhere without saying where');
       at = new URL(next, at);
       continue;
     }
@@ -47,7 +47,7 @@ export async function download({ url, folder, fetchFn = globalThis.fetch, extra 
     break;
   }
   const length = Number(response.headers?.get?.('content-length') ?? 0);
-  if (length > max) throw new Error(`the file is ${length} bytes, more than Bench downloads (${max})`);
+  if (length > max) throw new Error(`the file is ${length} bytes, more than Devices downloads (${max})`);
   const temp = join(folder, `.download-${Date.now().toString(36)}.part`);
   const fd = openSync(temp, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW, 0o600);
   const hash = createHash('sha256');
@@ -56,7 +56,7 @@ export async function download({ url, folder, fetchFn = globalThis.fetch, extra 
     const take = (chunk) => {
       const part = Buffer.from(chunk);
       bytes += part.length;
-      if (bytes > max) throw new Error(`the file is larger than Bench downloads (${max} bytes)`);
+      if (bytes > max) throw new Error(`the file is larger than Devices downloads (${max} bytes)`);
       hash.update(part);
       writeSync(fd, part);
     };
@@ -91,7 +91,7 @@ export function keep(temp, folder, name) {
     linkSync(temp, file);
   } catch (error) {
     rmSync(temp, { force: true });
-    if (error?.code === 'EEXIST') throw new Error(`${name} is already in the firmware folder; Bench does not replace it. Remove it yourself or pick another name.`);
+    if (error?.code === 'EEXIST') throw new Error(`${name} is already in the firmware folder; Devices does not replace it. Remove it yourself or pick another name.`);
     throw error;
   }
   rmSync(temp, { force: true });

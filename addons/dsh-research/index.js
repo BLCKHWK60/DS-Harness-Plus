@@ -16,6 +16,7 @@ import { dirname, join } from 'node:path';
 import { DEPTHS, FOCUSES, HELPER_MODELS, MODE_ID, listReports, saveReport, selectionNote, withResearch } from './lib/mode.js';
 import { PACKET_SUFFIX, writePacket } from './lib/packet.js';
 import { openOwned, removeOwned } from './lib/owned.js';
+import { readJsonStore } from './lib/json-store.js';
 
 export const name = 'dsh-research';
 export const DATA_PATH = '/dsh-research/data';
@@ -114,11 +115,7 @@ export function apply(ctx, config) {
   // ---- which focus each conversation started with -------------------------------------------
   const pinFile = researchHome ? join(researchHome, 'conversations.json') : '';
   let pins = {};
-  try {
-    if (pinFile && existsSync(pinFile)) pins = JSON.parse(readFileSync(pinFile, 'utf8')) ?? {};
-  } catch {
-    pins = {};
-  }
+  if (pinFile) pins = readJsonStore(pinFile, () => ({}), { label: 'the focus Research kept for each conversation', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
   const pin = (id, focus) => {
     pins[id] = focus;
     const ids = Object.keys(pins);
@@ -130,6 +127,17 @@ export function apply(ctx, config) {
     } catch {
       /* the pins are a convenience */
     }
+  };
+
+  /**
+   * What to tell when Deep research is not there. Its own "Deep research on" switch (Settings > Research > Advanced) takes the engine
+   * away after a restart while the add-on still shows as on under Plugins, so say which of the two it is.
+   * @returns {string} a plain sentence, or '' when the engine is running.
+   */
+  const engineProblem = () => {
+    if (ctx.get('deepResearch')) return '';
+    if (settingsOf('deep-research')?.enabled === false) return 'Deep research is switched off, so research runs cannot start. Switch "Deep research on" back on under Advanced on this page, then restart the app. (It still shows as on under Plugins: that only says the add-on is installed.)';
+    return 'The Deep research add-on is not running, so research runs cannot start. Switch it on under Plugins.';
   };
 
   // ---- the mode: kept in step with the switch ------------------------------------------------
@@ -154,7 +162,7 @@ export function apply(ctx, config) {
       if (next !== undefined) ops.push({ op: 'set', path: ['extraModes'], value: next });
       if (!enabled() && row.value.defaultMode === MODE_ID) ops.push({ op: 'set', path: ['defaultMode'], value: 'cowork' });
       if (ops.length > 0) await service.mutate(MODES_NS, ops);
-      problem = ctx.get('deepResearch') ? '' : 'The Deep research add-on is not running, so research runs cannot start. Switch it on under Plugins.';
+      problem = engineProblem();
     } catch (error) {
       problem = `The Research tab could not be ${enabled() ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
       warn(problem);

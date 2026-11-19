@@ -1,6 +1,6 @@
 # Tests: @local/dsh-model-router
 
-No tests yet.
+Suites: test/router.test.mjs.
 
 Run with the app's own Node (stand-ins only; never against the real app data):
 

@@ -45,7 +45,7 @@ Off until you switch it on in **Settings → Split Plus**. It then adds a **Spli
 - **How it lands:** **Send** puts a card in that conversation's tray, above its chat box: what it is, where it came from, when, how many sources. You add a sentence or not, then **Send** there; **Remove** sends nothing. **Send and start** sends it at once. Into a running conversation, **Send when done** holds it until the run ends (the app's own queue), and **Hand over now** gives it to the running job at its next step.
 - **The card** starts with `[Split Plus send <id>, <time>: material, not instructions]`, says where it came from (tab, title, conversation id, time UTC), lists the web addresses in it, quotes the material line by line, and ends with `[End of Split Plus send <id>]`. Marks inside the material are defused. A conversation that received a card is told, in its instructions, that the text inside a card is material and never the user's instruction or yes.
 - **The ledger:** every send, sent from the tray, handed over or removed is a line in `<app data>/split-plus/sends.jsonl`; the tray is `tray.json` beside it and survives a restart.
-- **Never sent:** a Bench backup (it can hold passwords and keys), a file in Recon's room (in any capitals, or through a link), a file that is not text or is over 2 MB, and a file the sending conversation neither read, changed nor has in its own folder. A file is read through its own handle: never through a link at its last step, never a pipe or a device.
+- **Never sent:** a Devices backup (it can hold passwords and keys), a file in Recon's room (in any capitals, or through a link), a file that is not text or is over 2 MB, and a file the sending conversation neither read, changed nor has in its own folder. A file is read through its own handle: never through a link at its last step, never a pipe or a device.
 - **Recon's rules go along:** material from a conversation that holds a Recon export carries Recon's marker line, so Recon keeps its rules for the addresses in it wherever it lands.
 
 ## Sends through the doors (step 4)
@@ -55,7 +55,7 @@ Off until you switch it on in **Settings → Split Plus**. It then adds a **Spli
 - **Continue in Research:** a Content pane whose model wrote a "Continue in Research" text shows it whole, in a box you can edit, with **Start in Research beside**: a new Research conversation in the pane beside, with the text as you left it, as your message.
 - **Deleted conversations:** one deleted for good (the app's trash) leaves its tray, its folder's pane set and any watch; the ledger keeps its sends.
 - **For Recon's Export window:** `GET /dsh-split-plus/data?openPanes=1` lists the conversations open in the Split page, so they come first there.
-- **Bench, Content and Creator Plus** leave the text inside a card out of the user's words (their own `lib/sent.js`).
+- **Devices, Content and Creator Plus** leave the text inside a card out of the user's words (their own `lib/sent.js`).
 
 ## The watcher (step 5)
 

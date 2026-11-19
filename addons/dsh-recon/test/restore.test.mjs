@@ -429,7 +429,7 @@ test('in the running add-on: after /recon end, what the conversation read is not
     const agent = recon.agentOf(id, () => messages);
     const cite = (source) => recon.tools.get('recon_cite').execute({ source }, { agent });
     assert.match((await cite('S1')).text, /^\[S1\] Forum post/);
-    assert.match((await recon.run('end', agent)).text, /^Ended\. What this conversation read is forgotten/);
+    assert.match((await recon.run('end confirm', agent)).text, /^Ended\. What this conversation read is forgotten/);
     // The conversation is still there (here the stand-in app never lets go of it): its history is not read back.
     assert.equal((await recon.run('log', agent)).text, 'Research log of this conversation\n\nNothing was searched or read in this conversation yet.');
     const exported = await recon.run('export', agent);

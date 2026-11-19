@@ -243,7 +243,7 @@ test('10: a tool\'s answer is looked through only in the conversation\'s folder 
   }
 });
 
-test('11: a clean-up never picks or moves a Bench backup', () => {
+test('11: a clean-up never picks or moves a Devices backup', () => {
   const home = folder();
   const work = folder();
   try {

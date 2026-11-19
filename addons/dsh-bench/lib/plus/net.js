@@ -56,7 +56,7 @@ export function lanName(text) {
 /** A private address or a local name. */
 export const lanAddress = (text) => privateV4(text) || privateV6(text) || lanName(text);
 
-const NOT_LAN = (value) => `${quoted(value)} is not a private (home or office) address or a local name. Bench reaches only 10.x, 172.16–31.x, 192.168.x, 169.254.x, 100.64–127.x, fc00::/7, fe80::/10 and names ending .local, .lan, .home or .internal (or one word without a dot): never the internet`;
+const NOT_LAN = (value) => `${quoted(value)} is not a private (home or office) address or a local name. Devices reaches only 10.x, 172.16–31.x, 192.168.x, 169.254.x, 100.64–127.x, fc00::/7, fe80::/10 and names ending .local, .lan, .home or .internal (or one word without a dot): never the internet`;
 
 /**
  * An SSH host: user@address, the address private or local.
@@ -83,7 +83,7 @@ export const SSH_OPTIONS = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5'];
 export function lanTarget(value, { cidrMin = 16, allowCidr = true, allowRange = true } = {}) {
   const text = typeof value === 'string' ? value.trim() : '';
   if (!text) throw new Error('Give a target: a private address, a private network such as 192.168.1.0/24, or a local name');
-  if (text.startsWith('-')) throw new Error(`The target ${quoted(text)} starts with "-", which a program would read as an option. Bench never passes that`);
+  if (text.startsWith('-')) throw new Error(`The target ${quoted(text)} starts with "-", which a program would read as an option. Devices never passes that`);
   if (privateV4(text)) return { kind: 'v4', value: text };
   if (privateV6(text)) return { kind: 'v6', value: text };
   const cidr = /^(\d{1,3}(?:\.\d{1,3}){3})\/(\d{1,2})$/.exec(text);
@@ -124,7 +124,7 @@ export async function resolveLan(deps, name) {
   const list = (Array.isArray(found) ? found : [found]).filter((entry) => entry && typeof entry.address === 'string');
   if (list.length === 0) throw new Error(`${quoted(name)} could not be found on this network`);
   const outside = list.find((entry) => !privateV4(entry.address) && !privateV6(entry.address));
-  if (outside) throw new Error(`${quoted(name)} points to ${outside.address}, which is not a private address. Bench reaches only private (home or office) addresses`);
+  if (outside) throw new Error(`${quoted(name)} points to ${outside.address}, which is not a private address. Devices reaches only private (home or office) addresses`);
   const pick = list.find((entry) => privateV4(entry.address)) ?? list[0];
   return { address: pick.address, v6: !privateV4(pick.address) };
 }
@@ -133,7 +133,7 @@ export async function resolveLan(deps, name) {
 export function filterOf(value) {
   if (value === undefined || value === null || value === '') return '';
   const text = typeof value === 'string' ? value.trim() : '';
-  if (text.startsWith('-')) throw new Error(`The filter ${quoted(text)} starts with "-", which a program would read as an option. Bench never passes that`);
+  if (text.startsWith('-')) throw new Error(`The filter ${quoted(text)} starts with "-", which a program would read as an option. Devices never passes that`);
   if (!/^[A-Za-z0-9 .:/()\-_!=<>&|]{1,200}$/.test(text)) throw new Error('A filter may hold only letters, digits, spaces and . : / ( ) - _ ! = < > & | (at most 200), for example "tcp port 80"');
   return text;
 }

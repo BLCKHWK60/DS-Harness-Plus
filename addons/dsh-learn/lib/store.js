@@ -7,6 +7,7 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readJsonStore } from './json-store.js';
 import { schedule } from './schedule.js';
 
 const MAX_TOPICS = 300;
@@ -50,11 +51,9 @@ export function openStore(dir) {
   if (file) {
     try {
       mkdirSync(dir, { recursive: true });
-      const kept = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : [];
-      if (Array.isArray(kept)) topics = kept.filter((topic) => topic && typeof topic.id === 'string' && Array.isArray(topic.ideas));
-    } catch {
-      topics = [];
-    }
+    } catch { /* the save reports it */ }
+    const kept = readJsonStore(file, () => [], { label: 'what Learn kept', valid: (value) => Array.isArray(value) });
+    topics = kept.filter((topic) => topic && typeof topic.id === 'string' && Array.isArray(topic.ideas));
   }
   const save = () => {
     if (!file) return;

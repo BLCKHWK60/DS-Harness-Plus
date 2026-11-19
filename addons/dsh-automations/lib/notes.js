@@ -8,6 +8,7 @@
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { readJsonStore } from './json-store.js';
 
 /** The heartbeat is written this often; a longer silence means the app was closed (or the Mac slept). */
 export const BEAT_MS = 60 * 1000;
@@ -18,12 +19,8 @@ const PROMPT_MAX = 60000;
 
 const readJson = (file, fallback) => {
   if (!file) return fallback;
-  try {
-    const value = JSON.parse(readFileSync(file, 'utf8'));
-    return value && typeof value === 'object' && !Array.isArray(value) ? value : fallback;
-  } catch {
-    return fallback;
-  }
+  // A damaged file is kept aside (review H4), never read as empty and written over.
+  return readJsonStore(file, () => fallback, { label: 'what Automations kept', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
 };
 const writeJson = (file, value) => {
   if (!file) return;

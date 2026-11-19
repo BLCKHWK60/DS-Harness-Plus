@@ -8,6 +8,370 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const h = React.createElement;
     const { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } = React;
+    // ---- dsh-kit:begin ---- shared small helpers; this block is the same in every add-on page file that uses it.
+    // The master copy is docs/shared/dsh-kit.js. Change it there, then run `node scripts/sync-kit.mjs` (it copies the block into
+    // every client.js that has the two marker lines, and `bash scripts/check.sh` fails when a copy has drifted).
+    // Dependency-free: plain DOM for the question box, React is passed in for the error note.
+    const dshKit = (() => {
+      const STYLE_ID = 'dsh-kit-style';
+      const CSS = `
+    .dsh-kit-veil { position: fixed; inset: 0; z-index: 2147483000; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; background: color-mix(in srgb, #000 32%, transparent); }
+    .dsh-kit-box { width: min(420px, 100%); box-sizing: border-box; padding: 16px; border-radius: 12px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base)); color: var(--dsw-alias-label-primary); box-shadow: 0 14px 36px color-mix(in srgb, #000 28%, transparent); font: 14px/22px system-ui, sans-serif; }
+    .dsh-kit-title { margin: 0 0 4px; font-size: 14px; line-height: 22px; font-weight: 500; }
+    .dsh-kit-text { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 50vh; overflow: auto; }
+    .dsh-kit-field { display: block; width: 100%; box-sizing: border-box; height: 36px; margin-top: 10px; padding: 0 14px; border: 0; border-radius: 12px; font: inherit; color: var(--dsw-alias-label-primary); background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); }
+    .dsh-kit-field:focus { outline: 1px solid var(--dsw-alias-brand-primary); }
+    .dsh-kit-label { display: block; margin-top: 10px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+    .dsh-kit-label + .dsh-kit-field { margin-top: 2px; }
+    .dsh-kit-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+    .dsh-kit-btn { height: 28px; padding: 0 10px; border-radius: 8px; border: 0.5px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; cursor: pointer; }
+    .dsh-kit-btn:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+    .dsh-kit-btn:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); }
+    .dsh-kit-btn[data-main="true"] { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
+    .dsh-kit-btn[data-danger="true"] { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
+    .dsh-kit-note { margin: 4px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+    .dsh-kit-note[data-error="true"] { color: var(--dsw-alias-state-error-primary); }
+    .dsh-kit-more { margin-left: 6px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; text-decoration: underline; cursor: pointer; }
+    .dsh-kit-detail { display: block; margin-top: 4px; font: 11px/16px ui-monospace, Menlo, monospace; color: var(--dsw-alias-label-secondary); white-space: pre-wrap; user-select: text; }
+    `;
+      const ensureStyle = () => {
+        if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = STYLE_ID;
+        style.textContent = CSS;
+        (document.head || document.documentElement).appendChild(style);
+      };
+
+      /** Turns what a failed call says ("error 404", "settings/conflict: ...") into a plain sentence; the raw text goes to `details`. */
+      const plain = (raw) => {
+        let message = '';
+        if (typeof raw === 'string') message = raw;
+        else if (raw && typeof raw === 'object') {
+          const source = raw.rpcError ?? (raw.error && typeof raw.error === 'object' ? raw.error : raw);
+          message = String(source.message ?? raw.error ?? '');
+          if (source.code && !message.includes(String(source.code))) message = `${source.code}: ${message}`;
+        }
+        const existing = raw && typeof raw === 'object' && typeof raw.details === 'string' ? raw.details : '';
+        message = message.trim();
+        const text = (sentence) => ({ text: sentence, details: existing || (message && message !== sentence ? message : '') });
+        const status = /^(?:error|status|http)?\s*(\d{3})\b/i.exec(message)?.[1] ?? /(?:answered|returned)\s+(\d{3})\b/i.exec(message)?.[1] ?? '';
+        if (/settings\/conflict/i.test(message)) return text('This setting was changed somewhere else at the same moment. Please try again.');
+        if (/not mounted|namespace not mounted|settings unavailable|is switched off|is not running/i.test(message)) return text('This add-on is not running. Switch it on (or restart the app) and try again.');
+        if (/failed to fetch|networkerror|load failed|network request failed|econnrefused/i.test(message)) return text('Could not reach the app. Check that it is still running, then try again.');
+        if (status === '401' || status === '403') return text('The app did not allow this. Restart the app and try again.');
+        if (status === '404') return text('This part of the add-on is not available. It may be switched off, or the app needs a restart after an update.');
+        if (status === '408' || status === '504') return text('The app took too long to answer. Try again in a moment.');
+        if (status === '409') return text('This changed somewhere else at the same moment. Please try again.');
+        if (/^5\d\d$/.test(status)) return text('The add-on ran into a problem. Try again; if it keeps happening, restart the app.');
+        if (/^4\d\d$/.test(status)) return text('The app could not use this request. Try again; if it keeps happening, restart the app.');
+        // "code/name: message": show the message, keep the code as a detail.
+        const coded = /^([a-z][\w-]*(?:\/[\w.-]+)+):\s*(.+)$/is.exec(message);
+        if (coded) return { text: coded[2].trim(), details: existing || message };
+        // A readable sentence stays as it is.
+        if (/^[A-Z"'(].*\s/s.test(message) || /\s/.test(message)) return { text: message, details: existing };
+        if (!message) return { text: 'Something went wrong. Try again.', details: existing };
+        return text('Something went wrong. Try again; the Details line says what the app reported.');
+      };
+      /** An Error whose message is the plain sentence and whose `details` keeps the raw text. */
+      const fail = (raw) => {
+        const found = plain(raw);
+        const error = new Error(found.text);
+        error.details = found.details;
+        return error;
+      };
+
+      /**
+       * A small question box in the page's own style (window.prompt does nothing in the desktop app, and the native
+       * confirm cannot be styled or checked there). Resolves true/false; with `field` the typed text or null; `notice` shows OK only.
+       */
+      const ask = (options = {}) => new Promise((resolve) => {
+        if (typeof document === 'undefined') { resolve(options.field ? null : false); return; }
+        ensureStyle();
+        const before = document.activeElement;
+        const veil = document.createElement('div');
+        veil.className = 'dsh-kit-veil';
+        const box = document.createElement('div');
+        box.className = 'dsh-kit-box';
+        box.setAttribute('role', 'dialog');
+        box.setAttribute('aria-modal', 'true');
+        const add = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text != null) node.textContent = text; return node; };
+        if (options.title) { const title = add('p', 'dsh-kit-title', options.title); box.appendChild(title); box.setAttribute('aria-label', options.title); }
+        if (options.text) box.appendChild(add('p', 'dsh-kit-text', options.text));
+        let input = null;
+        if (options.field) {
+          if (options.field.label) box.appendChild(add('label', 'dsh-kit-label', options.field.label));
+          input = add('input', 'dsh-kit-field');
+          input.type = 'text';
+          input.value = options.field.value ?? '';
+          if (options.field.placeholder) input.placeholder = options.field.placeholder;
+          if (options.field.label) input.setAttribute('aria-label', options.field.label);
+          box.appendChild(input);
+        }
+        const row = add('div', 'dsh-kit-row');
+        const done = (value) => { document.removeEventListener('keydown', onKey, true); veil.remove(); try { before?.focus?.(); } catch { /* the old control is gone */ } resolve(value); };
+        const cancel = options.notice ? null : add('button', 'dsh-kit-btn', options.cancel ?? 'Cancel');
+        const ok = add('button', 'dsh-kit-btn', options.ok ?? 'OK');
+        ok.type = 'button';
+        ok.setAttribute('data-main', 'true');
+        if (options.danger) ok.setAttribute('data-danger', 'true');
+        const accept = () => done(input ? input.value : true);
+        const reject = () => done(input ? null : false);
+        function onKey(event) {
+          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (options.notice) accept(); else reject(); }
+          else if (event.key === 'Enter' && input && document.activeElement === input) { event.preventDefault(); event.stopPropagation(); accept(); }
+          else if (event.key === 'Tab') {
+            const stops = [...box.querySelectorAll('input,button')];
+            const at = stops.indexOf(document.activeElement);
+            if (stops.length > 0) { event.preventDefault(); stops[(at + (event.shiftKey ? stops.length - 1 : 1)) % stops.length].focus(); }
+          }
+        }
+        if (cancel) { cancel.type = 'button'; cancel.addEventListener('click', reject); row.appendChild(cancel); }
+        ok.addEventListener('click', accept);
+        row.appendChild(ok);
+        box.appendChild(row);
+        veil.appendChild(box);
+        veil.addEventListener('mousedown', (event) => { if (event.target === veil && !options.notice) reject(); });
+        document.addEventListener('keydown', onKey, true);
+        document.body.appendChild(veil);
+        // A question that can destroy something starts on Cancel, so a stray Enter never confirms it.
+        (input ?? (options.danger && cancel ? cancel : ok)).focus();
+        if (input) input.select();
+      });
+
+      /** The note to draw under a form or at the top of a page: a plain sentence and a "Details" button. */
+      const makeNote = (React) => function PlainNote({ error, text, details, kind }) {
+        ensureStyle();
+        const [open, setOpen] = React.useState(false);
+        const found = error !== undefined && error !== null && error !== '' ? plain(error) : { text: text ?? '', details: details ?? '' };
+        if (!found.text) return null;
+        const bad = kind ? kind === 'error' : error !== undefined && error !== null && error !== '';
+        return React.createElement('div', { className: 'dsh-kit-note', 'data-error': String(bad), role: bad ? 'alert' : 'status' },
+          found.text,
+          found.details ? React.createElement('button', { type: 'button', className: 'dsh-kit-more', 'aria-expanded': open, onClick: () => setOpen(!open) }, open ? 'Hide details' : 'Details') : null,
+          open && found.details ? React.createElement('span', { className: 'dsh-kit-detail' }, found.details) : null);
+      };
+      return { plain, fail, ask, makeNote };
+    })();
+    // ---- dsh-kit:end ----
+    // ---- dsh-poll:begin ---- shared polling helpers; this block is the same in every add-on page file that uses it.
+    // The master copy is docs/shared/dsh-poll.js. Change it there, then run `node scripts/sync-kit.mjs` (it copies the block into
+    // every client.js that has the two marker lines, and `bash scripts/check.sh` fails when a copy has drifted).
+    // Why it exists (review perf-settings-describe, 18 November 2026): every add-on page looked at the app's Settings and at its own
+    // routes on its own timer, even in a hidden window. This gives all of them ONE shared Settings copy (read once, renewed when
+    // Settings changes or after 30 seconds at the most) and one kind of polling loop that stops while the window is hidden.
+    // The first copy of this block to run puts the shared state on `window.__dshPoll`; later copies reuse it, so 30 add-ons share one.
+    const dshPoll = (() => {
+      const API = 1;
+      const root = typeof window !== 'undefined' ? window : globalThis;
+      if (root.__dshPoll && root.__dshPoll.api >= API) return root.__dshPoll;
+
+      /** How long a read of Settings stays good: with the change event working, 30 s is only a safety net. */
+      const SETTINGS_TTL = 30000;
+      /** Without the change event (an older app) the copy is only trusted for a moment. */
+      const SETTINGS_TTL_NO_EVENTS = 2000;
+      const WRITES = ['mutate', 'update', 'replace'];
+      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0 };
+      const cache = { value: undefined, at: 0, inflight: null, gen: 0, events: false };
+      const changeListeners = new Set();
+      const watched = new WeakSet();
+      const wrapped = new WeakSet();
+      const loops = new Set();
+
+      const isHidden = () => typeof root.document !== 'undefined' && root.document.hidden === true;
+      // The page's timers (a test page without any simply never schedules).
+      const setTimer = (fn, ms) => (typeof root.setTimeout === 'function' ? root.setTimeout(fn, ms) : typeof globalThis.setTimeout === 'function' ? globalThis.setTimeout(fn, ms) : null);
+      const clearTimer = (id) => { if (id === null) return; if (typeof root.clearTimeout === 'function') root.clearTimeout(id); else if (typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(id); };
+
+      /** Throw the shared copy away: the next read goes to the app. A read still on its way is not kept. */
+      function invalidate() {
+        stats.settingsInvalidations += 1;
+        cache.value = undefined;
+        cache.inflight = null;
+        cache.gen += 1;
+      }
+
+      /** Listen once per page connection for "Settings changed" (the app sends it after every write, from any window). */
+      function watch(ctx) {
+        const remote = ctx && ctx.remote;
+        if (!remote || watched.has(remote)) return;
+        watched.add(remote);
+        try {
+          if (typeof remote.$on === 'function') {
+            remote.$on('settings/document-updated', (ns) => {
+              invalidate();
+              for (const listener of [...changeListeners]) {
+                try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
+              }
+            });
+            cache.events = true;
+          }
+        } catch { /* no change event here: the short copy time covers it */ }
+        try {
+          if (typeof ctx.on === 'function') ctx.on('connection/reset', invalidate);
+        } catch { /* optional */ }
+        // This page's own writes drop the copy before their answer comes back, so a read that follows a write is never behind it.
+        const settings = remote.settings;
+        if (settings && !wrapped.has(settings)) {
+          wrapped.add(settings);
+          for (const name of WRITES) {
+            const original = settings[name];
+            if (typeof original !== 'function') continue;
+            try {
+              settings[name] = function (...args) {
+                invalidate();
+                const done = original.apply(this, args);
+                return done && typeof done.then === 'function' ? done.then((out) => { invalidate(); return out; }, (error) => { invalidate(); throw error; }) : done;
+              };
+            } catch { /* a frozen object keeps the plain call */ }
+          }
+        }
+      }
+
+      /**
+       * The app's Settings, the same answer as `ctx.remote.settings.describe()`, but read once for the whole page.
+       * @param {object} ctx - the add-on's own context (its `remote.settings` makes the call).
+       * @param {{fresh?: boolean}} [options] - `fresh: true` skips the shared copy (use it for the read before a save, so a stale
+       *   revision cannot cause a conflict; every write drops the copy anyway).
+       * @returns {Promise<object>} `{ok, value: {namespaces}}` or `{ok: false, error}`, never rejected for a bad answer.
+       */
+      function settings(ctx, options) {
+        watch(ctx);
+        const fresh = options && options.fresh === true;
+        const ttl = cache.events ? SETTINGS_TTL : SETTINGS_TTL_NO_EVENTS;
+        if (!fresh && cache.value !== undefined && Date.now() - cache.at < ttl) {
+          stats.settingsHits += 1;
+          return Promise.resolve(cache.value);
+        }
+        if (!fresh && cache.inflight) {
+          stats.settingsHits += 1;
+          return cache.inflight;
+        }
+        stats.settingsCalls += 1;
+        const gen = cache.gen;
+        const call = Promise.resolve(ctx.remote.settings.describe()).then((result) => {
+          if (gen === cache.gen) {
+            cache.inflight = null;
+            if (result && result.ok !== false) { cache.value = result; cache.at = Date.now(); }
+          }
+          return result;
+        }, (error) => {
+          if (gen === cache.gen) cache.inflight = null;
+          throw error;
+        });
+        if (!fresh) cache.inflight = call;
+        return call;
+      }
+
+      /** One namespace's entry (`{ns, value, revision}`) from the shared copy, or undefined. */
+      async function entry(ctx, ns, options) {
+        const result = await settings(ctx, options);
+        return result && result.ok !== false ? result.value.namespaces.find((item) => item.ns === ns) : undefined;
+      }
+
+      /** Be told when Settings changes (from this window or another). Returns the way to stop listening. */
+      function onChange(ctx, listener) {
+        watch(ctx);
+        changeListeners.add(listener);
+        return () => { changeListeners.delete(listener); };
+      }
+
+      /**
+       * A polling loop that waits for its last run to finish, stops while the window is hidden and starts again, at once, when it
+       * is shown. One timer per loop, never an interval.
+       * @param {() => (Promise<unknown> | unknown)} run - one look. It may return a number (the wait before the next look, in ms),
+       *   'idle' (wait `idle`: nothing to watch for now) or anything else (wait `every`).
+       * @param {{every: number | (() => number), idle?: number, hidden?: number | (() => number), immediate?: boolean}} options
+       *   `every`: wait while there is something to watch; `idle`: wait when the run says 'idle' (default five times `every`);
+       *   `hidden`: wait while the window is hidden (default 0 = no looking at all until it is shown);
+       *   `immediate`: look right away (default true).
+       * @returns {{stop: () => void, poke: () => void, running: () => boolean}} `poke()` looks now (once, even if called often).
+       */
+      function loop(run, options) {
+        const opts = options || {};
+        const read = (value, fallback) => (typeof value === 'function' ? value() : typeof value === 'number' ? value : fallback);
+        let timer = null;
+        let alive = true;
+        let busy = false;
+        let again = false;
+        let failures = 0;
+        let next = null;
+
+        const clear = () => { if (timer !== null) { clearTimer(timer); timer = null; } };
+        const schedule = (wait) => {
+          clear();
+          if (!alive) return;
+          if (isHidden()) {
+            const away = read(opts.hidden, 0);
+            if (!(away > 0)) return; // paused: the visibility event starts it again
+            wait = Math.max(wait, away);
+          }
+          timer = setTimer(tick, wait);
+        };
+        const waitFor = (result) => {
+          const every = read(opts.every, 5000);
+          if (typeof result === 'number' && result >= 0) return result;
+          if (result === 'idle') return read(opts.idle, every * 5);
+          return every;
+        };
+        async function tick() {
+          timer = null;
+          if (!alive) return;
+          if (busy) { again = true; return; }
+          busy = true;
+          stats.runs += 1;
+          let result;
+          try {
+            result = await run();
+            failures = 0;
+          } catch {
+            stats.errors += 1;
+            failures += 1;
+            // A failing look backs off (up to a minute) instead of hammering.
+            result = Math.min(60000, read(opts.every, 5000) * 2 ** Math.min(failures, 4));
+          }
+          busy = false;
+          if (!alive) return;
+          next = waitFor(result);
+          if (again) { again = false; schedule(0); } else schedule(next);
+        }
+        const handle = {
+          stop() { alive = false; clear(); loops.delete(handle); },
+          poke() { if (!alive) return; if (busy) { again = true; return; } clear(); if (isHidden() && !(read(opts.hidden, 0) > 0)) return; timer = setTimer(tick, 0); },
+          running: () => timer !== null || busy,
+          // Called by the page-wide visibility listener.
+          shown() { if (alive && !busy) { clear(); timer = setTimer(tick, 0); } },
+          hiddenNow() { if (!(read(opts.hidden, 0) > 0)) clear(); },
+        };
+        loops.add(handle);
+        if (opts.immediate === false) schedule(read(opts.every, 5000));
+        else if (isHidden()) schedule(0);
+        else void tick(); // the first look happens now, before this call returns
+        return handle;
+      }
+
+      if (typeof root.document !== 'undefined' && typeof root.document.addEventListener === 'function') {
+        root.document.addEventListener('visibilitychange', () => {
+          for (const handle of [...loops]) {
+            if (isHidden()) handle.hiddenNow();
+            else handle.shown();
+          }
+        });
+      }
+
+      const shared = {
+        api: API,
+        settings,
+        entry,
+        onChange,
+        invalidate,
+        loop,
+        stats: () => ({ ...stats, loops: loops.size, events: cache.events }),
+      };
+      root.__dshPoll = shared;
+      return shared;
+    })();
+    // ---- dsh-poll:end ----
+    const { ask: askInPage } = dshKit;
     // Before the first paint where the page has it (tab names), so a cut name never flashes.
     const useLayoutEffectSafe = React.useLayoutEffect ?? useEffect;
 
@@ -76,13 +440,36 @@ window.__ModuleLoader__.load({
         'add.command': 'Program to run (for example npx)',
         'add.args': 'Arguments, one per line',
         'add.url': 'Address (https://…)',
-        'add.make': 'Make the settings lines',
-        'add.paste': 'Quit DeepSeek Harness, paste these lines at the end of ~/.dsh/profiles/desktop/cordis.patch.yml (keep a copy of the file first), and open the app again. The connector then appears above with its own switch.',
         'add.copy': 'Copy',
         'add.copied': 'Copied.',
-        'add.note': 'Keys and tokens never go in this form. If a connector needs one, add it to the settings lines as ${credential:NAME} and store the key in Settings → Models or your keychain.',
-        'add.bad.name': 'Use 1–32 letters, digits, - or _, not already used.',
-        'add.bad.target': 'Fill in the program or the address.',
+        'add.note': 'A key or token you type here goes into the app\'s secret store, never into the settings file. The file only holds a reference to it.',
+        'add.keyName.stdio': 'Key it needs: its name (optional, for example GITHUB_TOKEN)',
+        'add.keyName.http': 'Key it needs: the header name (optional, usually Authorization)',
+        'add.keyValue': 'The key itself (kept in the app\'s secret store, never in the file)',
+        'add.show': 'Show what will be added',
+        'add.checking': 'Checking…',
+        'add.preview.title': 'This will be added at the end of {file}:',
+        'add.preview.same': 'Nothing else in the file changes. Before it writes, a copy of the file is kept, the app\'s own check reads the new file in a throwaway copy of its home, and the file is written only if all of that works.',
+        'add.preview.key': 'The key is kept in the app\'s secret store under the name {ref}. The file only says ${credential:{ref}}, so the key itself is never in it.',
+        'add.preview.keyKept': 'A key is already kept under that name, so leaving the key box empty keeps it.',
+        'add.preview.nocheck': 'The app\'s own check program was not found here, so Write it for me is off (the file is never changed without that check). Copy the lines, quit DeepSeek Harness, paste them at the end of {file} (keep a copy of the file first), and open the app again.',
+        'add.write': 'Write it for me',
+        'add.writing': 'Writing…',
+        'add.change': 'Change something',
+        'add.back': 'Back to the lines',
+        'add.problems': 'Please fix this first:',
+        'add.failed': 'Could not reach the app. Nothing was changed.',
+        'add.done.title': 'Added: {name}',
+        'add.done.file': 'Written to {file}.',
+        'add.done.backup': 'A copy of the old file is kept at {backup}.',
+        'add.done.nobackup': 'There was no settings file yet, so there was nothing to copy first.',
+        'add.restart.title': 'Restart needed',
+        'add.restart.body': 'DeepSeek Harness reads this file only when it starts. Quit it (press Cmd+Q) and open it again. The connector then shows in the list above, with its own switch.',
+        'add.restart.why': 'The app gives add-ons no Restart button, so this step is yours.',
+        'add.refused.title': 'Nothing was changed.',
+        'add.refused.details': 'Details',
+        'add.another': 'Add another',
+        'connectors.waiting': 'Added, starts after a restart',
         'skills.title': 'Skills',
         'skills.hint': 'Instructions the assistant can load for a kind of task. You can also start one by typing / in the chat box. These are the skills found for your default folder; a project can add its own.',
         'skills.search': 'Search skills',
@@ -119,6 +506,10 @@ window.__ModuleLoader__.load({
         'move.recon': 'Opened as a new {tab} conversation; the Recon original stays in Recon.',
         'move.reconFiles': 'Opened as a new {tab} conversation, with its {n} file(s) copied out of Recon; the Recon original stays in Recon.',
         'move.reconFailed': 'Could not move it out of Recon: {why}',
+        'move.reconDraft': 'Opened as a new {tab} conversation. A first message is ready in the chat box: read it, then press Send. Nothing has gone to the model yet.',
+        'move.reconDraftFiles': 'Opened as a new {tab} conversation, with its {n} file(s) you ticked copied out of Recon. A first message is ready in the chat box: read it, then press Send. Nothing has gone to the model yet.',
+        'move.reconCancelled': 'Nothing was moved.',
+        'move.reconProject': 'A whole project of Recon conversations is not moved. Move one conversation at a time: each one gets its own preview of what leaves Recon.',
         'archive': 'Archive',
         'find.placeholder': 'Search {tab}…',
         'find.hint': 'Titles as you type. Press Enter to search the text of messages too.',
@@ -956,6 +1347,71 @@ window.__ModuleLoader__.load({
           }
         ]
       },
+      "content": {
+        "pages": [],
+        "chips": [
+          {
+            "label": "Write a blog post",
+            "icon": "research",
+            "prompt": "Write a blog post about: "
+          },
+          {
+            "label": "Draft an email",
+            "icon": "spark",
+            "prompt": "Draft an email to: "
+          },
+          {
+            "label": "Make an outline",
+            "icon": "chart",
+            "prompt": "Make an outline for a talk or video about: "
+          },
+          {
+            "label": "Tidy my notes",
+            "icon": "spreadsheet",
+            "prompt": "Turn my notes in this folder into a clear summary."
+          }
+        ]
+      },
+      "bench": {
+        "pages": [],
+        "chips": [
+          {
+            "label": "What is connected?",
+            "icon": "spark",
+            "prompt": "What devices are connected to this Mac right now?"
+          },
+          {
+            "label": "Check an Android phone",
+            "icon": "research",
+            "prompt": "Read the details of my Android phone and tell me what you see."
+          },
+          {
+            "label": "Look at a board",
+            "icon": "chart",
+            "prompt": "Identify the board on my USB port and tell me what it is."
+          }
+        ]
+      },
+      "creator-plus": {
+        "pages": [],
+        "chips": [
+          {
+            "label": "Build an add-on",
+            "icon": "spark",
+            "prompt": "Build a new add-on that: "
+          },
+          {
+            "label": "Improve an add-on",
+            "icon": "research",
+            "prompt": "Improve this add-on and show me the change first: "
+          },
+          {
+            "label": "What went wrong?",
+            "icon": "chart",
+            "prompt": "Look at my recent conversations and tell me what went wrong most often."
+          }
+        ]
+      },
       "recon": {
         "pages": [],
         "greeting": "What should Recon look into?",
@@ -1321,8 +1777,9 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         try { window.localStorage.setItem(LOCAL_KEY, id); } catch { /* private mode */ }
       }
 
-      async function describe() {
-        const result = await ctx.remote.settings.describe();
+      // `fresh`: a read that a save follows asks the app itself, never the page's shared copy.
+      async function describe(fresh = false) {
+        const result = await dshPoll.settings(ctx, { fresh });
         if (!result.ok) throw new Error(result.error.code);
         return result.value.namespaces;
       }
@@ -1401,11 +1858,11 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         try {
           if (state.selected !== id) return;
           const op = [{ op: 'set', path: ['defaultMode'], value: id }];
-          let spaces = await describe();
+          let spaces = await describe(true);
           let entry = spaces.find((item) => item.ns === MODES_NS);
           let result = await ctx.remote.settings.mutate(MODES_NS, op, entry.revision);
           if (!result.ok && result.error.code === 'settings/conflict') {
-            spaces = await describe();
+            spaces = await describe(true);
             entry = spaces.find((item) => item.ns === MODES_NS);
             result = await ctx.remote.settings.mutate(MODES_NS, op, entry.revision);
           }
@@ -1433,7 +1890,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         for (const id of sessionIds) optimistic[id] = modeId;
         set({ sessionModes: optimistic, error: '' });
         try {
-          let spaces = await describe();
+          let spaces = await describe(true);
           let entry = spaces.find((item) => item.ns === MODES_NS);
           const build = (value) => {
             const next = { ...readObject(value?.sessionModes) };
@@ -1442,7 +1899,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           };
           let result = await ctx.remote.settings.mutate(MODES_NS, build(entry.value), entry.revision);
           if (!result.ok && result.error.code === 'settings/conflict') {
-            spaces = await describe();
+            spaces = await describe(true);
             entry = spaces.find((item) => item.ns === MODES_NS);
             result = await ctx.remote.settings.mutate(MODES_NS, build(entry.value), entry.revision);
           }
@@ -1469,10 +1926,10 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         try {
           if (state[key] !== value) return;
           const op = [{ op: 'set', path: [key], value }];
-          let entry = (await describe()).find((item) => item.ns === SETTINGS_NS);
+          let entry = (await describe(true)).find((item) => item.ns === SETTINGS_NS);
           let result = await ctx.remote.settings.mutate(SETTINGS_NS, op, entry.revision);
           if (!result.ok && result.error.code === 'settings/conflict') {
-            entry = (await describe()).find((item) => item.ns === SETTINGS_NS);
+            entry = (await describe(true)).find((item) => item.ns === SETTINGS_NS);
             result = await ctx.remote.settings.mutate(SETTINGS_NS, op, entry.revision);
           }
           if (!result.ok) throw new Error(result.error.code);
@@ -1622,8 +2079,9 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             get('uiSession')?.sessionStatus?.subscribe?.(update),
           ];
           // Titles and times change without always notifying; refresh gently.
-          const timer = setInterval(update, 5000);
-          return () => { clearInterval(timer); for (const off of offs) { try { off?.(); } catch { /* ignore */ } } };
+          // Looks again every 5 s while the window is shown, none while it is hidden.
+          const timer = dshPoll.loop(() => update(), { every: 5000, immediate: false });
+          return () => { timer.stop(); for (const off of offs) { try { off?.(); } catch { /* ignore */ } } };
         },
       };
     }
@@ -1650,8 +2108,8 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         get: () => snapshot,
         subscribe: (listener) => {
           listeners.add(listener);
-          if (listeners.size === 1) { void call().catch(() => {}); timer = setInterval(() => void call().catch(() => {}), 20000); }
-          return () => { listeners.delete(listener); if (listeners.size === 0) clearInterval(timer); };
+          if (listeners.size === 1) timer = dshPoll.loop(() => call().catch(() => {}), { every: 20000 });
+          return () => { listeners.delete(listener); if (listeners.size === 0) timer?.stop(); };
         },
         refresh: () => call(),
         save: (path, patch) => call(null, { method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify({ action: 'save', path, ...patch }) }),
@@ -1939,7 +2397,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         else setPending(preset);
       };
       const removeType = async (preset) => {
-        if (!window.confirm(t('type.remove.sure', { name: preset.name }))) return;
+        if (!(await askInPage({ text: t('type.remove.sure', { name: preset.name }), ok: 'Remove', danger: true }))) return;
         try { await projects.presetRemove(preset.id); setPending(null); setNote({ text: t('type.removed'), tone: '' }); } catch (error) { fail(error); }
       };
       const keepAs = async () => {
@@ -2057,8 +2515,8 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         get: () => snapshot,
         subscribe: (listener) => {
           listeners.add(listener);
-          if (listeners.size === 1) { void call().catch(() => {}); timer = setInterval(() => void call().catch(() => {}), 60000); }
-          return () => { listeners.delete(listener); if (listeners.size === 0) clearInterval(timer); };
+          if (listeners.size === 1) timer = dshPoll.loop(() => call().catch(() => {}), { every: 60000 });
+          return () => { listeners.delete(listener); if (listeners.size === 0) timer?.stop(); };
         },
         /** `where`: `{tab, fallbackTab}`, the tab it is deleted from (only that tab's Trash list shows it) and the tab its folder gives. */
         remove: (id, title, where) => post('delete', id, title, where),
@@ -2209,7 +2667,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         ? t(ids.length === 1 ? 'trash.empty.confirm.rows.one' : 'trash.empty.confirm.rows', { n: ids.length, what: rowContents(chosen, t) })
         : t(ids.length === 1 ? 'trash.empty.confirm.one' : 'trash.empty.confirm', { n: ids.length });
       if (untold > 0) question += '\n\n' + t(untold === 1 ? 'trash.empty.untold.one' : 'trash.empty.untold', { n: untold });
-      if (!ask(question)) return { asked: true, sent: [], failed: 0 };
+      if (!(await ask(question))) return { asked: true, sent: [], failed: 0 };
       start?.();
       const sent = [];
       let failed = 0;
@@ -2372,14 +2830,17 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
        * Move to: a conversation that began in Recon opens as a new conversation of the picked tab, with the
        * Recon one and its own files (moveOutOfRecon); the original stays in Recon. Any other moves as before.
        */
-      const moveTo = async (ids, modeId) => {
+      const moveTo = async (ids, modeId, whole) => {
         const fromRecon = modeId === 'recon' ? [] : ids.filter((id) => fromReconRow(id, lib.byId[id], state));
+        // Review B1: a whole project of Recon conversations is never moved at once; each needs its own preview.
+        if (fromRecon.length > 1 || (whole === true && fromRecon.length > 0)) { model.fail(t('move.reconProject')); return; }
         const rest = ids.filter((id) => !fromRecon.includes(id));
         if (rest.length > 0) await model.move(rest, modeId);
         for (const id of fromRecon) {
           try {
             const done = await moveOutOfRecon(appCtx, library, model, id, modeId);
-            model.note(t(done.files > 0 ? 'move.reconFiles' : 'move.recon', { tab: done.label, n: done.files }));
+            if (done.cancelled) { model.note(t('move.reconCancelled')); continue; }
+            model.note(t(done.drafted ? (done.files > 0 ? 'move.reconDraftFiles' : 'move.reconDraft') : done.files > 0 ? 'move.reconFiles' : 'move.recon', { tab: done.label, n: done.files }));
           } catch (problem) {
             model.fail(t('move.reconFailed', { why: String(problem?.message ?? problem).slice(0, 200) }));
           }
@@ -2438,7 +2899,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           let picked = null;
           try { picked = native ? await desktop.pick() : await uw.pickDirectory(); } catch (error) { if (native) throw error; }
           // In a web browser there may be no folder chooser: ask for the path instead.
-          if (!picked && !native) picked = window.prompt(t('proj.add.path'));
+          if (!picked && !native) picked = await askInPage({ text: t('proj.add.path'), field: { label: 'Folder path', placeholder: '/Users/you/Projects/my-project' }, ok: 'Add' });
           const path = (typeof picked === 'string' ? picked : picked?.path ?? '').trim();
           if (!path) return;
           const ws = await appCtx.get('workspaces').create({ path });
@@ -2514,7 +2975,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           if (error?.rpcError?.code !== 'workspace/session-active') throw error;
           // The clean-up never stops anything: it leaves a conversation that is still in use and says why.
           if (typeof busy === 'function') { busy(error?.rpcError?.details?.activity); return false; }
-          if (!window.confirm(stopQuestion(error?.rpcError?.details?.activity, question, t))) return false;
+          if (!(await askInPage({ text: stopQuestion(error?.rpcError?.details?.activity, question, t), ok: 'Stop it and continue', danger: true }))) return false;
           await service.archiveSession(id, { stopActivity: true });
         }
         if (id === lib.currentId) startNew(appCtx, library, selected.id);
@@ -2529,7 +2990,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       };
       /** Delete: archive it (the app then stops using it), then move its files to the trash. */
       const remove = async (id, title) => {
-        if (!window.confirm(t(inScratch(lib.byId[id]?.cwd) ? 'delete.confirm.scratch' : 'delete.confirm', { title }))) return;
+        if (!(await askInPage({ text: t(inScratch(lib.byId[id]?.cwd) ? 'delete.confirm.scratch' : 'delete.confirm', { title }), ok: 'Delete', danger: true }))) return;
         try {
           if (archived.has(id)) {
             if (id === lib.currentId) startNew(appCtx, library, selected.id);
@@ -2565,7 +3026,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         try {
           const done = await runEmpty({
             items: binHere, state, tabIds, selectedId: selected.id, t,
-            ask: (question) => window.confirm(question),
+            ask: (question) => askInPage({ text: question, ok: 'Empty the trash', danger: true }),
             send: (ids) => trash.empty(ids),
             start: () => setEmptying(true),
           });
@@ -2577,7 +3038,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       /** Delete permanently: no way back, so it always asks first. */
       const erase = async (row, title) => {
         const question = row?.kind === 'group' ? t('trash.erase.confirm.group', { title, what: rowContents(row, t) }) : t('trash.erase.confirm', { title });
-        if (!window.confirm(question)) return;
+        if (!(await askInPage({ text: question, ok: 'Delete for good', danger: true }))) return;
         try {
           const data = await trash.erase(row);
           const erased = data?.erased;
@@ -2636,7 +3097,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const removeMany = async (ids) => {
         setMenu(null);
         const titleOf = (id) => (lib.byId[id]?.displayTitle && String(lib.byId[id].displayTitle).trim()) || t('untitled');
-        if (!window.confirm(ids.length === 1 ? t(inScratch(lib.byId[ids[0]]?.cwd) ? 'delete.confirm.scratch' : 'delete.confirm', { title: titleOf(ids[0]) }) : t('delete.confirm.n', { n: ids.length }))) return;
+        if (!(await askInPage({ text: ids.length === 1 ? t(inScratch(lib.byId[ids[0]]?.cwd) ? 'delete.confirm.scratch' : 'delete.confirm', { title: titleOf(ids[0]) }) : t('delete.confirm.n', { n: ids.length }), ok: 'Delete', danger: true }))) return;
         for (const id of ids) {
           try {
             if (archived.has(id)) {
@@ -2652,7 +3113,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       };
       /** Clean up (step 43): every tab's Scratch conversations not used for a number of days, after one question. */
       const cleanUp = async () => {
-        const answer = window.prompt(t('cleanup.ask'), '30');
+        const answer = await askInPage({ text: t('cleanup.ask'), field: { label: 'Days', value: '30' }, ok: 'Continue' });
         if (answer === null) return;
         const days = Math.floor(Number(String(answer).trim()));
         if (!Number.isFinite(days) || days < 1 || days > 3650) { model.fail(t('cleanup.bad')); return; }
@@ -2679,10 +3140,10 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         const titleOf = (id) => (lib.byId[id]?.displayTitle && String(lib.byId[id].displayTitle).trim()) || t('untitled');
         const kept = skipped.map((item) => `• ${titleOf(item.id)} (${t(`cleanup.why.${item.why}`)})`).join('\n');
         if (take.length === 0) {
-          window.alert(`${t('cleanup.none', { date })}${kept ? `\n\n${t('cleanup.kept')}\n${kept}` : ''}${usedLines.length > 0 ? `\n\n${t('cleanup.automation')}\n${usedLines.join('\n')}` : ''}`);
+          await askInPage({ notice: true, text: `${t('cleanup.none', { date })}${kept ? `\n\n${t('cleanup.kept')}\n${kept}` : ''}${usedLines.length > 0 ? `\n\n${t('cleanup.automation')}\n${usedLines.join('\n')}` : ''}` });
           return;
         }
-        if (!window.confirm(`${t(take.length === 1 ? 'cleanup.confirm.one' : 'cleanup.confirm', { n: take.length, date })}${kept ? `\n\n${t('cleanup.kept')}\n${kept}` : ''}`)) return;
+        if (!(await askInPage({ text: `${t(take.length === 1 ? 'cleanup.confirm.one' : 'cleanup.confirm', { n: take.length, date })}${kept ? `\n\n${t('cleanup.kept')}\n${kept}` : ''}`, ok: 'Move to the trash', danger: true }))) return;
         // Step 42 (Automations part, question 9): a thread an automation still writes into is left alone,
         // and named with the automation, instead of asking once per thread.
         const inUse = [...usedLines];
@@ -2700,7 +3161,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             break;
           }
         }
-        if (inUse.length > 0) window.alert(`${t('cleanup.automation')}\n${inUse.join('\n')}`);
+        if (inUse.length > 0) await askInPage({ notice: true, text: `${t('cleanup.automation')}\n${inUse.join('\n')}` });
       };
       const restoreMany = async (ids) => {
         setMenu(null);
@@ -2744,7 +3205,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         && defaultWorkspace([ws]) === null;
       const removeProject = async (ws) => {
         setMenu(null);
-        if (!window.confirm(t('proj.remove.sure', { name: ws.title || ws.path || t('untitled') }))) return;
+        if (!(await askInPage({ text: t('proj.remove.sure', { name: ws.title || ws.path || t('untitled') }), ok: 'Remove project', danger: true }))) return;
         try {
           await appCtx.get('workspaces').delete(ws.workspaceId);
           void model.refresh();
@@ -2978,7 +3439,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
                 h('span', { className: 'cws-count' }, String(ids.length))),
               h('button', { type: 'button', className: 'cws-mini', title: t('proj.new'), 'aria-label': t('proj.new'), onClick: () => { try { appCtx.layout.selectPanel(null); } catch { /* */ } uw?.startSession?.(ws.workspaceId); } }, '+'),
               h('button', { type: 'button', className: 'cws-mini', title: t('proj.open'), 'aria-label': t('proj.open'), onClick: () => openProject(ws.workspaceId) }, '⚙'),
-              h(MoveMenu, { t, tabs, current: selected.id, label: t('proj.move', { title: ws.title || '' }), onMove: (modeId) => void moveTo(all.filter((id) => !lib.byId[id]?.blank), modeId) })),
+              h(MoveMenu, { t, tabs, current: selected.id, label: t('proj.move', { title: ws.title || '' }), onMove: (modeId) => void moveTo(all.filter((id) => !lib.byId[id]?.blank), modeId, true) })),
             isOpen ? h('div', { className: 'cws-proj-list' }, list(ids, ws.workspaceId, ws)) : null);
         }),
         scratchRows.length ? h(React.Fragment, null,
@@ -3105,6 +3566,10 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const workspace = appCtx.get('uiWorkspace');
       if (!sessions?.create || !remote?.prompt || !workspace?.openSession) throw new Error('this version of the app cannot open a conversation from here');
       const label = tabsOf(model.get()).find((m) => m.id === tabId)?.label ?? tabId;
+      // Review B1: the same window as Recon's export door first (what leaves, warnings, files none ticked);
+      // nothing is made, copied or sent before the user says yes.
+      const consent = await askMoveConsent(id, label);
+      if (!consent) return { cancelled: true, label, files: 0 };
       let cwd = '';
       let scratch = false;
       if (startPlaceOf(tabId) === 'scratch') {
@@ -3134,18 +3599,118 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const response = await fetch(new URL('dsh-recon/door', document.baseURI), {
         method: 'POST', cache: 'no-store', credentials: 'same-origin',
         headers: { accept: 'application/json', 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'move', session: id, tab: tabId, sessionId: child, folder: scratch ? `${cwd}/${child}` : cwd, title }),
+        body: JSON.stringify({ action: 'move', session: id, tab: tabId, sessionId: child, folder: scratch ? `${cwd}/${child}` : cwd, title, consent: true, files: consent.files, full: consent.full, agreeCloud: consent.agreeCloud }),
       });
       const done = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(done.error || `error ${response.status}`);
-      const sent = await remote.prompt({ requestId: globalThis.crypto?.randomUUID?.() ?? `move-${Date.now()}`, sessionId: child, mode: 'queue', content: [{ type: 'text', text: done.message }] });
+      if (!response.ok) {
+        // Refused (a cloud model Recon says Never to, for one): the empty conversation made for it is put away.
+        try { await appCtx.get('workspaces').archiveSession(child); } catch { /* an empty conversation is harmless */ }
+        throw new Error(done.error || `error ${response.status}`);
+      }
       // Named after the original (the first line of the message is the export mark, not a title).
       try { await remote.rename?.({ sessionId: child, title: `From Recon: ${title || 'Untitled conversation'}`.slice(0, 80) }); } catch { /* the app's own title stays */ }
       void model.select(tabId, label);
       try { appCtx.layout.selectPanel(null); } catch { /* already on the conversation */ }
       workspace.openSession(child);
-      if (sent && sent.ok === false) throw new Error(sent.error?.message ?? 'the conversation was not sent');
-      return { label: done.label || label, files: Number(done.files) || 0 };
+      // The first message is a DRAFT: put in the chat box for the user to read and send, never sent here.
+      void fillDraft(String(done.draft ?? ''));
+      return { label: done.label || label, files: Number(done.files) || 0, drafted: true };
+    }
+    /** Put text in the chat box (once the new conversation shows it), without sending it. */
+    async function fillDraft(text) {
+      if (!text) return;
+      for (let attempt = 0; attempt < 24; attempt += 1) {
+        await new Promise((done) => setTimeout(done, 250));
+        const boxes = [...document.querySelectorAll('[contenteditable="true"]')].filter((box) => box.offsetParent !== null && !box.closest('.cws-form'));
+        const box = boxes[boxes.length - 1];
+        if (!box) continue;
+        box.focus();
+        if (document.execCommand('insertText', false, text)) return;
+      }
+    }
+    /**
+     * The Move preview window (review B1): what leaves Recon, the warnings, the room's files (none ticked), and
+     * the agreement for a cloud model when Settings → Recon → Models says Ask. Resolves what was chosen, or
+     * null when cancelled (or the preview could not be read: then nothing moves).
+     */
+    function askMoveConsent(sessionId, label) {
+      return new Promise((resolve) => {
+        const style = (el, css) => { el.style.cssText = css; return el; };
+        const node = (tag, css, text) => { const el = style(document.createElement(tag), css || ''); if (text !== undefined) el.textContent = text; return el; };
+        const overlay = node('div', 'position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35)');
+        overlay.setAttribute('data-dsh-move-door', '');
+        const box = node('div', 'box-sizing:border-box;width:460px;max-width:calc(100vw - 24px);max-height:calc(100vh - 48px);overflow-y:auto;padding:14px 16px;border-radius:16px;border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-base));color:var(--dsw-alias-label-primary);font-size:12px;line-height:18px;box-shadow:0 8px 28px rgba(0,0,0,.28)');
+        box.setAttribute('role', 'dialog');
+        box.setAttribute('aria-label', 'Move out of Recon');
+        overlay.appendChild(box);
+        const done = (value) => { document.removeEventListener('keydown', onKey, true); overlay.remove(); resolve(value); };
+        const onKey = (event) => { if (event.key === 'Escape') { event.stopPropagation(); done(null); } };
+        document.addEventListener('keydown', onKey, true);
+        box.appendChild(node('h3', 'margin:0 0 6px;font-size:14px;line-height:22px;font-weight:500', 'Move out of Recon'));
+        const status = node('div', '', 'Reading what would leave…');
+        box.appendChild(status);
+        document.body.appendChild(overlay);
+        const address = new URL('dsh-recon/door', document.baseURI);
+        address.searchParams.set('session', sessionId);
+        address.searchParams.set('move', '1');
+        fetch(address, { cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } })
+          .then(async (response) => { const data = await response.json().catch(() => ({})); if (!response.ok) throw dshKit.fail(data.error || `error ${response.status}`); return data; })
+          .then((preview) => {
+            status.remove();
+            const section = (title, lines, warn) => {
+              box.appendChild(node('div', 'font-weight:600;margin-top:8px', title));
+              const list = node('ul', `margin:4px 0 0;padding-left:18px;color:var(${warn ? '--dsw-alias-state-warn-primary,var(--dsw-alias-label-secondary)' : '--dsw-alias-label-secondary'})`);
+              for (const line of lines) list.appendChild(node('li', '', line));
+              box.appendChild(list);
+            };
+            box.appendChild(node('div', '', `A new ordinary ${label} conversation opens and the Recon original stays in Recon. Only what is listed here goes, and no message is sent until you press Send yourself.`));
+            section('What leaves Recon', [...(preview.leaves ?? []), 'It is saved as summary.md in the new conversation\'s folder; the first message in the chat box only names it.']);
+            const files = Array.isArray(preview.files) ? preview.files : [];
+            const ticks = new Map();
+            if (files.length > 0) {
+              box.appendChild(node('div', 'font-weight:600;margin-top:8px', `Files in Recon's room (${files.length}), none ticked`));
+              for (const file of files) {
+                const row = node('label', 'display:flex;gap:6px;align-items:baseline;margin:2px 0');
+                const tick = node('input'); tick.type = 'checkbox'; tick.checked = false;
+                ticks.set(file.path, tick);
+                row.appendChild(tick);
+                row.appendChild(node('span', '', `${file.path} (${file.text ? 'text' : 'not text, copied unopened'}, ${Math.ceil((file.size || 0) / 1024)} KB)`));
+                box.appendChild(row);
+              }
+            }
+            const fullRow = node('label', 'display:flex;gap:6px;align-items:baseline;margin-top:8px');
+            const fullTick = node('input'); fullTick.type = 'checkbox'; fullTick.checked = false;
+            fullRow.appendChild(fullTick);
+            fullRow.appendChild(node('span', '', 'Also save the whole conversation as conversation.md (every page it read, in full). The new conversation\'s model can read it.'));
+            box.appendChild(fullRow);
+            let cloudTick;
+            if (preview.cloudModels === 'ask') {
+              const row = node('label', 'display:flex;gap:6px;align-items:baseline;margin-top:6px');
+              cloudTick = node('input'); cloudTick.type = 'checkbox'; cloudTick.checked = false;
+              row.appendChild(cloudTick);
+              row.appendChild(node('span', '', 'If the new conversation\'s model is a cloud model, I agree that what is listed above may go to it.'));
+              box.appendChild(row);
+            } else if (preview.cloudModels === 'never') {
+              box.appendChild(node('div', 'margin-top:6px', 'Cloud models are switched off for Recon (Settings → Recon → Models): if the new conversation\'s model is in the cloud, the move is refused and nothing is made.'));
+            } else box.appendChild(node('div', 'margin-top:6px', 'Settings → Recon → Models allows cloud models: the summary may go to a cloud model once you press Send.'));
+            if (preview.notKept) box.appendChild(node('div', 'margin-top:6px;color:var(--dsw-alias-label-secondary)', preview.notKept));
+            section('What never leaves', preview.never ?? []);
+            section('Once it is out, Recon\'s rules no longer hold for the copy', preview.warnings ?? [], true);
+            if (preview.running) box.appendChild(node('div', 'margin-top:8px;color:var(--dsw-alias-state-error-primary)', 'Recon is running in this conversation: move it when the run is done.'));
+            const row = node('div', 'display:flex;gap:8px;justify-content:flex-end;margin-top:12px');
+            const cancel = node('button', 'cursor:pointer', 'Cancel'); cancel.type = 'button'; cancel.className = 'dsh-rc-btn';
+            const go = node('button', 'cursor:pointer', 'Move'); go.type = 'button'; go.className = 'dsh-rc-btn'; go.disabled = preview.running === true;
+            cancel.onclick = () => done(null);
+            go.onclick = () => done({ files: [...ticks].filter(([, tick]) => tick.checked).map(([path]) => path), full: fullTick.checked, agreeCloud: cloudTick ? cloudTick.checked : false });
+            row.appendChild(cancel); row.appendChild(go); box.appendChild(row);
+            cancel.focus();
+          })
+          .catch((problem) => {
+            status.textContent = `Nothing was moved: the preview could not be read (${String(problem?.message ?? problem).slice(0, 160)}).`;
+            const close = node('button', 'margin-top:10px;cursor:pointer', 'Close'); close.type = 'button'; close.className = 'dsh-rc-btn';
+            close.onclick = () => done(null); box.appendChild(close);
+          });
+      });
     }
     /** Projects Plus keeps out of its own project lists: the hidden Scratch place (learnScratch). */
     const hidden = new Set();
@@ -3326,9 +3891,10 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const shortcut = useNewSessionShortcut(appCtx);
 
       useEffect(() => {
-        void model.refresh();
-        const timer = setInterval(() => void model.refresh(), 10000);
-        return () => clearInterval(timer);
+        // Read when Settings changes (another window, the /mode command, Settings → Modes), every 30 s as a safety net, never while hidden.
+        const watcher = dshPoll.loop(() => model.refresh(), { every: 30000 });
+        const off = dshPoll.onChange(appCtx, () => watcher.poke());
+        return () => { watcher.stop(); off(); };
       }, [model]);
 
       const wide = drawer || !collapsed;
@@ -3670,43 +4236,31 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
      */
     const PLUGIN_SWITCH = { set: null };
 
-    /** YAML for one MCP server row, ready to paste at the end of the profile's cordis.patch.yml. */
-    function rowYaml(form) {
-      const q = (v) => `'${String(v).replace(/'/g, "''")}'`;
-      const lines = ['- insert:', `    - id: mcp-${form.name}`, "      name: '@deepseek-ai/dsh-mcp-client'", '      config:',
-        `        serverName: ${form.name}`];
-      if (form.kind === 'http') {
-        lines.push('        transport: streamable-http', `        url: ${q(form.url.trim())}`);
-      } else {
-        const args = form.args.split('\n').map((a) => a.trim()).filter(Boolean);
-        lines.push('        transport: stdio', `        command: ${q(form.command.trim())}`);
-        if (args.length) lines.push(`        args: [${args.map(q).join(', ')}]`);
-      }
-      return lines.join('\n') + '\n';
-    }
-
     function ConnectorsPage({ appCtx }) {
       const t = appCtx.locale.bind(NS);
-      const [state, setState] = useState({ status: 'loading', servers: [] });
+      const [state, setState] = useState({ status: 'loading', servers: [], waiting: [] });
       const [busy, setBusy] = useState('');
       const [notes, setNotes] = useState({});
-      const [form, setForm] = useState({ name: '', kind: 'stdio', command: '', args: '', url: '', error: '', yaml: '', copied: false });
+      const blank = { name: '', kind: 'stdio', command: '', args: '', url: '', keyName: '', keyValue: '' };
+      const [form, setForm] = useState(blank);
+      // phase: edit (typing), preview (the exact lines shown), working, done (written: restart needed), refused (nothing changed).
+      const [flow, setFlow] = useState({ phase: 'edit', problems: [], preview: null, answer: null, copied: false });
 
       const load = useCallback(async () => {
         try {
           const response = await fetch(new URL('dsh-cowork-shell/connectors', document.baseURI), { headers: { accept: 'application/json' } });
-          if (!response.ok) throw new Error(String(response.status));
+          if (!response.ok) throw dshKit.fail(String(response.status));
           const data = await response.json();
-          setState({ status: 'ready', servers: Array.isArray(data.servers) ? data.servers : [] });
+          setState({ status: 'ready', servers: Array.isArray(data.servers) ? data.servers : [], waiting: Array.isArray(data.waiting) ? data.waiting : [] });
         } catch {
-          setState((prev) => (prev.status === 'ready' ? prev : { status: 'error', servers: [] }));
+          setState((prev) => (prev.status === 'ready' ? prev : { status: 'error', servers: [], waiting: [] }));
         }
       }, []);
 
       useEffect(() => {
-        void load();
-        const timer = setInterval(() => { if (!document.hidden) void load(); }, 5000);
-        return () => clearInterval(timer);
+        // Every 5 s while the page is shown, never while the window is hidden.
+        const timer = dshPoll.loop(() => load(), { every: 5000 });
+        return () => timer.stop();
       }, [load]);
 
       const note = (id, text, tone) => setNotes((prev) => ({ ...prev, [id]: { text, tone } }));
@@ -3730,25 +4284,47 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         }
       };
 
-      const makeYaml = () => {
-        const name = form.name.trim();
-        if (!NAME_RE.test(name) || state.servers.some((s) => s.serverName === name || s.id === `mcp-${name}`)) {
-          setForm((prev) => ({ ...prev, error: t('add.bad.name'), yaml: '' }));
-          return;
+      /** Ask the page's route to check the fields (`preview`) or to write the connector (`write`). Answers are in plain words. */
+      const ask = async (action) => {
+        const response = await fetch(new URL('dsh-cowork-shell/connectors/write', document.baseURI), {
+          method: 'POST', cache: 'no-store', credentials: 'same-origin',
+          headers: { accept: 'application/json', 'content-type': 'application/json' },
+          body: JSON.stringify({ action, form, ...(action === 'write' && flow.preview ? { expect: flow.preview.text } : {}) }),
+        });
+        return response.json().catch(() => ({ ok: false, text: t('add.failed') }));
+      };
+
+      const preview = async () => {
+        setFlow((prev) => ({ ...prev, phase: 'working', problems: [], copied: false }));
+        try {
+          const data = await ask('preview');
+          if (data.ok) setFlow({ phase: 'preview', problems: [], preview: data, answer: null, copied: false });
+          else setFlow({ phase: 'edit', problems: Array.isArray(data.problems) ? data.problems.map((p) => p.text) : [data.text ?? t('add.failed')], preview: null, answer: null, copied: false });
+        } catch {
+          setFlow({ phase: 'edit', problems: [t('add.failed')], preview: null, answer: null, copied: false });
         }
-        if (form.kind === 'http' ? !/^https?:\/\/\S+$/.test(form.url.trim()) : !form.command.trim()) {
-          setForm((prev) => ({ ...prev, error: t('add.bad.target'), yaml: '' }));
-          return;
+      };
+
+      const write = async () => {
+        setFlow((prev) => ({ ...prev, phase: 'working' }));
+        try {
+          const data = await ask('write');
+          if (data.ok) {
+            setFlow({ phase: 'done', problems: [], preview: null, answer: data, copied: false });
+            setForm(blank);
+            void load();
+          } else setFlow((prev) => ({ ...prev, phase: 'refused', answer: data }));
+        } catch {
+          setFlow((prev) => ({ ...prev, phase: 'refused', answer: { ok: false, text: t('add.failed') } }));
         }
-        setForm((prev) => ({ ...prev, name, error: '', yaml: rowYaml({ ...prev, name }), copied: false }));
       };
 
       const copy = async () => {
         try {
-          await navigator.clipboard.writeText(form.yaml);
-          setForm((prev) => ({ ...prev, copied: true }));
+          await navigator.clipboard.writeText(flow.preview?.text ?? '');
+          setFlow((prev) => ({ ...prev, copied: true }));
         } catch {
-          setForm((prev) => ({ ...prev, copied: false }));
+          setFlow((prev) => ({ ...prev, copied: false }));
         }
       };
 
@@ -3773,11 +4349,49 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
           }));
       });
 
+      // Written to the settings file but not started yet (the app reads the file when it starts).
+      const waitingRows = state.waiting.map((name) => h('div', { key: `waiting-${name}`, className: 'cws-item' },
+        h('span', { className: 'cws-glyph', 'aria-hidden': true }, h(Glyph, { name: 'link', size: 16 })),
+        h('div', { className: 'cws-item-main' }, h('div', { className: 'cws-item-name' }, name)),
+        h('span', { className: 'cws-chip' }, t('connectors.waiting'))));
+
       const field = (label, input) => [h('label', { key: label + 'l' }, label), h('div', { key: label + 'i' }, input)];
-      const set = (patch) => setForm((prev) => ({ ...prev, ...patch, error: '', yaml: '' }));
+      const set = (patch) => { setForm((prev) => ({ ...prev, ...patch })); setFlow((prev) => (prev.phase === 'working' ? prev : { phase: 'edit', problems: [], preview: null, answer: null, copied: false })); };
+      const working = flow.phase === 'working';
+      const column = { paddingBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 };
+      const previewBox = flow.phase === 'preview' || (working && flow.preview) ? h('div', { style: column },
+        h('p', { className: 'cws-note', style: { margin: 0 } }, fill(t('add.preview.title'), { file: flow.preview.file })),
+        h('pre', { className: 'cws-yaml' }, flow.preview.text),
+        flow.preview.key ? h('p', { className: 'cws-note', style: { margin: 0 } }, fill(t('add.preview.key'), { ref: flow.preview.key.ref })) : null,
+        flow.preview.key && flow.preview.key.kept ? h('p', { className: 'cws-note', style: { margin: 0 } }, t('add.preview.keyKept')) : null,
+        h('p', { className: 'cws-note', style: { margin: 0 } }, flow.preview.canCheck ? t('add.preview.same') : fill(t('add.preview.nocheck'), { file: flow.preview.file })),
+        h('div', { style: { display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' } },
+          flow.preview.canCheck ? h('button', { type: 'button', className: 'cws-btn', 'data-main': 'true', disabled: working, onClick: () => void write() }, working ? t('add.writing') : t('add.write')) : null,
+          h('button', { type: 'button', className: 'cws-btn', disabled: working, onClick: () => void copy() }, t('add.copy')),
+          h('button', { type: 'button', className: 'cws-btn', disabled: working, onClick: () => set({}) }, t('add.change')),
+          flow.copied ? h('span', { className: 'cws-msg', role: 'status' }, t('add.copied')) : null)) : null;
+      const checkList = (answer) => (Array.isArray(answer?.checks) ? answer.checks.map((check) => h('div', { key: check.name, className: 'cws-msg', 'data-tone': check.ok ? undefined : 'bad', role: 'status' }, `${check.ok ? '✓' : '✗'} ${check.name}`)) : []);
+      const doneBox = flow.phase === 'done' ? h('div', { style: column, role: 'status' },
+        h('div', { className: 'cws-item-name' }, fill(t('add.done.title'), { name: flow.answer.added })),
+        ...checkList(flow.answer),
+        h('p', { className: 'cws-note', style: { margin: 0 } }, fill(t('add.done.file'), { file: flow.answer.file })),
+        h('p', { className: 'cws-note', style: { margin: 0 } }, flow.answer.backup ? fill(t('add.done.backup'), { backup: flow.answer.backup }) : t('add.done.nobackup')),
+        h('div', { className: 'cws-item-name' }, t('add.restart.title')),
+        h('p', { className: 'cws-note', style: { margin: 0 } }, t('add.restart.body')),
+        h('p', { className: 'cws-note', style: { margin: 0 } }, t('add.restart.why')),
+        h('div', null, h('button', { type: 'button', className: 'cws-btn', onClick: () => setFlow({ phase: 'edit', problems: [], preview: null, answer: null, copied: false }) }, t('add.another')))) : null;
+      const refusedBox = flow.phase === 'refused' ? h('div', { style: column, role: 'alert' },
+        h('div', { className: 'cws-msg', 'data-tone': 'bad' }, t('add.refused.title')),
+        h('p', { className: 'cws-note', style: { margin: 0 } }, flow.answer?.text ?? t('add.failed')),
+        ...checkList(flow.answer),
+        flow.answer?.details ? h('details', null, h('summary', { className: 'cws-note' }, t('add.refused.details')), h('pre', { className: 'cws-yaml' }, flow.answer.details)) : null,
+        h('div', { style: { display: 'flex', gap: 12 } },
+          flow.preview ? h('button', { type: 'button', className: 'cws-btn', onClick: () => setFlow((prev) => ({ ...prev, phase: 'preview', answer: null })) }, t('add.back')) : null,
+          h('button', { type: 'button', className: 'cws-btn', onClick: () => set({}) }, t('add.change')))) : null;
+      const showForm = flow.phase === 'edit' || working || flow.phase === 'preview';
       const addForm = h('div', { className: 'cws-card' },
         h('div', { className: 'cws-item-name', style: { paddingTop: 12 } }, t('add.title')),
-        h('div', { className: 'cws-form' },
+        showForm ? h('div', { className: 'cws-form' },
           ...field(t('add.name'), h('input', { value: form.name, onChange: (e) => set({ name: e.target.value }), 'aria-label': t('add.name') })),
           ...field(t('add.kind'), h('select', { value: form.kind, onChange: (e) => set({ kind: e.target.value }), 'aria-label': t('add.kind') },
             h('option', { value: 'stdio' }, t('add.kind.stdio')), h('option', { value: 'http' }, t('add.kind.http')))),
@@ -3785,16 +4399,15 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             ? field(t('add.url'), h('input', { value: form.url, placeholder: 'https://', onChange: (e) => set({ url: e.target.value }), 'aria-label': t('add.url') }))
             : [...field(t('add.command'), h('input', { value: form.command, onChange: (e) => set({ command: e.target.value }), 'aria-label': t('add.command') })),
               ...field(t('add.args'), h('textarea', { value: form.args, onChange: (e) => set({ args: e.target.value }), 'aria-label': t('add.args') }))]),
+          ...field(form.kind === 'http' ? t('add.keyName.http') : t('add.keyName.stdio'), h('input', { value: form.keyName, onChange: (e) => set({ keyName: e.target.value }), 'aria-label': t(form.kind === 'http' ? 'add.keyName.http' : 'add.keyName.stdio'), spellCheck: false, autoComplete: 'off' })),
+          ...field(t('add.keyValue'), h('input', { type: 'password', value: form.keyValue, onChange: (e) => set({ keyValue: e.target.value }), 'aria-label': t('add.keyValue'), autoComplete: 'off', spellCheck: false })),
           h('div', { key: 'go-l' }),
           h('div', { key: 'go-i', style: { display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' } },
-            h('button', { type: 'button', className: 'cws-btn', onClick: makeYaml }, t('add.make')),
-            form.error ? h('span', { className: 'cws-msg', 'data-tone': 'bad', role: 'status' }, form.error) : null)),
-        form.yaml ? h('div', { style: { paddingBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 } },
-          h('p', { className: 'cws-note', style: { margin: 0 } }, t('add.paste')),
-          h('pre', { className: 'cws-yaml' }, form.yaml),
-          h('div', { style: { display: 'flex', gap: 12, alignItems: 'center' } },
-            h('button', { type: 'button', className: 'cws-btn', onClick: () => void copy() }, t('add.copy')),
-            form.copied ? h('span', { className: 'cws-msg', role: 'status' }, t('add.copied')) : null)) : null,
+            h('button', { type: 'button', className: 'cws-btn', disabled: working, onClick: () => void preview() }, working && !flow.preview ? t('add.checking') : t('add.show')))) : null,
+        flow.problems.length ? h('div', { style: column, role: 'alert' }, h('div', { className: 'cws-msg', 'data-tone': 'bad' }, t('add.problems')), ...flow.problems.map((text) => h('div', { key: text, className: 'cws-msg', 'data-tone': 'bad' }, text))) : null,
+        previewBox,
+        doneBox,
+        refusedBox,
         h('p', { className: 'cws-note', style: { margin: '0 0 12px' } }, t('add.note')));
 
       return h(PageFrame, {
@@ -3802,7 +4415,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
         actions: h('button', { type: 'button', className: 'cws-btn', onClick: () => void load() }, t('refresh')),
       },
       state.status === 'error' ? h('p', { className: 'cws-note' }, t('connectors.unavailable')) : null,
-      state.status === 'ready' ? h('div', { className: 'cws-card' }, rows.length ? rows : h('p', { className: 'cws-note', style: { margin: '12px 0' } }, t('connectors.empty'))) : null,
+      state.status === 'ready' ? h('div', { className: 'cws-card' }, rows.length + waitingRows.length ? [...rows, ...waitingRows] : h('p', { className: 'cws-note', style: { margin: '12px 0' } }, t('connectors.empty'))) : null,
       addForm);
     }
 
@@ -3816,7 +4429,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
       const load = useCallback(async () => {
         try {
           const response = await fetch(new URL('dsh-cowork-shell/skills', document.baseURI), { headers: { accept: 'application/json' } });
-          if (!response.ok) throw new Error(String(response.status));
+          if (!response.ok) throw dshKit.fail(String(response.status));
           setState({ status: 'ready', data: await response.json() });
         } catch {
           setState((prev) => (prev.data ? prev : { status: 'error', data: null }));
@@ -4137,6 +4750,27 @@ button.dsh-opt-pick[aria-pressed="true"] { border-color: var(--dsw-alias-brand-p
         h('style', null, OPTIONS_CSS), children);
     }
 
+    // What the chat box says before you type, by tab. The app's own line ("Describe what you want to build, / commands,
+    // @ files or sessions") fits Code only, so every other tab gets a plain line of its own. Code keeps the app's line.
+    // CSS only (no script, no watching): the app's line is hidden and ours is drawn in the same place and look.
+    const PLACEHOLDERS = {
+      chat: 'Ask anything',
+      cowork: 'Describe what you want done',
+      research: 'What do you want to find out?',
+      finance: 'Ask about your money or numbers',
+      data: 'Ask a question about your data',
+      recon: 'Ask in the private room',
+      scout: 'What are you looking for?',
+      content: 'What do you want to write or make?',
+      automations: 'Describe what should run, and when',
+      bench: 'Ask about a device',
+      'creator-plus': 'What should be built or improved?',
+    };
+    const PLACEHOLDER_CSS = Object.entries(PLACEHOLDERS).map(([tab, line]) => {
+      const where = `html[data-cws-tab="${tab}"] [class*='_grow']:has([data-composer-input]) > [class*='_placeholder']`;
+      return `${where}{font-size:0 !important}\n${where}::before{content:${JSON.stringify(line)};font-size:15px;line-height:25px}`;
+    }).join('\n');
+
     return {
       OptionsArea,
       OPTIONS_CSS,
@@ -4148,7 +4782,7 @@ button.dsh-opt-pick[aria-pressed="true"] { border-color: var(--dsw-alias-brand-p
         ctx.effect(() => ctx.locale.register(NS, DICT));
         const style = document.createElement('style');
         style.setAttribute('data-cowork-shell-style', '');
-        style.textContent = CSS;
+        style.textContent = CSS + '\n' + PLACEHOLDER_CSS;
         document.head.appendChild(style);
         ctx.effect(() => () => style.remove());
 

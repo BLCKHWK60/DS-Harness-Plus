@@ -1,6 +1,6 @@
 # Brief: @local/dsh-cowork-shell
 
-What it is for: A MindsHub-style left sidebar: Chat, Cowork and Code tabs at the top, each with its own sections, New chat / task / code task, your projects and Settings. Replaces the app's own sidebar while it is on; removing it brings the normal sidebar back.
+What it is for: A tabbed left sidebar: Chat, Cowork and Code tabs at the top, each with its own sections, New chat / task / code task, your projects and Settings. Replaces the app's own sidebar while it is on; removing it brings the normal sidebar back.
 
 This brief was written by Creator Plus from the plugin's own files. Its README below is the full description, complete enough to rebuild the plugin from; improve this brief by hand, with the user's yes.
 
@@ -13,7 +13,7 @@ This brief was written by Creator Plus from the plugin's own files. Its README b
 
 # Cowork sidebar
 
-Plugin `@local/dsh-cowork-shell` (dsh 0.2.2-rc.1). It replaces the app's left sidebar with a MindsHub-style one:
+Plugin `@local/dsh-cowork-shell` (dsh 0.2.2-rc.1). It replaces the app's left sidebar with a tabbed one:
 
 - **Chat / Cowork / Code tabs** at the top. The tabs are the modes of the Modes add-on, in their order, three by default.
 - **One New button per tab:** New chat, New task, New code task.

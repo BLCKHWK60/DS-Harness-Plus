@@ -1,12 +1,12 @@
 # DeepSeek Harness Plus: the guide
 
-Plus is a set of 42 add-ons for the DeepSeek Harness desktop app. This guide says what each part does, where to find it, how to use it, and what its settings are.
+Plus is a set of 48 add-ons for the DeepSeek Harness desktop app. This guide says what each part does, where to find it, how to use it, and what its settings are.
 
 - **Part 1** is for using it: the tabs, the chat box, projects, and the main features, in the order you meet them.
 - **Part 2** lists every slash command.
 - **Part 3** is the reference: every add-on with every setting and its starting value. It is generated from the add-ons' own code by `scripts/dev-guide.mjs`, so it does not go out of date; run `node scripts/dev-guide.mjs` after changing an add-on.
 
-Installing, updating and removing are in the [README](../README.md). The history of each feature is in [ADD-ONS.md](ADD-ONS.md).
+Installing, updating and removing are in the [README](../README.md), which also explains the words used here (add-on, mode, tab, conversation, workspace, tier). The history of each feature is in [ADD-ONS.md](ADD-ONS.md).
 
 ## Part 1: using it
 
@@ -17,7 +17,7 @@ Installing, updating and removing are in the [README](../README.md). The history
 | **Top of the sidebar** | The tabs: Chat, Cowork, Code, and Finance, Data, Research, Scout and Recon once you switch them on. With more than three they sit in rows of three. How many of your own modes get a tab is set in Settings → Modes. |
 | **Sidebar, under the tabs** | The tab's own pages (Automations, Connectors, Skills, Plugins…), then its projects and conversations, then the Trash. |
 | **Bottom of the sidebar** | Your DeepSeek balance, and **More** (Settings, look options). |
-| **Chat box, left** | Web, Depth, the models chip, Tools (Depth is in every tab and hidden only while Tools are off; in Research and Scout the Web label reads Always on and cannot be changed, and Research adds Focus; in a Finance conversation: its selection too). |
+| **Chat box, left** | Web, Depth, the models chip, Tools (the same in every tab. Web is one selector everywhere: Off, All or any mix of sources; in Research and Scout Off is greyed; in Recon it also has Tor, Usenet and I2P. In a Finance conversation: its selection too). |
 | **Chat box, right** | The model button: model, effort, tier. |
 | **Above the chat box** | The activity line, with the arrow that folds the chat box away. |
 | **Under an answer** | Copy, Rerun, Branch, usage, and pictures the assistant drew. |
@@ -47,19 +47,52 @@ A tab is a way of working. Clicking a tab returns you to the conversation you la
 - **The access level** (file sandbox): Chat, Data, Research and Recon set Read Only and Code sets Workspace Write, only when a conversation starts in the mode or is moved into it. A level you pick by hand in the chat box is kept, also after a restart. Moving to a tab that sets none (Cowork, Finance, Scout) puts back the earlier level, unless you changed it by hand.
 - `/mode` shows or switches the mode of a conversation. With the sidebar on, before the first message the selected tab decides: `/mode` then only names the tabs.
 
-### 3. The chat box
+### 3. The chat box, button by button
+
+The row under the text field is the same in every tab, from left to right. On a narrow window the words shrink to icons, and the right-hand buttons may move to a second line; nothing is lost. What is described here is what the buttons do in a conversation that is open. A button that cannot be used in a tab is greyed, with the reason in its tooltip.
+
+**Above the text field (start page of a new conversation)**
 
 | Control | What it does | How to use it |
 |---|---|---|
-| **Web** | Whether the assistant may use the internet in this conversation. | Click and pick **On** or **Off**. Off takes away web search, page reading and other tools that go online (an outside image service too), and stops commands and programs that go online; connectors you added stay on and can still reach the internet. In Research and Scout it reads **Always on** and cannot be changed: they always have the web (Off only while Tools are off). |
-| **Depth** | How much work the conversation gets: how much it searches when Web is on, planning, checks and reviews. | Click and pick **Quick**, **Standard** or **Thorough** (at least ten searches and ten pages read, key facts checked in two sources, a short plan, and one review by a helper in tabs that can start helpers; just before the turn ends the model gets one check and fixes only what is missing, shown as a grey row). The Depth you pick is also where new conversations start (also set in Settings → Modes). It is the same in every tab: in Recon it also sets how hard Recon searches, and in Research and Scout (and any deep research run) it sets the size of a research run: about 10, 25 or 45 minutes. How hard the model thinks is the **Effort** on the model button. |
-| **Focus** (Research tab) | Where a research run looks first: Web, News or Academic. | Pick in the chat box of a Research conversation. How long the run takes is the Depth button. A research run works in rounds with helper agents and ends in a cited report. |
-| **Selection** (Finance tab) | What a Finance conversation is about: kind, subject, market, focus, period. | Shown once the conversation has started. Press a part to change it, for this conversation only. |
-| **Models chip** | Shows whether helper agents use this conversation's model (**One model**) or others as well (an amber **3 models**). | Click to switch for this conversation. One model is the default and needs the least memory. |
-| **Tools** | Shows what the assistant can and cannot call right now, with one switch for all tools. | Click to see the list. |
-| **Model button** | Model, effort and tier for this conversation. | Click to pick. Saved model versions come first. |
-| **Activity line** | What is running: prompt processing, generating, tools, helpers, with speeds. | The arrow at its right end folds the chat box down so more of the conversation shows. Click again to bring it back. |
-| **Rerun** (under an answer) | Asks the same question again in a fresh copy of the conversation, with the model selected now. | Pick another model, then press the round arrow. The old answer stays in the original. |
+| **Place chip** (**Scratch** or **Folder**, and the folder's name) | Where this conversation works. **Scratch** is a private folder of its own, never one of yours; its files go away with the conversation. **Folder** is one of your own projects: the assistant can see and (if the access level allows) change the files in it. | Click the name to pick a project, or add a folder. A conversation cannot change its folder after it has started. Where new conversations of each tab start is set in Settings → Start places. |
+| **Working-style chip** (for example **Standard mode**) | The app's own choice of how the assistant works (its agent preset). Not the same as the Chat, Cowork or Code mode, which the tab sets. | Click to change it before the first message. |
+
+**In the row**
+
+| Control | What it does | How to use it |
+|---|---|---|
+| **+** (Add files or run commands) | The app's own: attach files, or run a command. | Click. |
+| **Access level** (**Read Only**, **Workspace Write** or **Full access**) | How much the assistant may do to your Mac. Read Only: it can look but not change your files without asking you first. Workspace Write: it may change files in this conversation's folder. Full access: no limit from the app's sandbox. | Click to pick. A level you pick by hand is kept, also after a restart. A conversation that starts in Chat, Data, Research or Recon starts at Read Only; Code starts at Workspace Write. |
+| **Model health dot** | Whether the models you use answer. Green: all are up. Amber or red with a name: that model or connection is slow or down. | Click to list every model with its state and last error. It shows nothing until Route health has models to check. |
+| **Web** (**Off**, **All**, or any mix of sources) | Which part of the internet the assistant may use in this conversation. **Off**: no web search, no page reading, and no other tool or program that goes online (connectors you added stay on). **All**: every kind of source, as before. Or tick any mix of Verified sources, Academic papers, News, Ordinary sites, Forums, Social media, Archives and Other (your own sources). Recon also has Tor, Usenet and I2P. | Click and pick. Research and Scout always need the web, so Off is greyed there (it works only while Tools are off). Settings → Web sources holds the lists and your own sources. |
+| **Depth** (**Quick**, **Standard**, **Thorough**) | How much work the conversation gets: how much it searches when Web is on, planning, checks and reviews. In Research, Scout and Recon it also sets the size of a research run: about 10, 25 or 45 minutes. | Click and pick. It is the same in every tab, and where new conversations start (also in Settings → Modes). It stays visible but greyed while Tools are off. How hard the model thinks is the Effort on the model button, not this. |
+| **Models chip** (**One model** or **3 models**) | Whether helper agents use this conversation's model, or other models as well. | Click to switch for this conversation. One model is the default and needs the least memory. |
+| **Tools** (**Tools on** or **Tools off**) | What the assistant can call right now. The list has three parts: can call, cannot call, and loaded when needed. | Click to see the list and to switch all tools on or off for this conversation. Off: the assistant is offered no tool at all, and the web is off too. A change applies from your next message. In Chat, tools mean searching and reading the web. |
+| **Long run** | Starts a Long run (Mission) from what you typed in the text field: the assistant keeps working on that goal by itself, for up to 10 laps and 2 hours unless you change this. It may change files in the folder and use the web. | Type the goal, click **Long run**, read the question and confirm. While it runs the button shows **Running**, with **Pause**, **Finish this lap** and **End** beside the chat box. A Long run can use many tokens. Its settings are in Settings → Mission. Greyed, with the reason in its tooltip, where a run cannot start (for example the conversation has no folder); hidden only while Mission is switched off. |
+| **Export** (download arrow) | Saves this conversation as a file. | Click, choose **Conversation only**, **Conversation and thinking** or **Full session log**, and a file type (Markdown, plain text, HTML, JSON or PDF), then **Download**, **Copy to clipboard** or **Make PDF**. The full log holds everything the app stored, which can include keys and passwords; a tick hides them (it is on by default for the full log). In Recon, Export opens Recon's own export window. |
+| **Settings gear** | The settings of this tab's mode, in a window over the chat, without leaving the conversation. | Click. **Web sources…** and **Open in Settings** are in its top bar. A mode with its own extras (Recon's Export…, Bench rules) keeps them here. |
+| **Activity line** | What is running right now: reading the prompt, writing, tools, helpers, other conversations, with speeds. | Look. The arrow at its right end folds the chat box down so more of the conversation shows; click again to bring it back. Settings → Activity changes its look. |
+| **Model button** (the model's name) | Model, effort and tier for this conversation. | Click to pick the model, drag the effort from Off to Ultra Code, choose a tier or a saved model version. A change applies from the next message. |
+| **Send** (round arrow) | Sends the message. | Click. |
+
+**Under the text field: the options of a tab**
+
+Some tabs show their own choices in one area under the chat box, in the same place for every tab; on the start page they sit under the box, and in a conversation under its status line. Only the tab they belong to shows them.
+
+| Tab | What is there | What it does |
+|---|---|---|
+| **Scout** | The kind of work (Any work type, Employee, Freelance, Contract, Internship, Public tender), the markets to search (for example USA, UK, Germany; click **+ Market** for more, or **Remote**), and **+ Files** (a resume, a LinkedIn export or notes). | Sets where Scout searches and what it looks for. A line under them says what will happen, for example "Nothing is sent or applied for." |
+| **Finance** | A five-part selection: what it is about (Company, Sector, Economy, Whole market), the market, the focus (Full picture, Figures, News, Mood, Outlook and risks, Comparison), the period (Latest quarter, 1 year, 5 years), and the subject you type. | Press a part to change it, for this conversation only, from the next answer on. The line under it says what the assistant will do and ends with "Research, not advice." |
+| **Creator Plus** | What you want to do (New plugin, Improve, Find what went wrong, Rebuild, Combine or split, Find gaps, Check after an update, Explain) and which add-ons or plugins it may look at (**+ Plugin**, or **All plugins** on purpose). | Picks the job and its target before you write the request. Locked entries are the app's own and are only read. |
+| **Code**, **Chat**, **Cowork**, **Data**, **Research**, **Recon** | Nothing extra here. | Their choices are the buttons in the row above (Research's Focus is the ticks of the Web button). |
+
+**Under an answer**
+
+| Control | What it does | How to use it |
+|---|---|---|
+| **Copy**, **Branch**, usage | The app's own. | Click. |
+| **Rerun** | Asks the same question again in a fresh copy of the conversation, with the model selected now. | Pick another model, then press the round arrow. The old answer stays in the original. |
 
 ### 4. Projects and project types (Cowork)
 
@@ -128,7 +161,7 @@ Switch it on in **Settings → Data**, open the Data tab, and pick the folder th
 Switch it on in **Settings → Finance** and open the Finance tab. Pick subject, market, focus and period on the start page, then ask. Once the conversation has started, its chat box shows the same selection; change a part there for this conversation only.
 
 - It puts reported figures, news and what people say side by side, with sources and dates, and draws charts.
-- **Adviser** (Settings → Finance → Adviser, off by default): it then ends with a clear call and adds no disclaimer, and keeps a profile of you that you can edit there.
+- **Adviser** (Settings → Finance → Adviser, off by default): you accept a warning once by typing "I understand"; it then ends with a clear call and the line "AI output, not regulated advice.", and keeps a profile of you that you can edit there.
 - **Watchlist**, **your own markets**, **your own data sources** (with keys kept in the app's secret store) and **scheduled briefs** are on the same page.
 - With Tools off it has no data tools: it may give figures from memory, each marked as from memory and possibly out of date, never with a source.
 - It is an AI model working from what it could fetch. It is not a licensed adviser and can be wrong.
@@ -137,7 +170,7 @@ Switch it on in **Settings → Finance** and open the Finance tab. Pick subject,
 
 Switch it on in **Settings → Research** (it needs the Deep research add-on) and open the Research tab. A question that needs outside facts gets a full run; a quick fact that one or two pages settle is looked up directly.
 
-- Pick **Depth** (Quick, about 10 minutes; Standard, about 25; Thorough, about 45) and **Focus** (Web, News, Academic) in the chat box.
+- Pick **Depth** (Quick, about 10 minutes; Standard, about 25; Thorough, about 45) and the **Web** sources (for example only Academic papers, or News) in the chat box.
 - Helper agents plan, search and read in rounds; progress shows above the chat box. The report cites its sources by number and ends with three follow-up questions as buttons.
 - Each source is marked **read**, **seen only in search results, not read**, or **not read, and not seen in search results**. Findings from pages no helper read stay in the report, labelled in the sentence. The check makes sure every citation is in the source list; it does not compare claims with the pages.
 - A Research conversation runs Read Only. Reports are saved; Settings → Research lists them, with **Show in Finder**.
@@ -159,7 +192,7 @@ Install the `tor` program (`brew install tor`), switch Recon on in **Settings �
 
 - The start page has starter chips (Search .onion sites, Search Usenet, News coverage, Old web page, Check a claim) and a status bar: Tor, Usenet, the Internet Archive's route, the model, and whether findings may go to it.
 - A model on this Mac or your own network gets what Recon finds. A cloud model gets it only after you type `/recon cloud`.
-- **Settings → Recon → More sources:** the Internet Archive and GDELT news, off until you switch them on. **Read Internet Archive copies directly (not through Tor)** is on by default: copies are then read straight from the Archive, which sees this Mac's internet address. Through Tor the Archive refuses most reads.
+- **Settings → Recon → More sources:** the Internet Archive and GDELT news, off until you switch them on. **Read Internet Archive copies directly (not through Tor)** is on by default: copies are then read straight from the Archive, which sees this Mac's internet address (or your VPN's, when the page goes out through a WireGuard tunnel you set up in Recon). Through Tor the Archive refuses most reads.
 - Every source gets a number like [S3]. Citations, links and `/recon export` still work after a restart.
 - Recon conversations never show in Global Search and are never synced. `/recon end` ends one and deletes it.
 
@@ -179,6 +212,7 @@ Install the `tor` program (`brew install tor`), switch Recon on in **Settings �
 | **Library** | Lets the assistant search your own documents and quote them with the file and page. | Settings → Library |
 | **PDF reader** | Reads, searches and, when needed, OCRs PDFs page by page. | Settings → PDF reader, `/pdf` |
 | **Diagram builder** | Draws charts and diagrams and shows them under the answer. | Settings → Diagrams |
+| **Code guides** | The eight Code tools guides (four reverse-engineering, four for reviews and fixes) are offered only in the Code tab on a new install; on an existing install nothing changes. | Settings → Code tools → "Where these guides are offered" |
 | **Code map** | A compact map of a code project, so the assistant looks things up instead of reading whole files. | Settings → Code map, `/codemap` |
 | **Learning** | A tutor that makes you attempt first and gives hints step by step. | Settings → Learning, `/learn` |
 | **Automations and alerts** | Your scheduled tasks on one page: how each run ended, what needs you, what was missed while the app was closed, a timeline; pause, change or delete one (deleted ones stay in the trash for 30 days); alerts on this Mac and on your phone. The Automations tab's chat makes and changes them. | Sidebar → Automations (every tab), the Automations tab, Settings → Alerts |
@@ -194,12 +228,12 @@ Install the `tor` program (`brew install tor`), switch Recon on in **Settings �
 | Feature | What it does | Where |
 |---|---|---|
 | **Self-improvement** | Improves the instructions a model is given, tested on your own tasks; you approve every change. | Settings → Self-improve, `/evolve` |
-| **Benchmark** | Runs prompt suites over a grid of models and sampling settings and recommends the best ones. | Settings → Benchmark, `/bench` |
+| **Benchmark** | Runs prompt suites over a grid of models and sampling settings and recommends the best ones. | Settings → Benchmark, `/benchmark` |
 | **Arena** | Ask several models the same question, compare the answers blind, and reveal who wrote what. | Settings → Arena, `/arena` |
 | **Model router** | Routes each turn to one of 2 to 5 candidate models using a small routing model. Nothing is set after install. | configuration file, `/router` |
 | **Route health** | Checks that your model servers are reachable and moves a conversation to its tier's fallback when one is not. | configuration file, `/routes` |
-| **Sampling presets** | Named sampling settings chosen per kind of task, mode or conversation. | Settings → Sampling, `/sampling` |
-| **Role prompts** | Adds your own instruction sections to what the assistant is told, optionally only for chosen tiers. | configuration file |
+| **Sampling presets** | Named sampling settings chosen per kind of task, mode or conversation. | Settings → Model Tiers → Sampling, `/sampling` |
+| **Role prompts** | Adds your own instruction sections to what the assistant is told, optionally only for chosen tiers. | Settings → Model Tiers → Instructions for every conversation file |
 
 ### 14. Housekeeping
 
@@ -209,7 +243,7 @@ Install the `tor` program (`brew install tor`), switch Recon on in **Settings �
 | **Colours** | Colour schemes for the whole app. | Settings → Colours |
 | **Look** | Hide the logos, show the date as the title, wide chat. | Sidebar → More |
 | **Context saver** | Shortens large tool results before the model sees them and keeps the original for retrieval. Off until configured. | configuration file, `/saved` |
-| **Notify** | Runs a command you choose when a turn ends or the app needs your approval. | configuration file, `/notify` |
+| **Notify** | Runs a command you choose when a turn ends or the app needs your approval. | Settings → Alerts, `/notify` |
 | **Media tools** | Image generation and editing tools, and an approval gate for browser and computer-use tools. With Web Off the image tools go, unless the image service is on this Mac or your own network. | configuration file |
 | **Sync, Shared settings** | Keep a second Mac in step. Recon conversations are never synced. | README, "Using it on a second Mac" |
 

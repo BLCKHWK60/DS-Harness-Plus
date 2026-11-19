@@ -5,6 +5,205 @@ window.__ModuleLoader__.load({
     const ReactDOM = require('react-dom');
     const h = React.createElement;
     const { useCallback, useEffect, useRef, useState } = React;
+    // ---- dsh-kit:begin ---- shared small helpers; this block is the same in every add-on page file that uses it.
+    // The master copy is docs/shared/dsh-kit.js. Change it there, then run `node scripts/sync-kit.mjs` (it copies the block into
+    // every client.js that has the two marker lines, and `bash scripts/check.sh` fails when a copy has drifted).
+    // Dependency-free: plain DOM for the question box, React is passed in for the error note.
+    const dshKit = (() => {
+      const STYLE_ID = 'dsh-kit-style';
+      const CSS = `
+    .dsh-kit-veil { position: fixed; inset: 0; z-index: 2147483000; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; background: color-mix(in srgb, #000 32%, transparent); }
+    .dsh-kit-box { width: min(420px, 100%); box-sizing: border-box; padding: 16px; border-radius: 12px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base)); color: var(--dsw-alias-label-primary); box-shadow: 0 14px 36px color-mix(in srgb, #000 28%, transparent); font: 14px/22px system-ui, sans-serif; }
+    .dsh-kit-title { margin: 0 0 4px; font-size: 14px; line-height: 22px; font-weight: 500; }
+    .dsh-kit-text { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 50vh; overflow: auto; }
+    .dsh-kit-field { display: block; width: 100%; box-sizing: border-box; height: 36px; margin-top: 10px; padding: 0 14px; border: 0; border-radius: 12px; font: inherit; color: var(--dsw-alias-label-primary); background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); }
+    .dsh-kit-field:focus { outline: 1px solid var(--dsw-alias-brand-primary); }
+    .dsh-kit-label { display: block; margin-top: 10px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+    .dsh-kit-label + .dsh-kit-field { margin-top: 2px; }
+    .dsh-kit-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+    .dsh-kit-btn { height: 28px; padding: 0 10px; border-radius: 8px; border: 0.5px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; cursor: pointer; }
+    .dsh-kit-btn:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+    .dsh-kit-btn:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); }
+    .dsh-kit-btn[data-main="true"] { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
+    .dsh-kit-btn[data-danger="true"] { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
+    .dsh-kit-note { margin: 4px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+    .dsh-kit-note[data-error="true"] { color: var(--dsw-alias-state-error-primary); }
+    .dsh-kit-more { margin-left: 6px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; text-decoration: underline; cursor: pointer; }
+    .dsh-kit-detail { display: block; margin-top: 4px; font: 11px/16px ui-monospace, Menlo, monospace; color: var(--dsw-alias-label-secondary); white-space: pre-wrap; user-select: text; }
+    `;
+      const ensureStyle = () => {
+        if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = STYLE_ID;
+        style.textContent = CSS;
+        (document.head || document.documentElement).appendChild(style);
+      };
+
+      /** Turns what a failed call says ("error 404", "settings/conflict: ...") into a plain sentence; the raw text goes to `details`. */
+      const plain = (raw) => {
+        let message = '';
+        if (typeof raw === 'string') message = raw;
+        else if (raw && typeof raw === 'object') {
+          const source = raw.rpcError ?? (raw.error && typeof raw.error === 'object' ? raw.error : raw);
+          message = String(source.message ?? raw.error ?? '');
+          if (source.code && !message.includes(String(source.code))) message = `${source.code}: ${message}`;
+        }
+        const existing = raw && typeof raw === 'object' && typeof raw.details === 'string' ? raw.details : '';
+        message = message.trim();
+        const text = (sentence) => ({ text: sentence, details: existing || (message && message !== sentence ? message : '') });
+        const status = /^(?:error|status|http)?\s*(\d{3})\b/i.exec(message)?.[1] ?? /(?:answered|returned)\s+(\d{3})\b/i.exec(message)?.[1] ?? '';
+        if (/settings\/conflict/i.test(message)) return text('This setting was changed somewhere else at the same moment. Please try again.');
+        if (/not mounted|namespace not mounted|settings unavailable|is switched off|is not running/i.test(message)) return text('This add-on is not running. Switch it on (or restart the app) and try again.');
+        if (/failed to fetch|networkerror|load failed|network request failed|econnrefused/i.test(message)) return text('Could not reach the app. Check that it is still running, then try again.');
+        if (status === '401' || status === '403') return text('The app did not allow this. Restart the app and try again.');
+        if (status === '404') return text('This part of the add-on is not available. It may be switched off, or the app needs a restart after an update.');
+        if (status === '408' || status === '504') return text('The app took too long to answer. Try again in a moment.');
+        if (status === '409') return text('This changed somewhere else at the same moment. Please try again.');
+        if (/^5\d\d$/.test(status)) return text('The add-on ran into a problem. Try again; if it keeps happening, restart the app.');
+        if (/^4\d\d$/.test(status)) return text('The app could not use this request. Try again; if it keeps happening, restart the app.');
+        // "code/name: message": show the message, keep the code as a detail.
+        const coded = /^([a-z][\w-]*(?:\/[\w.-]+)+):\s*(.+)$/is.exec(message);
+        if (coded) return { text: coded[2].trim(), details: existing || message };
+        // A readable sentence stays as it is.
+        if (/^[A-Z"'(].*\s/s.test(message) || /\s/.test(message)) return { text: message, details: existing };
+        if (!message) return { text: 'Something went wrong. Try again.', details: existing };
+        return text('Something went wrong. Try again; the Details line says what the app reported.');
+      };
+      /** An Error whose message is the plain sentence and whose `details` keeps the raw text. */
+      const fail = (raw) => {
+        const found = plain(raw);
+        const error = new Error(found.text);
+        error.details = found.details;
+        return error;
+      };
+
+      /**
+       * A small question box in the page's own style (window.prompt does nothing in the desktop app, and the native
+       * confirm cannot be styled or checked there). Resolves true/false; with `field` the typed text or null; `notice` shows OK only.
+       */
+      const ask = (options = {}) => new Promise((resolve) => {
+        if (typeof document === 'undefined') { resolve(options.field ? null : false); return; }
+        ensureStyle();
+        const before = document.activeElement;
+        const veil = document.createElement('div');
+        veil.className = 'dsh-kit-veil';
+        const box = document.createElement('div');
+        box.className = 'dsh-kit-box';
+        box.setAttribute('role', 'dialog');
+        box.setAttribute('aria-modal', 'true');
+        const add = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text != null) node.textContent = text; return node; };
+        if (options.title) { const title = add('p', 'dsh-kit-title', options.title); box.appendChild(title); box.setAttribute('aria-label', options.title); }
+        if (options.text) box.appendChild(add('p', 'dsh-kit-text', options.text));
+        let input = null;
+        if (options.field) {
+          if (options.field.label) box.appendChild(add('label', 'dsh-kit-label', options.field.label));
+          input = add('input', 'dsh-kit-field');
+          input.type = 'text';
+          input.value = options.field.value ?? '';
+          if (options.field.placeholder) input.placeholder = options.field.placeholder;
+          if (options.field.label) input.setAttribute('aria-label', options.field.label);
+          box.appendChild(input);
+        }
+        const row = add('div', 'dsh-kit-row');
+        const done = (value) => { document.removeEventListener('keydown', onKey, true); veil.remove(); try { before?.focus?.(); } catch { /* the old control is gone */ } resolve(value); };
+        const cancel = options.notice ? null : add('button', 'dsh-kit-btn', options.cancel ?? 'Cancel');
+        const ok = add('button', 'dsh-kit-btn', options.ok ?? 'OK');
+        ok.type = 'button';
+        ok.setAttribute('data-main', 'true');
+        if (options.danger) ok.setAttribute('data-danger', 'true');
+        const accept = () => done(input ? input.value : true);
+        const reject = () => done(input ? null : false);
+        function onKey(event) {
+          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (options.notice) accept(); else reject(); }
+          else if (event.key === 'Enter' && input && document.activeElement === input) { event.preventDefault(); event.stopPropagation(); accept(); }
+          else if (event.key === 'Tab') {
+            const stops = [...box.querySelectorAll('input,button')];
+            const at = stops.indexOf(document.activeElement);
+            if (stops.length > 0) { event.preventDefault(); stops[(at + (event.shiftKey ? stops.length - 1 : 1)) % stops.length].focus(); }
+          }
+        }
+        if (cancel) { cancel.type = 'button'; cancel.addEventListener('click', reject); row.appendChild(cancel); }
+        ok.addEventListener('click', accept);
+        row.appendChild(ok);
+        box.appendChild(row);
+        veil.appendChild(box);
+        veil.addEventListener('mousedown', (event) => { if (event.target === veil && !options.notice) reject(); });
+        document.addEventListener('keydown', onKey, true);
+        document.body.appendChild(veil);
+        // A question that can destroy something starts on Cancel, so a stray Enter never confirms it.
+        (input ?? (options.danger && cancel ? cancel : ok)).focus();
+        if (input) input.select();
+      });
+
+      /** The note to draw under a form or at the top of a page: a plain sentence and a "Details" button. */
+      const makeNote = (React) => function PlainNote({ error, text, details, kind }) {
+        ensureStyle();
+        const [open, setOpen] = React.useState(false);
+        const found = error !== undefined && error !== null && error !== '' ? plain(error) : { text: text ?? '', details: details ?? '' };
+        if (!found.text) return null;
+        const bad = kind ? kind === 'error' : error !== undefined && error !== null && error !== '';
+        return React.createElement('div', { className: 'dsh-kit-note', 'data-error': String(bad), role: bad ? 'alert' : 'status' },
+          found.text,
+          found.details ? React.createElement('button', { type: 'button', className: 'dsh-kit-more', 'aria-expanded': open, onClick: () => setOpen(!open) }, open ? 'Hide details' : 'Details') : null,
+          open && found.details ? React.createElement('span', { className: 'dsh-kit-detail' }, found.details) : null);
+      };
+      return { plain, fail, ask, makeNote };
+    })();
+    // ---- dsh-kit:end ----
+    /* dsh-merge:begin */
+    /* Shared by the add-ons whose settings pages are merged (host page shows partner parts). Keep every copy identical. */
+    const dshMerge = (() => {
+      const reg = (window.__dshMerge = window.__dshMerge || { hosts: {}, parts: {}, want: {}, subs: new Set() });
+      const tell = () => { for (const fn of [...reg.subs]) { try { fn(); } catch {} } };
+      const api = {
+        /** A host page announces itself; the returned function withdraws it. */
+        host(hostId) {
+          reg.hosts[hostId] = (reg.hosts[hostId] || 0) + 1;
+          tell();
+          let done = false;
+          return () => { if (done) return; done = true; reg.hosts[hostId] -= 1; if (!reg.hosts[hostId]) delete reg.hosts[hostId]; tell(); };
+        },
+        hasHost: (hostId) => Boolean(reg.hosts[hostId]),
+        /** A partner offers a part ({label: () => string, order, render: (props) => element}) to a host page. */
+        part(hostId, partId, spec) {
+          const list = (reg.parts[hostId] = reg.parts[hostId] || {});
+          list[partId] = spec;
+          tell();
+          return () => { if (list[partId] === spec) { delete list[partId]; tell(); } };
+        },
+        parts: (hostId) => Object.entries(reg.parts[hostId] || {}).map(([id, spec]) => ({ id, ...spec })).sort((a, b) => (a.order ?? 100) - (b.order ?? 100)),
+        subscribe(fn) { reg.subs.add(fn); return () => reg.subs.delete(fn); },
+        /** Settings search asks a host page to show one tab ('main' or a part id). */
+        openTab(hostId, tabId) { reg.want[hostId] = tabId; tell(); },
+        /** React hook: the host's current tab ('main' first), and a setter. Re-renders when parts or hosts change. */
+        useTab(React, hostId, first = 'main') {
+          const [tab, setTab] = React.useState(first);
+          const [, bump] = React.useState(0);
+          React.useEffect(() => api.subscribe(() => {
+            const wanted = reg.want[hostId];
+            if (wanted) { delete reg.want[hostId]; setTab(wanted); }
+            bump((n) => n + 1);
+          }), []);
+          React.useEffect(() => { const wanted = reg.want[hostId]; if (wanted) { delete reg.want[hostId]; setTab(wanted); } }, []);
+          const ids = ['main', ...api.parts(hostId).map((p) => p.id)];
+          return [ids.includes(tab) ? tab : 'main', setTab];
+        },
+        /** A partner shows its own page only while no host page shows it. `register()` registers the page and returns its remover. */
+        ownPageUnlessHosted(hostId, register) {
+          let off;
+          const sync = () => {
+            const need = !api.hasHost(hostId);
+            if (need && !off) off = register();
+            else if (!need && off) { off(); off = undefined; }
+          };
+          sync();
+          const unsub = api.subscribe(sync);
+          return () => { unsub(); if (off) { off(); off = undefined; } };
+        },
+      };
+      return api;
+    })();
+    /* dsh-merge:end */
 
     const NS = 'model-tiers';
     /** Width of the chat box's model panel. */
@@ -86,32 +285,32 @@ window.__ModuleLoader__.load({
         'effort.extra-high': 'Extra high',
         'effort.ultra': 'Ultra Code',
         'settings.model': 'Model',
-        'settings.provider': 'Provider',
-        'settings.customModel': 'Model id',
+        'settings.provider': 'Model service',
+        'settings.customModel': 'Model name',
         'settings.effort': 'Effort',
         'settings.webSearch': 'Web search',
         'settings.webFetch': 'Web fetch',
         'settings.browser': 'Browser',
-        'settings.subagents': 'Sub-agents',
-        'settings.cap': 'Max concurrent sub-agents',
+        'settings.subagents': 'Helper agents',
+        'settings.cap': 'Helper agents at the same time',
         'settings.capHint': 'Applies to every tier. Default is 4.',
         'settings.ultraAuto': 'Ultra Code auto-delegation',
         'settings.ultraAutoHint':
           'At Ultra Code, push the model to split independent work across sub-agents instead of waiting to be asked.',
-        'settings.active': 'Active session tiers',
+        'settings.active': 'Tiers in use right now',
         'settings.activeHint':
-          'Sessions with a tier pinned in the composer. Clearing this returns every session to its normal model selection.',
-        'settings.clearActive': 'Clear active tiers',
+          'Conversations that have a tier chosen in the chat box. Clearing this returns every conversation to its normal model choice.',
+        'settings.clearActive': 'Clear tiers in use',
         'settings.saved': 'Saved',
         'settings.saving': 'Saving…',
         'settings.reset': 'Reset to defaults',
-        'settings.loading': 'Loading model tiers…',
-        'settings.noCatalog': 'No model catalog available. Enter provider and model ids manually.',
-        'settings.writable': 'These tiers save to the active profile patch.',
+        'settings.loading': 'Loading…',
+        'settings.noCatalog': 'The model list could not be read. Type the model service and model name yourself.',
+        'settings.writable': 'These tiers are saved as you change them.',
         'composer.tier': 'Model',
-        'composer.configure': 'Configure tiers in Settings → Model Tiers',
+        'composer.configure': 'Set up tiers in Settings → Model Tiers',
         'composer.clear': 'Use normal model selection',
-        'composer.noConfig': 'Model tiers are not configured yet.',
+        'composer.noConfig': 'No tiers are set up yet.',
         'composer.busy': 'Switching…',
         'composer.failed': 'Could not switch tier',
         'composer.codeHint': 'Review, check, and fix code',
@@ -182,7 +381,7 @@ window.__ModuleLoader__.load({
   background: color-mix(in srgb, var(--dsw-alias-brand-primary) 16%, transparent);
 }
 .dsh-mt-chevron { font-size: 9px; opacity: .7; }
-.dsh-mt-pop {
+.dsh-mtx-pop {
   position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 60; width: 356px;
   max-height: min(70vh, 520px); overflow: auto; padding: 6px;
   background: var(--dsw-alias-bg-overlay); border: 1px solid var(--dsw-alias-border-l1);
@@ -194,7 +393,7 @@ window.__ModuleLoader__.load({
   padding: 2px 8px 10px; margin-bottom: 2px;
   border-bottom: 1px solid var(--dsw-alias-border-l1);
 }
-.dsh-mt-pophead {
+.dsh-mtx-pophead {
   padding: 6px 8px 3px; font-size: 10px; font-weight: 650; letter-spacing: .03em;
   text-transform: uppercase; color: var(--dsw-alias-label-secondary);
 }
@@ -500,6 +699,21 @@ window.__ModuleLoader__.load({
 .dsh-mt-tab:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); outline-offset: 2px; border-radius: 4px; }
 .dsh-mt-tabcount { font-size: 11px; border: 0; padding: 0; color: var(--dsw-alias-label-secondary); font-weight: 400; }
 .dsh-mt-tabstatus { font-size: 12px; align-self: center; }
+.dsh-mt-sub { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -4px; }
+.dsh-mt-subtab {
+  display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-secondary);
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.dsh-mt-subtab:hover { color: var(--dsw-alias-label-primary); }
+.dsh-mt-subtab[aria-pressed="true"] { color: var(--dsw-alias-brand-primary); border-color: var(--dsw-alias-brand-primary); background: color-mix(in srgb, var(--dsw-alias-brand-primary) 10%, transparent); }
+.dsh-mt-subtab:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+.dsh-mt-more { border-top: 0.5px solid var(--dsw-alias-border-l1); padding-top: 10px; }
+.dsh-mt-more > summary { display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.dsh-mt-more > summary::-webkit-details-marker { display: none; }
+.dsh-mt-more[open] > summary .dsh-mt-profilechevron { transform: rotate(90deg); }
+.dsh-mt-morebody { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
+.dsh-mt-morebody > .dsh-mt-customgrid { margin: 0; }
 .dsh-mt-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .dsh-mt-card, .dsh-mt-profile {
   border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 20px; padding: 16px; gap: 14px;
@@ -572,121 +786,121 @@ window.__ModuleLoader__.load({
 @media (max-width: 720px) { .dsh-mt-switches { grid-template-columns: 1fr; } }
 /* ---- chat box: the one model control ---- */
 /* The app's own model menu steps aside while this control is on; it returns when the add-on is off. */
-body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !important; }
-.dsh-mc-wrap { position: relative; display: inline-flex; align-items: center; min-width: 0; }
-.dsh-mc-trigger {
+body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !important; }
+.dsh-mtm-wrap { position: relative; display: inline-flex; align-items: center; min-width: 0; }
+.dsh-mtm-trigger {
   display: inline-flex; align-items: center; gap: 6px; height: 28px; max-width: 230px; padding: 0 8px;
   border: 1px solid transparent; border-radius: 8px; background: transparent;
   color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 1;
   cursor: pointer; white-space: nowrap;
 }
-.dsh-mc-trigger:hover, .dsh-mc-trigger[data-open="true"] { background: var(--dsw-alias-bg-layer-2); }
-.dsh-mc-trigger:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
-.dsh-mc-triggername { overflow: hidden; text-overflow: ellipsis; font-weight: 550; }
-.dsh-mc-triggereffort { color: var(--dsw-alias-label-secondary); }
-.dsh-mc-chevron { font-size: 9px; opacity: .6; }
-.dsh-mc-backdrop { position: fixed; inset: 0; z-index: 999; background: transparent; -webkit-app-region: no-drag; }
-.dsh-mc-pop {
+.dsh-mtm-trigger:hover, .dsh-mtm-trigger[data-open="true"] { background: var(--dsw-alias-bg-layer-2); }
+.dsh-mtm-trigger:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+.dsh-mtm-triggername { overflow: hidden; text-overflow: ellipsis; font-weight: 550; }
+.dsh-mtm-triggereffort { color: var(--dsw-alias-label-secondary); }
+.dsh-mtm-chevron { font-size: 9px; opacity: .6; }
+.dsh-mtm-backdrop { position: fixed; inset: 0; z-index: 999; background: transparent; -webkit-app-region: no-drag; }
+.dsh-mtm-pop {
   z-index: 1000; display: flex; flex-direction: column; overflow: hidden; padding: 6px; -webkit-app-region: no-drag;
   background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-layer-1)); color: var(--dsw-alias-label-primary);
   border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; font-size: 12px;
   box-shadow: 0 14px 36px color-mix(in srgb, #000 28%, transparent);
 }
-.dsh-mc-search, .dsh-mc-input, .dsh-mc-select {
+.dsh-mtm-search, .dsh-mtm-input, .dsh-mtm-select {
   width: 100%; box-sizing: border-box; height: 28px; padding: 0 8px; border-radius: 7px;
   border: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px;
 }
-.dsh-mc-search { border-color: transparent; background: transparent; flex: none; }
-.dsh-mc-search:focus, .dsh-mc-input:focus, .dsh-mc-select:focus { outline: none; border-color: var(--dsw-alias-brand-primary); }
-.dsh-mc-list { flex: 0 1 auto; min-height: 64px; max-height: min(232px, 34vh); overflow: auto; margin: 2px 0 4px; }
+.dsh-mtm-search { border-color: transparent; background: transparent; flex: none; }
+.dsh-mtm-search:focus, .dsh-mtm-input:focus, .dsh-mtm-select:focus { outline: none; border-color: var(--dsw-alias-brand-primary); }
+.dsh-mtm-list { flex: 0 1 auto; min-height: 64px; max-height: min(232px, 34vh); overflow: auto; margin: 2px 0 4px; }
 /* In a short window the list gives way first, then the lower sections scroll. */
-.dsh-mc-rest { flex: 0 1 auto; min-height: 0; overflow: hidden auto; display: flex; flex-direction: column; }
-.dsh-mc-group {
+.dsh-mtm-rest { flex: 0 1 auto; min-height: 0; overflow: hidden auto; display: flex; flex-direction: column; }
+.dsh-mtm-group {
   position: sticky; top: 0; padding: 6px 8px 3px; font-size: 10px; font-weight: 650; letter-spacing: .03em;
   text-transform: uppercase; color: var(--dsw-alias-label-secondary);
   background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-layer-1));
 }
-.dsh-mc-item {
+.dsh-mtm-item {
   display: flex; align-items: center; gap: 8px; width: 100%; min-height: 30px; padding: 4px 8px;
   border: 0; border-radius: 7px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
-.dsh-mc-item:hover, .dsh-mc-item:focus-visible { background: var(--dsw-alias-bg-layer-2); outline: none; }
-.dsh-mc-item[data-active="true"] { background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent); }
-.dsh-mc-item[disabled] { opacity: .55; cursor: default; }
-.dsh-mc-itemmain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.dsh-mc-itemname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dsh-mc-itemmeta { font-size: 10px; color: var(--dsw-alias-label-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dsh-mc-check { color: var(--dsw-alias-brand-primary); font-size: 12px; }
-.dsh-mc-empty { padding: 14px 8px; color: var(--dsw-alias-label-secondary); text-align: center; }
-.dsh-mc-block { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 9px 8px; border-top: 1px solid var(--dsw-alias-border-l1); }
-.dsh-mc-rowhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.dsh-mc-label { font-weight: 600; }
-.dsh-mc-value { margin-left: auto; color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; }
-.dsh-mc-rowhead .dsh-mc-value { color: var(--dsw-alias-brand-primary); font-weight: 600; }
-.dsh-mc-details > summary { cursor: pointer; list-style: none; }
-.dsh-mc-details > summary::-webkit-details-marker { display: none; }
-.dsh-mc-details > summary .dsh-mc-label::before { content: '▸'; display: inline-block; width: 12px; font-size: 9px; opacity: .7; }
-.dsh-mc-details[open] > summary .dsh-mc-label::before { content: '▾'; }
-.dsh-mc-details > summary .dsh-mc-value { color: var(--dsw-alias-label-secondary); font-weight: 400; }
+.dsh-mtm-item:hover, .dsh-mtm-item:focus-visible { background: var(--dsw-alias-bg-layer-2); outline: none; }
+.dsh-mtm-item[data-active="true"] { background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent); }
+.dsh-mtm-item[disabled] { opacity: .55; cursor: default; }
+.dsh-mtm-itemmain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.dsh-mtm-itemname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsh-mtm-itemmeta { font-size: 10px; color: var(--dsw-alias-label-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dsh-mtm-check { color: var(--dsw-alias-brand-primary); font-size: 12px; }
+.dsh-mtm-empty { padding: 14px 8px; color: var(--dsw-alias-label-secondary); text-align: center; }
+.dsh-mtm-block { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 9px 8px; border-top: 1px solid var(--dsw-alias-border-l1); }
+.dsh-mtm-rowhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dsh-mtm-label { font-weight: 600; }
+.dsh-mtm-value { margin-left: auto; color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; }
+.dsh-mtm-rowhead .dsh-mtm-value { color: var(--dsw-alias-brand-primary); font-weight: 600; }
+.dsh-mtm-details > summary { cursor: pointer; list-style: none; }
+.dsh-mtm-details > summary::-webkit-details-marker { display: none; }
+.dsh-mtm-details > summary .dsh-mtm-label::before { content: '▸'; display: inline-block; width: 12px; font-size: 9px; opacity: .7; }
+.dsh-mtm-details[open] > summary .dsh-mtm-label::before { content: '▾'; }
+.dsh-mtm-details > summary .dsh-mtm-value { color: var(--dsw-alias-label-secondary); font-weight: 400; }
 /* Effort slider: a slim track with six stops and a round thumb. */
-.dsh-mc-slider { position: relative; height: 20px; display: flex; align-items: center; }
-.dsh-mc-slider::before {
+.dsh-mtm-slider { position: relative; height: 20px; display: flex; align-items: center; }
+.dsh-mtm-slider::before {
   content: ''; position: absolute; left: 0; right: 0; height: 4px; border-radius: 2px;
-  background: linear-gradient(to right, var(--dsw-alias-brand-primary) var(--dsh-mc-fill, 0%), var(--dsw-alias-border-l1) var(--dsh-mc-fill, 0%));
+  background: linear-gradient(to right, var(--dsw-alias-brand-primary) var(--dsh-mtm-fill, 0%), var(--dsw-alias-border-l1) var(--dsh-mtm-fill, 0%));
 }
-.dsh-mc-slider[data-unset="true"]::before { background: var(--dsw-alias-border-l1); }
-.dsh-mc-stops { position: absolute; left: 7px; right: 7px; display: flex; justify-content: space-between; pointer-events: none; }
-.dsh-mc-stops span { width: 4px; height: 4px; border-radius: 50%; background: var(--dsw-alias-label-secondary); opacity: .55; }
-.dsh-mc-stops span[data-on="true"] { background: var(--dsw-alias-bg-base); opacity: .9; }
-.dsh-mc-slider input[type="range"] {
+.dsh-mtm-slider[data-unset="true"]::before { background: var(--dsw-alias-border-l1); }
+.dsh-mtm-stops { position: absolute; left: 7px; right: 7px; display: flex; justify-content: space-between; pointer-events: none; }
+.dsh-mtm-stops span { width: 4px; height: 4px; border-radius: 50%; background: var(--dsw-alias-label-secondary); opacity: .55; }
+.dsh-mtm-stops span[data-on="true"] { background: var(--dsw-alias-bg-base); opacity: .9; }
+.dsh-mtm-slider input[type="range"] {
   position: relative; z-index: 1; width: 100%; height: 20px; margin: 0; background: transparent;
   -webkit-appearance: none; appearance: none; cursor: pointer;
 }
-.dsh-mc-slider input[type="range"]::-webkit-slider-runnable-track { height: 4px; background: transparent; }
-.dsh-mc-slider input[type="range"]::-webkit-slider-thumb {
+.dsh-mtm-slider input[type="range"]::-webkit-slider-runnable-track { height: 4px; background: transparent; }
+.dsh-mtm-slider input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%;
   background: var(--dsw-alias-bg-base); border: 2px solid var(--dsw-alias-brand-primary);
   box-shadow: 0 1px 4px color-mix(in srgb, #000 30%, transparent);
 }
-.dsh-mc-slider[data-unset="true"] input[type="range"]::-webkit-slider-thumb { border-color: var(--dsw-alias-label-secondary); }
-.dsh-mc-slider input[type="range"]:focus-visible { outline: none; }
-.dsh-mc-slider input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-brand-primary) 35%, transparent); }
-.dsh-mc-slider input[type="range"]:disabled { cursor: default; opacity: .5; }
-.dsh-mc-ends { display: flex; justify-content: space-between; font-size: 10px; color: var(--dsw-alias-label-secondary); }
-.dsh-mc-note { font-size: 10px; line-height: 1.35; color: var(--dsw-alias-label-secondary); }
-.dsh-mc-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.dsh-mc-chip {
+.dsh-mtm-slider[data-unset="true"] input[type="range"]::-webkit-slider-thumb { border-color: var(--dsw-alias-label-secondary); }
+.dsh-mtm-slider input[type="range"]:focus-visible { outline: none; }
+.dsh-mtm-slider input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-brand-primary) 35%, transparent); }
+.dsh-mtm-slider input[type="range"]:disabled { cursor: default; opacity: .5; }
+.dsh-mtm-ends { display: flex; justify-content: space-between; font-size: 10px; color: var(--dsw-alias-label-secondary); }
+.dsh-mtm-note { font-size: 10px; line-height: 1.35; color: var(--dsw-alias-label-secondary); }
+.dsh-mtm-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.dsh-mtm-chip {
   height: 24px; padding: 0 9px; border-radius: 12px; border: 1px solid var(--dsw-alias-border-l1);
   background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 11px; cursor: pointer;
 }
-.dsh-mc-chip:hover { background: var(--dsw-alias-bg-layer-2); }
-.dsh-mc-chip[data-active="true"] {
+.dsh-mtm-chip:hover { background: var(--dsw-alias-bg-layer-2); }
+.dsh-mtm-chip[data-active="true"] {
   border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary);
   background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);
 }
-.dsh-mc-chip[disabled] { opacity: .55; cursor: default; }
-.dsh-mc-chip-quiet { border-style: dashed; }
-.dsh-mc-link { border: 0; background: transparent; color: var(--dsw-alias-brand-primary); font: inherit; font-size: 11px; cursor: pointer; padding: 0; }
-.dsh-mc-link[disabled] { opacity: .5; cursor: default; }
-.dsh-mc-field { display: flex; flex-direction: column; gap: 4px; }
-.dsh-mc-checkrow { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-.dsh-mc-checkrow input { accent-color: var(--dsw-alias-brand-primary); margin: 0; }
-.dsh-mc-range { width: 100%; margin: 0; accent-color: var(--dsw-alias-brand-primary); }
-.dsh-mc-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.dsh-mc-actions .dsh-mc-input { flex: 1 1 140px; width: auto; }
-.dsh-mc-btn {
+.dsh-mtm-chip[disabled] { opacity: .55; cursor: default; }
+.dsh-mtm-chip-quiet { border-style: dashed; }
+.dsh-mtm-link { border: 0; background: transparent; color: var(--dsw-alias-brand-primary); font: inherit; font-size: 11px; cursor: pointer; padding: 0; }
+.dsh-mtm-link[disabled] { opacity: .5; cursor: default; }
+.dsh-mtm-field { display: flex; flex-direction: column; gap: 4px; }
+.dsh-mtm-checkrow { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.dsh-mtm-checkrow input { accent-color: var(--dsw-alias-brand-primary); margin: 0; }
+.dsh-mtm-range { width: 100%; margin: 0; accent-color: var(--dsw-alias-brand-primary); }
+.dsh-mtm-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dsh-mtm-actions .dsh-mtm-input { flex: 1 1 140px; width: auto; }
+.dsh-mtm-btn {
   height: 26px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--dsw-alias-border-l1);
   background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 11px; cursor: pointer;
 }
-.dsh-mc-btn:hover { background: var(--dsw-alias-bg-layer-2); }
-.dsh-mc-btn[disabled] { opacity: .5; cursor: default; }
-.dsh-mc-btn-primary { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
-.dsh-mc-error { flex: none; margin: 2px 8px 6px; padding: 6px 8px; border-radius: 7px; font-size: 11px;
+.dsh-mtm-btn:hover { background: var(--dsw-alias-bg-layer-2); }
+.dsh-mtm-btn[disabled] { opacity: .5; cursor: default; }
+.dsh-mtm-btn-primary { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
+.dsh-mtm-error { flex: none; margin: 2px 8px 6px; padding: 6px 8px; border-radius: 7px; font-size: 11px;
   color: var(--dsw-alias-state-error-primary); background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); }
-.dsh-mc-foot { flex: none; padding: 7px 8px 3px; border-top: 1px solid var(--dsw-alias-border-l1); font-size: 10px; color: var(--dsw-alias-label-secondary); }
+.dsh-mtm-foot { flex: none; padding: 7px 8px 3px; border-top: 1px solid var(--dsw-alias-border-l1); font-size: 10px; color: var(--dsw-alias-label-secondary); }
 @media (prefers-reduced-motion: no-preference) {
-  .dsh-mc-item, .dsh-mc-chip, .dsh-mc-trigger, .dsh-mc-btn { transition: background .12s ease; }
+  .dsh-mtm-item, .dsh-mtm-chip, .dsh-mtm-trigger, .dsh-mtm-btn { transition: background .12s ease; }
 }
 /* ---- settings: tier extras and model versions ---- */
 .dsh-mt-extras { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; border-top: 1px solid var(--dsw-alias-border-l1); }
@@ -1309,11 +1523,11 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         h('span', { className: 'dsh-mt-rolelabel' }, ''),
         h('input', {
           className: 'dsh-mt-input',
-          placeholder: 'Tuner Plus adapter (its shelf id), optional',
-          title: 'Used only while that adapter is switched on and served on Settings → Tuner Plus; otherwise the model above.',
+          placeholder: 'Tuner Plus tuned copy (its shelf id), optional',
+          title: 'Used only while that tuned copy is switched on and running in Settings → Tuner Plus; otherwise the model above.',
           value: text,
           spellCheck: false,
-          'aria-label': `${label}: Tuner Plus adapter`,
+          'aria-label': `${label}: Tuner Plus tuned copy`,
           onChange: (event) => setText(event.target.value),
           onBlur: commit,
           onKeyDown: (event) => {
@@ -1373,7 +1587,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
               },
               h('option', { value: '' }, 'Not set'),
               (versions ?? []).map((version) => h('option', { key: version.id, value: `v:${version.id}` }, `Version: ${version.name}`)),
-              h('option', { value: 'route' }, 'A model, typed below'),
+              h('option', { value: 'route' }, 'A model, named below'),
             ),
           ),
           value?.version ? null : h(RoleRouteRow, { role: key, label: '', route: value?.provider ? value : null, onChange: (route) => onSet(route ? { ...route, ...(value?.adapter ? { adapter: value.adapter } : {}) } : null) }),
@@ -1412,11 +1626,11 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
     async function loadSettings(ctx) {
       if (!ctx.remote?.settings) throw new Error('Settings service is unavailable in this Client.');
       const result = await ctx.remote.settings.describe();
-      if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+      if (!result.ok) throw dshKit.fail(result.error);
       const view = result.value.namespaces.find((entry) => entry.ns === NS);
       if (!view) {
         throw new Error(
-          'The Model Tiers settings namespace is not mounted. Enable the Model Tiers plugin and reload the profile.',
+          'These settings could not be read. Check that the Model Tiers add-on is switched on, then reload the app.',
         );
       }
       return { config: normalizeConfig(view.value), revision: view.revision };
@@ -1478,7 +1692,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         if (typeof operations === 'function') ops = operations(fresh.config);
         result = await ctx.remote.settings.mutate(NS, ops, current);
       }
-      if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+      if (!result.ok) throw dshKit.fail(result.error);
       return { config: normalizeConfig(result.value.value), revision: result.value.revision };
     }
 
@@ -1646,8 +1860,8 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             className: 'dsh-mt-input',
             value: providerDraft,
             spellCheck: false,
-            placeholder: 'Provider',
-            'aria-label': 'Provider id',
+            placeholder: 'Model service',
+            'aria-label': 'Model service',
             onChange: (event) => setProviderDraft(event.target.value),
             onBlur: commit,
             onKeyDown: onEnter,
@@ -1731,7 +1945,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         h('span', { className: 'dsh-mt-rolelabel' }, label),
         h('input', {
           className: 'dsh-mt-input',
-          placeholder: 'provider',
+          placeholder: 'model service',
           value: provider,
           spellCheck: false,
           'aria-label': `${label} role provider`,
@@ -1789,7 +2003,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           h(
             'span',
             { className: 'dsh-mt-hint' },
-            'Used by delegate_role, review_lanes, and run_pipeline. Children keep this tier as their access and delegation policy.',
+            'Which model plays each role when work is handed to helper agents. Helpers keep this tier’s access rules.',
           ),
           ROLES.map((role) =>
             h(RoleRouteRow, {
@@ -1838,7 +2052,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         h(
           'summary',
           { className: 'dsh-mt-fallbackhead' },
-          `Fallback chain (${chain.length})`,
+          `Backup models (${chain.length})`,
         ),
         h(
           'div',
@@ -1888,24 +2102,24 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                 ),
               ),
             )
-          : h('span', { className: 'dsh-mt-hint' }, 'No fallback routes. Primary/variant remains the only route.'),
+          : h('span', { className: 'dsh-mt-hint' }, 'No backup models. The model above is the only one used.'),
         h(
           'div',
           { className: 'dsh-mt-addrow' },
           h('input', {
             className: 'dsh-mt-input',
-            placeholder: 'Fallback provider',
+            placeholder: 'Backup model service',
             value: provider,
             spellCheck: false,
-            'aria-label': `Fallback provider for ${tierId}`,
+            'aria-label': `Backup model service for ${tierId}`,
             onChange: (event) => setProvider(event.target.value),
           }),
           h('input', {
             className: 'dsh-mt-input',
-            placeholder: 'Fallback model',
+            placeholder: 'Backup model name',
             value: model,
             spellCheck: false,
-            'aria-label': `Fallback model for ${tierId}`,
+            'aria-label': `Backup model name for ${tierId}`,
             onChange: (event) => setModel(event.target.value),
           }),
           h('button', { type: 'button', className: 'dsh-mt-btn', onClick: add }, 'Add fallback'),
@@ -1990,7 +2204,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           h('span', { className: 'dsh-mt-cardtitle' }, name),
           h('span', { className: 'dsh-mt-profilemeta' }, `${tier.id} · ${customRouteLabel(tier)}`),
           activeCount > 0
-            ? h('span', { className: 'dsh-mt-profileused' }, `${activeCount} active session${activeCount === 1 ? '' : 's'}`)
+            ? h('span', { className: 'dsh-mt-profileused' }, `${activeCount} conversation${activeCount === 1 ? '' : 's'} using it`)
             : null,
         ),
         h(
@@ -2001,7 +2215,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             { className: 'dsh-mt-customgrid' },
             h(
               'div',
-              { className: 'dsh-mt-field' },
+              { className: 'dsh-mt-field dsh-mt-span2' },
               h('span', { className: 'dsh-mt-label' }, 'Name'),
               h('input', {
                 className: 'dsh-mt-input',
@@ -2011,39 +2225,6 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                 onBlur: () => commit(),
                 onKeyDown: blurOnEnter,
               }),
-            ),
-            h(
-              'div',
-              { className: 'dsh-mt-field' },
-              h('span', { className: 'dsh-mt-label' }, 'Badge'),
-              h('input', {
-                className: 'dsh-mt-input',
-                value: short,
-                maxLength: 2,
-                'aria-label': 'Tier badge',
-                onChange: (event) => setShort(event.target.value),
-                onBlur: () => commit(),
-                onKeyDown: blurOnEnter,
-              }),
-            ),
-            h(
-              'div',
-              { className: 'dsh-mt-field dsh-mt-span2' },
-              h('span', { className: 'dsh-mt-label' }, 'Role summary'),
-              h('input', {
-                className: 'dsh-mt-input',
-                value: role,
-                placeholder: 'e.g. Fast frontend checks',
-                'aria-label': 'Tier role summary',
-                onChange: (event) => setRole(event.target.value),
-                onBlur: () => commit(),
-                onKeyDown: blurOnEnter,
-              }),
-            ),
-            h(
-              'div',
-              { className: 'dsh-mt-span2' },
-              h(TierExtras, { tier, onPatch: (patch) => onChange({ ...tier, ...patch }) }),
             ),
             h(
               'div',
@@ -2101,6 +2282,45 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
               ),
             ),
             h(
+              MoreFold,
+              null,
+              h(
+                'div',
+                { className: 'dsh-mt-customgrid' },
+            h(
+              'div',
+              { className: 'dsh-mt-field' },
+              h('span', { className: 'dsh-mt-label' }, 'Badge'),
+              h('input', {
+                className: 'dsh-mt-input',
+                value: short,
+                maxLength: 2,
+                'aria-label': 'Tier badge',
+                onChange: (event) => setShort(event.target.value),
+                onBlur: () => commit(),
+                onKeyDown: blurOnEnter,
+              }),
+            ),
+            h(
+              'div',
+              { className: 'dsh-mt-field dsh-mt-span2' },
+              h('span', { className: 'dsh-mt-label' }, 'Role summary'),
+              h('input', {
+                className: 'dsh-mt-input',
+                value: role,
+                placeholder: 'e.g. Fast frontend checks',
+                'aria-label': 'Tier role summary',
+                onChange: (event) => setRole(event.target.value),
+                onBlur: () => commit(),
+                onKeyDown: blurOnEnter,
+              }),
+            ),
+            h(
+              'div',
+              { className: 'dsh-mt-span2' },
+              h(TierExtras, { tier, onPatch: (patch) => onChange({ ...tier, ...patch }) }),
+            ),
+            h(
               'div',
               { className: 'dsh-mt-field dsh-mt-span2' },
               h('span', { className: 'dsh-mt-label' }, 'Tier instructions'),
@@ -2118,7 +2338,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             h(
               'div',
               { className: 'dsh-mt-field dsh-mt-span2' },
-              h('span', { className: 'dsh-mt-label' }, `Variants (${tier.variants.length})`),
+              h('span', { className: 'dsh-mt-label' }, `Other models to try (${tier.variants.length})`),
               tier.variants.length > 0
                 ? h(
                     'div',
@@ -2140,27 +2360,27 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                       ),
                     ),
                   )
-                : h('span', { className: 'dsh-mt-hint' }, 'No variants. The primary model is the only route.'),
+                : h('span', { className: 'dsh-mt-hint' }, 'No other models. The model above is the only one used.'),
               h(
                 'div',
                 { className: 'dsh-mt-addrow' },
                 h('input', {
                   className: 'dsh-mt-input',
-                  placeholder: 'Variant provider',
+                  placeholder: 'Other model: service',
                   value: variantProvider,
                   spellCheck: false,
-                  'aria-label': 'Variant provider',
+                  'aria-label': 'Other model service',
                   onChange: (event) => setVariantProvider(event.target.value),
                 }),
                 h('input', {
                   className: 'dsh-mt-input',
-                  placeholder: 'Variant model',
+                  placeholder: 'Other model: name',
                   value: variantModel,
                   spellCheck: false,
-                  'aria-label': 'Variant model',
+                  'aria-label': 'Other model name',
                   onChange: (event) => setVariantModel(event.target.value),
                 }),
-                h('button', { type: 'button', className: 'dsh-mt-btn', onClick: addVariant }, 'Add variant'),
+                h('button', { type: 'button', className: 'dsh-mt-btn', onClick: addVariant }, 'Add model'),
               ),
             ),
             h(
@@ -2189,6 +2409,8 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                   h(TeamEditor, { tierId: tier.id, teams, versions, onChange: onTeams }),
                 )
               : null,
+              ),
+            ),
           ),
           h(
             'div',
@@ -2474,7 +2696,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           h(
             'div',
             { className: 'dsh-mt-customtools' },
-            h('span', { className: 'dsh-mt-hint' }, 'Profiles only filter the selector; tiers and routing are unchanged.'),
+            h('span', { className: 'dsh-mt-hint' }, 'A profile only shortens the list in the chat box; the tiers themselves stay as they are.'),
             h(
               'button',
               {
@@ -2538,7 +2760,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
       };
 
       const projectKeys = [
-        { key: 'ungrouped', label: 'Ungrouped sessions' },
+        { key: 'ungrouped', label: 'Conversations without a project' },
         ...workspaceRows.map((workspace) => ({
           key: workspace.workspaceId,
           label: workspace.title || workspace.path || workspace.workspaceId,
@@ -2563,7 +2785,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         h(
           'div',
           { className: 'dsh-mt-hint' },
-          'Named tier decks scoped to Workspaces. A project profile filters the composer selector and supplies its default tier; it does not change tier definitions or host routing.',
+          'Pick which tiers a project offers, and which one it starts with. This only changes the list in the chat box; the tiers themselves stay as they are.',
         ),
         profiles.length > 0
           ? h(
@@ -2787,7 +3009,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
       { id: 'modelProfiles', label: 'Model versions' },
       { id: 'projectProfiles', label: 'Project profiles' },
       { id: 'fallbackChains', label: 'Fallbacks' },
-      { id: 'roleModels', label: 'Role routes' },
+      { id: 'roleModels', label: 'Models for roles' },
       { id: 'limits', label: 'Limits' },
     ];
 
@@ -2869,12 +3091,12 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           h(
             'p',
             { className: 'dsh-mt-hint' },
-            'The export holds starter tiers, your tiers, model versions, project profiles, fallbacks and role routes. What each conversation picked is left out on purpose.',
+            'The export holds starter tiers, your tiers, model versions, project profiles, fallbacks and the models for roles. What each conversation picked is left out on purpose.',
           ),
           h(
             'p',
             { className: 'dsh-mt-hint' },
-            'An import only adds and updates: anything that is not in the file stays as it is. Tiers, model versions, project profiles, fallbacks and role routes with the same id are updated.',
+            'An import only adds and updates: anything that is not in the file stays as it is. Tiers, model versions, project profiles, backup models and the models for roles with the same name are updated.',
           ),
           h(
             'div',
@@ -2959,7 +3181,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         }
         const fallbacks = config.fallbackChains?.[tier.id] ?? [];
         if (fallbacks.some((route) => route.provider === tier.provider && route.model === tier.model)) {
-          tierIssues.push('Fallback chain repeats the primary route.');
+          tierIssues.push('The backup list repeats the main model.');
         }
         for (const issue of tierIssues) issues.push(`${tierLabel(tier)}: ${issue}`);
         return {
@@ -2999,10 +3221,10 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
       );
       const summaryCards = [
         { label: 'Tiers', value: tiers.length },
-        { label: 'Role routes', value: roleCount },
+        { label: 'Models for roles', value: roleCount },
         { label: 'Fallbacks', value: fallbackCount },
         { label: 'Project profiles', value: config.projectProfiles?.profiles?.length ?? 0 },
-        { label: 'Active sessions', value: activeEntries.length },
+        { label: 'Conversations with a tier', value: activeEntries.length },
         { label: 'Workspaces', value: workspaceRows.length },
       ];
       const report = [
@@ -3048,7 +3270,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           h(
             'p',
             { className: 'dsh-mt-hint' },
-            'Read-only checks for route coverage, stale session pins, and project-profile references. Warnings do not change runtime behavior.',
+            'Read-only checks: are the chosen models in your list, are any conversations tied to a tier that is gone, and do project profiles point at real tiers. A warning changes nothing.',
           ),
           h(
             'div',
@@ -3066,8 +3288,8 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         h(
           'div',
           { className: 'dsh-mt-card' },
-          h('div', { className: 'dsh-mt-cardtitle' }, 'Route coverage'),
-          h('div', { className: 'dsh-mt-hint' }, catalog ? 'Routes checked against the current model catalog.' : 'Model catalog is unavailable; route existence was not checked.'),
+          h('div', { className: 'dsh-mt-cardtitle' }, 'Are the models available?'),
+          h('div', { className: 'dsh-mt-hint' }, catalog ? 'Each chosen model was looked up in your model list.' : 'The model list could not be read, so the models were not checked.'),
           checks.map((check) =>
             h(
               'div',
@@ -3099,7 +3321,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             ? issues.map((issue, index) =>
                 h('div', { className: 'dsh-mt-issue', key: `${index}:${issue}` }, issue),
               )
-            : h('div', { className: 'dsh-mt-hint' }, 'No stale references or missing routes detected.'),
+            : h('div', { className: 'dsh-mt-hint' }, 'Nothing out of date or missing was found.'),
         ),
       );
     }
@@ -3220,7 +3442,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         h(
           'div',
           { className: 'dsh-mt-field' },
-          h('span', { className: 'dsh-mt-label' }, 'Skills loaded with this tier'),
+          h('span', { className: 'dsh-mt-label' }, 'Skills this tier uses'),
           skills.length > 0
             ? h(
                 'div',
@@ -3315,7 +3537,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           h(
             'span',
             { className: 'dsh-mt-hint' },
-            'Connectors are your MCP servers. Tools of a connector that is not ticked are hidden from the model in this tier.',
+            'Connectors are the outside tools you added. The tools of a connector that is not ticked are hidden from the model in this tier.',
           ),
         ),
       );
@@ -3662,8 +3884,18 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
       );
     }
 
+    /** The rarely needed settings of a tier, folded away so the first four (Name, Model, Effort, Access) stand out. */
+    function MoreFold({ children, label = 'More' }) {
+      return h(
+        'details',
+        { className: 'dsh-mt-more' },
+        h('summary', null, h('span', { className: 'dsh-mt-profilechevron', 'aria-hidden': true }, '▸'), label),
+        h('div', { className: 'dsh-mt-morebody' }, children),
+      );
+    }
+
     /** A starter tier's own name and instructions, saved when the field loses focus. */
-    function StarterText({ tier, meta, onPatch }) {
+    function StarterText({ tier, meta, onPatch, only }) {
       const [label, setLabel] = useState(tier.label ?? '');
       const [instructions, setInstructions] = useState(tier.prompt ?? '');
       useEffect(() => {
@@ -3673,7 +3905,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
       return h(
         React.Fragment,
         null,
-        h(
+        only === 'instructions' ? null : h(
           'div',
           { className: 'dsh-mt-field' },
           h('span', { className: 'dsh-mt-label' }, 'Name'),
@@ -3696,7 +3928,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             },
           }),
         ),
-        h(
+        only === 'name' ? null : h(
           'div',
           { className: 'dsh-mt-field' },
           h(
@@ -3728,7 +3960,13 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         ? workspaceSnapshot
         : workspaceSnapshot?.items ?? [];
       const [state, setState] = useState({ status: 'loading', config: null, revision: 0, catalog: null, error: null, saving: false });
-      const [section, setSection] = useState('tiers');
+      const [innerSection, setSection] = useState('tiers');
+      // The page's top tabs: the tiers themselves, then what other add-ons add (instructions, sampling), then Advanced.
+      const [top, setTop] = dshMerge.useTab(React, 'model-tiers', 'main');
+      const [visited, setVisited] = useState({});
+      useEffect(() => {
+        setVisited((value) => (value[top] ? value : { ...value, [top]: true }));
+      }, [top]);
       const [extras, setExtras] = useState({ skills: [], connectors: [] });
       const [presets, setPresets] = useState([]);
       useEffect(() => {
@@ -3788,7 +4026,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
       );
 
       if (state.status === 'loading') {
-        return h('div', { className: 'dsh-mt-page' }, h(Styles), h('div', { className: 'dsh-mt-hint' }, 'Loading model tiers…'));
+        return h('div', { className: 'dsh-mt-page' }, h(Styles), h('div', { className: 'dsh-mt-hint' }, 'Loading…'));
       }
       if (state.status === 'error' || !state.config) {
         return h(
@@ -3796,12 +4034,40 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           { className: 'dsh-mt-page' },
           h(Styles),
           h('div', { className: 'dsh-mt-head' }, h('h2', null, 'Model Tiers')),
-          h('div', { className: 'dsh-mt-status', 'data-error': 'true' }, state.error ?? 'Model tiers are unavailable.'),
+          h('div', { className: 'dsh-mt-status', 'data-error': 'true' }, 'These settings are unavailable. Check that the Model Tiers add-on is switched on.'),
         );
       }
 
       const config = state.config;
       const activeCount = Object.keys(config.activeTiers).length;
+      const MAIN_SECTIONS = ['tiers', 'custom', 'models'];
+      const ADVANCED_SECTIONS = ['projects', 'backup', 'health', 'advanced'];
+      // The part of the page shown now ('' when another add-on's tab is open).
+      const section =
+        top === 'main'
+          ? MAIN_SECTIONS.includes(innerSection) ? innerSection : 'tiers'
+          : top === 'advanced'
+            ? ADVANCED_SECTIONS.includes(innerSection) ? innerSection : 'projects'
+            : '';
+      const topTabs = [
+        { id: 'main', label: 'Tiers and models' },
+        ...dshMerge.parts('model-tiers').map((part) => ({ id: part.id, label: String(part.label?.() ?? part.id) })),
+      ];
+      const subTabs =
+        top === 'main'
+          ? [
+              { id: 'tiers', label: 'Starter tiers', count: TIER_IDS.length },
+              { id: 'custom', label: 'Your tiers', count: config.customTiers.length },
+              { id: 'models', label: 'Model versions', count: config.modelVersions.length },
+            ]
+          : top === 'advanced'
+            ? [
+                { id: 'projects', label: 'Projects', count: config.projectProfiles.profiles.length },
+                { id: 'backup', label: 'Backup' },
+                { id: 'health', label: 'Health' },
+                { id: 'advanced', label: 'Limits and reset' },
+              ]
+            : [];
 
       const setTier = (id, patch) => {
         const ops = [];
@@ -3861,6 +4127,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           },
         ]);
         setSection('custom');
+        setTop('main');
       };
 
       return h(
@@ -3877,31 +4144,14 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           h(
             'p',
             null,
-            'A tier is a way of working: how hard the model thinks, what it may use, how many sub-agents it runs, its own instructions, skills and connectors. ' +
-              'A model version is a named copy of a model with its own sampling settings. A tier can point at a version, or simply follow the model you pick in the chat box.',
-          ),
-          h(
-            'p',
-            null,
-            'Models come from Settings → Models. If a model is missing from a list here, add it there first.',
+            'A tier is a ready-made way of working: which model, how hard it thinks, and what it may use. Pick one in the chat box. ' +
+              'Models come from Settings → Models; if one is missing here, add it there first.',
           ),
         ),
         h(
           'div',
-          { className: 'dsh-mt-tabs', role: 'tablist', 'aria-label': 'Model tiers sections' },
-          [
-            { id: 'tiers', label: 'Starter tiers', count: TIER_IDS.length },
-            { id: 'custom', label: 'Your tiers', count: config.customTiers.length },
-            { id: 'models', label: 'Model versions', count: config.modelVersions.length },
-            {
-              id: 'projects',
-              label: 'Projects',
-              count: config.projectProfiles.profiles.length,
-            },
-            { id: 'backup', label: 'Backup' },
-            { id: 'health', label: 'Health' },
-            { id: 'advanced', label: 'Advanced' },
-          ].map((tab) =>
+          { className: 'dsh-mt-tabs', role: 'tablist', 'aria-label': 'Model Tiers pages' },
+          topTabs.map((tab) =>
             h(
               'button',
               {
@@ -3909,14 +4159,11 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                 type: 'button',
                 role: 'tab',
                 className: 'dsh-mt-tab',
-                'data-active': String(section === tab.id),
-                'aria-selected': section === tab.id,
-                onClick: () => setSection(tab.id),
+                'data-active': String(top === tab.id),
+                'aria-selected': top === tab.id,
+                onClick: () => setTop(tab.id),
               },
               tab.label,
-              tab.count === undefined
-                ? null
-                : h('span', { className: 'dsh-mt-tabcount' }, tab.count),
             ),
           ),
           h(
@@ -3930,6 +4177,26 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             state.error ? 'Could not save' : state.saving ? 'Saving…' : '',
           ),
         ),
+        subTabs.length > 0
+          ? h(
+              'div',
+              { className: 'dsh-mt-sub', role: 'group', 'aria-label': 'Sections' },
+              subTabs.map((tab) =>
+                h(
+                  'button',
+                  {
+                    key: tab.id,
+                    type: 'button',
+                    className: 'dsh-mt-subtab',
+                    'aria-pressed': String(section === tab.id),
+                    onClick: () => setSection(tab.id),
+                  },
+                  tab.label,
+                  tab.count === undefined ? null : h('span', { className: 'dsh-mt-tabcount' }, tab.count),
+                ),
+              ),
+            )
+          : null,
         h(
           'div',
           { className: 'dsh-mt-section', 'data-hidden': String(section !== 'models') },
@@ -3974,7 +4241,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                 ),
               ),
               h('div', { className: 'dsh-mt-cardrole' }, meta.role),
-              h(StarterText, { tier, meta, onPatch: (patch) => setTier(id, patch) }),
+              h(StarterText, { tier, meta, only: 'name', onPatch: (patch) => setTier(id, patch) }),
               h(ModelPicker, {
                 tier: { ...tier, provider: tier.ownProvider, model: tier.ownModel },
                 catalog: state.catalog,
@@ -3984,27 +4251,11 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                 'div',
                 { className: 'dsh-mt-hint' },
                 tier.versionId
-                  ? `The model version below is in charge: ${tier.versionName}.`
+                  ? `The saved model version “${tier.versionName}” is in charge of the model.`
                   : tier.ownProvider && tier.ownModel
                     ? 'Picking this tier switches the conversation to this model, with default settings.'
                     : 'No model set: this tier keeps whatever model the conversation is on.',
               ),
-              h(FallbackEditor, {
-                tierId: id,
-                chains: config.fallbackChains,
-                onChange: saveFallbacks,
-              }),
-              h(RoleModelsEditor, {
-                tierId: id,
-                roles: config.roleModels,
-                onChange: saveRoles,
-              }),
-              h(TeamEditor, {
-                tierId: id,
-                teams: config.teams,
-                versions: config.modelVersions,
-                onChange: saveTeams,
-              }),
               h(EffortRange, { effort: tier.effort, onChange: (effort) => setTier(id, { effort }) }),
               h(
                 'div',
@@ -4035,7 +4286,28 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                   }),
                 ),
               ),
-              h(TierExtras, { tier, onPatch: (patch) => setTier(id, patch) }),
+              h(
+                MoreFold,
+                null,
+                h(StarterText, { tier, meta, only: 'instructions', onPatch: (patch) => setTier(id, patch) }),
+                h(FallbackEditor, {
+                  tierId: id,
+                  chains: config.fallbackChains,
+                  onChange: saveFallbacks,
+                }),
+                h(RoleModelsEditor, {
+                  tierId: id,
+                  roles: config.roleModels,
+                  onChange: saveRoles,
+                }),
+                h(TeamEditor, {
+                  tierId: id,
+                  teams: config.teams,
+                  versions: config.modelVersions,
+                  onChange: saveTeams,
+                }),
+                h(TierExtras, { tier, onPatch: (patch) => setTier(id, patch) }),
+              ),
             );
           }),
           ),
@@ -4091,14 +4363,14 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           h(
             'div',
             { className: 'dsh-mt-card' },
-            h('div', { className: 'dsh-mt-cardtitle' }, 'Delegation limits'),
+            h('div', { className: 'dsh-mt-cardtitle' }, 'Helper agents'),
           h(
             'div',
             { className: 'dsh-mt-global' },
             h(
               'div',
               { className: 'dsh-mt-field' },
-              h('span', { className: 'dsh-mt-label' }, 'Max concurrent sub-agents'),
+              h('span', { className: 'dsh-mt-label' }, 'Helper agents at the same time'),
               h('input', {
                 className: 'dsh-mt-input dsh-mt-num',
                 type: 'number',
@@ -4135,13 +4407,13 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           h(
             'div',
             { className: 'dsh-mt-cardhead' },
-            h('span', { className: 'dsh-mt-cardtitle' }, 'Active session tiers'),
+            h('span', { className: 'dsh-mt-cardtitle' }, 'Tiers in use right now'),
             h('span', { className: 'dsh-mt-effort' }, `${activeCount} pinned`),
           ),
           h(
             'div',
             { className: 'dsh-mt-hint' },
-            'Clearing the pinned tiers returns every Session to its normal model selection. The next request keeps the current model and stops applying tier effort and access rules.',
+            'Clearing this returns every conversation to its normal model choice. The next message keeps the current model and stops using the tier’s effort and access rules.',
           ),
           h(
             'div',
@@ -4154,7 +4426,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                 disabled: activeCount === 0 || state.saving,
                 onClick: () => save([{ op: 'set', path: ['activeTiers'], value: '{}' }]),
               },
-              'Clear active tiers',
+              'Clear tiers in use',
             ),
             h(
               'button',
@@ -4181,11 +4453,20 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           ),
         ),
         ),
-        h(
-          'div',
-          { className: 'dsh-mt-status', 'data-error': state.error ? 'true' : 'false' },
-          state.error ?? (state.saving ? 'Saving…' : 'Changes are saved as you make them.'),
-        ),
+        // What other add-ons add as tabs. A tab stays in place once opened, so unsaved typing is not lost.
+        dshMerge
+          .parts('model-tiers')
+          .filter((part) => part.id !== 'advanced' && visited[part.id])
+          .map((part) =>
+            h('div', { className: 'dsh-mt-section', key: part.id, 'data-hidden': String(top !== part.id) }, part.render({ appCtx })),
+          ),
+        top === 'main' || top === 'advanced'
+          ? h(
+              'div',
+              { className: 'dsh-mt-status', 'data-error': state.error ? 'true' : 'false' },
+              state.error ?? (state.saving ? 'Saving…' : 'Changes are saved as you make them.'),
+            )
+          : null,
         ),
       );
     }
@@ -4600,7 +4881,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           const result = directory?.select
             ? await directory.select(request)
             : await appCtx.remote.session.selectModel({ sessionId, ...request });
-          if (result && result.ok === false) throw new Error(`${result.error.code}: ${result.error.message}`);
+          if (result && result.ok === false) throw dshKit.fail(result.error);
           setState((prev) => ({ ...prev, busy: null, config: saved.config, revision: saved.revision, error: null }));
         } catch (error) {
           // A failed model switch must not leave a misleading choice behind:
@@ -4871,14 +5152,14 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
           selection.maxTokens !== undefined ||
           (activeVersion.effort !== undefined && activeVersion.effort !== selection.effort));
 
-      const check = h('span', { className: 'dsh-mc-check', 'aria-hidden': true }, '✓');
+      const check = h('span', { className: 'dsh-mtm-check', 'aria-hidden': true }, '✓');
 
       const panel = !open
         ? null
         : h(
             'div',
             {
-              className: 'dsh-mc-pop',
+              className: 'dsh-mtm-pop',
               role: 'dialog',
               'aria-label': 'Model, effort and tier for this conversation',
               ref: popRef,
@@ -4894,7 +5175,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             },
             // ---- model list
             h('input', {
-              className: 'dsh-mc-search',
+              className: 'dsh-mtm-search',
               type: 'search',
               placeholder: 'Search models and saved versions',
               value: query,
@@ -4904,8 +5185,8 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             }),
             h(
               'div',
-              { className: 'dsh-mc-list', role: 'listbox', 'aria-label': 'Models' },
-              versions.length > 0 ? h('div', { className: 'dsh-mc-group' }, 'Saved versions') : null,
+              { className: 'dsh-mtm-list', role: 'listbox', 'aria-label': 'Models' },
+              versions.length > 0 ? h('div', { className: 'dsh-mtm-group' }, 'Saved versions') : null,
               versions.map((version) => {
                 const active = selection?.versionId === version.id;
                 return h(
@@ -4915,7 +5196,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                     type: 'button',
                     role: 'option',
                     'aria-selected': active,
-                    className: 'dsh-mc-item',
+                    className: 'dsh-mtm-item',
                     'data-active': String(active),
                     disabled: busy,
                     title: `${version.provider}/${version.model}`,
@@ -4923,9 +5204,9 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                   },
                   h(
                     'span',
-                    { className: 'dsh-mc-itemmain' },
-                    h('span', { className: 'dsh-mc-itemname' }, version.name),
-                    h('span', { className: 'dsh-mc-itemmeta' }, `${shortModel(version.model)} · ${versionSummary(version)}`),
+                    { className: 'dsh-mtm-itemmain' },
+                    h('span', { className: 'dsh-mtm-itemname' }, version.name),
+                    h('span', { className: 'dsh-mtm-itemmeta' }, `${shortModel(version.model)} · ${versionSummary(version)}`),
                   ),
                   active ? check : null,
                 );
@@ -4934,7 +5215,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                 h(
                   React.Fragment,
                   { key: `g:${group.id}` },
-                  h('div', { className: 'dsh-mc-group' }, group.name),
+                  h('div', { className: 'dsh-mtm-group' }, group.name),
                   group.models.map((model) => {
                     const active =
                       route?.provider === group.id && route?.model === model.id && !selection?.versionId;
@@ -4945,13 +5226,13 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                         type: 'button',
                         role: 'option',
                         'aria-selected': active,
-                        className: 'dsh-mc-item',
+                        className: 'dsh-mtm-item',
                         'data-active': String(active),
                         disabled: busy,
                         title: `${group.id}/${model.id}`,
                         onClick: () => pickModel(group.id, model.id),
                       },
-                      h('span', { className: 'dsh-mc-itemmain' }, h('span', { className: 'dsh-mc-itemname' }, model.name)),
+                      h('span', { className: 'dsh-mtm-itemmain' }, h('span', { className: 'dsh-mtm-itemname' }, model.name)),
                       active ? check : null,
                     );
                   }),
@@ -4960,27 +5241,27 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
               versions.length === 0 && groups.length === 0
                 ? h(
                     'div',
-                    { className: 'dsh-mc-empty' },
+                    { className: 'dsh-mtm-empty' },
                     filter ? 'Nothing matches that search.' : 'No models yet. Add one in Settings → Models.',
                   )
                 : null,
             ),
             h(
               'div',
-              { className: 'dsh-mc-rest' },
+              { className: 'dsh-mtm-rest' },
             // ---- effort
             h(
               'div',
-              { className: 'dsh-mc-block' },
+              { className: 'dsh-mtm-block' },
               h(
                 'div',
-                { className: 'dsh-mc-rowhead' },
-                h('span', { className: 'dsh-mc-label' }, 'Effort'),
-                h('span', { className: 'dsh-mc-value' }, effort ? EFFORTS[effortIndex].label : 'Default'),
+                { className: 'dsh-mtm-rowhead' },
+                h('span', { className: 'dsh-mtm-label' }, 'Effort'),
+                h('span', { className: 'dsh-mtm-value' }, effort ? EFFORTS[effortIndex].label : 'Default'),
               ),
               h(
                 'div',
-                { className: 'dsh-mc-slider', 'data-unset': String(!effort), style: { '--dsh-mc-fill': `${(effortIndex / (EFFORTS.length - 1)) * 100}%` } },
+                { className: 'dsh-mtm-slider', 'data-unset': String(!effort), style: { '--dsh-mtm-fill': `${(effortIndex / (EFFORTS.length - 1)) * 100}%` } },
                 h('input', {
                   type: 'range',
                   min: 0,
@@ -4996,26 +5277,26 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                 }),
                 h(
                   'div',
-                  { className: 'dsh-mc-stops', 'aria-hidden': true },
+                  { className: 'dsh-mtm-stops', 'aria-hidden': true },
                   EFFORT_IDS.map((id, index) => h('span', { key: id, 'data-on': String(Boolean(effort) && index <= effortIndex) })),
                 ),
               ),
               h(
                 'div',
-                { className: 'dsh-mc-ends', 'aria-hidden': true },
+                { className: 'dsh-mtm-ends', 'aria-hidden': true },
                 h('span', null, 'Off'),
                 h('span', null, 'Ultra Code'),
               ),
               route && !hasThinking && state.catalog
-                ? h('div', { className: 'dsh-mc-note' }, 'This model has no thinking control. Effort still changes how carefully it is told to work.')
+                ? h('div', { className: 'dsh-mtm-note' }, 'This model has no thinking control. Effort still changes how carefully it is told to work.')
                 : null,
               // Ultra Code: a switch beside Effort, not an effort level (plan step S1). Off unless switched on.
               h(
                 'div',
-                { className: 'dsh-mc-rowhead', 'data-ultra': '' },
+                { className: 'dsh-mtm-rowhead', 'data-ultra': '' },
                 h(Switch, { checked: ultraOn || effort === 'ultra', label: 'Ultra Code', disabled: Boolean(busy) || effort === 'ultra', onChange: () => void flipUltra() }),
               ),
-              h('div', { className: 'dsh-mc-note' }, effort === 'ultra'
+              h('div', { className: 'dsh-mtm-note' }, effort === 'ultra'
                 ? 'On through the top effort step. Lower Effort to switch it separately.'
                 : activeTier && activeTier.subagents === false
                   ? 'This tier runs no helpers (Sub-agents is off for it in Settings → Model Tiers), so the switch changes nothing here.'
@@ -5026,25 +5307,25 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             // ---- tier
             h(
               'div',
-              { className: 'dsh-mc-block' },
+              { className: 'dsh-mtm-block' },
               h(
                 'div',
-                { className: 'dsh-mc-rowhead' },
-                h('span', { className: 'dsh-mc-label' }, 'Tier'),
+                { className: 'dsh-mtm-rowhead' },
+                h('span', { className: 'dsh-mtm-label' }, 'Tier'),
                 selection
-                  ? h('button', { type: 'button', className: 'dsh-mc-link', disabled: busy, onClick: clearChoice }, 'Reset')
+                  ? h('button', { type: 'button', className: 'dsh-mtm-link', disabled: busy, onClick: clearChoice }, 'Reset')
                   : null,
               ),
               h(
                 'div',
-                { className: 'dsh-mc-chips' },
+                { className: 'dsh-mtm-chips' },
                 visibleDeck.map((tier) =>
                   h(
                     'button',
                     {
                       key: tier.id,
                       type: 'button',
-                      className: 'dsh-mc-chip',
+                      className: 'dsh-mtm-chip',
                       'aria-pressed': tier.id === activeTierId,
                       'data-active': String(tier.id === activeTierId),
                       disabled: busy,
@@ -5066,7 +5347,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                 ? h(
                     'select',
                     {
-                      className: 'dsh-mc-select',
+                      className: 'dsh-mtm-select',
                       value: sessionProfileId ?? '',
                       disabled: busy,
                       'aria-label': 'Project profile',
@@ -5079,14 +5360,14 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
               roleIds.length > 0
                 ? h(
                     'div',
-                    { className: 'dsh-mc-chips' },
+                    { className: 'dsh-mtm-chips' },
                     roleIds.map((role) =>
                       h(
                         'button',
                         {
                           key: role,
                           type: 'button',
-                          className: 'dsh-mc-chip dsh-mc-chip-quiet',
+                          className: 'dsh-mtm-chip dsh-mtm-chip-quiet',
                           'data-active': String(
                             roleRoutes[role].provider === route?.provider && roleRoutes[role].model === route?.model,
                           ),
@@ -5103,14 +5384,14 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             // ---- sampling
             h(
               'details',
-              { className: 'dsh-mc-block dsh-mc-details' },
+              { className: 'dsh-mtm-block dsh-mtm-details' },
               h(
                 'summary',
-                { className: 'dsh-mc-rowhead' },
-                h('span', { className: 'dsh-mc-label' }, 'Sampling'),
+                { className: 'dsh-mtm-rowhead' },
+                h('span', { className: 'dsh-mtm-label' }, 'Sampling'),
                 h(
                   'span',
-                  { className: 'dsh-mc-value' },
+                  { className: 'dsh-mtm-value' },
                   selection?.effectiveTemperature === undefined && selection?.effectiveMaxTokens === undefined
                     ? 'Default'
                     : [
@@ -5123,10 +5404,10 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
               ),
               h(
                 'div',
-                { className: 'dsh-mc-field' },
+                { className: 'dsh-mtm-field' },
                 h(
                   'label',
-                  { className: 'dsh-mc-checkrow' },
+                  { className: 'dsh-mtm-checkrow' },
                   h('input', {
                     type: 'checkbox',
                     checked: !autoTemperature,
@@ -5140,7 +5421,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                   h('span', null, 'Temperature'),
                   h(
                     'span',
-                    { className: 'dsh-mc-value' },
+                    { className: 'dsh-mtm-value' },
                     autoTemperature
                       ? selection?.modelTemperature !== undefined
                         ? `${selection.modelTemperature.toFixed(2)} (saved)`
@@ -5149,7 +5430,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                   ),
                 ),
                 h('input', {
-                  className: 'dsh-mc-range',
+                  className: 'dsh-mtm-range',
                   type: 'range',
                   min: 0,
                   max: 2,
@@ -5164,10 +5445,10 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
               ),
               h(
                 'div',
-                { className: 'dsh-mc-field' },
+                { className: 'dsh-mtm-field' },
                 h(
                   'label',
-                  { className: 'dsh-mc-checkrow' },
+                  { className: 'dsh-mtm-checkrow' },
                   h('input', {
                     type: 'checkbox',
                     checked: !autoMaxTokens,
@@ -5181,7 +5462,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                   h('span', null, 'Max output tokens'),
                   h(
                     'span',
-                    { className: 'dsh-mc-value' },
+                    { className: 'dsh-mtm-value' },
                     autoMaxTokens
                       ? selection?.modelMaxTokens !== undefined
                         ? `${selection.modelMaxTokens} (saved)`
@@ -5192,7 +5473,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                 autoMaxTokens
                   ? null
                   : h('input', {
-                      className: 'dsh-mc-input',
+                      className: 'dsh-mtm-input',
                       type: 'number',
                       min: 1,
                       max: 1000000,
@@ -5214,16 +5495,16 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                       },
                     }),
               ),
-              h('div', { className: 'dsh-mc-note' }, 'The app sends temperature and max tokens only. Other sampling settings stay on your model server.'),
+              h('div', { className: 'dsh-mtm-note' }, 'The app sends temperature and max tokens only. Other sampling settings stay on your model server.'),
               saveName === null
                 ? h(
                     'div',
-                    { className: 'dsh-mc-actions' },
+                    { className: 'dsh-mtm-actions' },
                     h(
                       'button',
                       {
                         type: 'button',
-                        className: 'dsh-mc-btn',
+                        className: 'dsh-mtm-btn',
                         disabled: !route || busy,
                         title: 'Keep these settings as a named version of this model. The plain model stays as it is.',
                         onClick: () => setSaveName(''),
@@ -5233,7 +5514,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                     changedFromVersion
                       ? h(
                           'button',
-                          { type: 'button', className: 'dsh-mc-btn', disabled: busy, onClick: updateVersion },
+                          { type: 'button', className: 'dsh-mtm-btn', disabled: busy, onClick: updateVersion },
                           `Update “${activeVersion.name}”`,
                         )
                       : null,
@@ -5241,14 +5522,14 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                 : h(
                     'form',
                     {
-                      className: 'dsh-mc-actions',
+                      className: 'dsh-mtm-actions',
                       onSubmit: (event) => {
                         event.preventDefault();
                         saveAsVersion();
                       },
                     },
                     h('input', {
-                      className: 'dsh-mc-input',
+                      className: 'dsh-mtm-input',
                       type: 'text',
                       autoFocus: true,
                       maxLength: 80,
@@ -5257,24 +5538,24 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                       'aria-label': 'Name of the new version',
                       onChange: (event) => setSaveName(event.target.value),
                     }),
-                    h('button', { type: 'submit', className: 'dsh-mc-btn dsh-mc-btn-primary', disabled: busy || !saveName.trim() }, 'Save'),
-                    h('button', { type: 'button', className: 'dsh-mc-btn', onClick: () => setSaveName(null) }, 'Cancel'),
+                    h('button', { type: 'submit', className: 'dsh-mtm-btn dsh-mtm-btn-primary', disabled: busy || !saveName.trim() }, 'Save'),
+                    h('button', { type: 'button', className: 'dsh-mtm-btn', onClick: () => setSaveName(null) }, 'Cancel'),
                   ),
             ),
-            state.error ? h('div', { className: 'dsh-mc-error', role: 'alert' }, state.error) : null,
+            state.error ? h('div', { className: 'dsh-mtm-error', role: 'alert' }, state.error) : null,
             ),
-            h('div', { className: 'dsh-mc-foot' }, 'Tiers and saved versions: Settings → Model Tiers'),
+            h('div', { className: 'dsh-mtm-foot' }, 'Tiers and saved versions: Settings → Model Tiers'),
           );
 
       return h(
         'div',
-        { className: 'dsh-mc-wrap', ref: rootRef },
+        { className: 'dsh-mtm-wrap', ref: rootRef },
         h(Styles),
         h(
           'button',
           {
             type: 'button',
-            className: 'dsh-mc-trigger',
+            className: 'dsh-mtm-trigger dsh-mc-trigger', // dsh-mc-trigger: Modes sets the one width of this button by that name
             ref: triggerRef,
             'data-open': String(open),
             'aria-haspopup': 'dialog',
@@ -5293,9 +5574,9 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
             },
           },
           activeTier ? h('span', { className: 'dsh-mt-badge', title: `Tier: ${tierLabel(activeTier)}` }, activeTier.short) : null,
-          h('span', { className: 'dsh-mc-triggername' }, triggerText),
-          effortLabel ? h('span', { className: 'dsh-mc-triggereffort' }, effortLabel) : null,
-          h('span', { className: 'dsh-mc-chevron', 'aria-hidden': true }, busy ? '…' : '▾'),
+          h('span', { className: 'dsh-mtm-triggername' }, triggerText),
+          effortLabel ? h('span', { className: 'dsh-mtm-triggereffort' }, effortLabel) : null,
+          h('span', { className: 'dsh-mtm-chevron dsh-mc-chevron', 'aria-hidden': true }, busy ? '…' : '▾'),
         ),
         panel && typeof document !== 'undefined'
           ? ReactDOM.createPortal(
@@ -5304,7 +5585,7 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
                 null,
                 // A clear sheet behind the panel: a click anywhere outside closes it, also on the
                 // part of the Mac window that otherwise only drags the window.
-                h('div', { className: 'dsh-mc-backdrop', 'aria-hidden': true, onPointerDown: () => setOpen(false) }),
+                h('div', { className: 'dsh-mtm-backdrop', 'aria-hidden': true, onPointerDown: () => setOpen(false) }),
                 panel,
               ),
               document.body,
@@ -5327,6 +5608,9 @@ body:has(.dsh-mc-wrap) [data-slot="conversation.input.model"] { display: none !i
         }
         const t = ctx.locale.bind('model-tiers');
 
+        // Other add-ons (Role prompts, Sampling presets) show their pages as tabs of this one.
+        ctx.effect(() => dshMerge.host('model-tiers'));
+        ctx.effect(() => dshMerge.part('model-tiers', 'advanced', { label: () => 'Advanced', order: 900, render: () => null }));
         ctx.effect(() =>
           ctx.slots.inject('settings.section', () =>
             ctx.slots.register(

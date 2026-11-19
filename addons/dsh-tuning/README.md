@@ -29,13 +29,13 @@ Each mode has its own switch, and each starts off.
 | Content | your rulings on claims (never a claim brought in from Recon), and your edits beside the writer's drafts from the Voice Library |
 | Research | a passage and the claim it supports, only from a source that was opened; source grades |
 | Finance and Data | a question and the query that answered it, when the analysis was saved or run again with nothing moved |
-| Bench | what a device reports and the recipe that fitted, for devices whose read was checked; never a write command |
+| Devices | what a device reports and the recipe that fitted, for devices whose read was checked; never a write command |
 | The work loop | each step and the cheapest model that passed it (for the router) |
 | Corrections | in any mode: the answer before you corrected it beside the answer after |
 | Creator Plus | a brief and the plugin that passed its checks; an error, its cause and its fix (from `<app data>/creator-plus/builds/*.json` when Creator Plus writes them) |
 | Other tabs | tool calls of turns that finished with no failed call and no correction |
 
-Never read: Recon; a conversation that received an export from Recon, by message or as a folder export it read (it fails closed: a conversation whose log cannot be read for the mark is left out); the helpers of either; a conversation marked "never learn from this" on Learned skills; Self-improve's own test runs; the trash; a turn that called Bench's or Recon's own tools (`bench_…`, `recon_…`), whatever the tab says now; and when the Modes add-on is off, nothing at all (it cannot tell Recon apart). A Content folder's ledger is read only when every conversation in that folder may be read and none holds an export from Recon, and only claims whose origin is known and safe (a Research report, the conversation itself, your own words) that cite no source of another origin. Your own folders are never read for rows.
+Never read: Recon; a conversation that received an export from Recon, by message or as a folder export it read (it fails closed: a conversation whose log cannot be read for the mark is left out); the helpers of either; a conversation marked "never learn from this" on Learned skills; Self-improve's own test runs; the trash; a turn that called Devices' or Recon's own tools (`bench_…`, `recon_…`), whatever the tab says now; and when the Modes add-on is off, nothing at all (it cannot tell Recon apart). A Content folder's ledger is read only when every conversation in that folder may be read and none holds an export from Recon, and only claims whose origin is known and safe (a Research report, the conversation itself, your own words) that cite no source of another origin. Your own folders are never read for rows.
 
 The newest turn of a conversation waits until a later turn shows you did not correct it, or the conversation was quiet for six hours; a turn kept after a quiet spell and corrected later is taken out again.
 

@@ -12,6 +12,7 @@ import {
   deepMerge,
   digest,
   fieldDigests,
+  localPaths,
   mergeSection,
   onlyPaths,
   readShared,
@@ -128,6 +129,7 @@ export class SharedSettingsEngine {
     const raw = new Map(this.settings.describe().map((row) => [row.ns, row]));
     const state = this.loadState();
     const next = {};
+    const out = {};
     const applied = [];
     const exported = [];
     const conflicts = [];
@@ -143,6 +145,9 @@ export class SharedSettingsEngine {
         ...(this.skip.get(ns) ?? []),
         ...(desc.secrets ?? []).map((secret) => secret.path.map(String)),
         ...secretPaths(user),
+        // Also what the file holds: a value written there by hand or by an older version must not reach this Mac either.
+        ...localPaths(user),
+        ...localPaths(fileSettings[ns]),
       ];
       const local = withoutPaths(user, keep);
       const fromFile = fileSettings[ns] === undefined ? undefined : withoutPaths(fileSettings[ns], keep);
@@ -159,6 +164,11 @@ export class SharedSettingsEngine {
       }
       for (const field of result.conflicts) conflicts.push(`${ns}.${field}`);
       next[ns] = result.merged;
+      // What stays on each Mac is not ours to touch in the file: an older Mac that still shares those
+      // fields would read their absence as "deleted" and reset its own switches and paths.
+      const secretKeys = new Set([...(desc.secrets ?? []).map((secret) => secret.path.map(String)), ...secretPaths(fileSettings[ns])].map((path) => path.join('\u0000')));
+      const keepInFile = keep.filter((path) => !secretKeys.has(path.join('\u0000')));
+      out[ns] = deepMerge(result.merged, onlyPaths(fileSettings[ns] ?? {}, keepInFile));
       if (result.toFile) exported.push(ns);
     }
 
@@ -168,7 +178,7 @@ export class SharedSettingsEngine {
       if (again.error || again.exists !== read.exists || (again.exists && again.digest !== read.digest)) {
         return this.finish('retry', { retry: true, applied, warnings: ['settings.json changed during the sync; trying again.'] });
       }
-      writeAtomic(file, renderShared({ ...fileSettings, ...next }, this.now()));
+      writeAtomic(file, renderShared({ ...fileSettings, ...out }, this.now()));
     }
     for (const [ns, section] of Object.entries(next)) state.sections[ns] = fieldDigests(section);
     this.saveState(state);

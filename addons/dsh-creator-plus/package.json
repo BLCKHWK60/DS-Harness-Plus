@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A Creator Plus tab that builds and improves plugins so they fit everything already installed, and keeps them working through updates: a live map of the setup, a fit check, a trial copy, backups and a way back, recipes, and proposals from the session logs. Nothing in your real setup changes without your yes. Off until you switch it on.",
+  "description": "Experimental: A Creator Plus tab that builds and improves plugins so they fit everything already installed, and keeps them working through updates: a live map of the setup, a fit check, a trial copy, backups and a way back, recipes, and proposals from the session logs. Nothing in your real setup changes without your yes. Off until you switch it on.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

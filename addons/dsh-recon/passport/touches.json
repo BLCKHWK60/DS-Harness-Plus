@@ -5,7 +5,8 @@
   "provides": [
     "recon",
     "reconWipe",
-    "reconExports"
+    "reconExports",
+    "reconMoved"
   ],
   "uses": [
     "agents",

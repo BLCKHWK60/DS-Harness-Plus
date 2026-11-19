@@ -31,7 +31,7 @@ const brew = (names, formula, used, extra = []) => ({ names, places: [...BREW, .
 export const PLUS_PROGRAMS = {
   // Part of macOS.
   ssh: macos('ssh', '/usr/bin', 'bench_router, bench_server, bench_net_flow (router), bench_monitor (router)'),
-  'ssh-keygen': macos('ssh-keygen', '/usr/bin', 'bench_router, bench_server (Bench\'s own key)'),
+  'ssh-keygen': macos('ssh-keygen', '/usr/bin', 'bench_router, bench_server (the key Devices made)'),
   'ssh-keyscan': macos('ssh-keyscan', '/usr/bin', 'bench_router, bench_server (the host\'s key)'),
   security: macos('security', '/usr/bin', 'bench_router, bench_server (saved passwords, in the keychain)'),
   system_profiler: macos('system_profiler', '/usr/sbin', 'bench_bluetooth, bench_usb_info, bench_ftdi, bench_ch340, bench_battery'),

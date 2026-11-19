@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Probes configured model routes, keeps an up/slow/down state per route, and moves Sessions to a tier's fallback route when a route is unreachable.",
+  "description": "Experimental: Checks that your configured models answer, keeps an up, slow or down state for each, and moves a conversation to its fallback model when one is unreachable.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -12,6 +12,7 @@
   },
   "files": [
     "index.js",
+    "lib/**",
     "client.js",
     "cordis.patch.yml",
     "README.md",

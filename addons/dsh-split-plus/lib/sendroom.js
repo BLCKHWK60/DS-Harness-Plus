@@ -7,6 +7,7 @@
 import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MAX_CHARS, cardText, deliveredText, newSendId, reconLine, sourcesOf } from './sends.js';
+import { readJsonStore } from './json-store.js';
 
 /** At most this many cards wait in one conversation's tray. */
 export const MAX_TRAY = 30;
@@ -50,11 +51,10 @@ export function openSendRoom({ home = '', now = Date.now, random = Math.random }
   /** sessionId → cards (no prototype, so no conversation id is special) */
   let trays = Object.create(null);
   const memoryLedger = [];
-  if (trayFile && existsSync(trayFile)) {
-    try {
-      const saved = JSON.parse(readFileSync(trayFile, 'utf8'));
-      if (saved && typeof saved === 'object' && !Array.isArray(saved)) trays = Object.assign(Object.create(null), saved);
-    } catch { /* a damaged tray starts empty; the ledger still has every send */ }
+  if (trayFile) {
+    // A damaged tray is kept aside (review H4); the ledger still has every send.
+    const saved = readJsonStore(trayFile, () => ({}), { label: 'the Send to tray', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
+    trays = Object.assign(Object.create(null), saved);
   }
   const saveTrays = () => {
     if (!trayFile) return;

@@ -117,6 +117,11 @@ Every Recon conversation runs in one empty folder, `/private/tmp/dsh-recon-room`
 of yours. The app tells a model the path of its conversation's folder; this one is outside your
 home and says nothing about you. It is emptied whenever Recon starts. A room that has turned into a
 link, is not a folder or is not yours is left alone, not emptied.
+With Recon switched off the room is emptied at start too, but only if Plus prepared that very room
+before (Recon notes the room's path in `recon/room-owner.json` in the app's home each time it prepares it)
+and it already exists; it is never created while Recon is off, and a room the note does not name is left
+alone. The lab protection above (`DSH_RECON_ROOM`, the real room never emptied on another data folder) is
+unchanged.
 
 An app started on another data folder than the usual one (a test copy: `DSH_HOME` set to a
 throwaway folder, or `HOME` moved) gets a room of its own, `/private/tmp/dsh-recon-copy-<12 letters>`,
@@ -144,13 +149,18 @@ one by what the disk says (the same folder, not the same spelling).
 sidebar on a Recon conversation opens a NEW, ordinary conversation of the picked tab in that tab's
 usual place (Scratch, or its project; never a room). The app cannot change a conversation's folder,
 and the room is shared and emptied at every start, so the conversation is not moved in place. The
-door's `move` action (`doorMove`, `lib/move.js`) copies the conversation's own files out of the room
-(its run folder and files its tool calls named; never another conversation's) into
-`<new folder>/from-recon-<id>/files`, writes the whole conversation there as `conversation.md`, claims
-the new conversation for the tab, and records the move as an export into it (the export rules hold
-there). The page sends the conversation as the first message and names the new one "From Recon:
-<title>". The original stays in Recon, unchanged; its room files go at the next start as always, the
-copies stay. Locked conversations move the same way. `/mode` still refuses in place and points to Move to.
+door's `move` action (`doorMove`, `lib/move.js`) works like the export door, since 1.0 (review B1, 18
+November 2026): the sidebar first opens the same preview window (what leaves, what never leaves, the
+warnings, the room's files with none ticked, and for Settings → Recon → Models = Ask a tick to agree to a
+cloud model). Only after the user's yes does a new conversation open. A cloud model is refused (nothing is
+made) when Models says Never. What goes is the newest report and the sources it cites as citations
+(`summary.md`), only the files the user ticked, and, if ticked, the whole conversation as
+`conversation.md`, all in `<new folder>/from-recon-<id>`. The first message is a short DRAFT put in the
+chat box (it names the folder, holds no page text) and is never sent automatically. The move is recorded
+as an export into the new conversation (the export rules hold there; Recon's cloud check treats it as
+holding Recon's findings; Shared sync leaves it out through the `reconMoved` service). A whole project of
+Recon conversations is never moved at once. The new one is named "From Recon: <title>". The original
+stays in Recon, unchanged; its room files go at the next start as always, the copies stay. Locked conversations move the same way. `/mode` still refuses in place and points to Move to.
 
 
 `/recon export` writes one text file: the research log, every source with its citation and its
@@ -201,8 +211,8 @@ The owner's answer: build it. Recon stays sealed; this is its one way out, and o
   the app restarted is not kept; only the messages are." A loaded conversation is exported as before.
 - **What never goes:** the text of the pages Recon read, Recon's room, the word list and blocklists,
   anything the screen dropped (never kept), VPN profiles, logins, notes for learning.
-- **Where:** a new conversation in a tab the owner picks (Content first; any tab but Recon, Bench
-  too: the owner's answer of 16 November, and Bench never takes export text as his words): made in
+- **Where:** a new conversation in a tab the owner picks (Content first; any tab but Recon, Devices
+  too: the owner's answer of 16 November, and Devices never takes export text as his words): made in
   Scratch, made that tab's by Modes' own move, with the export as its first message; or added to a
   conversation that exists (never Recon's, a sealed one, or a helper); or a folder (a full path; a new folder of its
   own with `export.md` and `export.json`; checked by its real path, the nearest existing folder's links
@@ -281,7 +291,7 @@ by Recon's code, not by more helpers. Long runs in Recon are Mission's and are u
 
 ## End and wipe
 
-`/recon end` ends a conversation for good:
+`/recon end` ends a conversation for good. Typed alone it deletes nothing and says so; `/recon end confirm` does it:
 
 - what it read (sources, notes, shown addresses, a cloud agreement) is forgotten;
 - Tor is stopped and its temporary folder deleted;
@@ -553,3 +563,17 @@ All (nothing ticked away) is Recon exactly as before. The ticks only take tools 
 Tests: `test/websources.test.mjs` (each tool's tick, the examples, a refusal counted as not run, results left out, your own sources through WireGuard only with the login hidden, the locked process's login lines).
 
 **Status dots (18 November 2026, the owner's request).** The start page's status bar has a dot for every service Recon can use, with the reason when you hover over it: Tor (as before), Usenet (as before), **WireGuard** (grey: not set up; green: connected, or set up and started when needed; amber: connecting; red: did not connect, with what was tried), **I2P** (grey: not set up yet), and **each of your own sources allowed in Recon** (green: its login is kept and WireGuard is set up; red: its last read failed, with why; grey: no login kept yet, or no working tunnel). It uses only what Recon already knows: WireGuard's own status, the last read of each source (in memory, with the login taken out) and Modes' `reconOtherStatus()` (whether a login is kept, looked up on this Mac). No request is sent to draw it. Choosing which of these a conversation uses stays on the Web button.
+
+
+## Damaged privacy files (1.0 review fix)
+
+`recon/door.json` (exports and moves) and `recon/wipe.json` (ended conversations waiting for deletion) are no longer
+overwritten when damaged. A copy is kept beside the file (`…damaged-<date-time>`, never over an earlier copy).
+- **door.json damaged:** the file stays where it is; nothing is exported or moved; every conversation counts as holding
+  what Recon found (no cloud model Recon does not allow); Sync is told (`reconMoved.damaged()`) and waits. The Recon page
+  says so in plain words. Fix the file from the copy, or delete it, and everything works again.
+- **wipe.json damaged:** the ids still plainly at the start of a cut-off list are kept and still deleted; the page says
+  how many were recovered. If no copy can be made, nothing is saved over it and ending a conversation is refused.
+- **Move order:** the new conversation is claimed by its tab first, then the cloud check is made against its real
+  model, then files are written; a move that fails after that removes its own new folder.
+Tests: `test/move-route.test.mjs` (runs the route on stand-in services), `test/room.test.mjs`.

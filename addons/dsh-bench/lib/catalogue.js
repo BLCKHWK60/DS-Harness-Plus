@@ -14,7 +14,7 @@
 /** Settings no recipe ever changes, whatever is asked. */
 export const NEVER_KEYS = /(tx_?power|transmit|country|region|regdomain|reg_domain|frequenc|freq_|channel_?width|chanbw|htmode|failsafe|fail_safe|return_?to_?home|rth_|geofence|geo_fence|speed_?limit|max_?speed|rf_?power|power_?level)/i;
 /** @returns {string} why a setting is never changed, or ''. */
-export const neverChanged = (key) => (NEVER_KEYS.test(String(key ?? '')) ? `${String(key).slice(0, 80)} is a radio limit or a safety setting (transmit power, region, frequency, a drone's failsafe, a speed limit); Bench never changes it on any device.` : '');
+export const neverChanged = (key) => (NEVER_KEYS.test(String(key ?? '')) ? `${String(key).slice(0, 80)} is a radio limit or a safety setting (transmit power, region, frequency, a drone's failsafe, a speed limit); Devices never changes it on any device.` : '');
 
 const built = (levels) => levels;
 /** The families, in the plan's order. */
@@ -63,9 +63,9 @@ export function familiesOf(device) {
 /** @returns {string} the catalogue as a plain file. */
 export function catalogueText() {
   return [
-    '# The kinds of device Bench knows',
+    '# The kinds of device Devices knows',
     '',
-    'Bench\'s catalogue: 22 families of what people commonly have at home. Every family has Identify and Read through Bench\'s doors. Adjust and Write exist only where a recipe is built, and are added family by family when you ask. Edit this file as you like: Bench never replaces it.',
+    'Devices\' catalogue: 22 families of what people commonly have at home. Every family has Identify and Read through Devices\' doors. Adjust and Write exist only where a recipe is built, and are added family by family when you ask. Edit this file as you like: Devices never replaces it.',
     '',
     '| Family | Kinds of device | Door | Deepest level | Route | Built so far |',
     '| --- | --- | --- | --- | --- | --- |',
@@ -85,9 +85,9 @@ export function recipeText(family) {
     `- Doors: ${family.doors.join(', ')}`,
     `- Deepest level: ${family.deepest}`,
     `- Route (open tools): ${family.route}`,
-    `- Built in Bench so far: ${family.built.join('; ')}`,
-    `- How Bench recognises it: ${[family.usb?.length ? `USB maker numbers ${family.usb.map((id) => `0x${id.toString(16).padStart(4, '0')}`).join(', ')}` : '', family.mdns?.length ? `it announces ${family.mdns.join(', ')}` : '', family.ble?.length ? `Bluetooth services ${family.ble.join(', ')}` : '', 'its name'].filter(Boolean).join('; ')}`,
-    family.lookOnly ? '- Look-only: Bench reads it and changes nothing on it.' : '',
+    `- Built in Devices so far: ${family.built.join('; ')}`,
+    `- How Devices recognises it: ${[family.usb?.length ? `USB maker numbers ${family.usb.map((id) => `0x${id.toString(16).padStart(4, '0')}`).join(', ')}` : '', family.mdns?.length ? `it announces ${family.mdns.join(', ')}` : '', family.ble?.length ? `Bluetooth services ${family.ble.join(', ')}` : '', 'its name'].filter(Boolean).join('; ')}`,
+    family.lookOnly ? '- Look-only: Devices reads it and changes nothing on it.' : '',
     family.never ? `- Never changed: ${family.never}.` : '- Never changed: radio limits (transmit power, region, frequency).',
     '- Adjust and Write steps not listed under "Built" are added only when you ask, from the maker\'s or the open project\'s own documentation.',
     '',

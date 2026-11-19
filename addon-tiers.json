@@ -1,0 +1,455 @@
+{
+  "_about": "The one list of every add-on's tier. Used by the installer (scripts/install.sh), the README and the Settings page. Edit here only. Tiers: core = finished, on by default; beta = shipped, off until you switch it on; experimental = only with \"Everything\", off until you switch it on; separate = its own download.",
+  "version": 1,
+  "tiers": {
+    "core": {
+      "label": "Core",
+      "installed": "on"
+    },
+    "beta": {
+      "label": "Beta",
+      "installed": "off"
+    },
+    "experimental": {
+      "label": "Experimental",
+      "installed": "off"
+    },
+    "separate": {
+      "label": "Separate download",
+      "installed": "off"
+    }
+  },
+  "supportedApp": {
+    "min": "0.2.2",
+    "below": "0.3.0",
+    "engines": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "addons": {
+    "dsh-activity": {
+      "tier": "core",
+      "label": "Activity",
+      "reason": "Finished and tested: a small indicator of what the assistant is doing."
+    },
+    "dsh-agent-swarm": {
+      "tier": "experimental",
+      "label": "Agent swarm",
+      "reason": "Many helpers at once can spend a lot quickly and has had little real-world testing."
+    },
+    "dsh-artifacts": {
+      "tier": "beta",
+      "label": "Artifacts",
+      "reason": "Works, but its privacy rules for private conversations were fixed only recently."
+    },
+    "dsh-automations": {
+      "tier": "core",
+      "label": "Alerts",
+      "reason": "Finished and tested: shows how scheduled tasks ended."
+    },
+    "dsh-balance": {
+      "tier": "core",
+      "label": "Balance",
+      "reason": "Finished and tested: shows your DeepSeek balance."
+    },
+    "dsh-bench": {
+      "tier": "experimental",
+      "label": "Devices",
+      "reason": "Controls boards, phones and routers; only tested with stand-ins, not with real devices."
+    },
+    "dsh-benchmark": {
+      "tier": "core",
+      "label": "Benchmark",
+      "reason": "Finished and tested: compares models on your own questions."
+    },
+    "dsh-budget": {
+      "tier": "core",
+      "label": "Budget",
+      "reason": "Finished and tested: limits that stop a runaway task."
+    },
+    "dsh-code-map": {
+      "tier": "core",
+      "label": "Code map",
+      "reason": "Finished and tested: a compact map of your project."
+    },
+    "dsh-code-power": {
+      "tier": "core",
+      "label": "Code power",
+      "reason": "Finished and tested: code review and fix skills."
+    },
+    "dsh-color-schemes": {
+      "tier": "core",
+      "label": "Colours",
+      "reason": "Finished and tested: colour schemes for the whole app."
+    },
+    "dsh-content": {
+      "tier": "beta",
+      "label": "Content",
+      "reason": "Works, but is new and has had little use by people other than its maker."
+    },
+    "dsh-context-saver": {
+      "tier": "experimental",
+      "label": "Context saver",
+      "reason": "Needs separate Python tools and changes what the assistant sees; not yet proven."
+    },
+    "dsh-cowork-shell": {
+      "tier": "core",
+      "label": "Cowork sidebar",
+      "reason": "Finished and tested: the Chat, Cowork and Code tabs."
+    },
+    "dsh-creator-plus": {
+      "tier": "experimental",
+      "label": "Creator Plus",
+      "reason": "Builds and changes add-ons itself, so a mistake can break other add-ons."
+    },
+    "dsh-data": {
+      "tier": "beta",
+      "label": "Data",
+      "reason": "Works, but is new and has had little use by people other than its maker."
+    },
+    "dsh-deep-research": {
+      "tier": "core",
+      "label": "Deep research",
+      "reason": "Finished and tested: parallel research with checked sources."
+    },
+    "dsh-diagram": {
+      "tier": "core",
+      "label": "Diagrams",
+      "reason": "Finished and tested: drawn diagrams from a description."
+    },
+    "dsh-engines": {
+      "tier": "experimental",
+      "label": "Engines",
+      "reason": "Has never been run with a real outside engine."
+    },
+    "dsh-evolve": {
+      "tier": "core",
+      "label": "Self-improvement",
+      "reason": "Finished and tested; every change needs your approval."
+    },
+    "dsh-finance": {
+      "tier": "beta",
+      "label": "Finance",
+      "reason": "Works, but gives market views, so it starts off and shows a warning first."
+    },
+    "dsh-learn": {
+      "tier": "core",
+      "label": "Learning",
+      "reason": "Finished and tested: a tutor that makes you do the thinking."
+    },
+    "dsh-library": {
+      "tier": "core",
+      "label": "Library",
+      "reason": "Finished and tested: search your own documents."
+    },
+    "dsh-mac": {
+      "tier": "core",
+      "label": "Mac tools",
+      "reason": "Finished and tested: Spotlight and Shortcuts, only in folders you allow."
+    },
+    "dsh-media-tools": {
+      "tier": "experimental",
+      "label": "Media tools",
+      "reason": "Image tools for an outside service; little tested and it can cost money."
+    },
+    "dsh-memory": {
+      "tier": "core",
+      "label": "Memory",
+      "reason": "Finished and tested: lasting facts about you."
+    },
+    "dsh-mission": {
+      "tier": "core",
+      "label": "Mission",
+      "reason": "Finished and tested: a goal worked on by several models."
+    },
+    "dsh-model-arena": {
+      "tier": "core",
+      "label": "Model arena",
+      "reason": "Finished and tested: a blind comparison of models."
+    },
+    "dsh-model-router": {
+      "tier": "experimental",
+      "label": "Model router",
+      "reason": "Picks the model for you each turn; costs and results are hard to predict."
+    },
+    "dsh-model-tiers": {
+      "tier": "core",
+      "label": "Model Tiers",
+      "reason": "Finished and tested: the model button and tiers."
+    },
+    "dsh-modes": {
+      "tier": "core",
+      "label": "Modes",
+      "reason": "Finished and tested: Chat, Cowork and Code modes."
+    },
+    "dsh-notify": {
+      "tier": "experimental",
+      "label": "Notify",
+      "reason": "Runs a command you write when a turn ends; being merged into Alerts."
+    },
+    "dsh-pdf": {
+      "tier": "core",
+      "label": "PDF reader",
+      "reason": "Finished and tested: reads PDFs with the Mac's own tools."
+    },
+    "dsh-privacy": {
+      "tier": "core",
+      "label": "Privacy",
+      "reason": "Finished and tested: switches off the app's reporting."
+    },
+    "dsh-recon": {
+      "tier": "separate",
+      "label": "Recon",
+      "reason": "Reaches Tor and Usenet, so it is a separate download with its own warning."
+    },
+    "dsh-research": {
+      "tier": "beta",
+      "label": "Research",
+      "reason": "Works, but is new and has had little use by people other than its maker."
+    },
+    "dsh-role-prompts": {
+      "tier": "core",
+      "label": "Role prompts",
+      "reason": "Finished and tested: your own instruction sections."
+    },
+    "dsh-route-health": {
+      "tier": "experimental",
+      "label": "Route health",
+      "reason": "Moves a conversation to another model by itself when one is down; not proven."
+    },
+    "dsh-sampling-presets": {
+      "tier": "core",
+      "label": "Sampling",
+      "reason": "Finished and tested: temperature and length presets."
+    },
+    "dsh-scout": {
+      "tier": "experimental",
+      "label": "Scout",
+      "reason": "Searches for work on outside sites; little tested."
+    },
+    "dsh-search": {
+      "tier": "core",
+      "label": "Search",
+      "reason": "Finished and tested: find conversations with Cmd-K."
+    },
+    "dsh-settings-plus": {
+      "tier": "core",
+      "label": "Settings Plus",
+      "reason": "Finished and tested: groups and searches the Settings window."
+    },
+    "dsh-shared-settings": {
+      "tier": "experimental",
+      "label": "Shared settings",
+      "reason": "Tried on one Mac only; a wrong merge could overwrite settings on another Mac."
+    },
+    "dsh-skill-architect": {
+      "tier": "core",
+      "label": "Learned skills",
+      "reason": "Finished and tested; nothing is installed without your approval."
+    },
+    "dsh-split-plus": {
+      "tier": "experimental",
+      "label": "Split Plus",
+      "reason": "Several conversations in one window; not yet tried in the desktop app."
+    },
+    "dsh-sync": {
+      "tier": "core",
+      "label": "Sync",
+      "reason": "Finished and tested: conversations between Macs through your own git repository."
+    },
+    "dsh-tuning": {
+      "tier": "experimental",
+      "label": "Tuner Plus",
+      "reason": "Collects training rows from your work; new and not yet proven."
+    },
+    "dsh-usage-ledger": {
+      "tier": "core",
+      "label": "Usage",
+      "reason": "Finished and tested: counts requests and tokens."
+    }
+  },
+  "dataFolders": [
+    {
+      "folder": "cowork-shell",
+      "addon": "dsh-cowork-shell",
+      "what": "your projects list, presets and versions"
+    },
+    {
+      "folder": "trash",
+      "addon": "dsh-cowork-shell",
+      "what": "the conversations you deleted in the Cowork sidebar (kept 30 days): removing this folder deletes them for good; the app cannot show them without Plus"
+    },
+    {
+      "folder": "mission",
+      "addon": "dsh-mission",
+      "what": "Mission run records and checkpoints"
+    },
+    {
+      "folder": "artifacts",
+      "addon": "dsh-artifacts",
+      "what": "the list of files your conversations made, their versions and their trash"
+    },
+    {
+      "folder": "library",
+      "addon": "dsh-library",
+      "what": "the index of your documents (the documents themselves are not touched)"
+    },
+    {
+      "folder": "memory",
+      "addon": "dsh-memory",
+      "what": "your list of lasting facts"
+    },
+    {
+      "folder": "code-map",
+      "addon": "dsh-code-map",
+      "what": "project maps (can be rebuilt)"
+    },
+    {
+      "folder": "content",
+      "addon": "dsh-content",
+      "what": "Content writing records"
+    },
+    {
+      "folder": "research",
+      "addon": "dsh-research",
+      "what": "Research records and reports"
+    },
+    {
+      "folder": "data",
+      "addon": "dsh-data",
+      "what": "Data mode records"
+    },
+    {
+      "folder": "finance",
+      "addon": "dsh-finance",
+      "what": "Finance records"
+    },
+    {
+      "folder": "scout",
+      "addon": "dsh-scout",
+      "what": "Scout searches and results"
+    },
+    {
+      "folder": "learn",
+      "addon": "dsh-learn",
+      "what": "your study records (no text of yours)"
+    },
+    {
+      "folder": "evolve",
+      "addon": "dsh-evolve",
+      "what": "Self-improvement test tasks, playbook versions"
+    },
+    {
+      "folder": "arena",
+      "addon": "dsh-model-arena",
+      "what": "Model Arena results"
+    },
+    {
+      "folder": "benchmarks",
+      "addon": "dsh-benchmark",
+      "what": "Benchmark runs and results"
+    },
+    {
+      "folder": "automations",
+      "addon": "dsh-automations",
+      "what": "the alerts list and run notes"
+    },
+    {
+      "folder": "budget",
+      "addon": "dsh-budget",
+      "what": "budget counters"
+    },
+    {
+      "folder": "usage-ledger",
+      "addon": "dsh-usage-ledger",
+      "what": "your daily request and token counts"
+    },
+    {
+      "folder": "diagrams",
+      "addon": "dsh-diagram",
+      "what": "saved diagrams"
+    },
+    {
+      "folder": "pdf-reader",
+      "addon": "dsh-pdf",
+      "what": "PDF reader notes and cache"
+    },
+    {
+      "folder": "tuning",
+      "addon": "dsh-tuning",
+      "what": "Tuner Plus training rows and data sets"
+    },
+    {
+      "folder": "creator-plus",
+      "addon": "dsh-creator-plus",
+      "what": "Creator Plus runs, backups and prepared changes"
+    },
+    {
+      "folder": "bench",
+      "addon": "dsh-bench",
+      "what": "Devices records"
+    },
+    {
+      "folder": "engines",
+      "addon": "dsh-engines",
+      "what": "Engines records"
+    },
+    {
+      "folder": "split-plus",
+      "addon": "dsh-split-plus",
+      "what": "Split Plus layouts and the send room"
+    },
+    {
+      "folder": "scratch",
+      "addon": "dsh-cowork-shell",
+      "what": "scratch work folders of conversations without a project"
+    },
+    {
+      "folder": "sync",
+      "addon": "dsh-sync",
+      "what": "the local copy of your conversation repository (the remote one is untouched)"
+    },
+    {
+      "folder": "shared-settings",
+      "addon": "dsh-shared-settings",
+      "what": "which iCloud folder is shared, and backups of this Mac's settings"
+    },
+    {
+      "folder": "recon",
+      "addon": "dsh-recon",
+      "what": "Recon exports, notes and settings"
+    }
+  ],
+  "dataNeverRemoved": [
+    {
+      "folder": "sessions",
+      "addon": "the app",
+      "what": "your conversations; the app owns them"
+    },
+    {
+      "folder": "skill-architect",
+      "addon": "dsh-skill-architect",
+      "what": "the learned skills you approved, and proposals still waiting for your yes. They are your work, so Plus never removes them",
+      "listed": true
+    },
+    {
+      "folder": "plugins",
+      "addon": "the app and Creator Plus",
+      "what": "add-ons you or Creator Plus made. The app still lists them without Plus, so Plus never removes them",
+      "listed": true
+    },
+    {
+      "folder": "skills",
+      "addon": "the app",
+      "what": "your skills, including learned ones you approved"
+    },
+    {
+      "folder": "profiles",
+      "addon": "the app",
+      "what": "the app's settings, models and keys"
+    },
+    {
+      "folder": "backups",
+      "addon": "Plus",
+      "what": "dated copies of your setup from every install and uninstall; they let you undo"
+    }
+  ]
+}

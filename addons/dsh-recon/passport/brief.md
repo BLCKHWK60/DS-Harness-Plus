@@ -182,8 +182,8 @@ The owner's answer: build it. Recon stays sealed; this is its one way out, and o
   the app restarted is not kept; only the messages are." A loaded conversation is exported as before.
 - **What never goes:** the text of the pages Recon read, Recon's room, the word list and blocklists,
   anything the screen dropped (never kept), VPN profiles, logins, notes for learning.
-- **Where:** a new conversation in a tab the owner picks (Content first; any tab but Recon, Bench
-  too: the owner's answer of 16 November, and Bench never takes export text as his words): made in
+- **Where:** a new conversation in a tab the owner picks (Content first; any tab but Recon, Devices
+  too: the owner's answer of 16 November, and Devices never takes export text as his words): made in
   Scratch, made that tab's by Modes' own move, with the export as its first message; or added to a
   conversation that exists (never Recon's, a sealed one, or a helper); or a folder (a full path; a new folder of its
   own with `export.md` and `export.json`; checked by its real path, the nearest existing folder's links

@@ -44,6 +44,8 @@ Runs are recorded from the moment the add-on is installed. Earlier ones are not 
 
 ## Alerts
 
+**One Alerts story with Notify (Phase 2).** **Settings → Alerts** is the one place for everything that tells you something happened. Below the task alerts it shows a group, "When a turn ends or the app waits for you", which is the Notify add-on's settings: your own program to run when a turn ends or the app waits for your approval. It appears only when Notify is installed (the Notify add-on gives the page that group through a small shared hand-over, `dshMerge`, copied identically into both `client.js` files); Alerts works alone without it, and Notify works alone with its own **Settings → Notify** page when Alerts is missing or switched off. Nothing stored moved: both add-ons keep their own setting names and files.
+
 **Settings → Alerts.** A short line when a task fails, needs you or finishes.
 
 - **Alert me when:** a task failed or was stopped (on), a task needs me (on), a task finished (off).

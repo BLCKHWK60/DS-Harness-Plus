@@ -70,31 +70,31 @@ export const name = 'deep-research';
 export const inject = ['tools'];
 
 export const Config = z.object({
-  enabled: z.boolean().default(true),
+  enabled: z.boolean().default(true).volatile(),
   toolName: z.string().default('deep_research'),
   roles: z
     .object({
-      planner: z.union([z.const('plan'), z.const('implement'), z.const('review'), z.const('fast')]).default('plan'),
-      searcher: z.union([z.const('plan'), z.const('implement'), z.const('review'), z.const('fast')]).default('fast'),
-      writer: z.union([z.const('plan'), z.const('implement'), z.const('review'), z.const('fast')]).default('plan'),
+      planner: z.union([z.const('plan'), z.const('implement'), z.const('review'), z.const('fast')]).default('plan').volatile(),
+      searcher: z.union([z.const('plan'), z.const('implement'), z.const('review'), z.const('fast')]).default('fast').volatile(),
+      writer: z.union([z.const('plan'), z.const('implement'), z.const('review'), z.const('fast')]).default('plan').volatile(),
     })
     .default({ planner: 'plan', searcher: 'fast', writer: 'plan' }),
   /**
    * Which model the helpers run on when the Modes add-on is not there to say: `same` (the model of
    * the conversation that started the research) or `roles` (the Tier add-on's role models).
    */
-  helperModel: z.union([z.const('same'), z.const('roles')]).default('same'),
+  helperModel: z.union([z.const('same'), z.const('roles')]).default('same').volatile(),
   /** Used when the Modes add-on is not there to give the conversation's Depth. */
-  depth: z.union([z.const('quick'), z.const('standard'), z.const('thorough')]).default('standard'),
+  depth: z.union([z.const('quick'), z.const('standard'), z.const('thorough')]).default('standard').volatile(),
   /** Upper bounds. The chosen depth decides the actual numbers and is held to these. */
-  maxSubquestions: z.number().min(1).max(12).default(8),
-  maxParallel: z.number().min(1).max(8).default(8),
-  maxSources: z.number().min(1).max(200).default(120),
-  maxMinutes: z.number().min(1).max(240).default(60),
-  searchToolNames: z.array(z.string()).default(['web_search']),
-  fetchToolNames: z.array(z.string()).default(['web_fetch']),
-  requireFetched: z.boolean().default(false),
-  wide: z.object({ maxRows: z.number().min(1).max(5000).default(500) }).default({ maxRows: 500 }),
+  maxSubquestions: z.number().min(1).max(12).default(8).volatile(),
+  maxParallel: z.number().min(1).max(8).default(8).volatile(),
+  maxSources: z.number().min(1).max(200).default(120).volatile(),
+  maxMinutes: z.number().min(1).max(240).default(60).volatile(),
+  searchToolNames: z.array(z.string()).default(['web_search']).volatile(),
+  fetchToolNames: z.array(z.string()).default(['web_fetch']).volatile(),
+  requireFetched: z.boolean().default(false).volatile(),
+  wide: z.object({ maxRows: z.number().min(1).max(5000).default(500).volatile() }).default({ maxRows: 500 }),
 });
 
 /**

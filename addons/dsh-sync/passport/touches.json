@@ -3,7 +3,9 @@
   "folder": "dsh-sync",
   "at": "2026-11-17",
   "provides": [],
-  "uses": [],
+  "uses": [
+    "reconMoved"
+  ],
   "events": [],
   "tools": [],
   "commands": [],

@@ -12,6 +12,8 @@
  * Formats: `md` (Markdown), `txt` (plain text), `html` (one page, prints well), `json`.
  */
 
+import { homedir } from 'node:os';
+
 export const LEVELS = ['conversation', 'thinking', 'full'];
 export const FORMATS = ['md', 'txt', 'html', 'json'];
 
@@ -19,6 +21,58 @@ const MIME = { md: 'text/markdown; charset=utf-8', txt: 'text/plain; charset=utf
 
 /** Log events that only say how the log was kept: left out of the readable formats (they stay in the raw log). */
 const QUIET = new Set(['agent/inbox/spliced', 'session-log-deepseek/delivery-accepted', 'step/start', 'step/end', 'turn/start', 'turn/end', 'subagent/catalog', 'session/title-llm-request']);
+
+// --- shared redact rules: this block is the same in every add-on that keeps a redact() (a test compares them) ---
+const SECRET_NAME = String.raw`[A-Za-z0-9_.-]*(?:api[-_]?key|access[-_]?key|secret|token(?!s\b|iz)|passw(?:or)?d|passphrase|credential|private[-_]?key|auth[-_]?key)[A-Za-z0-9_.-]*`;
+const NOT_A_VALUE = String.raw`(?!(?:null|none|true|false|undefined|\[secret\]|\*+)\b)`;
+const SECRET_RULES = [
+  // Well-known key shapes (a name is not needed).
+  [/\b(?:sk|pk|rk)[-_][-_A-Za-z0-9]{12,}/g, '[secret]'],
+  [/\b(?:gh[pousr]|github_pat|xox[abprs]|xapp|glpat|hf|npm|pypi)[-_][-_A-Za-z0-9]{12,}/g, '[secret]'],
+  [/\b(?:AKIA|ASIA|AIza)[-_A-Za-z0-9]{12,}/g, '[secret]'],
+  [/\beyJ[-_A-Za-z0-9]{8,}\.[-_A-Za-z0-9]{8,}\.[-_A-Za-z0-9]{8,}/g, '[secret]'],
+  // Authorization headers: Basic, Bearer, Token and the like.
+  [/(\bauthorization\\?["']?\s*[:=]\s*\\?["']?(?:(?:Basic|Bearer|Token|Digest)\s+)?)[^\s"',;\\]{4,}/gi, '$1[secret]'],
+  [/\bBearer\s+[-._~+/A-Za-z0-9]{12,}=*/gi, 'Bearer [secret]'],
+  // A name that says it is secret, then a value: OPENAI_API_KEY=..., DB_PASSWORD: ..., passphrase: ...
+  [new RegExp(String.raw`\b(${SECRET_NAME}\s*[:=]\s*)(["']?)${NOT_A_VALUE}[^\s"',;]{4,}\2`, 'gi'), '$1[secret]'],
+  // The same in JSON text (a tool's arguments are stored as a JSON string, so the quotes may be escaped).
+  [new RegExp(String.raw`(\\?["']${SECRET_NAME}\\?["']\s*:\s*\\?["'])${NOT_A_VALUE}[^"'\\]{4,}`, 'gi'), '$1[secret]'],
+  // Command-line flags: --password hunter2, --api-key=abc...
+  [/(--[\w-]*(?:passw(?:or)?d|token(?!s\b)|secret|api-?key|passphrase)(?:=|\s+))(?!-)[^\s"']{4,}/gi, '$1[secret]'],
+  // A password inside an address: https://user:pass@host
+  [/(\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:)[^\s/@]+@/gi, '$1[secret]@'],
+  [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '[private key]'],
+];
+// --- end of the shared block ---
+
+/**
+ * Remove what should not leave this Mac: keys, tokens, passwords, private keys, e-mail addresses and the home
+ * folder's name. The same rules as the redact() of Self-improve and Skill architect (each add-on has its own copy).
+ * @param {string} text - any text.
+ * @returns {string} the text with those replaced.
+ */
+export function redact(text) {
+  let value = String(text ?? '');
+  const home = homedir();
+  if (home && home.length > 1) value = value.split(home).join('~');
+  for (const [pattern, replacement] of SECRET_RULES) value = value.replace(pattern, replacement);
+  return value
+    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, '[email]')
+    .replace(/\/Users\/[^/\s"']+/g, '~');
+}
+
+/**
+ * The stored events with every text run through redact() (keys and values that are objects are walked; names are kept).
+ * @param {unknown} value - the events, or any part of one.
+ * @returns {unknown} a copy.
+ */
+export function redactEvents(value) {
+  if (typeof value === 'string') return redact(value);
+  if (Array.isArray(value)) return value.map(redactEvents);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, redactEvents(inner)]));
+  return value;
+}
 
 const asList = (value) => (Array.isArray(value) ? value : []);
 const plainText = (value) => (typeof value === 'string' ? value : value === undefined || value === null ? '' : JSON.stringify(value));
@@ -244,10 +298,11 @@ export function fileName(title, level, sessionId, format) {
 /**
  * One export, made.
  * @param {object[]} events - the stored events of the conversation.
- * @param {{level?: string, format?: string, sessionId?: string, now?: number}} [options]
+ * @param {{level?: string, format?: string, sessionId?: string, now?: number, hide?: boolean}} [options] - `hide`: keys, passwords and the like are removed (redact()).
  * @returns {{filename: string, mime: string, body: string, title: string, counts: object}} the file.
  */
 export function buildExport(events, options = {}) {
+  if (options.hide === true) events = redactEvents(asList(events));
   const level = LEVELS.includes(options.level) ? options.level : 'conversation';
   const format = FORMATS.includes(options.format) ? options.format : 'md';
   const sessionId = String(options.sessionId ?? '');

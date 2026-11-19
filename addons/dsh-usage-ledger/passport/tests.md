@@ -1,6 +1,6 @@
 # Tests: @local/dsh-usage-ledger
 
-No tests yet.
+Suites: test/ledger.test.mjs.
 
 Run with the app's own Node (stand-ins only; never against the real app data):
 

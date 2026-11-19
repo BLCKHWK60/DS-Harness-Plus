@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Routes each turn to one of 2 to 5 candidate models using a small routing model, from the second step of the turn. Does nothing until candidates are configured.",
+  "description": "Experimental: Routes each turn to one of 2 to 5 candidate models using a small routing model, from the second step of the turn. Does nothing until candidates are configured.",
   "exports": {
     ".": "./index.js",
     "./locale/*.json": "./locale/*.json",

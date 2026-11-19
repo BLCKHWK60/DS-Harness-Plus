@@ -39,7 +39,7 @@ export function helperPath(folder) {
 export async function ensureHelper({ run, folder }) {
   const path = helperPath(folder);
   if (existsSync(path)) return path;
-  if (!existsSync(XCRUN)) throw new Error('Reading a device\'s services needs Apple\'s Command Line Tools (they bring the Swift compiler). Install them yourself with `xcode-select --install` in Terminal. Bench never installs anything; the Mac\'s list (bench_bluetooth) works without them.');
+  if (!existsSync(XCRUN)) throw new Error('Reading a device\'s services needs Apple\'s Command Line Tools (they bring the Swift compiler). Install them yourself with `xcode-select --install` in Terminal. Devices never installs anything; the Mac\'s list (bench_bluetooth) works without them.');
   const plist = join(folder, 'bench-bluetooth.plist');
   writeFileSync(plist, PLIST);
   const temp = `${path}.${process.pid}.building`;
@@ -60,7 +60,7 @@ const parse = (result) => {
     throw new Error('The Bluetooth reader gave no answer.');
   }
 };
-const why = (error) => ({ unauthorized: 'macOS has not allowed Bluetooth for DeepSeek Harness: allow it in System Settings → Privacy & Security → Bluetooth, then ask again', off: 'Bluetooth is off on this Mac', unsupported: 'this Mac has no Bluetooth Bench can use', 'could not connect': 'the device did not let the Mac connect (it may be paired to another device, or out of reach)' }[error] ?? String(error));
+const why = (error) => ({ unauthorized: 'macOS has not allowed Bluetooth for DeepSeek Harness: allow it in System Settings → Privacy & Security → Bluetooth, then ask again', off: 'Bluetooth is off on this Mac', unsupported: 'this Mac has no Bluetooth Devices can use', 'could not connect': 'the device did not let the Mac connect (it may be paired to another device, or out of reach)' }[error] ?? String(error));
 
 /** @returns {Promise<{id: string, name: string, rssi: number, services: string[], maker: string, connectable: boolean}[]>} nearby devices, cleaned. */
 export async function scanNearby({ run, helper, seconds = SCAN_SECONDS }) {

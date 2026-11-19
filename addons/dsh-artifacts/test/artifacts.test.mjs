@@ -1,12 +1,12 @@
 /**
  * Artifacts: kinds and what changed (lib/kinds.js), the index and its versions (lib/store.js), and the
- * server half on a stand-in app: what a tool made becomes an artifact; Recon's stays with Recon; a Bench
+ * server half on a stand-in app: what a tool made becomes an artifact; Recon's stays with Recon; a Devices
  * backup is listed and never shown; contents go out as plain data; a clean-up goes to the trash and comes
  * back with Put back. Throwaway folders only.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { apply, testing } from '../index.js';
 import { diffLines, kindOf } from '../lib/kinds.js';
@@ -55,7 +55,7 @@ test('a version each time the content changes, kept in Artifacts\' folder, never
     rmSync(work, { recursive: true, force: true });
   }
 });
-test('Recon\'s artifacts are never listed; a Bench backup is listed, never kept as a copy; a deleted Scratch thread takes its artifacts along', () => {
+test('Recon\'s artifacts are never listed; a Devices backup is listed, never kept as a copy; a deleted Scratch thread takes its artifacts along', () => {
   const home = folder();
   const work = folder();
   try {
@@ -200,7 +200,7 @@ test('one artifact and what changed are found also when the asking conversation 
   }
 });
 
-test('the Danger zone: a Bench backup shown, Recon\'s files outside Recon, web pages opening running; noted', async () => {
+test('the Danger zone: a Devices backup shown, Recon\'s files outside Recon, web pages opening running; noted', async () => {
   const home = folder();
   const work = folder();
   try {
@@ -233,5 +233,180 @@ test('the Danger zone: a Bench backup shown, Recon\'s files outside Recon, web p
   } finally {
     rmSync(home, { recursive: true, force: true });
     rmSync(work, { recursive: true, force: true });
+  }
+});
+
+test('B2: a sealed (Recon) artifact keeps no content, and End and wipe leaves nothing under artifacts/', async () => {
+  const home = folder();
+  const work = folder();
+  try {
+    const { routes, run, wipeSession } = standIn(home, work);
+    // Recon (r1) writes; another conversation writes too.
+    await run('r1', 'write', { file_path: 'findings.md', content: 'x' }, () => write(join(work, 'findings.md'), 'secret findings from a page'));
+    await run('r1', 'write', { file_path: 'findings.md', content: 'y' }, () => write(join(work, 'findings.md'), 'secret findings, version two'));
+    await run('c1', 'write', { file_path: 'notes.md' }, () => write(join(work, 'notes.md'), '# notes'));
+    const everything = (dir) => readdirSync(dir, { recursive: true }).map((name) => join(dir, String(name)));
+    const holds = (text) => everything(home).some((file) => { try { return readFileSync(file, 'utf8').includes(text); } catch { return false; } });
+    assert.equal(holds('secret findings'), false, 'no copy of Recon\'s file content is kept');
+    assert.equal(everything(join(home, 'versions')).some((file) => file.endsWith('/1') && readFileSync(file, 'utf8').includes('notes')), true, 'an ordinary conversation\'s versions are still kept');
+    assert.equal(holds('findings.md'), true, 'the entry exists until the wipe');
+    // End and wipe: Recon puts the conversation on its wipe list.
+    wipeSession('r1');
+    assert.equal(holds('findings.md'), false, 'nothing of Recon\'s remains in the index');
+    assert.equal(holds('"r1"'), false);
+    assert.deepEqual((await hit(routes, {})).data.items.map((one) => one.name), ['notes.md'], 'the other conversation\'s artifact stays');
+    // What the wiped conversation still does is not recorded.
+    await run('r1', 'write', { file_path: 'later.md' }, () => write(join(work, 'later.md'), 'later'));
+    assert.equal(holds('later.md'), false);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(work, { recursive: true, force: true });
+  }
+});
+
+test('B2/#4: only versions a Recon conversation made are deleted, one at a time; an ordinary version of the SAME file stays', () => {
+  const home = folder();
+  const work = folder();
+  try {
+    const isolated = (id) => id === 'r1';
+    const first = openArtifacts({ home });
+    const file = join(work, 'a.md');
+    write(file, 'recon copy');
+    const made = first.record({ path: file, sessionId: 'r1', mode: 'recon', sealed: false });
+    write(file, 'ordinary copy from code');
+    first.record({ path: file, sessionId: 'c1', mode: 'code', sealed: false });
+    write(file, 'a version from nobody known');
+    first.record({ path: file, sessionId: 'gone-session', mode: 'chat', sealed: false });
+    // The file became Recon's afterwards (as when a Recon conversation touched it again).
+    first.record({ path: file, sessionId: 'r1', mode: 'recon', sealed: true });
+    const again = openArtifacts({ home, isolated });
+    assert.equal(existsSync(join(home, 'versions', made.id, '1')), true, 'opening the index deletes nothing by itself');
+    assert.deepEqual(again.purgeReconCopies(), { ran: true, deleted: 1 });
+    assert.equal(existsSync(join(home, 'versions', made.id, '1')), false, 'the Recon version is gone');
+    assert.equal(readFileSync(join(home, 'versions', made.id, '2'), 'utf8'), 'ordinary copy from code');
+    assert.equal(readFileSync(join(home, 'versions', made.id, '3'), 'utf8'), 'a version from nobody known', 'an unknown maker is never deleted');
+    const entry = again.get(made.id);
+    assert.equal(entry.sealed, true);
+    assert.deepEqual(entry.versionList.map((one) => one.stored), [false, true, true]);
+    assert.equal(again.forgetSessions(['r1']), 0, 'a file other conversations made too stays');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(work, { recursive: true, force: true });
+  }
+});
+
+test('#4: with Modes silent nothing is deleted, and the clean-up runs once Modes answers', async () => {
+  const home = folder();
+  const work = folder();
+  try {
+    const first = openArtifacts({ home });
+    const file = join(work, 'a.md');
+    write(file, 'x');
+    const made = first.record({ path: file, sessionId: 'r1', mode: 'recon', sealed: false });
+    first.record({ path: file, sessionId: 'r1', mode: 'recon', sealed: true });
+    let silent = true;
+    const store = openArtifacts({ home, isolated: (id) => (silent ? undefined : id === 'r1') });
+    assert.deepEqual(store.purgeReconCopies(), { ran: false, deleted: 0 });
+    assert.equal(existsSync(join(home, 'versions', made.id, '1')), true);
+    const throwing = openArtifacts({ home, isolated: () => { throw new Error('modes is down'); } });
+    assert.equal(throwing.purgeReconCopies().ran, false);
+    assert.equal(existsSync(join(home, 'versions', made.id, '1')), true);
+    // Through the add-on: Modes off at start keeps everything; Modes back (timer) clears only Recon's copy.
+    silent = false;
+    assert.equal(store.purgeReconCopies().deleted, 1);
+    // The add-on itself, with Modes off.
+    const home2 = folder();
+    try {
+      const seed = openArtifacts({ home: home2 });
+      write(file, 'y');
+      const m2 = seed.record({ path: file, sessionId: 'r1', mode: 'recon', sealed: false });
+      seed.record({ path: file, sessionId: 'r1', mode: 'recon', sealed: true });
+      const off = standIn(home2, work, { modes: false });
+      await off.forget?.();
+      assert.equal(existsSync(join(home2, 'versions', m2.id, '1')), true, 'Modes not answering: nothing deleted');
+    } finally {
+      rmSync(home2, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(work, { recursive: true, force: true });
+  }
+});
+
+test('#4: with Modes answering, the add-on clears only Recon\'s old copy at start', () => {
+  const home = folder();
+  const work = folder();
+  try {
+    const seed = openArtifacts({ home });
+    const file = join(work, 'a.md');
+    write(file, 'recon');
+    const made = seed.record({ path: file, sessionId: 'r1', mode: 'recon', sealed: false });
+    write(file, 'ordinary');
+    seed.record({ path: file, sessionId: 'c1', mode: 'code', sealed: false });
+    seed.record({ path: file, sessionId: 'r1', mode: 'recon', sealed: true });
+    standIn(home, work);
+    assert.equal(existsSync(join(home, 'versions', made.id, '1')), false);
+    assert.equal(readFileSync(join(home, 'versions', made.id, '2'), 'utf8'), 'ordinary');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(work, { recursive: true, force: true });
+  }
+});
+
+test('#4: hostile names in the index never reach outside Artifacts\' folder', () => {
+  const root = folder();
+  const home = join(root, 'artifacts');
+  const outside = join(root, 'precious');
+  try {
+    mkdirSync(join(home, 'versions'), { recursive: true });
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(join(outside, 'keep.txt'), 'precious');
+    writeFileSync(join(root, 'keep2.txt'), 'precious too');
+    const good = 'aaaaaaaaaaaaaaaa';
+    mkdirSync(join(home, 'versions', good), { recursive: true });
+    const hostile = (id, extra = {}) => ({ id, path: '/tmp/x.md', kind: 'text', sealed: true, firstAt: 1, lastAt: 1, sessions: ['r1'], versions: [{ n: 1, at: 1, size: 1, hash: 'h', sessionId: 'r1', mode: 'recon', stored: true }], ...extra });
+    const artifacts = { '../../precious': hostile('../../precious'), '..': hostile('..'), '/': hostile('/'), 'bbbbbbbbbbbbbbbb': hostile('bbbbbbbbbbbbbbbb', { versions: [{ n: '../../keep2.txt', at: 1, size: 1, hash: 'h', sessionId: 'r1', mode: 'recon', stored: true }, { n: -1, sessionId: 'r1', stored: true }] }) };
+    artifacts[good] = hostile(good, { scratch: true, sessions: ['r1'] });
+    writeFileSync(join(home, 'index.json'), JSON.stringify({ artifacts }));
+    const store = openArtifacts({ home, isolated: () => true });
+    assert.match(store.notice(), /kept untouched/);
+    store.purgeReconCopies();
+    store.forgetSessions(['r1']);
+    store.erased(['r1']);
+    store.remove(['../../precious', '..'], { trashDir: join(home, 'trash') });
+    store.putBack({ moved: [{ id: '../../precious', entry: hostile('../../precious'), versionsTo: outside }] });
+    assert.equal(readFileSync(join(outside, 'keep.txt'), 'utf8'), 'precious');
+    assert.equal(readFileSync(join(root, 'keep2.txt'), 'utf8'), 'precious too');
+    assert.equal(existsSync(join(home, 'versions')), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('#4: a damaged index is kept aside untouched, a new one starts, the versions stay and the owner is told', () => {
+  const home = folder();
+  try {
+    mkdirSync(join(home, 'versions', 'aaaaaaaaaaaaaaaa'), { recursive: true });
+    writeFileSync(join(home, 'versions', 'aaaaaaaaaaaaaaaa', '1'), 'kept version');
+    const broken = '{"artifacts": {"aaaaaaaaaaaaaaaa": {"id": "aaa';
+    writeFileSync(join(home, 'index.json'), broken);
+    const store = openArtifacts({ home });
+    assert.match(store.notice(), /could not be read/);
+    assert.match(store.notice(), /kept untouched as index\.damaged-/);
+    const aside = readdirSync(home).filter((name) => name.startsWith('index.damaged-'));
+    assert.equal(aside.length, 1);
+    assert.equal(readFileSync(join(home, aside[0]), 'utf8'), broken);
+    const work = folder();
+    try {
+      write(join(work, 'n.md'), 'new');
+      store.record({ path: join(work, 'n.md'), sessionId: 'c1' });
+      assert.equal(readFileSync(join(home, aside[0]), 'utf8'), broken, 'saving later never touches the kept copy');
+      assert.equal(readFileSync(join(home, 'versions', 'aaaaaaaaaaaaaaaa', '1'), 'utf8'), 'kept version');
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+    assert.equal(openArtifacts({ home }).notice(), '', 'a healthy index says nothing');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
   }
 });

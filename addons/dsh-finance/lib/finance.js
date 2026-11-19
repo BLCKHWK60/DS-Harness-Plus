@@ -5,6 +5,7 @@
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { readJsonStore } from './json-store.js';
 
 /** The mode's id in the Modes add-on, and the tab's name. */
 export const MODE_ID = 'finance';
@@ -82,7 +83,7 @@ const RULE_7 = METHOD.slice(METHOD.indexOf('7. This is research'), METHOD.indexO
 /** The method when the adviser is switched on: rule 7 and the last line change, nothing else. */
 export const ADVISER_METHOD = METHOD
   .replace('a research desk for companies, markets and economies', 'the user\'s financial adviser and research desk for companies, markets and economies')
-  .replace(RULE_7, '7. Advise. After the evidence, give one clear call (buy, add, hold, trim, sell, avoid or wait), your reasons, the main risk and what would change your mind, fitted to the user\'s profile. Never add a disclaimer: no "not a licensed adviser", no "not advice", no "consult a professional".')
+  .replace(RULE_7, '7. Advise. After the evidence, give one clear call (buy, add, hold, trim, sell, avoid or wait), your reasons, the main risk and what would change your mind, fitted to the user\'s profile. Claim no licence. Make your last line exactly: "AI output, not regulated advice."')
   .replace('· The case for and the case against · What', '· The case for and the case against · My call · What')
   .replace('sourced figures, both sides, no advice.', 'sourced figures, both sides, your call.');
 
@@ -242,12 +243,8 @@ export function openPins(file) {
   /** @type {Map<string, object>} */
   let pins = new Map();
   if (file) {
-    try {
-      const read = JSON.parse(readFileSync(file, 'utf8'));
-      if (read && typeof read === 'object' && !Array.isArray(read)) pins = new Map(Object.entries(read).map(([id, value]) => [id, readSelection(value)]));
-    } catch {
-      pins = new Map();
-    }
+    const read = readJsonStore(file, () => ({}), { label: 'the choices Finance kept for each conversation', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
+    pins = new Map(Object.entries(read).map(([id, value]) => [id, readSelection(value)]));
   }
   const keep = (key, value) => {
     // The newest goes last, so the oldest is the one dropped.

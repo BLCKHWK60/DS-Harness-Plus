@@ -8,6 +8,7 @@
 import { closeSync, constants as fsConstants, mkdirSync, openSync, readFileSync, renameSync, writeSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { oneLine } from './text.js';
+import { readJsonStore } from './json-store.js';
 
 export const KINDS = ['preference', 'pattern', 'lesson'];
 
@@ -19,12 +20,7 @@ export const KINDS = ['preference', 'pattern', 'lesson'];
  */
 export function openLearning(file, now = () => Date.now()) {
   const read = () => {
-    try {
-      const value = JSON.parse(readFileSync(file, 'utf8'));
-      return Array.isArray(value) ? value : [];
-    } catch {
-      return [];
-    }
+    return readJsonStore(file, () => [], { label: 'what Creator Plus learned', valid: (value) => Array.isArray(value) });
   };
   const write = (list) => {
     mkdirSync(dirname(file), { recursive: true, mode: 0o700 });

@@ -1,8 +1,8 @@
 /**
- * Bench's network door end to end on a stand-in app: route, ifconfig, ipconfig, dns-sd, ssh-keyscan,
+ * Devices' network door end to end on a stand-in app: route, ifconfig, ipconfig, dns-sd, ssh-keyscan,
  * ssh-keygen, ssh, security and pmset are scripted answers. Nothing real runs: no network is looked at,
  * no host is reached, the Keychain is not touched. The router and the Windows server are emulated from
- * the commands Bench sends.
+ * the commands Devices sends.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -179,15 +179,15 @@ test('networks and addresses: only private ranges and .local names; the Mac must
   assert.deepEqual(parseBrowse('12:00:00.001  Add        2   4 local.               _ssh._tcp.           My\u202e router'), [{ type: '_ssh._tcp', name: 'My router' }]);
 });
 
-test('the SSH sign-in: fixed options, Bench\'s own known_hosts, the key or the Keychain; a password never on a command line', () => {
+test('the SSH sign-in: fixed options, Devices\' own known_hosts, the key or the Keychain; a password never on a command line', () => {
   const files = { key: '/b/network/id_ed25519', knownHosts: '/b/network/known_hosts', askpass: '/b/network/askpass.sh' };
   const keyArgs = sshArgs({ net: { address: '192.168.8.1', port: 22, user: 'root', signIn: 'key' }, files, command: 'uname', alias: 'bench-slate-7' });
   for (const option of ['StrictHostKeyChecking=yes', 'HostKeyAlias=bench-slate-7', 'UserKnownHostsFile="/b/network/known_hosts"', 'GlobalKnownHostsFile=/dev/null', 'BatchMode=yes', 'IdentitiesOnly=yes', 'ForwardAgent=no']) assert.ok(keyArgs.includes(option), option);
   assert.deepEqual(keyArgs.slice(keyArgs.indexOf('-F'), keyArgs.indexOf('-F') + 2), ['-F', '/dev/null'], 'the user\'s own ssh config is not read');
   const pwArgs = sshArgs({ net: { address: '192.168.8.1', port: 22, user: 'root', signIn: 'password' }, files, command: 'uname', alias: 'bench-slate-7' });
-  assert.throws(() => networkFiles('/Users/me/Bench $HOME'), /%, \$ or "/);
-  assert.throws(() => networkFiles('/Users/me/100% Bench'), /%, \$ or "/);
-  assert.equal(networkFiles('/Users/me/My Bench').knownHosts, '/Users/me/My Bench/known_hosts', 'a space is fine: the path is quoted');
+  assert.throws(() => networkFiles('/Users/me/Devices $HOME'), /%, \$ or "/);
+  assert.throws(() => networkFiles('/Users/me/100% Devices'), /%, \$ or "/);
+  assert.equal(networkFiles('/Users/me/My Devices').knownHosts, '/Users/me/My Devices/known_hosts', 'a space is fine: the path is quoted');
   assert.ok(pwArgs.includes('PubkeyAuthentication=no'));
   assert.match(keychainInput('slate-7', 'p w"\''), /-X 7020772227\n$/);
   assert.doesNotMatch(keychainInput('slate-7', 'hunter22'), /hunter22/, 'the password goes to the Keychain as hexadecimal');
@@ -266,7 +266,7 @@ test('the router: read with keys masked; a checked backup kept on this Mac; only
   try {
     await settle();
     await readyRouter(app);
-    assert.match(await app.call('bench_router', { name: 'Slate 7', action: 'info' }), /Storage parts: 0:SBL1 \(never written by Bench\)[\s\S]*0:ART \(never written by Bench\)/);
+    assert.match(await app.call('bench_router', { name: 'Slate 7', action: 'info' }), /Storage parts: 0:SBL1 \(never written by Devices\)[\s\S]*0:ART \(never written by Devices\)/);
     const settings = await app.call('bench_router', { name: 'Slate 7', action: 'settings' });
     assert.match(settings, /wireless\.default_radio0\.key='\[masked\]'/);
     assert.doesNotMatch(settings, /hunter22/);
@@ -368,7 +368,7 @@ test('the Windows server: read; a service changed only when the user names it, n
     assert.match(await app.call('bench_server', { name: 'NAS', action: 'bios' }), /does not update NAS's BIOS/);
     const stop = (said, service = 'Spooler') => app.call('bench_server', { name: 'NAS', action: 'service', service, change: 'stop' }, { said });
     assert.match(await stop('please stop the printer thing'), /only when you name it in your own message/);
-    assert.match(await stop('stop sshd', 'sshd'), /Bench never stops or changes it/);
+    assert.match(await stop('stop sshd', 'sshd'), /Devices never stops or changes it/);
     assert.match(await stop("stop Spooler'; Remove-Item C:\\ -Recurse", "Spooler'; Remove-Item"), /as Windows writes it/);
     assert.equal(app.state.server.changes, 0);
     assert.match(await stop('stop Spooler please'), /Spooler is now Stopped, starts Automatic\. A restore point was made first\. It is on the undo list/);
@@ -484,7 +484,7 @@ test('host keys are kept per card: trusting another card at the same address doe
   }
 });
 
-test('a .local name is looked up and checked against the range; Bench connects to the address it checked', async () => {
+test('a .local name is looked up and checked against the range; Devices connects to the address it checked', async () => {
   const app = world();
   try {
     await settle();
@@ -514,13 +514,13 @@ test('Windows: undo checks the saved startup type; the name Windows answers with
     await app.call('bench_network', { action: 'key' });
     await app.call('bench_network', { action: 'trust', name: 'NAS' });
     assert.match(await app.call('bench_server', { name: 'NAS', action: 'service', service: 'WlanSvc', change: 'stop' }, { said: 'stop WlanSvc' }), /never stops or changes it/);
-    assert.match(await app.call('bench_server', { name: 'NAS', action: 'service', service: 'OpenSSH', change: 'stop' }, { said: 'stop OpenSSH' }), /sshd keeps Windows running, protects it or is Bench's own way in/);
+    assert.match(await app.call('bench_server', { name: 'NAS', action: 'service', service: 'OpenSSH', change: 'stop' }, { said: 'stop OpenSSH' }), /sshd keeps Windows running, protects it or is Devices' own way in/);
     await app.call('bench_server', { name: 'NAS', action: 'service', service: 'Spooler', change: 'stop' }, { said: 'stop Spooler' });
     const file = join(app.device('nas'), 'undo.json');
     const list = JSON.parse(readFileSync(file, 'utf8'));
     list[0].old.startType = "Automatic'; Remove-Item C:\\ -Recurse; '";
     writeFileSync(file, JSON.stringify(list));
-    assert.match(await app.call('bench_undo', { name: 'NAS', which: 'last' }), /its saved state is not one Bench sets/);
+    assert.match(await app.call('bench_undo', { name: 'NAS', which: 'last' }), /its saved state is not one Devices sets/);
     assert.equal(app.state.server.services.get('Spooler').status, 'Stopped');
     assert.throws(() => SCRIPTS.startup('Spooler', 'Automatic; x'), /not a startup type/);
     assert.match(SCRIPTS.startup('Spooler', 'Manual'), /-StartupType 'Manual'/);

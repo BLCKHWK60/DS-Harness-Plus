@@ -27,7 +27,7 @@ const OWN = /^\/dev\/cu\.(Bluetooth-Incoming-Port|debug-console|wlan-debug|.*-Wi
 /** @returns {string} why a port may not be opened, or ''. */
 export function portRefusal(port, shown) {
   const value = String(port ?? '');
-  if (!/^\/dev\/cu\.[A-Za-z0-9._-]{1,80}$/.test(value)) return `"${value.slice(0, 80)}" is not a serial port Bench opens: give a /dev/cu.… port that bench_usb listed.`;
+  if (!/^\/dev\/cu\.[A-Za-z0-9._-]{1,80}$/.test(value)) return `"${value.slice(0, 80)}" is not a serial port Devices opens: give a /dev/cu.… port that bench_usb listed.`;
   if (OWN.test(value)) return `${value} is the Mac's own port, not a device's.`;
   if (shown && !shown.has(value)) return `${value} was not listed by bench_usb in this conversation in the last hour. Call bench_usb first, then use a port it listed for a device.`;
   return '';
@@ -79,10 +79,10 @@ export function createSerial({ stty, cat, spawnFn = spawn, now = () => new Date(
      * @returns {Promise<{lines: number, bytes: number, newest: string[], startedAt: Date, endedAt: Date, stoppedEarly: boolean}>} what was read.
      */
     async watch({ port, baud, seconds, logFile, signal }) {
-      if (!BAUDS.includes(Number(baud))) throw new Error(`The speed ${baud} is not one Bench uses: ${BAUDS.join(', ')}.`);
+      if (!BAUDS.includes(Number(baud))) throw new Error(`The speed ${baud} is not one Devices uses: ${BAUDS.join(', ')}.`);
       const span = Math.max(1, Math.min(WATCH_MAX_MINUTES * 60, Math.round(Number(seconds) || 0)));
       try {
-        if (lstatSync(logFile).isSymbolicLink()) throw new Error('The log file is a link; Bench does not write through links.');
+        if (lstatSync(logFile).isSymbolicLink()) throw new Error('The log file is a link; Devices does not write through links.');
       } catch (error) {
         if (error?.code !== 'ENOENT') throw error;
       }

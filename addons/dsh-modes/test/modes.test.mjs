@@ -931,7 +931,7 @@ test('the same chat box in every mode (a switch, on by default): the buttons\' w
   assert.match(body, /fitClassic\(\);\s*\};/, 'a window too narrow even for two lines falls back');
   // Nothing of other add-ons is edited: only their place in the row (CSS) and one width for the access button.
   assert.match(client, /\[data-dsh-below\]::after\{content:'';order:4;flex:0 0 100%;height:0\}/);
-  assert.match(client, /\[data-dsh-below\] \[data-slot="conversation\.input\.left"\] > :not\(\.dsh-mt\):not\(style\),\[data-dsh-wrap\] \[data-slot="conversation\.input\.left"\] > :not\(\.dsh-mt\):not\(style\)\{order:5\}/);
+  assert.match(client, /\[data-dsh-below\] \[data-slot="conversation\.input\.left"\] > :not\(\.dsh-me-tools\):not\(style\),\[data-dsh-wrap\] \[data-slot="conversation\.input\.left"\] > :not\(\.dsh-me-tools\):not\(style\)\{order:5\}/);
   assert.match(client, /\[data-dsh-pin\] \[data-slot="conversation\.input\.permission"\] > \*\{min-width:156px/);
   assert.match(client, /\[data-dsh-wrap\]\{flex-wrap:wrap !important;row-gap:6px\}/);
 });

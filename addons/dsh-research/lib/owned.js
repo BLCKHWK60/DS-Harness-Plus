@@ -4,6 +4,7 @@
  */
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, sep } from 'node:path';
+import { readJsonStore } from './json-store.js';
 
 /** At most this many files are remembered (the oldest are forgotten first: their files simply stay). */
 export const OWNED_MAX = 2000;
@@ -14,12 +15,8 @@ export const OWNED_MAX = 2000;
  */
 export function openOwned(file) {
   const read = () => {
-    try {
-      const value = JSON.parse(readFileSync(file, 'utf8'));
-      return Array.isArray(value) ? value.filter((entry) => typeof entry?.id === 'string' && typeof entry?.file === 'string') : [];
-    } catch {
-      return [];
-    }
+    const value = readJsonStore(file, () => [], { label: 'the list of what Research made', valid: (found) => Array.isArray(found) });
+    return value.filter((entry) => typeof entry?.id === 'string' && typeof entry?.file === 'string');
   };
   const write = (entries) => {
     mkdirSync(dirname(file), { recursive: true, mode: 0o700 });

@@ -39,14 +39,14 @@ It is a separate plugin and does not touch Bench Lab (a community plugin; its ru
     pricing: { '<ROUTE>/<MODEL ID>': { inputPerMTok: <USD>, outputPerMTok: <USD> } }   # unlisted models cost 0
     limits: { maxParallel: 1, timeoutMs: 120000, maxJobMinutes: 60, maxCloudUsdPerJob: 0 }   # 0 = no spend cap
     export: { minSeeds: 3, scoreTolerance: 0.02 }
-    commandName: bench
+    commandName: benchmark
 ```
 
 `maxParallel` defaults to 1 because one large local model fits in memory at a time (your Bench Lab rule).
 
 ## Use
 
-`/bench run <suite>` starts a background job and returns its id; `/bench status [job]`, `/bench report <job>`, `/bench export <job>`, `/bench cancel <job>`, `/bench list`. Each job is saved atomically as `bench-<id>.json` (config-free: runs only). Service `benchmark`: `start`, `status`, `cancel`, `report`, `exportPresets`, `list`.
+`/benchmark run <suite>` starts a background job and returns its id; `/benchmark status [job]`, `/benchmark report <job>`, `/benchmark export <job>`, `/benchmark cancel <job>`, `/benchmark list`. Each job is saved atomically as `bench-<id>.json` (config-free: runs only). Service `benchmark`: `start`, `status`, `cancel`, `report`, `exportPresets`, `list`.
 
 ## How results are judged
 
@@ -78,7 +78,7 @@ Settings > **Benchmark** now sets the add-on up and runs it; no file editing is 
 **How it is wired:**
 
 - The form reads and writes the add-on's own settings through the app's settings channel (namespace `benchmark`; on a `settings/conflict` it reloads and retries once). `targets`, `suites`, `grid`, `judge`, `pricing` and `limits` are `.volatile()`, and the host half reads them at every use (`readSetup`). The YAML shape is unchanged.
-- The add-on now always loads. Before, it did nothing until targets and suites were set, and a mistake in a suite stopped it at start. Now a suite that cannot run is logged, shown on the page with the reason, and refused by `/bench run`. A job uses the limits and prices in force when it starts.
+- The add-on now always loads. Before, it did nothing until targets and suites were set, and a mistake in a suite stopped it at start. Now a suite that cannot run is logged, shown on the page with the reason, and refused by `/benchmark run`. A job uses the limits and prices in force when it starts.
 - Buttons go to one write route, `POST /dsh-benchmark/action`, body `{ action: run, suite }` or `{ action: cancel, id }`. Same fence as the read routes (login cookie and Host/Origin check), POST only, at most 16 KB of JSON, the suite name and job id are checked before use.
 - The read routes are unchanged and GET-only. `GET /dsh-benchmark/jobs` now lists each suite with its prompt count, what it still needs, and how many calls a run makes. They still carry no prompts and no answers; the page reads the prompts you wrote from the settings channel, not from these routes.
 
@@ -101,14 +101,14 @@ Spec hazard 4: the `benchlab` row in your live profile patch holds the runner to
 ## Not verified
 
 
-Real models (every answer was scripted), long jobs, the `/bench` command in the web app, cancel mid-run, parallelism above 1, and whether the exported presets improve real work.
+Real models (every answer was scripted), long jobs, the `/benchmark` command in the web app, cancel mid-run, parallelism above 1, and whether the exported presets improve real work.
 
 ## Checked (0.10 setup page, throwaway web profile, mock models)
 
 - **Unit tests:** 12 (the add-on had none): graders, statistics, what a prompt still needs, settings read live, loading with nothing or with a mistake in the file, a full job with one failing model (errors never scored), the read routes (fence, GET only, id check, no prompt or answer in them), the write route's refusals (no login, wrong method, unknown action, bad suite name, bad or unknown job id, broken JSON, oversize body, unknown suite), run and cancel through the route.
 - **Live, starting from an empty config:** added two models, made a suite on the page (prompt, grading, name, category), added the example suite, set two temperatures and two repeats, ran the suite (8 calls, finished, results table and recommendations shown), set limits and a price and saw the cost appear in the next run. The settings landed in the profile's `cordis.patch.yml` in the documented shape.
 - A name with a slash was refused with a plain message. Switching the way of grading to the judge and back kept the text (a bug found and fixed during the check).
-- **`/bench list`** in a chat still works.
+- **`/benchmark list`** in a chat still works.
 - **Look:** checked in the stock scheme (dark) and Forest (dark and light).
 
 **Not checked:** Cancel on the page (the mock answers at once, so no job stays running; cancel is covered by a unit test); a judge-graded prompt with a real model; the spend limit stopping a real run; the Chinese strings (new texts fall back to English); a narrow window for this page specifically (it shares its layout rules with the Arena page, which was checked at 900 px); the Mac desktop app.
@@ -123,6 +123,6 @@ Real models (every answer was scripted), long jobs, the `/bench` command in the 
 
 ## Compare ways of working (Content and Bench plan, step S7)
 
-**Settings → Benchmark → Compare ways of working** (or `/bench methods <suite> <small> <large>`) runs a suite's prompts six ways (`lib/methods.js`): the small model in one pass; the small model with the work loop at Standard and at Thorough, with Ultra Code off and on; and the large model in one pass. The loop here is Mission's idea: attempts (several only with Ultra Code), a vote where answers can be compared or the judge model's pick, a check by the judge model (never the grader, which knows the answer) with one retry in the checker's words, and checking questions at Thorough. The grader scores only the final answer. The scorecard gives mean score, seconds, tokens and calls per kind of task and way; the advice says where the loop pays (a gain of at least the export's score tolerance). **Accept** records it (`acceptedMethods`) and Settings → Mission shows it; nothing is switched on by itself. Tests: `test/methods.test.mjs`.
+**Settings → Benchmark → Compare ways of working** (or `/benchmark methods <suite> <small> <large>`) runs a suite's prompts six ways (`lib/methods.js`): the small model in one pass; the small model with the work loop at Standard and at Thorough, with Ultra Code off and on; and the large model in one pass. The loop here is Mission's idea: attempts (several only with Ultra Code), a vote where answers can be compared or the judge model's pick, a check by the judge model (never the grader, which knows the answer) with one retry in the checker's words, and checking questions at Thorough. The grader scores only the final answer. The scorecard gives mean score, seconds, tokens and calls per kind of task and way; the advice says where the loop pays (a gain of at least the export's score tolerance). **Accept** records it (`acceptedMethods`) and Settings → Mission shows it; nothing is switched on by itself. Tests: `test/methods.test.mjs`.
 
 Review fixes: a way that fails or times out scores 0 for that task (it is still counted as an error), so giving up never looks better; the cost of the calls made before a failure counts toward the spend limit; when the same judge model checks inside the loop and grades judge-graded prompts, the advice says so and suggests a different judge.

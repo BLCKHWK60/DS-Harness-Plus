@@ -15,7 +15,7 @@ const { apply, Config, DEFAULT_ROOM, ROOM, dataFolderOf, mayEmptyRoom, roomFor, 
 const COPY_ROOM = /^\/private\/tmp\/dsh-recon-copy-[0-9a-f]{12}$/;
 
 /** Start Recon on stand-in services; it prepares (empties) its room at once. */
-function start() {
+function start(enabled = true, homeDir) {
   const disposers = [];
   const services = {
     settings: { describe: () => [{ ns: 'modes', value: { extraModes: '{}', sessionIsolated: '{}', defaultMode: 'cowork' } }], mutate: async () => {} },
@@ -27,6 +27,7 @@ function start() {
     sessionPersistence: { list: async () => [] },
     sessions: { get: () => undefined },
     workspaceRegistry: { archiveSession: async () => {} },
+    ...(homeDir ? { dshHomePath: (sub) => join(homeDir, sub) } : {}),
   };
   const ctx = {
     ...services,
@@ -36,7 +37,7 @@ function start() {
     inject: (_names, callback) => callback(ctx),
     on: () => () => {},
   };
-  apply(ctx, Config({ enabled: false }));
+  apply(ctx, Config({ enabled }));
   return () => { for (const done of disposers) done(); };
 }
 
@@ -77,6 +78,44 @@ test('the loader refuses the real room by what the disk says, not by the spellin
     rmSync(one, { recursive: true, force: true });
     rmSync(other, { recursive: true, force: true });
   }
+});
+
+test('with Recon off, the room is emptied at start only when Plus prepared it before; it is never created', () => {
+  const homeDir = mkdtempSync(join(tmpdir(), 'dsh-recon-home-'));
+  try {
+    // Never switched on here (no note): an off Recon leaves the folder alone.
+    writeFileSync(join(ROOM, 'kept-unknown.txt'), 'x');
+    start(false, homeDir)();
+    assert.equal(existsSync(join(ROOM, 'kept-unknown.txt')), true, 'Recon off and the room not noted as ours: left alone');
+    // Switched on once: Plus notes the room, and empties it.
+    start(true, homeDir)();
+    assert.equal(existsSync(join(ROOM, 'kept-unknown.txt')), false, 'Recon on: emptied at start');
+    // Files stay after a run; then the app starts with Recon off: they go.
+    writeFileSync(join(ROOM, 'left-by-a-run.txt'), 'x');
+    mkdirSync(join(ROOM, 'conversation-folder'));
+    start(false, homeDir)();
+    assert.equal(existsSync(join(ROOM, 'left-by-a-run.txt')), false, 'Recon off, room is Plus\'s: emptied');
+    assert.equal(existsSync(join(ROOM, 'conversation-folder')), false);
+    assert.equal(existsSync(ROOM), true, 'the folder itself stays');
+    // A note for another room does not make this one ours.
+    writeFileSync(join(homeDir, 'recon', 'room-owner.json'), JSON.stringify({ room: '/private/tmp/dsh-recon-somewhere-else' }));
+    writeFileSync(join(ROOM, 'foreign.txt'), 'x');
+    start(false, homeDir)();
+    assert.equal(existsSync(join(ROOM, 'foreign.txt')), true, 'a room the note does not name is left alone');
+    // An off Recon does not make a missing room.
+    writeFileSync(join(homeDir, 'recon', 'room-owner.json'), JSON.stringify({ room: ROOM }));
+    rmSync(ROOM, { recursive: true, force: true });
+    start(false, homeDir)();
+    assert.equal(existsSync(ROOM), false, 'Recon off: the room is not created');
+    mkdirSync(ROOM, { recursive: true, mode: 0o700 });
+  } finally {
+    rmSync(homeDir, { recursive: true, force: true });
+    mkdirSync(ROOM, { recursive: true, mode: 0o700 });
+  }
+});
+
+test('the real room is never emptied by an app on another data folder, Recon on or off', () => {
+  assert.equal(mayEmptyRoom({ room: DEFAULT_ROOM, dataFolder: '/tmp/some-throwaway-home' }), false);
 });
 
 test('Recon empties its own room, and never a room that is a link to another folder', () => {

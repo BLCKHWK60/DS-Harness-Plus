@@ -2,6 +2,8 @@
 
 Plugin `@local/dsh-research` (dsh 0.2.2-rc.2). A mode and tab, beside Chat, Cowork and Code, for researching a question in depth. It is built on the **Deep research** add-on's engine and adds the experience around it.
 
+**One Research page (Plus 1.0).** Settings → Research is the only Research page. When the Deep research add-on is installed, its engine settings (most minutes, most sources, which model each helper uses, helper limits, tool names) appear on this page under **Advanced: research engine**. Nothing was renamed or moved in your saved settings: both add-ons keep their own settings keys, and each works alone (without Deep research there is simply no Advanced group).
+
 Off until you switch it on in **Settings → Research**. Needs the Modes add-on, the Cowork sidebar and the Deep research add-on.
 
 ## What you get

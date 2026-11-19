@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { setImmediate as tick } from 'node:timers/promises';
 import { apply } from '../index.js';
@@ -113,8 +114,17 @@ test('a task of your own marked for Finance is moved at once and named once look
   }
 });
 
+test('the adviser switch alone does nothing until the warning was accepted', () => {
+  const app = running({ config: { adviser: true }, modeOf: { s4: MODE_ID } });
+  try {
+    assert.ok(!/financial adviser/.test(app.agent('s4')()));
+  } finally {
+    app.stop();
+  }
+});
+
 test('the adviser note and the profile go to the conversation, not to its helpers', () => {
-  const app = running({ config: { adviser: true }, modeOf: { s4: MODE_ID, h1: MODE_ID, h2: MODE_ID } });
+  const app = running({ config: { adviser: true, adviserAccepted: true }, modeOf: { s4: MODE_ID, h1: MODE_ID, h2: MODE_ID } });
   try {
     assert.match(app.agent('s4')(), /You are the user's financial adviser/);
     const helper = app.agent('h1', { parentSession: 's4' })();
@@ -186,7 +196,7 @@ test('with Tools off, a Finance conversation is told it has no data tools and th
 });
 
 test('with Tools off and the adviser on, the adviser keeps its voice but saves nothing and marks figures as from memory', () => {
-  const app = running({ config: { adviser: true }, modeOf: { s9: MODE_ID, s10: MODE_ID }, noTools: new Set(['s9']), tools: true });
+  const app = running({ config: { adviser: true, adviserAccepted: true }, modeOf: { s9: MODE_ID, s10: MODE_ID }, noTools: new Set(['s9']), tools: true });
   try {
     const text = app.agent('s9')();
     assert.match(text, /You are the user's financial adviser/);
@@ -226,8 +236,9 @@ test('the chat box shows a Finance conversation\'s selection once it has started
   try {
     // A new conversation on the Finance tab: the start page's drop-downs are its selection.
     let chat = await chatOf(app, 's20');
-    // Only what the chat box reads: no adviser field, which the pill never showed.
-    assert.deepEqual(Object.keys(chat).sort(), ['enabled', 'focuses', 'kinds', 'markets', 'periods', 'session', 'watchlist']);
+    // Only what the chat box reads (the adviser flag is for the standing "not regulated advice" label).
+    assert.deepEqual(Object.keys(chat).sort(), ['adviser', 'enabled', 'focuses', 'kinds', 'markets', 'periods', 'session', 'watchlist']);
+    assert.equal(chat.adviser, false);
     assert.equal(chat.enabled, true);
     assert.equal(chat.session.id, 's20');
     assert.equal(chat.session.shown, false);
@@ -352,5 +363,26 @@ test('the chat box cannot change a conversation that is not a started Finance on
     assert.equal(nobody.status, 400);
   } finally {
     app.stop();
+  }
+});
+
+test('the app gives no way to add text to an answer, so the "not regulated advice" label is always in the chat box while the adviser is on', async () => {
+  const sessions = { a1: { id: 'a1', header: {}, turns: 1 } };
+  const on = running({ config: { adviser: true, adviserAccepted: true }, modeOf: { a1: MODE_ID }, sessions });
+  const notYet = running({ config: { adviser: true }, modeOf: { a1: MODE_ID }, sessions });
+  const off = running({ config: {}, modeOf: { a1: MODE_ID }, sessions });
+  try {
+    assert.equal((await chatOf(on, 'a1')).adviser, true);
+    assert.equal((await chatOf(notYet, 'a1')).adviser, false, 'switched on without the typed acceptance: no adviser, no label');
+    assert.equal((await chatOf(off, 'a1')).adviser, false);
+    // The chat box draws the label from that flag, in the words the adviser is told to end with.
+    const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+    assert.match(client, /view\.adviser === true \? h\('div', \{ className: 'dsh-opt-hint', 'data-dsh-adviser-label': 'true' \}, 'Adviser on\. AI output, not regulated advice\.'\)/);
+    // And the model is still told to end every answer with the line (the strict rule stays).
+    assert.match(on.agent('a1')(), /AI output, not regulated advice\./);
+  } finally {
+    on.stop();
+    notYet.stop();
+    off.stop();
   }
 });

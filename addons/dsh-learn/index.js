@@ -23,6 +23,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { apply as applyEvent, can, EVENTS, freshIdea, guidance, LEVEL_RULES, LEVELS, MAX_HINTS, outcomeOf, stageLabel } from './lib/rules.js';
 import { dueIdeas, whenText } from './lib/schedule.js';
+import { readJsonStore } from './lib/json-store.js';
 import { openStore, readPlan, SOURCES } from './lib/store.js';
 import { SKILLS } from './skills.js';
 
@@ -309,7 +310,7 @@ export function apply(ctx, config) {
   const store = openStore(dataDir);
   const sessionFile = dataDir ? join(dataDir, 'sessions.json') : '';
   const keep = {
-    load: () => (sessionFile && existsSync(sessionFile) ? JSON.parse(readFileSync(sessionFile, 'utf8')) : {}),
+    load: () => readJsonStore(sessionFile, () => ({}), { label: 'what Learn kept for each conversation', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) }),
     save: (value) => {
       if (!sessionFile) return;
       mkdirSync(dataDir, { recursive: true });

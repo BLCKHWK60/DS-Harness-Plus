@@ -250,7 +250,7 @@ export function apply(ctx, config) {
     scratchPlace,
     // Isolated conversations (Recon) are never pushed or pulled; the Modes add-on says which they are.
     // Scratch conversations (the Cowork sidebar's hidden place, <app home>/scratch) are never synced either.
-    isolation: () => readIsolation({ settings: ctx.get('settings'), modes: ctx.get('modes'), agents: ctx.get('agents'), sessionPersistence: ctx.get('sessionPersistence'), scratchPlace: scratchPlace() }),
+    isolation: () => readIsolation({ settings: ctx.get('settings'), modes: ctx.get('modes'), agents: ctx.get('agents'), sessionPersistence: ctx.get('sessionPersistence'), scratchPlace: scratchPlace(), reconMoved: ctx.get('reconMoved') }),
     logger,
   })
 

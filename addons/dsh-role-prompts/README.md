@@ -27,8 +27,12 @@ Host plugin `@local/dsh-role-prompts` (dsh 0.2.2-rc.1). It adds instruction sect
 
 - The spec's `mode: replace` (replacing the whole system prompt). dsh allows only one "complete" section and fails prompt assembly if two exist, so it was left out.
 - Measuring the prompt against a token budget (use `token-meter`).
-- A Settings page; edit the profile patch.
+- (Added later: a page, "Instructions for every conversation", shown as a tab of Model Tiers, or as its own Settings page without Model Tiers.)
 
 ## Verified (mock setup, rc.1)
 
 Sections appear in the model request in `order` relative to Tier's section; a section restricted to `opus` appears only on that tier; `enabled: false` hides it; `{{not_a_variable}}` stays literal; the three example texts load.
+
+## Page (added in Phase 2)
+
+"Instructions for every conversation": add, switch off, reorder and remove your sections, and tick which tiers each applies to. It shows as a tab of the Model Tiers page; without Model Tiers (or with it off) it has its own page in Settings. The `sections` field is now volatile (editable while the app runs); keys and defaults are unchanged. Text edits apply at once; a new section or a changed position applies from the next conversation. Tests: `test/role-prompts.test.mjs`.

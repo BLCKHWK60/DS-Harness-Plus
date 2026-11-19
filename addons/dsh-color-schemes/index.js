@@ -8,7 +8,7 @@ import z from '@deepseek-ai/schemastery';
 export const name = 'color-schemes';
 
 export const Config = z.object({
-  /** Scheme id: `stock` (the app's own colours), `mindshub`, `graphite`, `forest` or `custom`. */
+  /** Scheme id: `stock` (the app's own colours), `harbor`, `graphite`, `forest` or `custom`. */
   scheme: z.string().default('stock').volatile(),
   /**
    * Your own scheme as JSON, used when `scheme` is `custom`:

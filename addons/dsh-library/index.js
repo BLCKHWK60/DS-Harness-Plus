@@ -164,6 +164,11 @@ export function createIndexer({ library, warn = () => {}, read = extract }) {
     state.total = jobs.length;
     state.done = 0;
     for (const job of jobs) {
+      // Review B3: a folder removed during the scan is not read any more (and `put` refuses it too).
+      if (!library.folders().some((folder) => folder.path === job.folder)) {
+        state.done += 1;
+        continue;
+      }
       state.current = job.path;
       try {
         library.put(job, await read(job.path, job.kind));

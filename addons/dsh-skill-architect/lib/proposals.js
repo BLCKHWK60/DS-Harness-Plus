@@ -6,6 +6,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { readJsonStore } from './json-store.js';
 
 export const KEEP = 200;
 
@@ -28,12 +29,7 @@ export function visibleTo(skill, { cwd = '', tab = '' } = {}) {
 export function openProposals(file) {
   let list = [];
   if (file) {
-    try {
-      const read = JSON.parse(readFileSync(file, 'utf8'));
-      if (Array.isArray(read)) list = read;
-    } catch {
-      list = [];
-    }
+    list = readJsonStore(file, () => [], { label: 'the Skill architect proposals', valid: (value) => Array.isArray(value) });
   }
   const save = () => {
     if (!file) return;

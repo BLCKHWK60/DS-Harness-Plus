@@ -25,11 +25,14 @@ export function standIn(home, work, { modes = true, outputRoots = [], config = {
   const rows = [];
   /** The trash: `ready` (up or not), `gate` (a promise an add waits for). */
   const trash = { ready: true, gate: null };
+  /** Recon's wipe list as the Recon add-on offers it (review B2): ids waiting, and who wants to hear of changes. */
+  const wipe = { ids: [], listeners: new Set() };
   let owner;
   let tidy = () => {};
   const ctx = {
     get: (name) => (name === 'modes' ? (modes ? { get: (id) => ({ c1: 'code', r1: 'recon' })[id] ?? 'chat', isolated: (id) => id === 'r1' } : undefined)
-      : name === 'workingDirectory' ? { get: () => work } : undefined),
+      : name === 'workingDirectory' ? { get: () => work }
+        : name === 'reconWipe' ? { has: (id) => wipe.ids.includes(id), list: () => [...wipe.ids], onChange: (fn) => { wipe.listeners.add(fn); return () => wipe.listeners.delete(fn); } } : undefined),
     on: (name, fn) => { hooks[name] = fn; },
     effect: (fn) => fn(),
     inject(names, fn) {
@@ -68,7 +71,8 @@ export function standIn(home, work, { modes = true, outputRoots = [], config = {
     effect?.();
     await hooks['tools/post-execute'](exec, { content: [{ type: 'text', text }] }, async () => ({ kind: 'accept' }));
   };
-  return { routes, run, trashed, rows, trash, opened, revealed, owner: () => owner, tidy: () => tidy() };
+  const wipeSession = (id) => { wipe.ids.push(id); for (const fn of wipe.listeners) fn(id, 'add'); };
+  return { routes, run, trashed, rows, trash, wipeSession, opened, revealed, owner: () => owner, tidy: () => tidy() };
 }
 
 /** Ask the route as the page would. */

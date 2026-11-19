@@ -119,11 +119,11 @@ test('Move to on a conversation that began in Recon opens a new one of that tab;
   assert.equal(fromReconRow('r', { blank: true }, state), false, 'an empty draft just moves');
   assert.equal(fromReconRow('late', { blank: false }, state), false, 'moved INTO Recon after it ran: holds nothing of Recon');
   assert.equal(fromReconRow('c', { blank: false }, state), false);
-  const start = source.indexOf('const moveTo = async (ids, modeId) => {');
+  const start = source.indexOf('const moveTo = async (ids, modeId, whole) => {');
   const moveTo = source.slice(start, source.indexOf('\n      };\n', start));
   assert.match(moveTo, /modeId === 'recon' \? \[\] : ids\.filter\(\(id\) => fromReconRow\(id, lib\.byId\[id\], state\)\)/);
   assert.match(moveTo, /if \(rest\.length > 0\) await model\.move\(rest, modeId\);/);
-  assert.match(moveTo, /model\.note\(t\(done\.files > 0 \? 'move\.reconFiles' : 'move\.recon', \{ tab: done\.label, n: done\.files \}\)\)/);
+  assert.match(moveTo, /model\.note\(t\(done\.drafted \? \(done\.files > 0 \? 'move\.reconDraftFiles' : 'move\.reconDraft'\) : done\.files > 0 \? 'move\.reconFiles' : 'move\.recon', \{ tab: done\.label, n: done\.files \}\)\)/);
   // Both Move to menus (a conversation, a project's conversations) go through it.
   assert.equal((source.match(/onMove: \(modeId\) => void moveTo\(/g) ?? []).length, 2);
   assert.doesNotMatch(source, /onMove: \(modeId\) => void model\.move\(/);

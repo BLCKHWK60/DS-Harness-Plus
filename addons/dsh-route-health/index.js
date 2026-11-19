@@ -15,6 +15,7 @@
  * their own, so no address or route name is baked into this plugin.
  */
 import z from '@deepseek-ai/schemastery';
+import { plainReason } from './lib/plain.js';
 
 export const name = 'route-health';
 
@@ -431,10 +432,11 @@ export function apply(ctx, config) {
     const since = entry.lastProbeAt ? new Date(entry.lastProbeAt).toISOString() : 'never';
     let moved = null;
     if (plain(config.preemptiveFallback) !== false) moved = await moveOff(payload.agent, route);
+    const why = plainReason(entry.error);
     throw new Error(
       moved
-        ? `Cannot reach ${label} (${entry.error}). This session now uses ${moved.to.provider}/${moved.to.model}; send your message again.`
-        : `Cannot reach ${label} (${entry.error}; last checked ${since}). No fallback route is available for this session.`,
+        ? `Cannot reach ${label}. ${why.text} Your conversation now uses ${moved.to.provider}/${moved.to.model}; send your message again. (Details: ${why.details || 'none'})`
+        : `Cannot reach ${label}. ${why.text} No other model is set up to take over this conversation. (Details: ${why.details || 'none'}; last checked ${since})`,
     );
   });
 
@@ -535,7 +537,7 @@ export function apply(ctx, config) {
             handler: async () => {
               const rows = routeHealth.list();
               if (rows.length === 0) {
-                return { kind: 'success', text: 'No routes are configured for route health.' };
+                return { kind: 'success', text: 'No models are set up for health checks yet.' };
               }
               const lines = rows.map((row) => {
                 const age = row.lastProbeAt

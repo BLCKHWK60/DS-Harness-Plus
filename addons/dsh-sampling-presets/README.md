@@ -64,3 +64,11 @@ Temperature and max tokens reach the request from the preset (0.1 / 1500). A Tie
 ## Not verified
 
 oMLX behaviour with real aliases (the spec's own acceptance: the server's request log shows the changed sampling); mode-driven category changes in a running session; the `/sampling` command in the web app; multi-session behaviour; the spec's `stop` field (deliberately dropped).
+
+## Page placement (added in Phase 2)
+
+The page is now the "Sampling" tab of the Model Tiers page; without Model Tiers it keeps its own Sampling page. All its style names use the prefix `dsh-smp-` (they were `dsh-sp-`, which Split Plus and Settings search also used, so their styles crushed this page). Tests: `test/page.test.mjs`.
+
+## Tests
+
+Run from the Plus folder with the app's own Node. `test/presets.test.mjs` (settings, reference checks, which preset a conversation gets, what is added to a request and what is never overridden, the alias model switch at a turn boundary, `/sampling`) and `test/page.test.mjs` (the page).

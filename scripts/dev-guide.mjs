@@ -9,6 +9,16 @@ const root = process.argv[2] ?? '.';
 const read = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
 const SLOT = { 'conversation.input.left': 'chat box, left group', 'conversation.input.right': 'chat box, beside the send button', 'conversation.input.dock': 'above the chat box', 'conversation.chat.turnTail': 'under an answer', 'conversation.chat.assistant-actions': 'action row under an answer', 'conversation.hero.options': 'start page of a new conversation', 'conversation.hero.brand.mark': 'start page', 'sidebar.panellist': 'sidebar', 'sidebar.panel.icon': 'sidebar', 'sidebar.footer.action': 'bottom of the sidebar', 'shell.overlay': 'window edge', 'shell.leading': 'sidebar' };
 const ORDER = ['dsh-cowork-shell', 'dsh-modes', 'dsh-mission', 'dsh-data', 'dsh-finance', 'dsh-deep-research', 'dsh-model-tiers', 'dsh-agent-swarm', 'dsh-code-power', 'dsh-code-map', 'dsh-diagram', 'dsh-pdf', 'dsh-library', 'dsh-memory', 'dsh-learn', 'dsh-automations', 'dsh-mac', 'dsh-activity', 'dsh-budget', 'dsh-balance', 'dsh-usage-ledger', 'dsh-evolve', 'dsh-benchmark', 'dsh-model-arena', 'dsh-model-router', 'dsh-route-health', 'dsh-sampling-presets', 'dsh-role-prompts', 'dsh-context-saver', 'dsh-media-tools', 'dsh-notify', 'dsh-privacy', 'dsh-color-schemes', 'dsh-sync', 'dsh-shared-settings'];
+// Code comments are written for maintainers. For the guide: take out plan and step references and dates in
+// brackets, and say "you" where a comment says "the owner".
+const plain = (text) => text
+  .replace(/\s*\((?:[^()]*(?:plan step|Plan step|steps? S\d|owner's (?:answer|choice|plan|rule)|\d{1,2} November 2026|Tuner Plus's step|Tuning Plus|the plan)[^()]*)\)/g, '')
+  .replace(/\b([Tt])he owner's own\b/g, (m, c) => (c === 'T' ? 'Your own' : 'your own'))
+  .replace(/\bThe owner's\b/g, 'Your').replace(/\bthe owner's\b/g, 'your')
+  .replace(/\b[Tt]he owner (picks|types|ticked|ticks|installed|chose|switched|saved|accepted|sets|says)\b/g, (m, v) => `you ${{ picks: 'pick', types: 'type', ticked: 'ticked', ticks: 'tick', installed: 'installed', chose: 'chose', switched: 'switched', saved: 'saved', accepted: 'accepted', sets: 'set', says: 'say' }[v]}`)
+  .replace(/\b[Tt]he owner\b/g, 'you').replace(/\bowner\b/g, 'you').replace(/\s+([.,;:])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+// Pages that moved into another page (Phase 2): where to find them now.
+const MOVED = { 'dsh-sampling-presets': 'Model Tiers → Sampling', 'dsh-notify': 'Alerts', 'dsh-role-prompts': 'Model Tiers → Instructions for every conversation', 'dsh-code-power': 'Code tools → Reviews and fixes', 'dsh-code-map': 'Code tools', 'dsh-deep-research': 'Research → Advanced' };
 const dirs = fs.readdirSync(path.join(root, 'addons')).filter((d) => fs.existsSync(path.join(root, 'addons', d, 'package.json')));
 dirs.sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99));
 const facts = []; const out = [];
@@ -28,7 +38,7 @@ for (const d of dirs) {
     while ((m = re.exec(block))) {
       const rest = block.slice(m.index, m.index + 900);
       const def = /\.default\(((?:[^()]|\([^()]*\))*)\)/.exec(rest.slice(0, rest.indexOf('\n  /**') > 0 ? rest.indexOf('\n  /**') : 900));
-      const note = (m[1] ?? '').replace(/^\s*\*\s?/gm, '').replace(/\s+/g, ' ').trim();
+      const note = plain((m[1] ?? '').replace(/^\s*\*\s?/gm, '').replace(/\s+/g, ' ').trim());
       let value = def ? def[1].trim().replace(/\s+/g, ' ') : '';
       if (value.length > 40) value = value.startsWith('{') || value.startsWith('[') ? '(a list or table)' : `${value.slice(0, 37)}…`;
       if (!['object', 'array'].includes(m[3]) || note) settings.push({ name: m[2], value, note: note.slice(0, 260) });
@@ -46,7 +56,8 @@ for (const d of dirs) {
   facts.push({ d, title, settings: settings.length, tools: tools.length, cmds, section: sectionTitle, places, on, hasClient: Boolean(cli), tests: fs.existsSync(path.join(dir, 'test')) });
   out.push(`### ${title}`, '', `${(loc.meta?.description ?? pkg.description ?? '').trim()}`, '');
   const where = [];
-  if (sectionTitle) where.push(`Settings → ${sectionTitle}`);
+  if (MOVED[d]) where.push(`Settings → ${MOVED[d]}`);
+  else if (sectionTitle) where.push(`Settings → ${sectionTitle}`);
   if (places.length) where.push(...places);
   if (cmds.length) where.push(...cmds.map((c) => `\`/${c}\` in the chat box`));
   out.push(`- **Where:** ${where.length ? where.join('; ') : 'no page of its own; it works in the background'}`);

@@ -6,25 +6,74 @@
  */
 import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, sep } from 'node:path';
+import { keepCopy } from './damaged.js';
 
 const ID = /^[A-Za-z0-9][A-Za-z0-9._-]{5,120}$/;
 
 /**
+ * The ids a damaged list still plainly holds: the leading run of quoted ids of a cut-off JSON array
+ * (`["a1b2c3","d4e5f6","g7h`). Anything after the first thing that is not a quoted id is not trusted.
+ * @param {string} text - the damaged file.
+ * @returns {string[]} valid ids only.
+ */
+export function salvage(text) {
+  const out = [];
+  let rest = String(text).replace(/^\s*\[/, (m) => (m ? '' : m));
+  if (rest === String(text)) return out;
+  for (;;) {
+    const hit = /^\s*"([^"\\]*)"\s*(?:,|\]|$)/.exec(rest);
+    if (!hit) break;
+    if (ID.test(hit[1]) && !out.includes(hit[1])) out.push(hit[1]);
+    rest = rest.slice(hit[0].length);
+  }
+  return out;
+}
+
+/**
  * @param {string} file - where the list is kept; '' keeps it in memory.
+ * @param {(id: string, what: 'add' | 'done') => void} [onChange] - told when a conversation joins or leaves the list (Artifacts forgets what it made).
  * @returns {object} the list of conversations waiting to be deleted.
  */
-export function openWipeList(file) {
+export function openWipeList(file, onChange) {
   let ids = [];
+  /** Plain words when the file was damaged at start; '' otherwise. */
+  let trouble = '';
+  /** True when a damaged file could not be copied aside: nothing may be saved over it. */
+  let blocked = false;
   if (file) {
+    let text;
     try {
-      const read = JSON.parse(readFileSync(file, 'utf8'));
-      if (Array.isArray(read)) ids = read.filter((id) => typeof id === 'string' && ID.test(id));
-    } catch {
-      ids = [];
+      text = readFileSync(file, 'utf8');
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        blocked = true;
+        trouble = `Recon's list of ended conversations waiting to be deleted (wipe.json) could not be read (${String(error?.code ?? error?.message ?? error).slice(0, 60)}), so it was left exactly as it is and no conversation can be ended until it can be read. Their files are deleted once it can.`;
+      }
+    }
+    if (text !== undefined) {
+      let ok = false;
+      try {
+        const read = JSON.parse(text);
+        if (Array.isArray(read)) {
+          ids = read.filter((id) => typeof id === 'string' && ID.test(id));
+          ok = true;
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) {
+        // Damaged (a cut-off write, a hand edit): a copy is kept, the ids that are still plainly there are
+        // kept on the list (an ended conversation stays on its way to deletion), and the user is told.
+        const kept = keepCopy(file, text);
+        ids = salvage(text);
+        blocked = !kept.copied;
+        trouble = `Recon's list of ended conversations waiting to be deleted (wipe.json) was damaged. ${kept.copied ? `A copy was kept as ${kept.aside}.` : 'No copy could be made, so the file was left as it is and no conversation can be ended until that is fixed.'} ${ids.length} ended conversation${ids.length === 1 ? ' was' : 's were'} recovered and will still be deleted. If an ended conversation is still in your Archived list, end it again with /recon end confirm.`;
+      }
     }
   }
   const save = () => {
     if (!file) return;
+    if (blocked) throw new Error(trouble);
     mkdirSync(dirname(file), { recursive: true });
     const temp = `${file}.${process.pid}.tmp`;
     writeFileSync(temp, JSON.stringify(ids));
@@ -35,14 +84,18 @@ export function openWipeList(file) {
       if (!ID.test(String(id)) || ids.includes(id)) return;
       ids = [...ids, id];
       save();
+      try { onChange?.(String(id), 'add'); } catch { /* a listener never stops a wipe */ }
     },
     done(id) {
       if (!ids.includes(id)) return;
       ids = ids.filter((other) => other !== id);
       save();
+      try { onChange?.(String(id), 'done'); } catch { /* a listener never stops a wipe */ }
     },
     has: (id) => ids.includes(id),
     list: () => [...ids],
+    /** @returns {string} plain words when the file was damaged at start, else ''. */
+    problem: () => trouble,
   };
 }
 

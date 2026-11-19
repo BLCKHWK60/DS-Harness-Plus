@@ -1,5 +1,5 @@
 /**
- * lib/plus: the 28 tool definitions, the Bench switch, the never-throw net, and every action that changes
+ * lib/plus: the 28 tool definitions, the Devices switch, the never-throw net, and every action that changes
  * a device: refused with "Allow risky writes" off (nothing runs), run with the expected arguments when on.
  * Every program is a stand-in (find and run are scripted); nothing real runs, no port or network is used.
  */
@@ -12,7 +12,7 @@ import { PLUS_TOOL_NAMES, RISKY, buildPlusTools } from '../lib/plus/index.js';
 import { PYVISA_SCRIPT } from '../lib/plus/tools-lab.js';
 import { LINE_ARGS } from '../lib/plus/serialio.js';
 
-/** A stand-in Mac: a temp Bench folder and home, scripted programs, recorded calls and port writes. */
+/** A stand-in Mac: a temp Devices folder and home, scripted programs, recorded calls and port writes. */
 function world(options = {}) {
   const root = mkdtempSync(join(tmpdir(), 'bench-plus-defs-'));
   const bench = join(root, 'bench');
@@ -93,10 +93,10 @@ test('the 28 tools: the names in order, { schema, render } output, closed parame
   }
 });
 
-test('Bench switched off: every tool says so and runs nothing', async () => {
+test('Devices switched off: every tool says so and runs nothing', async () => {
   const app = world({ enabled: false, risky: true });
   try {
-    for (const name of PLUS_TOOL_NAMES) assert.equal(await app.call(name, { action: 'list' }), 'Bench is switched off in Settings → Bench.');
+    for (const name of PLUS_TOOL_NAMES) assert.equal(await app.call(name, { action: 'list' }), 'Devices is switched off in Settings → Devices.');
     assert.equal(app.calls.length, 0);
   } finally {
     app.close();
@@ -163,7 +163,7 @@ test('every RISKY action: refused with the switch off (nothing runs), run with t
       app.calls.length = 0;
       app.writes.length = 0;
       const refused = await app.call(tool, { action, ...args });
-      assert.equal(refused, `${tool} ${action} changes the device, so it runs only with "Allow risky writes" switched on (Settings → Bench → Danger zone). Nothing was sent.`);
+      assert.equal(refused, `${tool} ${action} changes the device, so it runs only with "Allow risky writes" switched on (Settings → Devices → Danger zone). Nothing was sent.`);
       assert.equal(app.calls.length, 0, `${tool} ${action}: nothing ran`);
       assert.equal(app.writes.length, 0, `${tool} ${action}: nothing was written to a port`);
       app.state.risky = true;
@@ -185,7 +185,7 @@ test('the risky runs in detail: J-Link\'s command file, the APDU on standard inp
     await app.call('bench_jlink', { action: 'cpu-reset', device: 'STM32F103C8', speed: 1000 });
     const jlink = app.calls.find((entry) => entry.program === 'JLinkExe');
     assert.deepEqual(jlink.args.slice(0, -1), ['-NoGui', '1', '-device', 'STM32F103C8', '-if', 'SWD', '-speed', '1000', '-autoconnect', '1', '-CommanderScript']);
-    assert.equal(jlink.script, 'connect\nr\ng\nexit\n', 'only Bench\'s fixed commands');
+    assert.equal(jlink.script, 'connect\nr\ng\nexit\n', 'only Devices\' fixed commands');
     assert.throws(() => readFileSync(jlink.args.at(-1)), /ENOENT/, 'the command file is removed afterwards');
 
     await app.call('bench_smartcard', { action: 'apdu', apdu: '00 b0 00 00 10' });

@@ -25,7 +25,7 @@
  * whether it may receive findings, for the status bar on the Recon tab's start page.
  */
 import z from '@deepseek-ai/schemastery';
-import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir, tmpdir, userInfo } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
@@ -35,7 +35,7 @@ import { MODE_ID, TOOLS, withRecon } from './lib/mode.js';
 import { CLAIM_MAX, DRAFTS, DRAFT_MAX, SEARCH_MS, SUB_MAX, ULTRA_TOOL, isRecipeHelperTask, judgeAccepted, judgeTask, materialOf, wideSearch, writerTask } from './lib/ultra.js';
 import { cloudPolicy, mayReceive, openConsent, providerPlace, staysHome } from './lib/model.js';
 import { exportText, writeExport } from './lib/export.js';
-import { MARKER_RE, MESSAGE_MAX, NEVER_GOES, NOT_KEPT, WARNINGS, addressKey, addressesIn, buildExport, covers, decoded, exportMessage, exportsInText, isOnion, openDoor, safeExportParent, sharesRun, urlsIn, writeExportFolder } from './lib/door.js';
+import { MARKER_RE, MESSAGE_MAX, NEVER_GOES, NOT_KEPT, WARNINGS, addressKey, addressesIn, buildExport, covers, decoded, exportLine, exportMessage, exportsInText, isOnion, openDoor, safeExportParent, sharesRun, urlsIn, writeExportFolder } from './lib/door.js';
 import { openForward } from './lib/forward.js';
 import { login, loginName } from './lib/keychain.js';
 import { AHMIA, createOnion } from './lib/onion.js';
@@ -55,7 +55,7 @@ import { openWipeList, wipeFiles, wipeTrashed } from './lib/wipe.js';
 import { createTor, findTor, torVersion } from './lib/tor.js';
 import { createVpn, findWireproxy, readVpnList, vpnNameOf, vpnRemoveCommandFor, vpnStoreCommandFor, vpnStored } from './lib/vpn.js';
 import { copyOtherFiles, copyRoomFile, filesNote, filesPart, listRoomFiles, namedByCalls, pickedFiles, runFolderName } from './lib/roomfiles.js';
-import { MOVE_FOLDER, buildMove, messagesFromEvents } from './lib/move.js';
+import { MOVE_FOLDER, buildDraft, buildMove, messagesFromEvents } from './lib/move.js';
 
 export const name = 'dsh-recon';
 
@@ -434,12 +434,35 @@ export function apply(ctx, config, standIns = {}) {
     ROOM = roomFor({ room: ROOM, dataFolder });
     warn(`this app runs on another data folder (${dataFolder}), so Recon uses its own folder ${ROOM}, not the real one`);
   }
-  const prepareRoom = () => {
+  // Plus writes down which room it prepared (in Recon's own data folder, not in the room). With Recon switched off
+  // the room is emptied at start only when that note names this very room: the room is then Plus's own, so its
+  // files do not stay until the Mac restarts. Without the note (never switched on here) it is left alone.
+  const roomNote = typeof home === 'function' ? join(home('recon'), 'room-owner.json') : '';
+  const roomIsOurs = () => {
+    if (!roomNote) return false;
+    try {
+      return JSON.parse(readFileSync(roomNote, 'utf8'))?.room === ROOM;
+    } catch {
+      return false;
+    }
+  };
+  const rememberRoom = () => {
+    if (!roomNote) return;
+    try {
+      mkdirSync(dirname(roomNote), { recursive: true, mode: 0o700 });
+      writeFileSync(roomNote, JSON.stringify({ room: ROOM }), { mode: 0o600 });
+    } catch (error) {
+      warn(`could not note which folder is Recon's room: ${String(error?.message ?? error)}`);
+    }
+  };
+  /** @param {boolean} on - Recon is switched on: make the room if it is missing and note it. Off: only empty an existing room of ours. */
+  const prepareRoom = (on = true) => {
     if (!mayEmptyRoom({ room: ROOM, dataFolder })) {
       warn(`this app runs on another data folder (${dataFolder}), so the real Recon folder ${ROOM} was not emptied; start it with DSH_RECON_ROOM set to a throwaway "dsh-recon-" folder in /tmp`);
       return;
     }
     try {
+      if (!on && (!existsSync(ROOM) || !roomIsOurs())) return;
       mkdirSync(ROOM, { recursive: true, mode: 0o700 });
       const seen = lstatSync(ROOM);
       if (seen.isSymbolicLink() || !seen.isDirectory() || (typeof process.getuid === 'function' && seen.uid !== process.getuid())) {
@@ -448,11 +471,21 @@ export function apply(ctx, config, standIns = {}) {
       }
       chmodSync(ROOM, 0o700);
       for (const name of readdirSync(ROOM)) rmSync(join(ROOM, name), { recursive: true, force: true });
+      if (on) rememberRoom();
     } catch (error) {
       warn(`could not prepare the Recon folder: ${String(error?.message ?? error)}`);
     }
   };
-  prepareRoom();
+  // Switched on: the room is emptied once at start (and once when Recon is switched on later in the same run).
+  // Switched off: an existing room that Plus prepared before is emptied at start too, but never created.
+  let roomPrepared = false;
+  const prepareRoomOnce = () => {
+    if (roomPrepared || !enabled()) return;
+    roomPrepared = true;
+    prepareRoom(true);
+  };
+  if (enabled()) prepareRoomOnce();
+  else prepareRoom(false);
   const sameFolder = (path) => {
     if (!path) return false;
     try {
@@ -801,7 +834,8 @@ export function apply(ctx, config, standIns = {}) {
   const follow = () => {
     void syncMode();
     try {
-      if (!existsSync(ROOM)) prepareRoom();
+      prepareRoomOnce();
+      if (enabled() && !existsSync(ROOM)) prepareRoom();
       syncTools();
     } catch (error) {
       warn(`could not update the tools: ${String(error?.message ?? error)}`);
@@ -838,6 +872,8 @@ export function apply(ctx, config, standIns = {}) {
     // (review finding 3): it counts as holding them.
     if (topIdOf(agent) !== String(agent.id) && inRecon(agent)) return true;
     if (sources.readCount(topIdOf(agent)) > 0) return true;
+    // A conversation a move opened (review B1): its first message came from Recon, whatever its history shows.
+    if (movedIn(topIdOf(agent))) return true;
     try {
       const messages = agent.session?.deriveMessages?.();
       if (holdsFindings(messages)) return true;
@@ -866,7 +902,7 @@ export function apply(ctx, config, standIns = {}) {
     if (mayReceive({ place, route, id: topIdOf(agent), consent, policy: cloudModels() }).ok || !holdsRecon(agent)) return next();
     const who = !route ? 'not known' : `${route.model} (${place.name || route.provider}), ${place.where === 'cloud' ? 'in the cloud' : 'at a place Recon cannot tell, treated as cloud'}`;
     const agree = cloudModels() === 'never' ? ' (cloud models are switched off in Settings → Recon → Models)' : enabled() && inRecon(agent) ? ', or type /recon cloud to agree to this model for this conversation' : '';
-    throw new Error(`This conversation holds what Recon found, and its model is ${who}. Nothing was sent. Pick a model on this computer or in your own network${agree}, then send your message again.`);
+    throw new Error(`This conversation holds what Recon found, and its model is ${who}. Nothing was sent. Pick a model on this computer or in your own network${agree}, then send your message again.${door.problem() ? ` (${door.problem()})` : ''}`);
   });
   // Mentions of other conversations: an isolated conversation takes in none, and none takes in an
   // isolated one. The app's own handler runs outside this one, so it never sees what is taken out.
@@ -939,7 +975,9 @@ export function apply(ctx, config, standIns = {}) {
   // ---- export, and End and wipe ------------------------------------------------------------------
 
   const exportFolder = () => String(plain(config?.exportFolder) ?? '').trim() || (typeof home === 'function' ? home('recon', 'exports') : join(ROOM, '..', 'dsh-recon-exports'));
-  const wipeList = openWipeList(typeof home === 'function' ? join(home('recon'), 'wipe.json') : '');
+  /** Add-ons told when a conversation joins or leaves the wipe list (Artifacts forgets what it made). */
+  const wipeListeners = new Set();
+  const wipeList = openWipeList(typeof home === 'function' ? join(home('recon'), 'wipe.json') : '', (id, what) => { for (const listener of [...wipeListeners]) { try { listener(id, what); } catch { /* a listener never stops a wipe */ } } });
   const trashDir = typeof home === 'function' ? home('trash', 'conversations') : '';
   // Which conversations End and wipe is deleting: the Cowork sidebar's trash refuses them, and its
   // Archived list offers no Restore or Delete for them.
@@ -960,7 +998,7 @@ export function apply(ctx, config, standIns = {}) {
     return inRecon(agent) && inRoom(agent);
   };
   if (typeof ctx.provide === 'function') ctx.effect(() => ctx.provide('recon', Object.freeze({ apiVersion: 2, runs: runsIn, runFolder: (id) => (runsIn(id) ? runFolder(id) : ''), longChecks: () => plain(config?.longChecks) === true })), 'recon: run folders');
-  if (typeof ctx.provide === 'function') ctx.effect(() => ctx.provide('reconWipe', Object.freeze({ has: (id) => wipeList.has(String(id)), list: () => wipeList.list() })), 'recon: wipe list');
+  if (typeof ctx.provide === 'function') ctx.effect(() => ctx.provide('reconWipe', Object.freeze({ has: (id) => wipeList.has(String(id)), list: () => wipeList.list(), onChange: (listener) => { wipeListeners.add(listener); return () => wipeListeners.delete(listener); } })), 'recon: wipe list');
   /** Set once the app's conversation services are there. */
   let wiper;
   /**
@@ -1091,6 +1129,8 @@ export function apply(ctx, config, standIns = {}) {
   // ---- the export door (step C8): the owner's one way out, and the rules that follow an export ----------
 
   const door = openDoor(typeof home === 'function' ? join(home('recon'), 'door.json') : '');
+  // The conversations a move opened: Shared sync (dsh-sync) leaves them out like Recon's own (review B1).
+  if (typeof ctx.provide === 'function') ctx.effect(() => ctx.provide('reconMoved', Object.freeze({ active: () => enabled(), damaged: () => door.problem() !== '', list: () => door.list().filter((entry) => entry.what === 'move').flatMap((entry) => (entry.to ?? []).filter((to) => to.kind === 'conversation' && to.id).map((to) => String(to.id))) })), 'recon: moved conversations');
   /** Addresses from an export the owner said yes to, per conversation: `${conversation}|${address}`. */
   const doorYes = new Set();
   /** Said in the window and in the export when a conversation is read from its saved messages after a restart. */
@@ -1387,8 +1427,9 @@ export function apply(ctx, config, standIns = {}) {
     }
     return { own: runFolderName(source.id), named: namedByCalls(events) };
   };
-  const doorPreview = async (sessionId, what) => {
-    const source = await doorSource(sessionId);
+  const doorPreview = async (sessionId, what, move = false) => {
+    const source = move ? await moveSource(sessionId) : await doorSource(sessionId);
+    if (move) what = 'report';
     const built = exportOf(source, what, 'preview', Date.now());
     let files = [];
     try {
@@ -1414,8 +1455,10 @@ export function apply(ctx, config, standIns = {}) {
       never: NEVER_GOES,
       warnings: WARNINGS,
       tabs: doorTabs(),
-      targets: await doorTargets(),
+      targets: move ? [] : await doorTargets(),
       folder: exportFolderDefault(),
+      // A move (review B1): what it does, and what Settings → Recon → Models says about cloud models.
+      ...(move ? { move: true, cloudModels: cloudModels(), alsoFull: true } : {}),
     };
   };
   const claimFor = async (sessionId, tab) => {
@@ -1435,6 +1478,7 @@ export function apply(ctx, config, standIns = {}) {
     throw lastError;
   };
   const doorExport = async (body) => {
+    if (door.problem()) throw new Error(door.problem());
     const source = await doorSource(body.session);
     const agent = { id: source.id };
     const to = String(body.to ?? '');
@@ -1523,53 +1567,114 @@ export function apply(ctx, config, standIns = {}) {
    * the room into `<folder>/from-recon-<id>/files`, the whole conversation is written beside them as
    * conversation.md, and the first message carries it. The original stays in Recon, unchanged.
    */
+  /**
+   * Whether the new conversation's model may receive what Recon found (review B1). Asked before anything
+   * is written: Settings → Recon → Models says Never → a cloud model (or one whose place cannot be told)
+   * is refused; Ask → only after the user ticked the agreement in the preview window.
+   */
+  const moveGate = async (child, agreeCloud) => {
+    let agent;
+    for (let attempt = 0; attempt < 12 && !agent; attempt += 1) {
+      try {
+        agent = ctx.get('agents')?.get?.(child);
+      } catch {
+        agent = undefined;
+      }
+      if (!agent) await new Promise((done) => setTimeout(done, 250));
+    }
+    const { route, place } = agent ? modelOf(agent) : { route: undefined, place: { where: 'unknown', host: '', name: '' } };
+    if (!route && cloudModels() === 'always') return;
+    if (agreeCloud === true && cloudModels() === 'ask' && route) consent.agree(child, route);
+    const allowed = mayReceive({ place, route, id: child, consent, policy: cloudModels() });
+    if (!allowed.ok) throw new Error(`Nothing was moved. ${allowed.why.replace(/^This conversation uses/, 'The new conversation uses').replace(/ To agree for this conversation, the user types \/recon cloud\./, ' Tick the agreement in the window, or pick a model on this computer or in your own network first.')}`);
+  };
+  /** The conversations a move opened (their summary is Recon's): they hold Recon's findings for the cloud check. */
+  // A damaged list cannot say which conversations a move opened: every conversation counts as one (fail closed).
+  const movedIn = (id) => door.problem() !== '' || door.list().some((entry) => entry.what === 'move' && (entry.to ?? []).some((to) => to.kind === 'conversation' && to.id === id));
+  /**
+   * Move a Recon conversation to another tab (the owner's choice, 18 November 2026): the page made a new
+   * conversation in that tab's usual place; it becomes one of that tab. Review B1 (18 November 2026): only
+   * after the preview window (body.consent), never to a cloud model Recon's settings do not allow, and what
+   * goes is the newest report and its citations as summary.md, the ticked files, and (if ticked) the whole
+   * conversation as conversation.md. The first message is a short DRAFT the user sends; it holds no page text.
+   * The original stays in Recon, unchanged.
+   */
   const doorMove = async (body) => {
+    if (door.problem()) throw new Error(door.problem());
     const source = await moveSource(body.session);
     if (runningNow(source.id)) throw new Error('Recon is running in this conversation: move it when the run is done.');
+    if (body.consent !== true) throw new Error('Nothing was moved: the move needs the preview window first (what leaves, and your yes).');
     const tab = String(body.tab ?? '');
     const target = doorTabs().find((one) => one.id === tab);
     if (!target) throw new Error('A conversation moves to a tab other than Recon.');
     const child = String(body.sessionId ?? '').slice(0, 200);
     if (!child || child === source.id) throw new Error('The new conversation is missing.');
     const parent = safeExportParent(String(body.folder ?? ''), [ROOM, DEFAULT_ROOM]);
+    // The new conversation becomes one of the picked tab first, so its model is the one it will really use; only
+    // then is the cloud check made (before anything is written). A refusal leaves an empty conversation of that tab.
+    await claimFor(child, tab);
+    await moveGate(child, body.agreeCloud === true);
     const id = newExportId();
     const at = Date.now();
     const where = join(parent, MOVE_FOLDER(id));
-    mkdirSync(where, { recursive: true, mode: 0o700 });
-    const scope = await roomScope(source);
-    let files = [];
+    let recorded = false;
+    const parentExisted = existsSync(parent);
     try {
-      const offered = existsSync(ROOM) ? listRoomFiles(ROOM, scope) : [];
-      files = offered.length > 0 ? pickedFiles(ROOM, offered.map((file) => file.path), scope) : [];
-    } catch {
-      files = [];
-    }
-    const copied = [];
-    const skipped = [];
-    for (const file of files) {
+      mkdirSync(where, { recursive: true, mode: 0o700 });
+      const scope = await roomScope(source);
+      // Only the files the user ticked in the window (none are ticked by default).
+      let files = [];
       try {
-        const into = join(where, 'files', file.path);
-        mkdirSync(dirname(into), { recursive: true, mode: 0o700 });
-        copyRoomFile(file.full, file.path, into);
-        copied.push(file.path);
-      } catch (error) {
-        skipped.push({ path: file.path, why: String(error?.message ?? error).slice(0, 120) });
+        const offered = existsSync(ROOM) ? listRoomFiles(ROOM, scope) : [];
+        const asked = Array.isArray(body.files) ? body.files.map(String) : [];
+        files = offered.length > 0 && asked.length > 0 ? pickedFiles(ROOM, asked, scope) : [];
+      } catch {
+        files = [];
       }
+      const copied = [];
+      const skipped = [];
+      for (const file of files) {
+        try {
+          const into = join(where, 'files', file.path);
+          mkdirSync(dirname(into), { recursive: true, mode: 0o700 });
+          copyRoomFile(file.full, file.path, into);
+          copied.push(file.path);
+        } catch (error) {
+          skipped.push({ path: file.path, why: String(error?.message ?? error).slice(0, 120) });
+        }
+      }
+      const summary = exportOf(source, 'report', id, at);
+      writeFileSync(join(where, 'summary.md'), `${exportLine(id, at)}\n${summary.markdown}`, { mode: 0o600, flag: 'wx' });
+      let full = '';
+      if (body.full === true) {
+        let messages = [];
+        try {
+          messages = source.agent ? source.agent.session?.deriveMessages?.() ?? [] : messagesFromEvents(source.events);
+        } catch {
+          messages = [];
+        }
+        full = buildMove({ title: String(body.title ?? '').slice(0, 200), messages, tabLabel: target.label || tab, folder: where, files: copied, skipped, at }).full;
+        writeFileSync(join(where, 'conversation.md'), full, { mode: 0o600, flag: 'wx' });
+      }
+      // Recorded as a move into the new conversation, so the export rules hold there (onion addresses never
+      // opened outside Recon, others after a yes, nothing into Memory) and the cloud check knows it.
+      door.add({ id, at, what: 'move', from: source.id, to: [{ kind: 'conversation', id: child, tab }], addresses: addressesIn(`${summary.markdown}\n${full}`) });
+      recorded = true;
+      sources.note(source.id, 'export', `moved to a new ${tab} conversation (summary${full ? ' and the whole conversation' : ''}, ${copied.length} file${copied.length === 1 ? '' : 's'} copied)`);
+      const draft = buildDraft({ title: String(body.title ?? '').slice(0, 200), tabLabel: target.label || tab, folder: where, files: copied, skipped, hasFull: Boolean(full), at });
+      return { id, tab, label: target.label || tab, draft: exportMessage(id, at, draft), folder: where, files: copied.length, skipped: skipped.length };
+    } catch (error) {
+      // Failed halfway: what this move wrote goes again (its own new folder only), so nothing of Recon is left behind.
+      if (!recorded) {
+        try {
+          rmSync(where, { recursive: true, force: true });
+          if (!parentExisted) rmdirSync(parent); // only if it is empty again
+        } catch {
+          /* the next move uses a new folder name */
+        }
+      }
+      throw error;
     }
-    let messages = [];
-    try {
-      messages = source.agent ? source.agent.session?.deriveMessages?.() ?? [] : messagesFromEvents(source.events);
-    } catch {
-      messages = [];
-    }
-    const built = buildMove({ title: String(body.title ?? '').slice(0, 200), messages, tabLabel: target.label || tab, folder: where, files: copied, skipped, at, max: MESSAGE_MAX - 400 });
-    writeFileSync(join(where, 'conversation.md'), built.full, { mode: 0o600, flag: 'wx' });
-    await claimFor(child, tab);
-    // Recorded as an export into the new conversation, so the export rules hold there (onion addresses never
-    // opened outside Recon, others after a yes, nothing into Memory).
-    door.add({ id, at, what: 'move', from: source.id, to: [{ kind: 'conversation', id: child, tab }], addresses: addressesIn(built.full) });
-    sources.note(source.id, 'export', `moved to a new ${tab} conversation (${copied.length} file${copied.length === 1 ? '' : 's'} copied)`);
-    return { id, tab, label: target.label || tab, message: exportMessage(id, at, built.message), folder: where, files: copied.length, skipped: skipped.length };
   };
   ctx.inject(['webServer', 'connection'], (inner) => {
     inner.effect(
@@ -1588,7 +1693,7 @@ export function apply(ctx, config, standIns = {}) {
           try {
             if (req.method === 'GET') {
               const params = new URL(String(req.url ?? ''), 'http://recon.invalid').searchParams;
-              res.end(JSON.stringify(await doorPreview(params.get('session'), params.get('what'))));
+              res.end(JSON.stringify(await doorPreview(params.get('session'), params.get('what'), params.get('move') === '1')));
               return;
             }
             if (req.method !== 'POST') throw new Error('only GET and POST');
@@ -1610,6 +1715,7 @@ export function apply(ctx, config, standIns = {}) {
             }
             if (body.action === 'claim') {
               // The page made the new conversation: it becomes one of the picked tab, and the export reached it.
+              if (door.problem()) throw new Error(door.problem());
               const entry = door.get(String(body.id ?? ''));
               if (!entry || (entry.to ?? []).length > 0) throw new Error('There is no export waiting for a new conversation.');
               const tab = String(body.tab ?? '');
@@ -1623,7 +1729,7 @@ export function apply(ctx, config, standIns = {}) {
             throw new Error('unknown action');
           } catch (error) {
             res.statusCode = 400;
-            res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 300) }));
+            res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 700) }));
           }
         },
       }),
@@ -1637,7 +1743,7 @@ export function apply(ctx, config, standIns = {}) {
         inner.commands.register({
           name: 'recon',
           description: 'Recon conversation: show its isolation and model, or agree to a cloud model',
-          input: { hint: '[status | cloud | direct | block | log | export | end | stop]' },
+          input: { hint: '[status | cloud | direct | block | log | export | end confirm | stop]' },
           handler: async ({ agent, rawInput }) => {
             try {
               const word = String(rawInput ?? '').trim().toLowerCase();
@@ -1667,8 +1773,10 @@ export function apply(ctx, config, standIns = {}) {
                 sources.note(agent.id, 'export', `written (${found.length} sources, ${notes.length} notes)`);
                 return { kind: 'success', text: `Exported ${found.length} sources and ${notes.length} notes to:\n${file}\n\nEverything from sources and from the assistant is quoted and marked as untrusted material in that file. If you give the file to another tab or tool, leave the marks in.` };
               }
-              if (word === 'end' || word === 'wipe') {
+              if (word === 'end' || word === 'wipe' || word === 'end confirm' || word === 'wipe confirm') {
                 if (!inRecon(agent)) return { kind: 'error', text: status(agent) };
+                // Review H11: a permanent delete is never one typed word. Without "confirm" nothing is done.
+                if (!word.endsWith(' confirm')) return { kind: 'error', text: `/recon ${word} deletes this conversation for good: what it read is forgotten, Tor is stopped and the conversation and its files are deleted, with no way back. Nothing was deleted. To go on, type /recon ${word} confirm` };
                 return { kind: 'success', text: await endAndWipe(agent) };
               }
               if (word === 'stop') {
@@ -1687,7 +1795,7 @@ export function apply(ctx, config, standIns = {}) {
                 directOk.delete(topIdOf(agent));
                 return { kind: 'success', text: 'Blocked again: without a working WireGuard tunnel, nothing outside Tor is sent from this conversation.' };
               }
-              return { kind: 'error', text: `/recon does not know "${word.slice(0, 40)}". Use /recon, /recon cloud, /recon direct, /recon block, /recon log, /recon export, /recon end or /recon stop.` };
+              return { kind: 'error', text: `/recon does not know "${word.slice(0, 40)}". Use /recon, /recon cloud, /recon direct, /recon block, /recon log, /recon export, /recon end confirm or /recon stop.` };
             } catch (error) {
               return { kind: 'error', text: String(error?.message ?? error).slice(0, 300) };
             }
@@ -1785,7 +1893,7 @@ export function apply(ctx, config, standIns = {}) {
       },
       at: Date.now(),
       enabled: enabled(),
-      problem,
+      problem: problem || door.problem() || wipeList.problem(),
       toolsOn: Boolean(toolsOff),
       tools: TOOLS,
       network: true,

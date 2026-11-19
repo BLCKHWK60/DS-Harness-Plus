@@ -60,7 +60,7 @@ function device(config, { registry, modes = true, isolated = [], open = {}, stor
   const isolate = (id) => { modesValue.sessionIsolated = JSON.stringify({ ...JSON.parse(modesValue.sessionIsolated), [id]: true }); };
   const ctx = {
     // `noScratch`: like a Sync from before Scratch, which knew no Scratch place.
-    get: (key) => (key === 'dshHomePath' ? (sub) => (noScratch && sub === 'scratch' ? undefined : join(home, sub)) : key === 'workspaceRegistry' ? registry : key in services ? services[key] : provided[key]),
+    get: (key) => (key === 'reconMoved' ? services.reconMoved : key === 'dshHomePath' ? (sub) => (noScratch && sub === 'scratch' ? undefined : join(home, sub)) : key === 'workspaceRegistry' ? registry : key in services ? services[key] : provided[key]),
     effect: (fn) => fn(),
     provide: (key, value) => { provided[key] = value; },
     on: (event, fn) => { (listeners[event] ??= []).push(fn); },
@@ -68,13 +68,14 @@ function device(config, { registry, modes = true, isolated = [], open = {}, stor
   };
   const { home: _ignore, ...rest } = config;
   apply(ctx, rest);
+  const provideRecon = (value) => { services.reconMoved = value; };
   const run = async (text) => commands.sync.handler({ rawInput: text });
   const sessions = join(home, 'sessions');
   const put = (rel, text) => { const f = join(sessions, ...rel.split('/')); mkdirSync(join(f, '..'), { recursive: true }); writeFileSync(f, text); };
   const add = (rel, text) => appendFileSync(join(sessions, ...rel.split('/')), text);
   const read = (rel) => readFileSync(join(sessions, ...rel.split('/')), 'utf8');
   const has = (rel) => existsSync(join(sessions, ...rel.split('/')));
-  return { home, sessions, run, put, add, read, has, provided, listeners, commands, isolate, repo: join(home, 'sync', 'repo') };
+  return { home, sessions, run, put, add, read, has, provideRecon, provided, listeners, commands, isolate, repo: join(home, 'sync', 'repo') };
 }
 const plainCfg = (remote, extra = {}) => ({ remote, ...extra });
 const walk = (dir, base = dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (e.name === '.git' ? [] : walk(join(dir, e.name), base)) : [join(dir, e.name).slice(base.length + 1)]));
@@ -899,4 +900,62 @@ test('the Scratch project is never in the shared project list, nor made from ano
   assert.doesNotMatch(plan.text, /Scratch/);
   await b.run('projects apply');
   assert.ok(created.every(([p]) => !p.startsWith(join(homeB, 'scratch'))), 'never made');
+});
+
+test('a conversation Recon\'s "Move to" opened is never synced (review B1)', async () => {
+  const { readIsolation } = await import('../lib/isolation.mjs');
+  const settings = { describe: () => [{ ns: 'modes', value: {} }] };
+  const answer = await readIsolation({ settings, reconMoved: { list: () => ['moved-1'] } });
+  assert.equal(answer.known, true);
+  assert.ok(answer.ids.has('moved-1'));
+  assert.equal(answer.exclude('project/moved-1/session.jsonl'), true);
+  assert.equal(answer.exclude('project/other/session.jsonl'), false);
+  // Recon cannot say: nothing breaks.
+  const broken = await readIsolation({ settings, reconMoved: { list: () => { throw new Error('x'); } } });
+  assert.equal(broken.known, true);
+});
+
+test('Recon switched off, switched on or not installed: Sync runs, and moved conversations are always left out', async () => {
+  const { readIsolation } = await import('../lib/isolation.mjs');
+  const settings = { describe: () => [{ ns: 'modes', value: {} }] };
+  for (const active of [false, true]) {
+    const answer = await readIsolation({ settings, reconMoved: { active: () => active, list: () => ['m1'] } });
+    assert.equal(answer.known, true, `Recon active=${active}: Sync must run`);
+    assert.equal(answer.reason, undefined);
+    assert.equal(answer.exclude('project/m1/session.jsonl'), true, 'the moved conversation is left out');
+    assert.equal(answer.exclude('project/other/session.jsonl'), false);
+  }
+  const absent = await readIsolation({ settings });
+  assert.equal(absent.known, true, 'no Recon add-on at all: Sync works');
+});
+
+test('a damaged list of moved conversations holds Sync back with a plain reason, and nothing is pushed', async () => {
+  const { readIsolation, RECON_DAMAGED_REASON } = await import('../lib/isolation.mjs');
+  const settings = { describe: () => [{ ns: 'modes', value: {} }] };
+  const held = await readIsolation({ settings, reconMoved: { active: () => false, damaged: () => true, list: () => [] } });
+  assert.equal(held.known, false);
+  assert.equal(held.reason, RECON_DAMAGED_REASON);
+  const remote = makeRemote();
+  const a = device(plainCfg(remote));
+  a.provideRecon({ active: () => false, damaged: () => true, list: () => [] });
+  a.put('--proj--/m1/session.jsonl', 'MOVED-SECRET\n');
+  const pushed = await a.run('push');
+  assert.equal(pushed.kind, 'error');
+  assert.match(pushed.text, /door\.json\) is damaged/);
+  assert.equal(git(remote, 'log', '--all', '-p').includes('MOVED-SECRET'), false);
+  a.provideRecon({ active: () => false, damaged: () => false, list: () => ['m1'] });
+  assert.equal((await a.run('push')).kind, 'success', 'repaired: Sync runs again');
+});
+
+test('with Recon switched off, a whole push runs and leaves out the moved conversation', async () => {
+  const remote = makeRemote();
+  const a = device(plainCfg(remote));
+  a.provideRecon?.({ active: () => false, list: () => ['m1'] });
+  a.put('--proj--/c1/session.jsonl', 'ordinary\n');
+  a.put('--proj--/m1/session.jsonl', 'MOVED-SECRET\n');
+  const pushed = await a.run('push');
+  assert.equal(pushed.kind, 'success', pushed.text);
+  assert.doesNotMatch(pushed.text, /switched off/);
+  assert.equal(git(remote, 'log', '--all', '-p').includes('MOVED-SECRET'), false);
+  assert.ok(git(remote, 'ls-tree', '-r', '--name-only', 'main').includes('--proj--/c1/session.jsonl'));
 });

@@ -2,6 +2,8 @@
 
 Host plugin `@local/dsh-deep-research` (dsh 0.2.2-rc.2). It adds one tool, `deep_research`, that the model can call for questions that need several sources. It wraps what dsh already has (child agents, the `web_search` / `web_fetch` tools and whichever search backend `dsh-web` uses); the new code is the orchestration, the citation check and the labels that say which sources a helper read.
 
+**Settings (Plus 1.0).** The engine settings have a page (`client.js`): inside **Settings → Research → Advanced: research engine** when the Research add-on is installed, or as **Settings → Deep research** when it is not. Most fields are marked `volatile` so the page can save them; names and defaults are unchanged, and `toolName` stays file-only. The shared merge helper (`dshMerge`, copied between the `dsh-merge:begin/end` lines) lets the Research page show this add-on's page as a part and removes this add-on's own page from the list while it does.
+
 ## How a run works
 
 1. **Plan**: a planner helper splits the question into sub-questions that cover different angles (the facts, the numbers, recent developments, primary sources, the strongest criticism), each with two or three search queries.

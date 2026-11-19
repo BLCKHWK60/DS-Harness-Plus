@@ -25,6 +25,7 @@ import { draw } from './lib/draw.js';
 import { CHARTS, KINDS, SHAPES } from './lib/spec.js';
 import { COLORS } from './lib/svg.js';
 import { SKILLS } from './skills.js';
+import { readJsonStore } from './lib/json-store.js';
 
 export const name = 'dsh-diagram';
 export const inject = ['tools'];
@@ -221,11 +222,9 @@ export function apply(ctx, config) {
   if (indexFile) {
     try {
       mkdirSync(join(indexFile, '..'), { recursive: true });
-      const kept = existsSync(indexFile) ? JSON.parse(readFileSync(indexFile, 'utf8')) : [];
-      if (Array.isArray(kept)) records = kept.filter((row) => row && typeof row.id === 'string' && typeof row.session === 'string' && Number.isFinite(row.at));
-    } catch {
-      records = [];
-    }
+    } catch { /* the save reports it */ }
+    const kept = readJsonStore(indexFile, () => [], { label: 'the list of Diagram drawings', valid: (value) => Array.isArray(value) });
+    records = kept.filter((row) => row && typeof row.id === 'string' && typeof row.session === 'string' && Number.isFinite(row.at));
   }
   const remember = (row) => {
     records.push(row);

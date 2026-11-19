@@ -62,16 +62,16 @@ export function routerSettingRule(key, value, { risky = false } = {}) {
   const name = String(key ?? '');
   if (!UCI_KEY.test(name)) return { rule: undefined, why: 'Give the setting as uci writes it, such as system.@system[0].hostname.' };
   if (risky) {
-    if (ROUTER_RADIO_OR_SECRET.test(name) || neverChanged(name)) return { rule: undefined, why: `${name} is a radio limit; Bench never changes it, also with "Allow risky writes" on.` };
+    if (ROUTER_RADIO_OR_SECRET.test(name) || neverChanged(name)) return { rule: undefined, why: `${name} is a radio limit; Devices never changes it, also with "Allow risky writes" on.` };
     if (isSecretOption(name)) return { rule: undefined, why: `${name} holds a key, a password or a PIN; it never goes through a model, also with "Allow risky writes" on. Set it on the router's own page.` };
     const known = ROUTER_SETTINGS.find((entry) => entry.key.test(name));
     if (known && value !== undefined && (!known.value.test(String(value)) || (known.check && !known.check(String(value))))) return { rule: undefined, why: `${String(value).slice(0, 40)} is not a value ${name} takes.` };
     if (value !== undefined && !FREE_VALUE.test(String(value))) return { rule: undefined, why: 'A value is one line of at most 200 characters, without control characters.' };
     return { rule: known ?? { package: name.split('.')[0], reload: 'reload_config', about: name }, why: '' };
   }
-  if (ROUTER_NEVER.test(name) || neverChanged(name)) return { rule: undefined, why: `${name} is a radio limit, a key or a setting that can lock you out of the router; Bench never changes it.` };
+  if (ROUTER_NEVER.test(name) || neverChanged(name)) return { rule: undefined, why: `${name} is a radio limit, a key or a setting that can lock you out of the router; Devices never changes it.` };
   const rule = ROUTER_SETTINGS.find((entry) => entry.key.test(name));
-  if (!rule) return { rule: undefined, why: `Bench changes only these router settings: ${ROUTER_SETTINGS.map((entry) => entry.about).join(', ')}. ${name} is read only.` };
+  if (!rule) return { rule: undefined, why: `Devices changes only these router settings: ${ROUTER_SETTINGS.map((entry) => entry.about).join(', ')}. ${name} is read only.` };
   if (value !== undefined && (!rule.value.test(String(value)) || (rule.check && !rule.check(String(value))))) return { rule: undefined, why: `${String(value).slice(0, 40)} is not a value ${name} takes${rule.package === 'wireless' && /ssid$/.test(name) ? ' (a Wi-Fi name is at most 32 bytes, without control characters)' : /leasetime$/.test(name) ? ' (at least 2m)' : ''}.` };
   return { rule, why: '' };
 }

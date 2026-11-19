@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Image generation and editing tools for an OpenAI-compatible images API (saved as files for the present tool), and an approval gate for browser-use and computer-use tools.",
+  "description": "Experimental: Image generation and editing tools for an OpenAI-compatible images API (saved as files for the present tool), and an approval gate for browser-use and computer-use tools.",
   "exports": {
     ".": "./index.js",
     "./locale/*.json": "./locale/*.json",

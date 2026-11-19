@@ -35,7 +35,7 @@ test('Windows: off, only a service the user names and never the ones Windows nee
   assert.match(serviceRefusal('bad name', '', { risky: true }), /as Windows writes it/);
 });
 
-test('the tab: all 44 Bench tools and the shared ones, 60 in all, and instructions under 4,000 characters', () => {
+test('the tab: all 44 Devices tools and the shared ones, 60 in all, and instructions under 4,000 characters', () => {
   assert.equal(BENCH_TOOLS.length, 44);
   assert.equal(new Set(TOOLS).size, 60);
   for (const name of PLUS_TOOL_NAMES) assert.ok(BENCH_TOOLS.includes(name), name);

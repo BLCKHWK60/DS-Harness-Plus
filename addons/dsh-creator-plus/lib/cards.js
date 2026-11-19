@@ -6,6 +6,7 @@
 import { closeSync, constants as fsConstants, mkdirSync, openSync, readFileSync, renameSync, writeSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { clip, oneLine } from './text.js';
+import { readJsonStore } from './json-store.js';
 
 export const STATUSES = ['open', 'tried', 'applying', 'applied', 'later', 'never', 'undone'];
 
@@ -19,12 +20,7 @@ export const signatureOf = (card) => `${card.kind}|${card.plugin ?? ''}|${oneLin
  */
 export function openCards(file, now = () => Date.now()) {
   const read = () => {
-    try {
-      const value = JSON.parse(readFileSync(file, 'utf8'));
-      return Array.isArray(value) ? value : [];
-    } catch {
-      return [];
-    }
+    return readJsonStore(file, () => [], { label: 'the Creator Plus cards', valid: (value) => Array.isArray(value) });
   };
   const write = (list) => {
     mkdirSync(dirname(file), { recursive: true, mode: 0o700 });

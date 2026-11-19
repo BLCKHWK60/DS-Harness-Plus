@@ -2,60 +2,70 @@
 
 Each add-on below says what it is for, whether it works the moment you install, and how to switch it on. For changing settings in general (where the settings file is, how to edit it safely), see **Changing an add-on's settings** in the [README](../README.md#changing-an-add-ons-settings).
 
+**Tier** says how well an add-on is tested. **Core**: finished, switched on when you install. **Beta**: finished enough to ship, but copied switched off until you switch it on. **Experimental**: little tested, only copied if you chose Everything when you installed, and off until you switch it on. **Separate download**: Recon, which has its own installer. The list of tiers is `addon-tiers.json`.
+
 **Two words used below:**
 - **Provider**: a place your models come from (a company's API or your own server), as you set it up in **Settings → Models**. Where an example says `<PROVIDER>`, write that provider's id, and `<MODEL>` is a model id it serves.
 - **Command**: something you type in the chat box starting with `/`, for example `/usage`.
 
 Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the end of the file, starting at the left edge. The blocks here are the **smallest useful** setup. Every add-on has more options, listed in its own technical notes (`addons/<name>/README.md`).
 
-| Add-on | Works right away? | Settings page | Command |
-| --- | --- | --- | --- |
-| [Cowork sidebar](#cowork-sidebar) | yes | the left sidebar itself | |
-| [Colour schemes](#colour-schemes) | yes (stock colours until you pick) | Settings → Colours | |
-| [Modes](#modes) | yes | Settings → Modes | `/mode` |
-| [Model Tiers](#model-tiers) | yes | Settings → Model Tiers | |
-| [Privacy](#privacy) | yes | | `/privacy` |
-| [Memory](#memory) | yes (starts empty) | Settings → Memory | |
-| [Budget guard](#budget-guard) | yes | Settings → Budget guard | |
-| [Automations](#automations) | yes (phone alerts after setup) | Settings → Alerts, and the Automation runs page | |
-| [Library](#library) | after you add a folder | Settings → Library | |
-| [Mac bridge](#mac-bridge) | after you allow something | Settings → Mac | |
-| [Finance](#finance) | after you switch it on | Settings → Finance, and the Finance tab | |
-| [Balance](#balance) | yes | The foot of the sidebar | |
-| [Data](#data) | after you switch it on | Settings → Data, and the Data tab | |
-| [Research](#research) | after you switch it on | Settings → Research, and the Research tab | |
-| [Scout](#scout) | after you switch it on | Settings → Scout, and the Scout tab | `/scout` |
-| [Recon](#recon) | after you switch it on (needs the `tor` program) | Settings → Recon, and the Recon tab | `/recon` |
-| [Mission](#mission) | yes | Settings → Mission | `/mission` |
-| [Global Search](#global-search) | yes | Cmd-K, or the search icon at the top of the sidebar | |
-| [Activity indicator](#activity-indicator) | yes | Settings → Activity | `/activity` |
-| [PDF reader](#pdf-reader) | yes | Settings → PDF reader | `/pdf` |
-| [Diagram builder](#diagram-builder) | yes | Settings → Diagrams | |
-| [Learning](#learning) | yes | Settings → Learning | `/learn` |
-| [Code map](#code-map) | yes | Settings → Code map | `/codemap` |
-| [Self-improvement](#self-improvement) | after setup, in its page | Settings → Self-improve | `/evolve` |
-| [Usage counter](#usage-counter) | yes | Settings → Usage | `/usage` |
-| [Deep research](#deep-research) | yes | | |
-| [Code power](#code-power) | yes | | `/review` |
-| [Sampling presets](#sampling-presets) | after setup | Settings → Sampling | `/sampling` |
-| [Model arena](#model-arena) | after setup, in its page | Settings → Arena | `/arena` |
-| [Agent swarm](#agent-swarm) | after setup | Settings → Swarm | |
-| [Benchmark](#benchmark) | after setup, in its page | Settings → Benchmark | `/bench` |
-| [Route health](#route-health) | after setup | dot in the chat box | `/routes` |
-| [Model router](#model-router) | after setup | | `/router` |
-| [Role prompts](#role-prompts) | after setup | | |
-| [Notify](#notify) | after setup | | `/notify` |
-| [Media tools](#media-tools) | after setup | | |
-| [Sync](#sync) | after setup | | `/sync` |
-| [Shared settings](#shared-settings) | after setup (installer asks) | | `/shared-settings` |
-| [Context saver](#context-saver) | after setup, needs Python | | `/saved` |
-| [Settings helper](#settings-helper) | yes | the Settings window itself | |
+| Add-on | Tier | Works right away? | Settings page | Command |
+| --- | --- | --- | --- | --- |
+| [Cowork sidebar](#cowork-sidebar) | Core | yes | the left sidebar itself | |
+| [Colour schemes](#colour-schemes) | Core | yes (stock colours until you pick) | Settings → Colours | |
+| [Modes](#modes) | Core | yes | Settings → Modes | `/mode` |
+| [Model Tiers](#model-tiers) | Core | yes | Settings → Model Tiers | |
+| [Privacy](#privacy) | Core | yes | | `/privacy` |
+| [Memory](#memory) | Core | yes (starts empty) | Settings → Memory | |
+| [Budget guard](#budget-guard) | Core | yes | Settings → Budget guard | |
+| [Automations](#automations) | Core | yes (phone alerts after setup) | Settings → Alerts, and the Automation runs page | |
+| [Library](#library) | Core | after you add a folder | Settings → Library | |
+| [Mac bridge](#mac-bridge) | Core | after you allow something | Settings → Mac | |
+| [Finance](#finance) | Beta | after you switch it on | Settings → Finance, and the Finance tab | |
+| [Balance](#balance) | Core | yes | The foot of the sidebar | |
+| [Data](#data) | Beta | after you switch it on | Settings → Data, and the Data tab | |
+| [Research](#research) | Beta | after you switch it on | Settings → Research, and the Research tab | |
+| [Scout](#scout) | Experimental | after you switch it on | Settings → Scout, and the Scout tab | `/scout` |
+| [Recon](#recon) | Separate download | after you switch it on (needs the `tor` program) | Settings → Recon, and the Recon tab | `/recon` |
+| [Mission](#mission) | Core | yes | Settings → Mission | `/mission` |
+| [Global Search](#global-search) | Core | yes | Cmd-K, or the search icon at the top of the sidebar | |
+| [Activity indicator](#activity-indicator) | Core | yes | Settings → Activity | `/activity` |
+| [PDF reader](#pdf-reader) | Core | yes | Settings → PDF reader | `/pdf` |
+| [Diagram builder](#diagram-builder) | Core | yes | Settings → Diagrams | |
+| [Learning](#learning) | Core | yes | Settings → Learning | `/learn` |
+| [Code map](#code-map) | Core | yes | Settings → Code tools | `/codemap` |
+| [Self-improvement](#self-improvement) | Core | after setup, in its page | Settings → Self-improve | `/evolve` |
+| [Usage counter](#usage-counter) | Core | yes | Settings → Usage | `/usage` |
+| [Deep research](#deep-research) | Core | yes | Settings → Research → Advanced | |
+| [Code power](#code-power) | Core | yes | Settings → Code tools → Reviews and fixes | `/review` |
+| [Sampling presets](#sampling-presets) | Core | after setup | Settings → Model Tiers → Sampling | `/sampling` |
+| [Model arena](#model-arena) | Core | after setup, in its page | Settings → Arena | `/arena` |
+| [Agent swarm](#agent-swarm) | Experimental | after setup | Settings → Swarm | |
+| [Benchmark](#benchmark) | Core | after setup, in its page | Settings → Benchmark | `/benchmark` |
+| [Route health](#route-health) | Experimental | after setup | dot in the chat box | `/routes` |
+| [Model router](#model-router) | Experimental | after setup | | `/router` |
+| [Role prompts](#role-prompts) | Core | after setup | Settings → Model Tiers → Instructions for every conversation | |
+| [Notify](#notify) | Experimental | after setup | Settings → Alerts | `/notify` |
+| [Media tools](#media-tools) | Experimental | after setup | | |
+| [Sync](#sync) | Core | after setup | | `/sync` |
+| [Shared settings](#shared-settings-experimental) | Experimental | after setup, off until you choose a folder | | `/shared-settings` |
+| [Context saver](#context-saver) | Experimental | after setup, needs Python | | `/saved` |
+| [Learned skills](#learned-skills) | Core | after setup (nothing is installed without your yes) | Settings → Learned skills | `/skills` |
+| [Settings helper](#settings-helper) | Core | yes | the Settings window itself | |
+| [Artifacts](#artifacts) | Beta | after you switch it on | Settings → Artifacts, and the Artifacts page | |
+| [Content](#content) | Beta | after you switch it on | Settings → Content, and the Content tab | |
+| [Split Plus](#split-plus) | Experimental | after you switch it on | Settings → Split Plus, and the Split page | |
+| [Devices](#devices) | Experimental | after you switch it on | Settings → Devices, and the Devices tab | |
+| [Creator Plus](#creator-plus) | Experimental | after you switch it on | Settings → Creator Plus, and the Creator Plus tab | |
+| [Tuner Plus](#tuner-plus) | Experimental | after you switch it on, needs Apple's mlx-lm | Settings → Tuner Plus | |
+| [Engines](#engines) | Experimental | after you pick an engine | the Engines page | `/engine` |
 
 ---
 
 ## Cowork sidebar
 
-Replaces the left sidebar with a MindsHub-style one:
+Replaces the left sidebar with a tabbed one:
 - **Chat / Cowork / Code tabs** at the top. The tab decides the mode of **new** conversations, and the mode drop-down leaves the chat box. A conversation's mode is fixed at its first message; to change one later, type `/mode`.
 - **A New button that follows the tab:** New chat, New task, New code task.
 - **Each tab's own sections:**
@@ -134,7 +144,7 @@ On a project's page, under the instructions, **Generate with a model…** lets a
 
 Pick the colours of the whole app in **Settings → Colours**:
 - **DeepSeek Harness** (the stock colours, the default)
-- **MindsHub Cowork** (navy and teal)
+- **Harbor** (navy and teal)
 - **Graphite** (grey and amber)
 - **Forest** (green and mint)
 - **Custom**, your own colours
@@ -371,10 +381,10 @@ Details: `addons/dsh-finance/README.md`.
 
 ### Since 0.34: the adviser
 
-**Settings → Finance → Adviser → Act as my financial adviser** (off by default). On, the assistant works the way an adviser would: it gets to know you from your profile, does the research, judges how an idea fits what you hold, and ends with one clear call (buy, add, hold, trim, sell, avoid or wait), with its reasons, the main risk and what would change its mind. It adds no disclaimer: no "I am not a licensed adviser", no "this is not financial advice", no "consult a professional". It applies from your next message, also in conversations that already exist.
+**Settings → Finance → Adviser → Act as my financial adviser** (off by default). On, the assistant works the way an adviser would: it gets to know you from your profile, does the research, judges how an idea fits what you hold, and ends with one clear call (buy, add, hold, trim, sell, avoid or wait), with its reasons, the main risk and what would change its mind. Before it can be switched on for the first time you read a plain-words warning (it is an AI, not a licensed or regulated adviser, it can be wrong, money can be lost) and type "I understand"; you are asked once. Every answer ends with the line "AI output, not regulated advice." It may ask you a short question when one missing fact would change its call. It applies from your next message, also in conversations that already exist.
 
 - **Your profile** appears under the switch: goals, time frame, the loss you can bear, what you hold, limits. You write it, and the assistant adds a dated line when you tell it something lasting (tool `finance_profile_save`). It is one file on your Mac (`finance/profile.md` in the app's data folder) and is sent to your model with each Finance message. Leave out account numbers; the tool refuses them.
-- It answers first. It does not reply with a question in place of the answer, and it does not put up a question card to learn about you. Where your profile is silent it says what it assumed. At most one short question comes at the very end, after its call (since 0.34.1).
+- It gives its research and its call in every reply. If one missing fact would really change the call, it may ask for it briefly (in plain text or with a question card) and says how the call would change; otherwise it states what it assumed and goes on.
 - Figures still come only from sources fetched in the conversation, with dates. That rule does not change.
 - The assistant does not claim a named licence, firm or registration. It is an AI model working from what it could fetch, and it can be wrong. Decisions are yours.
 - Off, Finance is as before: research only, and it does not say buy, sell or hold.
@@ -441,7 +451,7 @@ Details: `addons/dsh-recon/README.md`.
 ### Since 0.57.0: a start page, the Archive read directly, and links that survive a restart
 
 - **The start page** asks "What should Recon look into?" and has five starter chips: Search .onion sites, Search Usenet, News coverage, Old web page, Check a claim. A status bar shows Tor, Usenet, the Internet Archive's route, the conversation's model and whether findings may go to it. Agreeing to a cloud model stays something you type (`/recon cloud`): there is no button for it.
-- **Read Internet Archive copies directly (not through Tor)**, on **Settings → Recon → More sources**, is on by default. Copies are then read straight from the Archive, which sees this Mac's internet address. Off sends them through Tor again, where the Archive refuses most reads. GDELT and .onion sites always go through Tor. The Internet Archive and GDELT themselves stay off until you switch them on there. `/recon` and the status bar say which route is used.
+- **Read Internet Archive copies directly (not through Tor)**, on **Settings → Recon → More sources**, is on by default. Copies are then read straight from the Archive, which sees this Mac's internet address (or your VPN's, when the page goes out through a WireGuard tunnel you set up in Recon). Off sends them through Tor again, where the Archive refuses most reads. GDELT and .onion sites always go through Tor. The Internet Archive and GDELT themselves stay off until you switch them on there. `/recon` and the status bar say which route is used.
 - **After a restart**, earlier [S3] citations, links and `/recon export` keep working: Recon rebuilds a conversation's sources from the saved conversation. Nothing new is stored on disk.
 - **Kept out elsewhere:** Global Search never shows a Recon conversation, Sync never pushes or pulls one, and Mission does not work in one.
 
@@ -527,7 +537,7 @@ Details: `addons/dsh-search/README.md`.
 
 Makes a compact map of the project a conversation works in: its files, the functions and classes in them, and what uses what. The assistant looks things up in the map and reads one function at a time instead of whole files, which uses far fewer tokens on a large project. Nothing is installed, and nothing is written into your project; the map is kept in the app's own data folder.
 
-**Settings → Code map** shows each mapped folder with its numbers, lets you map it again or delete its map, and sets the limits and extra patterns to leave out. It will not map your whole home folder or whole personal folders such as Documents. `/codemap` shows the state in a chat.
+**Settings → Code tools** (the page also holds Code power, on its **Reviews and fixes** tab) has a **Code map** tab that shows each mapped folder with its numbers, lets you map it again or delete its map, and sets the limits and extra patterns to leave out. It will not map your whole home folder or whole personal folders such as Documents. `/codemap` shows the state in a chat.
 
 It also adds four "reverse engineer" skills. Type `/` in the chat box and pick:
 
@@ -568,7 +578,7 @@ Counts requests and tokens per day, provider and model. It never stores what you
 
 ## Deep research
 
-Gives the assistant a `deep_research` tool. Use the **Research** tab, where a question that needs outside facts gets a full run, or ask for it in plain words ("do deep research on ...") in a conversation whose Web button is not Off. (Depth **Thorough** is not deep research either: it only asks the assistant to search and read more itself.)
+Gives the assistant a `deep_research` tool. Its settings are in **Settings → Research**, in the collapsed group **Advanced: research engine**. Use the **Research** tab, where a question that needs outside facts gets a full run, or ask for it in plain words ("do deep research on ...") in a conversation whose Web button is not Off. (Depth **Thorough** is not deep research either: it only asks the assistant to search and read more itself.)
 
 - **How it works:** it plans sub-questions with search queries, sends out helpers that search and read pages at the same time, then **reviews what was found**: what is still missing, where sources contradict each other, what needs the original document. It writes sharper queries from that and sends helpers out again. At the end it writes a report that cites its sources by number. It checks that every citation is in the source list, and marks each source **read**, **seen only in search results, not read**, or **not read, and not seen in search results** (these labels are new in 0.57.0; a page counts as read only when its fetch came back without an error). Findings from pages no helper read stay in the report with their label; `requireFetched: true` in the configuration file leaves them out instead. Claims are not compared with the text of the pages.
 - **Three depths**: a run follows the Depth of the conversation that starts it (the Depth button, the same in every tab, since 0.59.0):
@@ -644,11 +654,11 @@ Use a strong model as the tutor, and prefer studying from your own PDF or notes:
 
 ## Code power
 
-Adds skills for reviewing a pull request (`/review`), fixing failing tests in a loop, trying several solutions and keeping the best, and a blind judge that compares candidate changes. Nothing to set up. Uses your Model Tiers role models when they are set.
+Its settings are on the **Reviews and fixes** tab of **Settings → Code tools**. Adds skills for reviewing a pull request (`/review`), fixing failing tests in a loop, trying several solutions and keeping the best, and a blind judge that compares candidate changes. Nothing to set up. Uses your Model Tiers role models when they are set.
 
 ## Sampling presets
 
-Named settings such as "precise" (low temperature) or "creative", picked automatically by kind of task or by mode, or by hand with `/sampling`. Set them up on **Settings → Sampling**.
+Named settings such as "precise" (low temperature) or "creative", picked automatically by kind of task or by mode, or by hand with `/sampling`. Set them up on the **Sampling** tab of **Settings → Model Tiers**.
 
 ## Model arena
 
@@ -664,7 +674,7 @@ Runs your own test questions over several models and settings, scores the answer
 
 Open **Settings → Benchmark**. The page walks you through the first run in three steps. First, add the **models to test**. Second, create a **suite**: press **New suite** (or **Add an example suite**), write what to ask, and choose how each answer is graded: contains a text, is exactly a text, matches a pattern, or is scored by a judge model. Third, choose the suite and press **Run**; the page says how many model calls that makes.
 
-Optional settings: temperatures and max output tokens to try on each model, how many times each prompt is repeated, limits on time and spend, and prices per model for the cost column. Results show score, speed, errors and cost per model and setting, plus a recommendation per category. The `/bench` commands still work in a chat.
+Optional settings: temperatures and max output tokens to try on each model, how many times each prompt is repeated, limits on time and spend, and prices per model for the cost column. Results show score, speed, errors and cost per model and setting, plus a recommendation per category. The `/benchmark` commands still work in a chat.
 
 ## Route health
 
@@ -686,7 +696,7 @@ Lets a small, fast model choose, for each message, which of 2 to 5 models should
 
 ## Role prompts
 
-Adds your own standing instructions to every conversation, or only for some tiers. Ready-made texts for planning, coding and routing are in `addons/dsh-role-prompts/examples/`.
+Adds your own standing instructions to every conversation, or only for some tiers. Write them on the **Instructions for every conversation** tab of **Settings → Model Tiers**. Ready-made texts for planning, coding and routing are in `addons/dsh-role-prompts/examples/`.
 
 ```yaml
 - id: role-prompts
@@ -699,7 +709,7 @@ Adds your own standing instructions to every conversation, or only for some tier
 
 ## Notify
 
-Runs a command when the assistant finishes or is waiting for your approval, for example to show a Mac notification:
+Runs a command when the assistant finishes or is waiting for your approval, for example to show a Mac notification. Its rules are in **Settings → Alerts**, in the group **When a turn ends or the app waits for you** (no file editing needed). The file form below still works:
 
 ```yaml
 - id: notify
@@ -729,15 +739,15 @@ Keeps your conversations (and, if you want, your project list) the same on sever
     deviceLabel: <A NAME FOR THIS MAC>
 ```
 
-For iCloud Drive instead of GitHub, make an empty repository in iCloud once (`git init --bare "$HOME/Library/Mobile Documents/com~apple~CloudDocs/DeepSeek Harness Plus/sessions.git"`) and use that full path as `remote`. Apple does not support git inside iCloud; if it ever misbehaves, a private GitHub repository works the same way.
+Use a normal private git remote: a private repository on GitHub, GitLab or a server of your own. **Avoid iCloud Drive for this.** Git keeps many small files and locks that iCloud copies, delays and renames, so a repository kept there can get damaged without warning. The add-on does accept a folder path (even one in iCloud Drive) if you insist, but it is not recommended.
 
 Then `/sync push` on one Mac and `/sync pull` on the other. **Before the first pull, back up `~/.dsh/sessions`**, because pulling copies the other Mac's conversations in. A conversation tied to a project folder can only be continued on a Mac where that folder has the same path. The details, including automatic sync and encryption, are in `addons/dsh-sync/README.md`.
 
 **Recon conversations are never synced** (since 0.57.0): they are never pushed or pulled, and one an earlier version pushed is taken off the remote's branch (its git history still holds it). Which conversations are Recon's is known from the Modes add-on, so while Modes is off or still starting, push and pull stop and say why.
 
-## Shared settings
+## Shared settings (Experimental)
 
-Keeps the settings you change in the app's pages the same on two Macs, through one `settings.json` in a folder such as iCloud Drive. Those settings are Modes, Model Tiers, the Cowork tabs, Sampling presets and Colours. It holds no secrets. The installer asks about it, or you can choose the folder yourself with `bash scripts/install.sh --settings "<folder>"`. The README section **Same settings on both Macs** explains how to use it. The details are in `addons/dsh-shared-settings/README.md`.
+**Experimental: tried only on one Mac so far.** Keeps the settings you change in the app's pages the same on two Macs, through one `settings.json` in a folder such as iCloud Drive. Those settings are Modes, Model Tiers, the Cowork tabs, Sampling presets and Colours. It holds no secrets, and nothing that is about one Mac only: on/off switches, folders, paths, permission switches, Recon and Notify stay where they are. It is off until you choose a folder. The installer can ask once about iCloud Drive (the answer is No unless you say Yes), or you can choose the folder yourself with `bash scripts/install.sh --settings "<folder>"`. The README section **Same settings on both Macs** explains how to use it. The details are in `addons/dsh-shared-settings/README.md`.
 
 ## Context saver
 
@@ -757,8 +767,39 @@ Sorts the Plus pages of the Settings window into groups with headings (Tabs and 
 
 - **Cmd-F** (Ctrl-F) jumps to the field. Type any word: a page, a setting, or what it does ("trim", "budget", "Tor"). **Enter** opens the result, scrolls to the setting and outlines it.
 - It also finds settings that have no control on any page; those are marked **configuration file only**, and **Open configuration file** at the top of the window is where to change them.
-- **A small gear beside Send** in the chat box opens the settings of the mode you are in, in a popup: Chat, Cowork and Code open the Modes page; Data, Recon, Scout, Finance, Content, Bench, Creator Plus, Research and Automations open their own page. You change them there exactly as in Settings. **Open in Settings** in the popup's header takes you to the full page; **Close**, Esc, or a click outside closes it. Switch the gear off with `modeGear` (see the add-on's README).
-- **Export in every mode** (not yet in a release): a download icon left of the gear opens **Export this conversation**: *Conversation only*, *Conversation and thinking*, or *Full session log* (the model and its settings, the instructions, thinking, every tool call and result, other log events and the raw log as stored), as Markdown, plain text, HTML, JSON or PDF (through the print window), to download or copy; and the app's own complete ZIP. Switch off with `exportButton`. A conversation another add-on keeps apart (Recon) exports only through its own Export…, which is in its gear.
-- **A mode's own buttons are in the gear**: Bench rules, Creator Plus, the Finance selection and Recon's Export are under **In this conversation** at the top of the gear's popup, not in the chat box, so every mode's chat box has the same buttons in the same places (Modes' Same chat box, on by default). Switch with `extrasInGear`.
+- **A small gear beside Send** in the chat box opens the settings of the mode you are in, in a popup: Chat, Cowork and Code open the Modes page; Data, Recon, Scout, Finance, Content, Devices, Creator Plus, Research and Automations open their own page. You change them there exactly as in Settings. **Open in Settings** in the popup's header takes you to the full page; **Close**, Esc, or a click outside closes it. Switch the gear off with `modeGear` (see the add-on's README).
+- **Export in every mode**: a download icon left of the gear opens **Export this conversation**: *Conversation only*, *Conversation and thinking*, or *Full session log* (the model and its settings, the instructions, thinking, every tool call and result, other log events and the raw log as stored), as Markdown, plain text, HTML, JSON or PDF (through the print window), to download or copy; and the app's own complete ZIP. Switch off with `exportButton`. A conversation another add-on keeps apart (Recon) exports only through its own Export…, which is in its gear.
+- **A mode's own buttons are in the gear**: Devices rules, Creator Plus, the Finance selection and Recon's Export are under **In this conversation** at the top of the gear's popup, not in the chat box, so every mode's chat box has the same buttons in the same places (Modes' Same chat box, on by default). Switch with `extrasInGear`.
 - Works right away. To switch it off, use the Plugins panel. Details: `addons/dsh-settings-plus/README.md`.
 
+## Agent swarm
+
+**Experimental.** Gives the assistant one tool, `run_swarm`, which runs a named group of helper agents on one task and returns every member's answer under its own heading. A group works in one of three ways: **fanout** (all at once), **pipeline** (in order, each seeing what the earlier ones wrote) or **debate** (two to five rounds, each member reading the others' last answers and revising). Nothing is set up by default: with no group defined it does nothing. Define groups on **Settings → Swarm**; each has a token cap and an optional money cap, so a runaway swarm stops. Details: `addons/dsh-agent-swarm/README.md`.
+
+## Artifacts
+
+**Beta, off until you switch it on in Settings → Artifacts.** Every file a conversation makes or changes shows as a card under the answer, in every tab. A click opens it beside the chat in a quick viewer (Markdown, web pages, code, tables, JSON, pictures, audio, video, PDF) or in the app's own preview. Every change to a file's content is kept as a version in Artifacts' own folder, never beside your file. **What changed** compares versions. The **Artifacts** page lists everything, filtered by tab, kind, date and folder. A web page opens cleaned: no scripts, no outside pictures, nothing that sends. **Run page** is a separate, clearly worded step. **Clean up** moves chosen artifacts to the app's trash (30 days, Put back), never a kept (★) one. An artifact made in a Scratch conversation goes with the conversation. Details: `addons/dsh-artifacts/README.md`.
+
+## Content
+
+**Beta, off until you switch it on in Settings → Content.** A tab for writing from your own material: books and chapters, articles, blog posts, scripts, outlines for podcasts and videos. Its method: report what the folder holds, ask what to build (kind, audience, length), read before writing, keep apart what a source says, what you said and the assistant's own words, mark unsupported statements, propose angles and an outline before the draft, save every draft, publish nothing. Web, Depth and Long run work as in every tab. It reads Word files and spreadsheets through Data and PDFs through the PDF reader when those are on. Needs Modes and the Cowork sidebar. Details: `addons/dsh-content/README.md`.
+
+## Split Plus
+
+**Experimental, off until you switch it on in Settings → Split Plus.** Two to four conversations side by side on one **Split** page, each in any mode and with its own chat box and access level, sharing one folder (or a Scratch folder of its own). A new pane starts in the same folder as the selected one. Each pane's title shows its mode, its folder and its state (Working, Waiting for you, New, Done). A pane in Recon opens only in Recon's own room, and a Recon pane is sealed: nothing is sent out of it to another pane. Details: `addons/dsh-split-plus/README.md`.
+
+## Devices
+
+**Experimental, off until you switch it on in Settings → Devices.** A tab for devices you connect to your Mac: it identifies what is plugged in by USB or paired by Bluetooth, reads a serial port, reads an ESP32's details and makes a checked backup of its flash, reads an Android phone's details and log, and can change an Android setting with undo. Writing ESP32 firmware is possible only behind strict conditions you set (a checked backup, the recovery path, official firmware with a matching checksum, a dry run and your yes). The assistant never writes a device command itself and has no shell in this tab. Only for devices that are yours. These steps were tested with stand-ins, not on real devices. Details: `addons/dsh-bench/README.md`.
+
+## Creator Plus
+
+**Experimental, off until you switch it on in Settings → Creator Plus.** A tab that builds and improves plugins so they fit everything you have. Its jobs: build a new plugin, change an existing one, keep everything working after an app update, and improve from the conversation logs. The options under the chat box pick the job (New plugin, Improve, Find what went wrong, Rebuild, Combine or split, Find gaps, Check after an update, Explain) and which plugins it may look at. The app's own plugins are only read and explained, never edited. Results appear as cards on Settings → Creator Plus with **Try it in the trial copy**, **Apply to my setup**, **Not now** and **Undo**; nothing in your setup changes without your yes. Long runs are switched off in this tab for now. Details: `addons/dsh-creator-plus/README.md`.
+
+## Tuner Plus
+
+**Experimental, off until you switch it on in Settings → Tuner Plus; each mode is read only when you switch that mode on there.** Keeps every checked step of your work (a tool call whose tests passed, a claim you ruled on, a draft you edited and approved) as a training example with its proof, and tests whether a small trained add-on or a tuned prompt would do better than what you use now, on a private exam made from your own work. Nothing is used until it beats the exam by a clear margin and you say yes. Training runs only on this Mac, from a Python with Apple's mlx-lm that you install yourself; Plus installs nothing and downloads no model. Details: `addons/dsh-tuning/README.md`.
+
+## Engines
+
+**Experimental.** Lets a Code conversation be answered by an outside coding engine (the first is OpenCode, which Plus does not install) instead of the app's own, and compares an engine with the app on the same task, side by side, on the **Engines** page. Nothing runs until you pick an engine in the model menu or start a comparison. The engine works in a copy of your project inside a macOS sandbox; what reaches your project is decided by the app: by default nothing until you type `/engine apply`. A file you changed in the meantime is never overwritten. Details: `addons/dsh-engines/README.md`.

@@ -9,6 +9,8 @@
  *   /shared-settings          show what is shared and the last result
  *   /shared-settings now      sync now
  *
+ * EXPERIMENTAL: tried only on one Mac so far. Off until a folder is set, and no installer turns it on by default.
+ *
  * Nothing is shared until a folder is set: either `folder` in this add-on's settings, or the folder
  * the installer recorded (`Install.command --settings <folder>`) in <dsh home>/shared-settings/folder.txt.
  * Secrets never go into the file: fields the app marks secret, and any field whose name looks like a
@@ -43,6 +45,9 @@ export const ALWAYS_SKIP = [
   'modes.sessionSandboxBase',
   // The Skill architect's "never learn from this" marks: per conversation, kept on each Mac.
   'skill-architect.nolearn',
+  // This Mac's own first-run card and its Simple/Advanced Settings view: each Mac chooses its own.
+  'settings-plus.view',
+  'settings-plus.setupPending',
 ];
 
 /** Per-conversation choices: they change all the time and mean little on the other Mac. */
@@ -67,16 +72,23 @@ export function skipList(configured) {
 
 /** Package scope of the Plus add-ons; their entries are shared unless excluded. */
 const PLUS_SCOPE = '@local/dsh-';
-/** Plus entries that are about this Mac (paths, keys) rather than about your setup. */
-const NEVER = new Set(['@local/dsh-sync', '@local/dsh-shared-settings']);
+/** Plus entries that are about this Mac (paths, keys, private setup) rather than about your setup. */
+const NEVER = new Set([
+  '@local/dsh-sync',
+  '@local/dsh-shared-settings',
+  // Recon's whole setup is private to this Mac: search engine, news accounts, VPN names, folders.
+  '@local/dsh-recon',
+  // Phone and server addresses for alerts.
+  '@local/dsh-notify',
+]);
 
 export const Config = z.object({
-  folder: z.string().default(''),
-  include: z.array(z.string()).default([]),
-  exclude: z.array(z.string()).default([]),
-  skipFields: z.array(z.string()).default(DEFAULT_SKIP),
-  pollSeconds: z.natural().min(5).max(3600).default(30),
-  commandName: z.string().default('shared-settings'),
+  folder: z.string().default('').description('Shared folder (Experimental): where settings.json is kept, for example a folder in iCloud Drive. Empty means off.'),
+  include: z.array(z.string()).default([]).description('Also share these add-ons (by id), for example ui-theme.'),
+  exclude: z.array(z.string()).default([]).description('Never share these add-ons (by id).'),
+  skipFields: z.array(z.string()).default(DEFAULT_SKIP).description('Settings that stay on each Mac, written as add-on.setting. Folders, paths, on/off switches and permission switches always stay.'),
+  pollSeconds: z.natural().min(5).max(3600).default(30).description('How often to look for changes from the other Mac, in seconds.'),
+  commandName: z.string().default('shared-settings').description('Name of the chat command that shows the status.'),
 });
 
 /**

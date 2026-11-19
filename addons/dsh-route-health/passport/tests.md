@@ -1,6 +1,6 @@
 # Tests: @local/dsh-route-health
 
-No tests yet.
+Suites: test/health.test.mjs, test/plain.test.mjs.
 
 Run with the app's own Node (stand-ins only; never against the real app data):
 

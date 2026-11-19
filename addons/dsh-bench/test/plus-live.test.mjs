@@ -67,7 +67,7 @@ test('a monitor spec is checked fully before any timer starts', () => {
   assert.equal(registry.count(), 0);
   for (let i = 0; i < MAX_MONITORS; i += 1) registry.start({ source: 'netif' });
   const before = clock.made.length;
-  assert.throws(() => registry.start({ source: 'hid' }), /8 monitors are running, the most Bench keeps at once/);
+  assert.throws(() => registry.start({ source: 'hid' }), /8 monitors are running, the most Devices keeps at once/);
   assert.equal(clock.made.length, before, 'the ninth made no timer');
   assert.ok(clock.made.every((handle) => handle.unrefd), 'every timer is unref\'d');
   registry.stopAll();
@@ -145,7 +145,7 @@ test('monitor readings: netif rates, a router over SSH, serial lines, OBD values
 
 test('the dashboard page: retitled, reads the state once a second with same-origin credentials, text only, the address cannot break out', () => {
   const html = dashboardHtml('/dsh-bench/dashboard/state');
-  assert.match(html, /<title>Bench — live devices<\/title>/);
+  assert.match(html, /<title>Devices — live devices<\/title>/);
   assert.match(html, /const STATE_URL = "\/dsh-bench\/dashboard\/state";/);
   assert.match(html, /fetch\(STATE_URL, \{ credentials: 'same-origin', cache: 'no-store' \}\)/);
   assert.match(html, /setInterval\(refresh, 1000\)/);
@@ -162,7 +162,7 @@ test('the dashboard page: retitled, reads the state once a second with same-orig
   assert.match(html, /connect-src 'self'/);
 });
 
-test('the dashboard state: nothing while Bench is off, the monitors while on, never throws', () => {
+test('the dashboard state: nothing while Devices is off, the monitors while on, never throws', () => {
   const { registry } = registryWorld(async () => ({ code: 0, stdout: '' }));
   registry.start({ source: 'netif', label: '<img src=x onerror=alert(1)>' });
   assert.deepEqual(dashboardState(registry, () => false), { enabled: false, monitors: [] });
@@ -175,7 +175,7 @@ test('the dashboard state: nothing while Bench is off, the monitors while on, ne
   registry.stopAll();
 });
 
-test('requirementRows: every program any Bench tool uses, found or missing with its install command', async () => {
+test('requirementRows: every program any Devices tool uses, found or missing with its install command', async () => {
   const root = mkdtempSync(join(tmpdir(), 'bench-plus-req-'));
   try {
     const bench = join(root, 'bench');
@@ -190,14 +190,14 @@ test('requirementRows: every program any Bench tool uses, found or missing with 
     assert.equal(rows.length, Object.keys(PLUS_PROGRAMS).length);
     assert.deepEqual(by.nmap, { name: 'nmap', used: 'bench_net_scan', builtIn: false, found: false, path: null, install: 'brew install nmap' });
     assert.deepEqual(by.ioreg, { name: 'ioreg', used: by.ioreg.used, builtIn: true, found: true, path: '/fake/bin/ioreg', install: null });
-    assert.equal(by.moria.found, true, 'a helper in the Bench folder\'s bin counts');
+    assert.equal(by.moria.found, true, 'a helper in the Devices folder\'s bin counts');
     assert.equal(by.moria.path, join(bench, 'bin', 'moria'));
     assert.match(by['hid-capture'].install, /swiftc -O ".*lib\/plus\/hid-capture\.swift" -o ".*bench"\/bin\/hid-capture/);
     assert.match(by.python3.install, /venv.*pip install pyvisa pyvisa-py pyusb/);
     const text = formatRequirements(rows);
     assert.match(text, new RegExp(`^Ready \\(${rows.length - 4}\\):`));
     assert.match(text, /Missing \(4\):[\s\S]*- nmap, for bench_net_scan\n {4}install: brew install nmap/);
-    assert.match(text, /Bench never installs anything\./);
+    assert.match(text, /Devices never installs anything\./);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -239,7 +239,7 @@ test('the install texts for Settings and the Swift helper\'s build line', () => 
   assert.match(INSTALL_TEXT.usbRea, /pipx install usb-rea/);
   assert.match(INSTALL_TEXT.hidCapture, /swiftc -O ".*\/lib\/plus\/hid-capture\.swift" -o ~\/\.dsh\/bench\/bin\/hid-capture -framework IOKit -framework Foundation/);
   assert.match(INSTALL_TEXT.jlink, /SEGGER/);
-  assert.match(INSTALL_TEXT.never, /Bench never installs anything/);
+  assert.match(INSTALL_TEXT.never, /Devices never installs anything/);
   const swift = readFileSync(new URL('../lib/plus/hid-capture.swift', import.meta.url), 'utf8');
   assert.match(swift, /^\/\/ {3}swiftc -O "<this file>" -o ~\/\.dsh\/bench\/bin\/hid-capture -framework IOKit -framework Foundation$/m);
   assert.match(swift, /IOHIDManagerRegisterInputValueCallback/);

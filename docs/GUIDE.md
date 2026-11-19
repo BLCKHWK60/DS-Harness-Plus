@@ -1,12 +1,12 @@
 # DeepSeek Harness Plus: the guide
 
-Plus is a set of 42 add-ons for the DeepSeek Harness desktop app. This guide says what each part does, where to find it, how to use it, and what its settings are.
+Plus is a set of 48 add-ons for the DeepSeek Harness desktop app. This guide says what each part does, where to find it, how to use it, and what its settings are.
 
 - **Part 1** is for using it: the tabs, the chat box, projects, and the main features, in the order you meet them.
 - **Part 2** lists every slash command.
 - **Part 3** is the reference: every add-on with every setting and its starting value. It is generated from the add-ons' own code by `scripts/dev-guide.mjs`, so it does not go out of date; run `node scripts/dev-guide.mjs` after changing an add-on.
 
-Installing, updating and removing are in the [README](../README.md). The history of each feature is in [ADD-ONS.md](ADD-ONS.md).
+Installing, updating and removing are in the [README](../README.md), which also explains the words used here (add-on, mode, tab, conversation, workspace, tier). The history of each feature is in [ADD-ONS.md](ADD-ONS.md).
 
 ## Part 1: using it
 
@@ -47,19 +47,52 @@ A tab is a way of working. Clicking a tab returns you to the conversation you la
 - **The access level** (file sandbox): Chat, Data, Research and Recon set Read Only and Code sets Workspace Write, only when a conversation starts in the mode or is moved into it. A level you pick by hand in the chat box is kept, also after a restart. Moving to a tab that sets none (Cowork, Finance, Scout) puts back the earlier level, unless you changed it by hand.
 - `/mode` shows or switches the mode of a conversation. With the sidebar on, before the first message the selected tab decides: `/mode` then only names the tabs.
 
-### 3. The chat box
+### 3. The chat box, button by button
+
+The row under the text field is the same in every tab, from left to right. On a narrow window the words shrink to icons, and the right-hand buttons may move to a second line; nothing is lost. What is described here is what the buttons do in a conversation that is open. A button that cannot be used in a tab is greyed, with the reason in its tooltip.
+
+**Above the text field (start page of a new conversation)**
 
 | Control | What it does | How to use it |
 |---|---|---|
-| **Web** | Whether the assistant may use the internet in this conversation. | Click and pick **On** or **Off**. Off takes away web search, page reading and other tools that go online (an outside image service too), and stops commands and programs that go online; connectors you added stay on and can still reach the internet. In Research and Scout it reads **Always on** and cannot be changed: they always have the web (Off only while Tools are off). |
-| **Depth** | How much work the conversation gets: how much it searches when Web is on, planning, checks and reviews. | Click and pick **Quick**, **Standard** or **Thorough** (at least ten searches and ten pages read, key facts checked in two sources, a short plan, and one review by a helper in tabs that can start helpers; just before the turn ends the model gets one check and fixes only what is missing, shown as a grey row). The Depth you pick is also where new conversations start (also set in Settings → Modes). It is the same in every tab: in Recon it also sets how hard Recon searches, and in Research and Scout (and any deep research run) it sets the size of a research run: about 10, 25 or 45 minutes. How hard the model thinks is the **Effort** on the model button. |
-| **Web sources** (every tab) | Which kinds of source a conversation may use: verified sources, academic papers, news, ordinary sites, forums, social media, archives, and Other (your own sources with a login, key or private address). Any mix. Recon also has Tor, Usenet and I2P. | The Web button in the chat box. Settings → Web sources holds the lists, your saved selections and your own sources. Research's former Focus is these ticks. |
-| **Selection** (Finance tab) | What a Finance conversation is about: kind, subject, market, focus, period. | Shown once the conversation has started. Press a part to change it, for this conversation only. |
-| **Models chip** | Shows whether helper agents use this conversation's model (**One model**) or others as well (an amber **3 models**). | Click to switch for this conversation. One model is the default and needs the least memory. |
-| **Tools** | Shows what the assistant can and cannot call right now, with one switch for all tools. | Click to see the list. |
-| **Model button** | Model, effort and tier for this conversation. | Click to pick. Saved model versions come first. |
-| **Activity line** | What is running: prompt processing, generating, tools, helpers, with speeds. | The arrow at its right end folds the chat box down so more of the conversation shows. Click again to bring it back. |
-| **Rerun** (under an answer) | Asks the same question again in a fresh copy of the conversation, with the model selected now. | Pick another model, then press the round arrow. The old answer stays in the original. |
+| **Place chip** (**Scratch** or **Folder**, and the folder's name) | Where this conversation works. **Scratch** is a private folder of its own, never one of yours; its files go away with the conversation. **Folder** is one of your own projects: the assistant can see and (if the access level allows) change the files in it. | Click the name to pick a project, or add a folder. A conversation cannot change its folder after it has started. Where new conversations of each tab start is set in Settings → Start places. |
+| **Working-style chip** (for example **Standard mode**) | The app's own choice of how the assistant works (its agent preset). Not the same as the Chat, Cowork or Code mode, which the tab sets. | Click to change it before the first message. |
+
+**In the row**
+
+| Control | What it does | How to use it |
+|---|---|---|
+| **+** (Add files or run commands) | The app's own: attach files, or run a command. | Click. |
+| **Access level** (**Read Only**, **Workspace Write** or **Full access**) | How much the assistant may do to your Mac. Read Only: it can look but not change your files without asking you first. Workspace Write: it may change files in this conversation's folder. Full access: no limit from the app's sandbox. | Click to pick. A level you pick by hand is kept, also after a restart. A conversation that starts in Chat, Data, Research or Recon starts at Read Only; Code starts at Workspace Write. |
+| **Model health dot** | Whether the models you use answer. Green: all are up. Amber or red with a name: that model or connection is slow or down. | Click to list every model with its state and last error. It shows nothing until Route health has models to check. |
+| **Web** (**Off**, **All**, or any mix of sources) | Which part of the internet the assistant may use in this conversation. **Off**: no web search, no page reading, and no other tool or program that goes online (connectors you added stay on). **All**: every kind of source, as before. Or tick any mix of Verified sources, Academic papers, News, Ordinary sites, Forums, Social media, Archives and Other (your own sources). Recon also has Tor, Usenet and I2P. | Click and pick. Research and Scout always need the web, so Off is greyed there (it works only while Tools are off). Settings → Web sources holds the lists and your own sources. |
+| **Depth** (**Quick**, **Standard**, **Thorough**) | How much work the conversation gets: how much it searches when Web is on, planning, checks and reviews. In Research, Scout and Recon it also sets the size of a research run: about 10, 25 or 45 minutes. | Click and pick. It is the same in every tab, and where new conversations start (also in Settings → Modes). It stays visible but greyed while Tools are off. How hard the model thinks is the Effort on the model button, not this. |
+| **Models chip** (**One model** or **3 models**) | Whether helper agents use this conversation's model, or other models as well. | Click to switch for this conversation. One model is the default and needs the least memory. |
+| **Tools** (**Tools on** or **Tools off**) | What the assistant can call right now. The list has three parts: can call, cannot call, and loaded when needed. | Click to see the list and to switch all tools on or off for this conversation. Off: the assistant is offered no tool at all, and the web is off too. A change applies from your next message. In Chat, tools mean searching and reading the web. |
+| **Long run** | Starts a Long run (Mission) from what you typed in the text field: the assistant keeps working on that goal by itself, for up to 10 laps and 2 hours unless you change this. It may change files in the folder and use the web. | Type the goal, click **Long run**, read the question and confirm. While it runs the button shows **Running**, with **Pause**, **Finish this lap** and **End** beside the chat box. A Long run can use many tokens. Its settings are in Settings → Mission. Greyed, with the reason in its tooltip, where a run cannot start (for example the conversation has no folder); hidden only while Mission is switched off. |
+| **Export** (download arrow) | Saves this conversation as a file. | Click, choose **Conversation only**, **Conversation and thinking** or **Full session log**, and a file type (Markdown, plain text, HTML, JSON or PDF), then **Download**, **Copy to clipboard** or **Make PDF**. The full log holds everything the app stored, which can include keys and passwords; a tick hides them (it is on by default for the full log). In Recon, Export opens Recon's own export window. |
+| **Settings gear** | The settings of this tab's mode, in a window over the chat, without leaving the conversation. | Click. **Web sources…** and **Open in Settings** are in its top bar. A mode with its own extras (Recon's Export…, Bench rules) keeps them here. |
+| **Activity line** | What is running right now: reading the prompt, writing, tools, helpers, other conversations, with speeds. | Look. The arrow at its right end folds the chat box down so more of the conversation shows; click again to bring it back. Settings → Activity changes its look. |
+| **Model button** (the model's name) | Model, effort and tier for this conversation. | Click to pick the model, drag the effort from Off to Ultra Code, choose a tier or a saved model version. A change applies from the next message. |
+| **Send** (round arrow) | Sends the message. | Click. |
+
+**Under the text field: the options of a tab**
+
+Some tabs show their own choices in one area under the chat box, in the same place for every tab; on the start page they sit under the box, and in a conversation under its status line. Only the tab they belong to shows them.
+
+| Tab | What is there | What it does |
+|---|---|---|
+| **Scout** | The kind of work (Any work type, Employee, Freelance, Contract, Internship, Public tender), the markets to search (for example USA, UK, Germany; click **+ Market** for more, or **Remote**), and **+ Files** (a resume, a LinkedIn export or notes). | Sets where Scout searches and what it looks for. A line under them says what will happen, for example "Nothing is sent or applied for." |
+| **Finance** | A five-part selection: what it is about (Company, Sector, Economy, Whole market), the market, the focus (Full picture, Figures, News, Mood, Outlook and risks, Comparison), the period (Latest quarter, 1 year, 5 years), and the subject you type. | Press a part to change it, for this conversation only, from the next answer on. The line under it says what the assistant will do and ends with "Research, not advice." |
+| **Creator Plus** | What you want to do (New plugin, Improve, Find what went wrong, Rebuild, Combine or split, Find gaps, Check after an update, Explain) and which add-ons or plugins it may look at (**+ Plugin**, or **All plugins** on purpose). | Picks the job and its target before you write the request. Locked entries are the app's own and are only read. |
+| **Code**, **Chat**, **Cowork**, **Data**, **Research**, **Recon** | Nothing extra here. | Their choices are the buttons in the row above (Research's Focus is the ticks of the Web button). |
+
+**Under an answer**
+
+| Control | What it does | How to use it |
+|---|---|---|
+| **Copy**, **Branch**, usage | The app's own. | Click. |
+| **Rerun** | Asks the same question again in a fresh copy of the conversation, with the model selected now. | Pick another model, then press the round arrow. The old answer stays in the original. |
 
 ### 4. Projects and project types (Cowork)
 
@@ -128,7 +161,7 @@ Switch it on in **Settings → Data**, open the Data tab, and pick the folder th
 Switch it on in **Settings → Finance** and open the Finance tab. Pick subject, market, focus and period on the start page, then ask. Once the conversation has started, its chat box shows the same selection; change a part there for this conversation only.
 
 - It puts reported figures, news and what people say side by side, with sources and dates, and draws charts.
-- **Adviser** (Settings → Finance → Adviser, off by default): it then ends with a clear call and adds no disclaimer, and keeps a profile of you that you can edit there.
+- **Adviser** (Settings → Finance → Adviser, off by default): you accept a warning once by typing "I understand"; it then ends with a clear call and the line "AI output, not regulated advice.", and keeps a profile of you that you can edit there.
 - **Watchlist**, **your own markets**, **your own data sources** (with keys kept in the app's secret store) and **scheduled briefs** are on the same page.
 - With Tools off it has no data tools: it may give figures from memory, each marked as from memory and possibly out of date, never with a source.
 - It is an AI model working from what it could fetch. It is not a licensed adviser and can be wrong.
@@ -159,7 +192,7 @@ Install the `tor` program (`brew install tor`), switch Recon on in **Settings �
 
 - The start page has starter chips (Search .onion sites, Search Usenet, News coverage, Old web page, Check a claim) and a status bar: Tor, Usenet, the Internet Archive's route, the model, and whether findings may go to it.
 - A model on this Mac or your own network gets what Recon finds. A cloud model gets it only after you type `/recon cloud`.
-- **Settings → Recon → More sources:** the Internet Archive and GDELT news, off until you switch them on. **Read Internet Archive copies directly (not through Tor)** is on by default: copies are then read straight from the Archive, which sees this Mac's internet address. Through Tor the Archive refuses most reads.
+- **Settings → Recon → More sources:** the Internet Archive and GDELT news, off until you switch them on. **Read Internet Archive copies directly (not through Tor)** is on by default: copies are then read straight from the Archive, which sees this Mac's internet address (or your VPN's, when the page goes out through a WireGuard tunnel you set up in Recon). Through Tor the Archive refuses most reads.
 - Every source gets a number like [S3]. Citations, links and `/recon export` still work after a restart.
 - Recon conversations never show in Global Search and are never synced. `/recon end` ends one and deletes it.
 
@@ -179,6 +212,7 @@ Install the `tor` program (`brew install tor`), switch Recon on in **Settings �
 | **Library** | Lets the assistant search your own documents and quote them with the file and page. | Settings → Library |
 | **PDF reader** | Reads, searches and, when needed, OCRs PDFs page by page. | Settings → PDF reader, `/pdf` |
 | **Diagram builder** | Draws charts and diagrams and shows them under the answer. | Settings → Diagrams |
+| **Code guides** | The eight Code tools guides (four reverse-engineering, four for reviews and fixes) are offered only in the Code tab on a new install; on an existing install nothing changes. | Settings → Code tools → "Where these guides are offered" |
 | **Code map** | A compact map of a code project, so the assistant looks things up instead of reading whole files. | Settings → Code map, `/codemap` |
 | **Learning** | A tutor that makes you attempt first and gives hints step by step. | Settings → Learning, `/learn` |
 | **Automations and alerts** | Your scheduled tasks on one page: how each run ended, what needs you, what was missed while the app was closed, a timeline; pause, change or delete one (deleted ones stay in the trash for 30 days); alerts on this Mac and on your phone. The Automations tab's chat makes and changes them. | Sidebar → Automations (every tab), the Automations tab, Settings → Alerts |
@@ -194,12 +228,12 @@ Install the `tor` program (`brew install tor`), switch Recon on in **Settings �
 | Feature | What it does | Where |
 |---|---|---|
 | **Self-improvement** | Improves the instructions a model is given, tested on your own tasks; you approve every change. | Settings → Self-improve, `/evolve` |
-| **Benchmark** | Runs prompt suites over a grid of models and sampling settings and recommends the best ones. | Settings → Benchmark, `/bench` |
+| **Benchmark** | Runs prompt suites over a grid of models and sampling settings and recommends the best ones. | Settings → Benchmark, `/benchmark` |
 | **Arena** | Ask several models the same question, compare the answers blind, and reveal who wrote what. | Settings → Arena, `/arena` |
 | **Model router** | Routes each turn to one of 2 to 5 candidate models using a small routing model. Nothing is set after install. | configuration file, `/router` |
 | **Route health** | Checks that your model servers are reachable and moves a conversation to its tier's fallback when one is not. | configuration file, `/routes` |
-| **Sampling presets** | Named sampling settings chosen per kind of task, mode or conversation. | Settings → Sampling, `/sampling` |
-| **Role prompts** | Adds your own instruction sections to what the assistant is told, optionally only for chosen tiers. | configuration file |
+| **Sampling presets** | Named sampling settings chosen per kind of task, mode or conversation. | Settings → Model Tiers → Sampling, `/sampling` |
+| **Role prompts** | Adds your own instruction sections to what the assistant is told, optionally only for chosen tiers. | Settings → Model Tiers → Instructions for every conversation file |
 
 ### 14. Housekeeping
 
@@ -209,7 +243,7 @@ Install the `tor` program (`brew install tor`), switch Recon on in **Settings �
 | **Colours** | Colour schemes for the whole app. | Settings → Colours |
 | **Look** | Hide the logos, show the date as the title, wide chat. | Sidebar → More |
 | **Context saver** | Shortens large tool results before the model sees them and keeps the original for retrieval. Off until configured. | configuration file, `/saved` |
-| **Notify** | Runs a command you choose when a turn ends or the app needs your approval. | configuration file, `/notify` |
+| **Notify** | Runs a command you choose when a turn ends or the app needs your approval. | Settings → Alerts, `/notify` |
 | **Media tools** | Image generation and editing tools, and an approval gate for browser and computer-use tools. With Web Off the image tools go, unless the image service is on this Mac or your own network. | configuration file |
 | **Sync, Shared settings** | Keep a second Mac in step. Recon conversations are never synced. | README, "Using it on a second Mac" |
 
@@ -221,7 +255,7 @@ Where a row says "configuration file": that add-on has no settings page. Open **
 |---|---|
 | `/activity` | Activity indicator |
 | `/arena` | Model arena |
-| `/bench` | Benchmark |
+| `/benchmark` | Benchmark |
 | `/codemap` | Code map |
 | `/engine` | Engines |
 | `/evolve` | Self-improvement |
@@ -250,7 +284,7 @@ Every add-on, in the order of Part 1, with what it adds and every setting. "Star
 
 Chat, Cowork and Code tabs at the top of the left sidebar, each with its own sections.
 
-- **Where:** sidebar; start page; start page of a new conversation; chat box, left group
+- **Where:** sidebar; start page; start page of a new conversation; chat box, left group; above the chat box
 - **After install:** on
 - **Details:** `addons/dsh-cowork-shell/README.md`
 
@@ -260,9 +294,9 @@ Chat, Cowork and Code tabs at the top of the left sidebar, each with its own sec
 | `maxTabs` | `3` | At most this many tabs (the first modes in order). |
 | `tabOrder` | `[]` | Your own tab order (tab ids, set by arranging the tabs). Only the order: which tabs show is unchanged. |
 | `hideLogos` | `false` | Hide the DeepSeek logo and name at the top of the sidebar and the logo on the start page. |
+| `iconOnlyTabs` | `false` | Tab names in the wide sidebar. Off (default): every tab shows its icon and its name; tabs take the width of their name and wrap onto more rows. On: tabs sit in rows of three and a name that does not fit shows the icon alone. |
 | `dateTitle` | `false` | Show today's date as the start page title instead of the tab's greeting. |
 | `wideChat` | `false` | Let the conversation and the message box use the whole width of the window instead of a centred column. |
-| `iconOnlyTabs` | `false` | Tab names in the wide sidebar. Off: every tab shows its icon and name and the tabs wrap onto more rows. On: rows of three, and a tab whose name does not fit shows its icon alone. |
 | `startPlaces` | `''` | Start places (Scratch step 44) as JSON: `{ tabId: 'scratch' \| 'folder' }`, over the defaults (every tab but Code starts in Scratch; Recon always in its room). Set on Settings → Start places. |
 | `newKeyFollows` | `true` | Cmd-N (the app's New Session) starts in the open tab's start place. Off: the app's own choice. |
 
@@ -282,15 +316,24 @@ Chat, Cowork and Code modes you can switch for each session.
 | `scheduledMode` | `'cowork'` | Mode of a conversation that an Automation task opens. Nobody picked a tab for it, so the tab last looked at must not decide. An unknown id falls back to the first mode with all tools. Chosen on Settings → Modes. |
 | `sessionModes` | `'{}'` | Per-session choice as JSON: `{ sessionId: modeId }`. Written by the composer selector. |
 | `sessionIsolated` | `'{}'` | Conversations that began in an isolated mode (id -> true). They stay isolated whatever happens to the mode. |
+| `skillsOff` | `'{}'` | Skills switched off per tab, as JSON `{ tabId: [skill names] }`. In that tab the model does not see them in its skill list and cannot load them; your own /name still works. Empty: as before. |
 | `pruneStaleSessions` | `true` | Drop per-session entries whose Session is no longer stored, once per start. |
 | `pinOnFirstTurn` | `true` | When a top-level Session starts its first turn without a chosen mode, record the mode it starts in. A later change of `defaultMode` (for example from a sidebar tab) then only affects new Sessions. |
 | `sessionWeb` | `'{}'` | Per-session web switch as JSON: `{ sessionId: true \| false }`. Missing = the mode's default (off in a no-tools mode). |
+| `sessionWebLevel` | `'{}'` | Per-session Web level as JSON: `{ sessionId: 'verified' \| 'open' \| 'everything' \| 'custom:<name>' }`. Missing = On as before: no limit beyond the tab's own. Only while the Web is on; lib/weblevel.js. |
+| `verifiedSources` | `VERIFIED_START` | The verified list (Web level Verified): one host or address ending per line. Its own list; Settings → Modes. |
+| `webMixes` | `'{}'` | Your saved Web selections as JSON: `{ name: ['verified', 'forums', …] }` (lib/sources.js KINDS, and in Recon its networks). Earlier Custom mixes keep working: their lanes are read as ticks ("channels" is social). Saved from the Web popup; edited on Settings →  |
+| `sessionWebSources` | `'{}'` | Per-conversation Web sources as JSON: `{ sessionId: ['verified', 'forums', …] }`. Missing = All: the web as before, or, for a conversation that picked one of the older levels (`sessionWebLevel`), that level read as ticks. Only while the Web is on. lib/sources. |
+| `academicSources` | `ACADEMIC_START` | The academic list (Web source Academic papers): one host or ending per line. Settings → Web sources. |
+| `newsSources` | `NEWS_START` | The news list (Web source News): one host or ending per line. Settings → Web sources. |
+| `otherSources` | `'[]'` | Your own other sources (Web source Other) as JSON: `[{ id, name, search, start, login, header, store, recon }]` (lib/other.js). No secret is ever kept here: logins, keys, cookies and secret addresses are in the app's secret store or the macOS Keychain, by each |
 | `sessionResearch` | `'{}'` | Obsolete: the old per-conversation Deep research switch, no longer offered or read (kept so older settings files still load). Old entries are pruned with the others. |
 | `sessionSearchDepth` | `'{}'` | Obsolete since 0.59.0: each conversation's former Web level, moved into `sessionDepth` once (`depthMoved`). Kept so older settings files still load. |
 | `sessionDepth` | `'{}'` | Per-session Depth as JSON: `{ sessionId: 'quick' \| 'standard' \| 'thorough' }` (missing = where new conversations start, `searchDepth`). How much work the conversation gets: how much it searches when Web is on, helpers, planning, checks and reviews. Set with th |
 | `sessionLens` | `'{}'` | Per-session Lens as JSON: `{ sessionId: 'blunt' \| 'scientific' \| 'journalistic' \| 'data-only' \| 'skeptic' \| 'encouraging' }` (missing or unknown = Default, which adds nothing). How the answer is worded (lib/lens.js, texts approved word for word). Its own secti |
 | `ownLenses` | `[]` | Your own Lenses (Lens part, step 30): `[{ name, text }]`, at most 40, names up to 40 characters, texts up to 4,000, no name of a shipped Lens. Each gets the same guard as every Lens. Edited on Settings → Modes; kept in these settings, so Shared settings carrie |
 | `depthMoved` | `false` | Each conversation's former Web level has been moved into its Depth (once, since 0.59.0). |
+| `longTools` | `'{}'` | Each tab's starting choice of tools for a Long run, as JSON: `{ modeId: { files: boolean, web: boolean } }` (missing: files and commands on; the web on, off in an isolated tab). A run's card can change it for that run. Set on Settings → Modes → Long run tools. |
 | `sessionTools` | `'{}'` | Per-session tools switch as JSON: `{ sessionId: false }`. While off, the model is offered no tool at all. |
 | `searchDepth` | `'standard'` | The Depth new conversations start with (quick, standard, thorough), and that a conversation without its own pick follows. Set on Settings → Modes, and by every pick on the Depth button. (Named for the former Web level, which it replaced in 0.59.0.) |
 | `codeMethod` | `true` | Give the Code mode a working method (read first, small changes, run the tests, report plainly) while it has no instructions of its own. |
@@ -301,6 +344,8 @@ Chat, Cowork and Code modes you can switch for each session.
 | `sessionHelpers` | `'{}'` | The same choice for one conversation, as JSON: `{ sessionId: 'same' \| 'roles' }`. It decides for every tool that starts helper agents (Mission, Deep research, Agent swarm, the Tier tools, Code power). A conversation without an entry follows `researchModel`, wh |
 | `rerunButton` | `true` | A Rerun button under every answer: asks the same question again, with the model now selected, in a fresh copy of the conversation. |
 | `hideFeedback` | `false` | Hide the app's thumbs-up and thumbs-down buttons under answers. |
+| `uniformBox` | `true` | The chat box looks the same in every mode (on by default): the buttons' words (Web · On, Depth, One model, Tools on) shrink by the window's width alone, not by what else a mode puts in the row, and the buttons add-ons bring (Creator Plus, Bench rules, Export,  |
+| `modeStart` | `'{}'` | Starting values per mode as JSON: `{ modeId: { web, depth, helpers, tools } }` (lib/start.js). What the Web, Depth, Models and Tools buttons read in a conversation that begins in the mode; a missing or empty value is the usual one (the mode's own default, or t |
 | `commandName` | `'mode'` | Name of the slash command that switches modes. |
 | `trimModes` | `['cowork', 'code', 'data']` | Modes with all tools that load them as needed: a core set and `tools_find` at first, other families when the model asks for them or the user's message mentions them. |
 | `sessionToolSets` | `'{}'` | Tool families a conversation added, as JSON: `{ sessionId: ['pdf', 'data'] }`. |
@@ -311,7 +356,7 @@ Chat, Cowork and Code modes you can switch for each session.
 
 Give a goal to several models: a planner, workers and a reviewer, with real commands as the proof. Three permission modes keep the work inside the conversation's folder, with checkpoints you can go back to. Type /mission in a conversation.
 
-- **Where:** Settings → Mission; above the chat box; window edge; `/mission` in the chat box
+- **Where:** Settings → Mission; above the chat box; chat box, beside the send button; window edge; `/mission` in the chat box
 - **After install:** on
 - **Tools the assistant gets:** `mission`
 - **Details:** `addons/dsh-mission/README.md`
@@ -324,7 +369,7 @@ Give a goal to several models: a planner, workers and a reviewer, with real comm
 | `maxTries` | `LIMITS.maxTries` |  |
 | `maxReviews` | `LIMITS.maxReviews` |  |
 | `maxSteps` | `LIMITS.maxSteps` |  |
-| `longMinutes` | `LONG.minutes` | Long run defaults (the owner's plan, Long run part; one place, as he chose): minutes, laps, use the full time. |
+| `longMinutes` | `LONG.minutes` | Long run defaults: minutes, laps, use the full time. |
 | `longLaps` | `LONG.laps` |  |
 | `longFullTime` | `false` |  |
 | `longKeepAwake` | `true` | Keep the Mac awake while a Long run is on (on power; on battery only with longBattery). |
@@ -334,6 +379,8 @@ Give a goal to several models: a planner, workers and a reviewer, with real comm
 | `waitMinutes` | `LIMITS.waitMinutes` | Minutes a helper waits for the user's yes before the item is set aside. 0 waits without end. |
 | `roles` | `'{}'` | The models for the roles, as JSON: `{ plan: {provider, model}, implement: {…}, review: {…} }`. Empty follows Model Tiers. |
 | `projects` | `'{}'` | The same per project, as JSON keyed by the project's folder. A project's choice wins over `roles`. |
+| `loopTabs` | `'[]'` | The work loop without Ultra Code: the tabs (Modes' mode ids) where you switched it on, as JSON `["code", "research"]`. Empty: only Ultra Code puts it on. |
+| `callsAtOnce` | `'{}'` | How many calls the work loop sends to a model server at once, per provider, as JSON `{ provider: 2 }`. Missing: 4 (your default); each between 1 and 16. A server that runs one request at a time is set to 1. |
 
 ### Data
 
@@ -353,7 +400,7 @@ A Data mode and tab: the assistant profiles your data files, runs queries agains
 
 A Finance mode and tab for researching companies, markets and economies. Research, not advice.
 
-- **Where:** Settings → Finance; start page of a new conversation; chat box, left group
+- **Where:** Settings → Finance; start page of a new conversation; chat box, left group; above the chat box
 - **After install:** off until you switch it on
 - **Tools the assistant gets:** `finance_profile_save`, `finance_prices`, `finance_news`, `finance_social`, `finance_company_figures`, `finance_company_filings`, `finance_economy`, `finance_source_get`
 - **Details:** `addons/dsh-finance/README.md`
@@ -370,13 +417,14 @@ A Finance mode and tab for researching companies, markets and economies. Researc
 | `moreMarkets` | `[]` | Markets of your own, offered after the built-in ones. |
 | `sources` | `'[]'` | Extra data sources as JSON: `[{ id, kind: 'api' \| 'connector', name, baseUrl, keyIn, keyName, about, docs, on }]`. Keys are never here: each is kept in the app's secret store. |
 | `financeTasks` | `[]` | Ids of scheduled tasks of your own that run in Finance instead of Cowork. |
-| `adviser` | `false` | The assistant speaks as the user's financial adviser: it recommends and adds no disclaimer. |
+| `adviser` | `false` | The assistant speaks as the user's financial adviser: it recommends and ends with "AI output, not regulated advice". Works only after `adviserAccepted`. |
+| `adviserAccepted` | `false` | The user typed their acceptance of the adviser warning once. Without it the adviser stays off, whatever `adviser` says. |
 
 ### Deep research
 
 A deep_research tool that plans, researches in parallel with child agents, and writes a cited report.
 
-- **Where:** no page of its own; it works in the background
+- **Where:** Settings → Research → Advanced
 - **After install:** on
 - **Details:** `addons/dsh-deep-research/README.md`
 
@@ -418,6 +466,8 @@ Five Claude-Code-style model tiers (Haiku, Sonnet, Opus, Fable, Code) with per-t
 | `sessionProfiles` | `'{}'` | Optional per-Session profile override; project default applies otherwise. |
 | `fallbackChains` | `'{}'` | Ordered fallback routes per tier: `{ tierId: [{provider, model}] }`. |
 | `roleModels` | `'{}'` | Role routes per tier: `{ tierId: { plan\|implement\|review\|fast: {provider, model} } }`. |
+| `sessionUltra` | `'{}'` | The Ultra Code switch beside Effort, per conversation, as JSON: `{ sessionId: true }`. Off unless switched on. Ultra Code is a switch, not an effort level: on, the conversation spreads its work over helpers at whatever effort is set. The top effort step "Ultra |
+| `teams` | `'{}'` | Teams for the work loop, per tier, as JSON: `{ tierId: { lead, helpers: [..], checker, judge } }`, each a `{ provider, model }` or `{ version: id }`. The lead plans and takes a step that failed twice; helpers do the steps (several models make attempts differ m |
 | `pruneStaleSessions` | `true` | Drop per-Session tier and profile entries whose stored Session no longer exists, once per start. |
 
 ### Agent swarm
@@ -441,13 +491,13 @@ Runs named swarms of child agents on Tier role routes with caps and a budget.
 
 Skills for PR review, a CI fix loop, best-of-N and hunk review, and a blind judge tool for comparing candidate diffs.
 
-- **Where:** no page of its own; it works in the background
+- **Where:** Settings → Code tools → Reviews and fixes
 - **After install:** on
 - **Details:** `addons/dsh-code-power/README.md`
 
 | Setting | Starts as | What it does |
 |---|---|---|
-| `enabled` | `true` |  |
+| `enabled` | `true` | Needs the app to start again to take effect (the skills and the tool are set up at start). |
 | `n` | `3` |  |
 | `judgeRole` | `'review'` |  |
 | `consistencyCheck` | `true` |  |
@@ -457,7 +507,7 @@ Skills for PR review, a CI fix loop, best-of-N and hunk review, and a blind judg
 
 A compact map of your project so the assistant looks things up instead of reading whole files, plus reverse-engineer skills. Nothing to install.
 
-- **Where:** Settings → Code map; `/codemap` in the chat box
+- **Where:** Settings → Code tools; `/codemap` in the chat box
 - **After install:** on
 - **Tools the assistant gets:** `code_map_overview`, `code_map_find`, `code_map_related`, `code_map_read`
 - **Details:** `addons/dsh-code-map/README.md`
@@ -534,7 +584,7 @@ A short list of lasting facts and preferences about you, given to every new conv
 | Setting | Starts as | What it does |
 |---|---|---|
 | `enabled` | `true` | Master switch. Off takes the memory out of new conversations; the list is kept. |
-| `suggest` | `true` | Whether the assistant may suggest things to remember. Off leaves only what the owner types. |
+| `suggest` | `true` | Whether the assistant may suggest things to remember. Off leaves only what you type. |
 
 ### Learning
 
@@ -644,7 +694,10 @@ Hard limits that stop a task that is running away: steps, tokens and minutes per
 | Setting | Starts as | What it does |
 |---|---|---|
 | `enabled` | `true` | Master switch. |
-| `maxSteps` | `300` | Most requests to a model in one task, helpers included. 0 = no limit. |
+| `maxSteps` | `300` | Most requests to a model in one task made by the conversation itself. 0 = no limit (helpers are then not limited either). |
+| `maxHelperSteps` | `1500` | Most requests in one task made by helper agents (Deep research, Mission, sub-agents), counted apart so a long run is not cut by the conversation's own limit. 0 = helpers share `maxSteps`, as before. |
+| `maxLongSteps` | `5000` | While a Mission Long run is on: most requests in one task, all of them (the Long run's own allowance; Mission has its own limits too). 0 = the ordinary limit. |
+| `maxLongTokens` | `60000000` | While a Mission Long run is on: most tokens in one task. 0 = the ordinary limit. |
 | `maxTokens` | `20000000` | Most tokens (sent plus received) in one task, helpers included. 0 = no limit. |
 | `maxMinutes` | `0` | Longest one task may run, in minutes. Time spent waiting for you counts. 0 = no limit. |
 | `maxRepeats` | `8` | The same tool call this many times in a row is treated as a loop. 0 = no check. |
@@ -690,7 +743,7 @@ Improves the instructions around a model: test tasks with checks, a reviewer mod
 |---|---|---|
 | `enabled` | `true` | Master switch: off stops jobs and adds nothing to any conversation. |
 | `target` | `''` | What is being improved: the id of a saved model version (from Model Tiers), or empty for a plain model. Each version has its own tasks, lessons and versions. |
-| `studentProvider` | `''` | The plain model being improved when no version is chosen. Empty until the owner picks one. |
+| `studentProvider` | `''` | The plain model being improved when no version is chosen. Empty until you pick one. |
 | `studentModel` | `''` |  |
 | `reviewerProvider` | `''` | The model that reviews failures and proposes changes. |
 | `reviewerModel` | `''` |  |
@@ -708,7 +761,7 @@ Improves the instructions around a model: test tasks with checks, a reviewer mod
 
 Runs prompt suites over a grid of models and sampling settings and recommends the best ones.
 
-- **Where:** Settings → Benchmark; `/bench` in the chat box
+- **Where:** Settings → Benchmark; `/benchmark` in the chat box
 - **After install:** on
 - **Details:** `addons/dsh-benchmark/README.md`
 
@@ -723,7 +776,8 @@ Runs prompt suites over a grid of models and sampling settings and recommends th
 | `timeoutMs` | `120000` |  |
 | `maxJobMinutes` | `60` |  |
 | `maxCloudUsdPerJob` | `0` |  |
-| `commandName` | `'bench'` |  |
+| `commandName` | `'benchmark'` |  |
+| `acceptedMethods` | `'{}'` | Where the work loop pays, as you accepted it from a methods job, as JSON `{ category: wayId }`. Advice only: Benchmark switches nothing on by itself; Mission shows it. |
 
 ### Model arena
 
@@ -788,7 +842,7 @@ Checks that your model routes are reachable and moves a Session to its tier's fa
 
 Named sampling presets chosen per task category, mode or session.
 
-- **Where:** Settings → Sampling; `/sampling` in the chat box
+- **Where:** Settings → Model Tiers → Sampling; `/sampling` in the chat box
 - **After install:** on
 - **Details:** `addons/dsh-sampling-presets/README.md`
 
@@ -807,7 +861,7 @@ Named sampling presets chosen per task category, mode or session.
 
 Adds your own instruction sections to the system prompt, optionally only for chosen tiers.
 
-- **Where:** no page of its own; it works in the background
+- **Where:** Settings → Model Tiers → Instructions for every conversation
 - **After install:** on
 - **Details:** `addons/dsh-role-prompts/README.md`
 
@@ -866,7 +920,7 @@ Image generation and editing tools, and an approval gate for browser and compute
 
 Runs a command you choose when a turn ends or dsh needs your approval.
 
-- **Where:** `/notify` in the chat box
+- **Where:** Settings → Alerts; `/notify` in the chat box
 - **After install:** on
 - **Details:** `addons/dsh-notify/README.md`
 
@@ -896,7 +950,7 @@ Switches off the app's two reporting channels to its maker: usage events, and th
 
 ### Colour schemes
 
-Pick the app's colours: DeepSeek Harness stock, MindsHub Cowork, Graphite or Forest, in light and dark.
+Pick the app's colours: DeepSeek Harness stock, Harbor, Graphite or Forest, in light and dark.
 
 - **Where:** Settings → Colours
 - **After install:** on
@@ -904,8 +958,8 @@ Pick the app's colours: DeepSeek Harness stock, MindsHub Cowork, Graphite or For
 
 | Setting | Starts as | What it does |
 |---|---|---|
-| `scheme` | `'stock'` | Scheme id: `stock` (the app's own colours), `mindshub`, `graphite`, `forest` or `custom`. |
-| `custom` | `''` | Your own scheme as JSON, used when `scheme` is `custom`: `{ "label": "...", "dark": { "--dsw-alias-bg-base": "#101010", ... }, "light": { ... }, "opaqueMacSidebar": true }`. Tokens you leave out keep the app's own value. |
+| `scheme` | `'stock'` | Scheme id: `stock` (the app's own colours), `harbor`, `graphite`, `forest` or `custom`. |
+| `custom` | `''` | Your own scheme as JSON, used when `scheme` is `custom`: `{ "label": "...", "dark": { "--dsw-alias-bg-base": "#101010",... }, "light": {... }, "opaqueMacSidebar": true }`. Tokens you leave out keep the app's own value. |
 | `opaqueMacSidebar` | `true` | On the Mac desktop app, paint the sidebar solid in the scheme's colour instead of see-through. |
 
 ### Sync
@@ -916,13 +970,77 @@ Syncs sessions and the project list between machines through a git remote you ch
 - **After install:** on
 - **Details:** `addons/dsh-sync/README.md`
 
-### Shared settings
+### Shared settings (Experimental)
 
-Keeps your Plus settings in one file in a folder you choose, such as iCloud Drive, so two Macs share one setup.
+Experimental: tried only on one Mac so far. Keeps your Plus settings in one file in a folder you choose, such as iCloud Drive, so two Macs share one setup. Off until you choose a folder.
 
 - **Where:** no page of its own; it works in the background
 - **After install:** on
 - **Details:** `addons/dsh-shared-settings/README.md`
+
+### Artifacts
+
+Every file a conversation makes shows as a card in its thread, opens rendered beside the chat, keeps its versions and is listed on one Artifacts page. Off until you switch it on.
+
+- **Where:** Settings → Artifacts; under an answer; sidebar
+- **After install:** off until you switch it on
+- **Details:** `addons/dsh-artifacts/README.md`
+
+| Setting | Starts as | What it does |
+|---|---|---|
+| `enabled` | `false` | Cards, the viewer and the Artifacts page. Off leaves nothing of it in the app; kept versions stay. |
+| `dangerShowBackups` | `false` | Danger zone. |
+| `dangerShowSealed` | `false` |  |
+| `dangerPagesRun` | `false` |  |
+| `dangerPagesInternet` | `false` |  |
+
+### Devices
+
+A Devices mode and tab for the devices you connect to your Mac: identify what is plugged in by USB, find its documentation, and keep a card and a logbook for each device.
+
+- **Where:** Settings → Devices; chat box, left group
+- **After install:** off until you switch it on
+- **Tools the assistant gets:** `bench_serial_watch`, `bench_esp32`, `bench_android`, `bench_undo`, `bench_bluetooth`, `bench_firmware`, `bench_network`, `bench_router`, `bench_server`, `bench_phone`, `bench_recipe`, `bench_usb`, `bench_devices`, `bench_card`, `bench_catalogue`, `bench_log`
+- **Details:** `addons/dsh-bench/README.md`
+
+| Setting | Starts as | What it does |
+|---|---|---|
+| `enabled` | `false` | The Bench mode and tab. Off leaves nothing of it in the app; cards and logbooks stay. |
+| `folder` | `''` | Where cards and logbooks are kept. Empty: `bench` in the app's home. |
+| `longChecks` | `true` | A Long run in Bench checks its work with commands that Mission runs, with the Mac's device ports closed to them. Off: Bench's Long runs run no checks (the reviewer judges by reading). |
+| `allowRiskyWrites` | `false` | Your switch for writes that can damage a device (Danger zone, off by default). On: the device tools' flash, erase, program, reset and send actions run, and the backup, source and recovery conditions of the firmware writes, the short setting lists and the prote |
+
+### Content
+
+A Content mode and tab: books, articles, blog posts, scripts and outlines written from your material, with numbered drafts and other conversations brought in as material.
+
+- **Where:** Settings → Content
+- **After install:** off until you switch it on
+- **Tools the assistant gets:** `content_reports`, `content_ledger`, `content_rule`, `content_plan`, `content_formats`, `content_draft`, `content_check`, `content_approve`, `content_correct`, `content_library`, `content_continue`, `content_setup`, `content_conversations`, `content_bring_in`
+- **Details:** `addons/dsh-content/README.md`
+
+| Setting | Starts as | What it does |
+|---|---|---|
+| `enabled` | `false` | The Content mode and tab. Off leaves nothing of it in the app; files it saved stay where they are. |
+| `voiceLibrary` | `''` | The Voice Library's folder. Empty (or not a full path): `content/voice-library` in the app's home. |
+
+### Creator Plus
+
+Builds and improves plugins so they fit everything already installed, tries them in a trial copy first, and keeps them working through updates. Nothing in your real setup changes without your yes.
+
+- **Where:** Settings → Creator Plus; chat box, left group; start page of a new conversation; above the chat box
+- **After install:** off until you switch it on
+- **Tools the assistant gets:** `creator_map`, `creator_passport`, `creator_recipe`, `creator_interview`, `creator_plan`, `creator_scaffold`, `creator_check`, `creator_change`, `creator_upkeep`, `creator_improve`, `creator_note`, `creator_handoff`, `creator_learn`, `creator_selftest`
+- **Details:** `addons/dsh-creator-plus/README.md`
+
+| Setting | Starts as | What it does |
+|---|---|---|
+| `enabled` | `false` | The Creator Plus tab and tools. Off leaves nothing of it in the app; its folder stays. |
+| `logReaders` | `'this-mac'` | Which models may read the session logs: this-mac (default), my-network, any. |
+| `strongModels` | `''` | Models the user marked as strong, one "provider/model" per line: they may replace a recipe's default steps. |
+| `plusFolder` | `''` | A Plus folder with its tests (the installed copy carries none), for upkeep and changes. Empty: tests are not run. |
+| `savedRuns` | `'[]'` | Saved runs of the bar, as JSON: [{ name, state, sentence }]. |
+| `sessionBars` | `'{}'` | Each conversation's bar, as JSON: { sessionId: { selection, all, run, lookOnly, logsFrom } }. |
 
 ### Engines
 
@@ -944,7 +1062,7 @@ Engines: use an outside coding engine (OpenCode first) in Code mode instead of d
 
 An isolated Recon mode and tab for research on .onion sites and Usenet text newsgroups. This version is the isolation frame; it has no network access yet.
 
-- **Where:** Settings → Recon; start page of a new conversation; `/recon` in the chat box
+- **Where:** Settings → Recon; start page of a new conversation; chat box, left group; `/recon` in the chat box
 - **After install:** off until you switch it on
 - **Tools the assistant gets:** `recon`
 - **Details:** `addons/dsh-recon/README.md`
@@ -953,12 +1071,14 @@ An isolated Recon mode and tab for research on .onion sites and Usenet text news
 |---|---|---|
 | `enabled` | `false` | The Recon mode and tab. Off leaves nothing of it in the app. |
 | `torPath` | `''` | Where the tor program is. Empty looks in the usual places (Homebrew, /usr/local). Plus does not install it. |
-| `otherEngine` | `false` | Search with another .onion search engine than the built-in filtered index. Off uses the built-in one. The blocklist of banned sites and the word screen apply either way. |
-| `engineHost` | `''` | That other engine's .onion name (the 56 characters and ".onion"). Used only while `otherEngine` is on. |
+| `otherEngine` | `false` | Search with another.onion search engine than the built-in filtered index. Off uses the built-in one. The blocklist of banned sites and the word screen apply either way. |
+| `engineHost` | `''` | That other engine's.onion name (the 56 characters and ".onion"). Used only while `otherEngine` is on. |
 | `usenetRoute` | `'off'` | How Usenet is reached. `off`: not at all. `direct`: an encrypted connection straight to a news server, which sees your address and knows the account used. |
 | `archiveOn` | `false` | The Internet Archive: dated copies of web pages, read as text. On lets recon_archive_find and recon_archive_read work. |
+| `longChecks` | `false` | A Long run here may check its work with small commands that Mission runs with no internet, no name lookups, no other programs, nothing of the home folder and writing only in the run's folder. Off (your default): no commands at all; the reviewer judges each ste |
 | `archiveDirect` | `true` | Read the Internet Archive directly, not through Tor: its list of copies and the copies themselves, still GET only, text only, with the same filters and limits. The Archive then sees this Mac's internet address. Off: through Recon's Tor, where the Archive refus |
 | `newsOn` | `false` | The GDELT Project's index of news coverage, asked through Recon's Tor. On lets recon_news_search work. |
+| `webOn` | `true` | The ordinary web (recon_web_search, recon_web_read), through WireGuard only, or straight where a conversation allowed it. |
 | `usenetAccounts` | `''` | The Usenet accounts: a news server each, with its own login. No login is kept here: each is in the macOS Keychain, under an item named after the account's id (lib/accounts.js). |
 | `id` | `''` |  |
 | `label` | `''` |  |
@@ -968,19 +1088,23 @@ An isolated Recon mode and tab for research on .onion sites and Usenet text news
 | `usenetHost` | `''` | The one news server of older versions. Read only, to turn it into the first account. |
 | `exportFolder` | `''` | Where `/recon export` writes its files. Empty uses the folder `recon/exports` in the app's home. |
 | `usenetPort` | `563` | That older server's port. Read only, for the same reason. |
+| `vpnConfigs` | `''` | WireGuard: everything Recon sends outside Tor goes through a WireGuard tunnel. The configurations by name, in order: the first is the primary, the others are backups. Each one's file is in the macOS Keychain under an item named after its id, never here (lib/vp |
+| `wireproxyPath` | `''` | Where the wireproxy program is. Empty looks in the usual places (Homebrew). Plus does not install it. |
+| `cloudModels` | `'ask'` | Cloud models in a Recon conversation: 'ask' (the default) hands what Recon finds to a cloud model only after /recon cloud in that conversation; 'always' without asking; 'never' not at all. A model on this Mac or in your own network always gets it. |
 
 ### Research
 
 A Research mode and tab: in-depth research with live progress, cited reports, follow-up questions and saved reports.
 
-- **Where:** Settings → Research; start page of a new conversation; chat box, left group; above the chat box
+- **Where:** Settings → Research; start page of a new conversation; above the chat box
 - **After install:** off until you switch it on
 - **Details:** `addons/dsh-research/README.md`
 
 | Setting | Starts as | What it does |
 |---|---|---|
 | `enabled` | `false` | The Research mode and tab. Off leaves nothing of it in the app. |
-| `focus` | `'web'` | Where a run looks first: web, news or academic. |
+| `focus` | `'web'` | Where a run looked first before the one Web selector: web, news or academic. Read once to carry it over into the Web selector's ticks (`focusMoved`); the chat box no longer sets it. |
+| `focusMoved` | `false` | Each conversation's Focus and this starting Focus have been carried over into the Web selector's ticks (once). |
 | `folder` | `''` | Where reports are saved. Empty: `research/reports` in the app's home. |
 
 ### Scout
@@ -1020,13 +1144,16 @@ Global Search: one box, opened with Cmd-K, that finds conversations by their tit
 
 Groups the Plus pages in Settings under headings, gives each its own icon, and adds a search for every setting.
 
-- **Where:** no page of its own; it works in the background
+- **Where:** chat box, beside the send button
 - **After install:** on
 - **Details:** `addons/dsh-settings-plus/README.md`
 
 | Setting | Starts as | What it does |
 |---|---|---|
 | `enabled` | `true` | Groups, icons and the search field in the Settings window. |
+| `modeGear` | `true` | The small gear beside Send that opens the current mode's settings page in a popup. |
+| `exportButton` | `true` | The Export button beside the gear: this conversation as a file (Markdown, text, HTML, JSON), at three levels. |
+| `extrasInGear` | `true` | A mode's own extra buttons (Devices rules, Creator Plus, Export for Recon, Focus, Finance pill, route badge) live in the gear's popup instead of the chat box. Only with the gear on and "Same chat box in every mode" on. |
 
 ### Learned skills
 
@@ -1045,3 +1172,53 @@ Learns from your past corrections and proposes skills, Memory facts and project 
 | `nolearn` | `'[]'` | Conversations never to learn from (ids, as JSON). Kept on each Mac. |
 | `projectsOff` | `'[]'` | Project folders where learned skills are off ("Start clean"), as JSON. |
 | `schedule` | `'off'` | Learn by itself (step 87): off, nightly or weekly. Only proposes, only while the app is open, and only with a reading model on this Mac or your own network. A time missed while the app was closed is shown, not caught up. |
+
+### Split Plus
+
+Two to four conversations side by side in one window, each in any mode, sharing one folder. Off until you switch it on.
+
+- **Where:** Settings → Split Plus; action row under an answer; above the chat box; sidebar
+- **After install:** off until you switch it on
+- **Tools the assistant gets:** `split_watch_read`
+- **Details:** `addons/dsh-split-plus/README.md`
+
+| Setting | Starts as | What it does |
+|---|---|---|
+| `enabled` | `false` | The Split page. Off leaves nothing of it in the app. |
+| `localAtOnce` | `4` | How many panes may use a model on this Mac (or your own server) at the same time; the rest wait and say so. |
+| `watcherModel` | `''` | The model a watching pane starts with, as "provider/model"; empty: the app's usual model. |
+| `dangerFileHolds` | `false` | Danger zone. |
+| `dangerSealedSends` | `false` |  |
+| `dangerWatchSealed` | `false` |  |
+| `dangerWatcherTools` | `false` |  |
+| `dangerUnmarked` | `false` |  |
+
+### Tuner Plus
+
+Models that learn from your work: checked steps kept as training rows, a private exam, data sets, and adapters trained on this Mac, each tested before you are asked.
+
+- **Where:** Settings → Tuner Plus
+- **After install:** off until you switch it on
+- **Tools the assistant gets:** `tuning_status`, `tuning_plan`, `tuning_start`, `tuning_export_set`, `tuning_skill_draft`, `tuning_skills_run`
+- **Details:** `addons/dsh-tuning/README.md`
+
+| Setting | Starts as | What it does |
+|---|---|---|
+| `enabled` | `false` | Tuning Plus as a whole. Off: nothing is harvested and its tools are not offered. |
+| `harvest` | `'{}'` | Which modes are harvested, as JSON: `{ code: true }`. Every mode starts off. |
+| `folder` | `''` | Tuning Plus's folder. Empty (or not a full path): `tuning` in the app's data. |
+| `python` | `''` | The Python in which you installed mlx-lm (full path). Tuning Plus installs nothing. |
+| `models` | `'{}'` | Where each base model's MLX files are on this Mac, as JSON: `{ "model name": "/full/path" }`. |
+| `teacher` | `''` | The teacher model (question-and-answer rows), as JSON `{ provider, model }`. |
+| `teacherCloud` | `false` | A teacher on the internet may read rows only when you ticked this. |
+| `providers` | `'{}'` | "May train" per provider, as JSON `{ provider: false }`. Missing means yes. |
+| `anthropicOpenEnded` | `false` | Text written by Anthropic's models may train adapters that write open-ended text. Starts off. |
+| `nightShift` | `false` | The night shift on this Mac. |
+| `idleMinutes` | `15` | Minutes of quiet before the night shift works. |
+| `nightMinutes` | `120` | The night shift's time limit per night, in minutes. |
+| `nightTrain` | `'[]'` | The sets the night shift may train, as JSON `["harness"]`, with the base model for each: `{ set, model }`. |
+| `examLimit` | `40` | How many exam rows a check uses at most. |
+| `ownNetworkLocal` | `false` | Count your own network's machines (192.168…,.local) as this Mac when deciding what may be sent to a model. Off: only this Mac itself counts. A local proxy that forwards to a cloud provider cannot be told apart from a model on your network. |
+| `skills` | `false` | The skills part (marks and records of every skill; later: writing and examining skills). Off: Tuner Plus is what it was before; nothing of the part runs, writes or asks. |
+| `skillExam` | `'{}'` | The two models of the skill exam, as JSON `{ floor: { provider, model }, strong: { provider, model } }`: the floor model must run on this Mac (your held-back tasks never leave it); the strong one may be any. |
+| `nightSkills` | `false` | The night shift drafts skills too (off at first; needs the night shift and the skills part): at most two skill ideas a night, each drafted by a model on this Mac and examined. Nothing goes live, nothing is edited. |

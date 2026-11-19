@@ -6,7 +6,7 @@ This brief was written by Creator Plus from the plugin's own files. Its README b
 
 ## What it must keep doing
 
-- Its settings: enabled, maxSteps, maxTokens, maxMinutes, maxRepeats, dayTokens.
+- Its settings: enabled, maxSteps, maxHelperSteps, maxLongSteps, maxLongTokens, maxTokens, maxMinutes, maxRepeats, dayTokens.
 
 ## Its README
 
@@ -50,6 +50,9 @@ An empty box (0) means no limit. The defaults are generous: a normal task does n
   config:
     enabled: true
     maxSteps: 300
+    maxHelperSteps: 1500
+    maxLongSteps: 5000
+    maxLongTokens: 60000000
     maxTokens: 20000000
     maxMinutes: 0
     maxRepeats: 8

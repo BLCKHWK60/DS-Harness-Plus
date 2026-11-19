@@ -28,7 +28,7 @@ export const PATH_REFUSED = /[%$"\n\r\0]/;
 
 /** Bench's network files, in the Bench folder's `network/` part. */
 export function networkFiles(folder) {
-  if (PATH_REFUSED.test(String(folder))) throw new Error('The Bench folder\'s path has a %, $ or " in it, which ssh would read as part of a command. Pick a folder without them on Settings → Bench to use the network door.');
+  if (PATH_REFUSED.test(String(folder))) throw new Error('The Devices folder\'s path has a %, $ or " in it, which ssh would read as part of a command. Pick a folder without them on Settings → Devices to use the network door.');
   return { key: join(folder, 'id_ed25519'), pub: join(folder, 'id_ed25519.pub'), knownHosts: join(folder, 'known_hosts'), askpass: join(folder, 'askpass.sh') };
 }
 
@@ -56,7 +56,7 @@ export function writeAskpass(path) {
 export async function ensureKey({ run, files }) {
   if (!existsSync(files.key)) {
     const made = await run(KEYGEN, ['-q', '-t', 'ed25519', '-N', '', '-C', 'DeepSeek Harness Bench', '-f', files.key], { timeoutMs: 20_000 });
-    if (made.code !== 0) throw new Error(`ssh-keygen could not make Bench's key (${String(made.stderr).trim().slice(0, 160)})`);
+    if (made.code !== 0) throw new Error(`ssh-keygen could not make Devices' key (${String(made.stderr).trim().slice(0, 160)})`);
   }
   chmodSync(files.key, 0o600);
   return readFileSync(files.pub, 'utf8').trim();
@@ -94,7 +94,7 @@ export async function hostKeys({ run, host, port }) {
   if (lines.length === 0) throw new Error(`${host} did not answer on port ${port} with an SSH key. Is SSH switched on there?`);
   const printed = await run(KEYGEN, ['-l', '-E', 'sha256', '-f', '-'], { input: `${lines.join('\n')}\n`, timeoutMs: 10_000 });
   const fingerprints = [...String(printed.stdout ?? '').matchAll(/SHA256:[A-Za-z0-9+/]{43}/g)].map((found) => found[0]);
-  if (fingerprints.length === 0) throw new Error('Bench could not read the device\'s key fingerprint.');
+  if (fingerprints.length === 0) throw new Error('Devices could not read the device\'s key fingerprint.');
   return { lines, fingerprints };
 }
 

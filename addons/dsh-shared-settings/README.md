@@ -1,4 +1,6 @@
-# Shared settings
+# Shared settings (Experimental)
+
+> **Experimental: tried only on one Mac so far.** It is off until you choose a folder, and nothing turns it on for you. Try it with a copy of your settings in mind: before it replaces anything on a Mac, that Mac's own values are saved in `<dsh home>/shared-settings/backups`.
 
 Host plugin `@local/dsh-shared-settings` (dsh 0.2.2-rc.1). It keeps the settings you change in the app's own pages in one file, `settings.json`, in a folder you choose. With the folder in iCloud Drive, two Macs share one setup.
 
@@ -16,8 +18,9 @@ The add-on reads and writes through the app's own settings service (`ctx.get('se
 
 Only values you set are shared, not defaults.
 
-By default every Plus entry (package `@local/dsh-*`) is shared. Two are never shared:
+By default every Plus entry (package `@local/dsh-*`) is shared. Four are never shared:
 - `dsh-sync`, because it holds paths and keys for one Mac;
+- `dsh-recon` and `dsh-notify`, because they hold private setup and addresses;
 - this add-on.
 
 The `include` setting adds other entries, for example the app's own `ui-theme`. The `exclude` setting leaves entries out.
@@ -25,9 +28,11 @@ The `include` setting adds other entries, for example the app's own `ui-theme`. 
 **Never in the file:**
 - Fields the app's schema marks as secret.
 - Any field whose name looks like a key, token, secret, password, passphrase or credential, at any depth.
+- Anything about this Mac rather than your setup, whatever `skipFields` says and at any depth: on/off switches (`enabled`), folders and program paths (names ending in Folder, Dir or Path), servers, hosts and ports, notification topics, permission and "danger" switches (names starting with `danger` or `allow`, and `trusted`, `anywhere`), and anything per conversation (names starting with `session`).
+- Recon and Notify are not shared at all: Recon's private setup (search engine, news accounts, VPN names, folders) and the alert addresses stay on each Mac.
 - The fields in `skipFields`. By default these are the per-conversation choices:
   - `modes.sessionModes`, `sessionWeb` and `sessionResearch`;
-  - `modes.sessionIsolated`, `sessionSearchDepth`, `sessionDepth` (each conversation's Depth), `sessionLens` (each conversation's Lens), `depthMoved` (whether this Mac's old Web levels were moved into Depth), `sessionTools`, `sessionHelpers`, `sessionToolSets`, `sessionSandboxBase` (each conversation's earlier access level) and `extraModes` (the tabs this Mac's add-ons add); and the Skill architect's `skill-architect.nolearn` (the conversations you marked "never learn from this");
+  - `modes.sessionIsolated`, `sessionSearchDepth`, `sessionDepth` (each conversation's Depth), `sessionLens` (each conversation's Lens), `depthMoved` (whether this Mac's old Web levels were moved into Depth), `sessionTools`, `sessionHelpers`, `sessionToolSets`, `sessionSandboxBase` (each conversation's earlier access level) and `extraModes` (the tabs this Mac's add-ons add); and the Skill architect's `skill-architect.nolearn` (the conversations you marked "never learn from this"); and Settings Plus's `settings-plus.view` (Simple or Advanced) and `settings-plus.setupPending` (this Mac's first-run card), so each Mac keeps its own;
   - `model-tiers.activeTiers`, `sessionProfiles` and `modelProfilesMigrated`.
 
   The ten `modes` fields on the second line stay on each Mac even when you set your own `skipFields`.

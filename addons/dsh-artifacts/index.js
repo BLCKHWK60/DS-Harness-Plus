@@ -35,7 +35,7 @@ export const Config = z.object({
 
 /** The Danger zone's switches, with what each one opens up. */
 export const DANGERS = {
-  dangerShowBackups: 'Bench backups are shown and opened like any file (they can hold passwords and keys).',
+  dangerShowBackups: 'Devices backups are shown and opened like any file (they can hold passwords and keys).',
   dangerShowSealed: 'Recon\'s files are listed and shown outside Recon.',
   dangerPagesRun: 'Web pages open already running their scripts (fetching still blocked; a page can still send itself to another address, which may reach the internet).',
   dangerPagesInternet: 'Web pages open with the internet allowed (their servers see that you opened them; they can reach your local network too).',
@@ -236,7 +236,30 @@ export function apply(ctx, config, standIns = {}) {
   const homeOf = ctx.get('dshHomePath');
   const home = standIns.home ?? (typeof homeOf === 'function' ? homeOf('artifacts') : '');
   const scratchRoot = standIns.scratchRoot ?? (typeof homeOf === 'function' ? homeOf('scratch') : '');
-  const store = openArtifacts({ home, scratchRoot });
+  /** Who made a version: true for a Recon (isolated) conversation, false for an ordinary one, null when Modes does not know. undefined when Modes is not answering at all. */
+  const isolatedOf = (id) => {
+    const service = ctx.get('modes');
+    if (typeof service?.isolated !== 'function') return undefined;
+    try {
+      const answer = service.isolated(String(id ?? ''));
+      return answer === true ? true : answer === false ? false : null;
+    } catch {
+      return undefined;
+    }
+  };
+  const store = openArtifacts({ home, scratchRoot, isolated: isolatedOf });
+  if (store.notice()) warn(store.notice());
+  /** Clears old copies of Recon files, one version at a time, once Modes can say which conversations are Recon's. */
+  let purged = false;
+  const purgeOld = () => {
+    if (purged) return;
+    try {
+      const result = store.purgeReconCopies();
+      if (result.ran) purged = true;
+    } catch (error) {
+      warn(`could not clear old copies of Recon files (${error?.message ?? error})`);
+    }
+  };
   const trashDir = home ? join(home, 'trash') : '';
   /** The app's own folders where tabs put what they make: what a tool's answer names there is found too. */
   const outputRoots = standIns.outputRoots ?? (typeof homeOf === 'function' ? OUTPUT_HOMES.map((parts) => {
@@ -318,6 +341,9 @@ export function apply(ctx, config, standIns = {}) {
           : changedIn(text, cwd, since, { roots: [cwd, ...outputRoots], userHome });
       if (paths.length === 0) return decision;
       const session = rootOf(exec.agent);
+      try {
+        if (ctx.get('reconWipe')?.has?.(session) === true) return decision;
+      } catch { /* the wipe list is a nicety here */ }
       const sealed = sealedOf(session);
       const mode = modeOf(session);
       for (const path of paths) {
@@ -404,6 +430,29 @@ export function apply(ctx, config, standIns = {}) {
   tidy.unref?.();
   ctx.effect?.(() => () => clearInterval(tidy), 'artifacts: tidy the trash');
   standIns.tidy?.(tidyTrash);
+  /**
+   * Recon's End and wipe (review B2): a conversation on Recon's wipe list is forgotten here at once, so no
+   * entry or copy of what it wrote stays under artifacts/. Looked at every few seconds and on every change.
+   */
+  const forgetWiped = () => {
+    purgeOld();
+    try {
+      const ids = ctx.get('reconWipe')?.list?.();
+      if (Array.isArray(ids) && ids.length > 0) store.forgetSessions(ids.map(String));
+    } catch (error) {
+      warn(`could not forget a wiped conversation (${error?.message ?? error})`);
+    }
+  };
+  const forgetTimer = setInterval(forgetWiped, 5000);
+  forgetTimer.unref?.();
+  ctx.effect?.(() => () => clearInterval(forgetTimer), 'artifacts: forget wiped conversations');
+  standIns.forget?.(forgetWiped);
+  forgetWiped();
+  // Told the moment Recon puts a conversation on its wipe list (and again when it is gone).
+  try {
+    const off = ctx.get('reconWipe')?.onChange?.((id) => { try { store.forgetSessions([String(id)]); } catch { /* the timer tries again */ } });
+    if (typeof off === 'function') ctx.effect?.(() => off, 'artifacts: Recon wipe events');
+  } catch { /* Recon is not running: the timer still asks */ }
 
   /**
    * Clean-up: the picked artifacts (never a starred, sealed or Bench backup one) go to the app's trash, with
@@ -447,7 +496,7 @@ export function apply(ctx, config, standIns = {}) {
   /** May this conversation see this artifact? Never a Bench backup's content; a sealed one only inside its own conversation. */
   const mayShow = (item, asking) => {
     if (!item) return 'There is no such artifact.';
-    if (item.noRender && !danger('dangerShowBackups')) return 'A Bench backup is listed and never shown: it can hold passwords and keys.';
+    if (item.noRender && !danger('dangerShowBackups')) return 'A Devices backup is listed and never shown: it can hold passwords and keys.';
     if (sealedHidden(item, asking)) return 'This artifact belongs to a sealed conversation (Recon) and shows only there.';
     return '';
   };
@@ -545,7 +594,7 @@ export function apply(ctx, config, standIns = {}) {
             }
             const list = enabled() ? store.list({ mode: q.get('mode') ?? '', folder: q.get('folder') ?? '', kind: q.get('kind') ?? '', from: Number(q.get('from')) || 0, to: Number(q.get('to')) || Number.MAX_SAFE_INTEGER }) : [];
             const sealedToo = enabled() && danger('dangerShowSealed') ? store.listSealed() : [];
-            res.end(JSON.stringify({ enabled: enabled(), trash: Boolean(trashHandle), items: [...list, ...sealedToo], danger: enabled() ? dangerState() : [] }));
+            res.end(JSON.stringify({ enabled: enabled(), trash: Boolean(trashHandle), notice: store.notice(), items: [...list, ...sealedToo], danger: enabled() ? dangerState() : [] }));
             return;
           }
           const chunks = [];

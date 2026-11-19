@@ -53,7 +53,7 @@ export const MODES = {
   content: 'Content: your rulings on claims, and your edits beside the writer\'s drafts',
   research: 'Research: a passage and the claim it supports from a source that was opened, and source grades',
   data: 'Finance and Data: a question and the query that answered it, when the analysis was saved or run again',
-  bench: 'Bench: what a device reports and the recipe that fitted, for devices whose read was checked (never a write command)',
+  bench: 'Devices: what a device reports and the recipe that fitted, for devices whose read was checked (never a write command)',
   loop: 'The work loop: each step and the cheapest model that passed it, for the router',
   corrections: 'Any mode: the answer before the owner corrected it beside the answer after',
   creator: 'Creator Plus: a brief and the plugin that passed its checks; an error, its cause and its fix',
@@ -1444,7 +1444,7 @@ export function apply(ctx, config, standIns = {}) {
       const log = await ctx.get('sessionQuery').readSession(one);
       const events = Array.isArray(log?.events) ? log.events : [];
       if (exportIn(events)) return 'This conversation holds an export from Recon, so no skill is made from it.';
-      if (turnsOf(events, 0).some((turn) => turn.tools.some((call) => signedInTool(call.name) || closedTool(call.name)))) return `${one === id ? 'This conversation' : 'A helper of this conversation'} used a signed-in source (a connector), or Bench's or Recon's own tools, so no skill is made from it.`;
+      if (turnsOf(events, 0).some((turn) => turn.tools.some((call) => signedInTool(call.name) || closedTool(call.name)))) return `${one === id ? 'This conversation' : 'A helper of this conversation'} used a signed-in source (a connector), or Devices' or Recon's own tools, so no skill is made from it.`;
     }
     return '';
   };

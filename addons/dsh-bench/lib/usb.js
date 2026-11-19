@@ -200,7 +200,7 @@ export function portsOf(devices) {
  * @returns {Promise<string>} the report.
  */
 export async function identifyUsb({ run = runFixed, dev = () => readdirSync('/dev'), now = () => new Date(), onPorts } = {}) {
-  if (!run.standIn && process.platform !== 'darwin') throw new Error('Bench reads USB devices on a Mac only.');
+  if (!run.standIn && process.platform !== 'darwin') throw new Error('Devices reads USB devices on a Mac only.');
   const text = await run(IOREG, IOREG_ARGS);
   let names = [];
   try {

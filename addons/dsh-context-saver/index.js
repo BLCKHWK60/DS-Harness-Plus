@@ -151,7 +151,10 @@ export function apply(ctx, config) {
       failAll(error);
     });
     child.on('exit', () => {
-      if (helper === child) helper = null;
+      // Only the helper in use fails what is waiting: an old one that was killed after a hang must not
+      // fail the request that the new helper has since been given.
+      if (helper !== child) return;
+      helper = null;
       failAll(new Error('context-saver helper exited'));
     });
     helper = child;
@@ -305,7 +308,7 @@ export function apply(ctx, config) {
       const agentCtx = agent?.ctx;
       if (!agentCtx?.systemPrompt || owned.has(agent.id)) return;
       try {
-        owned.set(agent.id, agentCtx.effect(() => agentCtx.systemPrompt.section({ ...section, text: () => (ctx.get('modes')?.isolated?.(agent.id) === true ? '' : section.text), interpolate: false }), 'context-saver prompt section'));
+        owned.set(agent.id, agentCtx.effect(() => agentCtx.systemPrompt.section({ ...section, text: () => (ctx.get('modes')?.isolated?.(agent.id) === true ? '' : section.text()), interpolate: false }), 'context-saver prompt section'));
       } catch (error) {
         ctx.logger.warn(`context-saver: prompt section not added: ${error?.message ?? error}`);
       }

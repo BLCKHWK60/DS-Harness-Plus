@@ -445,7 +445,7 @@ test('a Recon conversation\'s run: commands are dropped (the reviewer judges), h
   }
 });
 
-/** A Bench conversation's Long run with stand-in helpers: the planner's answer, and what each helper was told and on which model. */
+/** A Devices conversation's Long run with stand-in helpers: the planner's answer, and what each helper was told and on which model. */
 async function benchRun({ checks, plan, long }) {
   const { createRunner } = await import('../runner.js');
   const { mkdtempSync } = await import('node:fs');
@@ -474,7 +474,7 @@ async function benchRun({ checks, plan, long }) {
   return { runner, agent, seen, events, root };
 }
 
-test('a Bench conversation\'s run, checks on: they run as in every tab, with the Mac\'s device ports closed; workers are told they have no commands; nothing else of Recon\'s rules', async () => {
+test('a Devices conversation\'s run, checks on: they run as in every tab, with the Mac\'s device ports closed; workers are told they have no commands; nothing else of Recon\'s rules', async () => {
   const { existsSync, rmSync } = await import('node:fs');
   const { NO_COMMANDS_PLAN, NO_COMMANDS_WORK } = await import('../lib/prompts.js');
   const { PORTS_CLOSED_NOTE } = await import('../runner.js');
@@ -489,7 +489,7 @@ test('a Bench conversation\'s run, checks on: they run as in every tab, with the
     assert.equal(run.items[0].check, 'echo fine > /dev/null && echo ok', 'the planner\'s checks are kept');
     assert.ok(!seen[0].prompt.includes(NO_COMMANDS_PLAN), 'the planner may write checks');
     const first = await runner.step(agent, new AbortController().signal, 60000); // item 1
-    assert.ok(seen[1].prompt.includes(NO_COMMANDS_WORK), 'a worker in Bench has no commands');
+    assert.ok(seen[1].prompt.includes(NO_COMMANDS_WORK), 'a worker in Devices has no commands');
     assert.equal(run.items[0].status, 'verified', first);
     assert.match(first, /PASSED: its command was run and passed/);
     if (port) {
@@ -506,7 +506,7 @@ test('a Bench conversation\'s run, checks on: they run as in every tab, with the
   }
 });
 
-test('a Bench conversation\'s run, checks switched off in Settings: no commands at all, the reviewer judges, as in a Recon run', async () => {
+test('a Devices conversation\'s run, checks switched off in Settings: no commands at all, the reviewer judges, as in a Recon run', async () => {
   const { rmSync } = await import('node:fs');
   const { NO_COMMANDS_PLAN } = await import('../lib/prompts.js');
   const { runner, agent, seen, root } = await benchRun({ checks: false, plan: { items: [{ title: 'Write the notes', check: 'ls' }], checks: ['ls'] } });
@@ -522,7 +522,7 @@ test('a Bench conversation\'s run, checks switched off in Settings: no commands 
   }
 });
 
-test('the check sandbox: device ports are closed only when asked; without the sandbox a Bench check is not run at all', async () => {
+test('the check sandbox: device ports are closed only when asked; without the sandbox a Devices check is not run at all', async () => {
   const { fence, runCommand, DEVICE_PORTS } = await import('../lib/shell.js');
   assert.ok(!fence('/x').includes(DEVICE_PORTS), 'every other tab: as before');
   assert.ok(fence('/x', { closePorts: true }).endsWith(DEVICE_PORTS), 'the last rule wins');

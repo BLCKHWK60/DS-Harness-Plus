@@ -5,6 +5,7 @@
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { readJsonStore } from './json-store.js';
 
 export const QUERIES_PER_CONVERSATION = 200;
 export const CONVERSATIONS_MAX = 300;
@@ -15,12 +16,7 @@ export const SNAPSHOT_ROWS = 200;
 export const CHANGES_MAX = 40;
 
 function load(file) {
-  try {
-    const read = JSON.parse(readFileSync(file, 'utf8'));
-    return read && typeof read === 'object' && !Array.isArray(read) ? read : {};
-  } catch {
-    return {};
-  }
+  return readJsonStore(file, () => ({}), { label: 'the results Data kept for comparing', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
 }
 
 function save(file, value) {

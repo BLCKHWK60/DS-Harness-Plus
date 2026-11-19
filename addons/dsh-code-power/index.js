@@ -71,10 +71,12 @@ Reason first, briefly. Then finish with exactly one \`\`\`json block, and nothin
 Use every candidate label exactly once in perAnswer and in ranking, and every criterion in each scores object.`;
 
 export const Config = z.object({
-  enabled: z.boolean().default(true),
+  /** Needs the app to start again to take effect (the skills and the tool are set up at start). */
+  enabled: z.boolean().default(true).volatile(),
   prReview: z
     .object({ lanes: z.array(z.string()).default(['correctness', 'security', 'tests']) })
-    .default({ lanes: ['correctness', 'security', 'tests'] }),
+    .default({ lanes: ['correctness', 'security', 'tests'] })
+    .volatile(),
   bestOfN: z
     .object({
       n: z.number().min(2).max(5).default(3),
@@ -82,10 +84,12 @@ export const Config = z.object({
       criteria: z.array(z.string()).default(['correctness', 'completeness', 'simplicity', 'test coverage']),
       consistencyCheck: z.boolean().default(true),
     })
-    .default({ n: 3, judgeRole: 'review', criteria: ['correctness', 'completeness', 'simplicity', 'test coverage'], consistencyCheck: true }),
+    .default({ n: 3, judgeRole: 'review', criteria: ['correctness', 'completeness', 'simplicity', 'test coverage'], consistencyCheck: true })
+    .volatile(),
   ciFix: z
     .object({ maxRounds: z.number().min(1).max(50).default(5), command: z.string().default('') })
-    .default({ maxRounds: 5, command: '' }),
+    .default({ maxRounds: 5, command: '' })
+    .volatile(),
   judgeToolName: z.string().default('judge_candidates'),
 });
 

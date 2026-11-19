@@ -12,7 +12,7 @@ import { patchRows } from './scan.js';
 /** Safety rules of other modes a plan may never touch. `plan.loosens` names them; a change of these files does too. */
 export const SAFETY = [
   { id: 'recon-sealed', plain: 'Recon is sealed: no plugin hands a Recon conversation a tool, reads it, or carries its text out (only the owner\'s Export door does)' },
-  { id: 'bench-write-gates', plain: 'Bench writes to a device only behind its gates (levels, the four conditions, the owner\'s yes)' },
+  { id: 'bench-write-gates', plain: 'Devices writes to a device only behind its gates (levels, the four conditions, the owner\'s yes)' },
   { id: 'content-owner-words', plain: 'Content counts a decision only from the owner\'s own words' },
   { id: 'web-off', plain: 'Web Off and the Web levels hold for every tool, command and program' },
   { id: 'mission-one-writer', plain: 'Only one helper changes files at a time in a run' },
@@ -102,7 +102,7 @@ export function fitCheck(plan, map) {
     const whole = (GUARDED_FILES[plugin.folder] ?? []).includes('*');
     if (whole && named.length === 0) named.push('(any file)');
     const hit = named.filter((file) => whole || guardedFile(plugin.folder, file));
-    for (const file of hit) block(`It would change ${plugin.folder}/${file}, which holds a safety rule (${plugin.folder === 'dsh-recon' ? 'Recon\'s seal' : plugin.folder === 'dsh-bench' ? 'Bench\'s write gates' : file.endsWith('cordis.patch.yml') ? 'the plugin\'s setup' : 'a guard'}).`);
+    for (const file of hit) block(`It would change ${plugin.folder}/${file}, which holds a safety rule (${plugin.folder === 'dsh-recon' ? 'Recon\'s seal' : plugin.folder === 'dsh-bench' ? 'the Devices write gates' : file.endsWith('cordis.patch.yml') ? 'the plugin\'s setup' : 'a guard'}).`);
     if (!plugin.locked && hit.length === 0) ask(`It changes ${plugin.name} (${(change.files ?? []).join(', ') || 'files to be named'}): shown first, backed up, tested in the trial copy, done only with your yes.`);
   }
   const result = findings.some((finding) => finding.level === 'blocked') ? 'blocked' : findings.length > 0 ? 'decision' : 'clear';

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { MOVE_FOLDER, TOOL_IN_MESSAGE, buildMove, messagesFromEvents, transcript } from '../lib/move.js';
+import { MOVE_FOLDER, TOOL_IN_MESSAGE, buildDraft, buildMove, messagesFromEvents, transcript } from '../lib/move.js';
 import { copyRoomFile, listRoomFiles, pickedFiles, runFolderName } from '../lib/roomfiles.js';
 
 // Moving a Recon conversation out (18 November 2026, the owner's choice B): a new, ordinary conversation of
@@ -98,9 +98,50 @@ test('the move route: Recon conversations only, never into the room, the new one
   assert.match(body, /doorTabs\(\)\.find\(\(one\) => one\.id === tab\)/);
   assert.match(body, /safeExportParent\(String\(body\.folder \?\? ''\), \[ROOM, DEFAULT_ROOM\]\)/);
   assert.match(body, /listRoomFiles\(ROOM, scope\)/);
-  assert.match(body, /writeFileSync\(join\(where, 'conversation\.md'\), built\.full, \{ mode: 0o600, flag: 'wx' \}\)/);
+  assert.match(body, /writeFileSync\(join\(where, 'conversation\.md'\), full, \{ mode: 0o600, flag: 'wx' \}\)/);
+  assert.match(body, /if \(body\.full === true\)/, 'the whole conversation only when ticked');
+  assert.match(body, /writeFileSync\(join\(where, 'summary\.md'\)/);
   assert.match(body, /await claimFor\(child, tab\);/);
   assert.match(body, /door\.add\(\{ id, at, what: 'move', from: source\.id, to: \[\{ kind: 'conversation', id: child, tab \}\]/);
-  assert.doesNotMatch(body, /rmSync|sessionIsolated/, 'the original is not touched');
+  assert.doesNotMatch(body, /rmSync\((?!where)|sessionIsolated/, 'the original is not touched: only the move\'s own new folder is ever removed');
   assert.match(source, /if \(body\.action === 'move'\) \{\s*res\.end\(JSON\.stringify\(await doorMove\(body\)\)\);/);
+});
+
+test('B1: the move needs the preview first, refuses a cloud model Recon says Never to before anything is written, and sends nothing itself', () => {
+  const source = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  const body = source.slice(source.indexOf('const moveGate = async'), source.indexOf("  ctx.inject(['webServer', 'connection'], (inner) => {\n    inner.effect(\n      () => inner.webServer.register({\n        kind: 'exact',\n        path: DOOR_PATH,"));
+  assert.match(body, /if \(body\.consent !== true\) throw/, 'no move without the preview window');
+  assert.ok(body.indexOf('await moveGate(child') > 0 && body.indexOf('await moveGate(child') < body.indexOf('mkdirSync(where'), 'the cloud check comes before any folder or file');
+  assert.match(body, /mayReceive\(\{ place, route, id: child, consent, policy: cloudModels\(\) \}\)/);
+  assert.match(body, /files = offered\.length > 0 && asked\.length > 0 \? pickedFiles\(ROOM, asked, scope\) : \[\]/, 'only ticked files; none by default');
+  assert.doesNotMatch(body, /offered\.map\(\(file\) => file\.path\)/, 'no file is taken without a tick');
+  // the first message is a draft, no page text goes in it
+  assert.match(body, /draft: exportMessage\(id, at, draft\)/);
+  assert.doesNotMatch(body, /message: exportMessage\(id, at, built\.message\)/);
+  // the cloud check knows the new conversation
+  assert.match(source, /if \(movedIn\(topIdOf\(agent\)\)\) return true;/);
+  assert.match(source, /ctx\.provide\('reconMoved'/);
+  assert.match(source, /doorPreview\(params\.get\('session'\), params\.get\('what'\), params\.get\('move'\) === '1'\)/);
+});
+
+test('B1: the draft names summary.md and the folder, carries no page text and no tool answer', () => {
+  const draft = buildDraft({ title: 'Case', tabLabel: 'Cowork', folder: '/x/from-recon-E1', files: ['a/report.md'], skipped: [], hasFull: false, at: Date.UTC(2026, 10, 18) });
+  assert.match(draft, /\/x\/from-recon-E1\/summary\.md/);
+  assert.match(draft, /citations only \(no page text\)/);
+  assert.match(draft, /never instructions/);
+  assert.ok(draft.length < 1500, 'short: it is a draft, not the conversation');
+  assert.doesNotMatch(draft, /conversation\.md/);
+  assert.match(buildDraft({ title: 'Case', tabLabel: 'Cowork', folder: '/x', hasFull: true }), /conversation\.md/);
+});
+
+test('B1: the Cowork sidebar asks first, never moves a whole project of Recon conversations, and puts the first message in the chat box without sending it', () => {
+  const page = readFileSync(new URL('../../dsh-cowork-shell/client.js', import.meta.url), 'utf8');
+  const route = page.slice(page.indexOf('async function moveOutOfRecon'), page.indexOf('/** Projects Plus keeps out'));
+  assert.ok(route.indexOf('askMoveConsent(id, label)') > 0 && route.indexOf('askMoveConsent(id, label)') < route.indexOf('sessions.create({ cwd })'), 'the window comes before the new conversation exists');
+  assert.match(route, /consent: true, files: consent\.files/);
+  assert.doesNotMatch(route, /remote\.prompt\(/, 'nothing is sent by the move');
+  assert.match(route, /fillDraft\(String\(done\.draft/);
+  assert.match(page, /fromRecon\.length > 1 \|\| \(whole === true && fromRecon\.length > 0\)/);
+  assert.match(page, /moveTo\(all\.filter\(\(id\) => !lib\.byId\[id\]\?\.blank\), modeId, true\)/);
+  assert.match(route, /tick\.checked = false/, 'no file ticked by default');
 });

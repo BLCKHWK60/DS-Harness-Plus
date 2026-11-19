@@ -7,7 +7,7 @@ DeepSeek Harness (dsh) is built on the Cordis plugin framework. The desktop app 
 - `package.json`: the profile's plugin dependencies, plus `dsh.profile.bundles`, the ordered list of **bundles** (packages that contribute a patch layer).
 - `cordis.patch.yml`: the user's own layer, applied after every bundle. A row here with the same `id` as a bundle's row replaces that row's `config`.
 
-Each add-on in `addons/` is a bundle: a package with `dsh.bundle.patch` pointing at its own `cordis.patch.yml`, which inserts one row with safe defaults (mostly "do nothing until configured"). Eight add-ons also have a browser half (`client.js`, declared under `dsh.client`) that adds a Settings page or a chat-box control. Live data reaches those pages through small read-only `GET` routes registered on the app's web server behind its login and Host/Origin checks (`/dsh-<add-on>/...`). They never serve keys or prompt text.
+Each add-on in `addons/` is a bundle: a package with `dsh.bundle.patch` pointing at its own `cordis.patch.yml`, which inserts one row with safe defaults (mostly "do nothing until configured"). Forty-two of the 48 add-ons also have a browser half (`client.js`, declared under `dsh.client`) that adds a Settings page or a chat-box control. Live data reaches those pages through small read-only `GET` routes registered on the app's web server behind its login and Host/Origin checks (`/dsh-<add-on>/...`). They never serve keys or prompt text.
 
 The add-ons are plain JavaScript (ES modules for the host half, the lazy-CJS client format for the browser half). Nothing needs building. Each add-on carries its own copy of two small MIT libraries (`schemastery`, `cosmokit`) in `node_modules/@deepseek-ai/`; those folders are part of the source and are committed on purpose.
 
@@ -22,9 +22,11 @@ The add-ons are plain JavaScript (ES modules for the host half, the lazy-CJS cli
 5. Runs `dsh plugin --profile desktop add <every add-on folder>`. That is pnpm in the profile directory: it links each folder (`link:`) and appends each package to `dsh.profile.bundles`. It works offline.
 6. Checks that every package is linked to the new folder and listed as a bundle. On any failure it restores `package.json` and the lockfile, runs `dsh plugin install` to re-sync, and puts the previous add-on copy back.
 
-It never edits `cordis.patch.yml`. Re-running it is the update path: the same package names point at the same folder, which now holds the new files.
+It does not touch `cordis.patch.yml`, except on a **first** install: then it writes the safer starting values of `new-install-defaults.json` (a lower per-task token limit, words in Activity, Code review at High effort) as rows in that file, for ids that have no row yet. An update never writes them. The reason is in the next paragraph. Re-running it is the update path: the same package names point at the same folder, which now holds the new files.
 
 `scripts/uninstall.sh` runs `dsh plugin --profile desktop remove <names>` for whichever Plus packages the profile lists, then deletes the add-on folder. User rows for removed add-ons stay in `cordis.patch.yml`. dsh treats a patch row whose target is missing as a warning (`patch: entry "<id>" not found`), not an error, so the app still starts, and a reinstall picks the rows up again.
+
+**Why starting values are not put in an add-on's own `cordis.patch.yml`.** That file is a bundle layer the app reads on every start, under the person's own layer. Changing a value there changes it for every existing install that never saved that setting. A value in the person's own layer is exactly what the Settings page saves, so a first install can start with it and an update leaves everyone's setup alone. Note also that a row in the person's own layer replaces the bundle row's `config` as a whole, so each row in `new-install-defaults.json` repeats the keys of the add-on's own row (`scripts/new-install-defaults.test.mjs` checks this).
 
 Both scripts take `--profile <name>` and honour `DSH_HOME`, which is how `scripts/check.sh` rehearses everything in a throwaway folder.
 
@@ -47,6 +49,6 @@ Rules worth keeping:
 
 ## Known limits
 
-- Most add-ons are configured by editing YAML. Only Model Tiers, Modes and Sampling presets have editable Settings pages. The app's Plugins page can host a per-add-on configuration page (`plugins.row.config` slot); none of the add-ons uses it yet.
+- About 40% of the settings can still only be changed in the configuration file; most add-ons have a Settings page for the rest, and the search field there finds both. The app's Plugins page can host a per-add-on configuration page (`plugins.row.config` slot); none of the add-ons uses it yet.
 - Plugins outside the dsh repository cannot add events to a conversation, so progress views (swarm, arena, benchmark) live in Settings, not in the chat.
-- Tested on dsh 0.2.2-rc.1 on Apple Silicon macOS. Each add-on's README lists what was and was not verified.
+- Built for dsh 0.2.2 up to, not including, 0.3.0 (the range is in `addon-tiers.json`), on Apple Silicon macOS. Each add-on's README lists what was and was not verified.

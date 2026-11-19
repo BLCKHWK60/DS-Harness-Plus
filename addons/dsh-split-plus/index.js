@@ -52,6 +52,7 @@ import { KINDS, RECON_MARKER_RE } from './lib/sends.js';
 import { WATCHER_ONLY_READS, WATCHER_TOOLS, runReport, watchText } from './lib/watch.js';
 import { MAX_PANES, abbreviation, cleanPanes, folderLabel, isSessionId, placeOfNewPane, reconNamed } from './lib/panes.js';
 import { providerPlace } from './lib/place.js';
+import { readJsonStore } from './lib/json-store.js';
 
 export const name = 'dsh-split-plus';
 /** The tools service: the watcher's final guard. */
@@ -461,7 +462,7 @@ export function apply(ctx, config, standIns = {}) {
     const real = realPathOf(file);
     for (const one of [file, real]) {
       if (reconNamed(one)) throw new Error('Files in Recon\'s room leave only through its Export… button.');
-      if (/\/devices\/[^/]+\/backups\//i.test(one)) throw new Error('A Bench backup is never sent: it can hold passwords and keys.');
+      if (/\/devices\/[^/]+\/backups\//i.test(one)) throw new Error('A Devices backup is never sent: it can hold passwords and keys.');
     }
     const folder = realPathOf(folderOfId(sessionId));
     const insideFolder = Boolean(folder) && folder !== '/' && real.startsWith(`${folder.replace(/\/+$/, '')}/`);
@@ -519,12 +520,8 @@ export function apply(ctx, config, standIns = {}) {
   })();
   /** watcher conversation → watched conversation, kept across restarts. */
   const watchers = new Map((() => {
-    try {
-      const saved = watchFile && existsSync(watchFile) ? JSON.parse(readFileSync(watchFile, 'utf8')) : {};
-      return Object.entries(saved && typeof saved === 'object' ? saved : {}).filter(([a, b]) => typeof a === 'string' && typeof b === 'string');
-    } catch {
-      return [];
-    }
+    const saved = readJsonStore(watchFile, () => ({}), { label: 'which conversations watch which', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
+    return Object.entries(saved).filter(([a, b]) => typeof a === 'string' && typeof b === 'string');
   })());
   const saveWatchers = () => {
     if (!watchFile) return;

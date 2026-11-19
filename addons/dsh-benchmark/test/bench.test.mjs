@@ -47,7 +47,7 @@ function harness(config, { llm } = {}) {
     }),
   };
   apply(ctx, config);
-  const run = async (text) => commands.bench.handler({ rawInput: text });
+  const run = async (text) => (commands.benchmark ?? commands.bench).handler({ rawInput: text });
   const get = (path, { method = 'GET' } = {}) => {
     const res = { statusCode: 0, headers: {}, setHeader(k, v) { this.headers[k] = v; }, end(body) { this.body = body; } };
     routes[path.split('?')[0]]({ method, url: path }, res);
@@ -308,4 +308,22 @@ test('the canaries for Tuning Plus: twelve general tasks, each graded by code; a
   assert.equal(copy.length, 12);
   copy[0].grader.expect = 'anything';
   assert.notEqual(CANARIES[0].grader.expect, 'anything', 'the fixed set cannot be changed from outside');
+});
+
+test('/bench still works as the old name of /benchmark, with a one-time hint that the new name is /benchmark', async () => {
+  const h = harness(base());
+  assert.ok(h.commands.bench, 'the old name is registered next to the new one');
+  const old = (text) => h.commands.bench.handler({ rawInput: text });
+  const first = await old('list');
+  assert.equal(first.kind, 'success');
+  assert.match(first.text, /\/bench is now called \/benchmark/);
+  assert.match(first.text, /Suites: /, 'and it still answers the command');
+  const second = await old('list');
+  assert.doesNotMatch(second.text, /now called/, 'the hint is shown once');
+  assert.match(second.text, /Suites: /);
+  assert.match((await old('wat')).text, /Usage: \/benchmark run/);
+  assert.equal((await h.run('list')).text.includes('now called'), false, 'the new name never shows the hint');
+  // A person who set the command name to bench gets it once, not twice.
+  const same = harness(base({ commandName: 'bench' }));
+  assert.deepEqual(Object.keys(same.commands), ['bench']);
 });

@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Tuner Plus: keeps every checked step of your work as a training row with its proof, builds named data sets and a private exam from them, and turns them into better instructions, adapters and small tuned models on this Mac, each tested on the exam before you are asked. Off until you switch it on.",
+  "description": "Experimental: Tuner Plus: keeps every checked step of your work as a training row with its proof, builds named data sets and a private exam from them, and turns them into better instructions, adapters and small tuned models on this Mac, each tested on the exam before you are asked. Off until you switch it on.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

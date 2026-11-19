@@ -1,0 +1,62 @@
+# Files that stay in the repository but are NOT put in the disk image people download
+# (scripts/build-dmg.sh builds it with `git archive`, which honours export-ignore).
+# What is kept for users: Install.command, Uninstall.command, README.md, LICENSE, VERSION,
+# the add-ons, scripts/install.sh + uninstall.sh + common.sh, templates, extras/dsh-intel-mcp
+# and the guides docs/ADD-ONS.md, GUIDE.md, HOW-IT-WORKS.md, MODES-AND-SETTINGS.md and
+# CREATOR-PLUS-HANDBOOK.md.
+
+# Maintainer notes, plans, review logs and AI session prompts
+docs/CONTENT-BENCH-STEP0.md  export-ignore
+docs/CREATOR-PLUS-PHASE1.md  export-ignore
+docs/GAPS-AND-PLAN.md  export-ignore
+docs/HANDOFF.md  export-ignore
+docs/NEXT-FEATURES-STEPS.md  export-ignore
+docs/NEXT-SESSION-PROMPT.md  export-ignore
+docs/OVERNIGHT-2026-11-16.md  export-ignore
+docs/OVERNIGHT-2026-11-17.md  export-ignore
+docs/REVIEW-2026-11-11.md  export-ignore
+docs/SPLIT-PLUS-BUILD.md  export-ignore
+docs/SPLIT-PLUS-PHASE1.md  export-ignore
+docs/TUNER-PLUS-SKILLS-PHASE1.md  export-ignore
+docs/TUNING-PLUS-T0.md  export-ignore
+docs/UI-STYLE.md  export-ignore
+docs/guide-part1.md  export-ignore
+docs/shared  export-ignore
+docs/shared/**  export-ignore
+
+# Maintainer tools: building the image, the full self-check, regenerating the guide, copying shared code
+scripts/build-dmg.sh  export-ignore
+scripts/check.sh  export-ignore
+scripts/dev-extract-app.mjs  export-ignore
+scripts/dev-guide.mjs  export-ignore
+scripts/dev-hook-scan.mjs  export-ignore
+scripts/sync-kit.mjs  export-ignore
+
+# The Tuner Plus rollback (the self-check rehearses it from the repository; users do not get it)
+"Tuner Plus Way Back.command"  export-ignore
+scripts/tuner-way-back.sh  export-ignore
+extras/way-back  export-ignore
+extras/way-back/**  export-ignore
+
+# Git housekeeping
+.gitignore  export-ignore
+.gitattributes  export-ignore
+
+# The helper tests (the self-check runs them from the repository)
+scripts/plus-lib.test.mjs  export-ignore
+scripts/dev-tiers.mjs  export-ignore
+scripts/new-install-defaults.test.mjs  export-ignore
+docs/MODES-AND-SETTINGS-AUDIT.md  export-ignore
+scripts/docs.test.mjs  export-ignore
+
+# More maintainer-only files: the page and add-on tests, the CSS-name check and its list (check.sh runs them from the repository)
+scripts/dsh-poll.test.mjs  export-ignore
+scripts/dsh-ui.test.mjs  export-ignore
+scripts/check-css-classes.test.mjs  export-ignore
+scripts/check-css-classes.mjs  export-ignore
+scripts/css-class-allowlist.json  export-ignore
+addons/*/test  export-ignore
+addons/*/test/**  export-ignore
+
+# Every test file in scripts/ is maintainer-only
+scripts/*.test.mjs  export-ignore

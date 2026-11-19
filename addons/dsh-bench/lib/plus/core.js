@@ -20,22 +20,22 @@ import { DEFAULT_BENCH, PLUS_PROGRAMS, installOf, runnable } from './programs.js
 export const BAUDS = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
 /** The longest text a tool returns. */
 export const TEXT_MAX = 8000;
-export const OFF = 'Bench is switched off in Settings → Bench.';
-export const NEVER_INSTALLS = 'Bench never installs anything.';
+export const OFF = 'Devices is switched off in Settings → Devices.';
+export const NEVER_INSTALLS = 'Devices never installs anything.';
 export const MB = 1024 * 1024;
 
 /** An answer that is returned as it is (not as "It did not work: …"): a missing program, a plain refusal. */
 export class Answer extends Error {}
 
 /** The sentence for an action that changes a device while "Allow risky writes" is off. */
-export const riskyRefusal = (tool, action) => `${tool} ${action} changes the device, so it runs only with "Allow risky writes" switched on (Settings → Bench → Danger zone). Nothing was sent.`;
+export const riskyRefusal = (tool, action) => `${tool} ${action} changes the device, so it runs only with "Allow risky writes" switched on (Settings → Devices → Danger zone). Nothing was sent.`;
 
 /** A value as it is quoted back in a refusal: short, one line. */
 export const quoted = (value) => JSON.stringify(String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 60));
 
 /** Refuse a value that would read as an option. */
 export function noDash(value, what) {
-  if (String(value ?? '').startsWith('-')) throw new Error(`The ${what} ${quoted(value)} starts with "-", which a program would read as an option. Bench never passes that`);
+  if (String(value ?? '').startsWith('-')) throw new Error(`The ${what} ${quoted(value)} starts with "-", which a program would read as an option. Devices never passes that`);
   return value;
 }
 
@@ -43,14 +43,14 @@ export const PORT_RE = /^\/dev\/(?:cu|tty)\.[A-Za-z0-9._-]{1,80}$/;
 /** A serial port: /dev/cu.… or /dev/tty.… */
 export function serialPort(value) {
   const text = typeof value === 'string' ? value : '';
-  if (!PORT_RE.test(text)) throw new Error(`${quoted(text)} is not a serial port Bench opens: give a /dev/cu.… port (bench_usb lists them)`);
+  if (!PORT_RE.test(text)) throw new Error(`${quoted(text)} is not a serial port Devices opens: give a /dev/cu.… port (bench_usb lists them)`);
   return text;
 }
 
 /** A speed from the fixed list (or the fallback when none is given). */
 export function baudOf(value, fallback) {
   const number = value === undefined || value === null || value === '' ? fallback : Number(value);
-  if (!BAUDS.includes(number)) throw new Error(`The speed ${quoted(value)} is not one Bench uses: ${BAUDS.join(', ')}`);
+  if (!BAUDS.includes(number)) throw new Error(`The speed ${quoted(value)} is not one Devices uses: ${BAUDS.join(', ')}`);
   return number;
 }
 
@@ -142,7 +142,7 @@ const benchOf = (deps) => {
 export function checkFile(deps, value, { maxBytes, exts = [], what = 'file', noColon = false, tclSafe = false }) {
   const raw = typeof value === 'string' ? value : '';
   if (!raw) throw new Error(`Give the ${what}'s full path`);
-  if (raw.length > 1024 || /[\u0000-\u001f]/.test(raw)) throw new Error(`That ${what} path is not one Bench reads`);
+  if (raw.length > 1024 || /[\u0000-\u001f]/.test(raw)) throw new Error(`That ${what} path is not one Devices reads`);
   if (!isAbsolute(raw)) throw new Error(`Give the ${what}'s full path, starting with /, not ${quoted(raw)}`);
   const path = resolve(raw);
   if (noColon && path.includes(':')) throw new Error(`The ${what}'s path holds ":", which the program reads as a separator: rename or move the file`);
@@ -152,9 +152,9 @@ export function checkFile(deps, value, { maxBytes, exts = [], what = 'file', noC
   const bench = benchOf(deps);
   const benches = bench ? [bench, realOf(bench)] : [];
   for (const spelling of [path, realOf(path)]) {
-    if (closed.some((folder) => within(spelling, folder))) throw new Error(`Bench does not read files in ${closed.find((folder) => within(spelling, folder))}: it holds keys, passwords or devices. Nothing was read`);
+    if (closed.some((folder) => within(spelling, folder))) throw new Error(`Devices does not read files in ${closed.find((folder) => within(spelling, folder))}: it holds keys, passwords or devices. Nothing was read`);
     for (const folder of benches) {
-      if (within(spelling, folder) && relative(folder.toLowerCase(), spelling.toLowerCase()).split(sep).includes('backups')) throw new Error('The Bench folder\'s backups can hold Wi-Fi and other keys and are never given to a tool by path. Nothing was read');
+      if (within(spelling, folder) && relative(folder.toLowerCase(), spelling.toLowerCase()).split(sep).includes('backups')) throw new Error('The Devices folder\'s backups can hold Wi-Fi and other keys and are never given to a tool by path. Nothing was read');
     }
   }
   let info;
@@ -163,9 +163,9 @@ export function checkFile(deps, value, { maxBytes, exts = [], what = 'file', noC
   } catch {
     throw new Error(`There is no file at ${path}`);
   }
-  if (info.isSymbolicLink()) throw new Error(`${path} is a link: Bench reads only a plain file, never through a link`);
+  if (info.isSymbolicLink()) throw new Error(`${path} is a link: Devices reads only a plain file, never through a link`);
   if (!info.isFile()) throw new Error(`${path} is not a plain file`);
-  if (info.size > maxBytes) throw new Error(`${path} is ${Math.ceil(info.size / MB)} MB; Bench takes at most ${Math.round(maxBytes / MB)} MB here`);
+  if (info.size > maxBytes) throw new Error(`${path} is ${Math.ceil(info.size / MB)} MB; Devices takes at most ${Math.round(maxBytes / MB)} MB here`);
   if (exts.length > 0 && !exts.includes(extname(path).toLowerCase())) throw new Error(`${basename(path)} is not a ${exts.join(', ')} file`);
   return { path, size: info.size };
 }
@@ -198,11 +198,11 @@ export const sha256 = (buffer) => createHash('sha256').update(buffer).digest('he
  */
 export function benchDir(deps, ...parts) {
   const bench = benchOf(deps);
-  if (!bench) throw new Error('The Bench folder is not set; switch Bench on in Settings → Bench');
+  if (!bench) throw new Error('The Devices folder is not set; switch Devices on in Settings → Devices');
   mkdirSync(bench, { recursive: true, mode: 0o700 });
   let at = bench;
   for (const part of parts) {
-    if (!/^[A-Za-z0-9._-]{1,120}$/.test(part) || part === '.' || part === '..') throw new Error('That folder name is not one Bench makes');
+    if (!/^[A-Za-z0-9._-]{1,120}$/.test(part) || part === '.' || part === '..') throw new Error('That folder name is not one Devices makes');
     at = join(at, part);
     let info;
     try {
@@ -211,7 +211,7 @@ export function benchDir(deps, ...parts) {
       mkdirSync(at, { mode: 0o700 });
       continue;
     }
-    if (info.isSymbolicLink() || !info.isDirectory()) throw new Error(`${at} is not a plain folder; Bench writes only into its own folders, never through a link`);
+    if (info.isSymbolicLink() || !info.isDirectory()) throw new Error(`${at} is not a plain folder; Devices writes only into its own folders, never through a link`);
   }
   return at;
 }
@@ -303,7 +303,7 @@ export function missingText(id, deps) {
   const program = PLUS_PROGRAMS[id];
   const label = program?.names?.[0] ?? id;
   const install = installOf(id, bench);
-  const uses = program?.used ? ` (Bench uses it for ${program.used})` : '';
+  const uses = program?.used ? ` (Devices uses it for ${program.used})` : '';
   if (/ is part of macOS/.test(install)) return `${label} is not on this Mac${uses}: ${install} ${NEVER_INSTALLS}`;
   return `${label} is not on this Mac${uses}. Install it yourself in Terminal: ${install}. ${NEVER_INSTALLS}`;
 }

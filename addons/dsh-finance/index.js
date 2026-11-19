@@ -14,7 +14,8 @@
  * from the US securities regulator, yearly readings for economies from the World Bank, and share
  * prices, news and social posts (lib/market.js). For
  * everything else the assistant uses the app's web search, the Deep research add-on, the Library
- * and the chart tools. It is research, not advice, unless the adviser is switched on (lib/adviser.js).
+ * and the chart tools. It is research, not advice, unless the adviser is switched on (lib/adviser.js)
+ * after the user typed their acceptance of its warning.
  *
  * Route: `GET /dsh-finance/data` (with `?session=<id>`: what one conversation's chat box shows), and
  * `POST` to it for the page's actions and the chat box's change of a conversation's selection (`pin`).
@@ -58,8 +59,10 @@ export const Config = z.object({
   sources: z.string().default('[]').volatile(),
   /** Ids of scheduled tasks of your own that run in Finance instead of Cowork. */
   financeTasks: z.array(z.string()).default([]).volatile(),
-  /** The assistant speaks as the user's financial adviser: it recommends and adds no disclaimer. */
+  /** The assistant speaks as the user's financial adviser: it recommends and ends with "AI output, not regulated advice". Works only after `adviserAccepted`. */
   adviser: z.boolean().default(false).volatile(),
+  /** The user typed their acceptance of the adviser warning once. Without it the adviser stays off, whatever `adviser` says. */
+  adviserAccepted: z.boolean().default(false).volatile(),
 });
 
 function plain(value) {
@@ -84,7 +87,8 @@ export function readSettings(config) {
   const moreMarkets = cleanList(plain(config?.moreMarkets), 30).filter((market) => !MARKETS.some((other) => other.toLowerCase() === market.toLowerCase()));
   return {
     enabled: plain(config?.enabled) === true,
-    adviser: plain(config?.adviser) === true,
+    adviser: plain(config?.adviser) === true && plain(config?.adviserAccepted) === true,
+    adviserAccepted: plain(config?.adviserAccepted) === true,
     selection: readSelection({ kind: plain(config?.kind), subject: plain(config?.subject), market: plain(config?.market), focus: plain(config?.focus), period: plain(config?.period) }),
     watchlist: cleanList(plain(config?.watchlist), WATCHLIST_MAX),
     moreMarkets,
@@ -551,6 +555,8 @@ export function apply(ctx, config) {
       focuses: FOCUSES.map(({ id: value, label, text }) => ({ id: value, label, about: text })),
       periods: PERIODS.map(({ id: value, label, text }) => ({ id: value, label, about: text })),
       watchlist: now.watchlist,
+      // Whether the adviser is on, so the chat box can show the standing label that the app gives no way to append to an answer.
+      adviser: now.adviser,
       session: { id, shown: notShown(id) === '', pinned: Boolean(pin), selection: pin ?? now.selection },
     };
   };

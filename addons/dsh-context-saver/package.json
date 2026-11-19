@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Shortens large tool results before the model sees them and keeps the original for retrieval. Off until enabled.",
+  "description": "Experimental: Shortens large tool results before the model sees them and keeps the original for retrieval. Off until enabled.",
   "exports": {
     ".": "./index.js",
     "./locale/*.json": "./locale/*.json",

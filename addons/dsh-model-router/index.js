@@ -196,7 +196,9 @@ export function apply(ctx, config) {
   function resolve(candidate) {
     if (candidate.tier) {
       const tier = ctx.get('modelTiers')?.listTiers?.().find((item) => item.id === candidate.tier);
-      return tier ? { id: candidate.id, provider: tier.provider, model: tier.model, tierId: tier.id, strengths: candidate.strengths ?? '' } : null;
+      // A tier with no model of its own (a starter tier) applies its rules to the model the conversation is on:
+      // it is recognised by the tier the conversation is on, not by a provider/model pair.
+      return tier ? { id: candidate.id, provider: tier.provider, model: tier.model, tierId: tier.id, follows: !(tier.provider && tier.model), strengths: candidate.strengths ?? '' } : null;
     }
     return {
       id: candidate.id,
@@ -309,7 +311,8 @@ export function apply(ctx, config) {
     const selection = payload.modelSelection;
     const options = usable();
     const selectedKey = `${selection.provider}/${selection.model}`;
-    const inUse = options.find((route) => `${route.provider}/${route.model}` === selectedKey);
+    const tierNow = ctx.get('modelTiers')?.resolveTier?.(agent.id)?.id;
+    const inUse = options.find((route) => (route.follows ? tierNow === route.tierId : `${route.provider}/${route.model}` === selectedKey));
 
     // The route the router chose went down and route health moved the session: not a manual choice.
     const health = policy.respectHealth === false ? undefined : ctx.get('routeHealth');
@@ -352,7 +355,7 @@ export function apply(ctx, config) {
       switched: false,
       answer: answer ? { route: answer.route, confidence: answer.confidence } : null,
     };
-    if (target && `${target.provider}/${target.model}` !== selectedKey) {
+    if (target && (target.follows ? inUse?.id !== target.id : `${target.provider}/${target.model}` !== selectedKey)) {
       if (target.tierId && ctx.get('modelTiers')?.setSessionTier) await ctx.get('modelTiers').setSessionTier(agent.id, target.tierId);
       else agent.model.select({ provider: target.provider, model: target.model, ...(target.effort ? { reasoningEffort: target.effort } : {}) });
       entry.switched = true;
@@ -360,8 +363,9 @@ export function apply(ctx, config) {
     }
     if (target) {
       state.appliedId = target.id;
-      state.appliedKey = `${target.provider}/${target.model}`;
-      state.appliedProvider = target.provider;
+      // A tier with no model leaves the conversation's own model selected.
+      state.appliedKey = target.follows ? selectedKey : `${target.provider}/${target.model}`;
+      state.appliedProvider = target.follows ? selection.provider : target.provider;
     }
     remember(state, entry);
   }

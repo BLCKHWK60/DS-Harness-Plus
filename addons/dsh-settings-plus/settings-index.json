@@ -2002,54 +2002,6 @@
   "field": "modes.modes"
  },
  {
-  "page": "modes",
-  "pageLabel": "Modes",
-  "heading": "",
-  "label": "pinOnFirstTurn",
-  "description": "Records the mode a new conversation starts in on its first turn, so a later default change affects only new conversations. Default on. Only in the configuration file.",
-  "kind": "switch",
-  "keywords": [
-   "pin mode",
-   "first turn",
-   "pinOnFirstTurn",
-   "default mode"
-  ],
-  "configOnly": true,
-  "field": "modes.pinOnFirstTurn"
- },
- {
-  "page": "modes",
-  "pageLabel": "Modes",
-  "heading": "",
-  "label": "pruneStaleSessions",
-  "description": "Once per start, drops per-conversation mode entries of conversations that are no longer stored. Default on. Only in the configuration file.",
-  "kind": "switch",
-  "keywords": [
-   "prune",
-   "cleanup",
-   "stale sessions",
-   "pruneStaleSessions"
-  ],
-  "configOnly": true,
-  "field": "modes.pruneStaleSessions"
- },
- {
-  "page": "modes",
-  "pageLabel": "Modes",
-  "heading": "",
-  "label": "commandName",
-  "description": "Name of the slash command that switches modes. Default mode (/mode). Only in the configuration file.",
-  "kind": "text",
-  "keywords": [
-   "slash command",
-   "/mode",
-   "commandName",
-   "command"
-  ],
-  "configOnly": true,
-  "field": "modes.commandName"
- },
- {
   "page": "finance",
   "pageLabel": "Finance",
   "heading": "",
@@ -2139,7 +2091,7 @@
   "pageLabel": "Finance",
   "heading": "Adviser",
   "label": "Act as my financial adviser",
-  "description": "On: researches as an adviser would and ends with a clear call (buy, add, hold, trim, sell, avoid or wait) fitted to your profile, with no disclaimer. Off: research only.",
+  "description": "On: researches as an adviser would and ends with a clear call (buy, add, hold, trim, sell, avoid or wait) fitted to your profile, and every answer ends with the line \"AI output, not regulated advice.\" The first time, you read a warning and type \"I understand\". Off: research only.",
   "kind": "switch",
   "keywords": [
    "adviser",
@@ -2147,6 +2099,7 @@
    "buy sell hold",
    "recommendation",
    "disclaimer",
+   "warning",
    "adviser mode"
   ],
   "configOnly": false,
@@ -2869,22 +2822,6 @@
   "field": ""
  },
  {
-  "page": "data",
-  "pageLabel": "Data",
-  "heading": "",
-  "label": "pythonSetup",
-  "description": "Set up the private Python folder by itself the first time Data is switched on (about 450 MB). Off leaves data_python not set up. Default on. Only in the configuration file.",
-  "kind": "switch",
-  "keywords": [
-   "python setup",
-   "auto install",
-   "pythonSetup",
-   "download"
-  ],
-  "configOnly": true,
-  "field": "data.pythonSetup"
- },
- {
   "page": "research",
   "pageLabel": "Research",
   "heading": "",
@@ -3537,22 +3474,6 @@
   "field": ""
  },
  {
-  "page": "scout",
-  "pageLabel": "Scout",
-  "heading": "",
-  "label": "folder",
-  "description": "The folder for your files and the saved reports. Empty: scout/files in the app's home. Only in the configuration file.",
-  "kind": "text",
-  "keywords": [
-   "scout folder",
-   "files location",
-   "folder",
-   "path"
-  ],
-  "configOnly": true,
-  "field": "scout.folder"
- },
- {
   "page": "recon",
   "pageLabel": "Recon",
   "heading": "",
@@ -3654,7 +3575,7 @@
   "pageLabel": "Recon",
   "heading": "Connection",
   "label": "Search engine",
-  "description": "The built-in filtered index (Ahmia) at its .onion address. Another engine can be set only in the configuration file (otherEngine, engineHost).",
+  "description": "The built-in filtered index (Ahmia) at its .onion address. Another engine can be set only in the configuration file.",
   "kind": "info",
   "keywords": [
    "search engine",
@@ -4048,70 +3969,6 @@
   "field": ""
  },
  {
-  "page": "recon",
-  "pageLabel": "Recon",
-  "heading": "",
-  "label": "torPath",
-  "description": "Where the tor program is. Empty looks in the usual places (Homebrew, /usr/local). Plus does not install it. Only in the configuration file.",
-  "kind": "text",
-  "keywords": [
-   "tor path",
-   "tor binary",
-   "torPath",
-   "homebrew"
-  ],
-  "configOnly": true,
-  "field": "recon.torPath"
- },
- {
-  "page": "recon",
-  "pageLabel": "Recon",
-  "heading": "",
-  "label": "otherEngine",
-  "description": "Search with another .onion search engine than the built-in filtered index. The blocklist and word screen still apply. Default off. Only in the configuration file.",
-  "kind": "switch",
-  "keywords": [
-   "other engine",
-   "onion search",
-   "otherEngine",
-   "Ahmia"
-  ],
-  "configOnly": true,
-  "field": "recon.otherEngine"
- },
- {
-  "page": "recon",
-  "pageLabel": "Recon",
-  "heading": "",
-  "label": "engineHost",
-  "description": "That other engine's .onion name; used only while otherEngine is on. Only in the configuration file.",
-  "kind": "text",
-  "keywords": [
-   "engine host",
-   "onion address",
-   "engineHost",
-   "search engine"
-  ],
-  "configOnly": true,
-  "field": "recon.engineHost"
- },
- {
-  "page": "recon",
-  "pageLabel": "Recon",
-  "heading": "",
-  "label": "exportFolder",
-  "description": "Where /recon export writes its files. Empty: recon/exports in the app's home. Only in the configuration file.",
-  "kind": "text",
-  "keywords": [
-   "export folder",
-   "/recon export",
-   "exportFolder",
-   "path"
-  ],
-  "configOnly": true,
-  "field": "recon.exportFolder"
- },
- {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "",
@@ -4127,7 +3984,8 @@
    "delegation"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4145,7 +4003,8 @@
    "opus"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4161,7 +4020,8 @@
    "quick"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4177,7 +4037,8 @@
    "everyday"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4193,7 +4054,8 @@
    "hard problems"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4209,7 +4071,8 @@
    "long context"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4225,7 +4088,8 @@
    "ultra code"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4241,7 +4105,8 @@
    "clone"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4257,7 +4122,8 @@
    "starter name"
   ],
   "configOnly": false,
-  "field": "model-tiers.tiers.*.label"
+  "field": "model-tiers.tiers.*.label",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4273,7 +4139,8 @@
    "guidance"
   ],
   "configOnly": false,
-  "field": "model-tiers.tiers.*.instructions"
+  "field": "model-tiers.tiers.*.instructions",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4289,7 +4156,8 @@
    "route"
   ],
   "configOnly": false,
-  "field": "model-tiers.tiers.*.model"
+  "field": "model-tiers.tiers.*.model",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4304,7 +4172,8 @@
    "search"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4320,14 +4189,15 @@
    "custom model"
   ],
   "configOnly": false,
-  "field": "model-tiers.tiers.*.model"
+  "field": "model-tiers.tiers.*.model",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "Starter tiers",
-  "label": "Fallback chain",
-  "description": "Ordered fallback routes (provider/model) for the tier, reorderable with arrows. With none, the primary or variant remains the only route. Also on Your tiers cards.",
+  "label": "Backup models",
+  "description": "Models to try, in order, when the main one is not available. Reorder them with the arrows. With none, only the main model is used. Also on the Your tiers cards.",
   "kind": "list",
   "keywords": [
    "fallback",
@@ -4337,7 +4207,8 @@
    "route"
   ],
   "configOnly": false,
-  "field": "model-tiers.fallbackChains"
+  "field": "model-tiers.fallbackChains",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4353,14 +4224,15 @@
    "failover"
   ],
   "configOnly": false,
-  "field": "model-tiers.fallbackChains"
+  "field": "model-tiers.fallbackChains",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "Starter tiers",
   "label": "Role models",
-  "description": "Plan, Implement, Review and Fast routes used by delegate_role, review_lanes, and run_pipeline. Children keep this tier as their access and delegation policy.",
+  "description": "The models used for the Plan, Implement, Review and Fast jobs when the assistant hands work to helpers. Helpers keep this tier's access and limits.",
   "kind": "list",
   "keywords": [
    "roleModels",
@@ -4371,7 +4243,8 @@
    "delegate_role"
   ],
   "configOnly": false,
-  "field": "model-tiers.roleModels"
+  "field": "model-tiers.roleModels",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4387,7 +4260,8 @@
    "ultra code"
   ],
   "configOnly": false,
-  "field": "model-tiers.tiers.*.effort"
+  "field": "model-tiers.tiers.*.effort",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4403,7 +4277,8 @@
    "tools"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4419,7 +4294,8 @@
    "access"
   ],
   "configOnly": false,
-  "field": "model-tiers.tiers.*.webSearch"
+  "field": "model-tiers.tiers.*.webSearch",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4435,7 +4311,8 @@
    "access"
   ],
   "configOnly": false,
-  "field": "model-tiers.tiers.*.webFetch"
+  "field": "model-tiers.tiers.*.webFetch",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4451,7 +4328,8 @@
    "access"
   ],
   "configOnly": false,
-  "field": "model-tiers.tiers.*.browser"
+  "field": "model-tiers.tiers.*.browser",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4467,7 +4345,8 @@
    "agents"
   ],
   "configOnly": false,
-  "field": "model-tiers.tiers.*.subagents"
+  "field": "model-tiers.tiers.*.subagents",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4483,7 +4362,8 @@
    "model profile"
   ],
   "configOnly": false,
-  "field": "model-tiers.tiers.*.version"
+  "field": "model-tiers.tiers.*.version",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4499,7 +4379,8 @@
    "fewest"
   ],
   "configOnly": false,
-  "field": "model-tiers.tiers.*.minSubagents"
+  "field": "model-tiers.tiers.*.minSubagents",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4515,7 +4396,8 @@
    "cap"
   ],
   "configOnly": false,
-  "field": "model-tiers.tiers.*.maxSubagents"
+  "field": "model-tiers.tiers.*.maxSubagents",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4531,7 +4413,8 @@
    "instructions"
   ],
   "configOnly": false,
-  "field": "model-tiers.tiers.*.skills"
+  "field": "model-tiers.tiers.*.skills",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4547,7 +4430,8 @@
    "tools"
   ],
   "configOnly": false,
-  "field": "model-tiers.tiers.*.connectors"
+  "field": "model-tiers.tiers.*.connectors",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4563,7 +4447,8 @@
    "tab"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4578,7 +4463,8 @@
    "custom tier"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4593,7 +4479,8 @@
    "custom tier"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4609,7 +4496,8 @@
    "icon letter"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4625,7 +4513,8 @@
    "tier role"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4641,7 +4530,8 @@
    "custom tier"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4656,7 +4546,8 @@
    "delegation"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4672,7 +4563,8 @@
    "cap"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4687,7 +4579,8 @@
    "tier skills"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4703,7 +4596,8 @@
    "tools"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4719,7 +4613,8 @@
    "custom tier"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4734,7 +4629,8 @@
    "manual model"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4749,7 +4645,8 @@
    "thinking"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4764,7 +4661,8 @@
    "access"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4779,7 +4677,8 @@
    "access"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4794,7 +4693,8 @@
    "access"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4809,7 +4709,8 @@
    "helpers"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4825,14 +4726,15 @@
    "behavior"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "Your tiers",
-  "label": "Variants",
-  "description": "Extra provider/model routes for your tier. With no variants the primary model is the only route.",
+  "label": "Other models to try",
+  "description": "More models you can switch to for this tier. With none, the main model is the only one.",
   "kind": "list",
   "keywords": [
    "variant",
@@ -4841,7 +4743,8 @@
    "routes"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4857,7 +4760,8 @@
    "model"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4873,7 +4777,8 @@
    "up"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4889,7 +4794,8 @@
    "down"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4904,14 +4810,15 @@
    "duplicate tier"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "Your tiers",
   "label": "Delete tier",
-  "description": "Removes this tier. If sessions are using it, click again to confirm.",
+  "description": "Removes this tier. If conversations are using it, click again to confirm.",
   "kind": "button",
   "keywords": [
    "remove tier",
@@ -4919,7 +4826,8 @@
    "custom tier"
   ],
   "configOnly": false,
-  "field": "model-tiers.customTiers"
+  "field": "model-tiers.customTiers",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4935,7 +4843,8 @@
    "tab"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4951,7 +4860,8 @@
    "presets"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4967,7 +4877,8 @@
    "model copy"
   ],
   "configOnly": false,
-  "field": "model-tiers.modelVersions"
+  "field": "model-tiers.modelVersions",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4982,7 +4893,8 @@
    "label"
   ],
   "configOnly": false,
-  "field": "model-tiers.modelVersions"
+  "field": "model-tiers.modelVersions",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -4997,7 +4909,8 @@
    "base model"
   ],
   "configOnly": false,
-  "field": "model-tiers.modelVersions"
+  "field": "model-tiers.modelVersions",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -5012,7 +4925,8 @@
    "version effort"
   ],
   "configOnly": false,
-  "field": "model-tiers.modelVersions"
+  "field": "model-tiers.modelVersions",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -5028,7 +4942,8 @@
    "version"
   ],
   "configOnly": false,
-  "field": "model-tiers.modelVersions"
+  "field": "model-tiers.modelVersions",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -5044,7 +4959,8 @@
    "version"
   ],
   "configOnly": false,
-  "field": "model-tiers.modelVersions"
+  "field": "model-tiers.modelVersions",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -5059,7 +4975,8 @@
    "system prompt"
   ],
   "configOnly": false,
-  "field": "model-tiers.modelVersions"
+  "field": "model-tiers.modelVersions",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -5074,7 +4991,8 @@
    "override prompt"
   ],
   "configOnly": false,
-  "field": "model-tiers.modelVersions"
+  "field": "model-tiers.modelVersions",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -5091,7 +5009,8 @@
    "creator"
   ],
   "configOnly": false,
-  "field": "model-tiers.modelVersions"
+  "field": "model-tiers.modelVersions",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -5106,7 +5025,8 @@
    "duplicate version"
   ],
   "configOnly": false,
-  "field": "model-tiers.modelVersions"
+  "field": "model-tiers.modelVersions",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -5121,7 +5041,8 @@
    "delete for good"
   ],
   "configOnly": false,
-  "field": "model-tiers.modelVersions"
+  "field": "model-tiers.modelVersions",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -5137,14 +5058,15 @@
    "projectProfiles"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "Projects",
   "label": "Project profiles",
-  "description": "Named tier decks scoped to Workspaces. A project profile filters the composer selector and supplies its default tier; it does not change tier definitions or host routing.",
+  "description": "Named sets of tiers for a project. A profile narrows the model list in the chat box and sets the starting tier; it does not change the tiers themselves.",
   "kind": "section",
   "keywords": [
    "profiles",
@@ -5153,7 +5075,8 @@
    "projects"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
@@ -5168,7 +5091,8 @@
    "project profile"
   ],
   "configOnly": false,
-  "field": "model-tiers.projectProfiles"
+  "field": "model-tiers.projectProfiles",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
@@ -5183,7 +5107,8 @@
    "project profile"
   ],
   "configOnly": false,
-  "field": "model-tiers.projectProfiles"
+  "field": "model-tiers.projectProfiles",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
@@ -5198,7 +5123,8 @@
    "starting tier"
   ],
   "configOnly": false,
-  "field": "model-tiers.projectProfiles"
+  "field": "model-tiers.projectProfiles",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
@@ -5214,7 +5140,8 @@
    "checkboxes"
   ],
   "configOnly": false,
-  "field": "model-tiers.projectProfiles"
+  "field": "model-tiers.projectProfiles",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
@@ -5229,14 +5156,15 @@
    "project profile"
   ],
   "configOnly": false,
-  "field": "model-tiers.projectProfiles"
+  "field": "model-tiers.projectProfiles",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "Projects",
   "label": "Project assignment",
-  "description": "Pick a profile for each workspace and for Ungrouped sessions. All tiers shows every tier.",
+  "description": "Pick a profile for each project and for conversations outside any project. All tiers shows every tier.",
   "kind": "list",
   "keywords": [
    "assign profile",
@@ -5245,7 +5173,8 @@
    "project"
   ],
   "configOnly": false,
-  "field": "model-tiers.projectProfiles"
+  "field": "model-tiers.projectProfiles",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
@@ -5262,14 +5191,15 @@
    "tab"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "Backup",
   "label": "Backup & restore",
-  "description": "The export holds starter tiers, your tiers, model versions, project profiles, fallbacks and role routes. What each conversation picked is left out on purpose.",
+  "description": "The export holds starter tiers, your tiers, model versions, project profiles, backup models and role models. What each conversation picked is left out on purpose.",
   "kind": "section",
   "keywords": [
    "backup",
@@ -5279,7 +5209,8 @@
    "json"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
@@ -5295,7 +5226,8 @@
    "copy json"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
@@ -5311,7 +5243,8 @@
    "json file"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
@@ -5327,7 +5260,8 @@
    "restore"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
@@ -5343,7 +5277,8 @@
    "restore"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
@@ -5359,14 +5294,15 @@
    "restore"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "Backup",
   "label": "Project profiles",
-  "description": "Import option: include project profiles and assignments when merging an export.",
+  "description": "Named sets of tiers for a project. A profile narrows the model list in the chat box and sets the starting tier; it does not change the tiers themselves.",
   "kind": "switch",
   "keywords": [
    "import section",
@@ -5375,7 +5311,8 @@
    "restore"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
@@ -5391,14 +5328,15 @@
    "restore"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "Backup",
-  "label": "Role routes",
-  "description": "Import option: include role model routes when merging an export.",
+  "label": "Models for roles",
+  "description": "Import option: include the role models when merging an export.",
   "kind": "switch",
   "keywords": [
    "import section",
@@ -5407,7 +5345,8 @@
    "restore"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
@@ -5423,7 +5362,8 @@
    "restore"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
@@ -5439,7 +5379,8 @@
    "merge"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
@@ -5455,14 +5396,15 @@
    "backup"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "",
   "label": "Health",
-  "description": "Read-only checks for route coverage, stale session pins, and project-profile references. Warnings do not change runtime behavior.",
+  "description": "Read-only checks: are the models available, are there leftover choices from deleted conversations, do project profiles point at tiers that exist. Warnings change nothing.",
   "kind": "section",
   "keywords": [
    "health",
@@ -5471,7 +5413,8 @@
    "tab"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -5486,14 +5429,15 @@
    "diagnostics"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "Health",
-  "label": "Route coverage",
-  "description": "Each tier's routes, checked against the current model catalog.",
+  "label": "Are the models available?",
+  "description": "Each tier's models, checked against the list of models you can use now.",
   "kind": "section",
   "keywords": [
    "routes",
@@ -5502,14 +5446,15 @@
    "fallbacks"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "Health",
   "label": "Warnings",
-  "description": "Stale references or missing routes found by the health checks.",
+  "description": "Leftover choices or missing models found by the health checks.",
   "kind": "section",
   "keywords": [
    "warnings",
@@ -5518,14 +5463,15 @@
    "problems"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "",
-  "label": "Advanced",
-  "description": "Tab with the delegation limits and the active session tiers.",
+  "label": "Limits and reset",
+  "description": "Tab with the limits for helper agents and the tiers in use right now.",
   "kind": "section",
   "keywords": [
    "advanced",
@@ -5534,12 +5480,13 @@
    "tab"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
-  "heading": "Advanced",
+  "heading": "Limits and reset",
   "label": "Delegation limits",
   "description": "App-wide sub-agent cap and Ultra Code auto-delegation.",
   "kind": "section",
@@ -5549,13 +5496,14 @@
    "limits"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
-  "heading": "Advanced",
-  "label": "Max concurrent sub-agents",
+  "heading": "Limits and reset",
+  "label": "Helper agents at the same time",
   "description": "Applies to every tier. Default is 4 (1 to 8).",
   "kind": "number",
   "keywords": [
@@ -5565,12 +5513,13 @@
    "parallel agents"
   ],
   "configOnly": false,
-  "field": "model-tiers.maxSubagents"
+  "field": "model-tiers.maxSubagents",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
-  "heading": "Advanced",
+  "heading": "Limits and reset",
   "label": "Ultra Code auto-delegation",
   "description": "At Ultra Code, push the model to split independent work across sub-agents instead of waiting to be asked.",
   "kind": "switch",
@@ -5581,14 +5530,15 @@
    "sub-agents"
   ],
   "configOnly": false,
-  "field": "model-tiers.ultraAutoDelegate"
+  "field": "model-tiers.ultraAutoDelegate",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
-  "heading": "Advanced",
-  "label": "Active session tiers",
-  "description": "Sessions with a tier pinned in the chat box, with the number pinned.",
+  "heading": "Limits and reset",
+  "label": "Tiers in use right now",
+  "description": "Conversations with a tier chosen in the chat box, and how many.",
   "kind": "section",
   "keywords": [
    "pinned tiers",
@@ -5596,14 +5546,15 @@
    "activeTiers"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
-  "heading": "Advanced",
-  "label": "Clear active tiers",
-  "description": "Returns every session to its normal model selection. The next request keeps the current model and stops applying tier effort and access rules.",
+  "heading": "Limits and reset",
+  "label": "Clear tiers in use",
+  "description": "Puts every conversation back to its normal model choice. The next message keeps the current model and stops applying tier effort and access rules.",
   "kind": "button",
   "keywords": [
    "unpin",
@@ -5612,12 +5563,13 @@
    "reset sessions"
   ],
   "configOnly": false,
-  "field": "model-tiers.activeTiers"
+  "field": "model-tiers.activeTiers",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
-  "heading": "Advanced",
+  "heading": "Limits and reset",
   "label": "Reset tier rules",
   "description": "Puts the starter tiers' effort and access rules, the sub-agent cap and auto-delegation back to defaults. Models, names and instructions are kept.",
   "kind": "button",
@@ -5628,14 +5580,15 @@
    "tier rules"
   ],
   "configOnly": false,
-  "field": "model-tiers.tiers"
+  "field": "model-tiers.tiers",
+  "tab": "advanced"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "",
-  "label": "Prune stale sessions",
-  "description": "On start, removes per-session tier and profile entries whose session is no longer stored. Default on. Configuration file only.",
+  "label": "Clean up old choices",
+  "description": "On start, removes saved tier and profile choices of conversations that no longer exist. On by default. Configuration file only.",
   "kind": "switch",
   "keywords": [
    "pruneStaleSessions",
@@ -5644,7 +5597,8 @@
    "stale pins"
   ],
   "configOnly": true,
-  "field": "model-tiers.pruneStaleSessions"
+  "field": "model-tiers.pruneStaleSessions",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
@@ -5660,11 +5614,12 @@
    "per model"
   ],
   "configOnly": true,
-  "field": "model-tiers.modelProfiles"
+  "field": "model-tiers.modelProfiles",
+  "tab": "main"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "",
   "label": "Sampling",
   "description": "A preset is a named temperature and output limit. A category picks a preset; a conversation gets its category from /sampling, its mode, or the default.",
@@ -5676,11 +5631,13 @@
    "categories"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "",
   "label": "Presets",
   "description": "Named presets of temperature and max output tokens.",
@@ -5691,11 +5648,13 @@
    "sampling"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Presets",
   "label": "Add preset",
   "description": "Adds a preset (temperature 0.7, max output tokens 4096) to edit.",
@@ -5706,11 +5665,13 @@
    "add"
   ],
   "configOnly": false,
-  "field": "sampling-presets.presets"
+  "field": "sampling-presets.presets",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Presets",
   "label": "Name",
   "description": "Preset name. Names must be filled in and unique; renaming follows every reference to it.",
@@ -5721,11 +5682,13 @@
    "label"
   ],
   "configOnly": false,
-  "field": "sampling-presets.presets"
+  "field": "sampling-presets.presets",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Presets",
   "label": "Temperature (0 to 2)",
   "description": "Temperature must be a number from 0 to 2.",
@@ -5736,11 +5699,13 @@
    "sampling"
   ],
   "configOnly": false,
-  "field": "sampling-presets.presets"
+  "field": "sampling-presets.presets",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Presets",
   "label": "Max output tokens",
   "description": "Max tokens must be a whole number from 1 to 1,000,000.",
@@ -5752,11 +5717,13 @@
    "length"
   ],
   "configOnly": false,
-  "field": "sampling-presets.presets"
+  "field": "sampling-presets.presets",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Presets",
   "label": "Note (why this preset)",
   "description": "Optional note on why this preset exists.",
@@ -5767,11 +5734,13 @@
    "description"
   ],
   "configOnly": false,
-  "field": "sampling-presets.presets"
+  "field": "sampling-presets.presets",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Presets",
   "label": "Remove",
   "description": "Removes this preset from the form; Save to apply.",
@@ -5781,11 +5750,13 @@
    "remove preset"
   ],
   "configOnly": false,
-  "field": "sampling-presets.presets"
+  "field": "sampling-presets.presets",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "",
   "label": "Categories",
   "description": "Which preset each kind of task uses.",
@@ -5798,11 +5769,13 @@
    "chat"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Categories",
   "label": "Add category",
   "description": "Adds a category that uses the first preset.",
@@ -5813,11 +5786,13 @@
    "add"
   ],
   "configOnly": false,
-  "field": "sampling-presets.categories"
+  "field": "sampling-presets.categories",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Categories",
   "label": "Category",
   "description": "Category name, such as code, plan, chat, research or summarize. Must be unique; renaming follows every reference.",
@@ -5828,11 +5803,13 @@
    "rename"
   ],
   "configOnly": false,
-  "field": "sampling-presets.categories"
+  "field": "sampling-presets.categories",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Categories",
   "label": "Preset",
   "description": "The preset this category uses.",
@@ -5843,11 +5820,13 @@
    "mapping"
   ],
   "configOnly": false,
-  "field": "sampling-presets.categories"
+  "field": "sampling-presets.categories",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Categories",
   "label": "Remove",
   "description": "Removes this category from the form; Save to apply.",
@@ -5857,11 +5836,13 @@
    "remove category"
   ],
   "configOnly": false,
-  "field": "sampling-presets.categories"
+  "field": "sampling-presets.categories",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "",
   "label": "Per mode",
   "description": "With the Modes add-on, a conversation in a mode uses that category unless you chose one with /sampling.",
@@ -5872,11 +5853,13 @@
    "mode rules"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Per mode",
   "label": "Add mode rule",
   "description": "Adds a rule mapping a mode to a category.",
@@ -5887,11 +5870,13 @@
    "byMode"
   ],
   "configOnly": false,
-  "field": "sampling-presets.byMode"
+  "field": "sampling-presets.byMode",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Per mode",
   "label": "Mode id",
   "description": "The mode id, for example chat, cowork or code; suggestions come from the Modes add-on.",
@@ -5904,11 +5889,13 @@
    "code"
   ],
   "configOnly": false,
-  "field": "sampling-presets.byMode"
+  "field": "sampling-presets.byMode",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Per mode",
   "label": "Category",
   "description": "The category a conversation in this mode uses.",
@@ -5919,11 +5906,13 @@
    "byMode"
   ],
   "configOnly": false,
-  "field": "sampling-presets.byMode"
+  "field": "sampling-presets.byMode",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Per mode",
   "label": "Remove",
   "description": "Removes this mode rule from the form; Save to apply.",
@@ -5933,11 +5922,13 @@
    "remove mode"
   ],
   "configOnly": false,
-  "field": "sampling-presets.byMode"
+  "field": "sampling-presets.byMode",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Default category",
   "label": "Default category",
   "description": "The category used when no mode or /sampling picks one. None: no preset unless a mode or /sampling picks one.",
@@ -5948,11 +5939,13 @@
    "default"
   ],
   "configOnly": false,
-  "field": "sampling-presets.defaultCategory"
+  "field": "sampling-presets.defaultCategory",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "How presets reach the model",
   "label": "How presets reach the model",
   "description": "In dsh sends temperature and max tokens with each request (the safe choice); Server alias switches to a server-mapped model id, which can discard the server cache; Both.",
@@ -5965,11 +5958,13 @@
    "mixed"
   ],
   "configOnly": false,
-  "field": "sampling-presets.strategy"
+  "field": "sampling-presets.strategy",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "",
   "label": "Per model (optional)",
   "description": "Limit which presets a model may use, and name the server alias that carries a preset on that model. Leave empty to apply every preset to every model.",
@@ -5981,11 +5976,13 @@
    "allowed presets"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Per model (optional)",
   "label": "Add model rule",
   "description": "Adds a per-model rule.",
@@ -5996,11 +5993,13 @@
    "perModel"
   ],
   "configOnly": false,
-  "field": "sampling-presets.perModel"
+  "field": "sampling-presets.perModel",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Per model (optional)",
   "label": "Model, as provider/model",
   "description": "The model this rule is for. Use the form provider/model.",
@@ -6011,11 +6010,13 @@
    "model id"
   ],
   "configOnly": false,
-  "field": "sampling-presets.perModel"
+  "field": "sampling-presets.perModel",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Per model (optional)",
   "label": "Allowed presets (none ticked = all)",
   "description": "Tick the presets this model may use; none ticked allows all.",
@@ -6026,11 +6027,13 @@
    "restrict presets"
   ],
   "configOnly": false,
-  "field": "sampling-presets.perModel"
+  "field": "sampling-presets.perModel",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Per model (optional)",
   "label": "Server alias per preset (a model id; empty = none)",
   "description": "For each preset, the model id your server maps to its own sampling settings for this model.",
@@ -6041,11 +6044,13 @@
    "alias model id"
   ],
   "configOnly": false,
-  "field": "sampling-presets.perModel"
+  "field": "sampling-presets.perModel",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "Per model (optional)",
   "label": "Remove",
   "description": "Removes this model rule from the form; Save to apply.",
@@ -6055,11 +6060,13 @@
    "remove rule"
   ],
   "configOnly": false,
-  "field": "sampling-presets.perModel"
+  "field": "sampling-presets.perModel",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "",
   "label": "Discard changes",
   "description": "Throws away unsaved changes and reloads the saved settings.",
@@ -6071,11 +6078,13 @@
    "cancel"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "",
   "label": "Save",
   "description": "Saves presets, categories, mode rules, default category, strategy and model rules. Fix any highlighted rows first.",
@@ -6086,11 +6095,13 @@
    "store settings"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "",
   "label": "Enable sampling presets",
   "description": "Turns the Sampling presets add-on on or off. Default on. Configuration file only.",
@@ -6101,11 +6112,13 @@
    "sampling presets"
   ],
   "configOnly": true,
-  "field": "sampling-presets.enabled"
+  "field": "sampling-presets.enabled",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "",
   "label": "Command name",
   "description": "Name of the chat command that picks a category; default sampling (/sampling). Configuration file only.",
@@ -6116,7 +6129,9 @@
    "/sampling"
   ],
   "configOnly": true,
-  "field": "sampling-presets.commandName"
+  "field": "sampling-presets.commandName",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "model-arena",
@@ -6487,21 +6502,6 @@
   "page": "model-arena",
   "pageLabel": "Arena",
   "heading": "",
-  "label": "Enable model arena",
-  "description": "Turns the Model arena add-on on or off. Default on. Configuration file only.",
-  "kind": "switch",
-  "keywords": [
-   "enabled",
-   "on off",
-   "model arena"
-  ],
-  "configOnly": true,
-  "field": "model-arena.enabled"
- },
- {
-  "page": "model-arena",
-  "pageLabel": "Arena",
-  "heading": "",
   "label": "Data folder",
   "description": "Optional absolute folder for stored rounds; default is a folder in the dsh home. Configuration file only.",
   "kind": "text",
@@ -6513,21 +6513,6 @@
   ],
   "configOnly": true,
   "field": "model-arena.dataDir"
- },
- {
-  "page": "model-arena",
-  "pageLabel": "Arena",
-  "heading": "",
-  "label": "Command name",
-  "description": "Name of the chat command; default arena (/arena). Configuration file only.",
-  "kind": "text",
-  "keywords": [
-   "commandName",
-   "slash command",
-   "/arena"
-  ],
-  "configOnly": true,
-  "field": "model-arena.commandName"
  },
  {
   "page": "budget",
@@ -6795,36 +6780,6 @@
   "page": "usage-ledger",
   "pageLabel": "Usage",
   "heading": "",
-  "label": "Enable usage counting",
-  "description": "Turns counting on or off; it only observes and stores numbers. Default on. Configuration file only.",
-  "kind": "switch",
-  "keywords": [
-   "enabled",
-   "on off",
-   "usage ledger"
-  ],
-  "configOnly": true,
-  "field": "usage-ledger.enabled"
- },
- {
-  "page": "usage-ledger",
-  "pageLabel": "Usage",
-  "heading": "",
-  "label": "Retention days",
-  "description": "Days older than this are dropped when the plugin starts. 1 to 3650, default 365. Configuration file only.",
-  "kind": "number",
-  "keywords": [
-   "retentionDays",
-   "history",
-   "keep days"
-  ],
-  "configOnly": true,
-  "field": "usage-ledger.retentionDays"
- },
- {
-  "page": "usage-ledger",
-  "pageLabel": "Usage",
-  "heading": "",
   "label": "Free models",
   "description": "Patterns on provider/model (* matches any characters) flagged as free. Evaluated when reading, so changing it re-labels history. Configuration file only.",
   "kind": "list",
@@ -6866,21 +6821,6 @@
   ],
   "configOnly": true,
   "field": "usage-ledger.dataDir"
- },
- {
-  "page": "usage-ledger",
-  "pageLabel": "Usage",
-  "heading": "",
-  "label": "Command name",
-  "description": "Name of the chat command; default usage (/usage, which can also reset counts). Configuration file only.",
-  "kind": "text",
-  "keywords": [
-   "commandName",
-   "slash command",
-   "/usage"
-  ],
-  "configOnly": true,
-  "field": "usage-ledger.commandName"
  },
  {
   "page": "benchmark",
@@ -7443,21 +7383,6 @@
   "page": "benchmark",
   "pageLabel": "Benchmark",
   "heading": "",
-  "label": "Enable benchmark",
-  "description": "Turns the Benchmark add-on on or off. Default on. Configuration file only.",
-  "kind": "switch",
-  "keywords": [
-   "enabled",
-   "on off",
-   "benchmark"
-  ],
-  "configOnly": true,
-  "field": "benchmark.enabled"
- },
- {
-  "page": "benchmark",
-  "pageLabel": "Benchmark",
-  "heading": "",
   "label": "Data folder",
   "description": "Optional absolute folder for jobs and reports; default is a folder in the dsh home. Configuration file only.",
   "kind": "text",
@@ -7474,21 +7399,6 @@
   "page": "benchmark",
   "pageLabel": "Benchmark",
   "heading": "",
-  "label": "Fewest repeats for a confident pick",
-  "description": "A recommendation with fewer seeds than this is marked low confidence. 1 to 50, default 3. Configuration file only.",
-  "kind": "number",
-  "keywords": [
-   "minSeeds",
-   "export",
-   "confidence"
-  ],
-  "configOnly": true,
-  "field": "benchmark.export.minSeeds"
- },
- {
-  "page": "benchmark",
-  "pageLabel": "Benchmark",
-  "heading": "",
   "label": "Score tolerance",
   "description": "Among cells within this of the best mean score, the fastest then cheapest is recommended. 0 to 1, default 0.02. Configuration file only.",
   "kind": "number",
@@ -7499,21 +7409,6 @@
   ],
   "configOnly": true,
   "field": "benchmark.export.scoreTolerance"
- },
- {
-  "page": "benchmark",
-  "pageLabel": "Benchmark",
-  "heading": "",
-  "label": "Command name",
-  "description": "Name of the chat command; default bench (/bench). Configuration file only.",
-  "kind": "text",
-  "keywords": [
-   "commandName",
-   "slash command",
-   "/bench"
-  ],
-  "configOnly": true,
-  "field": "benchmark.commandName"
  },
  {
   "page": "mission",
@@ -7923,41 +7818,6 @@
   "page": "agent-swarm",
   "pageLabel": "Swarm",
   "heading": "Configured swarms",
-  "label": "Swarm definitions",
-  "description": "Named swarms: strategy (fanout, pipeline, debate), members, maxActive, maxMinutes, rounds and budget. Configuration file only; with none set the tool is off.",
-  "kind": "list",
-  "keywords": [
-   "swarms",
-   "members",
-   "strategy",
-   "maxActive",
-   "budget",
-   "rounds"
-  ],
-  "configOnly": true,
-  "field": "agent-swarm.swarms"
- },
- {
-  "page": "agent-swarm",
-  "pageLabel": "Swarm",
-  "heading": "Configured swarms",
-  "label": "Model prices for dollar budgets",
-  "description": "Price per million input and output tokens per route and model, used for dollar figures and caps. Models not listed count as 0. Configuration file only.",
-  "kind": "list",
-  "keywords": [
-   "pricing",
-   "inputPerMTok",
-   "outputPerMTok",
-   "cost",
-   "dollars"
-  ],
-  "configOnly": true,
-  "field": "agent-swarm.pricing"
- },
- {
-  "page": "agent-swarm",
-  "pageLabel": "Swarm",
-  "heading": "Configured swarms",
   "label": "Default swarm per mode",
   "description": "Names a swarm per app mode; adds a one-line hint to the system prompt in that mode. Configuration file only.",
   "kind": "list",
@@ -7984,21 +7844,6 @@
   ],
   "configOnly": true,
   "field": "agent-swarm.toolName"
- },
- {
-  "page": "agent-swarm",
-  "pageLabel": "Swarm",
-  "heading": "",
-  "label": "Agent swarm enabled",
-  "description": "Master switch of the Agent swarm add-on (on by default). Configuration file only.",
-  "kind": "switch",
-  "keywords": [
-   "enabled",
-   "on off",
-   "agent swarm"
-  ],
-  "configOnly": true,
-  "field": "agent-swarm.enabled"
  },
  {
   "page": "evolve",
@@ -8618,22 +8463,6 @@
   ],
   "configOnly": false,
   "field": ""
- },
- {
-  "page": "evolve",
-  "pageLabel": "Self-improve",
-  "heading": "",
-  "label": "Answer length ceiling",
-  "description": "How much longer answers may get before a change is refused (1.5 = 50% more tokens). Configuration file only.",
-  "kind": "number",
-  "keywords": [
-   "costCeiling",
-   "length",
-   "gate",
-   "tokens"
-  ],
-  "configOnly": true,
-  "field": "evolve.costCeiling"
  },
  {
   "page": "evolve",
@@ -9655,55 +9484,6 @@
   "page": "plugins",
   "pageLabel": "Built-in plugins",
   "heading": "",
-  "label": "Notify rules",
-  "description": "Notify add-on (no settings page): commands to run when a turn ends or dsh waits for your approval. Does nothing until you list a rule. Configuration file only.",
-  "kind": "list",
-  "keywords": [
-   "notify",
-   "rules",
-   "turnEnd",
-   "approval",
-   "command",
-   "minSeconds"
-  ],
-  "configOnly": true,
-  "field": "notify.rules"
- },
- {
-  "page": "plugins",
-  "pageLabel": "Built-in plugins",
-  "heading": "",
-  "label": "Notify enabled",
-  "description": "Master switch of the Notify add-on (on by default). Configuration file only.",
-  "kind": "switch",
-  "keywords": [
-   "notify",
-   "enabled",
-   "on off"
-  ],
-  "configOnly": true,
-  "field": "notify.enabled"
- },
- {
-  "page": "plugins",
-  "pageLabel": "Built-in plugins",
-  "heading": "",
-  "label": "Notify commands per minute",
-  "description": "Most Notify commands run in a minute across all rules (20 by default). Configuration file only.",
-  "kind": "number",
-  "keywords": [
-   "notify",
-   "maxPerMinute",
-   "rate limit",
-   "flood"
-  ],
-  "configOnly": true,
-  "field": "notify.maxPerMinute"
- },
- {
-  "page": "plugins",
-  "pageLabel": "Built-in plugins",
-  "heading": "",
   "label": "Notify slash command name",
   "description": "Name of the /notify command (notify by default). Configuration file only.",
   "kind": "text",
@@ -10206,23 +9986,6 @@
   "field": ""
  },
  {
-  "page": "library",
-  "pageLabel": "Library",
-  "heading": "",
-  "label": "Folder check interval (minutes)",
-  "description": "How often the folders are checked for new and changed files, in minutes. 0 = only when you press Check now. Default 10. Only in the configuration file.",
-  "kind": "number",
-  "keywords": [
-   "rescanMinutes",
-   "rescan",
-   "interval",
-   "refresh",
-   "schedule"
-  ],
-  "configOnly": true,
-  "field": "library.rescanMinutes"
- },
- {
   "page": "pdf",
   "pageLabel": "PDF reader",
   "heading": "",
@@ -10366,24 +10129,8 @@
   "field": "pdf.skills"
  },
  {
-  "page": "pdf",
-  "pageLabel": "PDF reader",
-  "heading": "",
-  "label": "Slash command name (/pdf)",
-  "description": "Name of the slash command, default pdf; empty registers none. Only in the configuration file.",
-  "kind": "text",
-  "keywords": [
-   "commandName",
-   "slash command",
-   "/pdf",
-   "command"
-  ],
-  "configOnly": true,
-  "field": "pdf.commandName"
- },
- {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "",
   "label": "Code map",
   "description": "A compact map of your project so the assistant looks things up and reads one function at a time instead of whole files. Uses far fewer tokens. Nothing is installed.",
@@ -10396,11 +10143,12 @@
    "tokens"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "",
   "label": "Use the code map",
   "description": "Gives the assistant five look-up tools in conversations that have tools (Cowork and Code).",
@@ -10412,11 +10160,12 @@
    "enabled"
   ],
   "configOnly": false,
-  "field": "code-map.enabled"
+  "field": "code-map.enabled",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "",
   "label": "Tell the assistant about it",
   "description": "Adds three lines to its instructions in code projects, so it uses the map before reading files.",
@@ -10428,11 +10177,12 @@
    "system prompt"
   ],
   "configOnly": false,
-  "field": "code-map.promptHint"
+  "field": "code-map.promptHint",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "",
   "label": "Mapped folders",
   "description": "Folders that have a map, with files, names, source size, map size and when it was made.",
@@ -10444,11 +10194,12 @@
    "status"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "Mapped folders",
   "label": "Map this folder now",
   "description": "Maps the app's default folder; shown while that folder has no map yet.",
@@ -10460,11 +10211,12 @@
    "default folder"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "Mapped folders",
   "label": "Map again",
   "description": "On each mapped folder: builds its map again.",
@@ -10475,11 +10227,12 @@
    "reindex"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "Mapped folders",
   "label": "Delete map",
   "description": "On each mapped folder: deletes its map from the app's data folder. Your project is not touched.",
@@ -10490,11 +10243,12 @@
    "delete index"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "",
   "label": "Limits",
   "description": "How many files are mapped, the largest file size, and extra patterns to leave out.",
@@ -10505,11 +10259,12 @@
    "ignore"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "Limits",
   "label": "Most files in one folder",
   "description": "A bigger folder is mapped up to this many files. 100 to 50,000.",
@@ -10520,11 +10275,12 @@
    "max files"
   ],
   "configOnly": false,
-  "field": "code-map.maxFiles"
+  "field": "code-map.maxFiles",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "Limits",
   "label": "Largest file (KB)",
   "description": "Bigger files are skipped. 16 to 4,096.",
@@ -10536,11 +10292,12 @@
    "max size"
   ],
   "configOnly": false,
-  "field": "code-map.maxFileKb"
+  "field": "code-map.maxFileKb",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "Limits",
   "label": "Also leave out",
   "description": "One pattern per line, like a line in a .gitignore file, e.g. docs/ or *.generated.ts. Dependency and build folders, binaries, lock files and .gitignore entries are always left out.",
@@ -10553,11 +10310,12 @@
    "patterns"
   ],
   "configOnly": false,
-  "field": "code-map.extraIgnore"
+  "field": "code-map.extraIgnore",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "",
   "label": "Reverse-engineer skills",
   "description": "Four step-by-step guides: /reverse-codebase, /reverse-website, /reverse-api-format and /reverse-app-binary. Type / in the chat box and pick one.",
@@ -10570,11 +10328,12 @@
    "binary"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "",
   "label": "Good to know",
   "description": "The map holds names, line numbers and connections, not your code; connections come from reading the text; only the conversation's folder is mapped.",
@@ -10585,11 +10344,12 @@
    "tips"
   ],
   "configOnly": false,
-  "field": ""
+  "field": "",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "",
   "label": "Map storage folder",
   "description": "Where maps are kept; empty uses a folder in the app's data folder. Only in the configuration file.",
@@ -10601,11 +10361,12 @@
    "location"
   ],
   "configOnly": true,
-  "field": "code-map.dataDir"
+  "field": "code-map.dataDir",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "",
   "label": "Slash command name (/codemap)",
   "description": "Name of the slash command, default codemap; empty registers none. Only in the configuration file.",
@@ -10617,11 +10378,12 @@
    "command"
   ],
   "configOnly": true,
-  "field": "code-map.commandName"
+  "field": "code-map.commandName",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "",
   "label": "Register the reverse-engineer skills",
   "description": "Registers the four reverse-engineer skills. On by default. Only in the configuration file.",
@@ -10632,7 +10394,8 @@
    "register"
   ],
   "configOnly": true,
-  "field": "code-map.skills"
+  "field": "code-map.skills",
+  "tab": "main"
  },
  {
   "page": "learn",
@@ -10733,8 +10496,8 @@
   "page": "learn",
   "pageLabel": "Learning",
   "heading": "Settings",
-  "label": "Level for new sessions",
-  "description": "How firmly answers are held back in a new session: Gentle, Firm (default) or Strict. The text under it explains the chosen level.",
+  "label": "Level for new conversations",
+  "description": "How firmly answers are held back in a new conversation: Gentle, Firm (default) or Strict. The text under it explains the chosen level.",
   "kind": "select",
   "keywords": [
    "level",
@@ -10752,7 +10515,7 @@
   "pageLabel": "Learning",
   "heading": "Settings",
   "label": "Ideas per review",
-  "description": "The most ideas one review session goes through: 5, 10, 15 or 20.",
+  "description": "The most ideas one review goes through: 5, 10, 15 or 20.",
   "kind": "select",
   "keywords": [
    "reviewSize",
@@ -10798,22 +10561,6 @@
   "page": "learn",
   "pageLabel": "Learning",
   "heading": "",
-  "label": "Learning record folder",
-  "description": "Where the learning record is kept; default is a folder in the dsh home. Only in the configuration file.",
-  "kind": "text",
-  "keywords": [
-   "dataDir",
-   "data folder",
-   "storage",
-   "record"
-  ],
-  "configOnly": true,
-  "field": "learn.dataDir"
- },
- {
-  "page": "learn",
-  "pageLabel": "Learning",
-  "heading": "",
   "label": "study-tutor skill",
   "description": "Register the study-tutor skill. On by default. Only in the configuration file.",
   "kind": "switch",
@@ -10824,22 +10571,6 @@
   ],
   "configOnly": true,
   "field": "learn.skills"
- },
- {
-  "page": "learn",
-  "pageLabel": "Learning",
-  "heading": "",
-  "label": "Slash command name (/learn)",
-  "description": "Name of the slash command, default learn; empty registers none. Only in the configuration file.",
-  "kind": "text",
-  "keywords": [
-   "commandName",
-   "slash command",
-   "/learn",
-   "command"
-  ],
-  "configOnly": true,
-  "field": "learn.commandName"
  },
  {
   "page": "diagram",
@@ -11208,11 +10939,11 @@
   "page": "color-schemes",
   "pageLabel": "Colours",
   "heading": "",
-  "label": "MindsHub Cowork",
+  "label": "Harbor",
   "description": "Deep navy with teal accents, light and dark.",
   "kind": "segments",
   "keywords": [
-   "mindshub",
+   "harbor",
    "navy",
    "teal",
    "scheme",
@@ -11448,7 +11179,7 @@
   "pageLabel": "Swarm",
   "heading": "",
   "label": "Model prices",
-  "description": "Dollars per million input and output tokens per route/model, for the dollar figures and budgets. Models not listed count as 0.",
+  "description": "Dollars per million tokens sent and received, for each model, used for the dollar figures and budgets. Models not listed count as 0.",
   "kind": "list",
   "keywords": [
    "pricing",
@@ -11462,45 +11193,11 @@
   "field": "agent-swarm.pricing"
  },
  {
-  "page": "agent-swarm",
-  "pageLabel": "Swarm",
-  "heading": "",
-  "label": "Default swarm per mode",
-  "description": "A swarm name per mode id; in that mode a one-line hint about the swarm is added to the system prompt.",
-  "kind": "list",
-  "keywords": [
-   "defaultSwarmByMode",
-   "mode",
-   "default",
-   "hint"
-  ],
-  "configOnly": true,
-  "field": "agent-swarm.defaultSwarmByMode"
- },
- {
-  "page": "agent-swarm",
-  "pageLabel": "Swarm",
-  "heading": "",
-  "label": "When a model is down",
-  "description": "What a swarm does when a member's route is down: rebind to another route, skip the member, or refuse the run. Default rebind.",
-  "kind": "select",
-  "keywords": [
-   "onRouteDown",
-   "route",
-   "down",
-   "rebind",
-   "skip",
-   "refuse"
-  ],
-  "configOnly": true,
-  "field": "agent-swarm.onRouteDown"
- },
- {
   "page": "benchmark",
   "pageLabel": "Benchmark",
   "heading": "",
   "label": "Benchmark on/off",
-  "description": "Switches the Benchmark add-on, its jobs and the /bench command on or off. Default on.",
+  "description": "Switches the Benchmark add-on, its jobs and the /benchmark command on or off. Default on.",
   "kind": "switch",
   "keywords": [
    "enabled",
@@ -11533,7 +11230,7 @@
   "pageLabel": "Benchmark",
   "heading": "",
   "label": "Slash command name",
-  "description": "Name of the /bench command. Default bench.",
+  "description": "Name of the /benchmark command. Default benchmark.",
   "kind": "text",
   "keywords": [
    "commandName",
@@ -11546,7 +11243,7 @@
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "",
   "label": "Data folder",
   "description": "Where code maps are kept. Empty uses a folder in the app's data folder.",
@@ -11559,11 +11256,12 @@
    "path"
   ],
   "configOnly": true,
-  "field": "code-map.dataDir"
+  "field": "code-map.dataDir",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "",
   "label": "Slash command name",
   "description": "Name of the /codemap command. Empty registers no command.",
@@ -11575,11 +11273,12 @@
    "codemap"
   ],
   "configOnly": true,
-  "field": "code-map.commandName"
+  "field": "code-map.commandName",
+  "tab": "main"
  },
  {
   "page": "code-map",
-  "pageLabel": "Code map",
+  "pageLabel": "Code tools",
   "heading": "",
   "label": "Reverse-engineer skills on/off",
   "description": "Registers the four reverse-engineer skills (/reverse-codebase, /reverse-website, /reverse-api-format, /reverse-app-binary). Default on.",
@@ -11592,7 +11291,8 @@
    "register"
   ],
   "configOnly": true,
-  "field": "code-map.skills"
+  "field": "code-map.skills",
+  "tab": "main"
  },
  {
   "page": "data",
@@ -11809,14 +11509,15 @@
    "maxTokens"
   ],
   "configOnly": true,
-  "field": "model-tiers.modelProfiles"
+  "field": "model-tiers.modelProfiles",
+  "tab": "main"
  },
  {
   "page": "model-tiers",
   "pageLabel": "Model Tiers",
   "heading": "",
   "label": "Model registry migrated",
-  "description": "One-time marker the app sets after moving model settings to the route-keyed registry. Not meant to be changed.",
+  "description": "A one-time marker the app sets after moving model settings to the newer list. Not meant to be changed.",
   "kind": "switch",
   "keywords": [
    "modelProfilesMigrated",
@@ -11825,7 +11526,9 @@
    "internal"
   ],
   "configOnly": true,
-  "field": "model-tiers.modelProfilesMigrated"
+  "field": "model-tiers.modelProfilesMigrated",
+  "tab": "main",
+  "internal": true
  },
  {
   "page": "model-tiers",
@@ -11841,7 +11544,9 @@
    "starters"
   ],
   "configOnly": true,
-  "field": "model-tiers.startersMigrated"
+  "field": "model-tiers.startersMigrated",
+  "tab": "main",
+  "internal": true
  },
  {
   "page": "model-tiers",
@@ -11858,7 +11563,9 @@
    "override"
   ],
   "configOnly": true,
-  "field": "model-tiers.sessionProfiles"
+  "field": "model-tiers.sessionProfiles",
+  "tab": "main",
+  "internal": true
  },
  {
   "page": "model-tiers",
@@ -11875,7 +11582,8 @@
    "stale"
   ],
   "configOnly": true,
-  "field": "model-tiers.pruneStaleSessions"
+  "field": "model-tiers.pruneStaleSessions",
+  "tab": "main"
  },
  {
   "page": "modes",
@@ -11892,7 +11600,8 @@
    "research"
   ],
   "configOnly": true,
-  "field": "modes.extraModes"
+  "field": "modes.extraModes",
+  "internal": true
  },
  {
   "page": "modes",
@@ -11926,7 +11635,8 @@
    "selector"
   ],
   "configOnly": true,
-  "field": "modes.sessionModes"
+  "field": "modes.sessionModes",
+  "internal": true
  },
  {
   "page": "modes",
@@ -11942,7 +11652,8 @@
    "conversation"
   ],
   "configOnly": true,
-  "field": "modes.sessionIsolated"
+  "field": "modes.sessionIsolated",
+  "internal": true
  },
  {
   "page": "modes",
@@ -11992,7 +11703,8 @@
    "switch"
   ],
   "configOnly": true,
-  "field": "modes.sessionWeb"
+  "field": "modes.sessionWeb",
+  "internal": true
  },
  {
   "page": "modes",
@@ -12008,7 +11720,8 @@
    "switch"
   ],
   "configOnly": true,
-  "field": "modes.sessionResearch"
+  "field": "modes.sessionResearch",
+  "internal": true
  },
  {
   "page": "modes",
@@ -12024,7 +11737,8 @@
    "obsolete"
   ],
   "configOnly": true,
-  "field": "modes.sessionSearchDepth"
+  "field": "modes.sessionSearchDepth",
+  "internal": true
  },
  {
   "page": "modes",
@@ -12043,14 +11757,15 @@
    "search"
   ],
   "configOnly": true,
-  "field": "modes.sessionDepth"
+  "field": "modes.sessionDepth",
+  "internal": true
  },
  {
   "page": "modes",
   "pageLabel": "Modes",
   "heading": "",
   "label": "Lens per conversation",
-  "description": "Each conversation's Lens (blunt, scientific, journalistic, data-only, skeptic or encouraging; missing is Default, which adds nothing) as JSON: how the answer is worded. Not for helpers, paused during a study session. No button yet.",
+  "description": "Each conversation's Lens (blunt, scientific, journalistic, data-only, skeptic or encouraging; missing is Default, which adds nothing): how the answer is worded. Not for helpers; paused during a study conversation.",
   "kind": "text",
   "keywords": [
    "sessionLens",
@@ -12061,7 +11776,8 @@
    "conversation"
   ],
   "configOnly": true,
-  "field": "modes.sessionLens"
+  "field": "modes.sessionLens",
+  "internal": true
  },
  {
   "page": "modes",
@@ -12095,7 +11811,8 @@
    "web level"
   ],
   "configOnly": true,
-  "field": "modes.depthMoved"
+  "field": "modes.depthMoved",
+  "internal": true
  },
  {
   "page": "modes",
@@ -12111,7 +11828,8 @@
    "conversation"
   ],
   "configOnly": true,
-  "field": "modes.sessionTools"
+  "field": "modes.sessionTools",
+  "internal": true
  },
  {
   "page": "modes",
@@ -12163,7 +11881,8 @@
    "roles"
   ],
   "configOnly": true,
-  "field": "modes.sessionHelpers"
+  "field": "modes.sessionHelpers",
+  "internal": true
  },
  {
   "page": "modes",
@@ -12195,7 +11914,8 @@
    "conversation"
   ],
   "configOnly": true,
-  "field": "modes.sessionToolSets"
+  "field": "modes.sessionToolSets",
+  "internal": true
  },
  {
   "page": "modes",
@@ -12211,7 +11931,8 @@
    "web"
   ],
   "configOnly": true,
-  "field": "modes.webMarksCleared"
+  "field": "modes.webMarksCleared",
+  "internal": true
  },
  {
   "page": "modes",
@@ -12311,7 +12032,8 @@
    "restart"
   ],
   "configOnly": true,
-  "field": "modes.sessionSandboxBase"
+  "field": "modes.sessionSandboxBase",
+  "internal": true
  },
  {
   "page": "modes",
@@ -12328,7 +12050,8 @@
    "data"
   ],
   "configOnly": true,
-  "field": "modes.dataTrimAdded"
+  "field": "modes.dataTrimAdded",
+  "internal": true
  },
  {
   "page": "pdf",
@@ -12427,7 +12150,8 @@
    "legacy"
   ],
   "configOnly": true,
-  "field": "recon.usenetHost"
+  "field": "recon.usenetHost",
+  "internal": true
  },
  {
   "page": "recon",
@@ -12443,7 +12167,8 @@
    "legacy"
   ],
   "configOnly": true,
-  "field": "recon.usenetPort"
+  "field": "recon.usenetPort",
+  "internal": true
  },
  {
   "page": "research",
@@ -12463,7 +12188,7 @@
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "",
   "label": "Sampling presets on/off",
   "description": "Switches the Sampling presets add-on and its command on or off. Default on.",
@@ -12476,11 +12201,13 @@
    "off"
   ],
   "configOnly": true,
-  "field": "sampling-presets.enabled"
+  "field": "sampling-presets.enabled",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "sampling-presets",
-  "pageLabel": "Sampling",
+  "pageLabel": "Model Tiers",
   "heading": "",
   "label": "Slash command name",
   "description": "Name of the /sampling command. Default sampling.",
@@ -12492,7 +12219,9 @@
    "sampling"
   ],
   "configOnly": true,
-  "field": "sampling-presets.commandName"
+  "field": "sampling-presets.commandName",
+  "host": "model-tiers",
+  "tab": "sampling-presets"
  },
  {
   "page": "scout",
@@ -12575,156 +12304,6 @@
   ],
   "configOnly": true,
   "field": "scout.folder"
- },
- {
-  "page": "none",
-  "pageLabel": "Code power",
-  "heading": "",
-  "label": "Code power on/off",
-  "description": "Switches the Code power skills (PR review, CI fix loop, best-of-N, hunk review) and the judge tool on or off. Default on.",
-  "kind": "switch",
-  "keywords": [
-   "enabled",
-   "code power",
-   "skills",
-   "on",
-   "off"
-  ],
-  "configOnly": true,
-  "field": "code-power.enabled"
- },
- {
-  "page": "none",
-  "pageLabel": "Code power",
-  "heading": "",
-  "label": "PR review lanes",
-  "description": "Review angles the pr-review skill runs, for example correctness, security, tests, performance. Default correctness, security, tests.",
-  "kind": "list",
-  "keywords": [
-   "prReview",
-   "lanes",
-   "review",
-   "pr-review",
-   "security"
-  ],
-  "configOnly": true,
-  "field": "code-power.prReview.lanes"
- },
- {
-  "page": "none",
-  "pageLabel": "Code power",
-  "heading": "",
-  "label": "Best-of-N attempts",
-  "description": "How many attempts the best-of-n skill makes in separate worktrees, 2 to 5. Default 3.",
-  "kind": "number",
-  "keywords": [
-   "bestOfN",
-   "n",
-   "attempts",
-   "candidates",
-   "worktrees"
-  ],
-  "configOnly": true,
-  "field": "code-power.bestOfN.n"
- },
- {
-  "page": "none",
-  "pageLabel": "Code power",
-  "heading": "",
-  "label": "Judge role",
-  "description": "Tier role whose model judges the candidates (plan, implement, review or fast). Default review.",
-  "kind": "text",
-  "keywords": [
-   "judgeRole",
-   "judge",
-   "tier",
-   "role",
-   "bestOfN"
-  ],
-  "configOnly": true,
-  "field": "code-power.bestOfN.judgeRole"
- },
- {
-  "page": "none",
-  "pageLabel": "Code power",
-  "heading": "",
-  "label": "Judge criteria",
-  "description": "What the judge scores each candidate on. Default correctness, completeness, simplicity, test coverage.",
-  "kind": "list",
-  "keywords": [
-   "criteria",
-   "judge",
-   "scoring",
-   "bestOfN"
-  ],
-  "configOnly": true,
-  "field": "code-power.bestOfN.criteria"
- },
- {
-  "page": "none",
-  "pageLabel": "Code power",
-  "heading": "",
-  "label": "Judge twice in reverse order",
-  "description": "Repeats the judgement with the candidates in reverse order; different winners give a tie flagged as split. Default on.",
-  "kind": "switch",
-  "keywords": [
-   "consistencyCheck",
-   "position bias",
-   "judge",
-   "reverse"
-  ],
-  "configOnly": true,
-  "field": "code-power.bestOfN.consistencyCheck"
- },
- {
-  "page": "none",
-  "pageLabel": "Code power",
-  "heading": "",
-  "label": "CI fix rounds",
-  "description": "Most fix rounds the ci-fix-loop skill runs before it stops and reports, 1 to 50. Default 5.",
-  "kind": "number",
-  "keywords": [
-   "ciFix",
-   "maxRounds",
-   "rounds",
-   "ci",
-   "loop"
-  ],
-  "configOnly": true,
-  "field": "code-power.ciFix.maxRounds"
- },
- {
-  "page": "none",
-  "pageLabel": "Code power",
-  "heading": "",
-  "label": "CI check command",
-  "description": "Command the ci-fix-loop skill runs to check the work, for example make check. Empty: the skill finds or asks for it.",
-  "kind": "text",
-  "keywords": [
-   "ciFix",
-   "command",
-   "test",
-   "check",
-   "ci"
-  ],
-  "configOnly": true,
-  "field": "code-power.ciFix.command"
- },
- {
-  "page": "none",
-  "pageLabel": "Code power",
-  "heading": "",
-  "label": "Judge tool name",
-  "description": "Name of the blind judge tool for comparing candidate diffs. Default judge_candidates.",
-  "kind": "text",
-  "keywords": [
-   "judgeToolName",
-   "judge_candidates",
-   "tool",
-   "name"
-  ],
-  "configOnly": true,
-  "field": "code-power.judgeToolName"
  },
  {
   "page": "none",
@@ -13101,23 +12680,6 @@
  },
  {
   "page": "none",
-  "pageLabel": "Role prompts",
-  "heading": "",
-  "label": "Prompt sections",
-  "description": "Your own system prompt sections: each has text, order, enabled and appliesToTiers (empty applies to every tier).",
-  "kind": "list",
-  "keywords": [
-   "sections",
-   "system prompt",
-   "instructions",
-   "appliesToTiers",
-   "role prompts"
-  ],
-  "configOnly": true,
-  "field": "role-prompts.sections"
- },
- {
-  "page": "none",
   "pageLabel": "Route health",
   "heading": "",
   "label": "Routes to check",
@@ -13196,56 +12758,6 @@
   ],
   "configOnly": true,
   "field": "route-health.blockWhenDown"
- },
- {
-  "page": "none",
-  "pageLabel": "Notify",
-  "heading": "",
-  "label": "Notify on/off",
-  "description": "Runs a command you choose when a turn ends or dsh needs your approval. Default on.",
-  "kind": "switch",
-  "keywords": [
-   "enabled",
-   "notify",
-   "notification",
-   "on",
-   "off"
-  ],
-  "configOnly": true,
-  "field": "notify.enabled"
- },
- {
-  "page": "none",
-  "pageLabel": "Notify",
-  "heading": "",
-  "label": "Notification rules",
-  "description": "Each rule: id, on (turnEnd or approval), reasons, minSeconds, topLevelOnly, minIntervalSeconds, timeoutMs and command (run without a shell).",
-  "kind": "list",
-  "keywords": [
-   "rules",
-   "command",
-   "turnEnd",
-   "approval",
-   "notification"
-  ],
-  "configOnly": true,
-  "field": "notify.rules"
- },
- {
-  "page": "none",
-  "pageLabel": "Notify",
-  "heading": "",
-  "label": "Most runs per minute",
-  "description": "Most notification commands run per minute across all rules, 1 to 600. Default 20.",
-  "kind": "number",
-  "keywords": [
-   "maxPerMinute",
-   "rate limit",
-   "flood",
-   "per minute"
-  ],
-  "configOnly": true,
-  "field": "notify.maxPerMinute"
  },
  {
   "page": "none",
@@ -13554,8 +13066,9 @@
    "opencode",
    "model menu"
   ],
-  "configOnly": true,
-  "field": "engines.opencodeModels"
+  "configOnly": false,
+  "field": "engines.opencodeModels",
+  "where": "Engines page in the sidebar"
  },
  {
   "page": "none",
@@ -13571,15 +13084,16 @@
    "auto",
    "engine"
   ],
-  "configOnly": true,
-  "field": "engines.applyWhen"
+  "configOnly": false,
+  "field": "engines.applyWhen",
+  "where": "Engines page in the sidebar"
  },
  {
   "page": "none",
   "pageLabel": "Sync",
   "heading": "",
   "label": "Sync on/off",
-  "description": "Syncs sessions and the project list between machines through a git remote you choose. Default on.",
+  "description": "Syncs conversations and the project list between your Macs through a git remote you choose. Default on.",
   "kind": "switch",
   "keywords": [
    "enabled",
@@ -13627,7 +13141,7 @@
   "pageLabel": "Sync",
   "heading": "",
   "label": "Backend",
-  "description": "git sends plaintext; encrypted encrypts sessions with age. Default git.",
+  "description": "\"git\" sends plain text; \"encrypted\" encrypts conversations with age before sending. Default git.",
   "kind": "select",
   "keywords": [
    "backend",
@@ -13706,8 +13220,8 @@
   "page": "none",
   "pageLabel": "Sync",
   "heading": "",
-  "label": "Session folder",
-  "description": "Where live sessions are stored. Empty uses the sessions folder in the dsh home.",
+  "label": "Conversation folder",
+  "description": "Where live conversations are stored. Empty uses the conversations folder in the app's data folder.",
   "kind": "text",
   "keywords": [
    "sessionRoot",
@@ -13997,7 +13511,7 @@
   "pageLabel": "Shared settings",
   "heading": "",
   "label": "Fields not shared",
-  "description": "Fields kept per Mac, as entry id.field. Default: per-conversation fields such as modes.sessionModes and model-tiers.activeTiers.",
+  "description": "Settings kept separate on each Mac, written as add-on.setting. By default the per-conversation settings are not shared.",
   "kind": "list",
   "keywords": [
    "skipFields",
@@ -14088,8 +13602,9 @@
    "brand",
    "sidebar"
   ],
-  "configOnly": true,
-  "field": "cowork-shell.hideLogos"
+  "configOnly": false,
+  "field": "cowork-shell.hideLogos",
+  "where": "sidebar More menu"
  },
  {
   "page": "none",
@@ -14104,8 +13619,9 @@
    "title",
    "greeting"
   ],
-  "configOnly": true,
-  "field": "cowork-shell.dateTitle"
+  "configOnly": false,
+  "field": "cowork-shell.dateTitle",
+  "where": "sidebar More menu"
  },
  {
   "page": "none",
@@ -14121,25 +13637,9 @@
    "chat",
    "layout"
   ],
-  "configOnly": true,
-  "field": "cowork-shell.wideChat"
- },
- {
-  "page": "none",
-  "pageLabel": "Deep research",
-  "heading": "",
-  "label": "Deep research on/off",
-  "description": "Switches the deep_research tool on or off. Default on.",
-  "kind": "switch",
-  "keywords": [
-   "enabled",
-   "deep research",
-   "tool",
-   "on",
-   "off"
-  ],
-  "configOnly": true,
-  "field": "deep-research.enabled"
+  "configOnly": false,
+  "field": "cowork-shell.wideChat",
+  "where": "sidebar More menu"
  },
  {
   "page": "none",
@@ -14156,217 +13656,6 @@
   ],
   "configOnly": true,
   "field": "deep-research.toolName"
- },
- {
-  "page": "none",
-  "pageLabel": "Deep research",
-  "heading": "",
-  "label": "Planner role",
-  "description": "Tier role that plans the research (plan, implement, review or fast); the analyst uses it too. Default plan.",
-  "kind": "select",
-  "keywords": [
-   "roles",
-   "planner",
-   "tier",
-   "role"
-  ],
-  "configOnly": true,
-  "field": "deep-research.roles.planner"
- },
- {
-  "page": "none",
-  "pageLabel": "Deep research",
-  "heading": "",
-  "label": "Searcher role",
-  "description": "Tier role of the helpers that search and read (plan, implement, review or fast). Default fast.",
-  "kind": "select",
-  "keywords": [
-   "roles",
-   "searcher",
-   "tier",
-   "helpers"
-  ],
-  "configOnly": true,
-  "field": "deep-research.roles.searcher"
- },
- {
-  "page": "none",
-  "pageLabel": "Deep research",
-  "heading": "",
-  "label": "Writer role",
-  "description": "Tier role that writes the report (plan, implement, review or fast). Default plan.",
-  "kind": "select",
-  "keywords": [
-   "roles",
-   "writer",
-   "tier",
-   "report"
-  ],
-  "configOnly": true,
-  "field": "deep-research.roles.writer"
- },
- {
-  "page": "none",
-  "pageLabel": "Deep research",
-  "heading": "",
-  "label": "Helper model without Modes",
-  "description": "same (the conversation's model) or roles (Tier role models). Used only when the Modes add-on is not there. Default same.",
-  "kind": "select",
-  "keywords": [
-   "helperModel",
-   "same",
-   "roles",
-   "helpers"
-  ],
-  "configOnly": true,
-  "field": "deep-research.helperModel"
- },
- {
-  "page": "none",
-  "pageLabel": "Deep research",
-  "heading": "",
-  "label": "Depth without Modes",
-  "description": "quick, standard or thorough. Used only when the Modes add-on is not there to say. Default standard.",
-  "kind": "select",
-  "keywords": [
-   "depth",
-   "quick",
-   "standard",
-   "thorough"
-  ],
-  "configOnly": true,
-  "field": "deep-research.depth"
- },
- {
-  "page": "none",
-  "pageLabel": "Deep research",
-  "heading": "",
-  "label": "Most sub-questions",
-  "description": "Upper bound on the sub-questions a run plans, 1 to 12; the chosen depth is held to it. Default 8.",
-  "kind": "number",
-  "keywords": [
-   "maxSubquestions",
-   "subquestions",
-   "limit",
-   "plan"
-  ],
-  "configOnly": true,
-  "field": "deep-research.maxSubquestions"
- },
- {
-  "page": "none",
-  "pageLabel": "Deep research",
-  "heading": "",
-  "label": "Most helpers at once",
-  "description": "Upper bound on helpers searching at once, 1 to 8. Default 8.",
-  "kind": "number",
-  "keywords": [
-   "maxParallel",
-   "parallel",
-   "helpers",
-   "limit"
-  ],
-  "configOnly": true,
-  "field": "deep-research.maxParallel"
- },
- {
-  "page": "none",
-  "pageLabel": "Deep research",
-  "heading": "",
-  "label": "Most sources",
-  "description": "Upper bound on the sources one run collects, 1 to 200. Default 120.",
-  "kind": "number",
-  "keywords": [
-   "maxSources",
-   "sources",
-   "limit",
-   "pages"
-  ],
-  "configOnly": true,
-  "field": "deep-research.maxSources"
- },
- {
-  "page": "none",
-  "pageLabel": "Deep research",
-  "heading": "",
-  "label": "Most minutes",
-  "description": "Upper bound on the minutes one run may take, 1 to 240. Default 60.",
-  "kind": "number",
-  "keywords": [
-   "maxMinutes",
-   "minutes",
-   "time",
-   "limit"
-  ],
-  "configOnly": true,
-  "field": "deep-research.maxMinutes"
- },
- {
-  "page": "none",
-  "pageLabel": "Deep research",
-  "heading": "",
-  "label": "Search tool names",
-  "description": "Tools the helpers search with. Default web_search; use other names for another search backend, such as an MCP one.",
-  "kind": "list",
-  "keywords": [
-   "searchToolNames",
-   "web_search",
-   "search",
-   "backend"
-  ],
-  "configOnly": true,
-  "field": "deep-research.searchToolNames"
- },
- {
-  "page": "none",
-  "pageLabel": "Deep research",
-  "heading": "",
-  "label": "Page reading tool names",
-  "description": "Tools the helpers read pages with. Default web_fetch.",
-  "kind": "list",
-  "keywords": [
-   "fetchToolNames",
-   "web_fetch",
-   "fetch",
-   "pages"
-  ],
-  "configOnly": true,
-  "field": "deep-research.fetchToolNames"
- },
- {
-  "page": "none",
-  "pageLabel": "Deep research",
-  "heading": "",
-  "label": "Only use pages really read",
-  "description": "Drop a finding when its own helper did not read the page (it only saw it in search results, or not at all), even if another helper read it. Default off: it stays in the report, marked not read.",
-  "kind": "switch",
-  "keywords": [
-   "requireFetched",
-   "fetched",
-   "sources",
-   "citations",
-   "not read",
-   "search results only"
-  ],
-  "configOnly": true,
-  "field": "deep-research.requireFetched"
- },
- {
-  "page": "none",
-  "pageLabel": "Deep research",
-  "heading": "",
-  "label": "Wide mode rows",
-  "description": "Most rows in a wide (table and CSV) run, 1 to 5000. Default 500.",
-  "kind": "number",
-  "keywords": [
-   "wide",
-   "maxRows",
-   "rows",
-   "csv",
-   "table"
-  ],
-  "configOnly": true,
-  "field": "deep-research.wide.maxRows"
  },
  {
   "page": "none",
@@ -14754,14 +14043,15 @@
    "selector"
   ],
   "configOnly": true,
-  "field": "modes.sessionWebSources"
+  "field": "modes.sessionWebSources",
+  "internal": true
  },
  {
-  "page": "none",
-  "pageLabel": "Settings helper",
+  "page": "start-here",
+  "pageLabel": "Start here",
   "heading": "",
   "label": "Export button on/off",
-  "description": "Off hides the Export button beside the gear: this conversation as a file (Markdown, text, HTML, JSON, PDF) at three levels, up to the full session log. Default on.",
+  "description": "A button beside Send that saves the open conversation as a file (Markdown, text, HTML, JSON or PDF). Default on.",
   "kind": "switch",
   "keywords": [
    "exportButton",
@@ -14774,7 +14064,7 @@
    "json",
    "troubleshooting"
   ],
-  "configOnly": true,
+  "configOnly": false,
   "field": "settings-plus.exportButton"
  },
  {
@@ -14782,7 +14072,7 @@
   "pageLabel": "Settings helper",
   "heading": "",
   "label": "A mode's extra buttons in the gear's popup",
-  "description": "On: a mode's own buttons (Bench rules, Creator Plus, Focus and Academic, the Finance selection, Recon's Export) are in the gear's popup instead of the chat box. Needs the gear on and \"Same chat box in every mode\" on. Default on.",
+  "description": "On: a mode's own buttons (Devices rules, Creator Plus, Focus and Academic, the Finance selection, Recon's Export) are in the gear's popup instead of the chat box. Needs the gear on and \"Same chat box in every mode\" on. Default on.",
   "kind": "switch",
   "keywords": [
    "extrasInGear",
@@ -14831,6 +14121,2734 @@
    "research"
   ],
   "configOnly": true,
-  "field": "research.focusMoved"
+  "field": "research.focusMoved",
+  "internal": true
+ },
+ {
+  "page": "content",
+  "pageLabel": "Content",
+  "heading": "",
+  "label": "Content",
+  "description": "A tab for writing from your own material: books and chapters, articles, blog posts, scripts and outlines. It keeps the material and every draft in one folder and keeps apart what a source says, what you said and its own wording.",
+  "kind": "section",
+  "keywords": [
+   "writing",
+   "books",
+   "articles",
+   "drafts"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "content",
+  "pageLabel": "Content",
+  "heading": "The tab",
+  "label": "Show the Content tab",
+  "description": "Adds the Content tab, its instructions and its tools. Off takes them away; files it saved stay where they are.",
+  "kind": "switch",
+  "keywords": [
+   "enabled",
+   "content tab",
+   "writing",
+   "switch on",
+   "switch off"
+  ],
+  "configOnly": false,
+  "field": "content.enabled"
+ },
+ {
+  "page": "content",
+  "pageLabel": "Content",
+  "heading": "How to use it",
+  "label": "How to use it",
+  "description": "Pick the folder with your material on the start page, bring in other conversations with @, and drafts are saved as numbered files that are never replaced.",
+  "kind": "section",
+  "keywords": [
+   "folder",
+   "drafts",
+   "material"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "content",
+  "pageLabel": "Content",
+  "heading": "From material to a final piece",
+  "label": "From material to a final piece",
+  "description": "How material becomes a final piece: a list of claims and how sure each one is, angles and a brief, an outline, a draft checked sentence by sentence, then the final version with sources and a publish kit.",
+  "kind": "section",
+  "keywords": [
+   "ledger",
+   "claims",
+   "brief",
+   "outline",
+   "final",
+   "sources"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "content",
+  "pageLabel": "Content",
+  "heading": "Voice Library",
+  "label": "Voice Library folder",
+  "description": "Where Content learns your voice, only from pieces you approved. Give a full folder path; empty uses Content's own folder in the app's data. This is not the Library page, which searches your documents.",
+  "kind": "text",
+  "keywords": [
+   "voiceLibrary",
+   "writing style",
+   "voice",
+   "folder"
+  ],
+  "configOnly": false,
+  "field": "content.voiceLibrary"
+ },
+ {
+  "page": "content",
+  "pageLabel": "Content",
+  "heading": "The subject folder",
+  "label": "The subject folder",
+  "description": "What Content keeps in a subject's folder: material that came in, your notes, numbered drafts, and titles and descriptions for publishing.",
+  "kind": "section",
+  "keywords": [
+   "research folder",
+   "notes",
+   "drafts",
+   "publish"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "content",
+  "pageLabel": "Content",
+  "heading": "Good to know",
+  "label": "Good to know",
+  "description": "Content asks before changing files, publishes nothing, and treats your rulings and approvals as yours only when your own words say so.",
+  "kind": "section",
+  "keywords": [
+   "read only",
+   "publish",
+   "approval",
+   "privacy"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "bench",
+  "pageLabel": "Devices",
+  "heading": "",
+  "label": "Devices",
+  "description": "A tab for the devices you connect to this Mac: maker boards such as an ESP32 or Arduino, phones, routers and other gadgets. It finds out what a device is, finds its documentation and keeps a card and a logbook for each one.",
+  "kind": "section",
+  "keywords": [
+   "bench",
+   "hardware",
+   "esp32",
+   "arduino",
+   "router",
+   "phone",
+   "firmware"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "bench",
+  "pageLabel": "Devices",
+  "heading": "The tab",
+  "label": "Show the Devices tab",
+  "description": "Adds the Devices tab, its instructions and its tools. Off takes them away and closes any port being watched. Cards and logbooks stay in the Devices folder.",
+  "kind": "switch",
+  "keywords": [
+   "enabled",
+   "devices tab",
+   "bench",
+   "switch on",
+   "switch off"
+  ],
+  "configOnly": false,
+  "field": "bench.enabled"
+ },
+ {
+  "page": "bench",
+  "pageLabel": "Devices",
+  "heading": "The Devices folder",
+  "label": "Devices folder",
+  "description": "Where each device's card and logbook are kept. Give a full folder path; empty uses Devices' own folder in the app's data.",
+  "kind": "text",
+  "keywords": [
+   "folder",
+   "cards",
+   "logbook",
+   "path"
+  ],
+  "configOnly": false,
+  "field": "bench.folder"
+ },
+ {
+  "page": "bench",
+  "pageLabel": "Devices",
+  "heading": "Long runs",
+  "label": "Check the work of a Long run",
+  "description": "On: a Long run proves each step with a small check, with this Mac's device ports closed so a check cannot open a board's port. Off: no checks run and the reviewer judges by reading the files.",
+  "kind": "switch",
+  "keywords": [
+   "longChecks",
+   "long run",
+   "checks",
+   "ports",
+   "serial"
+  ],
+  "configOnly": false,
+  "field": "bench.longChecks"
+ },
+ {
+  "page": "bench",
+  "pageLabel": "Devices",
+  "heading": "Programs Devices uses",
+  "label": "Check what is installed",
+  "description": "Lists every program Devices' tools can use, whether it is on this Mac, and the exact command for anything missing. Devices never installs anything.",
+  "kind": "button",
+  "keywords": [
+   "requirements",
+   "installed programs",
+   "tools",
+   "missing"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "bench",
+  "pageLabel": "Devices",
+  "heading": "Live dashboard",
+  "label": "Live dashboard",
+  "description": "One card per running monitor (a car over OBD-II, a serial device, this Mac's network, a router over SSH, USB devices), updated every second. The page only shows; it starts nothing.",
+  "kind": "section",
+  "keywords": [
+   "monitor",
+   "obd",
+   "serial",
+   "dashboard"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "bench",
+  "pageLabel": "Devices",
+  "heading": "Open and closed in Devices",
+  "label": "Open and closed in Devices",
+  "description": "Which actions Devices may take: the list that also shows under \"Devices rules\" in the chat box.",
+  "kind": "section",
+  "keywords": [
+   "devices rules",
+   "permissions",
+   "levels"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "bench",
+  "pageLabel": "Devices",
+  "heading": "Devices with a card",
+  "label": "Devices with a card",
+  "description": "Each device's level: Restricted (identify and read only), Ask-Auto (each change asks you) or Full Auto. Only you set these. A firmware write always asks you.",
+  "kind": "section",
+  "keywords": [
+   "restricted",
+   "ask-auto",
+   "full auto",
+   "unlink",
+   "dry run",
+   "level"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "bench",
+  "pageLabel": "Devices",
+  "heading": "Your networks",
+  "label": "Your networks",
+  "description": "Devices looks at and signs in to network devices only while this Mac is on a network you mark here. Mark a network while the Mac is on it.",
+  "kind": "section",
+  "keywords": [
+   "network",
+   "ssh",
+   "router",
+   "wifi"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "bench",
+  "pageLabel": "Devices",
+  "heading": "Your networks",
+  "label": "Devices' SSH key",
+  "description": "The key Devices uses to sign in to a device on your network. Add its public half to the device once; the private half never leaves this Mac.",
+  "kind": "section",
+  "keywords": [
+   "ssh key",
+   "public key",
+   "authorized keys"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "bench",
+  "pageLabel": "Devices",
+  "heading": "Firmware sources you added",
+  "label": "Firmware sources you added",
+  "description": "Extra sites where firmware may come from, each for one kind of device. Devices still checks the file's checksum itself.",
+  "kind": "section",
+  "keywords": [
+   "firmware",
+   "sources",
+   "github",
+   "checksum"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "bench",
+  "pageLabel": "Devices",
+  "heading": "How to use it",
+  "label": "How to use it",
+  "description": "Plug a device in, open the Devices tab and ask what is plugged in.",
+  "kind": "section",
+  "keywords": [
+   "plugged in",
+   "start"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "bench",
+  "pageLabel": "Devices",
+  "heading": "Good to know",
+  "label": "Good to know",
+  "description": "What Devices cannot do, what it logs, and which actions always ask you first.",
+  "kind": "section",
+  "keywords": [
+   "limits",
+   "logbook",
+   "undo"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "bench",
+  "pageLabel": "Devices",
+  "heading": "Danger zone",
+  "label": "Allow risky writes",
+  "description": "Off by default. On: flashing, erasing, programming, resets and commands sent to boards, debug probes, instruments and phones run when asked, and firmware writes need no backup or source check. Each device's level and your yes still apply.",
+  "kind": "switch",
+  "keywords": [
+   "allowRiskyWrites",
+   "danger",
+   "flash",
+   "erase",
+   "firmware write",
+   "unsafe"
+  ],
+  "configOnly": false,
+  "field": "bench.allowRiskyWrites"
+ },
+ {
+  "page": "creator-plus",
+  "pageLabel": "Creator Plus",
+  "heading": "",
+  "label": "Creator Plus",
+  "description": "A tab that builds and improves add-ons so they fit everything you have, tries every change in a trial copy first and keeps your add-ons working after updates. It changes nothing of your real setup unless you press a button.",
+  "kind": "section",
+  "keywords": [
+   "plugins",
+   "add-ons",
+   "builder",
+   "update"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "creator-plus",
+  "pageLabel": "Creator Plus",
+  "heading": "The tab",
+  "label": "Show the Creator Plus tab",
+  "description": "Adds the Creator Plus tab and its tools. Off takes them away; its folder (backups, cards, what it learned) stays.",
+  "kind": "switch",
+  "keywords": [
+   "enabled",
+   "creator plus tab",
+   "switch on",
+   "switch off"
+  ],
+  "configOnly": false,
+  "field": "creator-plus.enabled"
+ },
+ {
+  "page": "creator-plus",
+  "pageLabel": "Creator Plus",
+  "heading": "Rules that never bend",
+  "label": "Rules that never bend",
+  "description": "The rules Creator Plus always keeps, such as trying a change in a trial copy first.",
+  "kind": "section",
+  "keywords": [
+   "rules",
+   "trial copy",
+   "safety"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "creator-plus",
+  "pageLabel": "Creator Plus",
+  "heading": "Results",
+  "label": "Results",
+  "description": "Findings, prepared changes, questions and ready add-ons from Creator Plus conversations, each with buttons such as Apply and Undo.",
+  "kind": "section",
+  "keywords": [
+   "findings",
+   "apply",
+   "undo",
+   "cards"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "creator-plus",
+  "pageLabel": "Creator Plus",
+  "heading": "What Creator Plus learned",
+  "label": "What Creator Plus learned",
+  "description": "Your usual answers, how things are built here and mistakes not to repeat. Each is kept only when you press Keep, and can be undone.",
+  "kind": "section",
+  "keywords": [
+   "learning",
+   "keep",
+   "lessons"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "creator-plus",
+  "pageLabel": "Creator Plus",
+  "heading": "Settings",
+  "label": "Who may read your conversation logs",
+  "description": "To improve your add-ons, Creator Plus reads what went wrong in past conversations (secrets masked). Choose which models may read them: on this Mac, on your network, or any.",
+  "kind": "select",
+  "keywords": [
+   "logReaders",
+   "session logs",
+   "privacy",
+   "this mac",
+   "cloud"
+  ],
+  "configOnly": false,
+  "field": "creator-plus.logReaders"
+ },
+ {
+  "page": "creator-plus",
+  "pageLabel": "Creator Plus",
+  "heading": "Settings",
+  "label": "Strong models",
+  "description": "Models you trust to improve on a recipe's default steps. They still follow every \"must\" step and pass every check. One per line, as provider/model.",
+  "kind": "text",
+  "keywords": [
+   "strongModels",
+   "models",
+   "trusted"
+  ],
+  "configOnly": false,
+  "field": "creator-plus.strongModels"
+ },
+ {
+  "page": "creator-plus",
+  "pageLabel": "Creator Plus",
+  "heading": "Settings",
+  "label": "Plus folder with its tests",
+  "description": "The full path of a Plus folder (the download or a copy of the project) so Creator Plus can run each add-on's tests after an update. Empty: tests are not run.",
+  "kind": "text",
+  "keywords": [
+   "plusFolder",
+   "tests",
+   "folder",
+   "path"
+  ],
+  "configOnly": false,
+  "field": "creator-plus.plusFolder"
+ },
+ {
+  "page": "creator-plus",
+  "pageLabel": "Creator Plus",
+  "heading": "Saved runs",
+  "label": "Saved runs",
+  "description": "Runs you saved from the bar in a Creator Plus conversation. They can also run on a schedule from the Alerts page; a scheduled run changes nothing without your yes.",
+  "kind": "section",
+  "keywords": [
+   "savedRuns",
+   "schedule",
+   "automation"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "creator-plus",
+  "pageLabel": "Creator Plus",
+  "heading": "Saved runs",
+  "label": "Saved runs list",
+  "description": "The list of runs you saved. Kept by the page; there is nothing to type here.",
+  "kind": "info",
+  "keywords": [
+   "savedRuns"
+  ],
+  "configOnly": false,
+  "field": "creator-plus.savedRuns",
+  "internal": true
+ },
+ {
+  "page": "creator-plus",
+  "pageLabel": "Creator Plus",
+  "heading": "",
+  "label": "Open bar per conversation",
+  "description": "What each Creator Plus conversation's bar was set to. Written by the chat box; there is nothing to type here.",
+  "kind": "info",
+  "keywords": [
+   "sessionBars"
+  ],
+  "configOnly": false,
+  "field": "creator-plus.sessionBars",
+  "internal": true
+ },
+ {
+  "page": "creator-plus",
+  "pageLabel": "Creator Plus",
+  "heading": "Self-test",
+  "label": "The eight tests",
+  "description": "Runs the parts code can check by itself in a throwaway folder. The rest need a model: ask Creator Plus in a conversation to run its self-test.",
+  "kind": "button",
+  "keywords": [
+   "self test",
+   "selftest",
+   "check"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "creator-plus",
+  "pageLabel": "Creator Plus",
+  "heading": "Backups",
+  "label": "Backups",
+  "description": "Every change and install keeps the version before it. Undo on a card puts one back.",
+  "kind": "section",
+  "keywords": [
+   "backup",
+   "undo",
+   "restore"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "split-plus",
+  "pageLabel": "Split Plus",
+  "heading": "",
+  "label": "Split page",
+  "description": "Two to four conversations side by side in one window, each in any mode with its own buttons and permission mode. A pane opened from another works in the same folder; a Recon pane works only in Recon's own room.",
+  "kind": "switch",
+  "keywords": [
+   "enabled",
+   "split",
+   "panes",
+   "side by side",
+   "switch on",
+   "switch off"
+  ],
+  "configOnly": false,
+  "field": "split-plus.enabled"
+ },
+ {
+  "page": "split-plus",
+  "pageLabel": "Split Plus",
+  "heading": "Local models",
+  "label": "Panes on a local model at once",
+  "description": "How many panes may use a model on this Mac or your own server at the same time (1 to 4). A pane over the limit waits and says so. Online models never count.",
+  "kind": "number",
+  "keywords": [
+   "localAtOnce",
+   "limit",
+   "local model",
+   "at once"
+  ],
+  "configOnly": false,
+  "field": "split-plus.localAtOnce"
+ },
+ {
+  "page": "split-plus",
+  "pageLabel": "Split Plus",
+  "heading": "Watching",
+  "label": "Watcher model",
+  "description": "The model a watching pane starts with, written as provider/model. You can change it in that pane. Empty: the app's usual model.",
+  "kind": "text",
+  "keywords": [
+   "watcherModel",
+   "watch",
+   "model"
+  ],
+  "configOnly": false,
+  "field": "split-plus.watcherModel"
+ },
+ {
+  "page": "split-plus",
+  "pageLabel": "Split Plus",
+  "heading": "Danger zone",
+  "label": "Danger zone",
+  "description": "Each rule starts on. Switch one off only when you need to: it stays off until you switch it back, the Split page shows it in red and each change is logged.",
+  "kind": "section",
+  "keywords": [
+   "danger",
+   "rules"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "split-plus",
+  "pageLabel": "Split Plus",
+  "heading": "Danger zone",
+  "label": "Let panes change the same file at once",
+  "description": "Panes no longer wait for a file another pane is changing, and a change to a file that changed since the pane read it is no longer refused.",
+  "kind": "switch",
+  "keywords": [
+   "dangerFileHolds",
+   "danger",
+   "file lock",
+   "conflict"
+  ],
+  "configOnly": false,
+  "field": "split-plus.dangerFileHolds"
+ },
+ {
+  "page": "split-plus",
+  "pageLabel": "Split Plus",
+  "heading": "Danger zone",
+  "label": "Send out of and into Recon panes",
+  "description": "Send to works out of and into Recon panes without Recon's Export window. What Recon read can then reach other tabs.",
+  "kind": "switch",
+  "keywords": [
+   "dangerSealedSends",
+   "danger",
+   "recon",
+   "send"
+  ],
+  "configOnly": false,
+  "field": "split-plus.dangerSealedSends"
+ },
+ {
+  "page": "split-plus",
+  "pageLabel": "Split Plus",
+  "heading": "Danger zone",
+  "label": "Watch Recon panes",
+  "description": "A watcher may read a Recon pane's run. What Recon read then reaches the watcher's model.",
+  "kind": "switch",
+  "keywords": [
+   "dangerWatchSealed",
+   "danger",
+   "recon",
+   "watcher"
+  ],
+  "configOnly": false,
+  "field": "split-plus.dangerWatchSealed"
+ },
+ {
+  "page": "split-plus",
+  "pageLabel": "Split Plus",
+  "heading": "Danger zone",
+  "label": "Let watchers use every tool",
+  "description": "A watcher may change files and run commands like any conversation of its tab, not only read.",
+  "kind": "switch",
+  "keywords": [
+   "dangerWatcherTools",
+   "danger",
+   "watcher",
+   "tools"
+  ],
+  "configOnly": false,
+  "field": "split-plus.dangerWatcherTools"
+ },
+ {
+  "page": "split-plus",
+  "pageLabel": "Split Plus",
+  "heading": "Danger zone",
+  "label": "Send without the card",
+  "description": "Sends go as plain text, without the \"material, not instructions\" card, so the receiving conversation reads it as your own words.",
+  "kind": "switch",
+  "keywords": [
+   "dangerUnmarked",
+   "danger",
+   "send",
+   "card"
+  ],
+  "configOnly": false,
+  "field": "split-plus.dangerUnmarked"
+ },
+ {
+  "page": "artifacts",
+  "pageLabel": "Artifacts",
+  "heading": "",
+  "label": "Artifacts",
+  "description": "A card under each turn for every file it made or changed, from every tab. A click opens it in the app's preview or beside the chat. Every version is kept, and web pages open safely.",
+  "kind": "switch",
+  "keywords": [
+   "enabled",
+   "files",
+   "cards",
+   "preview",
+   "versions",
+   "switch on",
+   "switch off"
+  ],
+  "configOnly": false,
+  "field": "artifacts.enabled"
+ },
+ {
+  "page": "artifacts",
+  "pageLabel": "Artifacts",
+  "heading": "Danger zone",
+  "label": "Danger zone",
+  "description": "Each rule starts on. Switch one off only when you need to: it stays off until you switch it back, the Artifacts page shows it in red and each change is logged.",
+  "kind": "section",
+  "keywords": [
+   "danger",
+   "rules"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "artifacts",
+  "pageLabel": "Artifacts",
+  "heading": "Danger zone",
+  "label": "Show Devices backups",
+  "description": "Devices backups are shown and opened like any file. They can hold passwords and keys.",
+  "kind": "switch",
+  "keywords": [
+   "dangerShowBackups",
+   "danger",
+   "backups",
+   "devices",
+   "secrets"
+  ],
+  "configOnly": false,
+  "field": "artifacts.dangerShowBackups"
+ },
+ {
+  "page": "artifacts",
+  "pageLabel": "Artifacts",
+  "heading": "Danger zone",
+  "label": "Show Recon's files outside Recon",
+  "description": "Recon's files are listed on the Artifacts page and shown in any conversation.",
+  "kind": "switch",
+  "keywords": [
+   "dangerShowSealed",
+   "danger",
+   "recon",
+   "sealed"
+  ],
+  "configOnly": false,
+  "field": "artifacts.dangerShowSealed"
+ },
+ {
+  "page": "artifacts",
+  "pageLabel": "Artifacts",
+  "heading": "Danger zone",
+  "label": "Open web pages running",
+  "description": "Web pages open with their scripts running. They cannot fetch anything, but a page can still send itself to another address, which may reach the internet.",
+  "kind": "switch",
+  "keywords": [
+   "dangerPagesRun",
+   "danger",
+   "scripts",
+   "web page"
+  ],
+  "configOnly": false,
+  "field": "artifacts.dangerPagesRun"
+ },
+ {
+  "page": "artifacts",
+  "pageLabel": "Artifacts",
+  "heading": "Danger zone",
+  "label": "Open web pages with the internet",
+  "description": "Web pages open with the internet allowed: their servers see that you opened them, and they can reach machines on your local network.",
+  "kind": "switch",
+  "keywords": [
+   "dangerPagesInternet",
+   "danger",
+   "internet",
+   "web page",
+   "network"
+  ],
+  "configOnly": false,
+  "field": "artifacts.dangerPagesInternet"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "",
+  "label": "Tuner Plus",
+  "description": "Models that learn from your work. Every checked step is kept as a training row with its proof; a private exam from your own work decides whether anything is used. Nothing changes until it beats the exam and you say yes.",
+  "kind": "section",
+  "keywords": [
+   "tuning",
+   "training",
+   "adapter",
+   "learn",
+   "exam"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "",
+  "label": "Tuner Plus",
+  "description": "Off: nothing is gathered and its tools are not offered in the chat. On: it can gather rows from the modes you allow below.",
+  "kind": "switch",
+  "keywords": [
+   "enabled",
+   "tuner",
+   "switch on",
+   "switch off"
+  ],
+  "configOnly": false,
+  "field": "tuning.enabled"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "What it learns from",
+  "label": "What it learns from",
+  "description": "Each mode starts off. Only checked steps become rows. Recon and your own folders are never read, and secrets are masked before a row is stored.",
+  "kind": "section",
+  "keywords": [
+   "harvest",
+   "modes",
+   "privacy",
+   "recon"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "What it learns from",
+  "label": "Modes it may learn from",
+  "description": "One switch per mode. Only checked steps from a mode you switched on become training rows.",
+  "kind": "switch",
+  "keywords": [
+   "harvest",
+   "learn from",
+   "modes",
+   "gather"
+  ],
+  "configOnly": false,
+  "field": "tuning.harvest"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "What it learns from",
+  "label": "Gather now",
+  "description": "Gathers new checked steps into data sets straight away.",
+  "kind": "button",
+  "keywords": [
+   "harvest",
+   "collect"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "What it learns from",
+  "label": "Build add-on lessons",
+  "description": "Builds lessons from how your add-ons were used.",
+  "kind": "button",
+  "keywords": [
+   "lessons",
+   "plugin lessons"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "What it learns from",
+  "label": "Questions from reference material",
+  "description": "Has the teacher model write questions from reference material you give it; a separate run checks each one.",
+  "kind": "button",
+  "keywords": [
+   "teacher",
+   "qa",
+   "questions"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "The bar",
+  "label": "The bar",
+  "description": "Pick a model, a goal, a method and a time budget, then press Start. Look only shows what would happen and changes nothing.",
+  "kind": "section",
+  "keywords": [
+   "train",
+   "goal",
+   "method",
+   "budget",
+   "look only",
+   "start"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "Results",
+  "label": "Results",
+  "description": "Cards with the results of runs and of the night shift, with buttons such as Taste test and Promote.",
+  "kind": "section",
+  "keywords": [
+   "cards",
+   "taste test",
+   "promote"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "Data sets",
+  "label": "Data sets",
+  "description": "The named sets of training rows, how many may train, and a button to write one out.",
+  "kind": "section",
+  "keywords": [
+   "rows",
+   "export",
+   "sets"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "The exam",
+  "label": "The exam",
+  "description": "One row in five is kept as a private exam made from your own work. It is never trained on. A candidate is offered only when it clearly beats the exam.",
+  "kind": "section",
+  "keywords": [
+   "exam",
+   "canaries",
+   "benchmark"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "",
+  "label": "Exam rows per check",
+  "description": "The most exam rows one check uses. Default 40. Configuration file only.",
+  "kind": "number",
+  "keywords": [
+   "examLimit",
+   "exam",
+   "rows"
+  ],
+  "configOnly": true,
+  "field": "tuning.examLimit"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "The shelf",
+  "label": "The shelf",
+  "description": "Tuned model files (adapters) and tuned prompts that were built, with their exam results and buttons to switch them on, serve them or save their address.",
+  "kind": "section",
+  "keywords": [
+   "adapters",
+   "shelf",
+   "serve",
+   "mlx"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "Skills",
+  "label": "Skills",
+  "description": "Every skill the app can see, with a mark that says where it came from. A skill goes live only after you read its whole text.",
+  "kind": "section",
+  "keywords": [
+   "skills",
+   "marks",
+   "drafts",
+   "exam"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "Skills",
+  "label": "Skills part",
+  "description": "On: Tuner Plus tracks where each skill came from and can draft and examine skills. Off: it does nothing with skills.",
+  "kind": "switch",
+  "keywords": [
+   "skills",
+   "skill marks",
+   "switch on",
+   "switch off"
+  ],
+  "configOnly": false,
+  "field": "tuning.skills"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "Skills",
+  "label": "Skill exam models",
+  "description": "The two models of the skill exam: a \"floor\" model that runs on this Mac (your held-back tasks never leave it) and a stronger one that may be any.",
+  "kind": "text",
+  "keywords": [
+   "skillExam",
+   "floor model",
+   "strong model",
+   "exam"
+  ],
+  "configOnly": false,
+  "field": "tuning.skillExam"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "Trainer and models on this Mac",
+  "label": "The trainer's Python",
+  "description": "The full path of the Python in which you installed Apple's mlx-lm. Tuner Plus never installs anything and never downloads a model.",
+  "kind": "text",
+  "keywords": [
+   "python",
+   "mlx-lm",
+   "trainer",
+   "path"
+  ],
+  "configOnly": false,
+  "field": "tuning.python"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "Trainer and models on this Mac",
+  "label": "Where each base model's files are",
+  "description": "The folder on this Mac that holds each base model's MLX files. Its files are never changed.",
+  "kind": "text",
+  "keywords": [
+   "models",
+   "mlx",
+   "base model",
+   "folder"
+  ],
+  "configOnly": false,
+  "field": "tuning.models"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "Trainer and models on this Mac",
+  "label": "Teacher model",
+  "description": "The model that writes questions from reference material. Only used for that.",
+  "kind": "select",
+  "keywords": [
+   "teacher",
+   "questions"
+  ],
+  "configOnly": false,
+  "field": "tuning.teacher"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "Trainer and models on this Mac",
+  "label": "A teacher on the internet may read rows",
+  "description": "Off: only a teacher on this Mac reads your rows. On: a teacher on the internet may read them too.",
+  "kind": "switch",
+  "keywords": [
+   "teacherCloud",
+   "cloud",
+   "privacy"
+  ],
+  "configOnly": false,
+  "field": "tuning.teacherCloud"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "Trainer and models on this Mac",
+  "label": "Count my own network's machines as this Mac",
+  "description": "Off: only this Mac counts when Tuner Plus decides what may be sent to a model. On: a model at a home address counts too. A proxy that forwards to a cloud provider cannot be told apart.",
+  "kind": "switch",
+  "keywords": [
+   "ownNetworkLocal",
+   "network",
+   "privacy",
+   "local"
+  ],
+  "configOnly": false,
+  "field": "tuning.ownNetworkLocal"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "May it train?",
+  "label": "May it train?",
+  "description": "Decided for each row by who really wrote its text: never Recon, never a signed-in source, never a row with secrets that could not be masked. Each provider has its own switch.",
+  "kind": "section",
+  "keywords": [
+   "train",
+   "terms",
+   "providers",
+   "privacy"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "May it train?",
+  "label": "Text written by each provider",
+  "description": "One switch per provider: whether text written by that provider's models may be used for training. Read each provider's own terms.",
+  "kind": "switch",
+  "keywords": [
+   "providers",
+   "terms",
+   "training"
+  ],
+  "configOnly": false,
+  "field": "tuning.providers"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "May it train?",
+  "label": "Anthropic text for tuned open-ended models",
+  "description": "Starts off: Anthropic's terms say its outputs may not train models that compete with its own. Narrow tools such as judges are allowed. The switch is yours.",
+  "kind": "switch",
+  "keywords": [
+   "anthropicOpenEnded",
+   "claude",
+   "terms"
+  ],
+  "configOnly": false,
+  "field": "tuning.anthropicOpenEnded"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "The night shift",
+  "label": "Work at night on this Mac",
+  "description": "Works only while this Mac is on power and unused. It gathers, sorts and proposes; it trains only the sets you allow and never promotes anything.",
+  "kind": "switch",
+  "keywords": [
+   "nightShift",
+   "night",
+   "idle",
+   "overnight"
+  ],
+  "configOnly": false,
+  "field": "tuning.nightShift"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "The night shift",
+  "label": "Draft skills at night",
+  "description": "At most two skill ideas a night, drafted by a model on this Mac and examined. Nothing goes live and nothing is changed.",
+  "kind": "switch",
+  "keywords": [
+   "nightSkills",
+   "skills",
+   "night"
+  ],
+  "configOnly": false,
+  "field": "tuning.nightSkills"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "The night shift",
+  "label": "Sets the night shift may train",
+  "description": "Which data sets the night shift may train, each with the base model chosen on the bar. None means it trains nothing.",
+  "kind": "select",
+  "keywords": [
+   "nightTrain",
+   "sets",
+   "night"
+  ],
+  "configOnly": false,
+  "field": "tuning.nightTrain"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "",
+  "label": "Minutes of quiet before the night shift",
+  "description": "How many minutes this Mac must be unused before the night shift works. Default 15. Configuration file only.",
+  "kind": "number",
+  "keywords": [
+   "idleMinutes",
+   "idle",
+   "night shift"
+  ],
+  "configOnly": true,
+  "field": "tuning.idleMinutes"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "",
+  "label": "Night shift time limit",
+  "description": "The most minutes the night shift works per night. Default 120. Configuration file only.",
+  "kind": "number",
+  "keywords": [
+   "nightMinutes",
+   "night shift",
+   "limit"
+  ],
+  "configOnly": true,
+  "field": "tuning.nightMinutes"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "",
+  "label": "Tuner Plus folder",
+  "description": "Where Tuner Plus keeps its rows, sets and shelf. Empty: its own folder in the app's data. Configuration file only.",
+  "kind": "text",
+  "keywords": [
+   "folder",
+   "path"
+  ],
+  "configOnly": true,
+  "field": "tuning.folder"
+ },
+ {
+  "page": "tuning",
+  "pageLabel": "Tuner Plus",
+  "heading": "Limits you should know",
+  "label": "Limits you should know",
+  "description": "What training can and cannot do: gains get smaller each time, a small model has a ceiling, and facts are better looked up than trained in.",
+  "kind": "section",
+  "keywords": [
+   "limits",
+   "ratchet",
+   "retrieval"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "mission",
+  "pageLabel": "Mission",
+  "heading": "Long runs",
+  "label": "Laps",
+  "description": "The most laps a long run takes. A lap is work on the open items, the overall commands and a review. 1 to 50, 10 by default.",
+  "kind": "number",
+  "keywords": [
+   "longLaps",
+   "laps",
+   "long run"
+  ],
+  "configOnly": false,
+  "field": "mission.longLaps"
+ },
+ {
+  "page": "mission",
+  "pageLabel": "Mission",
+  "heading": "Long runs",
+  "label": "Use the full time",
+  "description": "Off: a run whose list is done stops after two laps in a row find nothing more to do. On: it keeps looking until the time or the laps are up.",
+  "kind": "switch",
+  "keywords": [
+   "longFullTime",
+   "full time",
+   "long run"
+  ],
+  "configOnly": false,
+  "field": "mission.longFullTime"
+ },
+ {
+  "page": "mission",
+  "pageLabel": "Mission",
+  "heading": "Long runs",
+  "label": "Keep the Mac awake",
+  "description": "While a long run is on and the Mac is on power. The screen may still turn off; closing a laptop's lid still puts it to sleep.",
+  "kind": "switch",
+  "keywords": [
+   "longKeepAwake",
+   "sleep",
+   "awake",
+   "caffeinate"
+  ],
+  "configOnly": false,
+  "field": "mission.longKeepAwake"
+ },
+ {
+  "page": "mission",
+  "pageLabel": "Mission",
+  "heading": "Long runs",
+  "label": "Also on battery",
+  "description": "Keep the Mac awake on battery too. That drains the battery.",
+  "kind": "switch",
+  "keywords": [
+   "longBattery",
+   "battery",
+   "awake"
+  ],
+  "configOnly": false,
+  "field": "mission.longBattery"
+ },
+ {
+  "page": "mission",
+  "pageLabel": "Mission",
+  "heading": "Long runs",
+  "label": "Try again by itself",
+  "description": "When your model server does not answer, try again up to three times, 2, 5 and 10 minutes later. Never after you paused the run or after the app restarted.",
+  "kind": "switch",
+  "keywords": [
+   "longRetry",
+   "retry",
+   "model server",
+   "long run"
+  ],
+  "configOnly": false,
+  "field": "mission.longRetry"
+ },
+ {
+  "page": "mission",
+  "pageLabel": "Mission",
+  "heading": "Long runs",
+  "label": "Think by role",
+  "description": "Planner and reviewer think hard (High), workers less (Medium), all on the same model. Off: every helper uses the effort set in Model Tiers.",
+  "kind": "switch",
+  "keywords": [
+   "longEffort",
+   "effort",
+   "planner",
+   "reviewer"
+  ],
+  "configOnly": false,
+  "field": "mission.longEffort"
+ },
+ {
+  "page": "mission",
+  "pageLabel": "Mission",
+  "heading": "Work loop (Ultra Code)",
+  "label": "The work loop for every run, per tab",
+  "description": "One switch per tab. On: every run started in that tab uses the work loop, also with Ultra Code off. Off: only Ultra Code puts it on there.",
+  "kind": "switch",
+  "keywords": [
+   "loopTabs",
+   "work loop",
+   "ultra code",
+   "recipe"
+  ],
+  "configOnly": false,
+  "field": "mission.loopTabs"
+ },
+ {
+  "page": "mission",
+  "pageLabel": "Mission",
+  "heading": "Work loop (Ultra Code)",
+  "label": "Calls at once, per model server",
+  "description": "How many calls the work loop sends to one model server at the same time, 1 to 16 (4 unless changed). A server that runs one request at a time: set 1.",
+  "kind": "number",
+  "keywords": [
+   "callsAtOnce",
+   "parallel",
+   "concurrency",
+   "model server"
+  ],
+  "configOnly": false,
+  "field": "mission.callsAtOnce"
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "Skills switched off per tab",
+  "label": "Skills switched off per tab",
+  "description": "In a tab the model does not see these skills and cannot load them; typing /name still works. Use \"Switch back on\" to restore one.",
+  "kind": "switch",
+  "keywords": [
+   "skillsOff",
+   "skills",
+   "tab",
+   "switch back on"
+  ],
+  "configOnly": false,
+  "field": "modes.skillsOff"
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "Long run tools",
+  "label": "What a Long run may use in each tab",
+  "description": "For each tab, whether a Long run may use files and commands and the web from the start. A run's own settings can change this for one chat.",
+  "kind": "switch",
+  "keywords": [
+   "longTools",
+   "long run",
+   "files",
+   "web",
+   "commands"
+  ],
+  "configOnly": false,
+  "field": "modes.longTools"
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "",
+  "label": "Web level per conversation",
+  "description": "Each conversation's chosen web level. Written by the chat box; there is nothing to type here.",
+  "kind": "info",
+  "keywords": [
+   "sessionWebLevel"
+  ],
+  "configOnly": true,
+  "field": "modes.sessionWebLevel",
+  "internal": true
+ },
+ {
+  "page": "recon",
+  "pageLabel": "Recon",
+  "heading": "More sources",
+  "label": "Let a Long run check its work, without the internet",
+  "description": "On: a Long run may check its work with small commands that run with no internet and write only in the run's folder. Off: no commands; the reviewer judges by reading.",
+  "kind": "switch",
+  "keywords": [
+   "longChecks",
+   "long run",
+   "checks"
+  ],
+  "configOnly": false,
+  "field": "recon.longChecks"
+ },
+ {
+  "page": "recon",
+  "pageLabel": "Recon",
+  "heading": "More sources",
+  "label": "The ordinary web",
+  "description": "On: Recon may search and read ordinary web pages, only through WireGuard or where a conversation allowed it. Off: only Recon's hidden networks and archives.",
+  "kind": "switch",
+  "keywords": [
+   "webOn",
+   "web search",
+   "wireguard"
+  ],
+  "configOnly": false,
+  "field": "recon.webOn"
+ },
+ {
+  "page": "recon",
+  "pageLabel": "Recon",
+  "heading": "WireGuard",
+  "label": "WireGuard connections",
+  "description": "The WireGuard connections by name, in order: the first is the main one, the others are backups. Each one's file is kept in the macOS Keychain, never in a setting.",
+  "kind": "list",
+  "keywords": [
+   "vpnConfigs",
+   "vpn",
+   "wireguard",
+   "tunnel"
+  ],
+  "configOnly": false,
+  "field": "recon.vpnConfigs"
+ },
+ {
+  "page": "recon",
+  "pageLabel": "Recon",
+  "heading": "",
+  "label": "wireproxy program path",
+  "description": "Where the wireproxy program is. Empty looks in the usual places. Plus does not install it. Configuration file only.",
+  "kind": "text",
+  "keywords": [
+   "wireproxyPath",
+   "wireproxy",
+   "wireguard",
+   "path"
+  ],
+  "configOnly": true,
+  "field": "recon.wireproxyPath"
+ },
+ {
+  "page": "skill-architect",
+  "pageLabel": "Learned skills",
+  "heading": "Reading model",
+  "label": "Reading model",
+  "description": "The model that reads your past conversations to learn from them. Empty: the first model on this Mac or your network.",
+  "kind": "select",
+  "keywords": [
+   "readingModel",
+   "model",
+   "learn"
+  ],
+  "configOnly": false,
+  "field": "skill-architect.readingModel"
+ },
+ {
+  "page": "skill-architect",
+  "pageLabel": "Learned skills",
+  "heading": "",
+  "label": "Conversations never to learn from",
+  "description": "The conversations you marked \"never learn from this\". Kept on each Mac; mark one with its own button.",
+  "kind": "list",
+  "keywords": [
+   "nolearn",
+   "never learn",
+   "privacy",
+   "exclude"
+  ],
+  "configOnly": false,
+  "field": "skill-architect.nolearn"
+ },
+ {
+  "page": "skill-architect",
+  "pageLabel": "Learned skills",
+  "heading": "",
+  "label": "Projects where learned skills are off",
+  "description": "Project folders where learned skills are switched off (\"Start clean\").",
+  "kind": "list",
+  "keywords": [
+   "projectsOff",
+   "start clean",
+   "projects",
+   "off"
+  ],
+  "configOnly": false,
+  "field": "skill-architect.projectsOff"
+ },
+ {
+  "page": "evolve",
+  "pageLabel": "Self-improve",
+  "heading": "Setup",
+  "label": "Model to improve: provider",
+  "description": "The provider of the model to improve. Set together with the model by the same menu.",
+  "kind": "select",
+  "keywords": [
+   "studentProvider"
+  ],
+  "configOnly": false,
+  "field": "evolve.studentProvider",
+  "internal": true
+ },
+ {
+  "page": "evolve",
+  "pageLabel": "Self-improve",
+  "heading": "Setup",
+  "label": "Reviewer model: provider",
+  "description": "The provider of the reviewer model. Set together with the model by the same menu.",
+  "kind": "select",
+  "keywords": [
+   "reviewerProvider"
+  ],
+  "configOnly": false,
+  "field": "evolve.reviewerProvider",
+  "internal": true
+ },
+ {
+  "page": "evolve",
+  "pageLabel": "Self-improve",
+  "heading": "Setup",
+  "label": "Judge model: provider",
+  "description": "The provider of the judge model. Set together with the model by the same menu.",
+  "kind": "select",
+  "keywords": [
+   "judgeProvider"
+  ],
+  "configOnly": false,
+  "field": "evolve.judgeProvider",
+  "internal": true
+ },
+ {
+  "page": "benchmark",
+  "pageLabel": "Benchmark",
+  "heading": "",
+  "label": "Accepted ways of working",
+  "description": "Which way of working you accepted for each kind of task after a methods comparison. Advice only; Benchmark switches nothing on by itself.",
+  "kind": "info",
+  "keywords": [
+   "acceptedMethods",
+   "methods",
+   "work loop"
+  ],
+  "configOnly": false,
+  "field": "benchmark.acceptedMethods",
+  "internal": true
+ },
+ {
+  "page": "finance",
+  "pageLabel": "Finance",
+  "heading": "Adviser",
+  "label": "Adviser warning accepted",
+  "description": "Remembers that you typed your acceptance of the adviser warning. Without it the adviser stays off. There is nothing to type here.",
+  "kind": "info",
+  "keywords": [
+   "adviserAccepted"
+  ],
+  "configOnly": false,
+  "field": "finance.adviserAccepted",
+  "internal": true
+ },
+ {
+  "page": "none",
+  "pageLabel": "Cowork sidebar",
+  "heading": "",
+  "label": "Tab order",
+  "description": "The order of the tabs in the sidebar. Change it with the Arrange tabs button beside the tabs; Reset order restores the usual order.",
+  "kind": "info",
+  "keywords": [
+   "tabOrder",
+   "arrange tabs",
+   "drag",
+   "order"
+  ],
+  "configOnly": false,
+  "field": "cowork-shell.tabOrder",
+  "where": "sidebar"
+ },
+ {
+  "page": "none",
+  "pageLabel": "Cowork sidebar",
+  "heading": "",
+  "label": "Show only icons for crowded tabs",
+  "description": "When the tab row is crowded, tabs may show only their icon. Off by default (tabs always show their names). Configuration file only.",
+  "kind": "switch",
+  "keywords": [
+   "iconOnlyTabs",
+   "tab names",
+   "icons"
+  ],
+  "configOnly": true,
+  "field": "cowork-shell.iconOnlyTabs"
+ },
+ {
+  "page": "none",
+  "pageLabel": "Model router",
+  "heading": "",
+  "label": "Router command name",
+  "description": "The name of the slash command that shows the router's state. Empty registers none. Configuration file only.",
+  "kind": "text",
+  "keywords": [
+   "commandName",
+   "slash command",
+   "router"
+  ],
+  "configOnly": true,
+  "field": "model-router.commandName"
+ },
+ {
+  "page": "none",
+  "pageLabel": "Route health",
+  "heading": "",
+  "label": "Route health command name",
+  "description": "The name of the slash command that shows the connection check. Empty registers none. Configuration file only.",
+  "kind": "text",
+  "keywords": [
+   "commandName",
+   "slash command",
+   "health"
+  ],
+  "configOnly": true,
+  "field": "route-health.commandName"
+ },
+ {
+  "page": "none",
+  "pageLabel": "Privacy",
+  "heading": "",
+  "label": "Privacy command name",
+  "description": "The name of the slash command that reports the privacy switches. Empty registers none. Configuration file only.",
+  "kind": "text",
+  "keywords": [
+   "commandName",
+   "slash command",
+   "privacy"
+  ],
+  "configOnly": true,
+  "field": "privacy.commandName"
+ },
+ {
+  "page": "deep-research",
+  "pageLabel": "Research",
+  "heading": "Advanced: research engine",
+  "label": "Deep research on",
+  "description": "Turn the deep research tool on or off (after a restart).",
+  "kind": "switch",
+  "keywords": [
+   "deep research",
+   "research engine"
+  ],
+  "configOnly": false,
+  "field": "deep-research.enabled",
+  "tab": "deep-research",
+  "host": "research"
+ },
+ {
+  "page": "deep-research",
+  "pageLabel": "Research",
+  "heading": "Advanced: research engine",
+  "label": "Most minutes a run may take",
+  "description": "A deep research run stops when this time is up.",
+  "kind": "number",
+  "keywords": [
+   "deep research",
+   "research engine"
+  ],
+  "configOnly": false,
+  "field": "deep-research.maxMinutes",
+  "tab": "deep-research",
+  "host": "research"
+ },
+ {
+  "page": "deep-research",
+  "pageLabel": "Research",
+  "heading": "Advanced: research engine",
+  "label": "Most sources per run",
+  "description": "The most pages one report may list.",
+  "kind": "number",
+  "keywords": [
+   "deep research",
+   "research engine"
+  ],
+  "configOnly": false,
+  "field": "deep-research.maxSources",
+  "tab": "deep-research",
+  "host": "research"
+ },
+ {
+  "page": "deep-research",
+  "pageLabel": "Research",
+  "heading": "Advanced: research engine",
+  "label": "Which model the helpers use",
+  "description": "Same as the conversation, or the role models from Model Tiers.",
+  "kind": "select",
+  "keywords": [
+   "deep research",
+   "research engine"
+  ],
+  "configOnly": false,
+  "field": "deep-research.helperModel",
+  "tab": "deep-research",
+  "host": "research"
+ },
+ {
+  "page": "deep-research",
+  "pageLabel": "Research",
+  "heading": "Advanced: research engine",
+  "label": "Starting depth",
+  "description": "Used only when the Modes add-on is not there.",
+  "kind": "select",
+  "keywords": [
+   "deep research",
+   "research engine"
+  ],
+  "configOnly": false,
+  "field": "deep-research.depth",
+  "tab": "deep-research",
+  "host": "research"
+ },
+ {
+  "page": "deep-research",
+  "pageLabel": "Research",
+  "heading": "Advanced: research engine",
+  "label": "Planner",
+  "description": "Which model role splits the question into parts.",
+  "kind": "select",
+  "keywords": [
+   "deep research",
+   "research engine"
+  ],
+  "configOnly": false,
+  "field": "deep-research.roles.planner",
+  "tab": "deep-research",
+  "host": "research"
+ },
+ {
+  "page": "deep-research",
+  "pageLabel": "Research",
+  "heading": "Advanced: research engine",
+  "label": "Searcher",
+  "description": "Which model role looks for pages and reads them.",
+  "kind": "select",
+  "keywords": [
+   "deep research",
+   "research engine"
+  ],
+  "configOnly": false,
+  "field": "deep-research.roles.searcher",
+  "tab": "deep-research",
+  "host": "research"
+ },
+ {
+  "page": "deep-research",
+  "pageLabel": "Research",
+  "heading": "Advanced: research engine",
+  "label": "Writer",
+  "description": "Which model role writes the report.",
+  "kind": "select",
+  "keywords": [
+   "deep research",
+   "research engine"
+  ],
+  "configOnly": false,
+  "field": "deep-research.roles.writer",
+  "tab": "deep-research",
+  "host": "research"
+ },
+ {
+  "page": "deep-research",
+  "pageLabel": "Research",
+  "heading": "Advanced: research engine",
+  "label": "Most questions per run",
+  "description": "How many parts the question may be split into.",
+  "kind": "number",
+  "keywords": [
+   "deep research",
+   "research engine"
+  ],
+  "configOnly": false,
+  "field": "deep-research.maxSubquestions",
+  "tab": "deep-research",
+  "host": "research"
+ },
+ {
+  "page": "deep-research",
+  "pageLabel": "Research",
+  "heading": "Advanced: research engine",
+  "label": "Most helpers at once",
+  "description": "Lower this on a slow computer or a local model.",
+  "kind": "number",
+  "keywords": [
+   "deep research",
+   "research engine"
+  ],
+  "configOnly": false,
+  "field": "deep-research.maxParallel",
+  "tab": "deep-research",
+  "host": "research"
+ },
+ {
+  "page": "deep-research",
+  "pageLabel": "Research",
+  "heading": "Advanced: research engine",
+  "label": "Names of the search tools",
+  "description": "Change only if you use another search tool.",
+  "kind": "text",
+  "keywords": [
+   "deep research",
+   "research engine"
+  ],
+  "configOnly": false,
+  "field": "deep-research.searchToolNames",
+  "tab": "deep-research",
+  "host": "research"
+ },
+ {
+  "page": "deep-research",
+  "pageLabel": "Research",
+  "heading": "Advanced: research engine",
+  "label": "Names of the page-reading tools",
+  "description": "Names of the tools that read a page.",
+  "kind": "text",
+  "keywords": [
+   "deep research",
+   "research engine"
+  ],
+  "configOnly": false,
+  "field": "deep-research.fetchToolNames",
+  "tab": "deep-research",
+  "host": "research"
+ },
+ {
+  "page": "deep-research",
+  "pageLabel": "Research",
+  "heading": "Advanced: research engine",
+  "label": "Drop findings a helper did not read",
+  "description": "Off keeps them, marked as not read.",
+  "kind": "switch",
+  "keywords": [
+   "deep research",
+   "research engine"
+  ],
+  "configOnly": false,
+  "field": "deep-research.requireFetched",
+  "tab": "deep-research",
+  "host": "research"
+ },
+ {
+  "page": "deep-research",
+  "pageLabel": "Research",
+  "heading": "Advanced: research engine",
+  "label": "Most rows in a big table",
+  "description": "For the wide research tables.",
+  "kind": "number",
+  "keywords": [
+   "deep research",
+   "research engine"
+  ],
+  "configOnly": false,
+  "field": "deep-research.wide.maxRows",
+  "tab": "deep-research",
+  "host": "research"
+ },
+ {
+  "page": "code-power",
+  "pageLabel": "Code tools",
+  "tab": "code-power",
+  "heading": "",
+  "label": "Reviews and fixes",
+  "description": "The Reviews and fixes tab of Code tools: four guides for reviews and fixes, and a judge that compares solutions.",
+  "kind": "",
+  "keywords": [
+   "code power",
+   "pull request",
+   "review",
+   "judge"
+  ],
+  "configOnly": false,
+  "field": "",
+  "host": "code-map"
+ },
+ {
+  "page": "code-power",
+  "pageLabel": "Code tools",
+  "tab": "code-power",
+  "heading": "",
+  "label": "Use reviews and fixes",
+  "description": "Offers the four guides (pr-review, ci-fix-loop, best-of-n, hunk-review) and the judge tool. Needs an app restart to change.",
+  "kind": "switch",
+  "keywords": [
+   "code power",
+   "enabled",
+   "skills"
+  ],
+  "configOnly": false,
+  "field": "code-power.enabled",
+  "host": "code-map"
+ },
+ {
+  "page": "code-power",
+  "pageLabel": "Code tools",
+  "tab": "code-power",
+  "heading": "Pull request review",
+  "label": "Review lanes",
+  "description": "The angles a pull request review looks from, separated by commas.",
+  "kind": "list",
+  "keywords": [
+   "lanes",
+   "review",
+   "security"
+  ],
+  "configOnly": false,
+  "field": "code-power.prReview.lanes",
+  "host": "code-map"
+ },
+ {
+  "page": "code-power",
+  "pageLabel": "Code tools",
+  "tab": "code-power",
+  "heading": "Best of several",
+  "label": "Attempts",
+  "description": "How many independent approaches the best-of-several guide tries, 2 to 5.",
+  "kind": "number",
+  "keywords": [
+   "best of n",
+   "attempts",
+   "candidates"
+  ],
+  "configOnly": false,
+  "field": "code-power.bestOfN.n",
+  "host": "code-map"
+ },
+ {
+  "page": "code-power",
+  "pageLabel": "Code tools",
+  "tab": "code-power",
+  "heading": "Best of several",
+  "label": "Judge model role",
+  "description": "Which Model Tiers role the judge uses, such as review.",
+  "kind": "text",
+  "keywords": [
+   "judge",
+   "role",
+   "tier"
+  ],
+  "configOnly": false,
+  "field": "code-power.bestOfN.judgeRole",
+  "host": "code-map"
+ },
+ {
+  "page": "code-power",
+  "pageLabel": "Code tools",
+  "tab": "code-power",
+  "heading": "Best of several",
+  "label": "Judging criteria",
+  "description": "What the judge scores, separated by commas.",
+  "kind": "list",
+  "keywords": [
+   "criteria",
+   "judge",
+   "scoring"
+  ],
+  "configOnly": false,
+  "field": "code-power.bestOfN.criteria",
+  "host": "code-map"
+ },
+ {
+  "page": "code-power",
+  "pageLabel": "Code tools",
+  "tab": "code-power",
+  "heading": "Best of several",
+  "label": "Judge twice, in reversed order",
+  "description": "Catches a judge that prefers whatever it sees first; disagreeing rounds give a tie.",
+  "kind": "switch",
+  "keywords": [
+   "position bias",
+   "judge",
+   "reverse"
+  ],
+  "configOnly": false,
+  "field": "code-power.bestOfN.consistencyCheck",
+  "host": "code-map"
+ },
+ {
+  "page": "code-power",
+  "pageLabel": "Code tools",
+  "tab": "code-power",
+  "heading": "Fix until the checks pass",
+  "label": "Most rounds",
+  "description": "How many tries the fix-until-checks-pass guide makes before it stops and reports, 1 to 50.",
+  "kind": "number",
+  "keywords": [
+   "rounds",
+   "ci",
+   "loop"
+  ],
+  "configOnly": false,
+  "field": "code-power.ciFix.maxRounds",
+  "host": "code-map"
+ },
+ {
+  "page": "code-power",
+  "pageLabel": "Code tools",
+  "tab": "code-power",
+  "heading": "Fix until the checks pass",
+  "label": "Check command",
+  "description": "The command that runs your tests or checks. Empty: the assistant finds it or asks.",
+  "kind": "text",
+  "keywords": [
+   "command",
+   "test",
+   "check",
+   "ci"
+  ],
+  "configOnly": false,
+  "field": "code-power.ciFix.command",
+  "host": "code-map"
+ },
+ {
+  "page": "none",
+  "pageLabel": "Code power",
+  "heading": "",
+  "label": "Judge tool name",
+  "description": "Name of the judge tool. Default judge_candidates.",
+  "kind": "text",
+  "keywords": [
+   "judge_candidates",
+   "tool",
+   "name"
+  ],
+  "configOnly": true,
+  "field": "code-power.judgeToolName"
+ },
+ {
+  "page": "notify",
+  "pageLabel": "Alerts",
+  "heading": "When a turn ends or the app waits for you",
+  "label": "When a turn ends or the app waits for you",
+  "description": "Your own program to run when a turn ends or the app waits for your approval (the Notify settings).",
+  "kind": "section",
+  "keywords": [
+   "notify",
+   "command",
+   "banner",
+   "sound",
+   "turn ended",
+   "approval"
+  ],
+  "configOnly": false,
+  "field": "",
+  "tab": "notify",
+  "host": "alerts"
+ },
+ {
+  "page": "notify",
+  "pageLabel": "Alerts",
+  "heading": "When a turn ends or the app waits for you",
+  "label": "Run commands",
+  "description": "Off keeps your rules but runs none of them.",
+  "kind": "switch",
+  "keywords": [
+   "notify",
+   "enabled",
+   "on off"
+  ],
+  "configOnly": false,
+  "field": "notify.enabled",
+  "tab": "notify",
+  "host": "alerts"
+ },
+ {
+  "page": "notify",
+  "pageLabel": "Alerts",
+  "heading": "When a turn ends or the app waits for you",
+  "label": "Most runs per minute",
+  "description": "All rules together. Stops a flood if something goes wrong.",
+  "kind": "number",
+  "keywords": [
+   "maxPerMinute",
+   "rate limit",
+   "flood"
+  ],
+  "configOnly": false,
+  "field": "notify.maxPerMinute",
+  "tab": "notify",
+  "host": "alerts"
+ },
+ {
+  "page": "notify",
+  "pageLabel": "Alerts",
+  "heading": "When a turn ends or the app waits for you",
+  "label": "Add: when a turn ends",
+  "description": "Adds a rule that runs your command when a turn ends.",
+  "kind": "button",
+  "keywords": [
+   "rule",
+   "turn end",
+   "finished",
+   "notify"
+  ],
+  "configOnly": false,
+  "field": "notify.rules",
+  "tab": "notify",
+  "host": "alerts"
+ },
+ {
+  "page": "notify",
+  "pageLabel": "Alerts",
+  "heading": "When a turn ends or the app waits for you",
+  "label": "Add: when the app waits for my approval",
+  "description": "Adds a rule that runs your command when the app asks you to approve something.",
+  "kind": "button",
+  "keywords": [
+   "rule",
+   "approval",
+   "waiting",
+   "notify"
+  ],
+  "configOnly": false,
+  "field": "notify.rules",
+  "tab": "notify",
+  "host": "alerts"
+ },
+ {
+  "page": "notify",
+  "pageLabel": "Alerts",
+  "heading": "When a turn ends or the app waits for you",
+  "label": "Run it when the turn ended like this",
+  "description": "Which endings count: finished, stopped with an error, cancelled, blocked, interrupted.",
+  "kind": "select",
+  "keywords": [
+   "reasons",
+   "completed",
+   "error",
+   "aborted"
+  ],
+  "configOnly": false,
+  "field": "notify.rules",
+  "tab": "notify",
+  "host": "alerts"
+ },
+ {
+  "page": "notify",
+  "pageLabel": "Alerts",
+  "heading": "When a turn ends or the app waits for you",
+  "label": "Command: one part per line, the program first",
+  "description": "The program to run and its parts. Runs on this Mac with your permissions.",
+  "kind": "textarea",
+  "keywords": [
+   "command",
+   "program",
+   "osascript",
+   "shell"
+  ],
+  "configOnly": false,
+  "field": "notify.rules",
+  "tab": "notify",
+  "host": "alerts"
+ },
+ {
+  "page": "notify",
+  "pageLabel": "Alerts",
+  "heading": "When a turn ends or the app waits for you",
+  "label": "Fill in a Mac notification",
+  "description": "Fills in a command that shows a macOS banner with the alert text.",
+  "kind": "button",
+  "keywords": [
+   "osascript",
+   "banner",
+   "notification"
+  ],
+  "configOnly": false,
+  "field": "notify.rules",
+  "tab": "notify",
+  "host": "alerts"
+ },
+ {
+  "page": "notify",
+  "pageLabel": "Alerts",
+  "heading": "When a turn ends or the app waits for you",
+  "label": "Only when the turn took at least (seconds)",
+  "description": "Skips short turns. Under More options of a turn-end rule.",
+  "kind": "number",
+  "keywords": [
+   "minSeconds",
+   "long turns"
+  ],
+  "configOnly": false,
+  "field": "notify.rules",
+  "tab": "notify",
+  "host": "alerts"
+ },
+ {
+  "page": "notify",
+  "pageLabel": "Alerts",
+  "heading": "When a turn ends or the app waits for you",
+  "label": "At least this many seconds between two runs",
+  "description": "Pause between two runs of one rule. Under More options.",
+  "kind": "number",
+  "keywords": [
+   "minIntervalSeconds",
+   "interval"
+  ],
+  "configOnly": false,
+  "field": "notify.rules",
+  "tab": "notify",
+  "host": "alerts"
+ },
+ {
+  "page": "notify",
+  "pageLabel": "Alerts",
+  "heading": "When a turn ends or the app waits for you",
+  "label": "Stop the command after (milliseconds)",
+  "description": "The command is stopped after this time. Under More options.",
+  "kind": "number",
+  "keywords": [
+   "timeoutMs",
+   "timeout"
+  ],
+  "configOnly": false,
+  "field": "notify.rules",
+  "tab": "notify",
+  "host": "alerts"
+ },
+ {
+  "page": "notify",
+  "pageLabel": "Alerts",
+  "heading": "When a turn ends or the app waits for you",
+  "label": "Also for helper agents",
+  "description": "Also run the rule for turns of helper agents. Off by default. Under More options.",
+  "kind": "switch",
+  "keywords": [
+   "topLevelOnly",
+   "sub-agents",
+   "helpers"
+  ],
+  "configOnly": false,
+  "field": "notify.rules",
+  "tab": "notify",
+  "host": "alerts"
+ },
+ {
+  "page": "role-prompts",
+  "pageLabel": "Model Tiers",
+  "tab": "role-prompts",
+  "heading": "Instructions for every conversation",
+  "label": "Instructions for every conversation",
+  "description": "Your own instructions, added to the start of every conversation, in the order you choose.",
+  "kind": "section",
+  "keywords": [
+   "system prompt",
+   "role prompts",
+   "planning",
+   "coding",
+   "custom instructions"
+  ],
+  "configOnly": false,
+  "field": "role-prompts.sections",
+  "host": "model-tiers"
+ },
+ {
+  "page": "role-prompts",
+  "pageLabel": "Model Tiers",
+  "tab": "role-prompts",
+  "heading": "Instructions for every conversation",
+  "label": "Instructions: switch on or off",
+  "description": "Turn one set of instructions on or off without deleting it.",
+  "kind": "switch",
+  "keywords": [
+   "enabled"
+  ],
+  "configOnly": false,
+  "field": "role-prompts.sections.*.enabled",
+  "host": "model-tiers"
+ },
+ {
+  "page": "role-prompts",
+  "pageLabel": "Model Tiers",
+  "tab": "role-prompts",
+  "heading": "Instructions for every conversation",
+  "label": "Instructions: text",
+  "description": "The words added to every conversation.",
+  "kind": "text",
+  "keywords": [],
+  "configOnly": false,
+  "field": "role-prompts.sections.*.text",
+  "host": "model-tiers"
+ },
+ {
+  "page": "role-prompts",
+  "pageLabel": "Model Tiers",
+  "tab": "role-prompts",
+  "heading": "Instructions for every conversation",
+  "label": "Instructions: position",
+  "description": "Lower comes earlier. Default 60.",
+  "kind": "number",
+  "keywords": [
+   "order"
+  ],
+  "configOnly": false,
+  "field": "role-prompts.sections.*.order",
+  "host": "model-tiers"
+ },
+ {
+  "page": "role-prompts",
+  "pageLabel": "Model Tiers",
+  "tab": "role-prompts",
+  "heading": "Instructions for every conversation",
+  "label": "Instructions: only for these tiers",
+  "description": "Leave all unticked to use the instructions in every conversation.",
+  "kind": "list",
+  "keywords": [
+   "appliesToTiers"
+  ],
+  "configOnly": false,
+  "field": "role-prompts.sections.*.appliesToTiers",
+  "host": "model-tiers"
+ },
+ {
+  "page": "model-tiers",
+  "pageLabel": "Model Tiers",
+  "heading": "Limits and reset",
+  "label": "Ultra Code switch per conversation",
+  "description": "Remembers which conversations have the Ultra Code switch on. Kept by the add-on; not meant to be edited.",
+  "kind": "info",
+  "keywords": [
+   "sessionUltra"
+  ],
+  "configOnly": true,
+  "field": "model-tiers.sessionUltra",
+  "internal": true,
+  "tab": "advanced"
+ },
+ {
+  "page": "model-tiers",
+  "pageLabel": "Model Tiers",
+  "heading": "Limits and reset",
+  "label": "Saved helper teams",
+  "description": "Remembers the helper teams (lead, helpers, checker, judge) set for each tier. Kept by the add-on; not meant to be edited.",
+  "kind": "info",
+  "keywords": [
+   "teams"
+  ],
+  "configOnly": true,
+  "field": "model-tiers.teams",
+  "internal": true,
+  "tab": "advanced"
+ },
+ {
+  "page": "budget",
+  "pageLabel": "Budget guard",
+  "heading": "Limits for one task",
+  "label": "Steps by helpers",
+  "description": "Requests made by the helpers the assistant starts, such as Deep research or a Mission run. Empty or 0: helpers share the Steps limit.",
+  "kind": "number",
+  "keywords": [
+   "maxHelperSteps",
+   "helpers",
+   "long run"
+  ],
+  "configOnly": false,
+  "field": "budget.maxHelperSteps"
+ },
+ {
+  "page": "budget",
+  "pageLabel": "Budget guard",
+  "heading": "While a Long run is on",
+  "label": "Steps in a Long run",
+  "description": "The most requests a Long run may make, helpers included. Empty or 0 means the ordinary limits.",
+  "kind": "number",
+  "keywords": [
+   "maxLongSteps",
+   "long run",
+   "hours"
+  ],
+  "configOnly": false,
+  "field": "budget.maxLongSteps"
+ },
+ {
+  "page": "budget",
+  "pageLabel": "Budget guard",
+  "heading": "While a Long run is on",
+  "label": "Tokens in a Long run",
+  "description": "The most tokens a Long run may use, sent plus received, helpers included. Empty or 0 means the ordinary limits.",
+  "kind": "number",
+  "keywords": [
+   "maxLongTokens",
+   "long run",
+   "hours"
+  ],
+  "configOnly": false,
+  "field": "budget.maxLongTokens"
+ },
+ {
+  "page": "about-plus",
+  "pageLabel": "About Plus",
+  "heading": "",
+  "label": "About Plus",
+  "description": "Which app versions Plus works with, and which add-ons are finished, in testing or early.",
+  "kind": "section",
+  "keywords": [
+   "version",
+   "supported",
+   "app update",
+   "plus version"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "about-plus",
+  "pageLabel": "About Plus",
+  "heading": "Versions",
+  "label": "Supported app versions",
+  "description": "Shows the range of DeepSeek Harness versions Plus is written for, your app's version, and what happens when the app updates.",
+  "kind": "section",
+  "keywords": [
+   "app version",
+   "range",
+   "update",
+   "compatible"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "about-plus",
+  "pageLabel": "About Plus",
+  "heading": "Core",
+  "label": "Add-on labels: Core, Beta, Experimental",
+  "description": "Every installed add-on with its label: Core is finished, Beta is newer, Experimental is early and off until you switch it on.",
+  "kind": "section",
+  "keywords": [
+   "beta",
+   "experimental",
+   "core",
+   "labels",
+   "finished"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "start-here",
+  "pageLabel": "Start here",
+  "heading": "",
+  "label": "Start here",
+  "description": "The settings most people need, in plain words, and the setup that runs once on a new install.",
+  "kind": "section",
+  "keywords": [
+   "simple",
+   "basics",
+   "first run",
+   "welcome",
+   "getting started"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "start-here",
+  "pageLabel": "Start here",
+  "heading": "",
+  "label": "Set up in 2 minutes",
+  "description": "Add a model, choose a daily spending limit, and decide how much of Settings to show. Run it again here whenever you like.",
+  "kind": "button",
+  "keywords": [
+   "setup",
+   "first run",
+   "run setup again",
+   "welcome",
+   "onboarding"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "start-here",
+  "pageLabel": "Start here",
+  "heading": "",
+  "label": "Settings list: Simple or Advanced",
+  "description": "Simple shows about ten settings in plain words. Advanced shows every page. The switch is at the top of Settings.",
+  "kind": "segments",
+  "keywords": [
+   "simple",
+   "advanced",
+   "show everything",
+   "view",
+   "settings-plus.view"
+  ],
+  "configOnly": false,
+  "field": "settings-plus.view"
+ },
+ {
+  "page": "start-here",
+  "pageLabel": "Start here",
+  "heading": "",
+  "label": "Show me everything",
+  "description": "Shows every page of every add-on, and the More settings page.",
+  "kind": "switch",
+  "keywords": [
+   "advanced",
+   "everything",
+   "all settings"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "start-here",
+  "pageLabel": "Start here",
+  "heading": "",
+  "label": "First-run setup is pending",
+  "description": "Marks a fresh install until the setup card is finished or put away.",
+  "kind": "switch",
+  "keywords": [
+   "setupPending"
+  ],
+  "configOnly": true,
+  "field": "settings-plus.setupPending",
+  "internal": true
+ },
+ {
+  "page": "start-here",
+  "pageLabel": "Start here",
+  "heading": "",
+  "label": "Which model answers",
+  "description": "Add a model and its key, and pick the one new conversations use, on the Models page.",
+  "kind": "button",
+  "keywords": [
+   "model",
+   "default model",
+   "key",
+   "provider"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "start-here",
+  "pageLabel": "Start here",
+  "heading": "",
+  "label": "The web in each tab",
+  "description": "Each tab decides for itself whether the assistant may search the web. Set on the Modes page.",
+  "kind": "button",
+  "keywords": [
+   "web",
+   "internet",
+   "search",
+   "default web"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "start-here",
+  "pageLabel": "Start here",
+  "heading": "",
+  "label": "What the assistant may change",
+  "description": "The access level new conversations start with: read only or workspace write.",
+  "kind": "select",
+  "keywords": [
+   "access",
+   "permission",
+   "read only",
+   "workspace write",
+   "full access",
+   "sandbox"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "start-here",
+  "pageLabel": "Start here",
+  "heading": "",
+  "label": "Daily spending limit",
+  "description": "The most the assistant may use in one day, all conversations together. \"No limit\" is allowed.",
+  "kind": "select",
+  "keywords": [
+   "budget",
+   "spending",
+   "cost",
+   "limit",
+   "tokens per day",
+   "money"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "start-here",
+  "pageLabel": "Start here",
+  "heading": "",
+  "label": "Stop a runaway task",
+  "description": "Stops a single task that keeps going too long or uses far too much.",
+  "kind": "switch",
+  "keywords": [
+   "budget",
+   "runaway",
+   "loop",
+   "stop"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "start-here",
+  "pageLabel": "Start here",
+  "heading": "",
+  "label": "Which add-ons are on",
+  "description": "Switch add-ons on and off, and see which are finished, newer or early.",
+  "kind": "button",
+  "keywords": [
+   "add-ons",
+   "plugins",
+   "core",
+   "beta",
+   "experimental",
+   "turn on"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "more-settings",
+  "pageLabel": "More settings",
+  "heading": "",
+  "label": "More settings",
+  "description": "Settings that have no control on any other page, drawn from each add-on and grouped by add-on. Each one saves at once and can be reset to its default.",
+  "kind": "section",
+  "keywords": [
+   "configuration file",
+   "advanced",
+   "yaml",
+   "file only",
+   "reset to default",
+   "all settings"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "more-settings",
+  "pageLabel": "More settings",
+  "heading": "",
+  "label": "Reset to default",
+  "description": "Puts one setting back to the value its add-on starts with.",
+  "kind": "button",
+  "keywords": [
+   "reset",
+   "default",
+   "restore"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "budget",
+  "pageLabel": "Budget guard",
+  "heading": "",
+  "label": "Starting token limit marker",
+  "description": "A marker the installer sets on a new install so its starting limit is not counted as a limit you saved. Not meant to be changed.",
+  "kind": "switch",
+  "keywords": [
+   "startingTokens",
+   "marker",
+   "installer",
+   "internal"
+  ],
+  "configOnly": true,
+  "field": "budget.startingTokens",
+  "tab": "main",
+  "internal": true
  }
 ]

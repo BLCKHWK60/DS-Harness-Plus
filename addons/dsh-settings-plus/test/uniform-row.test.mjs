@@ -82,16 +82,16 @@ test('the row\'s words follow the box\'s width alone: the parts that differ per 
   const ref = (re) => Number(modes.match(re)?.[1]);
   // The model button (its name differs per mode) has one width in every mode.
   assert.match(modes, /html\[data-dsh-uniform="true"\] \.dsh-mc-trigger\{width:(\d+)px;max-width:\1px;box-sizing:border-box\}/, 'model button: one width');
-  const lvl = modes.match(/\[data-dsh-measure\] \.dsh-mt:not\(\[data-f1\]\) \.lvl\{display:inline-block !important;width:([\d.]+em) !important\}/)?.[1];
+  const lvl = modes.match(/\[data-dsh-measure\] \.dsh-me-tools:not\(\[data-f1\]\) \.lvl\{display:inline-block !important;width:([\d.]+em) !important\}/)?.[1];
   assert.ok(lvl, 'the Web and Depth values');
-  assert.ok(modes.includes(`html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:${lvl};overflow:hidden;text-overflow:ellipsis}`), 'values: measured at their cap');
-  assert.match(modes, /\[data-dsh-measure\] \.dsh-mt:not\(\[data-f1\]\) button\[data-helpers\] \.lbl\{display:inline-block;min-width:[\d.]+em\}/, 'One model / 2 models');
-  assert.match(modes, /\[data-dsh-measure\] \.dsh-mt:not\(\[data-f2\]\) button\[data-tools\] \.lbl\{display:inline-block;min-width:[\d.]+em\}/, 'Tools on / off');
+  assert.ok(modes.includes(`html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:${lvl};overflow:hidden;text-overflow:ellipsis}`), 'values: measured at their cap');
+  assert.match(modes, /\[data-dsh-measure\] \.dsh-me-tools:not\(\[data-f1\]\) button\[data-helpers\] \.lbl\{display:inline-block;min-width:[\d.]+em\}/, 'One model / 2 models');
+  assert.match(modes, /\[data-dsh-measure\] \.dsh-me-tools:not\(\[data-f2\]\) button\[data-tools\] \.lbl\{display:inline-block;min-width:[\d.]+em\}/, 'Tools on / off');
   // Run: "Run" and "Running" have one width (that of "Running").
   const run = ref(/html\[data-dsh-uniform="true"\] \.dsh-ms-runbtn\{min-width:(\d+)px;box-sizing:border-box;justify-content:center\}/);
   assert.ok(run >= 80, 'Run as wide as "Running"');
   // The classes measured are the ones the owners draw.
-  assert.ok(clientOf('dsh-model-tiers').includes("className: 'dsh-mc-trigger'"));
+  assert.ok(clientOf('dsh-model-tiers').includes("className: 'dsh-mtm-trigger dsh-mc-trigger'"));
   assert.ok(clientOf('dsh-mission').includes("className: 'dsh-ms-runbtn'"));
   assert.match(modes, /'data-helpers': many \? 'many' : 'one'/);
   assert.match(modes, /'data-tools': none \? 'off' : 'on'/);
@@ -108,15 +108,16 @@ test('the same buttons whatever the conversation\'s state: Depth stays (greyed) 
   assert.match(body, /if \(off \|\| !uniform\) return null;/);
   assert.match(body, /getAttribute\('data-dsh-uniform'\) === 'true'/);
   assert.match(body, /setOff\(\/switched off\/i\.test/);
-  assert.match(body, /disabled: true, title: why/);
+  assert.match(body, /disabled: !notReady \|\| busy, title: why/);
   // The same word, icon and class as the live button.
   assert.equal((body.match(/className: 'dsh-ms-runbtn'/g) ?? []).length, 1);
-  assert.match(body, /'Run'\)\);/);
+  assert.match(body, /'Long run'\),/);
 });
 
 test('a mode\'s own button never lingers on another tab: forgotten when the conversation changes, hidden on another sidebar tab', () => {
   const bench = clientOf('dsh-bench');
-  assert.match(bench, /setView\(null\);\s*setOpen\(false\);\s*const tick = async/);
+  // (Devices now looks through the shared polling loop; the answer is still forgotten first.)
+  assert.match(bench, /setView\(null\);\s*setOpen\(false\);(?:\s*\/\/[^\n]*)*\s*const watcher = dshPoll\.loop/);
   assert.match(bench, /if \(otherTab\('bench'\)\) return null;/);
   const creator = clientOf('dsh-creator-plus');
   assert.match(creator, /setView\(null\);\s*setState\(null\);\s*setOpen\(false\);/);

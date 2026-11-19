@@ -22,6 +22,7 @@ import z from '@deepseek-ai/schemastery';
 import { openLibrary, readReach } from './lib/library.js';
 import { CANDIDATES_MAX, isPrivate, learnPrompt, pickConversations, proposalsOf, signalsOf, whereOf } from './lib/learn.js';
 import { openProposals, visibleTo } from './lib/proposals.js';
+import { readJsonStore } from './lib/json-store.js';
 
 /**
  * The marker lines of a Recon export (dsh-recon/lib/door.js: EXPORT_LINE_RE, and each source's
@@ -549,11 +550,7 @@ export function apply(ctx, config) {
 
   const scheduleFile = dir ? join(dir, 'schedule.json') : '';
   const readSchedule = () => {
-    try {
-      return JSON.parse(readFileSync(scheduleFile, 'utf8')) ?? {};
-    } catch {
-      return {};
-    }
+    return readJsonStore(scheduleFile, () => ({}), { label: 'the Skill architect schedule', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
   };
   const writeSchedule = (value) => {
     if (!scheduleFile) return;

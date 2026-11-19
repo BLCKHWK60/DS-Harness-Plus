@@ -173,7 +173,7 @@ export function advice(cells, tolerance = 0.02, { overlap = false } = {}) {
   return out;
 }
 
-/** @returns {string} the scorecard and the advice as plain text (for /bench). */
+/** @returns {string} the scorecard and the advice as plain text (for /benchmark). */
 export function methodsText(cells, notes) {
   const lines = ['Ways of working: mean score (0 to 1), seconds and tokens per task.'];
   let category = '';

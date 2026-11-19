@@ -16,6 +16,7 @@
  */
 import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
+import { readJsonStore } from './json-store.js';
 
 export const LIBRARY_NAME = 'Voice Library';
 export const VOICES = ['written', 'spoken'];
@@ -134,12 +135,8 @@ export function openLibrary(folderOf) {
   const read = () => {
     const folder = String(folderOf() ?? '').trim();
     if (!folder) return empty();
-    try {
-      const value = JSON.parse(readFileSync(join(folder, RECORD), 'utf8'));
-      return value && typeof value === 'object' ? { ...empty(), ...value } : empty();
-    } catch {
-      return empty();
-    }
+    const value = readJsonStore(join(folder, RECORD), () => undefined, { label: 'the Content library record', valid: (found) => found && typeof found === 'object' && !Array.isArray(found) });
+    return value ? { ...empty(), ...value } : empty();
   };
   /** A new file, never replacing one. */
   const newFile = (dir, base, text) => {

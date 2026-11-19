@@ -1,6 +1,6 @@
 /**
  * lib/plus: each tool's reading actions on scripted programs (nothing real runs): the exact arguments
- * each program gets, what the tool makes of its output, and the files it keeps (only in the Bench
+ * each program gets, what the tool makes of its output, and the files it keeps (only in the Devices
  * folder's dumps, extracted and usb-rea folders).
  */
 import test from 'node:test';
@@ -96,7 +96,7 @@ function world() {
   state.paths.openocd = join(root, 'oc', 'bin', 'openocd');
   const replies = {
     idevice_id: () => ({ stdout: '00008030-001A2D3C0E91802E\n' }),
-    ideviceinfo: () => ({ stdout: `DeviceName: Bench iPhone\nProductType: iPhone15,2\nProductVersion: 18.1\nDevicePublicKey: ${'A'.repeat(400)}\n` }),
+    ideviceinfo: () => ({ stdout: `DeviceName: Devices iPhone\nProductType: iPhone15,2\nProductVersion: 18.1\nDevicePublicKey: ${'A'.repeat(400)}\n` }),
     avrdude: (args) => (args.includes('signature:r:-:h') ? { stdout: '0x1e,0x95,0xf\n' } : args.includes('lfuse:r:-:h') ? { stdout: '0xff\n0xde\n0xfd\n' } : { stderr: 'avrdude: Device signature = 0x1e950f (probably m328p)\n' }),
     picotool: (args) => ({ stdout: args.includes('-d') ? 'Device Information\n flash size: 2048K\n flash id: 0xE6614103E7452D2F\n' : 'Program Information\n name: blink\n' }),
     'st-info': () => ({ stdout: 'Found 1 stlink programmers\n  chipid: 0x410\n  descr: F1xx Medium-density\n' }),
@@ -243,7 +243,7 @@ test('bench_stm32: info, a read kept in dumps with its checksum, verify by readi
     assert.match(await app.call('bench_stm32', { action: 'verify', file: other, address: '0x08001000' }), /^Different: the flash at 0x08001000/);
     const reads = app.argsOf('st-flash');
     assert.deepEqual(reads.map((args) => [args[0], args[2], args[3]]), [['read', '0x08000000', '0x40'], ['read', '0x08000000', '0x80'], ['read', '0x08001000', '0x80']]);
-    assert.ok(reads.every((args) => args[1].startsWith(join(app.bench, 'dumps'))), 'dumps only in the Bench folder');
+    assert.ok(reads.every((args) => args[1].startsWith(join(app.bench, 'dumps'))), 'dumps only in the Devices folder');
     assert.deepEqual(app.argsOf('st-info'), [['--probe']]);
   } finally {
     app.close();
@@ -373,7 +373,7 @@ test('USB lists: lsusb when it is there, else the Mac\'s system_profiler, else i
     assert.ok(!ftdi.includes('tty.usbserial'), 'call-out ports only');
     assert.deepEqual(app.argsOf('ioreg').at(-1), ['-r', '-c', 'IOUSBHostDevice', '-l', '-w0']);
 
-    // The EEPROM: read into dumps with a config Bench writes (fixed numbers), never written to the chip.
+    // The EEPROM: read into dumps with a config Devices writes (fixed numbers), never written to the chip.
     app.state.missing.delete('lsusb');
     const eeprom = await app.call('bench_ftdi', { action: 'eeprom-read', product: '6001' });
     assert.match(eeprom, /Read the EEPROM of the FT232R or FT245R .* into .*dumps\/ftdi-eeprom-6001-20261117-102030\.bin: 128 bytes/);
@@ -439,7 +439,7 @@ test('bench_hid, bench_hid_watch, bench_hid_capture', async () => {
     assert.match(capture, /page Keyboard\/Keypad usage 0x4 value 1/);
     assert.deepEqual(app.calls.at(-1).args, ['2']);
     assert.equal(app.calls.at(-1).file, '/fake/bin/hid-capture');
-    // A helper built into the Bench folder is used first.
+    // A helper built into the Devices folder is used first.
     mkdirSync(join(app.bench, 'bin'), { recursive: true });
     writeFileSync(join(app.bench, 'bin', 'hid-capture'), '#!/bin/sh\n');
     chmodSync(join(app.bench, 'bin', 'hid-capture'), 0o755);
@@ -512,7 +512,7 @@ test('bench_net_flow and bench_firmware_analyze', async () => {
   }
 });
 
-test('bench_firmware_extract (moria) and bench_usb_protocol (usb-rea) write only into their Bench folders', async () => {
+test('bench_firmware_extract (moria) and bench_usb_protocol (usb-rea) write only into their Devices folders', async () => {
   const app = world();
   try {
     const image = app.file('Router FW v1.2.bin', Buffer.alloc(1024, 3));

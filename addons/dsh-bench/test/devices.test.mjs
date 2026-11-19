@@ -1,5 +1,5 @@
 /**
- * Bench's device steps (plan B3, B4, B5, B7, B9) with stand-ins only: no real port is opened, no real
+ * Devices' device steps (plan B3, B4, B5, B7, B9) with stand-ins only: no real port is opened, no real
  * esptool, adb or device is used, the Mac's Bluetooth list is a sample. Stand-in programs are small
  * scripts in a throwaway folder (stty, cat), or a scripted runner that answers as esptool, adb and pmset do.
  */
@@ -28,7 +28,7 @@ test('the gates: Identify always; Read by level; Adjust and Write as the card al
   assert.deepEqual(gate({ card: card('identify', 'ask-auto'), need: 'identify' }), { ok: true, ask: false, why: '' });
   assert.equal(gate({ card: card('identify', 'ask-auto'), need: 'read' }).ok, false);
   assert.equal(gate({ card: card('read', 'ask-auto'), need: 'read' }).ok, true);
-  assert.match(gate({ card: card('read', 'full-auto'), need: 'adjust' }).why, /highest level is Read[\s\S]*Only the user can raise it, on Settings → Bench/);
+  assert.match(gate({ card: card('read', 'full-auto'), need: 'adjust' }).why, /highest level is Read[\s\S]*Only the user can raise it, on Settings → Devices/);
   assert.deepEqual(gate({ card: card('adjust', 'ask-auto'), need: 'adjust' }), { ok: true, ask: true, why: '' });
   assert.deepEqual(gate({ card: card('adjust', 'full-auto'), need: 'adjust' }), { ok: true, ask: false, why: '' });
   assert.match(gate({ card: card('write', 'restricted'), need: 'adjust' }).why, /Restricted/);
@@ -76,14 +76,14 @@ Hard resetting via RTS pin...`;
 test('the ESP32 recipe: chip details, sizes, addresses, official sources only, protected parts, the start check', () => {
   assert.deepEqual(parseFlashId(FLASH_ID), { chip: 'ESP32-D0WD-V3 (revision v3.1)', features: 'WiFi, BT, Dual Core, 240MHz, VRef calibration in efuse, Coding Scheme None', mac: '24:6f:28:aa:bb:cc', flash: '4MB', flashBytes: 4 * 1024 * 1024 });
   assert.equal(sizeBytes('512KB'), 512 * 1024);
-  assert.equal(sizeBytes('64MB'), undefined, 'larger than Bench works with');
+  assert.equal(sizeBytes('64MB'), undefined, 'larger than Devices works with');
   assert.equal(addressOf('0x10000'), 0x10000);
   assert.equal(addressOf('0x10001'), undefined, 'not on a 4 KB boundary');
   assert.equal(addressOf('0x10000; rm'), undefined);
   assert.equal(sourceRefusal('https://github.com/esphome/esphome/releases/download/2026.1.0/x.bin'), '');
   assert.equal(sourceRefusal('https://dl.espressif.com/x.bin'), '');
   assert.equal(sourceRefusal('https://micropython.org/resources/firmware/ESP32_GENERIC.bin'), '');
-  assert.match(sourceRefusal('https://github.com/someone/fork/releases/x.bin'), /is not a source Bench knows/);
+  assert.match(sourceRefusal('https://github.com/someone/fork/releases/x.bin'), /is not a source Devices knows/);
   assert.match(sourceRefusal('https://forum.example.com/attachment/123'), /never flashed/);
   assert.match(sourceRefusal('http://dl.espressif.com/x.bin'), /https/);
   assert.match(protectedHit(0x0, 0x1000), /loader/);
@@ -108,7 +108,7 @@ test('Android: adb\'s list, only the chosen build properties, the battery; setti
   assert.match(settingRefusal({ namespace: 'system', key: 'screen_off_timeout', value: '1; reboot', change: true }), /is not a value screen_off_timeout takes/);
   assert.match(settingRefusal({ namespace: 'global', key: 'private_dns_mode', value: 'off', change: true }), /protections/);
   assert.match(settingRefusal({ namespace: 'global', key: 'http_proxy' }), /protections/, 'not even read');
-  assert.match(settingRefusal({ namespace: 'global', key: 'some_new_setting', value: '1', change: true }), /Bench changes only these settings/);
+  assert.match(settingRefusal({ namespace: 'global', key: 'some_new_setting', value: '1', change: true }), /Devices changes only these settings/);
   assert.equal(settingRefusal({ namespace: 'global', key: 'some_new_setting' }), '', 'read, it may be');
   assert.equal(adbArgs.put('X', 'system', 'font_scale', "1'; reboot").at(-1), "'1'\\''; reboot'", 'every value goes to the phone in quotes');
   assert.equal(settingRaw('30000 it\'s\n'), "30000 it's");
@@ -141,7 +141,7 @@ test('ports: only a /dev/cu port bench_usb listed, never the Mac\'s own', () => 
   assert.equal(portRefusal('/dev/cu.SLAB_USBtoUART', shown), '');
   assert.match(portRefusal('/dev/cu.usbmodem1', shown), /not listed by bench_usb/);
   assert.match(portRefusal('/dev/cu.debug-console', new Set(['/dev/cu.debug-console'])), /Mac's own/);
-  assert.match(portRefusal('/dev/tty.SLAB_USBtoUART', shown), /not a serial port Bench opens/);
+  assert.match(portRefusal('/dev/tty.SLAB_USBtoUART', shown), /not a serial port Devices opens/);
   assert.match(portRefusal('/dev/cu.x;rm', shown), /not a serial port/);
   assert.equal(deviceLine('wifi password: hunter22\u0007 ok'), 'wifi password: [masked]  ok');
 });
@@ -172,7 +172,7 @@ test('watching a port: the line is set with fixed arguments, every line is kept 
     assert.match(log, /^\d{4}-\d\d-\d\dT[\d:.]+Z  rst:0x1/m);
     assert.match(log, /wifi password: \[masked\]/);
     assert.doesNotMatch(log, /hunter22/);
-    await assert.rejects(serial.watch({ port: '/dev/cu.x', baud: 12345, seconds: 1, logFile }), /not one Bench uses/);
+    await assert.rejects(serial.watch({ port: '/dev/cu.x', baud: 12345, seconds: 1, logFile }), /not one Devices uses/);
     const failing = createSerial({ stty: standInPrograms([], { failStty: true }).stty, cat: programs.cat });
     await assert.rejects(failing.watch({ port: '/dev/cu.x', baud: 115200, seconds: 1, logFile }), /could not be set up/);
   } finally {
@@ -181,44 +181,44 @@ test('watching a port: the line is set with fixed arguments, every line is kept 
   }
 });
 
-test('programs: found in their fixed places; when missing, Bench says how to get them and installs nothing', async () => {
+test('programs: found in their fixed places; when missing, Devices says how to get them and installs nothing', async () => {
   const dir = scratch();
   try {
     writeFileSync(join(dir, 'esptool.py'), '#!/bin/sh\nexit 0\n');
     chmodSync(join(dir, 'esptool.py'), 0o755);
     assert.equal(await findProgram('esptool', { places: [dir] }), join(dir, 'esptool.py'));
     assert.equal(await findProgram('adb', { places: [dir] }), '');
-    assert.match(PROGRAMS.adb.get, /brew install android-platform-tools[\s\S]*Bench never installs anything/);
+    assert.match(PROGRAMS.adb.get, /brew install android-platform-tools[\s\S]*Devices never installs anything/);
     assert.match(PROGRAMS.esptool.get, /pipx install esptool/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('the guard: nothing in the Bench folder or under /dev is read or written by file tools; searching a folder that holds it is refused', () => {
+test('the guard: nothing in the Devices folder or under /dev is read or written by file tools; searching a folder that holds it is refused', () => {
   const folder = scratch();
   const old = scratch();
   try {
     const decide = (name, args, cwd = '/') => benchRefusal({ name, args, cwd, benchFolders: [folder, old] });
     assert.equal(decide('read', { file_path: join(folder, 'devices', 'esp32-board-1', 'backups', 'x-flash.bin') }), NO_BACKUPS);
     assert.equal(decide('read', { file_path: join(folder, 'devices', 'esp32-board-1', 'card.md') }), NO_BACKUPS, 'bench_devices shows the card');
-    assert.equal(decide('read', { file_path: join(old, 'devices', 'x', 'backups', 'y.bin') }), NO_BACKUPS, 'a Bench folder used before');
+    assert.equal(decide('read', { file_path: join(old, 'devices', 'x', 'backups', 'y.bin') }), NO_BACKUPS, 'a Devices folder used before');
     assert.equal(decide('grep', { pattern: 'psk', path: join(folder, 'devices') }), NO_BACKUPS);
     assert.equal(decide('glob', { pattern: join(folder, 'devices', '**', '*.bin') }), NO_BACKUPS);
-    assert.equal(decide('grep', { pattern: 'psk', path: dirname(folder) }), NO_BACKUPS, 'a search over a folder that holds the Bench folder');
+    assert.equal(decide('grep', { pattern: 'psk', path: dirname(folder) }), NO_BACKUPS, 'a search over a folder that holds the Devices folder');
     assert.equal(decide('grep', { pattern: 'psk' }, dirname(folder)), NO_BACKUPS, 'a search with no path searches the conversation\'s folder');
     assert.equal(decide('read', { file_path: '/dev/cu.SLAB_USBtoUART' }), NO_DEVICE_FILES);
     assert.equal(decide('write', { file_path: '/dev/cu.SLAB_USBtoUART', content: 'x' }), NOT_THERE);
     assert.equal(decide('edit', { file_path: join(folder, 'devices', 'x', 'card.json') }), NOT_THERE);
     assert.equal(decide('read', { file_path: '/elsewhere/notes.md' }), '');
-    assert.equal(decide('write', { file_path: '/elsewhere/report.md', content: 'x' }), '', 'a Long run writes its own files outside the Bench folder');
+    assert.equal(decide('write', { file_path: '/elsewhere/report.md', content: 'x' }), '', 'a Long run writes its own files outside the Devices folder');
   } finally {
     rmSync(folder, { recursive: true, force: true });
     rmSync(old, { recursive: true, force: true });
   }
 });
 
-test('the guard is an allow-list: every way to run a command and every tool Bench does not know is closed', () => {
+test('the guard is an allow-list: every way to run a command and every tool Devices does not know is closed', () => {
   const decide = (name, args = {}) => benchRefusal({ name, args, cwd: '/', benchFolders: [] });
   for (const name of ['bash', 'terminal', 'terminal_open', 'terminal_send', 'shell', 'pwsh', 'powershell', 'run_code', 'job_output', 'job_kill', 'terminal_whatever', 'shell_exec']) assert.equal(decide(name), NO_COMMANDS, name);
   for (const name of ['str_replace_editor', 'apply_patch', 'notebook_edit', 'mcp__someone__run', 'computer', 'browser_click', 'spawn_agent']) assert.equal(decide(name), NOT_ALLOWED, name);
@@ -258,7 +258,7 @@ test('downloads: at most 8 GB (the owner\'s choice); a larger file is refused be
   const folder = scratch();
   try {
     const fetchFn = async () => ({ status: 200, headers: { get: (name) => (name === 'content-length' ? String(9 * 1024 * 1024 * 1024) : null) }, arrayBuffer: async () => new ArrayBuffer(1) });
-    await assert.rejects(download({ url: 'https://dl.gl-inet.com/x.bin', folder, fetchFn, kind: 'router' }), /more than Bench downloads/);
+    await assert.rejects(download({ url: 'https://dl.gl-inet.com/x.bin', folder, fetchFn, kind: 'router' }), /more than Devices downloads/);
     assert.deepEqual(readdirSync(folder), []);
     const small = async () => ({ status: 200, headers: { get: (name) => (name === 'content-length' ? String(7 * 1024 * 1024 * 1024) : null) }, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer });
     const got = await download({ url: 'https://dl.gl-inet.com/x.bin', folder, fetchFn: small, kind: 'router' });

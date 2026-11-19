@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Bench",
-    "description": "A Bench mode and tab for the devices you connect to your Mac: identify what is plugged in by USB, find its documentation, and keep a card and a logbook for each device."
+    "title": "Devices",
+    "description": "A Devices mode and tab for the devices you connect to your Mac: identify what is plugged in by USB, find its documentation, and keep a card and a logbook for each device."
   }
 }

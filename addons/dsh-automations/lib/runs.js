@@ -6,6 +6,7 @@
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { readJsonStore } from './json-store.js';
 
 /**
  * Runs kept for all automations together, newest first: only a ceiling for the file's size. Each
@@ -132,12 +133,8 @@ function tail(text) {
 export function openRuns(file) {
   let runs = [];
   if (file) {
-    try {
-      const read = JSON.parse(readFileSync(file, 'utf8'));
-      if (Array.isArray(read?.runs)) runs = read.runs.filter((run) => run && typeof run.id === 'string' && typeof run.sessionId === 'string');
-    } catch {
-      runs = [];
-    }
+    const read = readJsonStore(file, () => ({}), { label: 'the record of Automations runs', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
+    if (Array.isArray(read?.runs)) runs = read.runs.filter((run) => run && typeof run.id === 'string' && typeof run.sessionId === 'string');
   }
   let dirty = false;
   /** Conversation id -> its run in progress. */

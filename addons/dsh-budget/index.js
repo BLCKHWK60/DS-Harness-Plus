@@ -2,7 +2,9 @@
  * Budget guard: hard limits that stop a task that is running away.
  *
  * A task is one turn of a conversation: everything the assistant does after one message, with the
- * work of its helper agents counted in. The guard counts the task's steps (requests to a model),
+ * work of its helper agents counted in. The guard counts the task's steps (requests to a model; the
+ * conversation's own and its helpers' apart, so a long Deep research or Mission run is not cut by the
+ * limit meant for a runaway conversation),
  * tokens and minutes, and watches for the same tool call repeated in a row. At a limit it refuses
  * the task's next step, which ends the turn; the conversation is untouched and the next message
  * starts a fresh allowance. The limit is enforced here, by the program: the model is never asked
@@ -22,8 +24,16 @@ export const DATA_PATH = '/dsh-budget/data';
 export const Config = z.object({
   /** Master switch. */
   enabled: z.boolean().default(true).volatile(),
-  /** Most requests to a model in one task, helpers included. 0 = no limit. */
+  /** Most requests to a model in one task made by the conversation itself. 0 = no limit (helpers are then not limited either). */
   maxSteps: z.natural().default(300).volatile(),
+  /** Most requests in one task made by helper agents (Deep research, Mission, sub-agents), counted apart so a long run is not cut by the conversation's own limit. 0 = helpers share `maxSteps`, as before. */
+  maxHelperSteps: z.natural().default(1500).volatile(),
+  /** While a Mission Long run is on: most requests in one task, all of them (the Long run's own allowance; Mission has its own limits too). 0 = the ordinary limit. */
+  maxLongSteps: z.natural().default(5000).volatile(),
+  /** While a Mission Long run is on: most tokens in one task. 0 = the ordinary limit. */
+  maxLongTokens: z.natural().default(60000000).volatile(),
+  /** Set by a first install only: the token limit below is the installer's starting value, not one the person chose, so a Long run's allowance may replace it. Saving the token limit on the Budget page clears it. */
+  startingTokens: z.boolean().default(false).volatile(),
   /** Most tokens (sent plus received) in one task, helpers included. 0 = no limit. */
   maxTokens: z.natural().default(20000000).volatile(),
   /** Longest one task may run, in minutes. Time spent waiting for you counts. 0 = no limit. */
@@ -53,7 +63,11 @@ export function apply(ctx, config) {
   const limits = () => readLimits({
     enabled: plain(config.enabled),
     maxSteps: plain(config.maxSteps),
+    maxHelperSteps: plain(config.maxHelperSteps),
+    maxLongSteps: plain(config.maxLongSteps),
+    maxLongTokens: plain(config.maxLongTokens),
     maxTokens: plain(config.maxTokens),
+    startingTokens: plain(config.startingTokens),
     maxMinutes: plain(config.maxMinutes),
     maxRepeats: plain(config.maxRepeats),
     dayTokens: plain(config.dayTokens),
@@ -91,6 +105,14 @@ export function apply(ctx, config) {
     return String(header.id ?? session?.id ?? '');
   };
   const isHelper = (session) => session?.header?.origin === 'subagent';
+  /** The Long run working in a conversation right now ('' when none, or paused, or an ordinary /mission run): only then its allowance applies. */
+  const longKey = (id) => {
+    try {
+      return id ? String(ctx.get('mission')?.longRunId?.(id) ?? '') : '';
+    } catch {
+      return '';
+    }
+  };
 
   // Events older than this start are history being read back, not work happening now.
   const startedAt = Date.now();
@@ -105,11 +127,11 @@ export function apply(ctx, config) {
           if (!isHelper(session)) meter.startTask(id);
           break;
         case 'step/start':
-          meter.step(id);
+          meter.step(id, isHelper(session), longKey(id));
           break;
         case 'assistant/message': {
           const usage = event.data?.usage;
-          if (usage && typeof usage === 'object') meter.usage(id, (Number(usage.inputTokens) || 0) + (Number(usage.outputTokens) || 0));
+          if (usage && typeof usage === 'object') meter.usage(id, (Number(usage.inputTokens) || 0) + (Number(usage.outputTokens) || 0), longKey(id));
           break;
         }
         case 'turn/end':
@@ -128,7 +150,7 @@ export function apply(ctx, config) {
     let id = '';
     try {
       id = rootOf(payload?.agent?.session);
-      hit = id ? meter.check(id) : null;
+      hit = id ? meter.check(id, longKey(id)) : null;
     } catch (error) {
       ctx.logger?.warn?.(`budget: could not check a step: ${String(error?.message ?? error)}`);
     }

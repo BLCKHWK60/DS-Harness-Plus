@@ -14,6 +14,270 @@ window.__ModuleLoader__.load({
     const ReactDOM = require('react-dom');
     const h = React.createElement;
     const { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } = React;
+    // ---- dsh-kit:begin ---- shared small helpers; this block is the same in every add-on page file that uses it.
+    // The master copy is docs/shared/dsh-kit.js. Change it there, then run `node scripts/sync-kit.mjs` (it copies the block into
+    // every client.js that has the two marker lines, and `bash scripts/check.sh` fails when a copy has drifted).
+    // Dependency-free: plain DOM for the question box, React is passed in for the error note.
+    const dshKit = (() => {
+      const STYLE_ID = 'dsh-kit-style';
+      const CSS = `
+    .dsh-kit-veil { position: fixed; inset: 0; z-index: 2147483000; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; background: color-mix(in srgb, #000 32%, transparent); }
+    .dsh-kit-box { width: min(420px, 100%); box-sizing: border-box; padding: 16px; border-radius: 12px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base)); color: var(--dsw-alias-label-primary); box-shadow: 0 14px 36px color-mix(in srgb, #000 28%, transparent); font: 14px/22px system-ui, sans-serif; }
+    .dsh-kit-title { margin: 0 0 4px; font-size: 14px; line-height: 22px; font-weight: 500; }
+    .dsh-kit-text { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 50vh; overflow: auto; }
+    .dsh-kit-field { display: block; width: 100%; box-sizing: border-box; height: 36px; margin-top: 10px; padding: 0 14px; border: 0; border-radius: 12px; font: inherit; color: var(--dsw-alias-label-primary); background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); }
+    .dsh-kit-field:focus { outline: 1px solid var(--dsw-alias-brand-primary); }
+    .dsh-kit-label { display: block; margin-top: 10px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+    .dsh-kit-label + .dsh-kit-field { margin-top: 2px; }
+    .dsh-kit-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+    .dsh-kit-btn { height: 28px; padding: 0 10px; border-radius: 8px; border: 0.5px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; cursor: pointer; }
+    .dsh-kit-btn:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+    .dsh-kit-btn:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); }
+    .dsh-kit-btn[data-main="true"] { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
+    .dsh-kit-btn[data-danger="true"] { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
+    .dsh-kit-note { margin: 4px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+    .dsh-kit-note[data-error="true"] { color: var(--dsw-alias-state-error-primary); }
+    .dsh-kit-more { margin-left: 6px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; text-decoration: underline; cursor: pointer; }
+    .dsh-kit-detail { display: block; margin-top: 4px; font: 11px/16px ui-monospace, Menlo, monospace; color: var(--dsw-alias-label-secondary); white-space: pre-wrap; user-select: text; }
+    `;
+      const ensureStyle = () => {
+        if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = STYLE_ID;
+        style.textContent = CSS;
+        (document.head || document.documentElement).appendChild(style);
+      };
+
+      /** Turns what a failed call says ("error 404", "settings/conflict: ...") into a plain sentence; the raw text goes to `details`. */
+      const plain = (raw) => {
+        let message = '';
+        if (typeof raw === 'string') message = raw;
+        else if (raw && typeof raw === 'object') {
+          const source = raw.rpcError ?? (raw.error && typeof raw.error === 'object' ? raw.error : raw);
+          message = String(source.message ?? raw.error ?? '');
+          if (source.code && !message.includes(String(source.code))) message = `${source.code}: ${message}`;
+        }
+        const existing = raw && typeof raw === 'object' && typeof raw.details === 'string' ? raw.details : '';
+        message = message.trim();
+        const text = (sentence) => ({ text: sentence, details: existing || (message && message !== sentence ? message : '') });
+        const status = /^(?:error|status|http)?\s*(\d{3})\b/i.exec(message)?.[1] ?? /(?:answered|returned)\s+(\d{3})\b/i.exec(message)?.[1] ?? '';
+        if (/settings\/conflict/i.test(message)) return text('This setting was changed somewhere else at the same moment. Please try again.');
+        if (/not mounted|namespace not mounted|settings unavailable|is switched off|is not running/i.test(message)) return text('This add-on is not running. Switch it on (or restart the app) and try again.');
+        if (/failed to fetch|networkerror|load failed|network request failed|econnrefused/i.test(message)) return text('Could not reach the app. Check that it is still running, then try again.');
+        if (status === '401' || status === '403') return text('The app did not allow this. Restart the app and try again.');
+        if (status === '404') return text('This part of the add-on is not available. It may be switched off, or the app needs a restart after an update.');
+        if (status === '408' || status === '504') return text('The app took too long to answer. Try again in a moment.');
+        if (status === '409') return text('This changed somewhere else at the same moment. Please try again.');
+        if (/^5\d\d$/.test(status)) return text('The add-on ran into a problem. Try again; if it keeps happening, restart the app.');
+        if (/^4\d\d$/.test(status)) return text('The app could not use this request. Try again; if it keeps happening, restart the app.');
+        // "code/name: message": show the message, keep the code as a detail.
+        const coded = /^([a-z][\w-]*(?:\/[\w.-]+)+):\s*(.+)$/is.exec(message);
+        if (coded) return { text: coded[2].trim(), details: existing || message };
+        // A readable sentence stays as it is.
+        if (/^[A-Z"'(].*\s/s.test(message) || /\s/.test(message)) return { text: message, details: existing };
+        if (!message) return { text: 'Something went wrong. Try again.', details: existing };
+        return text('Something went wrong. Try again; the Details line says what the app reported.');
+      };
+      /** An Error whose message is the plain sentence and whose `details` keeps the raw text. */
+      const fail = (raw) => {
+        const found = plain(raw);
+        const error = new Error(found.text);
+        error.details = found.details;
+        return error;
+      };
+
+      /**
+       * A small question box in the page's own style (window.prompt does nothing in the desktop app, and the native
+       * confirm cannot be styled or checked there). Resolves true/false; with `field` the typed text or null; `notice` shows OK only.
+       */
+      const ask = (options = {}) => new Promise((resolve) => {
+        if (typeof document === 'undefined') { resolve(options.field ? null : false); return; }
+        ensureStyle();
+        const before = document.activeElement;
+        const veil = document.createElement('div');
+        veil.className = 'dsh-kit-veil';
+        const box = document.createElement('div');
+        box.className = 'dsh-kit-box';
+        box.setAttribute('role', 'dialog');
+        box.setAttribute('aria-modal', 'true');
+        const add = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text != null) node.textContent = text; return node; };
+        if (options.title) { const title = add('p', 'dsh-kit-title', options.title); box.appendChild(title); box.setAttribute('aria-label', options.title); }
+        if (options.text) box.appendChild(add('p', 'dsh-kit-text', options.text));
+        let input = null;
+        if (options.field) {
+          if (options.field.label) box.appendChild(add('label', 'dsh-kit-label', options.field.label));
+          input = add('input', 'dsh-kit-field');
+          input.type = 'text';
+          input.value = options.field.value ?? '';
+          if (options.field.placeholder) input.placeholder = options.field.placeholder;
+          if (options.field.label) input.setAttribute('aria-label', options.field.label);
+          box.appendChild(input);
+        }
+        const row = add('div', 'dsh-kit-row');
+        const done = (value) => { document.removeEventListener('keydown', onKey, true); veil.remove(); try { before?.focus?.(); } catch { /* the old control is gone */ } resolve(value); };
+        const cancel = options.notice ? null : add('button', 'dsh-kit-btn', options.cancel ?? 'Cancel');
+        const ok = add('button', 'dsh-kit-btn', options.ok ?? 'OK');
+        ok.type = 'button';
+        ok.setAttribute('data-main', 'true');
+        if (options.danger) ok.setAttribute('data-danger', 'true');
+        const accept = () => done(input ? input.value : true);
+        const reject = () => done(input ? null : false);
+        function onKey(event) {
+          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (options.notice) accept(); else reject(); }
+          else if (event.key === 'Enter' && input && document.activeElement === input) { event.preventDefault(); event.stopPropagation(); accept(); }
+          else if (event.key === 'Tab') {
+            const stops = [...box.querySelectorAll('input,button')];
+            const at = stops.indexOf(document.activeElement);
+            if (stops.length > 0) { event.preventDefault(); stops[(at + (event.shiftKey ? stops.length - 1 : 1)) % stops.length].focus(); }
+          }
+        }
+        if (cancel) { cancel.type = 'button'; cancel.addEventListener('click', reject); row.appendChild(cancel); }
+        ok.addEventListener('click', accept);
+        row.appendChild(ok);
+        box.appendChild(row);
+        veil.appendChild(box);
+        veil.addEventListener('mousedown', (event) => { if (event.target === veil && !options.notice) reject(); });
+        document.addEventListener('keydown', onKey, true);
+        document.body.appendChild(veil);
+        // A question that can destroy something starts on Cancel, so a stray Enter never confirms it.
+        (input ?? (options.danger && cancel ? cancel : ok)).focus();
+        if (input) input.select();
+      });
+
+      /** The note to draw under a form or at the top of a page: a plain sentence and a "Details" button. */
+      const makeNote = (React) => function PlainNote({ error, text, details, kind }) {
+        ensureStyle();
+        const [open, setOpen] = React.useState(false);
+        const found = error !== undefined && error !== null && error !== '' ? plain(error) : { text: text ?? '', details: details ?? '' };
+        if (!found.text) return null;
+        const bad = kind ? kind === 'error' : error !== undefined && error !== null && error !== '';
+        return React.createElement('div', { className: 'dsh-kit-note', 'data-error': String(bad), role: bad ? 'alert' : 'status' },
+          found.text,
+          found.details ? React.createElement('button', { type: 'button', className: 'dsh-kit-more', 'aria-expanded': open, onClick: () => setOpen(!open) }, open ? 'Hide details' : 'Details') : null,
+          open && found.details ? React.createElement('span', { className: 'dsh-kit-detail' }, found.details) : null);
+      };
+      return { plain, fail, ask, makeNote };
+    })();
+    // ---- dsh-kit:end ----
+    // ---- dsh-ui:begin ---- shared page parts (switch, button, row, heading, empty state, chips); the same block in every page file that uses it.
+    // The master copy is docs/shared/dsh-ui.js. Change it there, then run `node scripts/sync-kit.mjs`; `bash scripts/check.sh` fails when a copy has drifted.
+    // All classes start with "dshu-" and belong to this block only: no add-on defines or restyles them. The look follows docs/UI-STYLE.md.
+    // React is passed in: `const ui = dshUi.makeParts(React);` then `h(ui.Switch, { on, label, onChange })`, `h(ui.Row, { title, desc }, control)` and so on.
+    const dshUi = (() => {
+      const STYLE_ID = 'dsh-ui-style';
+      const CSS = `
+    .dshu-page { display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); }
+    .dshu-title { margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; }
+    .dshu-desc { margin: 4px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+    .dshu-desc[data-error="true"] { color: var(--dsw-alias-state-error-primary); }
+    .dshu-group { margin: 24px 0 8px; font-size: 12px; line-height: 18px; font-weight: 600; text-transform: uppercase; color: var(--dsw-alias-label-secondary); }
+    .dshu-row { display: flex; align-items: center; gap: 16px; padding: 16px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
+    .dshu-rowtext { flex: 1; min-width: 0; }
+    .dshu-rowtitle { font-size: 14px; line-height: 22px; overflow-wrap: anywhere; }
+    .dshu-rowdesc { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+    .dshu-side { flex: none; display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+    @media (max-width: 560px) { .dshu-row { flex-wrap: wrap; } .dshu-side { margin-left: auto; } }
+    .dshu-btn { flex: none; height: 28px; padding: 0 10px; border-radius: 8px; border: 0.5px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; }
+    .dshu-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+    .dshu-btn:disabled { opacity: .5; cursor: default; }
+    .dshu-btn[data-main="true"] { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
+    .dshu-btn[data-danger="true"] { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
+    .dshu-field { flex: 1; min-width: 0; box-sizing: border-box; height: 36px; padding: 0 14px; border: 0; border-radius: 12px; font: inherit; font-size: 14px; color: var(--dsw-alias-label-primary); background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); }
+    .dshu-field:focus { outline: 1px solid var(--dsw-alias-brand-primary); }
+    .dshu-switch { flex: none; position: relative; width: 36px; height: 20px; padding: 2px; border: 0; border-radius: 999px; cursor: pointer; background: var(--dsw-alias-border-l3, var(--dsw-alias-border-l2)); }
+    .dshu-switch::after { content: ''; display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--dsw-alias-switch-thumb, var(--dsw-alias-label-primary)); }
+    .dshu-switch[aria-checked="true"] { background: var(--dsw-alias-brand-primary); }
+    .dshu-switch[aria-checked="true"]::after { transform: translateX(16px); background: var(--dsw-alias-bg-base); }
+    .dshu-switch[data-danger="true"][aria-checked="true"] { background: var(--dsw-alias-state-error-primary); }
+    .dshu-switch:disabled { opacity: .5; cursor: default; }
+    @media (prefers-reduced-motion: no-preference) { .dshu-switch { transition: background .12s ease; } .dshu-switch::after { transition: transform .12s ease; } }
+    .dshu-btn:focus-visible, .dshu-switch:focus-visible, .dshu-chip:focus-visible, .dshu-link:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+    .dshu-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 16px 0 0; padding: 16px; border-radius: 20px; border: 0.5px dashed var(--dsw-alias-border-l2); color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
+    .dshu-empty-title { margin: 0; font-size: 14px; line-height: 22px; color: var(--dsw-alias-label-primary); }
+    .dshu-empty-text { margin: 0; overflow-wrap: anywhere; }
+    .dshu-empty .dshu-chips { margin-top: 8px; }
+    .dshu-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .dshu-chip { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 12px; border: 0.5px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; cursor: pointer; }
+    .dshu-chip:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+    .dshu-link { padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; text-decoration: underline; cursor: pointer; }
+    .dshu-wait { margin: 16px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+    .dshu-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    `;
+      const ensureStyle = () => {
+        if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = STYLE_ID;
+        style.textContent = CSS;
+        (document.head || document.documentElement).appendChild(style);
+      };
+
+      /** Copies text and says so. Resolves true when it worked. */
+      const copyText = async (text) => {
+        try {
+          if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) { await navigator.clipboard.writeText(String(text)); return true; }
+        } catch { /* fall through to the old way */ }
+        try {
+          const area = document.createElement('textarea');
+          area.value = String(text);
+          area.setAttribute('readonly', '');
+          area.style.cssText = 'position:fixed;opacity:0';
+          document.body.appendChild(area);
+          area.select();
+          const done = document.execCommand('copy');
+          area.remove();
+          return done === true;
+        } catch { return false; }
+      };
+
+      const makeParts = (React) => {
+        ensureStyle();
+        const h = React.createElement;
+        /** The page frame: a title, one sentence under it, then the page. */
+        const Page = ({ title, desc, children }) => h('div', { className: 'dshu-page' },
+          title ? h('h2', { className: 'dshu-title' }, title) : null,
+          desc ? h('p', { className: 'dshu-desc' }, desc) : null,
+          children);
+        const Group = ({ children }) => h('div', { className: 'dshu-group' }, children);
+        /** A short line in the page's description style; `error` draws it in the error colour. */
+        const Desc = ({ error, children, role }) => h('p', { className: 'dshu-desc', 'data-error': String(error === true), role: role ?? (error ? 'alert' : undefined) }, children);
+        /** One setting: text on the left, the control(s) on the right. */
+        const Row = ({ title, desc, children }) => h('div', { className: 'dshu-row' },
+          h('div', { className: 'dshu-rowtext' }, h('div', { className: 'dshu-rowtitle' }, title), desc ? h('div', { className: 'dshu-rowdesc' }, desc) : null),
+          children);
+        const Side = ({ children }) => h('div', { className: 'dshu-side' }, children);
+        /** `danger`: when it is on, the switch is drawn in the error colour (a safety rule that has been turned off). */
+        const Switch = ({ on, label, onChange, disabled, danger }) => h('button', {
+          type: 'button', role: 'switch', className: 'dshu-switch', 'data-danger': danger ? 'true' : undefined, 'aria-checked': on === true, 'aria-label': label, disabled: disabled === true, onClick: () => onChange(!on),
+        });
+        const Button = ({ main, danger, children, ...rest }) => h('button', { type: 'button', className: 'dshu-btn', 'data-main': main ? 'true' : undefined, 'data-danger': danger ? 'true' : undefined, ...rest }, children);
+        const Field = (props) => h('input', { className: 'dshu-field', spellCheck: false, autoCapitalize: 'off', autoCorrect: 'off', ...props });
+        /** A button that copies `text` and shows "Copied" for a moment (a timer only while it is showing). */
+        const CopyButton = ({ text, label = 'Copy', ...rest }) => {
+          const [done, setDone] = React.useState(false);
+          const timer = React.useRef(0);
+          React.useEffect(() => () => clearTimeout(timer.current), []);
+          return h(Button, { ...rest, 'aria-live': 'polite', onClick: async () => {
+            if (await copyText(typeof text === 'function' ? text() : text)) { setDone(true); clearTimeout(timer.current); timer.current = setTimeout(() => setDone(false), 1500); }
+          } }, done ? 'Copied' : label);
+        };
+        /** A row of small choices (starter chips). `items` are strings or { label, value }; `onPick(value)`. */
+        const Chips = ({ items, onPick, label }) => h('div', { className: 'dshu-chips', role: 'group', 'aria-label': label ?? 'Suggestions' },
+          items.map((item) => { const entry = typeof item === 'string' ? { label: item, value: item } : item; return h('button', { key: entry.label, type: 'button', className: 'dshu-chip', onClick: () => onPick(entry.value ?? entry.label) }, entry.label); }));
+        /** What a list shows when it has nothing yet: what it is for, then what to do first (optionally as starter chips). */
+        const Empty = ({ title, text, chips, onPick, children }) => h('div', { className: 'dshu-empty', role: 'status' },
+          title ? h('p', { className: 'dshu-empty-title' }, title) : null,
+          text ? h('p', { className: 'dshu-empty-text' }, text) : null,
+          chips && chips.length > 0 ? h(Chips, { items: chips, onPick: onPick ?? (() => {}) }) : null,
+          children);
+        const Wait = ({ children }) => h('p', { className: 'dshu-wait', role: 'status' }, children ?? 'Loading…');
+        return { Page, Group, Desc, Row, Side, Switch, Button, Field, CopyButton, Chips, Empty, Wait };
+      };
+      return { makeParts, ensureStyle, copyText };
+    })();
+    // ---- dsh-ui:end ----
+    const { fail, ask } = dshKit;
+    const ui = dshUi.makeParts(React);
+    const PlainNote = dshKit.makeNote(React);
 
     const NS = 'artifacts';
     const DICT = { en: { 'section.title': 'Artifacts', 'page.title': 'Artifacts' }, zh: { 'section.title': 'Artifacts', 'page.title': '产物' } };
@@ -58,9 +322,6 @@ window.__ModuleLoader__.load({
 .dsh-af-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
 .dsh-af-rows { width: 100%; border-collapse: collapse; } .dsh-af-rows td, .dsh-af-rows th { padding: 6px 8px; border-bottom: 0.5px solid var(--dsw-alias-border-l1); text-align: left; font-size: 12px; } .dsh-af-rows th { color: var(--dsw-alias-label-secondary); font-weight: 600; }
 .dsh-af-box { margin: 18px 0; padding: 12px 14px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 12px; }
-.dsh-af-switch { position: relative; width: 36px; height: 20px; flex: none; border: 0; border-radius: 10px; cursor: pointer; background: var(--dsw-alias-border-l2); padding: 0; }
-.dsh-af-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 8px; background: var(--dsw-alias-bg-base); transition: transform .15s; }
-.dsh-af-switch[aria-checked="true"] { background: var(--dsw-alias-brand-primary); } .dsh-af-switch[aria-checked="true"]::after { transform: translateX(16px); }
 `;
 
     async function call(body, query = '') {
@@ -70,13 +331,13 @@ window.__ModuleLoader__.load({
         body: body ? JSON.stringify(body) : undefined,
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || `error ${response.status}`);
+      if (!response.ok) throw fail(data.error || `error ${response.status}`);
       return data;
     }
     /** A version's content, as plain data (never a page from the app's address). */
     async function content(id, version, session) {
       const response = await fetch(new URL(`dsh-artifacts/data?content=${encodeURIComponent(id)}&v=${encodeURIComponent(version)}&session=${encodeURIComponent(session ?? '')}`, document.baseURI), { cache: 'no-store', credentials: 'same-origin' });
-      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || `error ${response.status}`);
+      if (!response.ok) throw fail((await response.json().catch(() => ({}))).error || `error ${response.status}`);
       return response.blob();
     }
     const extOf = (name) => String(name ?? '').toLowerCase().split('.').pop();
@@ -340,7 +601,7 @@ window.__ModuleLoader__.load({
         !backup && !sealed ? h('button', { key: 'preview', type: 'button', className: 'dsh-af-btn', onClick: appPreview, title: 'Show this conversation on its own, with the file in the app\'s own preview' }, 'App preview') : null,
         !backup && !sealed && openable(item) ? h('button', { key: 'open', type: 'button', className: 'dsh-af-btn', onClick: () => void act(() => call({ action: 'openApp', id: item.id, session: sessionId }), 'Opened in its own app.') }, 'Open in its app') : null,
         !backup && !sealed ? h('button', { key: 'reveal', type: 'button', className: 'dsh-af-btn', title: 'Show it in its folder, without opening it', onClick: () => void act(() => call({ action: 'reveal', id: item.id, session: sessionId }), 'Shown in Finder.') }, 'Show in Finder') : null,
-        !backup && !sealed ? h('button', { key: 'save', type: 'button', className: 'dsh-af-btn', onClick: () => { const folder = window.prompt('Save a copy into which folder? (full path)'); if (folder) void act(async () => { const done = await call({ action: 'saveTo', id: item.id, session: sessionId, folder, version }); setNote(`Saved: ${done.where}`); }); } }, 'Save to folder') : null,
+        !backup && !sealed ? h('button', { key: 'save', type: 'button', className: 'dsh-af-btn', onClick: () => { void ask({ title: 'Save a copy to a folder', text: 'Type the full path of the folder, for example /Users/you/Documents.', field: { label: 'Folder', placeholder: '/Users/you/Documents' }, ok: 'Save' }).then((folder) => { if (folder && folder.trim()) void act(async () => { const done = await call({ action: 'saveTo', id: item.id, session: sessionId, folder: folder.trim(), version }); setNote(`Saved: ${done.where}`); }); }); } }, 'Save to folder') : null,
         !sealed ? h('button', { key: 'copy', type: 'button', className: 'dsh-af-btn', onClick: () => void act(async () => { await navigator.clipboard.writeText(shown?.text ?? item.path); }, shown?.text ? 'Copied.' : 'The path is copied.') }, 'Copy') : null,
         !sealed ? h('button', { key: 'send', type: 'button', className: 'dsh-af-btn', onClick: () => window.dispatchEvent(new CustomEvent('dsh-split-plus:send-file', { detail: { sessionId, path: item.path } })), title: 'Send it to another pane or chat (Split Plus)' }, 'Send to…') : null,
         sealed ? h('span', { key: 'sealed', className: 'dsh-af-note' }, 'Recon\'s files stay in Recon: its own Export… button takes them out once its run is done.') : null,
@@ -391,7 +652,7 @@ window.__ModuleLoader__.load({
       };
       let body = null;
       if (!item) body = h('p', { className: 'dsh-af-note', 'data-error': error ? 'true' : 'false' }, note || 'Loading…');
-      else if (item.noRender) body = h('p', { className: 'dsh-af-note' }, 'A Bench backup is listed and never shown: it can hold passwords and keys.');
+      else if (item.noRender) body = h('p', { className: 'dsh-af-note' }, 'A Devices backup is listed and never shown: it can hold passwords and keys.');
       else if (diff) body = h(DiffView, { diff });
       else if (!shown) body = h('p', { className: 'dsh-af-note', 'data-error': error ? 'true' : 'false' }, note || 'Loading…');
       else if (item.kind === 'markdown') body = h(MarkdownView, { text: shown.text });
@@ -479,12 +740,12 @@ window.__ModuleLoader__.load({
       const [clean, setClean] = useState({ kinds: '', minMB: '', olderThanDays: '', newerThanDays: '', alsoFiles: false });
       const [picked, setPicked] = useState(null);
       const [busy, setBusy] = useState(false);
-      const [note, setNote] = useState('');
+      const [note, setNote] = useState(null);
       const query = useMemo(() => {
         const from = filters.days ? Date.now() - Number(filters.days) * 86_400_000 : 0;
         return `?mode=${encodeURIComponent(filters.mode)}&folder=${encodeURIComponent(filters.folder)}&kind=${encodeURIComponent(filters.kind)}&from=${from}`;
       }, [filters]);
-      const read = useCallback(() => call(null, query).then(setData, (problem) => setNote(problem.message)), [query]);
+      const read = useCallback(() => call(null, query).then(setData, (problem) => setNote(problem)), [query]);
       useEffect(() => { void read(); }, [read]);
       if (data && data.enabled !== true) return h('div', { className: 'dsh-af-page' }, h('style', null, CSS), h('h1', null, 'Artifacts'), h('p', { className: 'dsh-af-note' }, 'Artifacts is off. Switch it on in Settings → Artifacts.'));
       const items = data?.items ?? [];
@@ -495,14 +756,17 @@ window.__ModuleLoader__.load({
         h('style', null, CSS),
         h('h1', null, 'Artifacts'),
         h('p', { className: 'dsh-af-note' }, 'Every file a conversation made or changed, from every tab, newest first. The file in its folder is the artifact; older versions are kept here. Recon\'s files show only inside Recon.'),
+        data?.notice ? h('p', { className: 'dsh-af-note', style: { color: 'var(--dsw-alias-state-error-primary)' } }, data.notice) : null,
         h('div', { className: 'dsh-af-filters' },
           h('select', { className: 'dsh-af-select', value: filters.mode, onChange: (event) => setFilters({ ...filters, mode: event.target.value }) }, h('option', { value: '' }, 'Every tab'), modesSeen.map((mode) => h('option', { key: mode, value: mode }, mode))),
           h('select', { className: 'dsh-af-select', value: filters.kind, onChange: (event) => setFilters({ ...filters, kind: event.target.value }) }, h('option', { value: '' }, 'Every kind'), kindsSeen.map((kind) => h('option', { key: kind, value: kind }, KIND_LABEL[kind] ?? kind))),
           h('select', { className: 'dsh-af-select', value: filters.days, onChange: (event) => setFilters({ ...filters, days: event.target.value }) }, h('option', { value: '' }, 'Any date'), h('option', { value: '1' }, 'Today'), h('option', { value: '7' }, 'Last 7 days'), h('option', { value: '30' }, 'Last 30 days')),
           h('input', { className: 'dsh-af-input', style: { width: 260 }, placeholder: 'Folder (full path)', value: filters.folder, onChange: (event) => setFilters({ ...filters, folder: event.target.value }) }),
           h('span', { className: 'dsh-af-note' }, `${items.length} artifact${items.length === 1 ? '' : 's'}`),
-          (data?.danger ?? []).length > 0 ? h('span', { className: 'dsh-af-note', style: { color: 'var(--dsw-alias-state-error-primary)' }, title: data.danger.map((one) => one.what).join('\n') }, `⚠ Danger zone: ${data.danger.length} rule${data.danger.length === 1 ? '' : 's'} off`) : null),
-        h('table', { className: 'dsh-af-rows' },
+          (data?.danger ?? []).length > 0 ? h('span', { className: 'dsh-af-note', style: { color: 'var(--dsw-alias-state-error-primary)' }, title: data.danger.map((one) => one.what).join('\n') }, `Careful: ${data.danger.length} safety rule${data.danger.length === 1 ? '' : 's'} switched off`) : null),
+        data && items.length === 0 ? h(ui.Empty, { title: filters.mode || filters.kind || filters.days || filters.folder ? 'No file matches these filters' : 'No files yet', text: filters.mode || filters.kind || filters.days || filters.folder ? 'Clear a filter above to see more.' : 'When a conversation makes or changes a file, it shows up here, with every older version kept. Try asking in Chat or Cowork: "Write me a short summary as a Markdown file."' }) : null,
+        !data && !note ? h(ui.Wait, null, 'Loading your files…') : null,
+        items.length > 0 ? h('table', { className: 'dsh-af-rows' },
           h('thead', null, h('tr', null, ['', 'Name', 'Kind', 'Tab', 'Folder', 'Changed', 'Versions', ''].map((label, n) => h('th', { key: n }, label)))),
           h('tbody', null, items.slice(0, 1000).map((one) => h('tr', { key: one.id },
             h('td', null, one.star ? '★' : ''),
@@ -514,7 +778,7 @@ window.__ModuleLoader__.load({
             h('td', null, one.versions),
             h('td', null,
               h('button', { type: 'button', className: 'dsh-af-btn', disabled: one.noRender, onClick: () => setViewing({ id: one.id, sessionId: one.lastSession }) }, 'View'), ' ',
-              h('button', { type: 'button', className: 'dsh-af-btn', title: 'Open the conversation that made it', onClick: () => appCtx.get('uiWorkspace')?.openSession?.(one.lastSession) }, 'Its conversation')))))),
+              h('button', { type: 'button', className: 'dsh-af-btn', title: 'Open the conversation that made it', onClick: () => appCtx.get('uiWorkspace')?.openSession?.(one.lastSession) }, 'Its conversation')))))) : null,
         h('div', { className: 'dsh-af-box' },
           h('strong', null, 'Clean up'),
           h('p', { className: 'dsh-af-note' }, 'Pick by kind, size and age, see what matches, then move it to the app\'s trash (30 days, with Put back). A starred (kept) artifact is never picked. Without the tick, the files in your folders stay where they are; only the kept versions and the list entries go.'),
@@ -524,12 +788,12 @@ window.__ModuleLoader__.load({
             h('input', { className: 'dsh-af-input', style: { width: 150 }, placeholder: 'Older than days', value: clean.olderThanDays, onChange: (event) => setClean({ ...clean, olderThanDays: event.target.value }) }),
             h('input', { className: 'dsh-af-input', style: { width: 150 }, placeholder: 'Newer than days', value: clean.newerThanDays, onChange: (event) => setClean({ ...clean, newerThanDays: event.target.value }) }),
             h('label', { className: 'dsh-af-note' }, h('input', { type: 'checkbox', checked: clean.alsoFiles, onChange: (event) => setClean({ ...clean, alsoFiles: event.target.checked }) }), ' Also move the files in my folders to the trash'),
-            h('button', { type: 'button', className: 'dsh-af-btn', disabled: busy, onClick: () => void call(null, `?match=${encodeURIComponent(JSON.stringify(filter))}`).then((value) => setPicked(value.ids ?? []), (problem) => setNote(problem.message)) }, 'See what matches')),
+            h('button', { type: 'button', className: 'dsh-af-btn', disabled: busy, onClick: () => void call(null, `?match=${encodeURIComponent(JSON.stringify(filter))}`).then((value) => setPicked(value.ids ?? []), (problem) => setNote(problem)) }, 'See what matches')),
           picked ? h('div', null,
             h('p', { className: 'dsh-af-note' }, `${picked.length} artifact${picked.length === 1 ? '' : 's'} match${clean.alsoFiles ? '; their files go too' : ''}.`),
-            h('button', { type: 'button', className: 'dsh-af-btn', 'data-main': 'true', disabled: busy || picked.length === 0 || data?.trash !== true, onClick: () => { if (!window.confirm(`Move ${picked.length} artifact${picked.length === 1 ? '' : 's'}${clean.alsoFiles ? ' and their files' : ''} to the trash? You can put them back from the trash for 30 days.`)) return; setBusy(true); void call({ action: 'cleanup', ids: picked, alsoFiles: clean.alsoFiles }).then((done) => { setNote(`${done.moved} moved to the trash.`); setPicked(null); return read(); }, (problem) => setNote(problem.message)).finally(() => setBusy(false)); } }, 'Move to the trash'),
+            h('button', { type: 'button', className: 'dsh-af-btn', 'data-main': 'true', disabled: busy || picked.length === 0 || data?.trash !== true, onClick: () => { void ask({ text: `Move ${picked.length} artifact${picked.length === 1 ? '' : 's'}${clean.alsoFiles ? ' and their files' : ''} to the trash? You can put them back from the trash for 30 days.`, ok: 'Move to the trash' }).then((yes) => { if (!yes) return; setBusy(true); void call({ action: 'cleanup', ids: picked, alsoFiles: clean.alsoFiles }).then((done) => { setNote(`${done.moved} moved to the trash.`); setPicked(null); return read(); }, (problem) => setNote(problem.message)).finally(() => setBusy(false)); }); } }, 'Move to the trash'),
             data?.trash !== true ? h('p', { className: 'dsh-af-note' }, 'Clean-up needs the app\'s trash (the Cowork sidebar).') : null) : null),
-        note ? h('p', { className: 'dsh-af-note' }, note) : null,
+        note ? h(PlainNote, { error: note }) : null,
         viewing ? h(Viewer, { appCtx, flags, artifactId: viewing.id, sessionId: viewing.sessionId, floating: true, onClose: () => setViewing(null) }) : null);
     }
 
@@ -538,7 +802,7 @@ window.__ModuleLoader__.load({
     }
 
     const DANGER_SWITCHES = [
-      ['dangerShowBackups', 'Show Bench backups', 'Bench backups are shown and opened like any file. They can hold passwords and keys.'],
+      ['dangerShowBackups', 'Show Devices backups', 'Devices backups are shown and opened like any file. They can hold passwords and keys.'],
       ['dangerShowSealed', 'Show Recon\'s files outside Recon', 'Recon\'s files are listed on the Artifacts page and shown in any conversation.'],
       ['dangerPagesRun', 'Open web pages running', 'Web pages open with their scripts running. They cannot fetch anything, but a page can still send itself to another address, which may reach the internet.'],
       ['dangerPagesInternet', 'Open web pages with the internet', 'Web pages open with the internet allowed: their servers see that you opened them, and they can reach machines on your local network.'],
@@ -546,8 +810,9 @@ window.__ModuleLoader__.load({
     function SettingsPage({ appCtx, onChanged }) {
       const [data, setData] = useState(null);
       const [busy, setBusy] = useState(false);
-      const [note, setNote] = useState('');
-      const read = useCallback(() => call().then(setData, (problem) => setNote(problem.message)), []);
+      const [note, setNote] = useState({ text: '', details: '', error: false });
+      const problemNote = (prefix, problem) => setNote({ text: `${prefix}${problem.message}`, details: problem.details ?? '', error: true });
+      const read = useCallback(() => call().then(setData, (problem) => setNote({ text: problem.message, details: problem.details ?? '', error: true })), []);
       useEffect(() => { void read(); }, [read]);
       const setDanger = async (key, value) => {
         setBusy(true);
@@ -556,11 +821,11 @@ window.__ModuleLoader__.load({
           const rowOf = async () => { const result = await settings.describe(); return result.ok ? result.value.namespaces.find((entry) => entry.ns === NS) : undefined; };
           let done = await settings.mutate(NS, [{ op: 'set', path: [key], value }], (await rowOf())?.revision);
           if (!done.ok && done.error.code === 'settings/conflict') done = await settings.mutate(NS, [{ op: 'set', path: [key], value }], (await rowOf())?.revision);
-          if (!done.ok) throw new Error(done.error?.message ?? 'not saved');
-          setNote(value ? 'Switched off. It stays off until you switch it back.' : 'Back on: the rule holds again.');
+          if (!done.ok) throw fail(done.error ?? 'not saved');
+          setNote({ text: value ? 'Switched off. It stays off until you switch it back.' : 'Back on: the rule holds again.', details: '', error: false });
           await read();
         } catch (problem) {
-          setNote(`Not saved: ${problem.message}`);
+          problemNote('Not saved: ', problem);
         } finally {
           setBusy(false);
         }
@@ -573,31 +838,27 @@ window.__ModuleLoader__.load({
           const row = await rowOf();
           let done = await settings.mutate(NS, [{ op: 'set', path: ['enabled'], value: data.enabled !== true }], row?.revision);
           if (!done.ok && done.error.code === 'settings/conflict') done = await settings.mutate(NS, [{ op: 'set', path: ['enabled'], value: data.enabled !== true }], (await rowOf())?.revision);
-          if (!done.ok) throw new Error(done.error?.message ?? 'not saved');
-          setNote(data.enabled ? 'Switched off.' : 'Switched on.');
+          if (!done.ok) throw fail(done.error ?? 'not saved');
+          setNote({ text: data.enabled ? 'Switched off.' : 'Switched on.', details: '', error: false });
           await read();
           onChanged();
         } catch (problem) {
-          setNote(`Not saved: ${problem.message}`);
+          problemNote('Not saved: ', problem);
         } finally {
           setBusy(false);
         }
       };
-      return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, color: 'var(--dsw-alias-label-primary)' } },
-        h('style', null, CSS),
-        h('div', { style: { display: 'flex', gap: 12, alignItems: 'center' } },
-          h('div', { style: { flex: 1 } }, h('div', { style: { fontWeight: 500 } }, 'Artifacts'), h('div', { className: 'dsh-af-note' }, 'A card under each turn for every file it made or changed, from every tab; a click opens it in the app\'s own preview, or beside the chat in a Split pane. Every version is kept in Artifacts\' own folder, and the Artifacts page lists them all. Web pages are shown safely: their scripts run only after "Run page" (a running page may still reach the internet by going to another address), and the internet is allowed only after "Allow internet for this file".')),
-          data ? h('button', { type: 'button', role: 'switch', className: 'dsh-af-switch', 'aria-checked': data.enabled === true, 'aria-label': 'Artifacts', disabled: busy, onClick: () => void toggle() }) : null),
-        data?.enabled === true ? h('div', { style: { marginTop: 14 } },
-          h('div', { style: { fontSize: 12, fontWeight: 600, color: 'var(--dsw-alias-state-error-primary)' } }, '⚠ DANGER ZONE'),
-          h('p', { className: 'dsh-af-note' }, 'Each rule below starts on. Switch one off only when you need to: it stays off until you switch it back, the Artifacts page shows it in red, and each change is noted in Artifacts\' log.'),
+      return h(ui.Page, { title: 'Artifacts', desc: 'A card under each turn for every file it made or changed, from every tab. A click opens it in the app\'s own preview, or beside the chat in a Split pane. Every version is kept.' },
+        note.text ? h(PlainNote, { text: note.text, details: note.details, kind: note.error ? 'error' : 'info' }) : null,
+        h(ui.Row, { title: 'Show a card under each file', desc: 'Off hides the cards and the Artifacts page. Nothing is deleted.' },
+          data ? h(ui.Switch, { on: data.enabled === true, label: 'Artifacts', disabled: busy, onChange: () => void toggle() }) : h(ui.Wait, null, 'Loading…')),
+        data?.enabled === true ? h(React.Fragment, null,
+          h(ui.Group, null, 'Careful: safety rules'),
+          h(ui.Desc, null, 'Each rule below starts on. Switch one off only when you need to: it stays off until you switch it back, the Artifacts page shows a warning, and each change is noted in the log.'),
           DANGER_SWITCHES.map(([key, name, desc]) => {
             const off = (data.danger ?? []).some((one) => one.name === key);
-            return h('div', { key, style: { display: 'flex', gap: 12, alignItems: 'center', padding: '6px 0' } },
-              h('div', { style: { flex: 1 } }, h('div', { style: { fontWeight: 500 } }, name), h('div', { className: 'dsh-af-note', style: { margin: 0 } }, desc)),
-              h('button', { type: 'button', role: 'switch', className: 'dsh-af-switch', 'aria-checked': off, 'aria-label': name, style: off ? { background: 'var(--dsw-alias-state-error-primary)' } : undefined, disabled: busy, onClick: () => void setDanger(key, !off) }));
-          })) : null,
-        note ? h('p', { className: 'dsh-af-note' }, note) : null);
+            return h(ui.Row, { key, title: name, desc }, h(ui.Switch, { on: off, danger: true, label: name, disabled: busy, onChange: () => void setDanger(key, !off) }));
+          })) : null);
     }
 
     const plugin = {

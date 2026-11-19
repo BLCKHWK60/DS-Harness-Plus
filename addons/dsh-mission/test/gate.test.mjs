@@ -695,7 +695,7 @@ test('a Long run in Recon with checks switched on in Settings → Recon: the car
   }
 });
 
-test('a Long run in Bench: the card says what is closed, and the run carries Bench\'s rules; other tabs carry none', { skip: !hasGit && 'needs git' }, async () => {
+test('a Long run in Devices: the card says what is closed, and the run carries Devices\'s rules; other tabs carry none', { skip: !hasGit && 'needs git' }, async () => {
   const app = running();
   try {
     const agent = app.open('bn1');
@@ -706,7 +706,7 @@ test('a Long run in Bench: the card says what is closed, and the run carries Ben
     assert.match(card.json.preflight.ticks.find((entry) => entry.key === 'bench').text, /device ports closed to those checks/);
     checks = false;
     card = await app.card('GET', { sessionId: 'bn1' });
-    assert.match(card.json.preflight.ticks.find((entry) => entry.key === 'bench').text, /checks are switched off in Settings → Bench/);
+    assert.match(card.json.preflight.ticks.find((entry) => entry.key === 'bench').text, /checks are switched off in Settings → Devices/);
     checks = true;
     assert.equal((await app.card('POST', { sessionId: 'bn1', action: 'save', mode: 'auto', minutes: 30, laps: 1, keepAwake: false })).status, 200);
     assert.equal((await app.card('POST', { sessionId: 'bn1', action: 'arm' })).status, 200);
@@ -718,7 +718,7 @@ test('a Long run in Bench: the card says what is closed, and the run carries Ben
     assert.equal(run.long.isolated, undefined, 'none of Recon\'s rules');
     app.open('cw1');
     app.tabs.cw1 = 'cowork';
-    assert.equal((await app.card('GET', { sessionId: 'cw1' })).json.preflight.ticks.find((entry) => entry.key === 'bench'), undefined, 'Cowork: no Bench line');
+    assert.equal((await app.card('GET', { sessionId: 'cw1' })).json.preflight.ticks.find((entry) => entry.key === 'bench'), undefined, 'Cowork: no Devices line');
   } finally {
     app.done();
   }
@@ -906,4 +906,127 @@ test('the owner\'s answer: a Long run in the Research tab uses the work loop wit
   }
   const { loopWanted } = await import('../lib/loop.js');
   assert.deepEqual(loopWanted({ ultra: false, tab: 'code', loopTabs: ['code'] }), { ultra: false, tabOn: true }, 'other tabs keep their switch');
+});
+
+// ---- the regression fixes: Run in a new chat (item 5) and no undo (item 6) ----
+
+test('Run in a new chat: the start refuses a conversation that is still answering, or that did not get those words, and starts in the one that did', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const first = app.open('n1');
+    const other = app.open('n2');
+    const goal = 'tidy up the notes folder please';
+    // The chat box sends the words: only n1 gets them.
+    app.says(first, goal);
+    await app.tick();
+    // Another chat (a Split pane, or the chat the user switched to) must not take the goal.
+    const wrong = await app.card('POST', { sessionId: 'n2', action: 'start', goal, afterMessage: true });
+    assert.equal(wrong.status, 400);
+    assert.match(wrong.json.error, /did not get those words/);
+    assert.equal((await app.card('GET', { sessionId: 'n2' })).json.run, null, 'nothing started in the other chat');
+    // Still answering: refused, in plain words, and nothing started.
+    first.status = 'running';
+    const busy = await app.card('POST', { sessionId: 'n1', action: 'start', goal, afterMessage: true });
+    assert.equal(busy.status, 400);
+    assert.match(busy.json.error, /still answering/);
+    const card = await app.card('GET', { sessionId: 'n1' });
+    assert.equal(card.json.busy, true, 'the page can see it must wait');
+    assert.equal(card.json.run, null);
+    // Done answering: it starts, here.
+    first.status = 'idle';
+    const ok = await app.card('POST', { sessionId: 'n1', action: 'start', goal, afterMessage: true });
+    assert.equal(ok.status, 200, JSON.stringify(ok.json));
+    assert.equal(ok.json.run.kind, 'long');
+    assert.equal(other.status, undefined);
+    assert.equal((await app.card('GET', { sessionId: 'n2' })).json.run, null);
+    // Budget guard asks Mission whether a Long run is working: yes now, no while it is paused, and never for another chat.
+    assert.match(app.provided.mission.longRunId('n1'), /\w/);
+    assert.equal(app.provided.mission.longRunId('n2'), '');
+    await app.card('POST', { sessionId: 'n1', action: 'pause' });
+    assert.equal(app.provided.mission.longRunId('n1'), '', 'a paused Long run has no allowance');
+    await app.card('POST', { sessionId: 'n1', action: 'end' });
+    assert.equal(app.provided.mission.longRunId('n1'), '');
+    await app.tick();
+  } finally {
+    app.done();
+  }
+});
+
+/** A conversation in a folder too broad for checkpoints (a disk's top folder: nothing is ever written there). */
+function broad(app, id) {
+  const agent = app.open(id);
+  agent.header.cwd = '/Volumes';
+  agent.session.header.cwd = '/Volumes';
+  const asked = [];
+  let answer = 'allowed-once';
+  app.services.approval = { request: async (request) => { asked.push(request.reason); return answer; } };
+  const sections = [];
+  agent.ctx = { effect: (start) => start(), systemPrompt: { section: (spec) => { sections.push(spec); return () => {}; } } };
+  app.emit('agent/created', { agent });
+  const post = async (exec, result = { content: [{ type: 'text', text: 'ok' }] }) => {
+    let out = { kind: 'accept', content: result.content };
+    for (const handler of app.handlers('tools/post-execute')) out = await handler(exec, result, async () => out);
+    return out;
+  };
+  return { agent, asked, sections, post, answer: (value) => { answer = value; } };
+}
+const bash = (agent, command, callId) => ({ name: 'bash', arguments: { command }, agent, callId, signal: new AbortController().signal });
+
+test('Restricted with no undo (a folder too broad): the rules say so, and a command that could change files is asked about once', { skip: !existsSync('/Volumes') && 'needs a Mac' }, async () => {
+  const app = running();
+  try {
+    const here = broad(app, 'r1');
+    const said = await app.mission(here.agent, 'restricted');
+    assert.match(said.text, /Checkpoints are off for this folder: it is too broad/);
+    // The model's rules, from the first turn on, tell the truth.
+    const rules = here.sections[0].text();
+    assert.match(rules, /no undo is available in this folder/);
+    assert.match(rules, /asked before every command that could change a file/);
+    assert.doesNotMatch(rules, /is undone at once/);
+    // A reader runs freely, nobody is asked.
+    assert.equal((await app.preExecute(bash(here.agent, 'ls -la', 'c1'))).kind, 'allow');
+    assert.equal(here.asked.length, 0);
+    // A command that could change files: the user is asked, in plain words, with the command.
+    const first = await app.preExecute(bash(here.agent, 'rm -rf build', 'c2'));
+    assert.equal(first.kind, 'allow');
+    assert.equal(here.asked.length, 1);
+    assert.match(here.asked[0], /cannot be put back/);
+    assert.match(here.asked[0], /rm -rf build/);
+    // The same command is not asked again; another one is.
+    await app.preExecute(bash(here.agent, 'rm -rf build', 'c3'));
+    assert.equal(here.asked.length, 1);
+    // A no keeps the command from running.
+    here.answer('rejected');
+    const no = await app.preExecute(bash(here.agent, 'npm test', 'c4'));
+    assert.equal(no.kind, 'deny');
+    assert.match(no.reason, /said no/);
+  } finally {
+    app.done();
+  }
+});
+
+test('Ask-Auto with no undo: nobody is asked, the model is told once per conversation (also one that had the mode on before), and Full Auto is left as it is', { skip: !existsSync('/Volumes') && 'needs a Mac' }, async () => {
+  const app = running();
+  try {
+    const here = broad(app, 'a1');
+    await app.mission(here.agent, 'ask');
+    assert.match(here.sections[0].text(), /not stopped from changing existing files/);
+    const exec = bash(here.agent, 'npm run build', 'k1');
+    assert.equal((await app.preExecute(exec)).kind, 'allow');
+    assert.equal(here.asked.length, 0, 'Ask-Auto asks about files and places, not about commands');
+    const told = await here.post(exec);
+    assert.match(JSON.stringify(told), /NOT undone here/);
+    assert.match(JSON.stringify(told), /Tell the user this once/);
+    // Once only.
+    const exec2 = bash(here.agent, 'npm run build', 'k2');
+    await app.preExecute(exec2);
+    assert.doesNotMatch(JSON.stringify(await here.post(exec2)), /NOT undone here/);
+    // Full Auto never undid anything and never asks.
+    const full = broad(app, 'f1');
+    await app.mission(full.agent, 'auto');
+    assert.equal((await app.preExecute(bash(full.agent, 'rm -rf x', 'f1'))).kind, 'allow');
+    assert.equal(full.asked.length, 0);
+  } finally {
+    app.done();
+  }
 });

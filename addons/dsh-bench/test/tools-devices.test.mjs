@@ -1,7 +1,7 @@
 /**
- * Bench's device tools end to end on a stand-in app: esptool, adb, pmset and the Mac's Bluetooth list
+ * Devices' device tools end to end on a stand-in app: esptool, adb, pmset and the Mac's Bluetooth list
  * are scripted answers (nothing real runs), the serial reader is a stand-in, the user's yes is a
- * stand-in of the app's approval card, and permissions are set through Settings → Bench's own route.
+ * stand-in of the app's approval card, and permissions are set through Settings → Devices' own route.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -128,7 +128,7 @@ function world(options = {}) {
     approve: async (_exec, reason) => { state.asked.push(reason); state.beforeYes?.(); return state.approve; },
     fetch: async (url, options) => {
       state.fetched.push(url);
-      assert.equal(options.redirect, 'manual', 'Bench follows each step of the way itself');
+      assert.equal(options.redirect, 'manual', 'Devices follows each step of the way itself');
       const page = state.pages.get(url);
       if (!page) return { status: 404, headers: { get: () => null }, text: async () => '' };
       if (page.to) return { status: 302, headers: { get: (name) => (name === 'location' ? page.to : null) }, text: async () => '' };
@@ -213,7 +213,7 @@ test('the ESP32 backup: read twice and compared, kept with its checksum, never t
     assert.match(await app.call('bench_esp32', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', action: 'backup' }), /two reads[\s\S]*differ[\s\S]*not checked/);
     assert.equal(JSON.parse(readFileSync(join(app.device(), 'backups.json'), 'utf8'))[1].verified, false);
     app.state.missing.add('esptool');
-    assert.match(await app.call('bench_esp32', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', action: 'info' }), /esptool is not installed[\s\S]*Bench never installs anything/);
+    assert.match(await app.call('bench_esp32', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', action: 'info' }), /esptool is not installed[\s\S]*Devices never installs anything/);
   } finally {
     app.close();
   }
@@ -230,11 +230,11 @@ test('a firmware write: refused at Read; a dry run shows what is missing; each o
     await app.post({ action: 'permissions', name: 'ESP32 board 1', level: 'write', asks: 'ask-auto', dryRun: false, ranges: '' });
     assert.match(await flash({ source: 'https://forum.example.com/files/app.bin' }), /Not written[\s\S]*firmware source: forum\.example\.com\S* is not/);
     assert.match(await flash({ checksum: '0'.repeat(64) }), /Not written[\s\S]*firmware checksum: the file's SHA-256 is [0-9a-f]{64}, not 0{64}/);
-    // Bench reads the page itself: a checksum the model gives does not count.
+    // Devices reads the page itself: a checksum the model gives does not count.
     app.state.pages.set(SOURCE, { text: '<html>no checksum here</html>' });
     assert.match(await flash(), /Not written[\s\S]*firmware checksum: the page does not show this file's SHA-256/);
     app.state.pages.set(SOURCE, { to: 'https://evil.example.net/app.bin' });
-    assert.match(await flash(), /Not written[\s\S]*firmware checksum: evil\.example\.net: evil\.example\.net\S* is not a source Bench knows/);
+    assert.match(await flash(), /Not written[\s\S]*firmware checksum: evil\.example\.net: evil\.example\.net\S* is not a source Devices knows/);
     app.state.pages.set(SOURCE, { to: 'https://release-assets.githubusercontent.com/x/app.bin.sha256' });
     app.state.pages.set('https://release-assets.githubusercontent.com/x/app.bin.sha256', { text: `${sum}  app.bin\n` });
     assert.match(await flash({ dryRun: true }), /^Dry run: nothing was sent\.\n(?![\s\S]*Missing)/, 'GitHub\'s own download host, where a release file leads');
@@ -282,7 +282,7 @@ test('a firmware write: the user\'s yes every time (also in Full Auto), the powe
     app.state.approve = 'rejected';
     assert.match(await flash(), /The user said no to writing firmware/);
     assert.equal(writes(app), 0);
-    assert.match(app.state.asked.at(-1), /^Write firmware to "ESP32 board 1"\?\nWrite app\.bin \(4096 bytes, SHA-256 [0-9a-f]{64}\) to ESP32 board 1 at 0x10000\.\nSource: https:\/\/github\.com\/esphome[\s\S]*Saved first: backups\/[\s\S]*Way back: Hold BOOT[\s\S]*Cannot be undone by Bench/);
+    assert.match(app.state.asked.at(-1), /^Write firmware to "ESP32 board 1"\?\nWrite app\.bin \(4096 bytes, SHA-256 [0-9a-f]{64}\) to ESP32 board 1 at 0x10000\.\nSource: https:\/\/github\.com\/esphome[\s\S]*Saved first: backups\/[\s\S]*Way back: Hold BOOT[\s\S]*Cannot be undone by Devices/);
     app.state.approve = 'allowed-once';
     // The protected start of the flash: the user's own words, not the model's.
     assert.match(await flash({ address: '0x0' }), /protected part[\s\S]*"write protected esp32 board 1"/);
@@ -308,7 +308,7 @@ test('a failed write stops: no second try, the way back and the backup are shown
     assert.equal(writes(app), 1);
     app.state.writeFails = false;
     app.state.bootLines = ['invalid header: 0xffffffff'];
-    assert.match(await app.call('bench_esp32', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', action: 'flash', file: 'app.bin', address: '0x10000', source: SOURCE, checksum: sum }), /Start check: FAILED[\s\S]*Bench stops here/);
+    assert.match(await app.call('bench_esp32', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', action: 'flash', file: 'app.bin', address: '0x10000', source: SOURCE, checksum: sum }), /Start check: FAILED[\s\S]*Devices stops here/);
   } finally {
     app.close();
   }
@@ -336,7 +336,7 @@ test('Android: phones listed, details read; a setting changed only as the card a
     await app.call('bench_card', { name: 'Pixel 7' });
     assert.match(await app.call('bench_android', { action: 'info', name: 'Pixel 7', serial: 'R58N123ABC' }), /listed in this conversation in the last hour/);
     assert.match(await app.call('bench_android', { action: 'devices' }), /R58N123ABC: device, model Pixel 7/);
-    assert.match(await app.call('bench_android', { action: 'info', name: 'Pixel 7', serial: 'R58N123ABC' }), /ro\.product\.model: Pixel 7[\s\S]*battery level: 81[\s\S]*bootloader is locked; Bench does not unlock it/);
+    assert.match(await app.call('bench_android', { action: 'info', name: 'Pixel 7', serial: 'R58N123ABC' }), /ro\.product\.model: Pixel 7[\s\S]*battery level: 81[\s\S]*bootloader is locked; Devices does not unlock it/);
     const logs = await app.call('bench_android', { action: 'logs', name: 'Pixel 7', serial: 'R58N123ABC', lines: 50 });
     assert.match(logs, /psk=\[masked\]/);
     assert.doesNotMatch(logs, /hunter22/);
@@ -347,7 +347,7 @@ test('Android: phones listed, details read; a setting changed only as the card a
     assert.equal(app.state.settings.get('system screen_off_timeout'), '30000');
     assert.match(await app.call('bench_android', { ...put, value: '1;reboot' }), /is not a value screen_off_timeout takes/);
     assert.match(await app.call('bench_android', { ...put, namespace: 'global', key: 'http_proxy', value: 'x' }), /protections/);
-    assert.match(await app.call('bench_android', { ...put, namespace: 'secure', key: 'some_setting', value: '1' }), /Bench changes only these settings/);
+    assert.match(await app.call('bench_android', { ...put, namespace: 'secure', key: 'some_setting', value: '1' }), /Devices changes only these settings/);
     assert.match(await app.call('bench_android', { ...put, namespace: 'global', key: 'adb_enabled', value: '0' }), /protections/);
     assert.match(await app.call('bench_android', put), /30000 → 60000, read back and equal\. It is on the undo list/);
     assert.match(app.state.asked.at(-1), /^Change system screen_off_timeout on Pixel 7 from 30000 to 60000/, 'Ask-Auto asked');
@@ -373,7 +373,7 @@ test('look-only devices: a phone setting refused on a card named for an e-bike, 
     await app.call('bench_card', { name: 'Bosch eBike display' });
     await app.post({ action: 'permissions', name: 'Bosch eBike display', level: 'write', asks: 'full-auto', dryRun: false, ranges: '' });
     await app.call('bench_android', { action: 'devices' });
-    assert.match(await app.call('bench_android', { action: 'setting_put', name: 'Bosch eBike display', serial: 'R58N123ABC', namespace: 'system', key: 'screen_off_timeout', value: '60000' }), /vehicles and e-bikes, which Bench only reads/);
+    assert.match(await app.call('bench_android', { action: 'setting_put', name: 'Bosch eBike display', serial: 'R58N123ABC', namespace: 'system', key: 'screen_off_timeout', value: '60000' }), /vehicles and e-bikes, which Devices only reads/);
   } finally {
     app.close();
   }
@@ -391,7 +391,7 @@ test('Bluetooth: the Mac\'s list, read and nothing sent; the permissions route c
     assert.equal(ok.status, 200);
     const row = ok.json.devices.find((entry) => entry.name === 'Board');
     assert.deepEqual([row.level, row.asks, row.dryRun, row.ranges], ['adjust', 'restricted', true, '0x9000-0xF000']);
-    assert.match(readFileSync(join(app.device('board'), 'logbook.md'), 'utf8'), /Permissions changed by the user on Settings → Bench\n\n- Before: level read, asks ask-auto[\s\S]*- After: level adjust, asks restricted, dry run yes, protected 0x9000-0xF000/);
+    assert.match(readFileSync(join(app.device('board'), 'logbook.md'), 'utf8'), /Permissions changed by the user on Settings → Devices\n\n- Before: level read, asks ask-auto[\s\S]*- After: level adjust, asks restricted, dry run yes, protected 0x9000-0xF000/);
     assert.ok(ok.json.closed.some((rule) => rule.what.startsWith('Write (firmware)')));
     assert.equal(existsSync(join(app.home, 'bench', 'devices', 'board', 'card.json')), true);
   } finally {
@@ -410,13 +410,13 @@ test('a card is linked to one device: a card linked to the board on a port is re
     // Another board on the same port: the card's permissions are not its.
     app.state.usb = { id: 'usb 0x1a86:0x7523 at 0x01100000', label: 'USB Serial (0x1a86:0x7523, plugged in at 0x01100000)' };
     await app.call('bench_usb', {});
-    assert.match(await app.call('bench_serial_watch', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', minutes: 0.1 }), /linked to CP2102 USB to UART Bridge[\s\S]*the device on \/dev\/cu\.SLAB_USBtoUART is USB Serial \(0x1a86:0x7523[\s\S]*unlinks the card on Settings → Bench/);
+    assert.match(await app.call('bench_serial_watch', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', minutes: 0.1 }), /linked to CP2102 USB to UART Bridge[\s\S]*the device on \/dev\/cu\.SLAB_USBtoUART is USB Serial \(0x1a86:0x7523[\s\S]*unlinks the card on Settings → Devices/);
     assert.equal(app.state.watched.length, 1, 'not opened');
     assert.equal(app.state.asked.length, 1, 'not asked either');
     const unlinked = await app.post({ action: 'unlink', name: 'ESP32 board 1' });
     assert.equal(unlinked.status, 200);
     assert.match(unlinked.json.devices.find((row) => row.name === 'ESP32 board 1').linked, /no device yet/);
-    assert.match(readFileSync(join(app.device(), 'logbook.md'), 'utf8'), /The user unlinked the card from its devices on Settings → Bench/);
+    assert.match(readFileSync(join(app.device(), 'logbook.md'), 'utf8'), /The user unlinked the card from its devices on Settings → Devices/);
     await app.call('bench_serial_watch', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', minutes: 0.1 });
     assert.equal(app.state.asked.length, 2, 'asked again, for the new device');
     assert.equal(app.state.watched.length, 2);
@@ -586,7 +586,7 @@ test('a look-only mark stays when the card\'s words change; only the user lifts 
     await app.post({ action: 'permissions', name: 'Display', level: 'write', asks: 'full-auto', dryRun: false, ranges: '' });
     await app.call('bench_android', { action: 'devices' });
     const put = { action: 'setting_put', name: 'Display', serial: 'R58N123ABC', namespace: 'system', key: 'screen_off_timeout', value: '60000' };
-    assert.match(await app.call('bench_android', put), /vehicles and e-bikes, which Bench only reads/);
+    assert.match(await app.call('bench_android', put), /vehicles and e-bikes, which Devices only reads/);
     const row = (await app.post({ action: 'permissions', name: 'Display', level: 'write', asks: 'full-auto', dryRun: false, ranges: '' })).json.devices.find((entry) => entry.name === 'Display');
     assert.equal(row.lookOnlyMarked, true);
     assert.equal(row.lookOnlyFromWords, '');
@@ -603,7 +603,7 @@ test('a look-only mark stays when the card\'s words change; only the user lifts 
   }
 });
 
-test('a long watch ends when Bench is switched off', async () => {
+test('a long watch ends when Devices is switched off', async () => {
   const app = world();
   try {
     await settle();
@@ -614,7 +614,7 @@ test('a long watch ends when Bench is switched off', async () => {
     await new Promise((done) => setTimeout(done, 100));
     app.config.enabled = false;
     const late = new Promise((done) => setTimeout(() => done('still watching after 6 s'), 6000));
-    assert.match(await Promise.race([watching, late]), /stopped early: Bench was switched off/);
+    assert.match(await Promise.race([watching, late]), /stopped early: Devices was switched off/);
   } finally {
     app.close();
   }
@@ -638,8 +638,8 @@ test('the user\'s own firmware sources: added and removed only on the page; GL.i
     const removed = await app.post({ action: 'source', remove: 'fw.example.org/releases/' });
     assert.deepEqual(removed.json.sources, []);
     assert.match(await flash(), /firmware source: fw\.example\.org\S* is not/);
-    assert.match(await flash({ source: 'https://dl.gl-inet.com/router/be3600/stable' }), /firmware source: dl\.gl-inet\.com\S* is not a source Bench knows for ESP32 boards/, 'a router\'s source is never an ESP32\'s');
-    assert.match(await flash({ source: 'https://github.com/esphome/esphome/issues/123' }), /firmware source: github\.com\S* is not a source Bench knows for ESP32 boards/, 'only a project\'s releases on GitHub');
+    assert.match(await flash({ source: 'https://dl.gl-inet.com/router/be3600/stable' }), /firmware source: dl\.gl-inet\.com\S* is not a source Devices knows for ESP32 boards/, 'a router\'s source is never an ESP32\'s');
+    assert.match(await flash({ source: 'https://github.com/esphome/esphome/issues/123' }), /firmware source: github\.com\S* is not a source Devices knows for ESP32 boards/, 'only a project\'s releases on GitHub');
     assert.equal((await app.post({ action: 'source', url: 'https://github.com/someone/', kind: 'esp32' })).status, 400, 'a GitHub source is one project\'s releases');
     assert.equal((await app.post({ action: 'source', url: 'https://example.org/fw/', kind: 'anything' })).status, 400, 'each source is for one kind of device');
   } finally {
@@ -647,7 +647,7 @@ test('the user\'s own firmware sources: added and removed only on the page; GL.i
   }
 });
 
-test('Bench downloads firmware itself: only from a listed source, after the user\'s yes, kept only when the page publishes its SHA-256, never over a file', async () => {
+test('Devices downloads firmware itself: only from a listed source, after the user\'s yes, kept only when the page publishes its SHA-256, never over a file', async () => {
   const app = world();
   try {
     await settle();
@@ -671,7 +671,7 @@ test('Bench downloads firmware itself: only from a listed source, after the user
     app.state.pages.set(page, { text: `gl-be3600-4.7.0.bin ${sum}` });
     assert.match(await fetch(), /Downloaded gl-be3600-4\.7\.0\.bin \(5000 bytes, SHA-256 [0-9a-f]{64}\)/);
     assert.deepEqual(readFileSync(join(folder, 'gl-be3600-4.7.0.bin')), bytes);
-    assert.match(await fetch(), /already in the firmware folder; Bench does not replace it/);
+    assert.match(await fetch(), /already in the firmware folder; Devices does not replace it/);
     assert.deepEqual(readdirSync(folder), ['gl-be3600-4.7.0.bin']);
     app.state.pages.set('https://dl.gl-inet.com/router/be3600/moved.bin', { to: 'https://evil.example.net/x.bin' });
     assert.match(await fetch({ url: 'https://dl.gl-inet.com/router/be3600/moved.bin' }), /evil\.example\.net: evil\.example\.net\S* is not/);
@@ -790,7 +790,7 @@ test('Bluetooth: the user names the device exactly (whole words, not inside a lo
   }
 });
 
-test('a Recon export sent into a Bench conversation is never the user\'s words: its markers, Recon\'s own check, and a check that fails all refuse', async () => {
+test('a Recon export sent into a Devices conversation is never the user\'s words: its markers, Recon\'s own check, and a check that fails all refuse', async () => {
   const app = world();
   try {
     await settle();
@@ -817,7 +817,7 @@ test('"Allow risky writes" off: an ESP32 erase is refused and a write still need
     await settle();
     await off.call('bench_card', { name: 'ESP32 board 1', chip: 'ESP32' });
     await off.call('bench_usb', {});
-    assert.match(await off.call('bench_esp32', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', action: 'erase' }), /runs only with "Allow risky writes" switched on \(Settings → Bench → Danger zone\)\. Nothing was sent\./);
+    assert.match(await off.call('bench_esp32', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', action: 'erase' }), /runs only with "Allow risky writes" switched on \(Settings → Devices → Danger zone\)\. Nothing was sent\./);
     assert.equal(off.state.calls.filter((entry) => entry.includes('erase_flash')).length, 0);
   } finally {
     off.close();
@@ -833,7 +833,7 @@ test('"Allow risky writes" off: an ESP32 erase is refused and a write still need
     const firmware = join(app.device(), 'firmware');
     mkdirSync(firmware, { recursive: true });
     writeFileSync(join(firmware, 'app.bin'), Buffer.alloc(4096, 3));
-    // No backup, no recovery path, a source Bench does not know, the start of the flash: written after the yes.
+    // No backup, no recovery path, a source Devices does not know, the start of the flash: written after the yes.
     const done = await app.call('bench_esp32', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', action: 'flash', file: 'app.bin', address: '0x0', source: 'https://forum.example.com/app.bin' });
     assert.match(done, /Written and read back: app\.bin at 0x0/);
     assert.match(app.state.asked.at(-1), /"Allow risky writes" is on: no backup, source check, recovery path or protected-part message is required/);

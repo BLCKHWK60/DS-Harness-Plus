@@ -5,7 +5,7 @@ Plugin `@local/dsh-color-schemes` (dsh 0.2.2-rc.1). Choose the colours of the wh
 | Scheme | Look |
 | --- | --- |
 | **DeepSeek Harness** (default) | The app's own colours, exactly as shipped. Nothing is changed. |
-| **MindsHub Cowork** | Deep navy with teal accents and MindsHub's faint dot grid on the main area. The dark colours were sampled from MindsHub Cowork screenshots. |
+| **Harbor** | Deep navy with teal accents and a faint dot grid on the main area. |
 | **Graphite** | Neutral greys with amber accents. |
 | **Forest** | Deep green with mint accents. |
 | **Custom** | Your own colours (see below). |
@@ -14,7 +14,7 @@ Every scheme has a light and a dark version, and follows **Settings → General 
 
 ## Solid sidebar on the Mac
 
-The Mac desktop app normally draws the sidebar half see-through, so the desktop behind it shows. With a scheme other than DeepSeek Harness, **Solid sidebar on the Mac** (on by default) paints it in the scheme's colour, the way MindsHub looks. The stock scheme never changes it.
+The Mac desktop app normally draws the sidebar half see-through, so the desktop behind it shows. With a scheme other than DeepSeek Harness, **Solid sidebar on the Mac** (on by default) paints it in the scheme's colour, the way Harbor looks. The stock scheme never changes it.
 
 ## Custom scheme
 
@@ -53,7 +53,7 @@ The browser half lays the scheme's colours over the app's light or dark palette 
 ```yaml
 - id: color-schemes
   config:
-    scheme: mindshub        # stock | mindshub | graphite | forest | custom
+    scheme: harbor        # stock | harbor | graphite | forest | custom
     opaqueMacSidebar: true
 ```
 
@@ -61,8 +61,8 @@ The browser half lays the scheme's colours over the app's light or dark palette 
 
 In the throwaway web profile, through the app's browser view:
 
-- **Each scheme in dark:** MindsHub Cowork, Graphite and Forest each recoloured the background, sidebar, chat box, message bubble, borders and accent (send button, selected view tab).
-- **MindsHub Cowork in light:** light background with a teal accent and a teal-tinted bubble.
+- **Each scheme in dark:** Harbor, Graphite and Forest each recoloured the background, sidebar, chat box, message bubble, borders and accent (send button, selected view tab).
+- **Harbor in light:** light background with a teal accent and a teal-tinted bubble.
 - **Back to DeepSeek Harness:** removed every override (0 left), so it is exactly the app as shipped.
 - **Restart:** the choice survived it.
 - **Custom:** a valid custom scheme applied. A value that tried to sneak in CSS was refused.
@@ -71,3 +71,9 @@ In the throwaway web profile, through the app's browser view:
 
 - the Mac desktop app, including the solid-sidebar rule, which depends on the app's internal class name `…_sidebarCol`
 - every screen of the app; some rarely seen surfaces may keep stock colours. Tell me which and they can be added.
+
+## Tests
+
+Run from the Plus folder with the app's own Node. `test/schemes.test.mjs` (settings defaults; the page's colour logic in a stand-in browser: Stock adds nothing, Harbor's colours reach the theme service, the old stored id of Harbor still gives Harbor both from the browser's storage and from Settings, custom schemes and how bad ones are refused, the dot pattern, the Harbor texts).
+
+Fixed with its test: every custom scheme was refused, because the colour check used the name `CSS`, which in the page file is the page's own style text. It now asks `window.CSS`.

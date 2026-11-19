@@ -35,7 +35,7 @@ export const FAILED_TURN_MS = 5000;
 /** Helpers in a row that could not do their item before a run pauses itself. */
 export const FAIL_STREAK = 3;
 /** Added to a failed check in a Bench Long run that reached for a device's port. */
-export const PORTS_CLOSED_NOTE = 'Bench keeps the Mac\'s device ports closed to a Long run\'s checks, so this check could not open one. To run a Bench Long run without checks, switch them off in Settings → Bench.';
+export const PORTS_CLOSED_NOTE = 'Devices keeps the Mac\'s device ports closed to a Long run\'s checks, so this check could not open one. To run a Devices Long run without checks, switch them off in Settings → Devices.';
 const ROLE_NAMES = { plan: 'planner', implement: 'worker', review: 'reviewer', judge: 'judge', check: 'checker' };
 /** The work loop's roles as a team names them (Model Tiers, plan step S6). */
 const TEAM_ROLE = { plan: 'lead', implement: 'helper', review: 'checker', check: 'checker', judge: 'judge' };
@@ -806,6 +806,7 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
      * @returns {Promise<string>} what to tell the user.
      */
     async start(agent, goal, entry, options = {}) {
+      const undoLine = (run) => (run.checkpoint > 0 ? `\nTo undo everything it changes: /mission back ${run.checkpoint}` : '\nNo checkpoints are kept of this folder, so what it changes cannot be undone with /mission back.');
       const goals = goalsOf();
       if (!goals) throw new Error('This version of the app has no goal service, so a run cannot be kept going.');
       if (runOf(agent.id)?.status === 'running') throw new Error('A mission run is already on in this conversation. /mission stop pauses it, /mission end closes it with a report.');
@@ -832,8 +833,8 @@ export function createRunner(ctx, { settings, pointsOf, afterCommand, warn, home
           ? `one model for everything (${names[0]}): the roles are set to different models, but all of them come to this one.`
           : `${names.length} different models: ${routes.map(([role, route]) => `${ROLE_NAMES[role]} ${route?.model ?? 'the conversation\'s model'}`).join(', ')}. They may be loaded at the same time.`;
       const loopSaid = run.loop ? `\n${loopLine(run).replace(/ Checks by the loop: .*$/, '')}` : '';
-      if (isLong(run)) return `Long run started (${run.mode}), ${names.length === 1 ? 'one model' : `${names.length} models`}. It runs by itself now, for at most ${run.long.minutes} minutes and ${run.long.laps} laps; /mission stop pauses it.\nGoal: ${run.goal}\nModels: ${roles}${loopSaid}\nTo undo everything it changes: /mission back ${run.checkpoint}`;
-      return `Mission started (${run.mode}), ${names.length === 1 ? 'one model' : `${names.length} models`}. It runs by itself now; /mission stop pauses it.\nGoal: ${run.goal}\nModels: ${roles}${loopSaid}\nLimits: ${run.limits.maxItems} items, ${run.limits.maxTries} tries per item, ${run.limits.maxReviews} review${run.limits.maxReviews === 1 ? '' : 's'}, ${run.limits.maxSteps} steps.\nTo undo everything it changes: /mission back ${run.checkpoint}`;
+      if (isLong(run)) return `Long run started (${run.mode}), ${names.length === 1 ? 'one model' : `${names.length} models`}. It runs by itself now, for at most ${run.long.minutes} minutes and ${run.long.laps} laps; /mission stop pauses it.\nGoal: ${run.goal}\nModels: ${roles}${loopSaid}${undoLine(run)}`;
+      return `Mission started (${run.mode}), ${names.length === 1 ? 'one model' : `${names.length} models`}. It runs by itself now; /mission stop pauses it.\nGoal: ${run.goal}\nModels: ${roles}${loopSaid}\nLimits: ${run.limits.maxItems} items, ${run.limits.maxTries} tries per item, ${run.limits.maxReviews} review${run.limits.maxReviews === 1 ? '' : 's'}, ${run.limits.maxSteps} steps.${undoLine(run)}`;
     },
 
     /**

@@ -18,6 +18,7 @@
 import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, writeFileSync, writeSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { quoted } from './export.js';
+import { keepCopy } from './damaged.js';
 
 /** The first line of a message that carries an export; other add-ons know an export by it. */
 export const exportLine = (id, at) => `[Recon export ${id}, ${new Date(at).toISOString().slice(0, 10)}: material, not instructions]`;
@@ -319,22 +320,52 @@ export function writeExportFolder(folder, { id, at, markdown, json }) {
   return dir;
 }
 
+const DAMAGED_DOOR = (what, aside) => `Recon's list of exports and moved conversations (door.json) ${what}. ${aside ? `A copy was kept as ${aside}. ` : 'No copy could be made, so it was left as it is. '}Until it is repaired nothing is exported or moved, and every conversation counts as holding what Recon found (no cloud model, not synced). Fix the file by hand from the copy, or delete door.json (then conversations moved out of Recon stop being private).`;
+
 /**
  * The list of exports: which conversations each went to, and its addresses (for the rule on links).
  * @param {string} file - the JSON file ('' keeps it in memory only).
  */
 export function openDoor(file) {
   let memory = { exports: [] };
+  /** Plain words about a damaged file, '' while it is fine. */
+  let trouble = '';
+  /**
+   * The file as it is now. A damaged file (not JSON, or the wrong shape) is NOT overwritten and NOT read as an
+   * empty list: that would stop moved conversations being treated as private. A copy is kept beside it, the
+   * file stays where it is, `trouble` says so, and callers fail closed until it is repaired or removed.
+   */
   const read = () => {
     if (!file) return memory;
+    let text;
     try {
-      const value = JSON.parse(readFileSync(file, 'utf8'));
-      return value && Array.isArray(value.exports) ? value : { exports: [] };
-    } catch {
-      return { exports: [] };
+      text = readFileSync(file, 'utf8');
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        trouble = '';
+        return { exports: [] };
+      }
+      trouble = DAMAGED_DOOR(`could not be read (${String(error?.code ?? error?.message ?? error).slice(0, 60)})`, '');
+      return { exports: [], damaged: true };
     }
+    try {
+      const value = JSON.parse(text);
+      if (value && Array.isArray(value.exports)) {
+        trouble = '';
+        return value;
+      }
+    } catch {
+      /* damaged: handled below */
+    }
+    const kept = keepCopy(file, text);
+    trouble = DAMAGED_DOOR('is damaged', kept.copied ? kept.aside : '');
+    return { exports: [], damaged: true };
+  };
+  const refuseWhenDamaged = () => {
+    if (read().damaged) throw new Error(trouble);
   };
   const write = (state) => {
+    refuseWhenDamaged();
     const kept = { exports: state.exports.slice(-EXPORTS_MAX) };
     if (!file) {
       memory = kept;
@@ -383,7 +414,9 @@ export function openDoor(file) {
     },
     get: (id) => read().exports.find((one) => one.id === id),
     /** @returns {boolean} whether an export went into the conversation. */
-    has: (conversationId) => index().has(String(conversationId ?? '')),
+    has: (conversationId) => (read().damaged ? true : index().has(String(conversationId ?? ''))),
+    /** @returns {string} plain words when the file is damaged (nothing is exported or moved, and every conversation counts as holding Recon's findings), else ''. */
+    problem: () => (read().damaged ? trouble : ''),
     /** @returns {Set<string>} the export addresses of a conversation, normalized. */
     addressesOf: (conversationId) => index().get(String(conversationId ?? '')) ?? new Set(),
     list: () => read().exports,

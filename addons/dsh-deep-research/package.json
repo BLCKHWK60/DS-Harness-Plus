@@ -6,11 +6,13 @@
   "description": "A deep_research tool: plan sub-questions, research them in parallel with child agents, and write a report whose citations are checked against the source list, each source labelled by whether a helper read it.",
   "exports": {
     ".": "./index.js",
+    "./client": "./client.js",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
   "files": [
     "index.js",
+    "client.js",
     "lib/*.js",
     "cordis.patch.yml",
     "README.md",
@@ -25,6 +27,14 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale"
+      ]
     }
   }
 }

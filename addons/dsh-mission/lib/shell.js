@@ -182,7 +182,7 @@ export async function runCommand({ command, root, timeoutMs = CHECK_MS, signal, 
   const confined = existsSync(sandbox);
   // Ports and the internet can be closed only by the sandbox: without it, such a check is not run at all.
   if (offline && !confined) return { ok: false, code: null, output: "The Mac's sandbox is not available, so this check was not run: in Recon, checks must run without the internet.", timedOut: false, seconds: 0 };
-  if (closePorts && !confined) return { ok: false, code: null, output: "The Mac's sandbox is not available, so this check was not run: in Bench, device ports must stay closed to checks.", timedOut: false, seconds: 0 };
+  if (closePorts && !confined) return { ok: false, code: null, output: "The Mac's sandbox is not available, so this check was not run: in Devices, device ports must stay closed to checks.", timedOut: false, seconds: 0 };
   // An offline check keeps its temporary files in the run's own folder, the only place it may write.
   let temp = '';
   if (offline) {

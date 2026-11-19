@@ -85,7 +85,7 @@ async function linkedPhone(app, level = 'write') {
   assert.match(await app.call('bench_android', { action: 'info', name: 'Pixel 7', serial: SERIAL }), /Pixel 7/);
 }
 
-test('fastboot\'s answers read; the commands Bench never runs', () => {
+test('fastboot\'s answers read; the commands Devices never runs', () => {
   assert.deepEqual(parseFastbootDevices(`${SERIAL}\tfastboot\nbad;id\tfastboot\n`), [SERIAL]);
   assert.equal(fastbootFlag({ stdout: '', stderr: '(bootloader) get_unlock_ability: 1\nOKAY' }, 'get_unlock_ability'), true);
   assert.equal(fastbootFlag({ stdout: '', stderr: 'unlocked: no' }, 'unlocked'), false);
@@ -139,7 +139,7 @@ test('unlocking: only when the maker allows it, with a counted backup, the user\
     assert.equal(app.state.unlocked, false);
     app.state.approve = 'allowed-once';
     assert.match(await unlock('OK, unlock Pixel 7.'), /bootloader is unlocked\. The phone erases itself/);
-    assert.equal(app.state.calls.some((call) => call[0] === 'fastboot' && FASTBOOT_NEVER.test(call.slice(3).join(' '))), false, 'nothing Bench never runs');
+    assert.equal(app.state.calls.some((call) => call[0] === 'fastboot' && FASTBOOT_NEVER.test(call.slice(3).join(' '))), false, 'nothing Devices never runs');
   } finally {
     app.close();
   }

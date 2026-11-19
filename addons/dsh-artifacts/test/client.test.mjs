@@ -138,5 +138,5 @@ test('8 and 4: a sealed (Recon) artifact offers nothing that takes it out of Rec
     const shown = buttons(testing.ViewerActions(props({ name, kind })));
     assert.ok(!shown.includes('Open in its app') && shown.includes('Show in Finder'), name);
   }
-  assert.deepEqual(buttons(testing.ViewerActions(props({ noRender: true }))), ['Copy', 'Send to…', '☆ Keep'], 'a Bench backup: nothing that shows it');
+  assert.deepEqual(buttons(testing.ViewerActions(props({ noRender: true }))), ['Copy', 'Send to…', '☆ Keep'], 'a Devices backup: nothing that shows it');
 });

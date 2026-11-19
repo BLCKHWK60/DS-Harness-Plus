@@ -13,6 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MAX_PANES } from './panes.js';
+import { readJsonStore } from './json-store.js';
 
 /** At most this many named pane sets, and this many folders remembered. */
 export const MAX_NAMED = 30;
@@ -45,11 +46,9 @@ export function openSets({ home = '', now = Date.now } = {}) {
   // Keyed by folder and by name: objects without a prototype, so no key (`__proto__`, say) is special.
   const bare = (value) => Object.assign(Object.create(null), value && typeof value === 'object' && !Array.isArray(value) ? value : {});
   let state = { folders: bare(), named: bare() };
-  if (file && existsSync(file)) {
-    try {
-      const saved = JSON.parse(readFileSync(file, 'utf8'));
-      state = { folders: bare(saved?.folders), named: bare(saved?.named) };
-    } catch { /* a damaged file starts empty */ }
+  if (file) {
+    const saved = readJsonStore(file, () => ({}), { label: 'your saved sets of panes', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
+    state = { folders: bare(saved?.folders), named: bare(saved?.named) };
   }
   const save = () => {
     if (!file) return;

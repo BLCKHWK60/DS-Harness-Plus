@@ -55,3 +55,9 @@ No path or address is defaulted. `skipTools` keeps file reads and edits verbatim
 ## Not verified
 
 The log-with-3-errors and grep/diff acceptance cases through dsh (covered by the Python corpus tests only), many concurrent calls, and long-running helper behaviour over days.
+
+## Tests
+
+Run from the Plus folder with the app's own Node. `test/saver.test.mjs` (a stand-in helper that speaks the same one-line protocol: what is shortened and what is never touched, per-tier switches, a helper that errors, hangs, crashes or cannot start, the crash-loop pause, `/saved`, the prompt section). The Python transforms have their own tests in `extras/dsh-intel-mcp/tests`.
+
+Fixed with its test: the prompt section that explains the retrieval marker returned the text function instead of the text; and a helper killed after a hang could fail the next request through its late exit message.

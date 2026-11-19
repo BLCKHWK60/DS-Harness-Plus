@@ -105,7 +105,7 @@ export function buildTools({ manager, folderOf, enabled }) {
    * @returns {(args: object, exec: object) => Promise<{text: string}>} the tool body.
    */
   const withMap = (answer) => async (args, exec) => {
-    if (!enabled()) return { text: 'The code map is switched off in Settings → Code map. Use the read and grep tools.' };
+    if (!enabled()) return { text: 'The code map is switched off in Settings → Code tools. Use the read and grep tools.' };
     let root;
     try {
       root = await folderOf(exec);
@@ -290,7 +290,8 @@ export function apply(ctx, config) {
 
   // ---- tools ---------------------------------------------------------------
   for (const tool of buildTools({ manager, folderOf: (exec) => folderOfAgent(exec?.agent, exec?.signal), enabled })) {
-    ctx.effect(() => ctx.tools.register(tool), `code-map tool ${tool.name}`);
+    // `when` is asked each time the model's tool list is made, so switching the add-on off in Settings takes the tools away at once.
+    ctx.effect(() => ctx.tools.register(tool, { when: () => enabled() }), `code-map tool ${tool.name}`);
   }
 
   // ---- the short hint --------------------------------------------------------
@@ -421,7 +422,7 @@ export function apply(ctx, config) {
                 const removed = manager.clear(manager.idOf(folder));
                 return { kind: 'success', text: removed ? `The code map of ${folder} was deleted. It is built again when next needed.` : 'This folder has no code map yet.' };
               }
-              if (!enabled()) return { kind: 'error', text: 'The code map is switched off in Settings → Code map.' };
+              if (!enabled()) return { kind: 'error', text: 'The code map is switched off in Settings → Code tools.' };
               if (arg === 'build') {
                 // A slow disk must not hold the command: after a few seconds the mapping goes on in the background.
                 let timer;
@@ -438,7 +439,7 @@ export function apply(ctx, config) {
               const row = manager.list().find((item) => item.id === manager.idOf(folder));
               if (!row) return { kind: 'success', text: `${folder} has no code map yet. It is built the first time the model uses it, or now with /${commandName} build.` };
               const languages = row.languages.slice(0, 6).map(([lang, n]) => `${lang} ${n}`).join(', ');
-              return { kind: 'success', text: `${rowLine(row)}\nLanguages: ${languages}.${row.truncated ? '\nOnly part of the folder is mapped (a limit was reached); raise the limits in Settings → Code map.' : ''}` };
+              return { kind: 'success', text: `${rowLine(row)}\nLanguages: ${languages}.${row.truncated ? '\nOnly part of the folder is mapped (a limit was reached); raise the limits in Settings → Code tools.' : ''}` };
             },
           }),
         'code-map command',

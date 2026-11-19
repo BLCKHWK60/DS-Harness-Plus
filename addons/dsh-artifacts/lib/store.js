@@ -13,8 +13,8 @@
  *   in the app's trash brings them back. A clean-up that fails half-way puts back what it had moved.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { constants, copyFileSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { basename, dirname, extname, join } from 'node:path';
+import { constants, copyFileSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { kindOf } from './kinds.js';
 
 /** A Bench backup: listed, never shown. */
@@ -23,6 +23,8 @@ export const BENCH_BACKUP = /\/devices\/[^/]+\/backups\//;
 export const RECON_ROOM = /(^|\/)dsh-recon[^/]*(\/|$)/i;
 /** A clean-up's name in the trash folder. */
 export const STAMP = /^\d{14}-[a-z0-9]{4,8}$/;
+/** An artifact's id as this add-on makes it: 16 hex letters. Anything else read from a file is never used as a folder name. */
+export const ID_FORM = /^[0-9a-f]{16}$/;
 /** Files this big are fingerprinted by size and time instead of being read whole (reading blocks the app). */
 export const HASH_MAX = 50_000_000;
 
@@ -115,23 +117,67 @@ const inside = (folder, path) => String(path ?? '').startsWith(`${String(folder)
  * @param {{home?: string, now?: () => number, scratchRoot?: string}} [options] - `home`: Artifacts' folder
  *   ('' keeps the index in memory and versions nowhere: for tests of the index only).
  */
-export function openArtifacts({ home = '', now = Date.now, scratchRoot = '' } = {}) {
+export function openArtifacts({ home = '', now = Date.now, scratchRoot = '', isolated = () => null } = {}) {
   const indexFile = home ? join(home, 'index.json') : '';
   /** @type {Record<string, any>} */
   let items = {};
+  /** What the owner should be told in plain words (a damaged index kept aside); '' when all is well. */
+  let notice = '';
+  const versionsRoot = home ? join(home, 'versions') : '';
+  /** Artifacts' own versions folder for one artifact: '' unless the id is well formed and the folder lies inside the store. */
+  const folderOf = (id) => {
+    if (!versionsRoot || !ID_FORM.test(String(id ?? ''))) return '';
+    const folder = resolve(versionsRoot, String(id));
+    return folder.startsWith(`${resolve(versionsRoot)}${sep}`) ? folder : '';
+  };
+  /** One kept version's file: '' unless the id and number are well formed and the file lies inside the store. */
+  const fileOf = (id, n) => {
+    const folder = folderOf(id);
+    if (!folder || !Number.isInteger(Number(n)) || Number(n) < 1) return '';
+    const file = resolve(folder, String(Number(n)));
+    return file.startsWith(`${folder}${sep}`) ? file : '';
+  };
+  let frozen = false;
+  const keepAside = (why) => {
+    const aside = join(home, `index.damaged-${new Date(now()).toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${randomBytes(2).toString('hex')}.json`);
+    try {
+      copyFileSync(indexFile, aside, constants.COPYFILE_EXCL);
+      notice = `Artifacts' list could not be read (${why}). It was kept untouched as ${basename(aside)} in Artifacts' folder and a new list was started; the saved versions of your files were not touched.`;
+    } catch {
+      notice = `Artifacts' list could not be read (${why}) and could not be copied aside; it was left as it is and nothing new is saved until that is fixed.`;
+      frozen = true;
+    }
+  };
   if (indexFile && existsSync(indexFile)) {
     try {
-      items = JSON.parse(readFileSync(indexFile, 'utf8')).artifacts ?? {};
-    } catch { /* a damaged index starts empty; versions stay on disk */ }
+      const read = JSON.parse(readFileSync(indexFile, 'utf8')).artifacts ?? {};
+      if (!read || typeof read !== 'object' || Array.isArray(read)) throw new Error('not a list');
+      const good = {};
+      let odd = 0;
+      for (const [key, entry] of Object.entries(read)) {
+        if (ID_FORM.test(key) && entry?.id === key && typeof entry.path === 'string' && Array.isArray(entry.versions) && Array.isArray(entry.sessions)) good[key] = entry;
+        else odd += 1;
+      }
+      items = good;
+      if (odd > 0) keepAside(`${odd} of its entries were not in the expected form`);
+    } catch (error) {
+      items = {};
+      keepAside(error?.message ?? 'damaged');
+    }
   }
   const save = () => {
-    if (!indexFile) return;
+    if (!indexFile || frozen) return;
     mkdirSync(home, { recursive: true, mode: 0o700 });
     const temp = `${indexFile}.${process.pid}.tmp`;
     writeFileSync(temp, JSON.stringify({ artifacts: items }), { mode: 0o600 });
     renameSync(temp, indexFile);
   };
-  const versionPath = (id, n) => (home ? join(home, 'versions', id, String(n)) : '');
+  const versionPath = (id, n) => fileOf(id, n);
+  /** Delete one artifact's whole versions folder (never outside Artifacts' own folder). */
+  const dropFolder = (id) => {
+    const folder = folderOf(id);
+    if (folder) rmSync(folder, { recursive: true, force: true });
+  };
   const inScratch = (path) => Boolean(scratchRoot) && (path === scratchRoot || path.startsWith(`${scratchRoot.replace(/\/+$/, '')}/`));
   const view = (entry) => {
     const last = entry.versions.at(-1);
@@ -217,6 +263,51 @@ export function openArtifacts({ home = '', now = Date.now, scratchRoot = '' } = 
   };
 
   const store = {
+    /** What the owner should be told about the list (a damaged one kept aside), in plain words; '' for nothing. */
+    notice: () => notice,
+    /**
+     * Review B2 and #4: copies an older build kept of a sealed (Recon) artifact are deleted, one version at a
+     * time, and only a version a Recon (isolated) conversation made. A version whose maker is not known to be
+     * a Recon conversation (ordinary, unknown, or Modes not answering) is never touched.
+     * @returns {{ran: boolean, deleted: number}} `ran` false: Modes could not say, so nothing was looked at.
+     */
+    purgeReconCopies() {
+      if (!home) return { ran: false, deleted: 0 };
+      let probe;
+      try {
+        probe = isolated('');
+      } catch {
+        probe = undefined;
+      }
+      // `undefined` means "Modes is not answering"; true/false/null is an answer.
+      if (probe === undefined) return { ran: false, deleted: 0 };
+      let deleted = 0;
+      let changed = false;
+      for (const [id, entry] of Object.entries(items)) {
+        if (entry?.sealed !== true) continue;
+        for (const version of entry.versions ?? []) {
+          if (version?.stored !== true) continue;
+          let verdict;
+          try {
+            verdict = isolated(String(version.sessionId ?? ''));
+          } catch {
+            verdict = undefined;
+          }
+          if (verdict !== true) continue;
+          const file = fileOf(id, version.n);
+          if (!file) continue;
+          try {
+            if (plainFile(file)) { unlinkSync(file); deleted += 1; }
+            version.stored = false;
+            changed = true;
+          } catch { /* it stays; the next start tries again */ }
+        }
+        const folder = folderOf(id);
+        if (folder) { try { rmdirSync(folder); } catch { /* not empty or not there: left as it is */ } }
+      }
+      if (changed) save();
+      return { ran: true, deleted };
+    },
     /** A fresh name for a clean-up in the trash folder. */
     newStamp() {
       return `${new Date(now()).toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${randomBytes(3).toString('hex')}`;
@@ -262,7 +353,8 @@ export function openArtifacts({ home = '', now = Date.now, scratchRoot = '' } = 
       }
       const n = (last?.n ?? 0) + 1;
       let stored = false;
-      if (home && !entry.noRender) {
+      // A sealed artifact (a Recon conversation's, or a file in Recon's room) keeps no content: only the fact it was made.
+      if (home && !entry.noRender && entry.sealed !== true) {
         try {
           mkdirSync(dirname(versionPath(id, n)), { recursive: true, mode: 0o700 });
           copyFileSync(file, versionPath(id, n), constants.COPYFILE_EXCL);
@@ -369,7 +461,7 @@ export function openArtifacts({ home = '', now = Date.now, scratchRoot = '' } = 
           if (!entry || entry.star === true || entry.sealed === true || entry.noRender === true) continue;
           const record = { id, entry: JSON.parse(JSON.stringify(entry)), versionsTo: '' };
           moved.push(record);
-          const versions = home ? join(home, 'versions', id) : '';
+          const versions = folderOf(id);
           if (versions && existsSync(versions)) {
             move(versions, join(room, 'versions', id));
             record.versionsTo = join(room, 'versions', id);
@@ -427,7 +519,7 @@ export function openArtifacts({ home = '', now = Date.now, scratchRoot = '' } = 
       const left = [];
       const notes = [];
       for (const record of moved) {
-        if (!record?.id || !record.entry || !Array.isArray(record.entry.versions)) continue;
+        if (!ID_FORM.test(String(record?.id ?? '')) || !record.entry || !Array.isArray(record.entry.versions)) continue;
         try {
           if (room && ((record.versionsTo && !inside(room, record.versionsTo)) || (record.file?.to && !inside(room, record.file.to)))) throw new Error('its paths are not in its own trash folder');
           const note = restoreOne(record);
@@ -465,12 +557,38 @@ export function openArtifacts({ home = '', now = Date.now, scratchRoot = '' } = 
      * @param {string[]} sessionIds - the conversations.
      * @returns {number} how many artifacts went.
      */
+    /**
+     * Recon's End and wipe (review B2): everything these conversations made is forgotten: the artifacts only
+     * they made go with their versions; a file other conversations made too only loses the wiped ones.
+     * @param {string[]} sessionIds - the wiped conversations.
+     * @returns {number} how many artifacts went.
+     */
+    forgetSessions(sessionIds) {
+      const gone = new Set((Array.isArray(sessionIds) ? sessionIds : []).map(String).filter(Boolean));
+      if (gone.size === 0) return 0;
+      let count = 0;
+      let changed = false;
+      for (const [id, entry] of Object.entries(items)) {
+        if (!(entry.sessions ?? []).some((one) => gone.has(one))) continue;
+        changed = true;
+        if (entry.sessions.every((one) => gone.has(one))) {
+          dropFolder(id);
+          delete items[id];
+          count += 1;
+        } else {
+          entry.sessions = entry.sessions.filter((one) => !gone.has(one));
+          entry.versions = entry.versions.filter((one) => !gone.has(one.sessionId));
+        }
+      }
+      if (changed) save();
+      return count;
+    },
     erased(sessionIds) {
       const gone = new Set((Array.isArray(sessionIds) ? sessionIds : []).map(String));
       let count = 0;
       for (const [id, entry] of Object.entries(items)) {
         if (!entry.scratch || existsSync(entry.path) || !entry.sessions.every((one) => gone.has(one))) continue;
-        if (home) rmSync(join(home, 'versions', id), { recursive: true, force: true });
+        dropFolder(id);
         delete items[id];
         count += 1;
       }

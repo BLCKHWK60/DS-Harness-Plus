@@ -38,6 +38,9 @@
   "config": [
     "enabled",
     "maxSteps",
+    "maxHelperSteps",
+    "maxLongSteps",
+    "maxLongTokens",
     "maxTokens",
     "maxMinutes",
     "maxRepeats",

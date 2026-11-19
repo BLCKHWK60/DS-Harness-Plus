@@ -8,6 +8,7 @@
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { readJsonStore } from './json-store.js';
 
 /** A skill name: kebab-case, as the app addresses skills. */
 export const NAME = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
@@ -55,12 +56,7 @@ export function openLibrary(dir, { now = () => Date.now() } = {}) {
   const file = dir ? join(dir, 'library.json') : '';
   let table = {};
   if (file) {
-    try {
-      const read = JSON.parse(readFileSync(file, 'utf8'));
-      if (read && typeof read === 'object' && !Array.isArray(read)) table = read;
-    } catch {
-      table = {};
-    }
+    table = readJsonStore(file, () => ({}), { label: 'the Skill architect library', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
   }
   const save = () => {
     if (!file) return;

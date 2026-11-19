@@ -20,7 +20,7 @@ export function buildTools({ enabled, bench, identify }) {
     render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }],
   };
   const safely = (work) => async (args, exec) => {
-    if (!enabled()) return { text: 'Bench is switched off in Settings → Bench.' };
+    if (!enabled()) return { text: 'Devices is switched off in Settings → Devices.' };
     try {
       return { text: await work(args ?? {}, exec) };
     } catch (error) {
@@ -58,12 +58,12 @@ export function buildTools({ enabled, bench, identify }) {
           lines.push(`- Permissions, set by the user: highest level ${label(LEVELS, card.permissions?.level)}, asks ${label(ASKS, card.permissions?.asks)}`);
           lines.push(`- Linked to: ${linkedText(card)}`);
           const family = lookOnlyFamily(card);
-          if (family) lines.push(`- Look-only: one of the ${family}. Bench reads it and changes nothing on it.`);
+          if (family) lines.push(`- Look-only: one of the ${family}. Devices reads it and changes nothing on it.`);
           lines.push('', last.length > 0 ? `Newest logbook entries (${last.length}):` : 'The logbook has no entries yet.', ...last.map((entry) => entry.trim()));
           return lines.join('\n');
         }
         const cards = bench.list();
-        if (cards.length === 0) return `No device has a card yet. The Bench folder is ${bench.where() || 'not set'}.`;
+        if (cards.length === 0) return `No device has a card yet. The Devices folder is ${bench.where() || 'not set'}.`;
         return [`Devices with a card (${cards.length}), newest change first:`, ...cards.map((card) => `- ${card.name}${card.maker || card.model ? `: ${[card.maker, card.model].filter(Boolean).join(' ')}` : ''}${card.connects ? ` · ${card.connects}` : ''} · level ${label(LEVELS, card.permissions?.level)} · ${card.entries} logbook entr${card.entries === 1 ? 'y' : 'ies'} · changed ${day(card.updated)}`)].join('\n');
       }),
     },
@@ -106,7 +106,7 @@ export function buildTools({ enabled, bench, identify }) {
     },
     {
       name: 'bench_catalogue',
-      description: 'The kinds of device Bench knows: 22 families, each with its doors, the deepest level it can reach, the open tools of its route and what is built in Bench so far. Without a family: the list. With a family id: its recipe. With a device\'s description (name, maker): the likely families (a guess, never proof). Adjust and Write exist only where a recipe is built; the others come when the user asks.',
+      description: 'The kinds of device Devices knows: 22 families, each with its doors, the deepest level it can reach, the open tools of its route and what is built in Devices so far. Without a family: the list. With a family id: its recipe. With a device\'s description (name, maker): the likely families (a guess, never proof). Adjust and Write exist only where a recipe is built; the others come when the user asks.',
       parameters: { type: 'object', properties: { family: { type: 'string', maxLength: 40 }, describe: { type: 'string', maxLength: 200 } }, additionalProperties: false },
       ...common,
       isConcurrencySafe: () => true,

@@ -14,6 +14,205 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const h = React.createElement;
     const { useCallback, useEffect, useRef, useState } = React;
+    // ---- dsh-kit:begin ---- shared small helpers; this block is the same in every add-on page file that uses it.
+    // The master copy is docs/shared/dsh-kit.js. Change it there, then run `node scripts/sync-kit.mjs` (it copies the block into
+    // every client.js that has the two marker lines, and `bash scripts/check.sh` fails when a copy has drifted).
+    // Dependency-free: plain DOM for the question box, React is passed in for the error note.
+    const dshKit = (() => {
+      const STYLE_ID = 'dsh-kit-style';
+      const CSS = `
+    .dsh-kit-veil { position: fixed; inset: 0; z-index: 2147483000; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; background: color-mix(in srgb, #000 32%, transparent); }
+    .dsh-kit-box { width: min(420px, 100%); box-sizing: border-box; padding: 16px; border-radius: 12px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base)); color: var(--dsw-alias-label-primary); box-shadow: 0 14px 36px color-mix(in srgb, #000 28%, transparent); font: 14px/22px system-ui, sans-serif; }
+    .dsh-kit-title { margin: 0 0 4px; font-size: 14px; line-height: 22px; font-weight: 500; }
+    .dsh-kit-text { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 50vh; overflow: auto; }
+    .dsh-kit-field { display: block; width: 100%; box-sizing: border-box; height: 36px; margin-top: 10px; padding: 0 14px; border: 0; border-radius: 12px; font: inherit; color: var(--dsw-alias-label-primary); background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); }
+    .dsh-kit-field:focus { outline: 1px solid var(--dsw-alias-brand-primary); }
+    .dsh-kit-label { display: block; margin-top: 10px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+    .dsh-kit-label + .dsh-kit-field { margin-top: 2px; }
+    .dsh-kit-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+    .dsh-kit-btn { height: 28px; padding: 0 10px; border-radius: 8px; border: 0.5px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; cursor: pointer; }
+    .dsh-kit-btn:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+    .dsh-kit-btn:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); }
+    .dsh-kit-btn[data-main="true"] { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
+    .dsh-kit-btn[data-danger="true"] { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
+    .dsh-kit-note { margin: 4px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+    .dsh-kit-note[data-error="true"] { color: var(--dsw-alias-state-error-primary); }
+    .dsh-kit-more { margin-left: 6px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; text-decoration: underline; cursor: pointer; }
+    .dsh-kit-detail { display: block; margin-top: 4px; font: 11px/16px ui-monospace, Menlo, monospace; color: var(--dsw-alias-label-secondary); white-space: pre-wrap; user-select: text; }
+    `;
+      const ensureStyle = () => {
+        if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = STYLE_ID;
+        style.textContent = CSS;
+        (document.head || document.documentElement).appendChild(style);
+      };
+
+      /** Turns what a failed call says ("error 404", "settings/conflict: ...") into a plain sentence; the raw text goes to `details`. */
+      const plain = (raw) => {
+        let message = '';
+        if (typeof raw === 'string') message = raw;
+        else if (raw && typeof raw === 'object') {
+          const source = raw.rpcError ?? (raw.error && typeof raw.error === 'object' ? raw.error : raw);
+          message = String(source.message ?? raw.error ?? '');
+          if (source.code && !message.includes(String(source.code))) message = `${source.code}: ${message}`;
+        }
+        const existing = raw && typeof raw === 'object' && typeof raw.details === 'string' ? raw.details : '';
+        message = message.trim();
+        const text = (sentence) => ({ text: sentence, details: existing || (message && message !== sentence ? message : '') });
+        const status = /^(?:error|status|http)?\s*(\d{3})\b/i.exec(message)?.[1] ?? /(?:answered|returned)\s+(\d{3})\b/i.exec(message)?.[1] ?? '';
+        if (/settings\/conflict/i.test(message)) return text('This setting was changed somewhere else at the same moment. Please try again.');
+        if (/not mounted|namespace not mounted|settings unavailable|is switched off|is not running/i.test(message)) return text('This add-on is not running. Switch it on (or restart the app) and try again.');
+        if (/failed to fetch|networkerror|load failed|network request failed|econnrefused/i.test(message)) return text('Could not reach the app. Check that it is still running, then try again.');
+        if (status === '401' || status === '403') return text('The app did not allow this. Restart the app and try again.');
+        if (status === '404') return text('This part of the add-on is not available. It may be switched off, or the app needs a restart after an update.');
+        if (status === '408' || status === '504') return text('The app took too long to answer. Try again in a moment.');
+        if (status === '409') return text('This changed somewhere else at the same moment. Please try again.');
+        if (/^5\d\d$/.test(status)) return text('The add-on ran into a problem. Try again; if it keeps happening, restart the app.');
+        if (/^4\d\d$/.test(status)) return text('The app could not use this request. Try again; if it keeps happening, restart the app.');
+        // "code/name: message": show the message, keep the code as a detail.
+        const coded = /^([a-z][\w-]*(?:\/[\w.-]+)+):\s*(.+)$/is.exec(message);
+        if (coded) return { text: coded[2].trim(), details: existing || message };
+        // A readable sentence stays as it is.
+        if (/^[A-Z"'(].*\s/s.test(message) || /\s/.test(message)) return { text: message, details: existing };
+        if (!message) return { text: 'Something went wrong. Try again.', details: existing };
+        return text('Something went wrong. Try again; the Details line says what the app reported.');
+      };
+      /** An Error whose message is the plain sentence and whose `details` keeps the raw text. */
+      const fail = (raw) => {
+        const found = plain(raw);
+        const error = new Error(found.text);
+        error.details = found.details;
+        return error;
+      };
+
+      /**
+       * A small question box in the page's own style (window.prompt does nothing in the desktop app, and the native
+       * confirm cannot be styled or checked there). Resolves true/false; with `field` the typed text or null; `notice` shows OK only.
+       */
+      const ask = (options = {}) => new Promise((resolve) => {
+        if (typeof document === 'undefined') { resolve(options.field ? null : false); return; }
+        ensureStyle();
+        const before = document.activeElement;
+        const veil = document.createElement('div');
+        veil.className = 'dsh-kit-veil';
+        const box = document.createElement('div');
+        box.className = 'dsh-kit-box';
+        box.setAttribute('role', 'dialog');
+        box.setAttribute('aria-modal', 'true');
+        const add = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text != null) node.textContent = text; return node; };
+        if (options.title) { const title = add('p', 'dsh-kit-title', options.title); box.appendChild(title); box.setAttribute('aria-label', options.title); }
+        if (options.text) box.appendChild(add('p', 'dsh-kit-text', options.text));
+        let input = null;
+        if (options.field) {
+          if (options.field.label) box.appendChild(add('label', 'dsh-kit-label', options.field.label));
+          input = add('input', 'dsh-kit-field');
+          input.type = 'text';
+          input.value = options.field.value ?? '';
+          if (options.field.placeholder) input.placeholder = options.field.placeholder;
+          if (options.field.label) input.setAttribute('aria-label', options.field.label);
+          box.appendChild(input);
+        }
+        const row = add('div', 'dsh-kit-row');
+        const done = (value) => { document.removeEventListener('keydown', onKey, true); veil.remove(); try { before?.focus?.(); } catch { /* the old control is gone */ } resolve(value); };
+        const cancel = options.notice ? null : add('button', 'dsh-kit-btn', options.cancel ?? 'Cancel');
+        const ok = add('button', 'dsh-kit-btn', options.ok ?? 'OK');
+        ok.type = 'button';
+        ok.setAttribute('data-main', 'true');
+        if (options.danger) ok.setAttribute('data-danger', 'true');
+        const accept = () => done(input ? input.value : true);
+        const reject = () => done(input ? null : false);
+        function onKey(event) {
+          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (options.notice) accept(); else reject(); }
+          else if (event.key === 'Enter' && input && document.activeElement === input) { event.preventDefault(); event.stopPropagation(); accept(); }
+          else if (event.key === 'Tab') {
+            const stops = [...box.querySelectorAll('input,button')];
+            const at = stops.indexOf(document.activeElement);
+            if (stops.length > 0) { event.preventDefault(); stops[(at + (event.shiftKey ? stops.length - 1 : 1)) % stops.length].focus(); }
+          }
+        }
+        if (cancel) { cancel.type = 'button'; cancel.addEventListener('click', reject); row.appendChild(cancel); }
+        ok.addEventListener('click', accept);
+        row.appendChild(ok);
+        box.appendChild(row);
+        veil.appendChild(box);
+        veil.addEventListener('mousedown', (event) => { if (event.target === veil && !options.notice) reject(); });
+        document.addEventListener('keydown', onKey, true);
+        document.body.appendChild(veil);
+        // A question that can destroy something starts on Cancel, so a stray Enter never confirms it.
+        (input ?? (options.danger && cancel ? cancel : ok)).focus();
+        if (input) input.select();
+      });
+
+      /** The note to draw under a form or at the top of a page: a plain sentence and a "Details" button. */
+      const makeNote = (React) => function PlainNote({ error, text, details, kind }) {
+        ensureStyle();
+        const [open, setOpen] = React.useState(false);
+        const found = error !== undefined && error !== null && error !== '' ? plain(error) : { text: text ?? '', details: details ?? '' };
+        if (!found.text) return null;
+        const bad = kind ? kind === 'error' : error !== undefined && error !== null && error !== '';
+        return React.createElement('div', { className: 'dsh-kit-note', 'data-error': String(bad), role: bad ? 'alert' : 'status' },
+          found.text,
+          found.details ? React.createElement('button', { type: 'button', className: 'dsh-kit-more', 'aria-expanded': open, onClick: () => setOpen(!open) }, open ? 'Hide details' : 'Details') : null,
+          open && found.details ? React.createElement('span', { className: 'dsh-kit-detail' }, found.details) : null);
+      };
+      return { plain, fail, ask, makeNote };
+    })();
+    // ---- dsh-kit:end ----
+    /* dsh-merge:begin */
+    /* Shared by the add-ons whose settings pages are merged (host page shows partner parts). Keep every copy identical. */
+    const dshMerge = (() => {
+      const reg = (window.__dshMerge = window.__dshMerge || { hosts: {}, parts: {}, want: {}, subs: new Set() });
+      const tell = () => { for (const fn of [...reg.subs]) { try { fn(); } catch {} } };
+      const api = {
+        /** A host page announces itself; the returned function withdraws it. */
+        host(hostId) {
+          reg.hosts[hostId] = (reg.hosts[hostId] || 0) + 1;
+          tell();
+          let done = false;
+          return () => { if (done) return; done = true; reg.hosts[hostId] -= 1; if (!reg.hosts[hostId]) delete reg.hosts[hostId]; tell(); };
+        },
+        hasHost: (hostId) => Boolean(reg.hosts[hostId]),
+        /** A partner offers a part ({label: () => string, order, render: (props) => element}) to a host page. */
+        part(hostId, partId, spec) {
+          const list = (reg.parts[hostId] = reg.parts[hostId] || {});
+          list[partId] = spec;
+          tell();
+          return () => { if (list[partId] === spec) { delete list[partId]; tell(); } };
+        },
+        parts: (hostId) => Object.entries(reg.parts[hostId] || {}).map(([id, spec]) => ({ id, ...spec })).sort((a, b) => (a.order ?? 100) - (b.order ?? 100)),
+        subscribe(fn) { reg.subs.add(fn); return () => reg.subs.delete(fn); },
+        /** Settings search asks a host page to show one tab ('main' or a part id). */
+        openTab(hostId, tabId) { reg.want[hostId] = tabId; tell(); },
+        /** React hook: the host's current tab ('main' first), and a setter. Re-renders when parts or hosts change. */
+        useTab(React, hostId, first = 'main') {
+          const [tab, setTab] = React.useState(first);
+          const [, bump] = React.useState(0);
+          React.useEffect(() => api.subscribe(() => {
+            const wanted = reg.want[hostId];
+            if (wanted) { delete reg.want[hostId]; setTab(wanted); }
+            bump((n) => n + 1);
+          }), []);
+          React.useEffect(() => { const wanted = reg.want[hostId]; if (wanted) { delete reg.want[hostId]; setTab(wanted); } }, []);
+          const ids = ['main', ...api.parts(hostId).map((p) => p.id)];
+          return [ids.includes(tab) ? tab : 'main', setTab];
+        },
+        /** A partner shows its own page only while no host page shows it. `register()` registers the page and returns its remover. */
+        ownPageUnlessHosted(hostId, register) {
+          let off;
+          const sync = () => {
+            const need = !api.hasHost(hostId);
+            if (need && !off) off = register();
+            else if (!need && off) { off(); off = undefined; }
+          };
+          sync();
+          const unsub = api.subscribe(sync);
+          return () => { unsub(); if (off) { off(); off = undefined; } };
+        },
+      };
+      return api;
+    })();
+    /* dsh-merge:end */
 
     const NS = 'sampling-presets';
     const STRATEGIES = ['in-dsh', 'server-alias', 'mixed'];
@@ -133,45 +332,45 @@ window.__ModuleLoader__.load({
     };
 
     const CSS = `
-.dsh-sp-page { display: flex; flex-direction: column; gap: 16px; padding: 0 0 36px; color: var(--dsw-alias-label-primary); }
-.dsh-sp-head h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--dsw-alias-label-primary); }
-.dsh-sp-head p { margin: 2px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); max-width: 72ch; }
-.dsh-sp-card { box-sizing: border-box; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 20px; padding: 16px; background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-1)); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.dsh-sp-card > h3 { margin: 0; font-size: 12px; line-height: 18px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--dsw-alias-label-secondary); }
-.dsh-sp-hint { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); max-width: 72ch; }
-.dsh-sp-item { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; padding-top: 12px; border-top: 0.5px solid var(--dsw-alias-border-l1); }
-.dsh-sp-item > .dsh-sp-note { flex-basis: 100%; }
-.dsh-sp-item:first-of-type { border-top: 0; padding-top: 0; }
-.dsh-sp-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 170px; min-width: 0; }
-.dsh-sp-field.narrow { flex: 0 1 140px; }
-.dsh-sp-field.wide { flex-basis: 100%; }
-.dsh-sp-card > .dsh-sp-field { flex: none; max-width: 420px; }
-.dsh-sp-field > span { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
-.dsh-sp-in, .dsh-sp-sel { box-sizing: border-box; height: 36px; padding: 0 14px; border: 0; border-radius: 12px; background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); color: var(--dsw-alias-label-primary); font: inherit; font-size: 14px; min-width: 0; }
-.dsh-sp-in:focus-visible, .dsh-sp-sel:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); outline-offset: 0; }
-.dsh-sp-in[data-bad="true"], .dsh-sp-sel[data-bad="true"] { outline: 1px solid var(--dsw-alias-state-error-primary); }
-.dsh-sp-btn { box-sizing: border-box; height: 28px; padding: 0 10px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; cursor: pointer; white-space: nowrap; }
-.dsh-sp-btn:hover:not([disabled]) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
-.dsh-sp-btn[disabled] { opacity: .5; cursor: default; }
-.dsh-sp-btn:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
-.dsh-sp-item > .dsh-sp-btn { margin-bottom: 4px; }
-.dsh-sp-btn.primary { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
-.dsh-sp-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 10px; background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); width: fit-content; max-width: 100%; }
-.dsh-sp-seg button { height: 28px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
-.dsh-sp-seg button:hover { color: var(--dsw-alias-label-primary); }
-.dsh-sp-seg button[aria-pressed="true"] { background: color-mix(in srgb, var(--dsw-alias-label-primary) 12%, transparent); color: var(--dsw-alias-label-primary); }
-.dsh-sp-seg button:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
-.dsh-sp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.dsh-sp-chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 12px; font-size: 12px; color: var(--dsw-alias-label-secondary); cursor: pointer; }
-.dsh-sp-chip[data-on="true"] { background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent); color: var(--dsw-alias-brand-primary); border-color: var(--dsw-alias-brand-primary); }
-.dsh-sp-chip input { margin: 0; accent-color: var(--dsw-alias-brand-primary); }
-.dsh-sp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.dsh-sp-spacer { flex: 1; }
-.dsh-sp-note { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
-.dsh-sp-note[data-bad="true"] { color: var(--dsw-alias-state-error-primary); }
-.dsh-sp-alias { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.dsh-sp-alias > b { font-size: 12px; font-weight: 500; color: var(--dsw-alias-label-primary); min-width: 80px; }
-.dsh-sp-alias .dsh-sp-in { flex: 1 1 180px; }
+.dsh-smp-page { display: flex; flex-direction: column; gap: 16px; padding: 0 0 36px; color: var(--dsw-alias-label-primary); }
+.dsh-smp-head h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--dsw-alias-label-primary); }
+.dsh-smp-head p { margin: 2px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); max-width: 72ch; }
+.dsh-smp-card { box-sizing: border-box; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 20px; padding: 16px; background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-1)); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.dsh-smp-card > h3 { margin: 0; font-size: 12px; line-height: 18px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--dsw-alias-label-secondary); }
+.dsh-smp-hint { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); max-width: 72ch; }
+.dsh-smp-item { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; padding-top: 12px; border-top: 0.5px solid var(--dsw-alias-border-l1); }
+.dsh-smp-item > .dsh-smp-note { flex-basis: 100%; }
+.dsh-smp-item:first-of-type { border-top: 0; padding-top: 0; }
+.dsh-smp-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 170px; min-width: 0; }
+.dsh-smp-field.narrow { flex: 0 1 140px; }
+.dsh-smp-field.wide { flex-basis: 100%; }
+.dsh-smp-card > .dsh-smp-field { flex: none; max-width: 420px; }
+.dsh-smp-field > span { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.dsh-smp-in, .dsh-smp-sel { box-sizing: border-box; height: 36px; padding: 0 14px; border: 0; border-radius: 12px; background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); color: var(--dsw-alias-label-primary); font: inherit; font-size: 14px; min-width: 0; }
+.dsh-smp-in:focus-visible, .dsh-smp-sel:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); outline-offset: 0; }
+.dsh-smp-in[data-bad="true"], .dsh-smp-sel[data-bad="true"] { outline: 1px solid var(--dsw-alias-state-error-primary); }
+.dsh-smp-btn { box-sizing: border-box; height: 28px; padding: 0 10px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; cursor: pointer; white-space: nowrap; }
+.dsh-smp-btn:hover:not([disabled]) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+.dsh-smp-btn[disabled] { opacity: .5; cursor: default; }
+.dsh-smp-btn:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+.dsh-smp-item > .dsh-smp-btn { margin-bottom: 4px; }
+.dsh-smp-btn.primary { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
+.dsh-smp-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 10px; background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); width: fit-content; max-width: 100%; }
+.dsh-smp-seg button { height: 28px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.dsh-smp-seg button:hover { color: var(--dsw-alias-label-primary); }
+.dsh-smp-seg button[aria-pressed="true"] { background: color-mix(in srgb, var(--dsw-alias-label-primary) 12%, transparent); color: var(--dsw-alias-label-primary); }
+.dsh-smp-seg button:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+.dsh-smp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.dsh-smp-chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 12px; font-size: 12px; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+.dsh-smp-chip[data-on="true"] { background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent); color: var(--dsw-alias-brand-primary); border-color: var(--dsw-alias-brand-primary); }
+.dsh-smp-chip input { margin: 0; accent-color: var(--dsw-alias-brand-primary); }
+.dsh-smp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dsh-smp-spacer { flex: 1; }
+.dsh-smp-note { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.dsh-smp-note[data-bad="true"] { color: var(--dsw-alias-state-error-primary); }
+.dsh-smp-alias { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dsh-smp-alias > b { font-size: 12px; font-weight: 500; color: var(--dsw-alias-label-primary); min-width: 80px; }
+.dsh-smp-alias .dsh-smp-in { flex: 1 1 180px; }
 `;
 
     /**
@@ -299,13 +498,13 @@ window.__ModuleLoader__.load({
 
     async function loadAll(ctx) {
       const result = await ctx.remote.settings.describe();
-      if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+      if (!result.ok) throw dshKit.fail(result.error);
       const entry = result.value.namespaces.find((item) => item.ns === NS);
       if (!entry) throw new Error('The Sampling presets settings namespace is not mounted.');
       return { value: entry.value, revision: entry.revision, modeIds: modeIdsOf(result.value.namespaces) };
     }
 
-    function SamplingPage({ appCtx }) {
+    function SamplingPage({ appCtx, embedded }) {
       const t = appCtx.locale.bind('samplingPresets');
       const [status, setStatus] = useState('loading');
       const [revision, setRevision] = useState(0);
@@ -391,7 +590,7 @@ window.__ModuleLoader__.load({
             const fresh = await loadAll(appCtx);
             result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
           }
-          if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+          if (!result.ok) throw dshKit.fail(result.error);
           setRevision(result.value.revision);
           adopt(result.value.value);
           setMessage({ text: t('saved') });
@@ -402,28 +601,28 @@ window.__ModuleLoader__.load({
         }
       };
 
-      if (status === 'loading') return h('div', { className: 'dsh-sp-note' }, h('style', { dangerouslySetInnerHTML: { __html: CSS } }), t('loading'));
+      if (status === 'loading') return h('div', { className: 'dsh-smp-note' }, h('style', { dangerouslySetInnerHTML: { __html: CSS } }), t('loading'));
       if (status === 'error') {
-        return h('div', { className: 'dsh-sp-note', 'data-bad': 'true' }, h('style', { dangerouslySetInnerHTML: { __html: CSS } }), t('failed'));
+        return h('div', { className: 'dsh-smp-note', 'data-bad': 'true' }, h('style', { dangerouslySetInnerHTML: { __html: CSS } }), t('failed'));
       }
 
       const presetNames = form.presets.map((p) => p.name).filter(Boolean);
       const categoryNames = form.categories.map((c) => c.name).filter(Boolean);
-      const field = (label, control, cls) => h('label', { className: `dsh-sp-field${cls ? ` ${cls}` : ''}` }, h('span', null, label), control);
-      const note = (id) => (problems[id] ? h('div', { className: 'dsh-sp-note', 'data-bad': 'true' }, t(problems[id])) : null);
+      const field = (label, control, cls) => h('label', { className: `dsh-smp-field${cls ? ` ${cls}` : ''}` }, h('span', null, label), control);
+      const note = (id) => (problems[id] ? h('div', { className: 'dsh-smp-note', 'data-bad': 'true' }, t(problems[id])) : null);
       const select = (value, options, onChange, bad, empty) =>
         h(
           'select',
-          { className: 'dsh-sp-sel', value, 'data-bad': bad, onChange: (event) => onChange(event.target.value) },
+          { className: 'dsh-smp-sel', value, 'data-bad': bad, onChange: (event) => onChange(event.target.value) },
           empty !== undefined ? h('option', { value: '' }, empty) : null,
           // Keep a value that no longer resolves visible instead of silently showing another one.
           value && !options.includes(value) ? h('option', { value }, value) : null,
           options.map((option) => h('option', { key: option, value: option }, option)),
         );
-      const remove = (onClick) => h('button', { type: 'button', className: 'dsh-sp-btn', onClick }, t('remove'));
-      const add = (label, onClick) => h('button', { type: 'button', className: 'dsh-sp-btn', onClick }, label);
+      const remove = (onClick) => h('button', { type: 'button', className: 'dsh-smp-btn', onClick }, t('remove'));
+      const add = (label, onClick) => h('button', { type: 'button', className: 'dsh-smp-btn', onClick }, label);
       const card = (title, hint, ...children) =>
-        h('section', { className: 'dsh-sp-card' }, h('h3', null, title), hint ? h('p', { className: 'dsh-sp-hint' }, hint) : null, ...children);
+        h('section', { className: 'dsh-smp-card' }, h('h3', null, title), hint ? h('p', { className: 'dsh-smp-hint' }, hint) : null, ...children);
 
       const firstOr = (list) => list[0] ?? '';
       const freshName = (prefix, rows) => {
@@ -434,71 +633,71 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { className: 'dsh-sp-page' },
+        { className: 'dsh-smp-page' },
         h('style', { dangerouslySetInnerHTML: { __html: CSS } }),
-        h('div', { className: 'dsh-sp-head' }, h('h2', null, t('section.title')), h('p', null, t('head.hint'))),
+        h('div', { className: 'dsh-smp-head' }, embedded ? null : h('h2', null, t('section.title')), h('p', null, t('head.hint'))),
 
         card(
           t('presets.title'),
           null,
-          form.presets.length === 0 ? h('div', { className: 'dsh-sp-note' }, t('presets.empty')) : null,
+          form.presets.length === 0 ? h('div', { className: 'dsh-smp-note' }, t('presets.empty')) : null,
           form.presets.map((p) =>
             h(
               'div',
-              { key: p.key, className: 'dsh-sp-item' },
-              field(t('p.name'), h('input', { className: 'dsh-sp-in', value: p.name, spellCheck: false, 'data-bad': flag(`${p.key}:name`), onChange: (e) => renamePreset(p.key, e.target.value.trim()) })),
-              field(t('p.temperature'), h('input', { className: 'dsh-sp-in', value: p.temperature, inputMode: 'decimal', 'data-bad': flag(`${p.key}:temperature`), onChange: (e) => setRow('presets', p.key, { temperature: e.target.value }) }), 'narrow'),
-              field(t('p.maxTokens'), h('input', { className: 'dsh-sp-in', value: p.maxTokens, inputMode: 'numeric', 'data-bad': flag(`${p.key}:maxTokens`), onChange: (e) => setRow('presets', p.key, { maxTokens: e.target.value }) }), 'narrow'),
-              field(t('p.notes'), h('input', { className: 'dsh-sp-in', value: p.notes, onChange: (e) => setRow('presets', p.key, { notes: e.target.value }) })),
+              { key: p.key, className: 'dsh-smp-item' },
+              field(t('p.name'), h('input', { className: 'dsh-smp-in', value: p.name, spellCheck: false, 'data-bad': flag(`${p.key}:name`), onChange: (e) => renamePreset(p.key, e.target.value.trim()) })),
+              field(t('p.temperature'), h('input', { className: 'dsh-smp-in', value: p.temperature, inputMode: 'decimal', 'data-bad': flag(`${p.key}:temperature`), onChange: (e) => setRow('presets', p.key, { temperature: e.target.value }) }), 'narrow'),
+              field(t('p.maxTokens'), h('input', { className: 'dsh-smp-in', value: p.maxTokens, inputMode: 'numeric', 'data-bad': flag(`${p.key}:maxTokens`), onChange: (e) => setRow('presets', p.key, { maxTokens: e.target.value }) }), 'narrow'),
+              field(t('p.notes'), h('input', { className: 'dsh-smp-in', value: p.notes, onChange: (e) => setRow('presets', p.key, { notes: e.target.value }) })),
               remove(() => dropRow('presets', p.key)),
               note(`${p.key}:name`) || note(`${p.key}:temperature`) || note(`${p.key}:maxTokens`),
             ),
           ),
-          h('div', { className: 'dsh-sp-bar' }, add(t('presets.add'), () => addRow('presets', { name: freshName('preset', form.presets), temperature: '0.7', maxTokens: '4096', notes: '', extra: {} }))),
+          h('div', { className: 'dsh-smp-bar' }, add(t('presets.add'), () => addRow('presets', { name: freshName('preset', form.presets), temperature: '0.7', maxTokens: '4096', notes: '', extra: {} }))),
         ),
 
         card(
           t('categories.title'),
           t('categories.hint'),
-          form.categories.length === 0 ? h('div', { className: 'dsh-sp-note' }, t('categories.empty')) : null,
+          form.categories.length === 0 ? h('div', { className: 'dsh-smp-note' }, t('categories.empty')) : null,
           form.categories.map((c) =>
             h(
               'div',
-              { key: c.key, className: 'dsh-sp-item' },
-              field(t('c.name'), h('input', { className: 'dsh-sp-in', value: c.name, spellCheck: false, 'data-bad': flag(`${c.key}:name`), onChange: (e) => renameCategory(c.key, e.target.value.trim()) })),
+              { key: c.key, className: 'dsh-smp-item' },
+              field(t('c.name'), h('input', { className: 'dsh-smp-in', value: c.name, spellCheck: false, 'data-bad': flag(`${c.key}:name`), onChange: (e) => renameCategory(c.key, e.target.value.trim()) })),
               field(t('c.preset'), select(c.preset, presetNames, (value) => setRow('categories', c.key, { preset: value }), flag(`${c.key}:preset`))),
               remove(() => dropRow('categories', c.key)),
               note(`${c.key}:name`) || note(`${c.key}:preset`),
             ),
           ),
-          h('div', { className: 'dsh-sp-bar' }, add(t('categories.add'), () => addRow('categories', { name: freshName('category', form.categories), preset: firstOr(presetNames) }))),
+          h('div', { className: 'dsh-smp-bar' }, add(t('categories.add'), () => addRow('categories', { name: freshName('category', form.categories), preset: firstOr(presetNames) }))),
         ),
 
         card(
           t('modes.title'),
           t('modes.hint'),
-          form.byMode.length === 0 ? h('div', { className: 'dsh-sp-note' }, t('modes.empty')) : null,
+          form.byMode.length === 0 ? h('div', { className: 'dsh-smp-note' }, t('modes.empty')) : null,
           form.byMode.map((m) =>
             h(
               'div',
-              { key: m.key, className: 'dsh-sp-item' },
+              { key: m.key, className: 'dsh-smp-item' },
               field(
                 t('m.mode'),
-                h('input', { className: 'dsh-sp-in', list: 'dsh-sp-modes', value: m.mode, spellCheck: false, 'data-bad': flag(`${m.key}:mode`), onChange: (e) => setRow('byMode', m.key, { mode: e.target.value.trim() }) }),
+                h('input', { className: 'dsh-smp-in', list: 'dsh-smp-modes', value: m.mode, spellCheck: false, 'data-bad': flag(`${m.key}:mode`), onChange: (e) => setRow('byMode', m.key, { mode: e.target.value.trim() }) }),
               ),
               field(t('m.category'), select(m.category, categoryNames, (value) => setRow('byMode', m.key, { category: value }), flag(`${m.key}:category`))),
               remove(() => dropRow('byMode', m.key)),
               note(`${m.key}:mode`) || note(`${m.key}:category`),
             ),
           ),
-          h('datalist', { id: 'dsh-sp-modes' }, modeIds.map((id) => h('option', { key: id, value: id }))),
-          h('div', { className: 'dsh-sp-bar' }, add(t('modes.add'), () => addRow('byMode', { mode: modeIds.find((id) => !form.byMode.some((m) => m.mode === id)) ?? '', category: firstOr(categoryNames) }))),
+          h('datalist', { id: 'dsh-smp-modes' }, modeIds.map((id) => h('option', { key: id, value: id }))),
+          h('div', { className: 'dsh-smp-bar' }, add(t('modes.add'), () => addRow('byMode', { mode: modeIds.find((id) => !form.byMode.some((m) => m.mode === id)) ?? '', category: firstOr(categoryNames) }))),
         ),
 
         card(
           t('default.title'),
           null,
-          h('div', { className: 'dsh-sp-field' }, select(form.defaultCategory, categoryNames, (value) => change((f) => ({ ...f, defaultCategory: value })), flag('default'), t('default.none'))),
+          h('div', { className: 'dsh-smp-field' }, select(form.defaultCategory, categoryNames, (value) => change((f) => ({ ...f, defaultCategory: value })), flag('default'), t('default.none'))),
           note('default'),
         ),
 
@@ -507,7 +706,7 @@ window.__ModuleLoader__.load({
           t(`strategy.${form.strategy}.hint`),
           h(
             'div',
-            { className: 'dsh-sp-seg', role: 'group', 'aria-label': t('strategy.title') },
+            { className: 'dsh-smp-seg', role: 'group', 'aria-label': t('strategy.title') },
             STRATEGIES.map((s) => h('button', { key: s, type: 'button', 'aria-pressed': form.strategy === s, onClick: () => change((f) => ({ ...f, strategy: s })) }, t(`strategy.${s}`))),
           ),
         ),
@@ -515,25 +714,25 @@ window.__ModuleLoader__.load({
         card(
           t('perModel.title'),
           t('perModel.hint'),
-          form.perModel.length === 0 ? h('div', { className: 'dsh-sp-note' }, t('perModel.empty')) : null,
+          form.perModel.length === 0 ? h('div', { className: 'dsh-smp-note' }, t('perModel.empty')) : null,
           form.perModel.map((m) =>
             h(
               'div',
-              { key: m.key, className: 'dsh-sp-item' },
-              field(t('pm.route'), h('input', { className: 'dsh-sp-in', value: m.route, spellCheck: false, 'data-bad': flag(`${m.key}:route`), onChange: (e) => setRow('perModel', m.key, { route: e.target.value.trim() }) }), 'wide'),
+              { key: m.key, className: 'dsh-smp-item' },
+              field(t('pm.route'), h('input', { className: 'dsh-smp-in', value: m.route, spellCheck: false, 'data-bad': flag(`${m.key}:route`), onChange: (e) => setRow('perModel', m.key, { route: e.target.value.trim() }) }), 'wide'),
               note(`${m.key}:route`),
               h(
                 'div',
-                { className: 'dsh-sp-field wide' },
+                { className: 'dsh-smp-field wide' },
                 h('span', null, t('pm.allowed')),
                 h(
                   'div',
-                  { className: 'dsh-sp-chips' },
+                  { className: 'dsh-smp-chips' },
                   presetNames.map((name) => {
                     const on = m.allowed.includes(name);
                     return h(
                       'label',
-                      { key: name, className: 'dsh-sp-chip', 'data-on': on ? 'true' : 'false' },
+                      { key: name, className: 'dsh-smp-chip', 'data-on': on ? 'true' : 'false' },
                       h('input', {
                         type: 'checkbox',
                         checked: on,
@@ -546,16 +745,16 @@ window.__ModuleLoader__.load({
               ),
               h(
                 'div',
-                { className: 'dsh-sp-field wide' },
+                { className: 'dsh-smp-field wide' },
                 h('span', null, t('pm.aliases')),
                 presetNames.map((name) => {
                   const current = m.aliases.find((a) => a.preset === name)?.alias ?? '';
                   return h(
                     'div',
-                    { key: name, className: 'dsh-sp-alias' },
+                    { key: name, className: 'dsh-smp-alias' },
                     h('b', null, name),
                     h('input', {
-                      className: 'dsh-sp-in',
+                      className: 'dsh-smp-in',
                       value: current,
                       spellCheck: false,
                       onChange: (e) => {
@@ -571,18 +770,18 @@ window.__ModuleLoader__.load({
               remove(() => dropRow('perModel', m.key)),
             ),
           ),
-          h('div', { className: 'dsh-sp-bar' }, add(t('perModel.add'), () => addRow('perModel', { route: '', allowed: [], aliases: [], extra: {} }))),
+          h('div', { className: 'dsh-smp-bar' }, add(t('perModel.add'), () => addRow('perModel', { route: '', allowed: [], aliases: [], extra: {} }))),
         ),
 
-        blocked ? h('div', { className: 'dsh-sp-note', 'data-bad': 'true' }, t('e.used')) : null,
+        blocked ? h('div', { className: 'dsh-smp-note', 'data-bad': 'true' }, t('e.used')) : null,
         h(
           'div',
-          { className: 'dsh-sp-bar' },
-          h('span', { className: 'dsh-sp-spacer' }),
-          message ? h('span', { className: 'dsh-sp-note', 'data-bad': message.bad ? 'true' : 'false', role: 'status' }, message.text) : null,
-          dirty && !message ? h('span', { className: 'dsh-sp-note' }, t('dirty')) : null,
-          h('button', { type: 'button', className: 'dsh-sp-btn', disabled: !dirty || busy, onClick: () => void refresh() }, t('discard')),
-          h('button', { type: 'button', className: 'dsh-sp-btn primary', disabled: !dirty || busy || blocked, onClick: () => void save() }, t('save')),
+          { className: 'dsh-smp-bar' },
+          h('span', { className: 'dsh-smp-spacer' }),
+          message ? h('span', { className: 'dsh-smp-note', 'data-bad': message.bad ? 'true' : 'false', role: 'status' }, message.text) : null,
+          dirty && !message ? h('span', { className: 'dsh-smp-note' }, t('dirty')) : null,
+          h('button', { type: 'button', className: 'dsh-smp-btn', disabled: !dirty || busy, onClick: () => void refresh() }, t('discard')),
+          h('button', { type: 'button', className: 'dsh-smp-btn primary', disabled: !dirty || busy || blocked, onClick: () => void save() }, t('save')),
         ),
       );
     }
@@ -592,11 +791,17 @@ window.__ModuleLoader__.load({
       apply(ctx) {
         ctx.effect(() => ctx.locale.register('samplingPresets', DICT));
         const t = ctx.locale.bind('samplingPresets');
+        // Shown as the "Sampling" tab of the Model Tiers page; its own page appears only without Model Tiers.
+        ctx.effect(() => dshMerge.part('model-tiers', 'sampling-presets', { label: () => t('section.title'), order: 300, render: (props) => h(SamplingPage, { ...props, appCtx: ctx, embedded: true }) }));
         ctx.effect(() =>
-          ctx.slots.inject('settings.section', () =>
-            ctx.slots.register(
-              { name: 'settings.section', id: 'sampling-presets', order: 210, label: () => t('section.title') },
-              (props) => h(SamplingPage, { ...props, appCtx: ctx }),
+          dshMerge.ownPageUnlessHosted('model-tiers', () =>
+            ctx.effect(() =>
+              ctx.slots.inject('settings.section', () =>
+                ctx.slots.register(
+                  { name: 'settings.section', id: 'sampling-presets', order: 210, label: () => t('section.title') },
+                  (props) => h(SamplingPage, { ...props, appCtx: ctx }),
+                ),
+              ),
             ),
           ),
         );

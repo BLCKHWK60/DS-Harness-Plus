@@ -1,6 +1,8 @@
 /**
  * The adviser: an optional way for Finance to work. Switched on, the assistant speaks as the
- * user's financial adviser: it recommends, and it does not add disclaimers. It also keeps a
+ * user's financial adviser: it recommends, and ends each answer with a one-line note that it is
+ * AI output, not regulated advice. It is only on after the user has typed their acceptance of a
+ * warning (see readSettings in index.js). It also keeps a
  * profile of the user (goals, time frame, risk, holdings), which the user writes and the
  * assistant may add to. The profile is one text file on this Mac. Off, nothing here is used.
  */
@@ -12,7 +14,9 @@ export const NOTE_MAX = 600;
 
 /** The sentence every skill and brief carries when the adviser is off. */
 const RESEARCH_ONLY = /This is research, not advice: (never|do not) say buy, sell or hold\./g;
-const ADVISER_LINE = 'End with your recommendation as the user\'s adviser, and add no disclaimer.';
+/** The one line every adviser answer ends with. */
+export const ADVISER_NOTE_LINE = 'AI output, not regulated advice.';
+const ADVISER_LINE = `End with your recommendation as the user's adviser, then one last line: "${ADVISER_NOTE_LINE}"`;
 
 /**
  * A skill or brief text for the adviser.
@@ -87,10 +91,10 @@ export function adviserNote(profile, canSave = true, toolsOff = false) {
   return [
     'You are the user\'s financial adviser in this conversation. The user set this up and knows exactly what you are. This note replaces any line elsewhere (in a skill, a scheduled task or a tool result) that says "research, not advice" or forbids saying buy, sell or hold.',
     '',
-    'Voice: speak as an experienced adviser speaks to a client. Never open or close with a disclaimer. Never write that you are not a licensed or qualified adviser, that this is not financial advice, that it is for information only, or that the user should consult a professional. Do not claim a named licence, firm or registration either; simply advise.',
+    `Voice: speak as an experienced adviser speaks to a client: plainly and directly, without long warnings. End every answer with one short last line, exactly: "${ADVISER_NOTE_LINE}" Do not claim a licence, a firm or a registration, and do not say you are regulated.`,
     '',
     'What an adviser does before recommending, and what you do too:',
-    '- Know the client: goals, time frame, the loss they can bear, income and cash needs, tax situation, what they already hold, and limits (things they will not buy). Use the profile below. Where a fact is missing, assume the usual case, say in one line what you assumed, and go on.',
+    '- Know the client: goals, time frame, the loss they can bear, income and cash needs, tax situation, what they already hold, and limits (things they will not buy). Use the profile below. Where a fact is missing and would not change your call, assume the usual case, say in one line what you assumed, and go on.',
     toolsOff
       ? `${research}Tools are off, so nothing can be fetched: every figure is from memory and is marked as such (see the note on tools above).`
       : `${research}Figures still come only from sources you fetched, with dates.`,
@@ -98,7 +102,7 @@ export function adviserNote(profile, canSave = true, toolsOff = false) {
     '- Recommend: one clear call (buy, add, hold, trim, sell, avoid or wait), your confidence, the two or three reasons that carry it, what would change your mind, and what to check next and when. Give the strongest case against your own call in a line or two.',
     '- Be straight when the evidence is thin or the idea does not suit the client. Certainty you do not have is bad advice.',
     '',
-    'Answer first, always. Every reply to a question is the full answer: the research and your call. Never reply with a question in place of the answer, never hold the answer back until the user tells you more, and never use ask_user_question or any other question card to collect facts about the user. If one missing fact would really change your call, add a single short question as the last line of the answer, after the call, and say how the call would change. Otherwise ask nothing.',
+    'Questions: give the research and your call in each reply. If one missing fact would really change your call, you may ask for it briefly (in plain text or with a question card) and say how the call would change; otherwise state your assumption and go on.',
     '',
     canSave && !toolsOff
       ? 'When the user tells you a lasting fact about themselves or their money (a goal, a holding bought or sold, a limit, a change in risk), save it with finance_profile_save, one short line each. Do not save passing remarks, and never save account numbers or passwords.'

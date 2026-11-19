@@ -16,6 +16,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, w
 import { join } from 'node:path';
 import { emptyPolicy, familyOf, normalizePolicy } from './policy.js';
 import { normalizeCheck } from './verify.js';
+import { readJsonStore } from './json-store.js';
 
 export const SPLITS = ['learn', 'check', 'guard'];
 export const KINDS = ['answer', 'agent'];
@@ -54,12 +55,8 @@ export function openStore(dir) {
   mkdirSync(join(dir, 'results'), { recursive: true });
 
   const read = (name, fallback) => {
-    try {
-      const path = join(dir, name);
-      return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : fallback;
-    } catch {
-      return fallback;
-    }
+    // A damaged file is kept aside (review H4), never taken for empty and written over.
+    return readJsonStore(join(dir, name), () => fallback, { label: `what Evolve kept (${name})` });
   };
   const write = (name, value) => {
     const path = join(dir, name);

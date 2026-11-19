@@ -10,6 +10,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { readJsonStore } from './json-store.js';
 
 export const START = '<!-- dsh-memory:start (written by the Memory page; change it there, not here) -->';
 export const END = '<!-- dsh-memory:end -->';
@@ -102,12 +103,8 @@ function writeSafely(file, text) {
  */
 export function openMemory({ dataFile, notesFile }) {
   const read = () => {
-    let data = {};
-    try {
-      data = JSON.parse(readFileSync(dataFile, 'utf8'));
-    } catch {
-      data = {};
-    }
+    // A damaged file is kept aside (review H4), never read as empty and written over.
+    const data = readJsonStore(dataFile, () => ({}), { label: 'your Memory', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
     const entries = (Array.isArray(data.entries) ? data.entries : []).filter((e) => e && typeof e.id === 'string' && cleanText(e.text));
     const suggestions = (Array.isArray(data.suggestions) ? data.suggestions : []).filter((s) => s && typeof s.id === 'string' && cleanText(s.text));
     return { entries, suggestions };

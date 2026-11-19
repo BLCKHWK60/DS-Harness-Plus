@@ -53,8 +53,8 @@ export function whyNot({ isolated, tier = null, helpers = false, word, tab = '',
 
 /** What the Long run card says in a Recon conversation, where Recon keeps the run inside its rules. */
 /** A Bench conversation's Long run, checks on (the default) or off (Settings → Bench). */
-export const BENCH_CHECKS_TEXT = 'Bench: the run checks its work, with the Mac\'s device ports closed to those checks. Its helpers run no commands. Checks can be switched off in Settings → Bench.';
-export const BENCH_NO_CHECKS_TEXT = 'Bench: this run checks nothing by itself (checks are switched off in Settings → Bench): the reviewer judges each item by reading. Its helpers run no commands.';
+export const BENCH_CHECKS_TEXT = 'Devices: the run checks its work, with the Mac\'s device ports closed to those checks. Its helpers run no commands. Checks can be switched off in Settings → Devices.';
+export const BENCH_NO_CHECKS_TEXT = 'Devices: this run checks nothing by itself (checks are switched off in Settings → Devices): the reviewer judges each item by reading. Its helpers run no commands.';
 /** A Recon Long run's checks: off (the default) or on without the internet (Settings → Recon). */
 /** A Creator Plus conversation's Long run (Creator Plus decides, through its `longRunRules`). */
 export const CREATOR_CHECKS_TEXT = 'Creator Plus: the run checks its work with commands that have no internet, see only the run\'s folder, get no keys, and can start only the usual check programs (never launchctl, open or a program it wrote); its helpers run no commands.';

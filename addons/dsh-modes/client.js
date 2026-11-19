@@ -5,6 +5,369 @@ window.__ModuleLoader__.load({
     const ReactDOM = require('react-dom');
     const h = React.createElement;
     const { useCallback, useEffect, useRef, useState, useLayoutEffect } = React;
+    // ---- dsh-kit:begin ---- shared small helpers; this block is the same in every add-on page file that uses it.
+    // The master copy is docs/shared/dsh-kit.js. Change it there, then run `node scripts/sync-kit.mjs` (it copies the block into
+    // every client.js that has the two marker lines, and `bash scripts/check.sh` fails when a copy has drifted).
+    // Dependency-free: plain DOM for the question box, React is passed in for the error note.
+    const dshKit = (() => {
+      const STYLE_ID = 'dsh-kit-style';
+      const CSS = `
+    .dsh-kit-veil { position: fixed; inset: 0; z-index: 2147483000; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; background: color-mix(in srgb, #000 32%, transparent); }
+    .dsh-kit-box { width: min(420px, 100%); box-sizing: border-box; padding: 16px; border-radius: 12px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base)); color: var(--dsw-alias-label-primary); box-shadow: 0 14px 36px color-mix(in srgb, #000 28%, transparent); font: 14px/22px system-ui, sans-serif; }
+    .dsh-kit-title { margin: 0 0 4px; font-size: 14px; line-height: 22px; font-weight: 500; }
+    .dsh-kit-text { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 50vh; overflow: auto; }
+    .dsh-kit-field { display: block; width: 100%; box-sizing: border-box; height: 36px; margin-top: 10px; padding: 0 14px; border: 0; border-radius: 12px; font: inherit; color: var(--dsw-alias-label-primary); background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); }
+    .dsh-kit-field:focus { outline: 1px solid var(--dsw-alias-brand-primary); }
+    .dsh-kit-label { display: block; margin-top: 10px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+    .dsh-kit-label + .dsh-kit-field { margin-top: 2px; }
+    .dsh-kit-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+    .dsh-kit-btn { height: 28px; padding: 0 10px; border-radius: 8px; border: 0.5px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; cursor: pointer; }
+    .dsh-kit-btn:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+    .dsh-kit-btn:focus-visible { outline: 1px solid var(--dsw-alias-brand-primary); }
+    .dsh-kit-btn[data-main="true"] { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
+    .dsh-kit-btn[data-danger="true"] { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
+    .dsh-kit-note { margin: 4px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+    .dsh-kit-note[data-error="true"] { color: var(--dsw-alias-state-error-primary); }
+    .dsh-kit-more { margin-left: 6px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; text-decoration: underline; cursor: pointer; }
+    .dsh-kit-detail { display: block; margin-top: 4px; font: 11px/16px ui-monospace, Menlo, monospace; color: var(--dsw-alias-label-secondary); white-space: pre-wrap; user-select: text; }
+    `;
+      const ensureStyle = () => {
+        if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = STYLE_ID;
+        style.textContent = CSS;
+        (document.head || document.documentElement).appendChild(style);
+      };
+
+      /** Turns what a failed call says ("error 404", "settings/conflict: ...") into a plain sentence; the raw text goes to `details`. */
+      const plain = (raw) => {
+        let message = '';
+        if (typeof raw === 'string') message = raw;
+        else if (raw && typeof raw === 'object') {
+          const source = raw.rpcError ?? (raw.error && typeof raw.error === 'object' ? raw.error : raw);
+          message = String(source.message ?? raw.error ?? '');
+          if (source.code && !message.includes(String(source.code))) message = `${source.code}: ${message}`;
+        }
+        const existing = raw && typeof raw === 'object' && typeof raw.details === 'string' ? raw.details : '';
+        message = message.trim();
+        const text = (sentence) => ({ text: sentence, details: existing || (message && message !== sentence ? message : '') });
+        const status = /^(?:error|status|http)?\s*(\d{3})\b/i.exec(message)?.[1] ?? /(?:answered|returned)\s+(\d{3})\b/i.exec(message)?.[1] ?? '';
+        if (/settings\/conflict/i.test(message)) return text('This setting was changed somewhere else at the same moment. Please try again.');
+        if (/not mounted|namespace not mounted|settings unavailable|is switched off|is not running/i.test(message)) return text('This add-on is not running. Switch it on (or restart the app) and try again.');
+        if (/failed to fetch|networkerror|load failed|network request failed|econnrefused/i.test(message)) return text('Could not reach the app. Check that it is still running, then try again.');
+        if (status === '401' || status === '403') return text('The app did not allow this. Restart the app and try again.');
+        if (status === '404') return text('This part of the add-on is not available. It may be switched off, or the app needs a restart after an update.');
+        if (status === '408' || status === '504') return text('The app took too long to answer. Try again in a moment.');
+        if (status === '409') return text('This changed somewhere else at the same moment. Please try again.');
+        if (/^5\d\d$/.test(status)) return text('The add-on ran into a problem. Try again; if it keeps happening, restart the app.');
+        if (/^4\d\d$/.test(status)) return text('The app could not use this request. Try again; if it keeps happening, restart the app.');
+        // "code/name: message": show the message, keep the code as a detail.
+        const coded = /^([a-z][\w-]*(?:\/[\w.-]+)+):\s*(.+)$/is.exec(message);
+        if (coded) return { text: coded[2].trim(), details: existing || message };
+        // A readable sentence stays as it is.
+        if (/^[A-Z"'(].*\s/s.test(message) || /\s/.test(message)) return { text: message, details: existing };
+        if (!message) return { text: 'Something went wrong. Try again.', details: existing };
+        return text('Something went wrong. Try again; the Details line says what the app reported.');
+      };
+      /** An Error whose message is the plain sentence and whose `details` keeps the raw text. */
+      const fail = (raw) => {
+        const found = plain(raw);
+        const error = new Error(found.text);
+        error.details = found.details;
+        return error;
+      };
+
+      /**
+       * A small question box in the page's own style (window.prompt does nothing in the desktop app, and the native
+       * confirm cannot be styled or checked there). Resolves true/false; with `field` the typed text or null; `notice` shows OK only.
+       */
+      const ask = (options = {}) => new Promise((resolve) => {
+        if (typeof document === 'undefined') { resolve(options.field ? null : false); return; }
+        ensureStyle();
+        const before = document.activeElement;
+        const veil = document.createElement('div');
+        veil.className = 'dsh-kit-veil';
+        const box = document.createElement('div');
+        box.className = 'dsh-kit-box';
+        box.setAttribute('role', 'dialog');
+        box.setAttribute('aria-modal', 'true');
+        const add = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text != null) node.textContent = text; return node; };
+        if (options.title) { const title = add('p', 'dsh-kit-title', options.title); box.appendChild(title); box.setAttribute('aria-label', options.title); }
+        if (options.text) box.appendChild(add('p', 'dsh-kit-text', options.text));
+        let input = null;
+        if (options.field) {
+          if (options.field.label) box.appendChild(add('label', 'dsh-kit-label', options.field.label));
+          input = add('input', 'dsh-kit-field');
+          input.type = 'text';
+          input.value = options.field.value ?? '';
+          if (options.field.placeholder) input.placeholder = options.field.placeholder;
+          if (options.field.label) input.setAttribute('aria-label', options.field.label);
+          box.appendChild(input);
+        }
+        const row = add('div', 'dsh-kit-row');
+        const done = (value) => { document.removeEventListener('keydown', onKey, true); veil.remove(); try { before?.focus?.(); } catch { /* the old control is gone */ } resolve(value); };
+        const cancel = options.notice ? null : add('button', 'dsh-kit-btn', options.cancel ?? 'Cancel');
+        const ok = add('button', 'dsh-kit-btn', options.ok ?? 'OK');
+        ok.type = 'button';
+        ok.setAttribute('data-main', 'true');
+        if (options.danger) ok.setAttribute('data-danger', 'true');
+        const accept = () => done(input ? input.value : true);
+        const reject = () => done(input ? null : false);
+        function onKey(event) {
+          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (options.notice) accept(); else reject(); }
+          else if (event.key === 'Enter' && input && document.activeElement === input) { event.preventDefault(); event.stopPropagation(); accept(); }
+          else if (event.key === 'Tab') {
+            const stops = [...box.querySelectorAll('input,button')];
+            const at = stops.indexOf(document.activeElement);
+            if (stops.length > 0) { event.preventDefault(); stops[(at + (event.shiftKey ? stops.length - 1 : 1)) % stops.length].focus(); }
+          }
+        }
+        if (cancel) { cancel.type = 'button'; cancel.addEventListener('click', reject); row.appendChild(cancel); }
+        ok.addEventListener('click', accept);
+        row.appendChild(ok);
+        box.appendChild(row);
+        veil.appendChild(box);
+        veil.addEventListener('mousedown', (event) => { if (event.target === veil && !options.notice) reject(); });
+        document.addEventListener('keydown', onKey, true);
+        document.body.appendChild(veil);
+        // A question that can destroy something starts on Cancel, so a stray Enter never confirms it.
+        (input ?? (options.danger && cancel ? cancel : ok)).focus();
+        if (input) input.select();
+      });
+
+      /** The note to draw under a form or at the top of a page: a plain sentence and a "Details" button. */
+      const makeNote = (React) => function PlainNote({ error, text, details, kind }) {
+        ensureStyle();
+        const [open, setOpen] = React.useState(false);
+        const found = error !== undefined && error !== null && error !== '' ? plain(error) : { text: text ?? '', details: details ?? '' };
+        if (!found.text) return null;
+        const bad = kind ? kind === 'error' : error !== undefined && error !== null && error !== '';
+        return React.createElement('div', { className: 'dsh-kit-note', 'data-error': String(bad), role: bad ? 'alert' : 'status' },
+          found.text,
+          found.details ? React.createElement('button', { type: 'button', className: 'dsh-kit-more', 'aria-expanded': open, onClick: () => setOpen(!open) }, open ? 'Hide details' : 'Details') : null,
+          open && found.details ? React.createElement('span', { className: 'dsh-kit-detail' }, found.details) : null);
+      };
+      return { plain, fail, ask, makeNote };
+    })();
+    // ---- dsh-kit:end ----
+    // ---- dsh-poll:begin ---- shared polling helpers; this block is the same in every add-on page file that uses it.
+    // The master copy is docs/shared/dsh-poll.js. Change it there, then run `node scripts/sync-kit.mjs` (it copies the block into
+    // every client.js that has the two marker lines, and `bash scripts/check.sh` fails when a copy has drifted).
+    // Why it exists (review perf-settings-describe, 18 November 2026): every add-on page looked at the app's Settings and at its own
+    // routes on its own timer, even in a hidden window. This gives all of them ONE shared Settings copy (read once, renewed when
+    // Settings changes or after 30 seconds at the most) and one kind of polling loop that stops while the window is hidden.
+    // The first copy of this block to run puts the shared state on `window.__dshPoll`; later copies reuse it, so 30 add-ons share one.
+    const dshPoll = (() => {
+      const API = 1;
+      const root = typeof window !== 'undefined' ? window : globalThis;
+      if (root.__dshPoll && root.__dshPoll.api >= API) return root.__dshPoll;
+
+      /** How long a read of Settings stays good: with the change event working, 30 s is only a safety net. */
+      const SETTINGS_TTL = 30000;
+      /** Without the change event (an older app) the copy is only trusted for a moment. */
+      const SETTINGS_TTL_NO_EVENTS = 2000;
+      const WRITES = ['mutate', 'update', 'replace'];
+      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0 };
+      const cache = { value: undefined, at: 0, inflight: null, gen: 0, events: false };
+      const changeListeners = new Set();
+      const watched = new WeakSet();
+      const wrapped = new WeakSet();
+      const loops = new Set();
+
+      const isHidden = () => typeof root.document !== 'undefined' && root.document.hidden === true;
+      // The page's timers (a test page without any simply never schedules).
+      const setTimer = (fn, ms) => (typeof root.setTimeout === 'function' ? root.setTimeout(fn, ms) : typeof globalThis.setTimeout === 'function' ? globalThis.setTimeout(fn, ms) : null);
+      const clearTimer = (id) => { if (id === null) return; if (typeof root.clearTimeout === 'function') root.clearTimeout(id); else if (typeof globalThis.clearTimeout === 'function') globalThis.clearTimeout(id); };
+
+      /** Throw the shared copy away: the next read goes to the app. A read still on its way is not kept. */
+      function invalidate() {
+        stats.settingsInvalidations += 1;
+        cache.value = undefined;
+        cache.inflight = null;
+        cache.gen += 1;
+      }
+
+      /** Listen once per page connection for "Settings changed" (the app sends it after every write, from any window). */
+      function watch(ctx) {
+        const remote = ctx && ctx.remote;
+        if (!remote || watched.has(remote)) return;
+        watched.add(remote);
+        try {
+          if (typeof remote.$on === 'function') {
+            remote.$on('settings/document-updated', (ns) => {
+              invalidate();
+              for (const listener of [...changeListeners]) {
+                try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
+              }
+            });
+            cache.events = true;
+          }
+        } catch { /* no change event here: the short copy time covers it */ }
+        try {
+          if (typeof ctx.on === 'function') ctx.on('connection/reset', invalidate);
+        } catch { /* optional */ }
+        // This page's own writes drop the copy before their answer comes back, so a read that follows a write is never behind it.
+        const settings = remote.settings;
+        if (settings && !wrapped.has(settings)) {
+          wrapped.add(settings);
+          for (const name of WRITES) {
+            const original = settings[name];
+            if (typeof original !== 'function') continue;
+            try {
+              settings[name] = function (...args) {
+                invalidate();
+                const done = original.apply(this, args);
+                return done && typeof done.then === 'function' ? done.then((out) => { invalidate(); return out; }, (error) => { invalidate(); throw error; }) : done;
+              };
+            } catch { /* a frozen object keeps the plain call */ }
+          }
+        }
+      }
+
+      /**
+       * The app's Settings, the same answer as `ctx.remote.settings.describe()`, but read once for the whole page.
+       * @param {object} ctx - the add-on's own context (its `remote.settings` makes the call).
+       * @param {{fresh?: boolean}} [options] - `fresh: true` skips the shared copy (use it for the read before a save, so a stale
+       *   revision cannot cause a conflict; every write drops the copy anyway).
+       * @returns {Promise<object>} `{ok, value: {namespaces}}` or `{ok: false, error}`, never rejected for a bad answer.
+       */
+      function settings(ctx, options) {
+        watch(ctx);
+        const fresh = options && options.fresh === true;
+        const ttl = cache.events ? SETTINGS_TTL : SETTINGS_TTL_NO_EVENTS;
+        if (!fresh && cache.value !== undefined && Date.now() - cache.at < ttl) {
+          stats.settingsHits += 1;
+          return Promise.resolve(cache.value);
+        }
+        if (!fresh && cache.inflight) {
+          stats.settingsHits += 1;
+          return cache.inflight;
+        }
+        stats.settingsCalls += 1;
+        const gen = cache.gen;
+        const call = Promise.resolve(ctx.remote.settings.describe()).then((result) => {
+          if (gen === cache.gen) {
+            cache.inflight = null;
+            if (result && result.ok !== false) { cache.value = result; cache.at = Date.now(); }
+          }
+          return result;
+        }, (error) => {
+          if (gen === cache.gen) cache.inflight = null;
+          throw error;
+        });
+        if (!fresh) cache.inflight = call;
+        return call;
+      }
+
+      /** One namespace's entry (`{ns, value, revision}`) from the shared copy, or undefined. */
+      async function entry(ctx, ns, options) {
+        const result = await settings(ctx, options);
+        return result && result.ok !== false ? result.value.namespaces.find((item) => item.ns === ns) : undefined;
+      }
+
+      /** Be told when Settings changes (from this window or another). Returns the way to stop listening. */
+      function onChange(ctx, listener) {
+        watch(ctx);
+        changeListeners.add(listener);
+        return () => { changeListeners.delete(listener); };
+      }
+
+      /**
+       * A polling loop that waits for its last run to finish, stops while the window is hidden and starts again, at once, when it
+       * is shown. One timer per loop, never an interval.
+       * @param {() => (Promise<unknown> | unknown)} run - one look. It may return a number (the wait before the next look, in ms),
+       *   'idle' (wait `idle`: nothing to watch for now) or anything else (wait `every`).
+       * @param {{every: number | (() => number), idle?: number, hidden?: number | (() => number), immediate?: boolean}} options
+       *   `every`: wait while there is something to watch; `idle`: wait when the run says 'idle' (default five times `every`);
+       *   `hidden`: wait while the window is hidden (default 0 = no looking at all until it is shown);
+       *   `immediate`: look right away (default true).
+       * @returns {{stop: () => void, poke: () => void, running: () => boolean}} `poke()` looks now (once, even if called often).
+       */
+      function loop(run, options) {
+        const opts = options || {};
+        const read = (value, fallback) => (typeof value === 'function' ? value() : typeof value === 'number' ? value : fallback);
+        let timer = null;
+        let alive = true;
+        let busy = false;
+        let again = false;
+        let failures = 0;
+        let next = null;
+
+        const clear = () => { if (timer !== null) { clearTimer(timer); timer = null; } };
+        const schedule = (wait) => {
+          clear();
+          if (!alive) return;
+          if (isHidden()) {
+            const away = read(opts.hidden, 0);
+            if (!(away > 0)) return; // paused: the visibility event starts it again
+            wait = Math.max(wait, away);
+          }
+          timer = setTimer(tick, wait);
+        };
+        const waitFor = (result) => {
+          const every = read(opts.every, 5000);
+          if (typeof result === 'number' && result >= 0) return result;
+          if (result === 'idle') return read(opts.idle, every * 5);
+          return every;
+        };
+        async function tick() {
+          timer = null;
+          if (!alive) return;
+          if (busy) { again = true; return; }
+          busy = true;
+          stats.runs += 1;
+          let result;
+          try {
+            result = await run();
+            failures = 0;
+          } catch {
+            stats.errors += 1;
+            failures += 1;
+            // A failing look backs off (up to a minute) instead of hammering.
+            result = Math.min(60000, read(opts.every, 5000) * 2 ** Math.min(failures, 4));
+          }
+          busy = false;
+          if (!alive) return;
+          next = waitFor(result);
+          if (again) { again = false; schedule(0); } else schedule(next);
+        }
+        const handle = {
+          stop() { alive = false; clear(); loops.delete(handle); },
+          poke() { if (!alive) return; if (busy) { again = true; return; } clear(); if (isHidden() && !(read(opts.hidden, 0) > 0)) return; timer = setTimer(tick, 0); },
+          running: () => timer !== null || busy,
+          // Called by the page-wide visibility listener.
+          shown() { if (alive && !busy) { clear(); timer = setTimer(tick, 0); } },
+          hiddenNow() { if (!(read(opts.hidden, 0) > 0)) clear(); },
+        };
+        loops.add(handle);
+        if (opts.immediate === false) schedule(read(opts.every, 5000));
+        else if (isHidden()) schedule(0);
+        else void tick(); // the first look happens now, before this call returns
+        return handle;
+      }
+
+      if (typeof root.document !== 'undefined' && typeof root.document.addEventListener === 'function') {
+        root.document.addEventListener('visibilitychange', () => {
+          for (const handle of [...loops]) {
+            if (isHidden()) handle.hiddenNow();
+            else handle.shown();
+          }
+        });
+      }
+
+      const shared = {
+        api: API,
+        settings,
+        entry,
+        onChange,
+        invalidate,
+        loop,
+        stats: () => ({ ...stats, loops: loops.size, events: cache.events }),
+      };
+      root.__dshPoll = shared;
+      return shared;
+    })();
+    // ---- dsh-poll:end ----
 
     const NS = 'modes';
     /** The Cowork sidebar's settings, whose tab count Settings → Modes sets. */
@@ -130,7 +493,7 @@ window.__ModuleLoader__.load({
         'rerun.files': 'Rerun started. Pictures and files attached to the question were not sent again; add them if they are needed.',
         'box.group': 'Chat box',
         'box.uniform': 'Same chat box in every mode',
-        'box.uniform.hint': 'The buttons read the same in every mode: how much of their words show (Web · On, Depth, One model, Tools on) depends on the window\'s width alone, and the access button keeps one width. The other controls (the route badge, the Scratch mark and the buttons a mode adds: Creator Plus, Bench rules, Export, Focus, the Finance pill) go on a second line, under the same core buttons, when the row is full. The model button and Run have one width in every mode, Depth stays (greyed) when Tools are off, and Run stays (greyed) where a Long run cannot start. Off: each mode shrinks its own row as before.',
+        'box.uniform.hint': 'The buttons read the same in every mode: how much of their words show (Web · On, Depth, One model, Tools on) depends on the window\'s width alone, and the access button keeps one width. The other controls (the route badge, the Scratch mark and the buttons a mode adds: Creator Plus, Devices rules, Export, Focus, the Finance pill) go on a second line, under the same core buttons, when the row is full. The model button and Run have one width in every mode, Depth stays (greyed) when Tools are off, and Run stays (greyed) where a Long run cannot start. Off: each mode shrinks its own row as before.',
         'answer.group': 'Buttons under an answer',
         'web.label': 'Web',
         'depth.label': 'Depth',
@@ -140,8 +503,8 @@ window.__ModuleLoader__.load({
         'lens.title': 'Lens: how the answer is worded',
         'depth.long.title': 'Beyond Thorough',
         'depth.long': 'Long run settings…',
-        'depth.long.hint': 'Time, laps and tools for a Long run in this chat, saved. Run (next to Send) starts one with what you typed; Send stays at the depth above.',
-        'depth.long.short': 'For the Run button',
+        'depth.long.hint': 'Time, laps and tools for a Long run in this chat, saved. Long run (next to Send) starts one with what you typed, after one question; Send stays at the depth above.',
+        'depth.long.short': 'For the Long run button',
         'depth.quick.short': 'Fast, light checks',
         'depth.standard.short': 'As usual',
         'depth.thorough.short': 'Plan, 10+ searches, review',
@@ -294,7 +657,7 @@ window.__ModuleLoader__.load({
         'wsp.o.search': 'Search address (with {query})',
         'wsp.o.start': 'Start address',
         'wsp.o.header': 'Header name',
-        'wsp.o.recon': 'May be used in Recon (only through Recon\'s own WireGuard route)',
+        'wsp.o.recon': 'May be used in Recon (only through Recon\'s own WireGuard connection)',
         'wsp.o.keptApp': 'Kept in the app\'s secret store. Typed once, never shown again.',
         'wsp.o.keptKeychain': 'Kept in the macOS Keychain. Typed once, never shown again.',
         'wsp.o.saveFirst': 'Save the sources first; then type its login here.',
@@ -452,7 +815,7 @@ window.__ModuleLoader__.load({
         'rerun.files': '已开始重新运行。问题中附带的图片和文件未再次发送，如有需要请重新添加。',
         'box.group': '聊天框',
         'box.uniform': '所有模式使用相同的聊天框',
-        'box.uniform.hint': '各模式中的按钮显示得一样：按钮文字显示多少（Web · On、Depth、One model、Tools on）只取决于窗口宽度，权限按钮保持固定宽度。模式自己添加的按钮（Creator Plus、Bench rules、Export、Focus、Finance 标签）在一行放不下时，会排到第二行，位于相同的核心按钮之后。模型按钮和 Run 在每个模式中宽度相同；工具关闭时 Depth 仍在原处（变灰）；无法开始长时间运行时 Run 也仍在原处（变灰）。关闭：每个模式像以前一样各自收缩。',
+        'box.uniform.hint': '各模式中的按钮显示得一样：按钮文字显示多少（Web · On、Depth、One model、Tools on）只取决于窗口宽度，权限按钮保持固定宽度。模式自己添加的按钮（Creator Plus、Devices rules、Export、Focus、Finance 标签）在一行放不下时，会排到第二行，位于相同的核心按钮之后。模型按钮和 Run 在每个模式中宽度相同；工具关闭时 Depth 仍在原处（变灰）；无法开始长时间运行时 Run 也仍在原处（变灰）。关闭：每个模式像以前一样各自收缩。',
         'answer.group': '回答下方的按钮',
         'web.label': '联网',
         'depth.label': '细致度',
@@ -760,9 +1123,10 @@ window.__ModuleLoader__.load({
       return { modes, current };
     }
 
-    async function load(ctx) {
-      const result = await ctx.remote.settings.describe();
-      if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+    // `fresh`: a read that a save follows asks the app itself (never the page's shared copy), so the revision it sends is current.
+    async function load(ctx, fresh = false) {
+      const result = await dshPoll.settings(ctx, { fresh });
+      if (!result.ok) throw dshKit.fail(result.error);
       const entry = result.value.namespaces.find((item) => item.ns === NS);
       if (!entry) throw new Error('The Modes settings namespace is not mounted.');
       // While the Cowork sidebar is on, its tabs choose the mode, so the chat-box selector hides.
@@ -865,13 +1229,13 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       // too: it holds what that conversation read. A copy of the first question carries none.
       // A copy with earlier turns also has their access level, so it keeps the level to go back to.
       const CARRIED = ['sessionModes', 'sessionWeb', 'sessionWebLevel', 'sessionSearchDepth', 'sessionDepth', 'sessionLens', 'sessionTools', 'sessionHelpers', 'sessionToolSets', ...(plan.cut !== undefined ? ['sessionIsolated', 'sessionSandboxBase'] : [])];
-      const fresh = await load(appCtx);
+      const fresh = await load(appCtx, true);
       const carried = CARRIED.filter((field) => (field === 'sessionIsolated' ? readObject(fresh.value[field])[sessionId] === true : readObject(fresh.value[field])[sessionId] !== undefined));
       if (carried.length > 0) {
         const build = (value) => carried.map((field) => ({ op: 'set', path: [field], value: JSON.stringify({ ...readObject(value[field]), [child]: readObject(fresh.value[field])[sessionId] }) }));
         let saved = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
         if (!saved.ok && saved.error.code === 'settings/conflict') {
-          const again = await load(appCtx);
+          const again = await load(appCtx, true);
           saved = await appCtx.remote.settings.mutate(NS, build(again.value), again.revision);
         }
       }
@@ -897,12 +1261,16 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         const listener = () => bump((n) => n + 1);
         answerFlags.listeners.add(listener);
         answerFlags.users += 1;
-        if (answerFlags.users === 1) answerFlags.timer = setInterval(() => { if (!document.hidden) void refreshAnswerFlags(appCtx); }, 8000);
-        void refreshAnswerFlags(appCtx);
+        // One look for every answer on screen: when Settings changes, otherwise every 30 s; none while the window is hidden.
+        if (answerFlags.users === 1) {
+          const watcher = dshPoll.loop(() => refreshAnswerFlags(appCtx), { every: 30000 });
+          const off = dshPoll.onChange(appCtx, (ns) => { if (ns === NS) watcher.poke(); });
+          answerFlags.timer = { stop: () => { watcher.stop(); off(); } };
+        }
         return () => {
           answerFlags.listeners.delete(listener);
           answerFlags.users -= 1;
-          if (answerFlags.users === 0) clearInterval(answerFlags.timer);
+          if (answerFlags.users === 0) answerFlags.timer?.stop?.();
         };
       }, [appCtx]);
       if (!answerFlags.rerun || !sessionId || !messageId) return h('style', null, RERUN_CSS);
@@ -943,14 +1311,11 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       // Re-read now and every few seconds, so a switch made with the /mode command shows up.
       // Hidden windows skip it; with the Cowork sidebar on (selector hidden) it checks only every 30 s.
       useEffect(() => {
-        void refresh();
-        let ticks = 0;
-        const timer = setInterval(() => {
-          ticks += 1;
-          // With the Cowork sidebar on, only check now and then whether it was switched off.
-          if (!document.hidden && (!shellRef.current || ticks % 10 === 0)) void refresh();
-        }, 3000);
-        return () => clearInterval(timer);
+        // Settings are read once for the whole page and again the moment they change (a /mode switch, a change in another window);
+        // every 30 s is only a safety net, and nothing is read while the window is hidden.
+        const watcher = dshPoll.loop(() => refresh(), { every: 30000 });
+        const off = dshPoll.onChange(appCtx, () => watcher.poke());
+        return () => { watcher.stop(); off(); };
       }, [refresh, sessionId]);
 
       const choose = async (modeId) => {
@@ -959,13 +1324,13 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         try {
           // Build the write from the latest value, and rebuild it if someone else wrote in between.
           const build = (value) => [{ op: 'set', path: ['sessionModes'], value: JSON.stringify({ ...readObject(value.sessionModes), [sessionId]: modeId }) }];
-          let fresh = await load(appCtx);
+          let fresh = await load(appCtx, true);
           let result = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
           if (!result.ok && result.error.code === 'settings/conflict') {
-            fresh = await load(appCtx);
+            fresh = await load(appCtx, true);
             result = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
           }
-          if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+          if (!result.ok) throw dshKit.fail(result.error);
           setState((prev) => ({ ...prev, status: 'ready', view: result.value.value, revision: result.value.revision, busy: false }));
         } catch {
           setState((prev) => ({ ...prev, busy: false }));
@@ -995,14 +1360,14 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
     }
 
     const TOGGLE_CSS = `
-.dsh-mt{display:inline-flex;gap:6px;align-items:center}
+.dsh-me-tools{display:inline-flex;gap:6px;align-items:center}
 /* Same chat box in every mode (uniformBox): the access button keeps one width, and the other controls of the seat (route badge, Scratch mark, add-on buttons) move to a second line when the row is full. */
 [data-dsh-pin] [data-slot="conversation.input.permission"] > *{min-width:156px;display:inline-flex;justify-content:flex-start}
 [data-dsh-below]{flex:1 1 0 !important;flex-wrap:wrap !important;row-gap:6px;align-self:flex-start;padding-top:3px}
 [data-dsh-below] ~ *{align-self:flex-start}
 [data-dsh-below]::after{content:'';order:4;flex:0 0 100%;height:0}
 [data-dsh-wrap]{flex-wrap:wrap !important;row-gap:6px}
-[data-dsh-below] [data-slot="conversation.input.left"] > :not(.dsh-mt):not(style),[data-dsh-wrap] [data-slot="conversation.input.left"] > :not(.dsh-mt):not(style){order:5}
+[data-dsh-below] [data-slot="conversation.input.left"] > :not(.dsh-me-tools):not(style),[data-dsh-wrap] [data-slot="conversation.input.left"] > :not(.dsh-me-tools):not(style){order:5}
 /* The same row in every mode (18 November): the model button (its name differs per mode; cut with "…", in full on hover) and
    Run ("Run" or "Running") have one width in every mode, so Run, Export and the gear sit in the same place everywhere. While
    the step is chosen (data-dsh-measure, set for a moment only) the other parts whose width changes from one conversation to
@@ -1010,71 +1375,74 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
    box's width alone, and the real parts are never wider than counted (the caps), so the row always fits. */
 html[data-dsh-uniform="true"] .dsh-mc-trigger{width:140px;max-width:140px;box-sizing:border-box}
 html[data-dsh-uniform="true"] .dsh-mc-trigger .dsh-mc-chevron{margin-left:auto}
-html[data-dsh-uniform="true"] .dsh-ms-runbtn{min-width:84px;box-sizing:border-box;justify-content:center}
-[data-dsh-measure] .dsh-mt:not([data-f1]) .lvl{display:inline-block !important;width:6.5em !important}
-[data-dsh-measure] .dsh-mt:not([data-f1]) button[data-helpers] .lbl{display:inline-block;min-width:5em}
-[data-dsh-measure] .dsh-mt:not([data-f2]) button[data-tools] .lbl{display:inline-block;min-width:4.3em}
-html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-overflow:ellipsis}
-.dsh-mt button{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:13px;white-space:nowrap}
-.dsh-mt button[aria-pressed='true']{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary);background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent)}
-.dsh-mt button:disabled{opacity:.5;cursor:default}
-@media (hover:hover){.dsh-mt button:hover:not([aria-pressed='true']):not([aria-disabled='true']){background:var(--dsw-alias-interactive-bg-hover)}.dsh-mt .pair[data-fixed] button[aria-pressed='false']{opacity:.5}}
-@media (max-width:760px){.dsh-mt button{padding:0 8px}.dsh-mt button .lbl{display:none}}
-.dsh-mt svg{flex:none}
-.dsh-mt .pair{display:inline-flex;align-items:center}
-.dsh-mt .pair > button:first-child{border-top-right-radius:0;border-bottom-right-radius:0}
-.dsh-mt .pair > button:only-child{border-radius:14px}
-.dsh-mt .pair > button.more{width:20px;padding:0;justify-content:center;margin-left:-1px;border-top-left-radius:0;border-bottom-left-radius:0}
-.dsh-mt{flex:none;white-space:nowrap}
-.dsh-mt[data-f1]{gap:4px}
-.dsh-mt[data-f1] .lvl{display:none}
-.dsh-mt[data-f1] button:not(.more){padding:0 8px}
-.dsh-mt[data-f1] .pair > button.more{width:18px}
-.dsh-mt[data-f1] button[data-helpers] .lbl{display:none}
-.dsh-mt button[data-helpers='many']{border-color:var(--dsw-alias-state-warning-primary,#d98a00);color:var(--dsw-alias-state-warning-primary,#d98a00)}
-.dsh-mt[data-f2] button[data-tools] .lbl{display:none}
-.dsh-mt[data-f3] .pair[data-kind='research'] .lbl{display:none}
-.dsh-mt[data-f3] .pair[data-kind='depth'] .lbl{display:none}
-.dsh-mt[data-f4] .pair[data-kind='search'] .lbl{display:none}
-.dsh-mt[data-f5] button:not(.more){padding:0 6px}
-.dsh-mt[data-f5] .pair > button.more{width:16px}
-.dsh-mt .pair .lvl{opacity:.8}
-.dsh-mt-pop .title{font-size:14px;line-height:22px;font-weight:500}
-.dsh-mt-pop .opts{display:flex;flex-direction:column;gap:2px;margin:8px -6px 0}
-.dsh-mt-pop .opts button{display:block;width:100%;text-align:left;border:0;border-radius:10px;padding:7px 10px;background:transparent;font:inherit;cursor:pointer;color:var(--dsw-alias-label-primary)}
-.dsh-mt-pop .opts button:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dsh-mt-pop .opts button[aria-current='true']{background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 14%, transparent)}
-.dsh-mt-pop .opts b{display:block;font-size:13px;line-height:18px;font-weight:600}
-.dsh-mt-pop .opts small{display:block;font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary)}
-.dsh-mt-pop input[type=range]{display:block;width:100%;margin:12px 0 2px;accent-color:var(--dsw-alias-brand-primary);cursor:pointer}
-.dsh-mt-pop .steps{display:flex;justify-content:space-between}
-.dsh-mt-pop .steps button{border:0;padding:2px 0;background:transparent;font:inherit;font-size:12px;cursor:pointer;color:var(--dsw-alias-label-secondary)}
-.dsh-mt-pop .steps button[aria-current='true']{color:var(--dsw-alias-label-primary);font-weight:600}
-.dsh-mt-pop .seg{display:flex;gap:6px;margin-top:6px}
-.dsh-mt-pop .seg button{flex:1;height:28px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:transparent;font:inherit;font-size:12px;cursor:pointer;color:var(--dsw-alias-label-secondary);white-space:nowrap}
-.dsh-mt-pop .seg button[aria-pressed='true']{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary);background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent)}
-.dsh-mt button[data-tools='off']{border-color:var(--dsw-alias-state-warn-primary);color:var(--dsw-alias-state-warn-primary)}
-.dsh-mt-pop{position:fixed;z-index:1000;box-sizing:border-box;width:320px;max-width:calc(100vw - 24px);overflow:auto;padding:14px 16px;border-radius:16px;border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-base));color:var(--dsw-alias-label-primary);font-size:12px;line-height:18px;box-shadow:0 8px 28px rgba(0,0,0,.28)}
-.dsh-mt-pop .row{display:flex;align-items:center;gap:12px}
-.dsh-mt-pop .row > span:first-child{flex:1;font-size:14px;line-height:22px}
-.dsh-mt-pop .hint{margin:4px 0 0;color:var(--dsw-alias-label-secondary)}
-.dsh-mt-pop[data-slim]{width:272px;padding:12px 14px}
-.dsh-mt-pop[data-slim] .title{font-size:13px;line-height:20px}
-.dsh-mt-pop[data-slim] .opts{margin-top:4px}
-.dsh-mt-pop[data-slim] .opts button{display:flex;align-items:baseline;gap:8px;padding:6px 10px}
-.dsh-mt-pop[data-slim] .opts b{flex:none}
-.dsh-mt-pop[data-slim] .opts small{flex:1;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dsh-mt-pop[data-slim] .title + .chips, .dsh-mt-pop[data-slim] .sep{margin-top:10px}
-.dsh-mt-pop[data-slim] .sep{border-top:0.5px solid var(--dsw-alias-border-l2);padding-top:8px}
-.dsh-mt-tip{position:fixed;z-index:1001;box-sizing:border-box;max-width:300px;padding:8px 10px;border-radius:10px;border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2, var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-base)));color:var(--dsw-alias-label-primary);font-size:12px;line-height:17px;box-shadow:0 6px 20px rgba(0,0,0,.25);pointer-events:none}
-.dsh-mt-pop .head{margin:12px 0 4px;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}
-.dsh-mt-pop .names{display:flex;flex-wrap:wrap;gap:4px}.dsh-mt-pop .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.dsh-mt-pop .chips button{padding:3px 10px;border-radius:999px;border:0.5px solid var(--dsw-alias-border-l2);background:transparent;color:inherit;font:inherit;cursor:pointer}.dsh-mt-pop .chips button[aria-selected='true']{background:color-mix(in srgb, var(--dsw-alias-label-primary) 12%, transparent);border-color:transparent;font-weight:500}.dsh-mt-pop .chips button:hover:not([aria-selected='true']){background:var(--dsw-alias-interactive-bg-hover)}
-.dsh-mt-pop .names span{padding:0 7px;border-radius:9px;line-height:18px;font-size:11px;background:color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent)}
-.dsh-mt-pop .names[data-no='true'] span{color:var(--dsw-alias-label-secondary);text-decoration:line-through}
-.dsh-mt-pop .sw{flex:none;position:relative;width:36px;height:20px;padding:2px;border:0;border-radius:999px;cursor:pointer;background:var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));transition:background .12s ease}
-.dsh-mt-pop .sw[aria-checked='true']{background:var(--dsw-alias-brand-primary)}
-.dsh-mt-pop .sw::after{content:'';display:block;width:16px;height:16px;border-radius:50%;background:var(--dsw-alias-switch-thumb, var(--dsw-alias-label-primary));transition:transform .12s ease}
-.dsh-mt-pop .sw[aria-checked='true']::after{transform:translateX(16px);background:var(--dsw-alias-bg-base)}
+html[data-dsh-uniform="true"] .dsh-ms-runbtn{min-width:92px;box-sizing:border-box;justify-content:center}
+[data-dsh-narrow] .dsh-ac-inline{display:none !important}
+[data-dsh-tiny] .dsh-mc-trigger{width:96px !important;max-width:96px !important}
+[data-dsh-tiny] .dsh-ms-runbtn{min-width:0 !important;padding:0 8px !important;gap:0 !important;font-size:0 !important}
+[data-dsh-measure] .dsh-me-tools:not([data-f1]) .lvl{display:inline-block !important;width:6.5em !important}
+[data-dsh-measure] .dsh-me-tools:not([data-f1]) button[data-helpers] .lbl{display:inline-block;min-width:5em}
+[data-dsh-measure] .dsh-me-tools:not([data-f2]) button[data-tools] .lbl{display:inline-block;min-width:4.3em}
+html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden;text-overflow:ellipsis}
+.dsh-me-tools button{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:13px;white-space:nowrap}
+.dsh-me-tools button[aria-pressed='true']{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary);background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent)}
+.dsh-me-tools button:disabled{opacity:.5;cursor:default}
+@media (hover:hover){.dsh-me-tools button:hover:not([aria-pressed='true']):not([aria-disabled='true']){background:var(--dsw-alias-interactive-bg-hover)}.dsh-me-tools .pair[data-fixed] button[aria-pressed='false']{opacity:.5}}
+@media (max-width:760px){.dsh-me-tools button{padding:0 8px}.dsh-me-tools button .lbl{display:none}}
+.dsh-me-tools svg{flex:none}
+.dsh-me-tools .pair{display:inline-flex;align-items:center}
+.dsh-me-tools .pair > button:first-child{border-top-right-radius:0;border-bottom-right-radius:0}
+.dsh-me-tools .pair > button:only-child{border-radius:14px}
+.dsh-me-tools .pair > button.more{width:20px;padding:0;justify-content:center;margin-left:-1px;border-top-left-radius:0;border-bottom-left-radius:0}
+.dsh-me-tools{flex:none;white-space:nowrap}
+.dsh-me-tools[data-f1]{gap:4px}
+.dsh-me-tools[data-f1] .lvl{display:none}
+.dsh-me-tools[data-f1] button:not(.more){padding:0 8px}
+.dsh-me-tools[data-f1] .pair > button.more{width:18px}
+.dsh-me-tools[data-f1] button[data-helpers] .lbl{display:none}
+.dsh-me-tools button[data-helpers='many']{border-color:var(--dsw-alias-state-warning-primary,#d98a00);color:var(--dsw-alias-state-warning-primary,#d98a00)}
+.dsh-me-tools[data-f2] button[data-tools] .lbl{display:none}
+.dsh-me-tools[data-f3] .pair[data-kind='research'] .lbl{display:none}
+.dsh-me-tools[data-f3] .pair[data-kind='depth'] .lbl{display:none}
+.dsh-me-tools[data-f4] .pair[data-kind='search'] .lbl{display:none}
+.dsh-me-tools[data-f5] button:not(.more){padding:0 6px}
+.dsh-me-tools[data-f5] .pair > button.more{width:16px}
+.dsh-me-tools .pair .lvl{opacity:.8}
+.dsh-me-pop .title{font-size:14px;line-height:22px;font-weight:500}
+.dsh-me-pop .opts{display:flex;flex-direction:column;gap:2px;margin:8px -6px 0}
+.dsh-me-pop .opts button{display:block;width:100%;text-align:left;border:0;border-radius:10px;padding:7px 10px;background:transparent;font:inherit;cursor:pointer;color:var(--dsw-alias-label-primary)}
+.dsh-me-pop .opts button:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dsh-me-pop .opts button[aria-current='true']{background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 14%, transparent)}
+.dsh-me-pop .opts b{display:block;font-size:13px;line-height:18px;font-weight:600}
+.dsh-me-pop .opts small{display:block;font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary)}
+.dsh-me-pop input[type=range]{display:block;width:100%;margin:12px 0 2px;accent-color:var(--dsw-alias-brand-primary);cursor:pointer}
+.dsh-me-pop .steps{display:flex;justify-content:space-between}
+.dsh-me-pop .steps button{border:0;padding:2px 0;background:transparent;font:inherit;font-size:12px;cursor:pointer;color:var(--dsw-alias-label-secondary)}
+.dsh-me-pop .steps button[aria-current='true']{color:var(--dsw-alias-label-primary);font-weight:600}
+.dsh-me-pop .seg{display:flex;gap:6px;margin-top:6px}
+.dsh-me-pop .seg button{flex:1;height:28px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:transparent;font:inherit;font-size:12px;cursor:pointer;color:var(--dsw-alias-label-secondary);white-space:nowrap}
+.dsh-me-pop .seg button[aria-pressed='true']{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary);background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent)}
+.dsh-me-tools button[data-tools='off']{border-color:var(--dsw-alias-state-warn-primary);color:var(--dsw-alias-state-warn-primary)}
+.dsh-me-pop{position:fixed;z-index:1000;box-sizing:border-box;width:320px;max-width:calc(100vw - 24px);overflow:auto;padding:14px 16px;border-radius:16px;border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-base));color:var(--dsw-alias-label-primary);font-size:12px;line-height:18px;box-shadow:0 8px 28px rgba(0,0,0,.28)}
+.dsh-me-pop .row{display:flex;align-items:center;gap:12px}
+.dsh-me-pop .row > span:first-child{flex:1;font-size:14px;line-height:22px}
+.dsh-me-pop .hint{margin:4px 0 0;color:var(--dsw-alias-label-secondary)}
+.dsh-me-pop[data-slim]{width:272px;padding:12px 14px}
+.dsh-me-pop[data-slim] .title{font-size:13px;line-height:20px}
+.dsh-me-pop[data-slim] .opts{margin-top:4px}
+.dsh-me-pop[data-slim] .opts button{display:flex;align-items:baseline;gap:8px;padding:6px 10px}
+.dsh-me-pop[data-slim] .opts b{flex:none}
+.dsh-me-pop[data-slim] .opts small{flex:1;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsh-me-pop[data-slim] .title + .chips, .dsh-me-pop[data-slim] .sep{margin-top:10px}
+.dsh-me-pop[data-slim] .sep{border-top:0.5px solid var(--dsw-alias-border-l2);padding-top:8px}
+.dsh-me-tip{position:fixed;z-index:1001;box-sizing:border-box;max-width:300px;padding:8px 10px;border-radius:10px;border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2, var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-base)));color:var(--dsw-alias-label-primary);font-size:12px;line-height:17px;box-shadow:0 6px 20px rgba(0,0,0,.25);pointer-events:none}
+.dsh-me-pop .head{margin:12px 0 4px;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}
+.dsh-me-pop .names{display:flex;flex-wrap:wrap;gap:4px}.dsh-me-pop .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.dsh-me-pop .chips button{padding:3px 10px;border-radius:999px;border:0.5px solid var(--dsw-alias-border-l2);background:transparent;color:inherit;font:inherit;cursor:pointer}.dsh-me-pop .chips button[aria-selected='true']{background:color-mix(in srgb, var(--dsw-alias-label-primary) 12%, transparent);border-color:transparent;font-weight:500}.dsh-me-pop .chips button:hover:not([aria-selected='true']){background:var(--dsw-alias-interactive-bg-hover)}
+.dsh-me-pop .names span{padding:0 7px;border-radius:9px;line-height:18px;font-size:11px;background:color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent)}
+.dsh-me-pop .names[data-no='true'] span{color:var(--dsw-alias-label-secondary);text-decoration:line-through}
+.dsh-me-pop .sw{flex:none;position:relative;width:36px;height:20px;padding:2px;border:0;border-radius:999px;cursor:pointer;background:var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));transition:background .12s ease}
+.dsh-me-pop .sw[aria-checked='true']{background:var(--dsw-alias-brand-primary)}
+.dsh-me-pop .sw::after{content:'';display:block;width:16px;height:16px;border-radius:50%;background:var(--dsw-alias-switch-thumb, var(--dsw-alias-label-primary));transition:transform .12s ease}
+.dsh-me-pop .sw[aria-checked='true']::after{transform:translateX(16px);background:var(--dsw-alias-bg-base)}
 `;
     const ICON = {
       search: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3.5 12h17M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z',
@@ -1106,9 +1474,9 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
         }
       }, [appCtx]);
       useEffect(() => {
-        void refresh();
-        const timer = setInterval(() => { if (!document.hidden) void refresh(); }, 4000);
-        return () => clearInterval(timer);
+        const watcher = dshPoll.loop(() => refresh(), { every: 30000 });
+        const off = dshPoll.onChange(appCtx, () => watcher.poke());
+        return () => { watcher.stop(); off(); };
       }, [refresh, sessionId]);
 
       // The buttons shrink to keep the chat box's bottom row on one line: first the step's name goes,
@@ -1255,13 +1623,23 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
           if (compact) row.setAttribute('data-model-compact', '');
           fitClassic();
         };
+        // Narrow window (1.0 review H7): the right-hand group is wider than the row and pushed Send off the screen at 375 px.
+        // Below 560 px the activity rings go (the Activity line still shows what is running); below 400 px the model button
+        // and Long run shrink too. Send never moves.
+        const markNarrow = () => {
+          const width = row.getBoundingClientRect().width;
+          if (width <= 0) return;
+          if (width < 560) row.setAttribute('data-dsh-narrow', ''); else row.removeAttribute('data-dsh-narrow');
+          if (width < 400) row.setAttribute('data-dsh-tiny', ''); else row.removeAttribute('data-dsh-tiny');
+        };
         const fit = () => (uniform ? fitUniform() : (row.removeAttribute('data-dsh-pin'), left?.removeAttribute('data-dsh-below'), left?.removeAttribute('data-dsh-wrap'), fitClassic()));
-        fit();
+        const fitAndMark = () => { markNarrow(); fit(); };
+        fitAndMark();
         if (typeof ResizeObserver !== 'function') return undefined;
         let frame = 0;
         const observer = new ResizeObserver(() => {
           cancelAnimationFrame(frame);
-          frame = requestAnimationFrame(fit);
+          frame = requestAnimationFrame(fitAndMark);
         });
         observer.observe(row);
         if (row.lastElementChild) observer.observe(row.lastElementChild);
@@ -1270,6 +1648,8 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
         return () => {
           cancelAnimationFrame(frame);
           observer.disconnect();
+          row.removeAttribute('data-dsh-narrow');
+          row.removeAttribute('data-dsh-tiny');
         };
       }, [shown, marks, sessionId, uniform]);
 
@@ -1300,10 +1680,10 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
               else next[sessionId] = wanted;
               return { op: 'set', path: [name], value: JSON.stringify(next) };
             });
-          let fresh = await load(appCtx);
+          let fresh = await load(appCtx, true);
           let result = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
           if (!result.ok && result.error.code === 'settings/conflict') {
-            fresh = await load(appCtx);
+            fresh = await load(appCtx, true);
             result = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
           }
           if (!result.ok) throw new Error(result.error.code);
@@ -1320,10 +1700,10 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
         setState((prev) => ({ ...prev, busy: true, view: { ...prev.view, [field]: value } }));
         try {
           const ops = [{ op: 'set', path: [field], value }];
-          let fresh = await load(appCtx);
+          let fresh = await load(appCtx, true);
           let result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
           if (!result.ok && result.error.code === 'settings/conflict') {
-            fresh = await load(appCtx);
+            fresh = await load(appCtx, true);
             result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
           }
           if (!result.ok) throw new Error(result.error.code);
@@ -1344,10 +1724,10 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
         setState((prev) => ({ ...prev, busy: true }));
         try {
           const build = (current) => settingOps(kind, picked, current, sessionId);
-          let fresh = await load(appCtx);
+          let fresh = await load(appCtx, true);
           let result = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
           if (!result.ok && result.error.code === 'settings/conflict') {
-            fresh = await load(appCtx);
+            fresh = await load(appCtx, true);
             result = await appCtx.remote.settings.mutate(NS, build(fresh.value), fresh.revision);
           }
           if (!result.ok) throw new Error(result.error.code);
@@ -1360,7 +1740,7 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
 
       return h(React.Fragment, null,
         h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
-        h('span', { className: 'dsh-mt', ref: root },
+        h('span', { className: 'dsh-me-tools', ref: root },
           // The Web selector: the same in every tab (Research and Scout cannot pick Off: searching is their work).
           // A Recon conversation moved into another tab is locked by the host with no tools at all: Off, greyed.
           h(WebSources, {
@@ -1644,7 +2024,7 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
         }, icon('search'), h('span', { className: 'lbl' }, t('web.label')), h('span', { className: 'lbl lvl' }, `· ${value}`)),
         open
           ? ReactDOM.createPortal(
-              h('div', { ref: panel, className: 'dsh-mt-pop', 'data-ws-pop': '', role: 'dialog', 'aria-label': t('ws.title'), style: { left: place.left, bottom: place.bottom, width: 340, maxHeight: place.room ?? 'calc(100vh - 120px)' } },
+              h('div', { ref: panel, className: 'dsh-me-pop', 'data-ws-pop': '', role: 'dialog', 'aria-label': t('ws.title'), style: { left: place.left, bottom: place.bottom, width: 340, maxHeight: place.room ?? 'calc(100vh - 120px)' } },
                 h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS + WS_CSS } }),
                 h('div', { className: 'title' }, t('ws.title')),
                 h('div', { className: 'seg', role: 'group', 'aria-label': t('ws.title') },
@@ -1791,13 +2171,13 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
         setBusy(true);
         try {
           const ops = [{ op: 'set', path: [key], value }];
-          let fresh = await load(appCtx);
+          let fresh = await load(appCtx, true);
           let result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
           if (!result.ok && result.error.code === 'settings/conflict') {
-            fresh = await load(appCtx);
+            fresh = await load(appCtx, true);
             result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
           }
-          if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+          if (!result.ok) throw dshKit.fail(result.error);
           setView(result.value.value);
           setNote({ bad: false, text: done });
           return true;
@@ -1811,7 +2191,7 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
       const post = async (body) => {
         const response = await fetch(new URL('dsh-modes/other', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify(body) });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error || `error ${response.status}`);
+        if (!response.ok) throw dshKit.fail(data.error || `error ${response.status}`);
         setKept(data.kept ?? {});
         return data;
       };
@@ -1915,19 +2295,19 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
 
     /** The selector's own look, beside the shared popup's. */
     const WS_CSS = `
-.dsh-mt-pop[data-ws-pop]{overflow:auto}
-.dsh-mt-pop .ws-list{display:flex;flex-direction:column;gap:1px;margin:2px -6px 0}
-.dsh-mt-pop .ws-tick{display:flex;align-items:flex-start;gap:8px;padding:5px 8px;border-radius:10px;cursor:pointer}
-.dsh-mt-pop .ws-tick:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dsh-mt-pop .ws-tick[aria-disabled='true']{opacity:.55;cursor:default}
-.dsh-mt-pop .ws-tick input{margin:3px 0 0;accent-color:var(--dsw-alias-brand-primary)}
-.dsh-mt-pop .ws-tick b{display:block;font-size:13px;line-height:18px;font-weight:600}
-.dsh-mt-pop .ws-tick small{display:block;font-size:12px;line-height:16px;color:var(--dsw-alias-label-secondary)}
-.dsh-mt-pop .ws-foot{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
-.dsh-mt-pop .ws-foot button{height:26px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:transparent;font:inherit;font-size:12px;cursor:pointer;color:var(--dsw-alias-label-primary)}
-.dsh-mt-pop .ws-foot button:disabled{opacity:.5;cursor:default}
-.dsh-mt-pop .ws-name{display:flex;gap:6px}
-.dsh-mt-pop .ws-name input{width:130px;height:26px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:transparent;font:inherit;font-size:12px;color:inherit}
+.dsh-me-pop[data-ws-pop]{overflow:auto}
+.dsh-me-pop .ws-list{display:flex;flex-direction:column;gap:1px;margin:2px -6px 0}
+.dsh-me-pop .ws-tick{display:flex;align-items:flex-start;gap:8px;padding:5px 8px;border-radius:10px;cursor:pointer}
+.dsh-me-pop .ws-tick:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dsh-me-pop .ws-tick[aria-disabled='true']{opacity:.55;cursor:default}
+.dsh-me-pop .ws-tick input{margin:3px 0 0;accent-color:var(--dsw-alias-brand-primary)}
+.dsh-me-pop .ws-tick b{display:block;font-size:13px;line-height:18px;font-weight:600}
+.dsh-me-pop .ws-tick small{display:block;font-size:12px;line-height:16px;color:var(--dsw-alias-label-secondary)}
+.dsh-me-pop .ws-foot{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.dsh-me-pop .ws-foot button{height:26px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:transparent;font:inherit;font-size:12px;cursor:pointer;color:var(--dsw-alias-label-primary)}
+.dsh-me-pop .ws-foot button:disabled{opacity:.5;cursor:default}
+.dsh-me-pop .ws-name{display:flex;gap:6px}
+.dsh-me-pop .ws-name input{width:130px;height:26px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:transparent;font:inherit;font-size:12px;color:inherit}
 `;
 
     /**
@@ -1980,7 +2360,7 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
         onPointerLeave: clear,
         onPointerDown: clear,
       } : {};
-      const node = tip ? h('div', { className: 'dsh-mt-tip', role: 'tooltip', style: { top: tip.top, left: tip.left } }, tip.text) : null;
+      const node = tip ? h('div', { className: 'dsh-me-tip', role: 'tooltip', style: { top: tip.top, left: tip.left } }, tip.text) : null;
       return { tipFor, tip: node, clear };
     }
 
@@ -2027,7 +2407,7 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
         open
           ? ReactDOM.createPortal(
               h(React.Fragment, null,
-                h('div', { ref: panel, className: 'dsh-mt-pop', 'data-slim': '', role: 'dialog', 'aria-label': t('depth.title'), style: { left: place.left, bottom: place.bottom, maxHeight: place.maxHeight } },
+                h('div', { ref: panel, className: 'dsh-me-pop', 'data-slim': '', role: 'dialog', 'aria-label': t('depth.title'), style: { left: place.left, bottom: place.bottom, maxHeight: place.maxHeight } },
                   h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
                   // The note on what Depth is (Recon, Research and Scout have their own) is the title's tooltip.
                   h('div', { className: 'title', ...tipFor(t(kind ? `depth.note.${kind}` : 'depth.note')) }, t('depth.title')),
@@ -2080,8 +2460,8 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
             .then((data) => alive && setView(data?.helpers ?? null))
             .catch(() => {});
         load();
-        const timer = setInterval(() => { if (!document.hidden) load(); }, open ? 3000 : 15000);
-        return () => { alive = false; clearInterval(timer); };
+        const timer = dshPoll.loop(() => load(), { every: open ? 3000 : 15000, immediate: false });
+        return () => { alive = false; timer.stop(); };
       }, [sessionId, open, policy]);
       // Placed before the list is drawn, so it never shows for a moment in the corner while the page is busy.
       useLayoutEffect(() => {
@@ -2113,7 +2493,7 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
         }, icon(many ? 'many' : 'one'), h('span', { className: 'lbl' }, label)),
         open
           ? ReactDOM.createPortal(
-              h('div', { ref: panel, className: 'dsh-mt-pop', role: 'dialog', 'aria-label': t('helpers.head'), style: { left: place.left, bottom: place.bottom, maxHeight: place.maxHeight } },
+              h('div', { ref: panel, className: 'dsh-me-pop', role: 'dialog', 'aria-label': t('helpers.head'), style: { left: place.left, bottom: place.bottom, maxHeight: place.maxHeight } },
                 h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
                 h('div', { className: 'title' }, t('helpers.head')),
                 h('div', { className: 'seg', role: 'group', 'aria-label': t('helpers.head') },
@@ -2151,7 +2531,7 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
             .then((data) => alive && setList(data))
             .catch(() => {});
         load();
-        const timer = setInterval(load, 3000);
+        const timer = dshPoll.loop(() => load(), { every: 3000, immediate: false });
         const away = (event) => {
           if (panel.current?.contains(event.target) || button.current?.contains(event.target)) return;
           setOpen(false);
@@ -2161,7 +2541,7 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
         document.addEventListener('keydown', key, true);
         return () => {
           alive = false;
-          clearInterval(timer);
+          timer.stop();
           document.removeEventListener('pointerdown', away, true);
           document.removeEventListener('keydown', key, true);
         };
@@ -2175,7 +2555,7 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
         }, icon('tools'), h('span', { className: 'lbl' }, t(none ? 'toggle.tools.off' : 'toggle.tools.on'))),
         open
           ? ReactDOM.createPortal(
-              h('div', { ref: panel, className: 'dsh-mt-pop', role: 'dialog', 'aria-label': t('toggle.tools.title'), style: { left: place.left, bottom: place.bottom, maxHeight: place.maxHeight } },
+              h('div', { ref: panel, className: 'dsh-me-pop', role: 'dialog', 'aria-label': t('toggle.tools.title'), style: { left: place.left, bottom: place.bottom, maxHeight: place.maxHeight } },
                 h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
                 h('div', { className: 'row' },
                   h('span', null, t('tools.switch')),
@@ -2355,8 +2735,8 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
     }
 
     async function loadEditor(ctx) {
-      const result = await ctx.remote.settings.describe();
-      if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+      const result = await dshPoll.settings(ctx, { fresh: true });
+      if (!result.ok) throw dshKit.fail(result.error);
       const entry = result.value.namespaces.find((item) => item.ns === NS);
       if (!entry) throw new Error('The Modes settings namespace is not mounted.');
       // The Cowork sidebar's own settings, while it is on: its tab count is set on this page too.
@@ -2514,7 +2894,7 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
             const fresh = await loadEditor(appCtx);
             result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
           }
-          if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+          if (!result.ok) throw dshKit.fail(result.error);
           setLoaded((prev) => ({ ...prev, revision: result.value.revision }));
           adopt(result.value.value);
           setMessage({ text: t('saved') });
@@ -2538,7 +2918,7 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
             fresh = await loadEditor(appCtx);
             result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
           }
-          if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+          if (!result.ok) throw dshKit.fail(result.error);
           setLoaded((prev) => ({ ...prev, revision: result.value.revision }));
         } catch (error) {
           setTrim(before);
@@ -2555,7 +2935,7 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
             fresh = await loadEditor(appCtx);
             result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
           }
-          if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+          if (!result.ok) throw dshKit.fail(result.error);
           setLoaded((prev) => ({ ...prev, revision: result.value.revision }));
           void refreshAnswerFlags(appCtx);
         } catch (error) {
@@ -2583,7 +2963,7 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
               setLoaded((prev) => ({ ...prev, revision: result.value.revision }));
               return;
             }
-            if (result.error.code !== 'settings/conflict') throw new Error(`${result.error.code}: ${result.error.message}`);
+            if (result.error.code !== 'settings/conflict') throw dshKit.fail(result.error);
           }
           throw new Error('the settings changed meanwhile; try again');
         } catch (error) {
@@ -2602,7 +2982,7 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
             fresh = await loadEditor(appCtx);
             result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
           }
-          if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+          if (!result.ok) throw dshKit.fail(result.error);
           setLoaded((prev) => ({ ...prev, revision: result.value.revision }));
           return true;
         } catch (error) {
@@ -2625,7 +3005,7 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
             if (!fresh.shell) throw new Error('the Cowork sidebar is switched off');
             result = await appCtx.remote.settings.mutate(SHELL_NS, ops, fresh.shell.revision);
           }
-          if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+          if (!result.ok) throw dshKit.fail(result.error);
           setShell((prev) => (prev ? { ...prev, revision: result.value.revision, maxTabs: count } : prev));
         } catch (error) {
           setShell(before);
@@ -2915,10 +3295,49 @@ html[data-dsh-uniform="true"] .dsh-mt .lvl{max-width:6.5em;overflow:hidden;text-
       );
     }
 
+    // ---- sidebar guard (1.0 review H2) ----
+    /**
+     * Exactly one of the app's own sidebar and the Cowork sidebar may be on. Switching the Cowork row off by itself left the app's
+     * sidebar off too (no sidebar at all); switching it on again with the app's sidebar on made two. Which one to switch, or null.
+     */
+    const sidebarFix = (stockOn, coworkOn) => (stockOn === coworkOn ? (coworkOn ? 'stock-off' : 'stock-on') : null);
+    const STOCK_SIDEBAR = '@deepseek-ai/dsh-client-ui-sidebar';
+    const COWORK_SIDEBAR = '@local/dsh-cowork-shell';
+    /** Watches the two rows every few seconds and puts them right after the same wrong state is seen twice in a row (a switch in progress is not a wrong state). */
+    function watchSidebars(manager, log) {
+      let wrongTimes = 0;
+      let busy = false;
+      const look = async () => {
+        if (busy || (typeof document !== 'undefined' && document.hidden)) return;
+        busy = true;
+        try {
+          const listed = await manager.listPlugins();
+          const rows = Array.isArray(listed) ? listed : listed?.ok === true && Array.isArray(listed.value) ? listed.value : null;
+          const stock = rows?.find((row) => row?.moduleName === STOCK_SIDEBAR);
+          const cowork = rows?.find((row) => row?.moduleName === COWORK_SIDEBAR);
+          // Without the Cowork sidebar installed there is nothing to keep in step.
+          const fix = stock && cowork ? sidebarFix(stock.enabled === true, cowork.enabled === true) : null;
+          wrongTimes = fix ? wrongTimes + 1 : 0;
+          if (fix && wrongTimes >= 2) {
+            wrongTimes = 0;
+            await manager.setPluginEnabled(stock.entryId, fix === 'stock-on');
+            log?.(fix === 'stock-on' ? 'The app\'s own sidebar was switched on again: the Cowork sidebar is off.' : 'The app\'s own sidebar was switched off: the Cowork sidebar is on.');
+          }
+        } catch { /* the plugin manager is busy or not there: the next look tries again */ } finally { busy = false; }
+      };
+      // Every five seconds while the window is shown; the loop stops by itself while it is hidden.
+      const watcher = dshPoll.loop(() => look(), { every: 5000 });
+      return () => watcher.stop();
+    }
+
     return {
       inject: ['slots', 'remote', 'remote.settings', 'locale'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register('modes', DICT));
+        // The sidebar guard: the owner is never left without a sidebar (or with two).
+        ctx.inject(['remote.pluginManager'], (inner) => {
+          inner.effect(() => watchSidebars(inner.remote.pluginManager, (line) => { try { inner.logger?.info?.(line); } catch { /* no logger in the browser */ } }), 'modes: sidebar guard');
+        });
         const t = ctx.locale.bind('modes');
         ctx.effect(() =>
           ctx.slots.inject('settings.section', () =>

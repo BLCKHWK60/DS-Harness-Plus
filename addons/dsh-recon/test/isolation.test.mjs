@@ -195,7 +195,13 @@ test('a Long run\'s helpers in Recon: the conversation\'s agreement covers them,
     assert.ok(existsSync(folder));
     writeFileSync(join(folder, 'findings.md'), 'what the run found');
     // End and wipe: the run ends, its folder goes, and the helpers' saved conversations go with the conversation's.
-    const said = await app.say(conversation, 'end');
+    // H11: "end" alone deletes nothing; it says what to type.
+    const asked = await app.say(conversation, 'end');
+    assert.equal(asked.kind, 'error');
+    assert.match(asked.text, /Nothing was deleted\. To go on, type \/recon end confirm/);
+    assert.deepEqual(app.ended, [], 'nothing was ended without the confirmation');
+    assert.ok(existsSync(folder));
+    const said = await app.say(conversation, 'end confirm');
     assert.equal(said.kind, 'success');
     assert.deepEqual(app.ended, ['session-r1']);
     assert.equal(existsSync(folder), false, 'the run\'s folder in the room is gone');

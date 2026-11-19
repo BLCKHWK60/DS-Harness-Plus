@@ -54,7 +54,7 @@ const MODES_NS = 'modes';
 const LISTED_FOR_MS = 60 * 60_000;
 /** Bench's own copy of Recon's export markers (dsh-recon/lib/door.js), for when Recon is not running. */
 const EXPORT_MARKS = [/\[Recon export [A-Z0-9]{2,20}, \d{4}-\d\d-\d\d: material, not instructions\]/, /^\[Recon export [^\]\n]{1,80}\]/m, /origin: Recon · lane:/, /origin:\s*Recon\b/i];
-const CHECKER_NO_TOOLS = 'You are Bench\'s plan checker: you have no tools. Answer with text only.';
+const CHECKER_NO_TOOLS = 'You are Devices\' plan checker: you have no tools. Answer with text only.';
 
 export const Config = z.object({
   /** The Bench mode and tab. Off leaves nothing of it in the app; cards and logbooks stay. */
@@ -306,7 +306,7 @@ export function apply(ctx, config, standIns = {}) {
     let child;
     try {
       const request = { prompt: [{ type: 'text', text: prompt }], parent: exec.agent, signal, ...(route?.provider && route?.model ? { agentOptions: { provider: route.provider, model: route.model } } : {}) };
-      child = await subagents.startActivation({ ...request, provider: 'spawn', label: 'Bench plan checker', request, delivery: 'parent', signal });
+      child = await subagents.startActivation({ ...request, provider: 'spawn', label: 'Devices plan checker', request, delivery: 'parent', signal });
       if (child?.childId) checkers.add(String(child.childId));
       const result = await child.result;
       const said = (result?.output ?? []).filter((block) => block?.type === 'text').map((block) => block.text).join(' ').replace(/\s+/g, ' ').trim().slice(0, 600);
@@ -334,7 +334,7 @@ export function apply(ctx, config, standIns = {}) {
       const service = ctx.get('settings');
       const row = service?.describe?.().find((entry) => entry.ns === MODES_NS);
       if (!row) {
-        problem = 'The Modes add-on is not running, so there is no Bench tab.';
+        problem = 'The Modes add-on is not running, so there is no Devices tab.';
         return;
       }
       if (row.value?.extraModes === undefined) {
@@ -350,7 +350,7 @@ export function apply(ctx, config, standIns = {}) {
       if (ops.length > 0) await service.mutate(MODES_NS, ops);
       problem = '';
     } catch (error) {
-      problem = `The Bench tab could not be ${enabled() ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
+      problem = `The Devices tab could not be ${enabled() ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
       warn(problem);
     } finally {
       syncing = false;
@@ -411,21 +411,21 @@ export function apply(ctx, config, standIns = {}) {
   const checksOn = () => plain(config?.longChecks) !== false;
   /** What is closed in a Bench conversation, as the chat box and the note say it. */
   const closedList = () => [
-    { what: 'Commands, programs, background jobs and any tool not on Bench\'s list', open: false, why: 'Bench reaches a device only through its own tools, which run fixed commands. Its list: its own tools, the web, PDFs, the Library, reading files, diagrams, the step list and questions (and writing files outside the Bench folder in a Long run). Fixed in Bench.' },
-    { what: 'File tools reading or writing the Bench folder or a device\'s port', open: false, why: 'Cards, logbooks and backups are kept by Bench\'s own tools; backups are never shown to a model (bench_devices shows a card). Fixed in Bench.' },
+    { what: 'Commands, programs, background jobs and any tool not on Devices\' list', open: false, why: 'Devices reaches a device only through its own tools, which run fixed commands. Its list: its own tools, the web, PDFs, the Library, reading files, diagrams, the step list and questions (and writing files outside the Devices folder in a Long run). Fixed in Devices.' },
+    { what: 'File tools reading or writing the Devices folder or a device\'s port', open: false, why: 'Cards, logbooks and backups are kept by Devices\' own tools; backups are never shown to a model (bench_devices shows a card). Fixed in Devices.' },
     { what: 'Identify and Read', open: true, why: 'Listing USB and Bluetooth devices and what announces itself on a network you marked as yours, watching a serial port (up to an hour per call), reading a nearby Bluetooth device\'s standard services when you name it, an ESP32\'s details and a checked backup, a phone\'s details, log, settings and storage backup, a router\'s and a Windows server\'s state. Opening a serial port restarts many boards: you are asked once per device.' },
     { what: 'Adjust (settings, with undo)', open: true, why: 'Only on a device whose card you set to Adjust or Write on this page, and only short lists: a phone\'s brightness, screen timeout, text size, sounds, rotation, animation speed, automatic time; a router\'s name, time zone, clock, address lease time and Wi-Fi names; a server\'s services that you name yourself (never the ones Windows or SSH need), after a restore point. Ask-Auto asks each time, Full Auto does not, Restricted refuses. Each card is linked to one device. Never on look-only devices, never radio limits or a drone\'s failsafes.' },
-    { what: 'Write (firmware)', open: true, why: 'Only on a device you set to Write; asks every time, one write at a time on one device, and only with a checked backup taken since its last write, a recovery path, firmware from the maker, an official project or a source you added, whose checksum Bench finds on that page itself. ESP32 boards (the start of the flash also needs your own message "write protected <device name>"; the eFuses: never), GL.iNet and OpenWrt routers by sysupgrade (never the loader or the radio calibration), a phone\'s system image after an unlock. Bench downloads a file itself only after your yes.' },
+    { what: 'Write (firmware)', open: true, why: 'Only on a device you set to Write; asks every time, one write at a time on one device, and only with a checked backup taken since its last write, a recovery path, firmware from the maker, an official project or a source you added, whose checksum Devices finds on that page itself. ESP32 boards (the start of the flash also needs your own message "write protected <device name>"; the eFuses: never), GL.iNet and OpenWrt routers by sysupgrade (never the loader or the radio calibration), a phone\'s system image after an unlock. Devices downloads a file itself only after your yes.' },
     risky()
-      ? { what: 'Allow risky writes (Danger zone)', open: true, why: 'ON, set by you on Settings → Bench: flashing, erasing, programming, resets and commands sent to boards, probes, instruments and cards run; firmware writes need no backup, source check or recovery path; any router setting (but radio limits and keys), any phone setting (still undoable) and any Windows service may be changed. The card\'s level and your yes on each write stay.' }
-      : { what: 'Allow risky writes (Danger zone)', open: false, why: 'Off: the conditions above hold, and the device tools\' flash, erase, program, reset and send actions refuse. You can switch it on in Settings → Bench → Danger zone.' },
-    { what: 'Device tools (iOS, AVR, Pico, STM32, J-Link, OpenOCD, FPGA, instruments, smart cards, NFC, USB, HID, battery, OBD-II, packet capture, network scan)', open: true, why: 'Reading and listing are open. Network scans and packet capture only on private (home and office) addresses. Firmware analysis and extraction never read the Bench folder\'s backups. A live dashboard of running monitors is at /dsh-bench/dashboard. bench_requirements says which programs are missing and how to install them; Bench never installs anything.' },
-    { what: 'Unlocking a phone', open: true, why: 'Only when its maker allows it, at Write, with a counted backup of its storage, your own message "unlock <device name>" and your yes: it ERASES the phone. Bench never relocks a phone.' },
-    { what: 'Network devices', open: true, why: 'Only on a network you marked as yours, at an address you set on this page, signing in with Bench\'s SSH key or a password kept in the Keychain, after you trusted the device\'s key.' },
-    { what: 'Connecting to a Bluetooth device to change it, a BIOS update, devices outside your marked networks', open: false, why: 'Bluetooth is read only; a BIOS is updated with the maker\'s own tool; Bench never looks beyond your networks.' },
+      ? { what: 'Allow risky writes (Danger zone)', open: true, why: 'ON, set by you on Settings → Devices: flashing, erasing, programming, resets and commands sent to boards, probes, instruments and cards run; firmware writes need no backup, source check or recovery path; any router setting (but radio limits and keys), any phone setting (still undoable) and any Windows service may be changed. The card\'s level and your yes on each write stay.' }
+      : { what: 'Allow risky writes (Danger zone)', open: false, why: 'Off: the conditions above hold, and the device tools\' flash, erase, program, reset and send actions refuse. You can switch it on in Settings → Devices → Danger zone.' },
+    { what: 'Device tools (iOS, AVR, Pico, STM32, J-Link, OpenOCD, FPGA, instruments, smart cards, NFC, USB, HID, battery, OBD-II, packet capture, network scan)', open: true, why: 'Reading and listing are open. Network scans and packet capture only on private (home and office) addresses. Firmware analysis and extraction never read the Devices folder\'s backups. A live dashboard of running monitors is at /dsh-bench/dashboard. bench_requirements says which programs are missing and how to install them; Devices never installs anything.' },
+    { what: 'Unlocking a phone', open: true, why: 'Only when its maker allows it, at Write, with a counted backup of its storage, your own message "unlock <device name>" and your yes: it ERASES the phone. Devices never relocks a phone.' },
+    { what: 'Network devices', open: true, why: 'Only on a network you marked as yours, at an address you set on this page, signing in with Devices\' SSH key or a password kept in the Keychain, after you trusted the device\'s key.' },
+    { what: 'Connecting to a Bluetooth device to change it, a BIOS update, devices outside your marked networks', open: false, why: 'Bluetooth is read only; a BIOS is updated with the maker\'s own tool; Devices never looks beyond your networks.' },
     checksOn()
-      ? { what: 'Long run checks', open: true, why: 'On, with the Mac\'s device ports closed to them. Switch them off in Settings → Bench.' }
-      : { what: 'Long run checks', open: false, why: 'Switched off in Settings → Bench: the reviewer judges each step by reading.' },
+      ? { what: 'Long run checks', open: true, why: 'On, with the Mac\'s device ports closed to them. Switch them off in Settings → Devices.' }
+      : { what: 'Long run checks', open: false, why: 'Switched off in Settings → Devices: the reviewer judges each step by reading.' },
   ];
   ctx.effect(() => ctx.provide('bench', Object.freeze({
     apiVersion: 1,
@@ -458,7 +458,7 @@ export function apply(ctx, config, standIns = {}) {
       }
     } catch (error) {
       warn(`could not check a tool call: ${String(error?.message ?? error)}`);
-      return { kind: 'deny', reason: 'Bench could not check this call, so it was not run.' };
+      return { kind: 'deny', reason: 'Devices could not check this call, so it was not run.' };
     }
     return next();
   });
@@ -470,7 +470,7 @@ export function apply(ctx, config, standIns = {}) {
       const header = exec.agent.header ?? exec.agent.session?.header;
       return benchRefusal({ name: String(exec.name ?? ''), args: exec.arguments, cwd: typeof header?.cwd === 'string' ? header.cwd : '', benchFolders: [...benchFolders, folder()].filter(Boolean) }) || undefined;
     } catch {
-      return 'Bench could not check this call, so it was not run.';
+      return 'Devices could not check this call, so it was not run.';
     }
   }), 'bench: the rule, final');
 
@@ -498,7 +498,7 @@ export function apply(ctx, config, standIns = {}) {
                 }
                 const level = modesSays('webLevel', agent.id);
                 const ultra = modesSays('ultraCode', agent.id);
-                return `${benchNote({ folder: folder(), devices, closed: closedList() })}${level ? `\nWeb access in this conversation: ${level}. Firmware and write steps come only from the maker's or an official project's pages on Bench's list, whatever the level; a forum may explain a fault, never be a step.` : ''}${ultra === true ? '\nUltra Code is on: helpers may identify, read and diagnose side by side; only one write runs at a time, on one device, and a checker reads each write plan before the user is asked.' : ''}`;
+                return `${benchNote({ folder: folder(), devices, closed: closedList() })}${level ? `\nWeb access in this conversation: ${level}. Firmware and write steps come only from the maker's or an official project's pages on Devices' list, whatever the level; a forum may explain a fault, never be a step.` : ''}${ultra === true ? '\nUltra Code is on: helpers may identify, read and diagnose side by side; only one write runs at a time, on one device, and a checker reads each write plan before the user is asked.' : ''}`;
               } catch {
                 return '';
               }
@@ -508,7 +508,7 @@ export function apply(ctx, config, standIns = {}) {
       );
       sections.set(agent.id, dispose);
     } catch (error) {
-      warn(`could not add the Bench note: ${String(error?.message ?? error)}`);
+      warn(`could not add the Devices note: ${String(error?.message ?? error)}`);
     }
   };
   ctx.on('agent/created', ({ agent }) => install(agent));
@@ -661,7 +661,7 @@ export function apply(ctx, config, standIns = {}) {
                 const password = String(body.password ?? '');
                 if (!password || password.length > PASSWORD_MAX) throw new Error('Give the password (at most 256 characters).');
                 await savePassword({ run, account: card.slug, password });
-                bench.record(card, { title: 'Password saved in the Keychain by the user', done: 'kept in the macOS Keychain; Bench never shows it' }, new Date());
+                bench.record(card, { title: 'Password saved in the Keychain by the user', done: 'kept in the macOS Keychain; Devices never shows it' }, new Date());
               } else if (body.action === 'forgetPassword') {
                 const card = bench.find(String(body.name ?? '').slice(0, 80));
                 if (!card) throw new Error('There is no such card.');
@@ -678,7 +678,7 @@ export function apply(ctx, config, standIns = {}) {
                 bench.unlink(String(body.name ?? '').slice(0, 80));
               } else if (body.action === 'reveal') {
                 const path = folder();
-                if (!path) throw new Error('There is no Bench folder.');
+                if (!path) throw new Error('There is no Devices folder.');
                 mkdirSync(path, { recursive: true, mode: 0o700 });
                 if (process.platform === 'darwin') await new Promise((done) => execFile('/usr/bin/open', [path], () => done()));
               } else throw new Error('unknown action');

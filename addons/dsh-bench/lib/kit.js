@@ -32,7 +32,7 @@ export function makeKit({ enabled, bench, find, run, approve, isHelper, seen, bu
   };
   const common = { output, isConcurrencySafe: () => false, timeoutMs: 40 * 60_000 };
   const safely = (work) => async (args, exec) => {
-    if (!enabled()) return { text: 'Bench is switched off in Settings → Bench.' };
+    if (!enabled()) return { text: 'Devices is switched off in Settings → Devices.' };
     try {
       return { text: await work(args ?? {}, exec) };
     } catch (error) {

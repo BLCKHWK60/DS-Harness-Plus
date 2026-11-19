@@ -68,7 +68,7 @@ function benchUsbInfo(deps) {
 function benchFtdi(deps) {
   return {
     name: 'bench_ftdi',
-    description: 'FTDI USB-serial and MPSSE chips (FT232R, FT2232, FT4232H, FT232H, FT-X; vendor 0x0403). list and info (chip, serial number, its serial ports) read the USB list. eeprom-read reads the chip\'s configuration EEPROM with libftdi\'s ftdi_eeprom into the Bench folder\'s dumps (nothing is written to the chip); on macOS it works only when no driver holds the chip (Apple\'s FTDI driver claims most FT232R/FT-X: the read then fails with "unable to claim").',
+    description: 'FTDI USB-serial and MPSSE chips (FT232R, FT2232, FT4232H, FT232H, FT-X; vendor 0x0403). list and info (chip, serial number, its serial ports) read the USB list. eeprom-read reads the chip\'s configuration EEPROM with libftdi\'s ftdi_eeprom into the Devices folder\'s dumps (nothing is written to the chip); on macOS it works only when no driver holds the chip (Apple\'s FTDI driver claims most FT232R/FT-X: the read then fails with "unable to claim").',
     parameters: {
       type: 'object',
       properties: {
@@ -108,7 +108,7 @@ function benchFtdi(deps) {
       const file = await locate(deps, 'ftdi_eeprom');
       if (!file) return missingText('ftdi_eeprom', deps);
       const dump = freshName(benchDir(deps, 'dumps'), `ftdi-eeprom-${hex4(chip.pid).slice(2)}-${stampOf(deps)}`, '.bin');
-      if (/["\\\n]/.test(dump)) throw new Error('The Bench folder\'s path holds a quote or backslash, which the EEPROM config cannot carry');
+      if (/["\\\n]/.test(dump)) throw new Error('The Devices folder\'s path holds a quote or backslash, which the EEPROM config cannot carry');
       const config = `vendor_id=0x0403\nproduct_id=${hex4(chip.pid)}\nfilename="${dump}"\n`;
       const result = await withTempFile('ftdi.conf', config, (conf) => deps.run(file, ['--read-eeprom', conf], { timeoutMs: 30_000 }));
       const all = [String(result?.stdout ?? ''), String(result?.stderr ?? '')].filter((part) => part.trim()).join('\n');
@@ -117,7 +117,7 @@ function benchFtdi(deps) {
         bytes = readChecked(dump, 64 * 1024);
       } catch {
         const claimed = /claim|busy|kernel driver|Access denied|unable to open/i.test(all);
-        throw new Error(`ftdi_eeprom could not read the EEPROM${claimed ? ': a driver holds the chip (on macOS, Apple\'s FTDI driver claims most FT232R and FT-X chips, and Bench does not unload drivers). Chips without a serial driver attached (FT232H, FT2232H in MPSSE use) can be read' : ''}: ${tail(all, 3) || `code ${result?.code}`}`);
+        throw new Error(`ftdi_eeprom could not read the EEPROM${claimed ? ': a driver holds the chip (on macOS, Apple\'s FTDI driver claims most FT232R and FT-X chips, and Devices does not unload drivers). Chips without a serial driver attached (FT232H, FT2232H in MPSSE use) can be read' : ''}: ${tail(all, 3) || `code ${result?.code}`}`);
       }
       return [
         `Read the EEPROM of the ${FTDI_CHIPS[chip.pid] ?? 'FTDI chip'} into ${dump}: ${bytes.length} bytes, sha256 ${sha256(bytes)}. Nothing was written to the chip.`,

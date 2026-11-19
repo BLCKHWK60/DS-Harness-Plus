@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { appendFileSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync, writeSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { RISKY, labelOf } from './standing.js';
+import { readJsonStore } from './json-store.js';
 
 /** Write a new file and never replace one; a taken name gets -v2, -v3. @returns {string} the path written. */
 export function writeVersion(folder, stem, ending, text) {
@@ -150,12 +151,8 @@ export function kitText({ piece, titles = [], description = '', showNotes = '', 
 export function openIndex(fileOf) {
   const file = () => String(fileOf() ?? '');
   const read = () => {
-    try {
-      const value = JSON.parse(readFileSync(file(), 'utf8'));
-      return value && typeof value === 'object' ? { claims: value.claims ?? {}, sources: value.sources ?? {} } : { claims: {}, sources: {} };
-    } catch {
-      return { claims: {}, sources: {} };
-    }
+    const value = readJsonStore(file(), () => ({}), { label: 'the Content claims ledger', valid: (found) => found && typeof found === 'object' && !Array.isArray(found) });
+    return { claims: value.claims ?? {}, sources: value.sources ?? {} };
   };
   const write = (index) => {
     const path = file();

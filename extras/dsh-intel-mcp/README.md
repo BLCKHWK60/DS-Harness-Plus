@@ -1,6 +1,6 @@
 # dsh-intel-mcp
 
-Python package `dsh-intel-mcp`: three stdio MCP servers originally written for MindsHub Cowork and kept as an external Python package. dsh attaches them through its MCP client; no dsh plugin code is needed.
+Python package `dsh-intel-mcp`: three stdio MCP servers originally written for another desktop app and kept as an external Python package. dsh attaches them through its MCP client; no dsh plugin code is needed.
 
 | Server | Start with | Tools |
 |---|---|---|
@@ -21,9 +21,9 @@ Python 3.12 or 3.13. `pip install` of this directory pulls tree-sitter with 14 p
 
 ## What changed from the fork
 
-- Imports and names only: `cowork.coding.*` became `dsh_intel_mcp.*`; `cowork_home()` became `data_home()` (from `DSH_INTEL_HOME`); the redaction and untrusted-data helpers were copied in; the MindsHub data-cleaner hooks were removed.
-- **Not ported:** the website analyzer and URL targets (they use the fork's SSRF-pinned HTTP client, `cowork.research.http`, which depends on MindsHub's egress policy). `re_fetch` reports it is unavailable and `--allow-websites` defaults to 0. Porting it needs a decision on how to do safe fetching.
-- The fork's Reverse Engineer task type (`coding_reverse_task` tests) is MindsHub-specific and was not ported.
+- Imports and names only: `cowork.coding.*` became `dsh_intel_mcp.*`; `cowork_home()` became `data_home()` (from `DSH_INTEL_HOME`); the redaction and untrusted-data helpers were copied in; that app's data-cleaner hooks were removed.
+- **Not ported:** the website analyzer and URL targets (they use the fork's SSRF-pinned HTTP client, `cowork.research.http`, which depends on that app's egress policy). `re_fetch` reports it is unavailable and `--allow-websites` defaults to 0. Porting it needs a decision on how to do safe fetching.
+- The fork's Reverse Engineer task type (`coding_reverse_task` tests) is specific to that app and was not ported.
 
 ## Tests
 

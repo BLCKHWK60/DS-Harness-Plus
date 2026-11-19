@@ -92,6 +92,7 @@ export function openLibrary(file) {
     folders: db.prepare('SELECT path, added_at AS addedAt FROM folders ORDER BY added_at, path'),
     addFolder: db.prepare('INSERT OR IGNORE INTO folders (path, added_at) VALUES (?, ?)'),
     dropFolder: db.prepare('DELETE FROM folders WHERE path = ?'),
+    hasFolder: db.prepare('SELECT 1 AS yes FROM folders WHERE path = ?'),
     known: db.prepare('SELECT path, mtime, size FROM files WHERE folder = ?'),
     fileByPath: db.prepare('SELECT id, folder, path, state, pieces FROM files WHERE path = ?'),
     dropPieces: db.prepare('DELETE FROM passages WHERE file_id = ?'),
@@ -104,11 +105,18 @@ export function openLibrary(file) {
     search: db.prepare(`
       SELECT files.path AS path, files.folder AS folder, passages.place AS place, passages.seq AS seq, passages.text AS text, bm25(passages) AS score
       FROM passages JOIN files ON files.id = passages.file_id
-      WHERE passages MATCH ? AND files.path LIKE ? ESCAPE '\\'
+      WHERE passages MATCH ? AND files.path LIKE ? ESCAPE '\\' AND files.folder IN (SELECT path FROM folders)
       ORDER BY score LIMIT 200`),
     read: db.prepare('SELECT seq, place, text FROM passages WHERE file_id = ? AND seq >= ? ORDER BY seq LIMIT 40'),
   };
 
+  // Review B3: rows of a folder that is no longer in the Library (removed while a scan was reading it, in an
+  // older build) are deleted when the index opens, with their passages, and passages without a document too.
+  db.exec(`
+    DELETE FROM passages WHERE file_id IN (SELECT id FROM files WHERE folder NOT IN (SELECT path FROM folders));
+    DELETE FROM files WHERE folder NOT IN (SELECT path FROM folders);
+    DELETE FROM passages WHERE file_id NOT IN (SELECT id FROM files);
+  `);
   const drop = (path) => {
     const row = q.fileByPath.get(path);
     if (!row) return;
@@ -162,6 +170,8 @@ export function openLibrary(file) {
      */
     put(file, parts, now = Date.now()) {
       inTransaction(() => {
+        // The folder was removed while this document was being read: nothing of it is kept.
+        if (!q.hasFolder.get(file.folder)) return;
         drop(file.path);
         const state = parts.length > 0 ? 'ok' : 'empty';
         const note = parts.length > 0 ? '' : 'No words found: probably a scan without a text layer.';
@@ -173,6 +183,7 @@ export function openLibrary(file) {
     /** Record that a document could not be read, so it is not tried again until it changes. */
     fail(file, reason, now = Date.now()) {
       inTransaction(() => {
+        if (!q.hasFolder.get(file.folder)) return;
         drop(file.path);
         q.putFile.run(file.folder, file.path, Math.round(file.mtime), file.size, 'failed', String(reason).slice(0, 200), 0, now);
       });

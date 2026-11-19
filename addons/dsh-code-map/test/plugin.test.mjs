@@ -30,7 +30,7 @@ const FILES = {
  * @returns {object} the fake context and what was registered.
  */
 function fakeApp({ home, folder, rejection, config = {}, modes }) {
-  const seen = { tools: [], routes: new Map(), commands: [], skills: [], sections: [], listeners: {}, warnings: [], provided: {} };
+  const seen = { tools: [], toolOptions: {}, routes: new Map(), commands: [], skills: [], sections: [], listeners: {}, warnings: [], provided: {} };
   const agent = {
     id: 'agent-1',
     header: { cwd: folder },
@@ -60,7 +60,7 @@ function fakeApp({ home, folder, rejection, config = {}, modes }) {
   const ctx = {
     get: (name) => services[name],
     logger: { warn: (message) => seen.warnings.push(message), info: () => {} },
-    tools: { register: (tool) => seen.tools.push(tool) },
+    tools: { register: (tool, options) => { seen.tools.push(tool); seen.toolOptions[tool.name] = options; } },
     effect: (fn) => fn(),
     provide: (name, value) => {
       seen.provided[name] = value;
@@ -70,7 +70,7 @@ function fakeApp({ home, folder, rejection, config = {}, modes }) {
     },
     inject: (_names, callback) => callback(inner),
   };
-  apply(ctx, { enabled: true, promptHint: true, maxFiles: 5000, maxFileKb: 400, extraIgnore: '', dataDir: '', commandName: 'codemap', skills: true, ...config });
+  apply(ctx, config.live ?? { enabled: true, promptHint: true, maxFiles: 5000, maxFileKb: 400, extraIgnore: '', dataDir: '', commandName: 'codemap', skills: true, ...config });
   return { seen, agent };
 }
 
@@ -292,4 +292,21 @@ test('no hint where the code_map tools cannot be called: Chat, tools off, an iso
   assert.equal(section.text(), HINT, 'Cowork or Code');
   isolated = true;
   assert.equal(section.text(), '');
+});
+
+test('switched off, the model is not offered the code map tools (and not the hint)', () => {
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'code-map-off-')));
+  const flag = { enabled: true };
+  // A live config: the switch is read each time, the way the app's settings are.
+  const live = { enabled: undefined, promptHint: true, maxFiles: 5000, maxFileKb: 400, extraIgnore: '', dataDir: '', commandName: 'codemap', skills: true, get enabled() { return flag.enabled; } };
+  const { seen } = fakeApp({ home, folder: home, config: { live } });
+  assert.equal(seen.tools.length, 5);
+  for (const tool of seen.tools) {
+    assert.equal(typeof seen.toolOptions[tool.name]?.when, 'function', `${tool.name} is registered with a "when"`);
+    assert.equal(seen.toolOptions[tool.name].when({}), true);
+  }
+  flag.enabled = false;
+  for (const tool of seen.tools) assert.equal(seen.toolOptions[tool.name].when({}), false, `${tool.name} is hidden when off`);
+  flag.enabled = true;
+  for (const tool of seen.tools) assert.equal(seen.toolOptions[tool.name].when({}), true);
 });

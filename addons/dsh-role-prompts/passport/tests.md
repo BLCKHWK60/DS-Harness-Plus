@@ -1,6 +1,6 @@
 # Tests: @local/dsh-role-prompts
 
-No tests yet.
+Suites: test/role-prompts.test.mjs.
 
 Run with the app's own Node (stand-ins only; never against the real app data):
 

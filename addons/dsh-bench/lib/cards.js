@@ -129,20 +129,20 @@ function folderIn(root, ...pieces) {
     } catch {
       stat = undefined;
     }
-    if (stat?.isSymbolicLink()) throw new Error(`${piece} in the Bench folder is a link; Bench does not write through links.`);
-    if (stat && !stat.isDirectory()) throw new Error(`${piece} in the Bench folder is a file, not a folder.`);
+    if (stat?.isSymbolicLink()) throw new Error(`${piece} in the Devices folder is a link; Devices does not write through links.`);
+    if (stat && !stat.isDirectory()) throw new Error(`${piece} in the Devices folder is a file, not a folder.`);
     if (!stat) mkdirSync(path, { mode: 0o700 });
   }
   // Right before use: the folder still leads inside the Bench folder.
   const base = realpathSync.native(root);
-  if (path !== root && !realpathSync.native(path).toLowerCase().startsWith(`${base.toLowerCase()}${sep}`)) throw new Error('A folder inside the Bench folder now leads somewhere else; nothing was written.');
+  if (path !== root && !realpathSync.native(path).toLowerCase().startsWith(`${base.toLowerCase()}${sep}`)) throw new Error('A folder inside the Devices folder now leads somewhere else; nothing was written.');
   return path;
 }
 
 /** Write a file in full by way of a new file beside it, so a crash never leaves half a card. Never through a link. */
 function replaceFile(path, text) {
   try {
-    if (lstatSync(path).isSymbolicLink()) throw new Error(`${path} is a link; Bench does not write through links.`);
+    if (lstatSync(path).isSymbolicLink()) throw new Error(`${path} is a link; Devices does not write through links.`);
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error;
   }
@@ -158,7 +158,7 @@ const LINK_KINDS = { usb: 'USB device', mac: 'ESP32 chip with MAC', adb: 'phone 
 export function linkedText(card) {
   const bound = card?.permissions?.bound ?? {};
   const parts = Object.entries(LINK_KINDS).filter(([kind]) => bound[kind]?.id).map(([kind, label]) => `${label} ${bound[kind].label || bound[kind].id}`);
-  return parts.length > 0 ? parts.join('; ') : 'no device yet (Bench links it the first time it is used, with your yes)';
+  return parts.length > 0 ? parts.join('; ') : 'no device yet (Devices links it the first time it is used, with your yes)';
 }
 
 /** The card for people. */
@@ -178,13 +178,13 @@ export function cardText(card) {
     `- How it asks: ${asks}`,
     `- Protected parts: ${card.protectedParts ? card.protectedParts.replace(/\n/g, '; ') : 'none named yet'}${card.permissions?.ranges ? ` · protected by you: ${card.permissions.ranges}` : ''}`,
     `- Dry run by default: ${card.permissions?.dryRun === true ? 'yes' : 'no'}`,
-    `- Opening its serial port: ${card.permissions?.portAgreed === true ? 'agreed by you (opening it restarts some boards)' : 'not agreed yet: Bench asks before the first open'}`,
+    `- Opening its serial port: ${card.permissions?.portAgreed === true ? 'agreed by you (opening it restarts some boards)' : 'not agreed yet: Devices asks before the first open'}`,
     `- Linked to: ${linkedText(card)}`,
-    ...(card.permissions?.net?.address ? [`- On your network: ${card.permissions.net.user}@${card.permissions.net.address}:${card.permissions.net.port}, signing in with ${card.permissions.net.signIn === 'password' ? 'a password kept in the Keychain' : 'Bench\'s SSH key'}`] : []),
-    ...(card.permissions?.lookOnly ? [`- Look-only: one of the ${card.permissions.lookOnly}. Bench only reads it; only you can lift this, on Settings → Bench.`] : []),
+    ...(card.permissions?.net?.address ? [`- On your network: ${card.permissions.net.user}@${card.permissions.net.address}:${card.permissions.net.port}, signing in with ${card.permissions.net.signIn === 'password' ? 'a password kept in the Keychain' : 'Devices\' SSH key'}`] : []),
+    ...(card.permissions?.lookOnly ? [`- Look-only: one of the ${card.permissions.lookOnly}. Devices only reads it; only you can lift this, on Settings → Devices.`] : []),
     ...(card.notes ? ['', '## Notes', '', card.notes] : []),
     '',
-    `Made ${stamp(new Date(card.created))} UTC, updated ${stamp(new Date(card.updated))} UTC. Kept by Bench; the logbook is logbook.md beside this file.`,
+    `Made ${stamp(new Date(card.created))} UTC, updated ${stamp(new Date(card.updated))} UTC. Kept by Devices; the logbook is logbook.md beside this file.`,
     '',
   ].join('\n');
 }
@@ -192,7 +192,7 @@ export function cardText(card) {
 /** The undo list for people. */
 export function undoText(card, list) {
   const lines = list.map((entry) => `- ${entry.undone ? '~~' : ''}${new Date(entry.at).toISOString().slice(0, 16).replace('T', ' ')} UTC · ${entry.what}: ${entry.old === null ? '(not set)' : entry.old} → ${entry.new}${entry.undone ? '~~ (set back)' : ''}`);
-  return [`# Undo list: ${card.name}`, '', 'Every change Bench made that can be set back, newest last. "Undo last" and "Undo all since" set them back, newest first.', '', ...(lines.length > 0 ? lines : ['Nothing yet.']), ''].join('\n');
+  return [`# Undo list: ${card.name}`, '', 'Every change Devices made that can be set back, newest last. "Undo last" and "Undo all since" set them back, newest first.', '', ...(lines.length > 0 ? lines : ['Nothing yet.']), ''].join('\n');
 }
 
 /**
@@ -203,9 +203,9 @@ export function undoText(card, list) {
 export function openBench(folderOf) {
   const root = () => {
     const folder = String(folderOf() ?? '').trim();
-    if (!folder) throw new Error('There is no Bench folder. Set one in Settings → Bench.');
+    if (!folder) throw new Error('There is no Devices folder. Set one in Settings → Devices.');
     mkdirSync(folder, { recursive: true, mode: 0o700 });
-    if (lstatSync(folder).isSymbolicLink()) throw new Error('The Bench folder is a link; Bench does not write through links. Pick a real folder in Settings → Bench.');
+    if (lstatSync(folder).isSymbolicLink()) throw new Error('The Devices folder is a link; Devices does not write through links. Pick a real folder in Settings → Devices.');
     return folder;
   };
   const devicesDir = () => folderIn(root(), 'devices');
@@ -263,7 +263,7 @@ export function openBench(folderOf) {
         if (fd !== undefined) closeSync(fd);
       }
     }
-    if (lstatSync(file).isSymbolicLink()) throw new Error('The logbook is a link; Bench does not write through links.');
+    if (lstatSync(file).isSymbolicLink()) throw new Error('The logbook is a link; Devices does not write through links.');
     const number = entries(card.slug).length + 1;
     const body = lines.filter(([, value]) => value).map(([label, value]) => `- ${label}: ${clip(value, ENTRY_MAX).replace(/\n/g, '\n  ')}`).join('\n');
     appendNoLink(file, `\n## ${number}. ${stamp(at)} UTC: ${clip(title, 200).replace(/\n/g, ' ')}\n\n${body}\n`);
@@ -310,7 +310,7 @@ export function openBench(folderOf) {
     readTop,
     /** Write a small JSON file at the top of the Bench folder (only from the user's own page or Bench's code). */
     writeTop(file, value) {
-      if (!/^[a-z][a-z0-9-]{0,40}\.json$/.test(file)) throw new Error('not a Bench file');
+      if (!/^[a-z][a-z0-9-]{0,40}\.json$/.test(file)) throw new Error('not a Devices file');
       replaceFile(join(root(), file), `${JSON.stringify(value, null, 2)}\n`);
       return value;
     },
@@ -355,7 +355,7 @@ export function openBench(folderOf) {
       const { slug: _slug, ...stored } = card;
       replaceFile(join(dir, 'card.json'), `${JSON.stringify(stored, null, 2)}\n`);
       replaceFile(join(dir, 'card.md'), cardText(card));
-      append(card, had ? 'Card updated' : 'Card made', [['Changed', had ? changed.join(', ') : 'new card'], ['Permissions', had ? '' : 'start at Read and Ask-Auto; only the user changes them'], ['Look-only', marked ? `marked: one of the ${family}; Bench only reads it, and only the user lifts this on Settings → Bench` : '']], at);
+      append(card, had ? 'Card updated' : 'Card made', [['Changed', had ? changed.join(', ') : 'new card'], ['Permissions', had ? '' : 'start at Read and Ask-Auto; only the user changes them'], ['Look-only', marked ? `marked: one of the ${family}; Devices only reads it, and only the user lifts this on Settings → Devices` : '']], at);
       return { card, made: !had, changed, file: join(dir, 'card.md') };
     },
     /**
@@ -399,7 +399,7 @@ export function openBench(folderOf) {
       const before = card.permissions ?? {};
       const next = { ...before, level, asks, dryRun: dryRun === true, ranges: kept };
       if (clearLookOnly === true) delete next.lookOnly;
-      const updated = writePermissions(card, next, before, at, 'Permissions changed by the user on Settings → Bench');
+      const updated = writePermissions(card, next, before, at, 'Permissions changed by the user on Settings → Devices');
       // A device set to Write gets its firmware folder, where the user puts the file to be written.
       if (level === 'write') folderIn(root(), 'devices', card.slug, 'firmware');
       return updated;
@@ -424,7 +424,7 @@ export function openBench(folderOf) {
       if (!card) throw new Error(`There is no card for "${clip(name, 80)}".`);
       const before = card.permissions ?? START_PERMISSIONS;
       const { bound: _bound, portAgreed: _agreed, ...rest } = before;
-      return writePermissions(card, rest, before, at, 'The user unlinked the card from its devices on Settings → Bench');
+      return writePermissions(card, rest, before, at, 'The user unlinked the card from its devices on Settings → Devices');
     },
     /**
      * Where the user reaches a network device, set on Settings → Bench: address, port, user, sign-in. A new
@@ -439,11 +439,11 @@ export function openBench(folderOf) {
         const { net: _gone, ...bound } = before.bound ?? {};
         next.bound = bound;
       }
-      return writePermissions(card, next, before, at, `Network settings changed by the user on Settings → Bench: ${net.user}@${net.address}:${net.port}, ${net.signIn === 'password' ? 'password in the Keychain' : 'SSH key'}`);
+      return writePermissions(card, next, before, at, `Network settings changed by the user on Settings → Devices: ${net.user}@${net.address}:${net.port}, ${net.signIn === 'password' ? 'password in the Keychain' : 'SSH key'}`);
     },
     /** A folder at the top of the Bench folder (network, recipes), made when missing; never through a link. */
     topFolder(sub) {
-      if (!/^[a-z][a-z-]{0,20}$/.test(sub)) throw new Error('not a Bench folder');
+      if (!/^[a-z][a-z-]{0,20}$/.test(sub)) throw new Error('not a Devices folder');
       return folderIn(root(), sub);
     },
     /** Bytes Bench read off a device (a backup), written once into a device's folder, never through a link. */
@@ -458,7 +458,7 @@ export function openBench(folderOf) {
     },
     /** A plain file at the top of the Bench folder or in its recipes/ part, written once: the user's edits are kept. */
     writeOnce(sub, file, text) {
-      if (!['', 'recipes', 'recipes/drafts'].includes(sub) || !/^[a-z0-9][a-z0-9.-]{0,80}\.(md|json)$/.test(file)) throw new Error('not a Bench file');
+      if (!['', 'recipes', 'recipes/drafts'].includes(sub) || !/^[a-z0-9][a-z0-9.-]{0,80}\.(md|json)$/.test(file)) throw new Error('not a Devices file');
       const dir = sub ? folderIn(root(), ...sub.split('/')) : root();
       try {
         const fd = openSync(join(dir, file), fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW, 0o600);

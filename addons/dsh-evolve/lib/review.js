@@ -13,6 +13,30 @@ import { extractJson } from './verify.js';
 const ANSWER_CHARS = 1500;
 const PROMPT_CHARS = 1500;
 
+// --- shared redact rules: this block is the same in every add-on that keeps a redact() (a test compares them) ---
+const SECRET_NAME = String.raw`[A-Za-z0-9_.-]*(?:api[-_]?key|access[-_]?key|secret|token(?!s\b|iz)|passw(?:or)?d|passphrase|credential|private[-_]?key|auth[-_]?key)[A-Za-z0-9_.-]*`;
+const NOT_A_VALUE = String.raw`(?!(?:null|none|true|false|undefined|\[secret\]|\*+)\b)`;
+const SECRET_RULES = [
+  // Well-known key shapes (a name is not needed).
+  [/\b(?:sk|pk|rk)[-_][-_A-Za-z0-9]{12,}/g, '[secret]'],
+  [/\b(?:gh[pousr]|github_pat|xox[abprs]|xapp|glpat|hf|npm|pypi)[-_][-_A-Za-z0-9]{12,}/g, '[secret]'],
+  [/\b(?:AKIA|ASIA|AIza)[-_A-Za-z0-9]{12,}/g, '[secret]'],
+  [/\beyJ[-_A-Za-z0-9]{8,}\.[-_A-Za-z0-9]{8,}\.[-_A-Za-z0-9]{8,}/g, '[secret]'],
+  // Authorization headers: Basic, Bearer, Token and the like.
+  [/(\bauthorization\\?["']?\s*[:=]\s*\\?["']?(?:(?:Basic|Bearer|Token|Digest)\s+)?)[^\s"',;\\]{4,}/gi, '$1[secret]'],
+  [/\bBearer\s+[-._~+/A-Za-z0-9]{12,}=*/gi, 'Bearer [secret]'],
+  // A name that says it is secret, then a value: OPENAI_API_KEY=..., DB_PASSWORD: ..., passphrase: ...
+  [new RegExp(String.raw`\b(${SECRET_NAME}\s*[:=]\s*)(["']?)${NOT_A_VALUE}[^\s"',;]{4,}\2`, 'gi'), '$1[secret]'],
+  // The same in JSON text (a tool's arguments are stored as a JSON string, so the quotes may be escaped).
+  [new RegExp(String.raw`(\\?["']${SECRET_NAME}\\?["']\s*:\s*\\?["'])${NOT_A_VALUE}[^"'\\]{4,}`, 'gi'), '$1[secret]'],
+  // Command-line flags: --password hunter2, --api-key=abc...
+  [/(--[\w-]*(?:passw(?:or)?d|token(?!s\b)|secret|api-?key|passphrase)(?:=|\s+))(?!-)[^\s"']{4,}/gi, '$1[secret]'],
+  // A password inside an address: https://user:pass@host
+  [/(\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:)[^\s/@]+@/gi, '$1[secret]@'],
+  [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '[private key]'],
+];
+// --- end of the shared block ---
+
 /**
  * Remove things that should not leave this Mac from a piece of text.
  * @param {string} text - text bound for the reviewer.
@@ -22,11 +46,8 @@ export function redact(text) {
   let value = String(text ?? '');
   const home = homedir();
   if (home && home.length > 1) value = value.split(home).join('~');
+  for (const [pattern, replacement] of SECRET_RULES) value = value.replace(pattern, replacement);
   return value
-    .replace(/\b(sk|pk|rk|ghp|gho|ghu|ghs|github_pat|xox[abprs]|AKIA|AIza)[-_A-Za-z0-9]{12,}\b/g, '[secret]')
-    .replace(/\bBearer\s+[-._~+/A-Za-z0-9]{12,}=*/gi, 'Bearer [secret]')
-    .replace(/\b((?:api[-_]?key|token|secret|password|passwd|authorization)\s*[:=]\s*)(["']?)[^\s"',;]{6,}\2/gi, '$1[secret]')
-    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '[private key]')
     .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, '[email]')
     .replace(/\/Users\/[^/\s"']+/g, '~');
 }

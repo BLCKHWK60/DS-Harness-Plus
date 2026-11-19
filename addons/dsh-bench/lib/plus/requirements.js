@@ -42,7 +42,7 @@ export function formatRequirements(rows) {
   lines.push('', `Missing (${missing.length}):`);
   if (missing.length === 0) lines.push('- nothing: every program is installed.');
   for (const row of missing) lines.push(`- ${row.name}, for ${row.used}`, `    install: ${row.install}`);
-  lines.push('', `${NEVER_INSTALLS} Run the commands above yourself in Terminal, then ask for bench_requirements again. Packet capture, instruments, moria, usb-rea, J-Link and the HID helper have more steps on Settings → Bench.`);
+  lines.push('', `${NEVER_INSTALLS} Run the commands above yourself in Terminal, then ask for bench_requirements again. Packet capture, instruments, moria, usb-rea, J-Link and the HID helper have more steps on Settings → Devices.`);
   return lines.join('\n');
 }
 
@@ -58,10 +58,10 @@ export const INSTALL_TEXT = {
     'then log out and back in, and check with: tshark -D',
     'Without the helper, until the next restart: sudo chmod 666 /dev/bpf*',
     'A phone or TV on Wi-Fi is usually invisible from the Mac (the access point switches its traffic): capture on the router instead.',
-    'Bench never asks for root and never installs anything.',
+    'Devices never asks for root and never installs anything.',
   ].join('\n'),
   pyvisa: [
-    'Instruments (bench_usb_tmc) use PyVISA in a Python of their own, which Bench looks for first:',
+    'Instruments (bench_usb_tmc) use PyVISA in a Python of their own, which Devices looks for first:',
     'python3 -m venv ~/.dsh/bench/venv',
     '~/.dsh/bench/venv/bin/python -m pip install pyvisa pyvisa-py pyusb',
     'brew install libusb   (for USB instruments through pyvisa-py; NI-VISA works too)',
@@ -88,7 +88,7 @@ export const INSTALL_TEXT = {
   ].join('\n'),
   jlink: [
     'J-Link (bench_jlink) needs SEGGER\'s J-Link Software and Documentation Pack: brew install --cask segger-jlink, or the download at https://www.segger.com/downloads/jlink/.',
-    'You accept SEGGER\'s terms during that install. Bench runs JLinkExe with a command file it writes itself (connect, mem32, regs, r, exit).',
+    'You accept SEGGER\'s terms during that install. Devices runs JLinkExe with a command file it writes itself (connect, mem32, regs, r, exit).',
   ].join('\n'),
   never: `${NEVER_INSTALLS} Run these commands yourself in Terminal; bench_requirements then shows what is ready.`,
 };

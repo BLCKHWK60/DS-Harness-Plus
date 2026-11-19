@@ -2,6 +2,10 @@
 
 Host plugin `@local/dsh-notify` (dsh 0.2.2-rc.1). dsh has no desktop notifications; this runs a command **you list** when something happens. **Nothing is configured by default**: with no rules it does not even listen.
 
+## Where you set it up (no YAML needed)
+
+**Settings → Alerts**, in the group "When a turn ends or the app waits for you" (the Automations add-on's page). Add a rule for "when a turn ends" or "when the app waits for my approval", write the command one part per line (the program first), or press **Fill in a Mac notification**. **More options** has the shortest time a turn must take, the pause between two runs, the time limit and whether helper agents count. Changes apply at once, without a restart. With the Automations add-on missing or off, the same settings are on their own page, **Settings → Notify**. The `rules`, `maxPerMinute` and `enabled` settings are live (`.volatile()`); the YAML below still works and is the same shape.
+
 ## Configuration
 
 ```yaml
@@ -44,4 +48,4 @@ command: [osascript, -e, 'display notification (system attribute "DSH_NOTIFY_MES
 
 ## Checked
 
-13 unit tests (helpers, config refusals, no listener without rules, args and environment, reasons, `minSeconds`, sub-agents ignored, approval without the reason text, injection attempt in the project folder and tool name, rate limits, failure and slow command not blocking, replay ignored, `/notify`). Live in a real dsh headless profile with a recording script: a plain turn gave `Finished in <folder>` and the project name came from the session's working folder; an approval asked by the media-tools gate gave `Waiting for your approval (bash) in <folder>` and then the turn end. Not tested: a real macOS banner (the recording script stood in for `osascript`), the app UI, phone notifications.
+19 unit tests (15 on the host half, 4 on the client part and how it joins the Alerts page; helpers, config refusals, nothing runs without rules, rules changed while the app runs, args and environment, reasons, `minSeconds`, sub-agents ignored, approval without the reason text, injection attempt in the project folder and tool name, rate limits, failure and slow command not blocking, replay ignored, `/notify`). Live in a real dsh headless profile with a recording script: a plain turn gave `Finished in <folder>` and the project name came from the session's working folder; an approval asked by the media-tools gate gave `Waiting for your approval (bash) in <folder>` and then the turn end. Not tested: a real macOS banner (the recording script stood in for `osascript`), the app UI, phone notifications.

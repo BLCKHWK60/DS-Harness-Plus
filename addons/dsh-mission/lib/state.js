@@ -5,6 +5,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { MODES } from './guard.js';
+import { readJsonStore } from './json-store.js';
 
 export const CONVERSATIONS_MAX = 300;
 export const APPROVED_MAX = 5000;
@@ -17,15 +18,11 @@ export function openState(file) {
   /** @type {Map<string, {mode: string, root: string, approved: Set<string>, outside: Set<string>, preset: string, at: number}>} */
   const table = new Map();
   if (file) {
-    try {
-      const read = JSON.parse(readFileSync(file, 'utf8'));
-      for (const [id, entry] of Object.entries(read && typeof read === 'object' ? read : {})) {
-        if (!MODES.includes(entry?.mode) || typeof entry.root !== 'string' || !entry.root) continue;
-        const list = (value) => new Set((Array.isArray(value) ? value : []).filter((item) => typeof item === 'string'));
-        table.set(id, { mode: entry.mode, root: entry.root, approved: list(entry.approved), outside: list(entry.outside), preset: typeof entry.preset === 'string' ? entry.preset : '', at: Number(entry.at) || 0 });
-      }
-    } catch {
-      table.clear();
+    const read = readJsonStore(file, () => ({}), { label: 'what Mission remembers for each conversation', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
+    for (const [id, entry] of Object.entries(read)) {
+      if (!MODES.includes(entry?.mode) || typeof entry.root !== 'string' || !entry.root) continue;
+      const list = (value) => new Set((Array.isArray(value) ? value : []).filter((item) => typeof item === 'string'));
+      table.set(id, { mode: entry.mode, root: entry.root, approved: list(entry.approved), outside: list(entry.outside), preset: typeof entry.preset === 'string' ? entry.preset : '', at: Number(entry.at) || 0 });
     }
   }
   let timer;

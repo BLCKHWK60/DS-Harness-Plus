@@ -54,3 +54,35 @@ Every Plus settings page and panel must look like the app's own Settings pages (
 ## Checking a page
 
 Open it in the lab under at least two schemes (Settings → Colours), in light and dark (Settings → General → Appearance), and at a narrow width. Nothing should keep a colour from another scheme, and it should sit next to the General page without looking like a different app.
+
+## Questions and error messages
+
+- **Never use `window.prompt`, `window.confirm` or `window.alert`.** `prompt` does nothing in the desktop app, and the other two cannot be styled or checked there. Use the shared question box, `dshKit.ask({ text, ok, danger, field, notice })` (a small pop-up in the page's own style; it resolves true/false, the typed text when it has a `field`, or just closes with `notice`). A question that can destroy something sets `danger: true`: it then starts on Cancel. `scripts/check.sh` fails when a page calls one of the three.
+- **Never show raw error text** such as "error 404" or "settings/conflict". Throw `dshKit.fail(raw)` (an Error with a plain sentence; the raw text stays in `error.details`) and, where a page has room, draw `PlainNote` (`const PlainNote = dshKit.makeNote(React)`), which shows the sentence and a **Details** button.
+- Both come from one block, `docs/shared/dsh-kit.js`, copied into each page between the `dsh-kit:begin` and `dsh-kit:end` lines. Change the master, then run `node scripts/sync-kit.mjs`; `scripts/check.sh` fails when a copy has drifted.
+
+## The shared page parts and CSS names
+
+Pages used to draw the same switch, button, row and heading again and again, each add-on with its own copy, and some class names met on one screen (the Sampling page was crushed by Split Plus's CSS). Two rules now prevent that.
+
+**1. Use the shared parts.** `docs/shared/dsh-ui.js` holds the parts every page needs, copied into each page file between the `dsh-ui:begin` and `dsh-ui:end` lines (change the master, then run `node scripts/sync-kit.mjs`; `scripts/check.sh` fails when a copy has drifted, as it does for the error helper). Use them with `const ui = dshUi.makeParts(React)`:
+
+| Part | What it is |
+| --- | --- |
+| `ui.Page({ title, desc })` | The page frame: title (16px), one sentence, then the page |
+| `ui.Group` | A group head (12px, upper case) |
+| `ui.Desc({ error })` | A short line in the description style |
+| `ui.Row({ title, desc }, control)` | One setting: text left, control right, 16px padding, divider |
+| `ui.Switch({ on, label, onChange, danger })` | The 36×20 switch; `danger` draws it red while on (a safety rule that is off) |
+| `ui.Button({ main, danger })` | 28px secondary button; `main` for the accent one |
+| `ui.Field` | 36px field |
+| `ui.CopyButton({ text })` | Copies, then says "Copied" for a moment |
+| `ui.Chips({ items, onPick })` | Starter chips |
+| `ui.Empty({ title, text, chips })` | What a list shows when it has nothing yet: what it is for and what to do first |
+| `ui.Wait` | A loading line |
+
+Every shared class starts with `dshu-`. They carry the keyboard focus ring (2px, accent) and the hover state. An add-on never defines or restyles a `dshu-` class; it adds its own class beside it when it needs something extra.
+
+**2. One prefix per add-on.** Every class an add-on creates starts with its own prefix, `dsh-` plus two or three letters that no other add-on uses (`dsh-mc-` is Modes' model chip, so Mac uses `dsh-mac-`). A class is created by one add-on only. A CSS rule always names at least one of the add-on's prefixed classes (`.dsh-xx-card .title`, never `.title`), unless it deliberately hooks onto `html`, `body` or a `[data-…]` attribute. `node scripts/check-css-classes.mjs` (run by `scripts/check.sh`) fails on a class made by two add-ons, two add-ons sharing a prefix, and a bare rule. The few deliberate exceptions, each with its reason, are in `scripts/css-class-allowlist.json`; do not add to it, rename instead.
+
+When you convert a page, take its rows, switches, buttons and headings from the shared parts and keep only what is special to the page in its own CSS.

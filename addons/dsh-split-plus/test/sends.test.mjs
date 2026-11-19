@@ -166,7 +166,7 @@ test('Recon stays sealed: nothing is sent out of it or into it this way, and its
   }
 });
 
-test('a file is sent as text from its full path; Bench backups, Recon\'s room and binary files never go', async () => {
+test('a file is sent as text from its full path; Devices backups, Recon\'s room and binary files never go', async () => {
   const home = folder();
   try {
     const { routes } = standIn(home);
@@ -177,7 +177,7 @@ test('a file is sent as text from its full path; Bench backups, Recon\'s room an
     mkdirSync(join(home, 'bench', 'devices', 'phone', 'backups'), { recursive: true });
     const backup = join(home, 'bench', 'devices', 'phone', 'backups', 'wifi.txt');
     writeFileSync(backup, 'psk=secret');
-    assert.match((await hit(routes, { method: 'POST', body: { action: 'file', sessionId: 'c1', path: backup } })).data.error, /Bench backup is never sent/);
+    assert.match((await hit(routes, { method: 'POST', body: { action: 'file', sessionId: 'c1', path: backup } })).data.error, /Devices backup is never sent/);
     assert.match((await hit(routes, { method: 'POST', body: { action: 'file', sessionId: 'c1', path: '/private/tmp/dsh-recon-room/page.md' } })).data.error, /Recon's room/);
     const binary = join(home, 'x.bin');
     writeFileSync(binary, Buffer.from([1, 0, 2]));

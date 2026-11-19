@@ -73,16 +73,16 @@ export const LOCAL_NAME = /^(?=.{1,120}$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,62})(?:\.[
  */
 export function addressRefusal(address, network) {
   const text = String(address ?? '').trim();
-  if (!text) return 'This device has no address yet. The user sets it on Settings → Bench.';
+  if (!text) return 'This device has no address yet. The user sets it on Settings → Devices.';
   const parts = ipv4(text);
   if (parts) {
-    if (!isPrivate(parts)) return `${text} is not an address on a home network. Bench reaches only devices on a network the user marked as theirs.`;
-    if (network && !network.cidr) return 'The marked network has no address range: mark it again on Settings → Bench.';
+    if (!isPrivate(parts)) return `${text} is not an address on a home network. Devices reaches only devices on a network the user marked as theirs.`;
+    if (network && !network.cidr) return 'The marked network has no address range: mark it again on Settings → Devices.';
     if (network?.cidr && !inCidr(text, network.cidr)) return `${text} is outside the marked network ${network.cidr}.`;
     return '';
   }
   if (LOCAL_NAME.test(text)) return '';
-  return `${text.slice(0, 80)} is not a private address or a .local name. Bench reaches only devices on a network the user marked as theirs.`;
+  return `${text.slice(0, 80)} is not a private address or a .local name. Devices reaches only devices on a network the user marked as theirs.`;
 }
 
 /**
@@ -105,7 +105,7 @@ export async function resolveAddress(run, address) {
  * The Wi-Fi name is kept as a label only: macOS may hide it from apps, and many networks share a range.
  */
 export function markedOf({ label, ssid, cidr }, current) {
-  if (!current?.ip || !current?.gatewayMac) throw new Error('Mark a network while the Mac is on it: Bench records its address range and its router\'s hardware address. The Mac\'s network or router could not be read just now.');
+  if (!current?.ip || !current?.gatewayMac) throw new Error('Mark a network while the Mac is on it: Devices records its address range and its router\'s hardware address. The Mac\'s network or router could not be read just now.');
   const range = String(cidr ?? '').trim() ? cidrOf(cidr) : current.cidr;
   if (!range) throw new Error('The Mac\'s address range could not be read; give it, such as 192.168.8.0/24.');
   if (!inCidr(current.ip, range)) throw new Error(`The Mac (${current.ip}) is not in ${range}. Mark a network while the Mac is on it.`);

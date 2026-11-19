@@ -6,8 +6,8 @@
  * The bundle patch switches the app's own sidebar (`ui-sidebar`) off, and this row turns itself on only
  * while that sidebar is off: both at once would stop the app from loading.
  */
-import { existsSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import z from '@deepseek-ai/schemastery';
 import { KEEP_MS, groupLabel, jsonSize, openTrash, safeId, safeOwner, safeTab, tidyPending } from './lib/trash.js';
 import { INSTRUCTIONS_MAX, UPLOAD_MAX, addFile, canonical, listFiles, noteOf, openProjects } from './lib/projects.js';
@@ -16,6 +16,8 @@ import { askMarks, withMarks } from './lib/skill-marks.js';
 import { buildDigest, drift } from './lib/digest.js';
 import { generatePrompt, openVersions, parseGenerated, versionsDir, whereOf } from './lib/generate.js';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
+import { addConnector, checkForm, dshProgram, namesInFile, profileOf, rowText, secretRefOf } from './lib/connectors.js';
 import { SCRATCH_TITLE, copyDropped, copyThreadFiles, insideThread, isScratch, keepInProject, prepareFolder, threadFolderOf } from './lib/scratch.js';
 
 export const name = 'cowork-shell';
@@ -199,6 +201,71 @@ export const DEFAULT_TABS = {
       }
     ]
   },
+  "content": {
+    "pages": [],
+    "chips": [
+      {
+        "label": "Write a blog post",
+        "icon": "research",
+        "prompt": "Write a blog post about: "
+      },
+      {
+        "label": "Draft an email",
+        "icon": "spark",
+        "prompt": "Draft an email to: "
+      },
+      {
+        "label": "Make an outline",
+        "icon": "chart",
+        "prompt": "Make an outline for a talk or video about: "
+      },
+      {
+        "label": "Tidy my notes",
+        "icon": "spreadsheet",
+        "prompt": "Turn my notes in this folder into a clear summary."
+      }
+    ]
+  },
+  "bench": {
+    "pages": [],
+    "chips": [
+      {
+        "label": "What is connected?",
+        "icon": "spark",
+        "prompt": "What devices are connected to this Mac right now?"
+      },
+      {
+        "label": "Check an Android phone",
+        "icon": "research",
+        "prompt": "Read the details of my Android phone and tell me what you see."
+      },
+      {
+        "label": "Look at a board",
+        "icon": "chart",
+        "prompt": "Identify the board on my USB port and tell me what it is."
+      }
+    ]
+  },
+  "creator-plus": {
+    "pages": [],
+    "chips": [
+      {
+        "label": "Build an add-on",
+        "icon": "spark",
+        "prompt": "Build a new add-on that: "
+      },
+      {
+        "label": "Improve an add-on",
+        "icon": "research",
+        "prompt": "Improve this add-on and show me the change first: "
+      },
+      {
+        "label": "What went wrong?",
+        "icon": "chart",
+        "prompt": "Look at my recent conversations and tell me what went wrong most often."
+      }
+    ]
+  },
   "recon": {
     "pages": [],
     "greeting": "What should Recon look into?",
@@ -236,6 +303,8 @@ export const DEFAULT_TABS = {
 export const SKILLS_PATH = '/dsh-cowork-shell/skills';
 export const PROJECTS_PATH = '/dsh-cowork-shell/projects';
 export const CONNECTORS_PATH = '/dsh-cowork-shell/connectors';
+/** "Write it for me": POST `{action: 'preview' | 'write', form}`; adds a connector to the person's own settings file (see lib/connectors.js). */
+export const CONNECTOR_WRITE_PATH = '/dsh-cowork-shell/connectors/write';
 export const TRASH_PATH = '/dsh-cowork-shell/trash';
 export const SCRATCH_PATH = '/dsh-cowork-shell/scratch';
 export const KEEP_PATH = '/dsh-cowork-shell/scratch/keep';
@@ -351,6 +420,23 @@ export function apply(ctx) {
     return true;
   };
 
+  /** The person's own settings file for connectors: where the running app keeps it, and its path as shown to the person. */
+  const shorten = (path) => (path.startsWith(`${homedir()}/`) ? `~/${path.slice(homedir().length + 1)}` : path);
+  function connectorPlace() {
+    const home = dirname(ctx.get('dshHomePath')?.('x') ?? join(homedir(), '.dsh', 'x'));
+    const place = profileOf({ home });
+    return { ...place, shown: shorten(place.file), backupDir: join(home, 'backups', 'connectors'), exists: existsSync(place.file) };
+  }
+  /** The settings file's text for reading connector names ('' when it is missing or too big to bother with). */
+  function connectorFileText() {
+    try {
+      const { file } = connectorPlace();
+      return existsSync(file) && statSync(file).size < 2_000_000 ? readFileSync(file, 'utf8') : '';
+    } catch {
+      return '';
+    }
+  }
+
   // Connectors page: every MCP server row (one `dsh-mcp-client` row per server in this app version),
   // whether it is on, what it runs (no secrets) and how many tools it has registered right now.
   ctx.inject(['webServer', 'connection'], (inner) => {
@@ -382,13 +468,99 @@ export function apply(ctx) {
               toolCount: tools.filter((name) => name.startsWith(`mcp__${serverName}__`)).length,
             };
           });
-          res.end(JSON.stringify({ at: Date.now(), servers }));
+          // Connectors written to the settings file that the running app has not started yet (they start after a restart).
+          const loaded = new Set(servers.flatMap((server) => [server.serverName.toLowerCase(), server.id.toLowerCase().replace(/^mcp-/, '')]));
+          const waiting = namesInFile(connectorFileText()).filter((name) => !loaded.has(name.toLowerCase()));
+          res.end(JSON.stringify({ at: Date.now(), servers, waiting }));
         } catch (error) {
           res.statusCode = 500;
           res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 300) }));
         }
       },
     }), 'cowork-shell connectors route');
+
+    // "Write it for me": the fields become one connector row in the person's own settings file, with a preview, a backup,
+    // the app's own check on a throwaway copy of the app's home, and a plain "restart needed" answer. A key is kept in
+    // the app's secret store, never in the file. POST only, behind the same login and Host/Origin fence as the page.
+    let writing = false;
+    inner.effect(() => inner.webServer.register({
+      kind: 'exact',
+      path: CONNECTOR_WRITE_PATH,
+      handler: async (req, res) => {
+        if (!guard(inner, req, res, ['POST'])) return;
+        const say = (status, body) => { res.statusCode = status; res.end(JSON.stringify(body)); };
+        try {
+          const chunks = [];
+          let size = 0;
+          for await (const chunk of req) {
+            size += chunk.length;
+            if (size > 65536) return say(413, { ok: false, text: 'That is too much text for a connector.' });
+            chunks.push(chunk);
+          }
+          let body;
+          try {
+            body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+          } catch {
+            return say(400, { ok: false, text: 'The request could not be read.' });
+          }
+          const place = connectorPlace();
+          const loaderEntries = (() => { try { return [...((ctx.get('loader') ?? ctx.loader)?.entries?.() ?? [])]; } catch { return []; } })();
+          const taken = [
+            ...loaderEntries.filter((e) => e.options?.name === MCP_CLIENT).flatMap((e) => [String(plain(plain(e.options.config)?.serverName) ?? ''), String(e.options.id ?? '').replace(/^mcp-/, '')]),
+            ...namesInFile(connectorFileText()),
+          ].filter(Boolean);
+          const checked = checkForm(body?.form, { taken });
+          if (!checked.ok) return say(200, { ok: false, stage: 'form', problems: checked.problems });
+          const value = checked.value;
+          const credentials = () => ctx.get('credentials');
+          const kept = async (ref) => { try { return (await credentials()?.describe?.(ref))?.configured === true; } catch { return false; } };
+          if (body?.action === 'preview') {
+            return say(200, {
+              ok: true,
+              text: rowText(value),
+              file: place.shown,
+              fileExists: place.exists,
+              key: value.keyName ? { ref: secretRefOf(value.name), kept: await kept(secretRefOf(value.name)), typed: value.keyValue !== '' } : null,
+              canCheck: Boolean(dshProgram()),
+            });
+          }
+          if (body?.action !== 'write') return say(400, { ok: false, text: 'Unknown request.' });
+          if (writing) return say(200, { ok: false, stage: 'busy', text: 'Another connector is being written. Wait a moment and try again.' });
+          writing = true;
+          try {
+            const answer = await addConnector({
+              value,
+              file: place.file,
+              backupDir: place.backupDir,
+              dsh: dshProgram(),
+              expect: typeof body.expect === 'string' ? body.expect : undefined,
+              keepKey: async (ref, secret) => {
+                const service = credentials();
+                if (!service?.set) throw new Error('no secret store');
+                await service.set(ref, secret);
+              },
+              hasKey: kept,
+              forgetKey: async (ref) => { await credentials()?.unset?.(ref); },
+            });
+            if (!answer.ok) return say(200, { ok: false, stage: answer.stage, text: answer.text, checks: answer.checks, ...(answer.details ? { details: String(answer.details).slice(0, 800) } : {}) });
+            return say(200, {
+              ok: true,
+              added: value.name,
+              file: place.shown,
+              backup: answer.backup ? shorten(answer.backup) : '',
+              checks: answer.checks,
+              restart: true,
+              // The app gives an add-on no way to restart it (checked in 0.2.2-rc.2), so the page tells the person how.
+              canRestart: false,
+            });
+          } finally {
+            writing = false;
+          }
+        } catch (error) {
+          say(500, { ok: false, text: 'Something went wrong before anything was written.', details: String(error?.message ?? error).slice(0, 300) });
+        }
+      },
+    }), 'cowork-shell connector writer route');
   });
 
   // Skills page: the skills available in the default working folder. GET only, behind the app's

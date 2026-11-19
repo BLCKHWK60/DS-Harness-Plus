@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A Finance mode and tab for researching companies, markets and economies from the figures, the news and what people are saying, with drop-downs for subject and market. Research, not advice. Off until you switch it on.",
+  "description": "Beta: A Finance mode and tab for researching companies, markets and economies from the figures, the news and what people are saying, with drop-downs for subject and market. Research, not advice. Off until you switch it on.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

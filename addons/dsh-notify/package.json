@@ -3,14 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Runs a command you list when a turn ends or dsh waits for your approval, for example to show a macOS notification. Off until configured; never blocks a turn.",
+  "description": "Experimental: Runs a command you list when a turn ends or dsh waits for your approval, for example to show a macOS notification. Set up on the Alerts page (or its own Notify page). Off until configured; never blocks a turn.",
   "exports": {
     ".": "./index.js",
+    "./client": "./client.js",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
   "files": [
     "index.js",
+    "client.js",
     "cordis.patch.yml",
     "README.md",
     "locale/*.json",
@@ -24,6 +26,14 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale"
+      ]
     }
   }
 }

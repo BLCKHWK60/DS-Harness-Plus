@@ -34,12 +34,12 @@ Off until you switch it on in **Settings → Artifacts**. It works with or witho
   - **Save to folder** looks at where the folder really is (through any link) before it makes anything, and never writes into Recon's room, whatever the capitals.
 - **The Artifacts page** lists everything made, filtered by tab, kind, date and folder; each row opens its conversation.
 - **Versions.** Every change of a file's content makes a version, kept in Artifacts' own folder (`<app data>/artifacts/versions`), never beside the file. Everything is kept, with no limit (the owner's answer).
-- **Clean-up** picks artifacts by kind, size and age (never a kept one, never a Bench backup, never Recon's), shows how many match, then moves their kept versions and list entries, and with a tick box their files too, to the app's trash (30 days, Put back).
+- **Clean-up** picks artifacts by kind, size and age (never a kept one, never a Devices backup, never Recon's), shows how many match, then moves their kept versions and list entries, and with a tick box their files too, to the app's trash (30 days, Put back).
   - If anything goes wrong half-way, everything already moved goes back and nothing is removed.
   - **Put back** brings everything back. If the file was made again at the same place since, the new one is never overwritten. The one from the trash comes back beside it as `name (restored).ext`, and its older versions come back in front of the new ones.
 - **Scratch threads:** an artifact made in a Scratch thread goes with the thread. Delete the thread and it leaves the list (it is in the trash with the thread); delete the thread for good and its versions go too.
 - **Recon:** Recon's files show only inside Recon and are never listed. They are sealed when a Recon conversation makes them, and also when they lie in one of Recon's rooms (any folder named `dsh-recon…`, whatever the capitals and through links). From Artifacts they never leave Recon, even from inside Recon: no app, no Finder, no copy to a folder or the clipboard, no send. Recon's own **Export…** button does that once its run is done. With Modes off, nobody can tell a Recon conversation from another, so everything made is sealed until Modes is back.
-- **Bench:** a Bench backup is listed and never shown or opened.
+- **Devices:** a Devices backup is listed and never shown or opened.
 
 ## How it is built
 
@@ -64,7 +64,7 @@ Off until you switch it on in **Settings → Artifacts**. It works with or witho
 
 Every rule above starts on. Each can be switched off in Settings → Artifacts → Danger zone; it stays off until switched back, the Artifacts page shows it in red, and each change is noted in `danger.jsonl`:
 
-- Show Bench backups.
+- Show Devices backups.
 - Show Recon's files outside Recon.
 - Open web pages running.
 - Open web pages with the internet allowed.
@@ -72,7 +72,7 @@ Every rule above starts on. Each can be switched off in Settings → Artifacts �
 ## Not built yet
 
 - A card for a file you attach, or for a file another pane sent.
-- A viewer of a tab's own (Content's ledger, a research packet, a Bench device card), and Creator Plus's recipe for one.
+- A viewer of a tab's own (Content's ledger, a research packet, a Devices device card), and Creator Plus's recipe for one.
 - Editing in the panel (your answer: view only, changes by asking), "Ask the pane's model to change it" as a button, and dragging the panel out into a pane of its own.
 
 ## Open question for the owner

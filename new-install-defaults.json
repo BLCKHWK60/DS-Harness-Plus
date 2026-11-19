@@ -1,0 +1,68 @@
+{
+  "_about": "Safer starting values, written ONLY on a first install of Plus (no Plus add-on was installed before). An update never writes them, so an earlier setup keeps exactly what it has, including values it never saved. They go into the person's own setup file (profiles/<name>/cordis.patch.yml), the same place the Settings pages save to, so each one can be changed on its Settings page. A row whose id is already in that file is left alone. The first-run card (Settings Plus) asks for the daily limit and writes it through Settings; the dayTokens value below is only a prepared default. The settings-plus row also marks a fresh install: setupPending is true only here, so an earlier setup never sees the card. A row here replaces the add-on's own row, so each one repeats the keys of that row (scripts/new-install-defaults.test.mjs checks they stay in step).",
+  "version": 1,
+  "rows": [
+    {
+      "id": "budget",
+      "name": "@local/dsh-budget",
+      "why": "A lower limit for the tokens one task may use (the app default is 20 million).",
+      "config": {
+        "enabled": true,
+        "maxTokens": 5000000,
+        "startingTokens": true
+      }
+    },
+    {
+      "id": "activity",
+      "name": "@local/dsh-activity",
+      "why": "Activity shows words (Writing, Reading prompt) instead of codes (TG, PP).",
+      "config": {
+        "enabled": true,
+        "words": true
+      }
+    },
+    {
+      "id": "model-tiers",
+      "name": "@local/dsh-model-tiers",
+      "why": "The Code review tier starts at High effort instead of Ultra.",
+      "config": {
+        "maxSubagents": 4,
+        "ultraAutoDelegate": true,
+        "activeTiers": "{}",
+        "tiers": {
+          "code": {
+            "effort": "high"
+          }
+        }
+      }
+    },
+    {
+      "id": "modes",
+      "name": "@local/dsh-modes",
+      "why": "The code guides (reverse-engineer, PR review, fix loop, best-of-several, hunk review) are offered only in the Code tab. Each tab can switch them on in Settings → Code tools.",
+      "config": {
+        "skillsOff": "{\"chat\":[\"best-of-n\",\"ci-fix-loop\",\"hunk-review\",\"pr-review\",\"reverse-api-format\",\"reverse-app-binary\",\"reverse-codebase\",\"reverse-website\"],\"cowork\":[\"best-of-n\",\"ci-fix-loop\",\"hunk-review\",\"pr-review\",\"reverse-api-format\",\"reverse-app-binary\",\"reverse-codebase\",\"reverse-website\"]}"
+      }
+    },
+    {
+      "id": "settings-plus",
+      "name": "@local/dsh-settings-plus",
+      "why": "The Settings window starts on the Simple list, and the first-run setup card is shown once.",
+      "config": {
+        "enabled": true,
+        "modeGear": true,
+        "exportButton": true,
+        "extrasInGear": true,
+        "view": "simple",
+        "setupPending": true
+      }
+    }
+  ],
+  "prepared": {
+    "_about": "Values the first-run card will offer; NOT written by the installer. Plug point: the card calls Settings with budget.dayTokens.",
+    "budget": {
+      "dayTokens": 0,
+      "suggested": 2000000
+    }
+  }
+}

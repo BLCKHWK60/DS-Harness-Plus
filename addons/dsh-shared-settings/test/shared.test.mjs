@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fieldDigests, mergeSection, parseFieldList, resolveFolder, secretPaths, withoutPaths } from '../lib/core.mjs';
+import { LOCAL_KEY, fieldDigests, localPaths, mergeSection, parseFieldList, resolveFolder, secretPaths, withoutPaths } from '../lib/core.mjs';
 import { SharedSettingsEngine } from '../lib/engine.mjs';
 import { ALWAYS_SKIP, DEFAULT_SKIP, pickFolder, shareRule, skipList } from '../index.mjs';
 
@@ -304,4 +304,94 @@ test('per-Mac Modes fields are never written to or taken from the file, even wit
   b.app.rows.get('modes').user = { defaultMode: 'code', ...perMac('b1') };
   await b.engine.run();
   assert.deepEqual(b.app.rows.get('modes').user, { defaultMode: 'chat', ...perMac('b1') });
+});
+
+test('fields about this Mac (switches, folders, paths, servers, permissions, per-conversation) never leave it', async () => {
+  const perMac = {
+    enabled: true, folder: '/Users/me/x', folders: ['/a'], exportFolder: '/Users/me/out', plusFolder: '/p', torPath: '/usr/local/bin/tor',
+    wireproxyPath: '/w', opencodePath: '/o', pythonSetup: 'x', engineHost: 'h', usenetHost: 'n', usenetPort: 563, ntfyTopic: 'secret-topic',
+    ntfyServer: 'https://n', dangerPagesRun: true, dangerFileHolds: true, allowRiskyWrites: true, allowInternet: true, anywhere: true,
+    trusted: ['x'], sessionWeb: '{}', sessionUltra: '{}', nolearn: '{}', phone: '1', logReaders: '[]', startPlaces: '[]',
+  };
+  const setup = { tiers: '[]', customTiers: '[]', modelProfiles: '{}', presets: '[]', byMode: '{}', scheme: 'x', custom: '{}', tabs: '[]', maxTabs: 8, defaultMode: 'code', modes: '[]', roleModels: '{}', fallbackChains: '[]', opaqueMacSidebar: true };
+  for (const key of Object.keys(perMac)) assert.ok(LOCAL_KEY.test(key), `${key} must stay on this Mac`);
+  for (const key of Object.keys(setup)) assert.ok(!LOCAL_KEY.test(key), `${key} is setup and may be shared`);
+  assert.deepEqual(localPaths({ a: { torPath: 'x', ok: 1 }, enabled: true }).map((path) => path.join('.')).sort(), ['a.torPath', 'enabled']);
+
+  const folder = tmp();
+  // An entry the add-on knows nothing about, with a mix of both kinds, even in a nested object.
+  const entries = () => ({ 'new-addon': { pkg: '@local/dsh-new-addon' } });
+  const a = mac(folder, entries());
+  a.app.rows.get('new-addon').user = { ...perMac, ...setup, nested: { torPath: '/x', keep: 1 } };
+  await a.engine.run();
+  const shared = readFile(folder).settings['new-addon'];
+  assert.deepEqual(Object.keys(shared).sort(), [...Object.keys(setup), 'nested'].sort());
+  assert.deepEqual(shared.nested, { keep: 1 });
+
+  // A file that holds them anyway (hand edit, older version) changes nothing of this Mac's own.
+  const data = readFile(folder);
+  data.settings['new-addon'] = { ...setup, enabled: false, folder: '/Users/other/x', ntfyTopic: 'other', nested: { torPath: '/other', keep: 2 } };
+  writeFileSync(join(folder, 'settings.json'), JSON.stringify(data));
+  const b = mac(folder, entries());
+  b.app.rows.get('new-addon').user = { enabled: true, folder: '/Users/me/x', ntfyTopic: 'mine', nested: { torPath: '/mine' } };
+  await b.engine.run();
+  const user = b.app.rows.get('new-addon').user;
+  assert.equal(user.enabled, true);
+  assert.equal(user.folder, '/Users/me/x');
+  assert.equal(user.ntfyTopic, 'mine');
+  assert.equal(user.nested.torPath, '/mine');
+});
+
+test('Recon and Notify are never shared, even when asked to be by default', () => {
+  const rule = shareRule({});
+  assert.equal(rule('recon', '@local/dsh-recon'), false);
+  assert.equal(rule('notify', '@local/dsh-notify'), false);
+  assert.equal(rule('modes', '@local/dsh-modes'), true);
+});
+
+test('a Mac updated to 1.0 leaves an older Mac\'s switches and paths in the file, so the older Mac keeps them', async () => {
+  const folder = tmp();
+  // What an older Mac wrote: its own switches and paths were shared.
+  const oldSection = { enabled: false, torPath: '/old/tor', exportFolder: '/old/out', scheme: 'a' };
+  writeFileSync(join(folder, 'settings.json'), JSON.stringify({ format: 1, settings: { 'new-addon': oldSection } }));
+  const oldSynced = fieldDigests(oldSection);
+
+  const b = mac(folder, { 'new-addon': { pkg: '@local/dsh-new-addon' } });
+  b.app.rows.get('new-addon').user = { enabled: true, torPath: '/new/tor', scheme: 'a' };
+  await b.engine.run();
+  b.app.edit('new-addon', { scheme: 'b' });
+  await b.engine.run();
+
+  const inFile = readFile(folder).settings['new-addon'];
+  assert.equal(inFile.scheme, 'b', 'the shared change travels');
+  assert.equal(inFile.enabled, false, 'the older Mac\'s switch is not deleted from the file');
+  assert.equal(inFile.torPath, '/old/tor');
+  assert.equal(inFile.exportFolder, '/old/out');
+  // The older Mac's own merge (it shares those fields) finds nothing changed for them.
+  const olderLocal = { enabled: false, torPath: '/old/tor', exportFolder: '/old/out', scheme: 'a' };
+  const merged = mergeSection(olderLocal, inFile, oldSynced);
+  assert.equal(merged.merged.enabled, false);
+  assert.equal(merged.merged.torPath, '/old/tor');
+  assert.equal(merged.merged.exportFolder, '/old/out');
+  assert.equal(merged.merged.scheme, 'b');
+  // The 1.0 Mac itself never took them.
+  assert.equal(b.app.rows.get('new-addon').user.enabled, true);
+});
+
+test('the first-run marker and the Simple/Advanced choice of Settings Plus stay on each Mac', async () => {
+  assert.ok(ALWAYS_SKIP.includes('settings-plus.view') && ALWAYS_SKIP.includes('settings-plus.setupPending'));
+  const folder = tmp();
+  const entries = () => ({ 'settings-plus': { pkg: '@local/dsh-settings-plus' } });
+  const a = mac(folder, entries(), { skip: skipList(undefined) });
+  a.app.rows.get('settings-plus').user = { view: 'simple', setupPending: true, modeGear: false };
+  await a.engine.run();
+  assert.deepEqual(readFile(folder).settings['settings-plus'], { modeGear: false }, 'the choice and the marker are not written');
+
+  const data = readFile(folder);
+  data.settings['settings-plus'] = { view: 'advanced', setupPending: false, modeGear: true };
+  writeFileSync(join(folder, 'settings.json'), JSON.stringify(data));
+  const b = mac(folder, entries(), { skip: skipList(undefined) });
+  b.app.rows.get('settings-plus').user = { view: 'simple', setupPending: true };
+  await b.engine.run();
+  assert.deepEqual(b.app.rows.get('settings-plus').user, { view: 'simple', setupPending: true, modeGear: true }, 'taken from the file: only the shared field');
 });

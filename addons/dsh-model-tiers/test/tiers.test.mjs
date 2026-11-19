@@ -566,3 +566,73 @@ test('a team member may name a Tuning Plus adapter: used only while Tuning Plus 
   assert.match(client, /value \? h\(AdapterField, \{ label, value, onSet \}\) : null/);
   assert.match(client, /onSet\(route \? \{ \.\.\.route, \.\.\.\(value\?\.adapter \? \{ adapter: value\.adapter \} : \{\}\) \} : null\)/);
 });
+
+// ---- the page: tabs for what other add-ons add, the trimmed tier cards, style names ----------------
+
+test('Model Tiers is the host page: it announces itself, offers an Advanced tab, and Role prompts and Sampling become tabs', async () => {
+  const window = {};
+  const load = (path) => {
+    let loaded;
+    window.__ModuleLoader__ = { load: (module) => { loaded = module; } };
+    new Function('window', readFileSync(new URL(path, import.meta.url), 'utf8'))(window); // eslint-disable-line no-new-func
+    const React = { createElement: () => null, Fragment: 'fragment', createContext: () => ({ Provider: 'provider' }), useCallback: (fn) => fn, useEffect() {}, useMemo: (fn) => fn(), useRef: () => ({}), useState: (value) => [value, () => {}], useLayoutEffect() {} };
+    const ReactDOM = { createPortal: () => null };
+    return loaded.factory((name) => (name === 'react' ? React : ReactDOM));
+  };
+  const context = () => {
+    const pages = [];
+    return { pages, ctx: { effect: (fn) => { const off = fn(); return typeof off === 'function' ? off : () => {}; }, locale: { register: () => () => {}, bind: () => (key) => key }, slots: { inject: (_n, fn) => fn(), register: (entry) => { pages.push(entry.id); return () => { pages.splice(pages.indexOf(entry.id), 1); }; } }, remote: {}, get: () => undefined } };
+  };
+  // Partners first: each shows its own page, because no host page exists yet.
+  const sampling = context();
+  load('../../dsh-sampling-presets/client.js').apply(sampling.ctx);
+  const roles = context();
+  load('../../dsh-role-prompts/client.js').apply(roles.ctx);
+  assert.deepEqual(sampling.pages, ['sampling-presets']);
+  assert.deepEqual(roles.pages, ['role-prompts']);
+  // Model Tiers loads: it announces itself, and the partners' own pages go away.
+  const tiers = context();
+  try { load('../client.js').apply(tiers.ctx); } catch { /* the stand-in has no models or chat box; only the announcement matters */ }
+  assert.ok(window.__dshMerge.hosts['model-tiers'], 'announced as the host');
+  assert.deepEqual(sampling.pages, []);
+  assert.deepEqual(roles.pages, []);
+  assert.ok(tiers.pages.includes('model-tiers'), 'its own page stays');
+  const ids = window.__dshMerge.parts['model-tiers'];
+  assert.deepEqual(Object.keys(ids).sort(), ['advanced', 'role-prompts', 'sampling-presets']);
+  assert.ok(ids.advanced.order > ids['sampling-presets'].order && ids['sampling-presets'].order > ids['role-prompts'].order, 'tab order: instructions, sampling, advanced');
+});
+
+test('the page folds the rarely used tier settings under More, and keeps Projects, Backup, Health and limits behind Advanced', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  // Starter card: Name, Model, Effort, Access come before the fold.
+  const card = client.slice(client.indexOf("only: 'name'"), client.indexOf("only: 'instructions'"));
+  assert.ok(card.indexOf('ModelPicker') < card.indexOf('EffortRange') && card.indexOf('EffortRange') < card.indexOf("'Access'"));
+  assert.match(client, /MoreFold,\n\s*null,\n\s*h\(StarterText, \{ tier, meta, only: 'instructions'/);
+  // Your own tiers: the same order, the rest under the fold.
+  const custom = client.slice(client.indexOf('function CustomTierCard('), client.indexOf('function CustomTiersEditor('));
+  assert.ok(custom.indexOf('h(ModelPicker') < custom.indexOf('h(EffortRange') && custom.indexOf('h(EffortRange') < custom.indexOf("'Access'") && custom.indexOf("'Access'") < custom.indexOf('MoreFold,'));
+  assert.ok(custom.indexOf('MoreFold,') < custom.indexOf("'Role summary'") && custom.indexOf('MoreFold,') < custom.indexOf('h(TeamEditor'));
+  for (const label of ["'Projects'", "'Backup'", "'Health'", "'Limits and reset'"]) assert.ok(client.includes(`label: ${label}`), label);
+});
+
+test('style names are the add-on\'s own: no prefix shared with another page', () => {
+  const root = new URL('../../', import.meta.url);
+  const own = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  const prefixes = (text) => new Set([...text.matchAll(/\.dsh-([a-z]+)-/g)].map((match) => match[1]));
+  const mine = prefixes(own);
+  mine.delete('kit');
+  assert.ok(mine.has('mtm') && !mine.has('mc'), 'the old model-chat prefix is renamed');
+  for (const other of ['dsh-mac', 'dsh-modes', 'dsh-split-plus', 'dsh-settings-plus', 'dsh-sampling-presets', 'dsh-role-prompts']) {
+    let text;
+    try { text = readFileSync(new URL(`${other}/client.js`, root), 'utf8'); } catch { continue; }
+    const theirs = prefixes(text);
+    for (const name of mine) {
+      if (name === 'mt' && other === 'dsh-modes') {
+        // Modes shares the short prefix; the only shared class was one popup, now renamed here.
+        assert.ok(!own.includes('.dsh-mt-pop'), 'Model Tiers no longer styles .dsh-mt-pop');
+        continue;
+      }
+      assert.ok(!theirs.has(name), `${other} also uses the prefix dsh-${name}-`);
+    }
+  }
+});

@@ -303,17 +303,22 @@ export function apply(ctx, config) {
         () =>
           inner.commands.register({
             name: commandName,
-            description: 'Show model usage: requests and tokens per model; `reset` clears the counts',
-            input: { hint: '[days|reset]' },
+            description: 'Show model usage: requests and tokens per model; `reset confirm` clears the counts',
+            input: { hint: '[days|reset confirm]' },
             handler: async ({ rawInput }) => {
               const arg = String(rawInput ?? '').trim().toLowerCase();
-              if (arg === 'reset') {
+              if (arg === 'reset' || arg === 'reset confirm') {
+                // Erasing the history is never one typed word: without "confirm" nothing is cleared.
+                if (arg === 'reset') {
+                  const total = summary(3650).totals.requests;
+                  return { kind: 'error', text: `/usage reset erases every count (${total} requests so far) for good, with no way back. Nothing was cleared. To go on, type /usage reset confirm` };
+                }
                 reset();
                 return { kind: 'success', text: 'Usage counts cleared.' };
               }
               const days = arg ? Number(arg) : 30;
               if (!Number.isInteger(days) || days < 1) {
-                return { kind: 'error', text: 'Usage: /usage [days] or /usage reset' };
+                return { kind: 'error', text: 'Usage: /usage [days] or /usage reset confirm' };
               }
               const result = summary(days);
               if (result.models.length === 0) return { kind: 'success', text: `No requests recorded in the last ${days} days.` };

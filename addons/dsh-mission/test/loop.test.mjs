@@ -1,5 +1,5 @@
 /**
- * The work loop (Content and Bench plan, steps S3 to S6): off unless switched on; recipes; the fixed
+ * The work loop (Content and Devices plan, steps S3 to S6): off unless switched on; recipes; the fixed
  * shape; a checker per kind of work; attempts side by side and a judge only for work that writes no file;
  * checking questions; a step that failed twice goes up; teams. Stand-in helpers only, no real model.
  */

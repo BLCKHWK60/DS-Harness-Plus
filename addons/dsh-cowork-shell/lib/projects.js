@@ -6,6 +6,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join, relative, sep } from 'node:path';
+import { readJsonStore } from './json-store.js';
 
 export const INSTRUCTIONS_MAX = 12000;
 export const FILES_MAX = 400;
@@ -34,14 +35,7 @@ export function canonical(path) {
 export function openProjects(file) {
   /** @type {Record<string, {tab: string, instructions: string, preset: string}>} */
   let table = {};
-  if (file) {
-    try {
-      const read = JSON.parse(readFileSync(file, 'utf8'));
-      if (read && typeof read === 'object' && !Array.isArray(read)) table = read;
-    } catch {
-      table = {};
-    }
-  }
+  if (file) table = readJsonStore(file, () => ({}), { label: 'your project instructions', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
   const write = () => {
     if (!file) return;
     mkdirSync(dirname(file), { recursive: true });

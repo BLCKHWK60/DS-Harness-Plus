@@ -46,9 +46,9 @@ function line(canvas, points) {
 }
 function message(text, className) { root.replaceChildren(make('div', 'empty' + (className ? ' ' + className : ''), text)); }
 function render(state) {
-  if (!state || !state.enabled) { message('Bench is switched off in Settings → Bench. Switch it on, then start a monitor with bench_monitor.', 'off'); return; }
+  if (!state || !state.enabled) { message('Devices is switched off in Settings → Devices. Switch it on, then start a monitor with bench_monitor.', 'off'); return; }
   const list = Array.isArray(state.monitors) ? state.monitors : [];
-  if (!list.length) { message('No monitors are running. Ask Bench, for example: start a serial monitor on /dev/cu.usbserial-…'); return; }
+  if (!list.length) { message('No monitors are running. Ask Devices, for example: start a serial monitor on /dev/cu.usbserial-…'); return; }
   const cards = [];
   const charts = [];
   for (const m of list) {
@@ -77,7 +77,7 @@ async function refresh() {
     if (!answer.ok) throw new Error(String(answer.status));
     render(await answer.json());
   } catch {
-    message('Cannot reach Bench. Is the app open and Bench switched on?', 'err');
+    message('Cannot reach Devices. Is the app open and Devices switched on?', 'err');
   }
 }
 refresh();
@@ -99,8 +99,8 @@ export function dashboardHtml(stateUrl) {
   const policy = `default-src 'none'; script-src 'sha256-${hash}'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'`;
   return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     + `<meta http-equiv="Content-Security-Policy" content="${policy}">`
-    + `<title>Bench — live devices</title><style>${STYLE}</style></head><body>`
-    + '<header><h1>Bench — live devices</h1><span class="sub">running monitors · updates every second · view only (bench_monitor starts and stops them)</span></header>'
+    + `<title>Devices — live devices</title><style>${STYLE}</style></head><body>`
+    + '<header><h1>Devices — live devices</h1><span class="sub">running monitors · updates every second · view only (bench_monitor starts and stops them)</span></header>'
     + '<main id="root"><div class="empty">Loading…</div></main>'
     + `<script>${script}</script></body></html>`;
 }

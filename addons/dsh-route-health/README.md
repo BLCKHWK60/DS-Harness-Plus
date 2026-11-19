@@ -44,3 +44,9 @@ Any HTTP answer below 500 counts as reachable, so no credential is needed. A ref
 - Wake-on-LAN or keeping the host awake is host configuration, not plugin code.
 - A route cannot be switched in the middle of a step on rc.1 (the route is fixed per step), so the step in flight when a route dies still ends with the provider error.
 - Fallback to a cloud route cannot be forbidden for a private tier yet (spec 6.3 `localOnly`): Tier has no such flag.
+
+## Tests
+
+Run from the Plus folder with the app's own Node. `test/health.test.mjs` (probing against a local stand-in server: up, slow, reachable on a 4xx, down only after the set number of failures; a refused step with its plain message and the switch that turns the refusal off; the refusal standing until the next check; moving to the fallback and back at a turn boundary; `/routes`; the state page) and `test/plain.test.mjs` (the plain sentences).
+
+Known by design, shown by the tests: while a route's last check says down and is still fresh, a message on it is refused even if the model would have answered; `blockWhenDown: false` turns the refusal off.

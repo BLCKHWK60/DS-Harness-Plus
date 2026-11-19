@@ -1,6 +1,6 @@
 # Tests: @local/dsh-code-power
 
-No tests yet.
+Suites: test/power.test.mjs, test/client.test.mjs.
 
 Run with the app's own Node (stand-ins only; never against the real app data):
 

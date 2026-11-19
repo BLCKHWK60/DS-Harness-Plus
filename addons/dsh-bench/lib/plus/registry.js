@@ -137,7 +137,7 @@ export function createRegistry(deps = {}) {
 
   function start(spec) {
     const settings = checkSpec(spec);
-    if (monitors.size >= MAX_MONITORS) throw new Error(`${MAX_MONITORS} monitors are running, the most Bench keeps at once. Stop one first (bench_monitor stop)`);
+    if (monitors.size >= MAX_MONITORS) throw new Error(`${MAX_MONITORS} monitors are running, the most Devices keeps at once. Stop one first (bench_monitor stop)`);
     sequence += 1;
     const id = `${settings.source}-${sequence}`;
     const monitor = { ...settings, id, startedAt: now(), latest: null, lastError: null, busy: false, ready: false, history: [], previous: null, previousAt: 0 };

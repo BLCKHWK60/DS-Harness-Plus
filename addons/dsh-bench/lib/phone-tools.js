@@ -83,7 +83,7 @@ export function buildPhoneTools(options) {
 
   const tool = {
     name: 'bench_phone',
-    description: 'An Android phone\'s bootloader and factory image (Write), for a phone whose card is linked to it (bench_android info) and listed in this conversation. action "backup": its shared storage (/sdcard: photos, downloads, documents) copied into its backups folder and counted; apps and their data, messages, accounts and eSIMs are NOT in it. "bootloader": restart it into its bootloader (after the user\'s yes) and read whether the maker allows unlocking and whether it is unlocked. "unlock": unlock the bootloader, which ERASES the phone: only when the maker allows it, with a checked backup, the user\'s own message "unlock <device name>" and their yes; the phone then asks on its own screen. "flash": the system image of the maker\'s factory image from the device\'s firmware folder (fastboot update), from a listed source with its published SHA-256, on an unlocked phone, behind the four conditions. Bench never writes the bootloader or the radio, never erases and never relocks. dryRun shows what would be sent.',
+    description: 'An Android phone\'s bootloader and factory image (Write), for a phone whose card is linked to it (bench_android info) and listed in this conversation. action "backup": its shared storage (/sdcard: photos, downloads, documents) copied into its backups folder and counted; apps and their data, messages, accounts and eSIMs are NOT in it. "bootloader": restart it into its bootloader (after the user\'s yes) and read whether the maker allows unlocking and whether it is unlocked. "unlock": unlock the bootloader, which ERASES the phone: only when the maker allows it, with a checked backup, the user\'s own message "unlock <device name>" and their yes; the phone then asks on its own screen. "flash": the system image of the maker\'s factory image from the device\'s firmware folder (fastboot update), from a listed source with its published SHA-256, on an unlocked phone, behind the four conditions. Devices never writes the bootloader or the radio, never erases and never relocks. dryRun shows what would be sent.',
     parameters: {
       type: 'object',
       properties: {
@@ -110,7 +110,7 @@ export function buildPhoneTools(options) {
         const adb = await program('adb');
         const count = Number(/(\d+)/.exec(String((await run(adb, ['-s', serial, 'shell', 'find /sdcard/ -type f 2>/dev/null | wc -l'], { timeoutMs: 120_000 })).stdout))?.[1] ?? NaN);
         if (!Number.isFinite(count)) throw new Error('The phone did not say how many files its storage holds.');
-        if (args.dryRun === true) return `Dry run: Bench would copy the phone's shared storage (${count} files) with ${shownCommand('adb', ['-s', serial, 'pull', '-a', '/sdcard/', '<backups>/<date>-storage'])}. Nothing was copied.`;
+        if (args.dryRun === true) return `Dry run: Devices would copy the phone's shared storage (${count} files) with ${shownCommand('adb', ['-s', serial, 'pull', '-a', '/sdcard/', '<backups>/<date>-storage'])}. Nothing was copied.`;
         return exclusive([`android:${serial}`, card.slug], async () => {
           const at = now();
           const backups = bench.deviceFolder(card, 'backups');
@@ -184,7 +184,7 @@ export function buildPhoneTools(options) {
           }
           bench.addWrite(card, { at: now().getTime(), kind: 'unlock', ok: after === true });
           bench.record(card, { title: after === true ? 'Bootloader unlocked' : 'Bootloader NOT unlocked', asked: 'unlock the bootloader', done: shownCommand('fastboot', fastbootArgs.unlock(serial)), check: after === true ? 'fastboot says unlocked: yes' : `fastboot says unlocked: ${after === false ? 'no' : 'not read'}${done.code !== 0 ? ` (fastboot ended with ${done.code})` : ''}`, next: 'the phone erases itself and restarts; set it up again, then switch USB debugging on again' }, now());
-          return after === true ? `${card.name}'s bootloader is unlocked. The phone erases itself and restarts; set it up again and switch USB debugging on before anything else.` : `${card.name} did not unlock (it may still be waiting for you on its own screen, or you declined there). Bench stopped and does not try again by itself.`;
+          return after === true ? `${card.name}'s bootloader is unlocked. The phone erases itself and restarts; set it up again and switch USB debugging on before anything else.` : `${card.name} did not unlock (it may still be waiting for you on its own screen, or you declined there). Devices stopped and does not try again by itself.`;
         });
       }
       if (action !== 'flash') throw new Error('The action is backup, bootloader, unlock or flash.');
@@ -216,7 +216,7 @@ export function buildPhoneTools(options) {
       const inBoot = await inBootloader(fastboot, serial);
       const unlocked = inBoot ? fastbootFlag(await run(fastboot, fastbootArgs.unlocked(serial), { timeoutMs: 20_000 }), 'unlocked') : undefined;
       if (unlocked !== true) conditions.push(inBoot ? 'the bootloader is locked (bench_phone action unlock)' : 'the phone is not in its bootloader (bench_phone action bootloader)');
-      const plan = [`Write the system image inside ${name} (SHA-256 ${sum}) to ${card.name} with fastboot update; its bootloader and radio are left as they are.`, `Source: ${String(args.source ?? '').slice(0, 300)}.`, `Saved first: ${backup ? `backups/${backup.file}` : 'nothing yet'}.`, `Way back: ${String(card.recovery ?? 'none named').slice(0, 300)}`, 'Cannot be undone by Bench.', `Commands: unzip the image-*.zip inside it ; ${shownCommand('fastboot', fastbootArgs.update(serial, '<image zip>'))}`].join('\n');
+      const plan = [`Write the system image inside ${name} (SHA-256 ${sum}) to ${card.name} with fastboot update; its bootloader and radio are left as they are.`, `Source: ${String(args.source ?? '').slice(0, 300)}.`, `Saved first: ${backup ? `backups/${backup.file}` : 'nothing yet'}.`, `Way back: ${String(card.recovery ?? 'none named').slice(0, 300)}`, 'Cannot be undone by Devices.', `Commands: unzip the image-*.zip inside it ; ${shownCommand('fastboot', fastbootArgs.update(serial, '<image zip>'))}`].join('\n');
       if (dry || conditions.length > 0) return [dry ? `Dry run: nothing was sent.${args.dryRun === true ? '' : ` ${DRY_NOTE}`}` : 'Not written: the conditions for a write do not hold.', plan, ...(conditions.length ? ['', 'Missing:', ...conditions.map((entry) => `- ${entry}`)] : [])].join('\n');
       await power();
       const unzip = await program('unzip');
@@ -239,12 +239,12 @@ export function buildPhoneTools(options) {
         rmSync(work, { recursive: true, force: true });
         bench.addWrite(card, { at: now().getTime(), kind: 'factory-image', file: name, sha256: sum, ok: flashed.code === 0 });
         if (flashed.code !== 0) {
-          const text = `The write failed (${String(flashed.stderr || flashed.stdout).trim().split('\n').slice(-2).join(' ').slice(0, 300)}). Bench stopped and does not try again by itself.\nTo bring it back: ${String(card.recovery).slice(0, 400)}`;
+          const text = `The write failed (${String(flashed.stderr || flashed.stdout).trim().split('\n').slice(-2).join(' ').slice(0, 300)}). Devices stopped and does not try again by itself.\nTo bring it back: ${String(card.recovery).slice(0, 400)}`;
           bench.record(card, { title: 'Factory image FAILED', asked: `write ${name}`, found: text, commands: [shownCommand('fastboot', fastbootArgs.update(serial, image))] }, now());
           return text;
         }
         bench.record(card, { title: `Factory image written: ${name}`, asked: `write ${name}`, after: `${name} (SHA-256 ${sum})`, check: 'fastboot update ended without an error; the phone restarts', commands: [shownCommand('fastboot', fastbootArgs.update(serial, image))], next: 'the user checks the phone starts and signs the job off' }, now());
-        return `Written: the system image of ${name} on ${card.name}. The phone restarts; check that it starts, then sign the job off. Its bootloader stays unlocked: Bench never relocks it (relocking with the wrong image can stop a phone from starting; follow the maker's own steps).`;
+        return `Written: the system image of ${name} on ${card.name}. The phone restarts; check that it starts, then sign the job off. Its bootloader stays unlocked: Devices never relocks it (relocking with the wrong image can stop a phone from starting; follow the maker's own steps).`;
       });
     }),
   };

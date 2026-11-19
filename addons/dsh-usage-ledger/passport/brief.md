@@ -39,7 +39,7 @@ Data is one JSON file, `usage-ledger.json`, written atomically (every few second
 ## Use
 
 - `/usage` prints requests and tokens per model for the last 30 days (`/usage 7` for 7 days), with `(free)` on free models.
-- `/usage reset` clears every count.
+- `/usage reset` asks first and erases nothing; `/usage reset confirm` clears every count.
 - Service `usageLedger`: `summary({days})` returns `{days, models, totals}`; `reset()`.
 
 ## Usage card (browser half, `client.js`)
@@ -50,7 +50,7 @@ Verified in a throwaway web profile with a seeded 45-day ledger: the route (401,
 
 ## Not done
 
-- The Usage card is read-only: it cannot reset the ledger (use `/usage reset`) and shows requests and tokens only (no money; see below).
+- The Usage card is read-only: it cannot reset the ledger (use `/usage reset confirm`) and shows requests and tokens only (no money; see below).
 - Cost in money is not computed (the spec's ledger counts tokens and the free flag only).
 - The ledger lives in a JSON file, not in `dsh-storage` (the domain API needs typed domain declarations that a plain-JS plugin does not have).
 

@@ -106,8 +106,17 @@ test('a conversation keeps the selection it started with', () => {
   assert.equal(openPins('').pin('a', { subject: 'Z' }).subject, 'Z');
 });
 
+test('the adviser needs the typed acceptance as well as the switch', () => {
+  assert.equal(readSettings({ adviser: true }).adviser, false);
+  assert.equal(readSettings({ adviser: true, adviserAccepted: false }).adviser, false);
+  assert.equal(readSettings({ adviserAccepted: true }).adviser, false);
+  assert.equal(readSettings({ adviser: true, adviserAccepted: true }).adviser, true);
+  assert.equal(readSettings({ adviser: true }).adviserAccepted, false);
+  assert.equal(readSettings({ adviser: true, adviserAccepted: true }).adviserAccepted, true);
+});
+
 test('settings: off until switched on, lists cleaned', () => {
-  assert.deepEqual(readSettings({}), { enabled: false, adviser: false, selection: { kind: 'company', subject: '', market: 'Global', focus: 'full', period: 'year' }, watchlist: [], moreMarkets: [], sources: [], financeTasks: [] });
+  assert.deepEqual(readSettings({}), { enabled: false, adviser: false, adviserAccepted: false, selection: { kind: 'company', subject: '', market: 'Global', focus: 'full', period: 'year' }, watchlist: [], moreMarkets: [], sources: [], financeTasks: [] });
   const set = readSettings({ enabled: true, kind: 'sector', subject: 'Banks', market: 'Europe', focus: 'news', period: 'quarter', watchlist: ['NVIDIA', 'nvidia', 'ASML'], moreMarkets: ['Mexico', 'japan', 'Mexico'] });
   assert.equal(set.enabled, true);
   assert.deepEqual(set.selection, { kind: 'sector', subject: 'Banks', market: 'Europe', focus: 'news', period: 'quarter' });

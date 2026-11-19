@@ -12,6 +12,13 @@ export const FORMAT = 1;
 export const FILE_NAME = 'settings.json';
 /** Field names that look like secrets; they never leave this Mac, whatever their schema says. */
 export const SECRET_KEY = /(api[-_]?key|token|secret|password|passphrase|credential|private[-_]?key)/i;
+/**
+ * Field names that are about this Mac or this conversation rather than about your setup: on/off
+ * switches, folders and program paths, servers and ports, notification topics, permission and
+ * "danger" switches, per-conversation choices. They never leave this Mac, whatever an entry's skip
+ * list says, at any depth, so a new add-on's field of this kind is kept home without anyone listing it.
+ */
+export const LOCAL_KEY = /^(enabled|trusted|anywhere|folders?|dirs?|path|paths|phone|port|host|server|topic|nolearn|logReaders|startPlaces)$|^(session|danger|allow|python|ntfy)|(Folders?|Dirs?|Paths?|Host|Port|Server|Topic)$/;
 /** Marker for "no value" in digests, so an absent field and an empty one differ. */
 const ABSENT = '-';
 
@@ -135,6 +142,19 @@ export function secretPaths(value, path = []) {
   if (!isObject(value)) return [];
   return Object.entries(value).flatMap(([key, child]) =>
     SECRET_KEY.test(key) ? [[...path, key]] : secretPaths(child, [...path, key]),
+  );
+}
+
+/**
+ * Paths of every object key that is about this Mac or this conversation (see LOCAL_KEY).
+ * @param {unknown} value - root.
+ * @param {string[]} [path] - prefix.
+ * @returns {string[][]} paths.
+ */
+export function localPaths(value, path = []) {
+  if (!isObject(value)) return [];
+  return Object.entries(value).flatMap(([key, child]) =>
+    LOCAL_KEY.test(key) ? [[...path, key]] : localPaths(child, [...path, key]),
   );
 }
 

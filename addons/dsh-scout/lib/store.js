@@ -7,6 +7,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readJsonStore } from './json-store.js';
 
 const PER_CONVERSATION = 1500;
 const CONVERSATIONS = 50;
@@ -49,9 +50,10 @@ export function openStore(folder = '') {
   const load = (id) => {
     try {
       const file = fileOf(id);
-      if (file && existsSync(file)) return fromSaved(JSON.parse(readFileSync(file, 'utf8')));
+      const saved = file ? readJsonStore(file, () => undefined, { label: 'what Scout kept for a conversation' }) : undefined;
+      if (saved !== undefined) return fromSaved(saved);
     } catch {
-      /* a damaged file: start afresh */
+      /* a record that cannot be turned into a list: start afresh */
     }
     return { list: [], byKey: new Map(), requests: 0, reports: [] };
   };

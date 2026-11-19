@@ -21,7 +21,8 @@ const sectionSchema = z.object({
 });
 
 export const Config = z.object({
-  sections: z.dict(sectionSchema).default({}),
+  // Volatile so the Settings page (client.js) can edit the sections while the app runs.
+  sections: z.dict(sectionSchema).default({}).volatile(),
 });
 
 /**

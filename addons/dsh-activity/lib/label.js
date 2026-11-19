@@ -99,7 +99,7 @@ export function labelOf(snapshot, settings) {
   }
   const modelBusy = parts.some((part) => part.kind === 'reason' || part.kind === 'write');
   if (figures && modelBusy) {
-    if (settings?.promptSpeed !== false && snapshot?.lastPrompt?.rate > 0) parts.push({ kind: 'extra', text: `PP ${rate(snapshot.lastPrompt.rate)} t/s` });
+    if (settings?.promptSpeed !== false && snapshot?.lastPrompt?.rate > 0) parts.push({ kind: 'extra', text: `${words ? 'Prompt speed' : 'PP'} ${rate(snapshot.lastPrompt.rate)} t/s` });
   }
   if (figures && settings?.context !== false && snapshot?.context > 0 && parts.some((part) => ['prompt', 'reason', 'write'].includes(part.kind))) {
     parts.push({ kind: 'extra', text: `${words ? 'context' : 'ctx'} ${shortCount(snapshot.context)}` });

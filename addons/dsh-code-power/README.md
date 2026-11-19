@@ -1,4 +1,9 @@
-# Code power
+# Code power (part of "Code tools")
+
+**Code tools** is one Settings page with two add-ons behind it: Code map (see `../dsh-code-map`) and this one. Code power's settings are the **Reviews and fixes** tab of that page (`client.js`: switch, review lanes, best-of-N count / judge role / criteria / reversed-order check, CI-fix round limit and check command). Without Code map installed, the same settings are a page of their own, "Code tools: reviews and fixes". The switch, the lanes, the round limit and the check command are read when the app starts (they build the skills), so a change to them applies after a restart; the judge settings apply at once. Settings keys and defaults are unchanged (they are now marked volatile so the page can save them).
+
+Tests: `test/power.test.mjs` (defaults, registration, off = nothing registered, skill text from the settings, the blind judge with its reversed-order check) and `test/client.test.mjs` (tab and own-page logic with Code map).
+
 
 Host plugin `@local/dsh-code-power` (dsh 0.2.2-rc.1). Mostly prompt assets, as the spec says, plus one small tool where code is more reliable than a prompt.
 
