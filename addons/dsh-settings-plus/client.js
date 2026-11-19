@@ -70,6 +70,7 @@ window.__ModuleLoader__.load({
     })();
     /* dsh-merge:end */
 
+
     // ---- dsh-kit:begin ---- shared small helpers; this block is the same in every add-on page file that uses it.
     // The master copy is docs/shared/dsh-kit.js. Change it there, then run `node scripts/sync-kit.mjs` (it copies the block into
     // every client.js that has the two marker lines, and `bash scripts/check.sh` fails when a copy has drifted).
@@ -341,7 +342,7 @@ window.__ModuleLoader__.load({
       { label: 'Modes and tabs', pages: ['modes', 'cowork-start', 'finance', 'data', 'scout', 'content', 'bench', 'creator-plus', 'split-plus'] },
       { label: 'Agents and code', pages: ['mission', 'agent-swarm', 'code-map', 'code-power'] },
       { label: 'Research and sources', pages: ['web-sources', 'research', 'deep-research', 'library', 'pdf'] },
-      { label: 'Privacy and safety', pages: ['mac', 'recon'] },
+      { label: 'Privacy and safety', pages: ['tool-access', 'mac', 'recon'] },
       { label: 'Learning', pages: ['memory', 'learn', 'evolve', 'skill-architect'] },
       { label: 'Add-ons and updates', pages: ['about-plus'] },
       { label: 'Advanced', pages: ['more-settings'] },
@@ -355,6 +356,7 @@ window.__ModuleLoader__.load({
       finance: 'M4 18l5-6 4 3 7-9M15 6h5v5',
       data: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
       scout: 'M12 4a8 8 0 1 0 0 16a8 8 0 0 0 0-16zM15.5 8.5l-2 5-5 2 2-5z',
+      'tool-access': 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3M12 14.5v2.5',
       recon: 'M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6zM9.5 12l2 2 3.5-4',
       content: 'M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4M12 20h8',
       bench: 'M8 8h8v8H8zM10 8V4M14 8V4M10 20v-4M14 20v-4M8 10H4M8 14H4M20 10h-4M20 14h-4',
@@ -858,6 +860,7 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
     }
 
     /** Open the Settings window on a page. */
+    if (typeof window !== 'undefined') (window.__dshSettingsPlus = window.__dshSettingsPlus || {}).openPage = (appCtx, id, label) => openSettingsOn(appCtx, id, label);
     function openSettingsOn(appCtx, id, label) {
       const store = settingsStore(appCtx);
       const actions = store?.actions;
@@ -1186,7 +1189,7 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
       modes: 'dsh-modes', 'web-sources': 'dsh-modes', 'cowork-start': 'dsh-cowork-shell', research: 'dsh-research', 'deep-research': 'dsh-deep-research', finance: 'dsh-finance', data: 'dsh-data', scout: 'dsh-scout', recon: 'dsh-recon', content: 'dsh-content', bench: 'dsh-bench', 'creator-plus': 'dsh-creator-plus', 'split-plus': 'dsh-split-plus',
       'model-tiers': 'dsh-model-tiers', 'role-prompts': 'dsh-role-prompts', 'sampling-presets': 'dsh-sampling-presets', 'model-arena': 'dsh-model-arena', benchmark: 'dsh-benchmark', tuning: 'dsh-tuning', budget: 'dsh-budget', 'usage-ledger': 'dsh-usage-ledger',
       mission: 'dsh-mission', 'agent-swarm': 'dsh-agent-swarm', evolve: 'dsh-evolve', 'skill-architect': 'dsh-skill-architect', alerts: 'dsh-automations', notify: 'dsh-notify', memory: 'dsh-memory', library: 'dsh-library', pdf: 'dsh-pdf', 'code-map': 'dsh-code-map', 'code-power': 'dsh-code-power', diagram: 'dsh-diagram', learn: 'dsh-learn', artifacts: 'dsh-artifacts',
-      'color-schemes': 'dsh-color-schemes', activity: 'dsh-activity', mac: 'dsh-mac', 'about-plus': 'dsh-settings-plus', 'start-here': 'dsh-settings-plus', 'more-settings': 'dsh-settings-plus',
+      'color-schemes': 'dsh-color-schemes', activity: 'dsh-activity', mac: 'dsh-mac', 'tool-access': 'dsh-modes', 'about-plus': 'dsh-settings-plus', 'start-here': 'dsh-settings-plus', 'more-settings': 'dsh-settings-plus',
     };
 
     const viewState = { value: 'advanced', subs: new Set() };
@@ -1209,8 +1212,10 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
 
     /** Extra rows another add-on can put on the Start here page (the Tool permissions row later): `window.__dshSettingsPlus.addSimpleRow({ id, order, render })`. */
     const simpleRows = (typeof window !== 'undefined' ? ((window.__dshSettingsPlus = window.__dshSettingsPlus || {}).rows = window.__dshSettingsPlus.rows || new Map()) : new Map());
+    const rowListeners = typeof window !== 'undefined' ? (((window.__dshSettingsPlus = window.__dshSettingsPlus || {}).rowListeners = window.__dshSettingsPlus.rowListeners || new Set())) : new Set();
+    const rowsChanged = () => { for (const fn of [...rowListeners]) { try { fn(); } catch { /* one page's trouble must not stop the rest */ } } };
     if (typeof window !== 'undefined') {
-      window.__dshSettingsPlus.addSimpleRow = (spec) => { if (spec && spec.id) simpleRows.set(spec.id, spec); return () => { if (simpleRows.get(spec.id) === spec) simpleRows.delete(spec.id); }; };
+      (window.__dshSettingsPlus = window.__dshSettingsPlus || {}).addSimpleRow = (spec) => { if (spec && spec.id) { simpleRows.set(spec.id, spec); rowsChanged(); } return () => { if (simpleRows.get(spec.id) === spec) { simpleRows.delete(spec.id); rowsChanged(); } }; };
     }
 
     /** A saved setting, found by its path in the settings the app reports (`value` is what is in force, `user` is what the person saved). */
@@ -1450,6 +1455,10 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
         note ? h(NoteLine, { note }) : null);
     }
 
+    /** Step 4's sentence, true for a new install and for an existing one (what Tool access does, and what the setting is now). */
+    const toolAccessLine = (on) => (on === false
+      ? 'Tool access is switched off here, so every tab has exactly the tools it has always had and the AI cannot ask for more. You do not have to do anything. If you want it, switch it on at the top of the Tool access page, then decide tab by tab what is On, what the AI may only ask for, and what is Off.'
+      : 'With Tool access on, the AI can see which tools exist and can ask you for one more. A new install starts with accounts and connectors, other Mac apps, and app and plugins on Ask in Cowork and Code, so the AI has to ask you first; every other tool stays as it was. An existing setup keeps the choices it has. You do not have to do anything; the Tool access grid lets you decide tab by tab what is On, Ask or Off.');
     /** The three steps. Nothing here asks for or stores a key: models and keys are added on the app's own Models page. */
     function SetupSteps({ appCtx, onClose }) {
       const view = useView();
@@ -1463,6 +1472,8 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
       }, []);
       const suggested = data?.setup?.suggested ?? 2000000;
       const budget = namespaces.find((one) => one.ns === 'budget');
+      const modesNs = namespaces.find((one) => one.ns === 'modes');
+      const toolAccessOn = modesNs ? pathGet(modesNs.value, ['toolAccessOn']) === true : undefined;
       return h('div', { className: 'dsh-sr-steps' },
         h('div', { className: 'dsh-sr-step', 'data-step': '1' },
           h('div', { className: 'dsh-sr-num' }, '1'),
@@ -1485,7 +1496,13 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
             h('span', null, 'Keep the safe defaults: Settings shows about ten settings in plain words, and everything else stays as it is. Or show everything: every page of every add-on. You can switch later at the top of Settings.'),
             h('div', { className: 'dsh-sr-act', role: 'radiogroup', 'aria-label': 'How much of Settings to show' },
               h('button', { type: 'button', role: 'radio', 'aria-checked': view === 'simple', className: 'dshu-btn dsh-sr-pick', 'data-sr-view': 'simple', onClick: () => void saveView(appCtx, 'simple') }, 'Keep the safe defaults'),
-              h('button', { type: 'button', role: 'radio', 'aria-checked': view === 'advanced', className: 'dshu-btn dsh-sr-pick', 'data-sr-view': 'advanced', onClick: () => void saveView(appCtx, 'advanced') }, 'Show me everything')))));
+              h('button', { type: 'button', role: 'radio', 'aria-checked': view === 'advanced', className: 'dshu-btn dsh-sr-pick', 'data-sr-view': 'advanced', onClick: () => void saveView(appCtx, 'advanced') }, 'Show me everything')))),
+        h('div', { className: 'dsh-sr-step', 'data-step': '4' },
+          h('div', { className: 'dsh-sr-num' }, '4'),
+          h('div', { className: 'dsh-sr-text' },
+            h('b', null, 'Which tools the AI may use'),
+            h('span', null, toolAccessLine(toolAccessOn)),
+            h('div', { className: 'dsh-sr-act' }, h(Btn, { onClick: () => { onClose?.('tools'); openSettingsOn(appCtx, 'tool-access', 'Tool access'); }, 'data-sr-tools': '' }, 'Show me the Tool access grid')))));
     }
 
     /** Forget the "first run" marker: the card is not shown again (it can still be opened from Start here). */
@@ -1505,7 +1522,7 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
         h('div', { className: 'dsh-mg-pop dsh-sr-pop', role: 'dialog', 'aria-modal': true, 'aria-label': 'Set up in 2 minutes', 'data-dsh-sr': '' },
           h('div', { className: 'dsh-mg-head' }, h('b', null, 'Set up in 2 minutes'), h('span', { className: 'grow' }), h('button', { type: 'button', onClick: () => onClose() }, 'Close')),
           h('div', { className: 'dsh-mg-body' },
-            h('p', { className: 'dsh-sh-rowdesc', style: { margin: '0 0 12px' } }, 'Three short steps. Nothing here blocks the app, and you can run this again from Settings → Start here.'),
+            h('p', { className: 'dsh-sh-rowdesc', style: { margin: '0 0 12px' } }, 'Four short steps. Nothing here blocks the app, and you can run this again from Settings → Start here.'),
             h(SetupSteps, { appCtx, onClose }),
             h('div', { className: 'dsh-sh-actions', style: { marginTop: 14 } }, h(Btn, { main: true, onClick: () => onClose(), 'data-sr-done': '' }, 'Done'))))), document.body);
     }
@@ -1517,11 +1534,11 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
       return h(React.Fragment, null,
         open ? null : h('div', { className: 'dsh-sr-card', role: 'region', 'aria-label': 'Set up in 2 minutes', 'data-dsh-sr-card': '' },
           h('b', null, 'Set up in 2 minutes'),
-          h('span', null, 'Add a model, choose a daily spending limit, and decide how much of Settings to show. You can skip this and come back to it from Settings → Start here.'),
+          h('span', null, 'Add a model, choose a daily spending limit, decide how much of Settings to show, and see which tools the AI may use. You can skip this and come back to it from Settings → Start here.'),
           h('div', { className: 'dsh-sh-actions' },
             h(Btn, { main: true, onClick: () => setOpen(true), 'data-sr-start': '' }, 'Start'),
             h(Btn, { onClick: finish, 'data-sr-skip': '' }, 'Not now'))),
-        open ? h(SetupDialog, { appCtx, onClose: (where) => { if (where === 'models') setOpen(false); else finish(); } }) : null);
+        open ? h(SetupDialog, { appCtx, onClose: (where) => { if (where === 'models' || where === 'tools') setOpen(false); else finish(); } }) : null);
     }
 
     /** Put the first-run card on the page once, when the install is a fresh one. */
@@ -1597,6 +1614,8 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
       const [tick, setTick] = useState(0);
       const [, bump] = useState(0);
       const reload = useCallback(() => setTick((n) => n + 1), []);
+      // Another add-on may put its row on this page after the page was drawn (Modes' Tool permissions): draw again then.
+      useEffect(() => { const again = () => bump((n) => n + 1); rowListeners.add(again); return () => { rowListeners.delete(again); }; }, []);
       useEffect(() => {
         let alive = true;
         void readSettings(appCtx).then((list) => { if (alive) setNamespaces(list); }).catch(() => {});
@@ -1616,7 +1635,7 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
       return h('div', { 'data-dsh-start': '' }, h(ui.Page, { title: 'Start here', desc: view === 'simple' ? 'The settings most people need, in plain words. Switch to Advanced at the top of Settings to see every page.' : 'The settings most people need, in plain words. This is the same list the Simple view shows.' },
         h(ui.Group, null, 'Set up'),
         h('div', { className: 'dsh-sh-card' },
-          h(Row, { title: 'Set up in 2 minutes', desc: 'Add a model, choose a daily spending limit, and decide how much of Settings to show. Run it again whenever you like.' }, h(Btn, { onClick: () => setSetupOpen(true), 'data-sh-setup': '' }, 'Run setup again'))),
+          h(Row, { title: 'Set up in 2 minutes', desc: 'Add a model, choose a daily spending limit, decide how much of Settings to show, and see which tools the AI may use. Run it again whenever you like.' }, h(Btn, { onClick: () => setSetupOpen(true), 'data-sh-setup': '' }, 'Run setup again'))),
         h(ui.Group, null, 'The basics'),
         h('div', { className: 'dsh-sh-card' },
           h(Row, { title: 'Which model answers', desc: 'Add a model and its key, and pick the one new conversations use, on the Models page.' }, h(Btn, { onClick: () => openSettingsOn(appCtx, 'models', 'Models') }, 'Open Models')),
@@ -1829,7 +1848,308 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
         }));
     }
 
+    // ---- toolcard:begin ---- Permission card, pure part: what the card says and which choices it shows. No React, no page; the tests run this block on its own.
+    // Everything the AI wrote (the reason) passes through `clean` and is only ever given to the page as a text child, never as markup.
+    const dshCard = (() => {
+      const WAIT_MS = 600000;
+      const SAYS = {
+        0: 'It only shows you something.',
+        1: 'It reads and researches.',
+        2: 'It can change things in your workspace or cost money.',
+        3: 'It can change or delete files, run programs, reach other models or services.',
+        4: 'Only you can switch this on, in Settings.',
+      };
+      const RECON_SAYS = 'Recon is sealed. It may only ask for a tool that cannot reach outside Recon\u2019s own routes: the Terminal, connectors, coding engines, helpers and anything online can never be requested from Recon. Your answer here counts for this conversation only.';
+      const LABEL = { once: 'Allow once', conversation: 'Allow in this conversation', mode: 'Allow in this tab', always: 'Always allow', deny: 'Deny', never: "Don't ask again" };
+      const SCOPES = ['once', 'conversation', 'mode', 'always'];
+      const ORDER = [...SCOPES, 'deny', 'never'];
+      const REASON_SHOWN = 300;
+
+      /** Text made safe to show: no control or direction-changing characters, one line, cut at `max` with an ellipsis. */
+      // eslint-disable-next-line no-control-regex
+      const clean = (value, max = 200) => {
+        const text = String(value ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]+/g, ' ').replace(/\s+/g, ' ').trim();
+        return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+      };
+
+      /** "9:42": whole seconds left, rounded up, never below 0:00. */
+      const countdown = (ms) => {
+        const seconds = Math.max(0, Math.ceil((Number(ms) || 0) / 1000));
+        return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+      };
+
+      /** Oldest first, one entry per id. */
+      const queue = (requests) => {
+        const seen = new Set();
+        return (Array.isArray(requests) ? requests : [])
+          .filter((one) => one && typeof one.id === 'string' && one.id && !seen.has(one.id) && seen.add(one.id))
+          .sort((a, b) => (a.openedAt ?? 0) - (b.openedAt ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      };
+
+      /** What one conversation shows now: its oldest request, and how many more wait behind it. */
+      const forSession = (requests, sessionId) => {
+        const mine = queue(requests).filter((one) => one.sessionId === sessionId);
+        return { current: mine[0] ?? null, more: Math.max(0, mine.length - 1) };
+      };
+
+      /** "2 more waiting" (nothing for none). */
+      const moreText = (count) => (count > 0 ? `${count} more waiting` : '');
+
+      /** Conversations with a request waiting. */
+      const waitingIds = (requests) => [...new Set(queue(requests).map((one) => one.sessionId))];
+
+      /**
+       * The buttons: only what the service offered and is allowed for this risk, safest wording, in a fixed order.
+       * Deny is always there. A long permission is never shown for a high-risk tool, after outside material was read, or in Recon,
+       * even if the request offered it.
+       */
+      const choices = (request) => {
+        const offered = new Set((request?.choices ?? []).map((one) => one?.id));
+        const longest = SCOPES.indexOf(request?.longest);
+        let top = longest >= 0 ? longest : SCOPES.length - 1;
+        const tier = Number.isInteger(request?.tier) ? request.tier : 3;
+        const outside = Boolean(request?.outsideMaterial) || Boolean(request?.outsideWarning);
+        if (tier >= 3 || outside || request?.recon) top = Math.min(top, 1);
+        if (tier >= 3 && outside) top = 0;
+        return ORDER.filter((id) => {
+          if (id === 'deny') return true;
+          if (!offered.has(id)) return false;
+          const at = SCOPES.indexOf(id);
+          return at < 0 || at <= top;
+        }).map((id) => ({ id, label: LABEL[id], kind: SCOPES.includes(id) ? 'allow' : id }));
+      };
+
+      /** How far the buttons reach, in words: the headline says exactly this, so it never promises less or more than the buttons give. */
+      const scopeWords = (request) => {
+        const allowed = choices(request).filter((one) => one.kind === 'allow').map((one) => one.id);
+        const widest = allowed.length ? SCOPES.indexOf(allowed[allowed.length - 1]) : -1;
+        return ['for one use only', 'in this conversation', 'in this conversation or the whole tab', 'in this conversation, the whole tab or always'][widest] ?? 'in this conversation';
+      };
+
+      /** What an answer's reply means. Only `{ok: true}` is a success: a refused answer (the request ran out, was cancelled or was answered already) is said out loud. */
+      const GONE = 'This request is no longer waiting. Your answer was not used.';
+      const answerResult = (status, data) => {
+        if (!data || typeof data !== 'object' || status >= 500) return { state: 'error', text: 'Your answer could not be sent. Try again.' };
+        if (data.ok === true) return { state: 'sent', text: '' };
+        // Only the host's own "no longer waiting" means the request ended; any other refusal (a bad request, Tool access not running) is a failed send.
+        if (/no longer waiting/i.test(String(data.reason ?? ''))) return { state: 'gone', text: GONE };
+        return { state: 'rejected', text: 'Your answer was not accepted, so nothing was decided. Try again.' };
+      };
+
+      /** What a key does on the card: Esc is Deny, nothing else (nothing is bound to Enter; a click outside does nothing). */
+      const keyAction = (key) => (key === 'Escape' ? 'deny' : null);
+
+      /**
+       * Whether the card may move the keyboard focus to its safest button. Never from a message half written, nor from a control the
+       * person chose, nor from the empty chat box of another conversation (another pane): only when nothing is focused, or the empty
+       * chat box that sits with this card.
+       */
+      const mayTakeFocus = ({ inCard, active, draft, editable }) => {
+        if (inCard) return false;
+        if (!active) return true;
+        // A chat box (empty or not) and any other control keep the keyboard: a stray Space or Enter must never answer the card.
+        if (draft || editable) return false;
+        return active === 'body';
+      };
+
+      /** Enter and Space on a card button are ignored for this long after the card moved the focus there by itself (a key typed into the chat box a moment before). */
+      const KEY_GRACE_MS = 1200;
+      const keyIgnored = (key, sinceFocusMs) => (key === 'Enter' || key === ' ') && sinceFocusMs >= 0 && sinceFocusMs < KEY_GRACE_MS;
+
+      /** Every line of the card, as plain strings. */
+      const model = (request, remainingMs) => {
+        const plain = clean(request.plain || request.tool, 80) || 'a tool';
+        const raw = clean(request.tool, 80);
+        const reason = clean(request.reason, REASON_SHOWN);
+        const tier = Number.isInteger(request.tier) ? request.tier : 3;
+        return {
+          id: request.id,
+          sessionId: request.sessionId,
+          heading: `The AI asks to use: ${plain} ${scopeWords(request)}`,
+          rawName: raw && raw !== plain ? raw : '',
+          risk: request.recon ? 'Risk: Highest. ' + RECON_SAYS : `Risk: ${clean(request.risk, 20) || 'High'}. ${SAYS[tier] ?? SAYS[3]}`,
+          reasonLabel: "The AI's reason, in its own words (not checked):",
+          reason,
+          noReason: reason ? '' : 'The AI gave no reason.',
+          outside: clean(request.outsideWarning, 240),
+          recon: clean(request.reconWarning, 240),
+          choices: choices(request),
+          countdown: `Waiting for your answer: ${countdown(remainingMs)} left. After that it counts as not answered.`,
+          remainingMs,
+        };
+      };
+
+      return { WAIT_MS, KEY_GRACE_MS, keyIgnored, SAYS, LABEL, SCOPES, GONE, clean, countdown, queue, forSession, moreText, waitingIds, choices, scopeWords, answerResult, keyAction, mayTakeFocus, model };
+    })();
+    // ---- toolcard:end ----
+
+    // ---- Permission card (Tool access): the card the AI's request for a tool is answered on ----
+    // One poller for the whole page asks the host (lib/toolcard.js) what waits. Each conversation draws only its own oldest request,
+    // above its chat box (in Split view that is inside the asking pane); a conversation that is not on screen keeps its request
+    // queued and shows a dot in the sidebar row. Text from the AI goes in only as a plain text child (never as markup).
+    const CARD_CSS = `
+.dsh-tc-card { box-sizing: border-box; margin: 0 auto 8px; width: 100%; max-width: 790px; padding: 12px 14px; border-radius: 16px; border: 0.5px solid var(--dsw-alias-state-warn-primary, var(--dsw-alias-border-l2)); background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-1)); color: var(--dsw-alias-label-primary); display: flex; flex-direction: column; gap: 8px; }
+.dsh-tc-card[data-recon="true"] { border-color: var(--dsw-alias-state-error-primary); }
+.dsh-tc-title { margin: 0; font-size: 14px; line-height: 22px; font-weight: 500; overflow-wrap: anywhere; }
+.dsh-tc-raw { font-weight: 400; color: var(--dsw-alias-label-secondary); }
+.dsh-tc-line { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.dsh-tc-reason { margin: 0; padding: 6px 10px; border-left: 2px solid var(--dsw-alias-border-l2); font-size: 13px; line-height: 20px; overflow-wrap: anywhere; max-height: 100px; overflow-y: auto; }
+.dsh-tc-warn { margin: 0; padding: 6px 10px; border-radius: 8px; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary); background: color-mix(in srgb, var(--dsw-alias-state-warn-primary, var(--dsw-alias-label-secondary)) 14%, transparent); }
+.dsh-tc-warn[data-kind="recon"] { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 14%, transparent); }
+.dsh-tc-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.dsh-tc-foot { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.dsh-tc-time { font-variant-numeric: tabular-nums; }
+.dsh-tc-problem { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-state-error-primary); }
+`;
+    let cardStyled = false;
+    const addCardStyle = () => {
+      if (cardStyled || typeof document === 'undefined') return;
+      cardStyled = true;
+      const style = document.createElement('style');
+      style.id = 'dsh-tc-style';
+      style.textContent = CARD_CSS;
+      (document.head || document.documentElement).appendChild(style);
+    };
+
+    const CARD_URL = () => new URL('dsh-settings-plus/tool-card', document.baseURI);
+    const cardState = { requests: [], at: 0, ready: false };
+    const cardSubs = new Set();
+    const cardTell = () => { for (const fn of [...cardSubs]) { try { fn(); } catch { /* one listener's trouble must not stop the rest */ } } };
+    const cardSet = (data) => {
+      const before = cardState.requests.map((one) => one.id).join('|');
+      cardState.requests = Array.isArray(data?.requests) ? dshCard.queue(data.requests) : [];
+      cardState.at = Date.now();
+      cardState.ready = data?.ready === true;
+      if (before !== cardState.requests.map((one) => one.id).join('|')) cardTell();
+    };
+    /** The page-wide door other add-ons use (the sidebar row dot, the Split pane header dot). */
+    const cardDoor = {
+      waiting: (sessionId) => dshCard.waitingIds(cardState.requests).includes(sessionId),
+      ids: () => dshCard.waitingIds(cardState.requests),
+      subscribe: (fn) => { cardSubs.add(fn); return () => cardSubs.delete(fn); },
+    };
+    if (typeof window !== 'undefined') window.__dshToolCard = cardDoor;
+
+    /** Looks at the host about once a second while something waits (and while the window is open); returns a stopper and a "look now". */
+    function startCardPoller() {
+      let stopped = false;
+      let timer = 0;
+      const look = async () => {
+        let data = null;
+        try {
+          const response = await fetch(CARD_URL(), { cache: 'no-store', credentials: 'same-origin' });
+          data = response.ok ? await response.json() : null;
+        } catch { data = null; }
+        if (stopped) return;
+        cardSet(data);
+        // Tool access off (the host says so): nothing can ask, so look only now and then.
+        const wait = document.hidden ? 4000 : data?.ready !== true || data?.off === true ? 15000 : cardState.requests.length > 0 ? 1000 : 2000;
+        timer = setTimeout(look, wait);
+      };
+      timer = setTimeout(look, 1500);
+      return { stop: () => { stopped = true; clearTimeout(timer); }, now: () => { clearTimeout(timer); void look(); } };
+    }
+    let cardPoller = null;
+
+    /** A note kept for a conversation after its request is gone (an answer that came too late): the card never vanishes without saying so. */
+    const cardNotes = new Map();
+    const cardNote = (sessionId, text) => { cardNotes.set(sessionId, text); cardTell(); setTimeout(() => { if (cardNotes.get(sessionId) === text) { cardNotes.delete(sessionId); cardTell(); } }, 10000); };
+
+    const useCardState = () => {
+      const [, bump] = useState(0);
+      useEffect(() => cardDoor.subscribe(() => bump((n) => n + 1)), []);
+      return cardState;
+    };
+
+    function PermissionCard({ sessionId }) {
+      const snap = useCardState();
+      const { current, more } = dshCard.forSession(snap.requests, sessionId);
+      const [busy, setBusy] = useState(false);
+      const [problem, setProblem] = useState('');
+      const [, tick] = useState(0);
+      const cardRef = useRef(null);
+      const autoFocusAt = useRef(0);
+      const id = current?.id;
+      useEffect(() => {
+        if (!id) return undefined;
+        const timer = setInterval(() => tick((n) => n + 1), 1000);
+        return () => clearInterval(timer);
+      }, [id]);
+      useEffect(() => {
+        setBusy(false);
+        setProblem('');
+        if (!id) return;
+        // The safest button gets the focus, unless the person has a message half written or has gone to another control: then nothing is taken from them.
+        // The app moves focus to the chat box a moment after a conversation opens, so the focus is also set once more shortly after.
+        const take = () => {
+          const active = document.activeElement;
+          const editable = Boolean(active) && (active.isContentEditable || active.tagName === 'TEXTAREA');
+          const draft = Boolean(active) && ((active.isContentEditable && active.textContent.trim() !== '') || ((active.tagName === 'TEXTAREA' || active.tagName === 'INPUT') && String(active.value ?? '').trim() !== ''));
+          if (dshCard.mayTakeFocus({ inCard: Boolean(active && cardRef.current?.contains(active)), active: !active ? null : active === document.body ? 'body' : 'other', draft, editable })) { autoFocusAt.current = Date.now(); cardRef.current?.querySelector('[data-dsh-tc-deny]')?.focus(); }
+        };
+        take();
+        const later = setTimeout(take, 400);
+        return () => clearTimeout(later);
+      }, [id]);
+      if (!current) {
+        const note = cardNotes.get(sessionId);
+        return note ? h('section', { className: 'dsh-tc-card', role: 'status', 'data-dsh-tool-card-note': sessionId }, h('p', { className: 'dsh-tc-line' }, note), h('div', { className: 'dsh-tc-choices' }, h(ui.Button, { onClick: () => { cardNotes.delete(sessionId); cardTell(); } }, 'Close'))) : null;
+      }
+      const m = dshCard.model(current, Math.max(0, current.remainingMs - (Date.now() - snap.at)));
+      const answer = async (choice) => {
+        if (busy) return;
+        setBusy(true);
+        setProblem('');
+        try {
+          const response = await fetch(CARD_URL(), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: m.id, choice }) });
+          let data = null;
+          try { data = await response.json(); } catch { data = null; }
+          const result = dshCard.answerResult(response.status, data);
+          if (result.state === 'error') throw new Error('no answer');
+          // The request leaves the card at once; the next look confirms it. A refused answer (too late) leaves a plain note in its place.
+          cardSet({ ready: true, requests: cardState.requests.filter((one) => one.id !== m.id) });
+          if (result.state === 'gone') cardNote(m.sessionId, result.text);
+          cardPoller?.now();
+        } catch {
+          setBusy(false);
+          setProblem('Your answer could not be sent. Try again.');
+        }
+      };
+      const deny = m.choices.find((one) => one.id === 'deny');
+      const never = m.choices.find((one) => one.id === 'never');
+      const allows = m.choices.filter((one) => one.kind === 'allow');
+      const titleId = `dsh-tc-t-${m.id}`;
+      const bodyId = `dsh-tc-b-${m.id}`;
+      return h('section', {
+        ref: cardRef, className: 'dsh-tc-card', role: 'alertdialog', 'aria-labelledby': titleId, 'aria-describedby': bodyId, 'data-recon': current.recon ? 'true' : 'false', 'data-dsh-tool-card': m.sessionId,
+        // Esc is Deny. Nothing is bound to Enter, and a click outside the card does nothing: a button only acts when it is pressed on purpose.
+        // Enter or Space right after the card focused a button by itself is dropped (a key typed for the chat box); after that a button does what it says.
+        onKeyDown: (event) => {
+          if (dshCard.keyIgnored(event.key, autoFocusAt.current ? Date.now() - autoFocusAt.current : -1)) { event.preventDefault(); return; }
+          if (dshCard.keyAction(event.key) === 'deny') { event.preventDefault(); event.stopPropagation(); void answer('deny'); }
+        },
+        onPointerDown: () => { autoFocusAt.current = 0; },
+      },
+        h('p', { id: titleId, className: 'dsh-tc-title' }, m.heading, m.rawName ? h('span', { className: 'dsh-tc-raw' }, ` (${m.rawName})`) : null),
+        h('div', { id: bodyId, style: { display: 'contents' } },
+          h('p', { className: 'dsh-tc-line' }, m.risk),
+          m.outside ? h('p', { className: 'dsh-tc-warn', role: 'note' }, m.outside) : null,
+          m.recon ? h('p', { className: 'dsh-tc-warn', 'data-kind': 'recon', role: 'note' }, m.recon) : null,
+          h('p', { className: 'dsh-tc-line' }, m.reasonLabel),
+          m.reason ? h('blockquote', { className: 'dsh-tc-reason' }, '“', m.reason, '”') : h('p', { className: 'dsh-tc-line' }, m.noReason)),
+        h('div', { className: 'dsh-tc-choices', role: 'group', 'aria-label': 'Your answer' },
+          deny ? h(ui.Button, { key: 'deny', 'data-dsh-tc-deny': '', main: true, disabled: busy, onClick: () => void answer('deny') }, deny.label) : null,
+          allows.map((one) => h(ui.Button, { key: one.id, disabled: busy, onClick: () => void answer(one.id) }, one.label)),
+          never ? h(ui.Button, { key: 'never', disabled: busy, onClick: () => void answer('never') }, never.label) : null),
+        problem ? h('p', { className: 'dsh-tc-problem', role: 'alert' }, problem) : null,
+        h('div', { className: 'dsh-tc-foot' },
+          h('span', { className: 'dsh-tc-line dsh-tc-time' }, m.countdown),
+          more > 0 ? h('span', { className: 'dsh-tc-line', 'aria-live': 'polite' }, dshCard.moreText(more)) : null));
+    }
+
     return {
+      dshCard,
+      toolAccessLine,
       visibleEntries,
       moreRows,
       parseEdit,
@@ -1857,6 +2177,11 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
             ctx.effect(() => ctx.slots.inject('settings.section.icon', () => ctx.slots.register({ name: 'settings.section.icon', id }, (props) => h(PageIcon, { ...props, appCtx: ctx, id }))));
           }
         }
+        // The permission card: above each chat box (in Split view, inside the asking pane).
+        addCardStyle();
+        cardPoller = typeof document !== 'undefined' ? startCardPoller() : null;
+        ctx.effect(() => () => { cardPoller?.stop(); cardPoller = null; });
+        ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'plus-tool-card', order: -100 }, (props) => h(PermissionCard, props))));
         ctx.effect(() => ctx.slots.inject('conversation.input.right', () => ctx.slots.register({ name: 'conversation.input.right', id: 'plus-export', order: 870 }, (props) => h(ExportButton, { ...props, appCtx: ctx }))));
         ctx.effect(() => ctx.slots.inject('conversation.input.right', () => ctx.slots.register({ name: 'conversation.input.right', id: 'plus-mode-gear', order: 880 }, (props) => h(ModeGear, { ...props, appCtx: ctx }))));
         ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'about-plus', order: 630, label: () => 'About Plus' }, () => h(AboutPage))));

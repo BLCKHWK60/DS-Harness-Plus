@@ -35,7 +35,7 @@ import { MODE_ID, TOOLS, withRecon } from './lib/mode.js';
 import { CLAIM_MAX, DRAFTS, DRAFT_MAX, SEARCH_MS, SUB_MAX, ULTRA_TOOL, isRecipeHelperTask, judgeAccepted, judgeTask, materialOf, wideSearch, writerTask } from './lib/ultra.js';
 import { cloudPolicy, mayReceive, openConsent, providerPlace, staysHome } from './lib/model.js';
 import { exportText, writeExport } from './lib/export.js';
-import { MARKER_RE, MESSAGE_MAX, NEVER_GOES, NOT_KEPT, WARNINGS, addressKey, addressesIn, buildExport, covers, decoded, exportLine, exportMessage, exportsInText, isOnion, openDoor, safeExportParent, sharesRun, urlsIn, writeExportFolder } from './lib/door.js';
+import { MARKER_RE, MESSAGE_MAX, NEVER_GOES, NOT_KEPT, WARNINGS, addressKey, addressesIn, buildExport, covers, decoded, exportLine, exportMessage, exportsInText, isOnion, movedService, openDoor, safeExportParent, sharesRun, urlsIn, writeExportFolder } from './lib/door.js';
 import { openForward } from './lib/forward.js';
 import { login, loginName } from './lib/keychain.js';
 import { AHMIA, createOnion } from './lib/onion.js';
@@ -1130,7 +1130,7 @@ export function apply(ctx, config, standIns = {}) {
 
   const door = openDoor(typeof home === 'function' ? join(home('recon'), 'door.json') : '');
   // The conversations a move opened: Shared sync (dsh-sync) leaves them out like Recon's own (review B1).
-  if (typeof ctx.provide === 'function') ctx.effect(() => ctx.provide('reconMoved', Object.freeze({ active: () => enabled(), damaged: () => door.problem() !== '', list: () => door.list().filter((entry) => entry.what === 'move').flatMap((entry) => (entry.to ?? []).filter((to) => to.kind === 'conversation' && to.id).map((to) => String(to.id))) })), 'recon: moved conversations');
+  if (typeof ctx.provide === 'function') ctx.effect(() => ctx.provide('reconMoved', movedService(door, () => enabled())), 'recon: moved conversations');
   /** Addresses from an export the owner said yes to, per conversation: `${conversation}|${address}`. */
   const doorYes = new Set();
   /** Said in the window and in the export when a conversation is read from its saved messages after a restart. */

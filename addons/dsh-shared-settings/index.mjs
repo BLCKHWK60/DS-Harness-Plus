@@ -43,6 +43,9 @@ export const ALWAYS_SKIP = [
   'modes.sessionHelpers',
   'modes.sessionToolSets',
   'modes.sessionSandboxBase',
+  // Tool access: which tools each tab may use, and whether it is on, are permission switches kept on each Mac.
+  'modes.toolAccess',
+  'modes.toolAccessOn',
   // The Skill architect's "never learn from this" marks: per conversation, kept on each Mac.
   'skill-architect.nolearn',
   // This Mac's own first-run card and its Simple/Advanced Settings view: each Mac chooses its own.

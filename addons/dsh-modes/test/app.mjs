@@ -58,10 +58,11 @@ export async function settle() {
  * @param {Set<string>} [options.studying] - conversations where Learn runs a study session (no set: no Learn add-on).
  * @param {Set<string>} [options.scratch] - Scratch conversations, as the Cowork sidebar's `coworkScratch` service tells (no set: no such service).
  * @param {object} [options.mission] - Mission's service, e.g. `{ longRun: (id) => ({ files, web }) }` (none: no Mission).
+ * @param {Set<string>} [options.viaPrograms] - conversations under the programs-only preset (PTC): their tools are reachable only through `run_code`.
  * @param {Set<string>} [options.ultra] - conversations with Ultra Code on, as Model Tiers tells (no set: Model Tiers cannot say).
  * @returns {object} the running app.
  */
-export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0, home, goals, failWrite, chat, studying, scratch, mission, ultra, credentials } = {}) {
+export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'everyday', known = [], loader = [], persisted, alone = false, before = [], tierDelay = 0, writeDelay = 0, home, goals, failWrite, chat, studying, scratch, mission, ultra, credentials, approval, services: more = {}, settingsExtra = [], viaPrograms } = {}) {
   const { config } = world;
   const handlers = new Map();
   const agents = new Map();
@@ -76,7 +77,7 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
   const sections = new Map();
   let command;
   const settings = {
-    describe: () => [{ ns: 'modes', value: config }, ...(tabs ? [{ ns: 'cowork-shell', value: { maxTabs } }] : []), ...(chat ? [{ ns: 'ui-chat', value: chat }] : [])],
+    describe: () => [{ ns: 'modes', value: config }, ...settingsExtra, ...(tabs ? [{ ns: 'cowork-shell', value: { maxTabs } }] : []), ...(chat ? [{ ns: 'ui-chat', value: chat }] : [])],
     mutate: async (ns, ops) => {
       if (ns !== 'modes') throw new Error(`unexpected namespace ${ns}`);
       if (writeDelay > 0) await new Promise((resolve) => setTimeout(resolve, writeDelay));
@@ -116,6 +117,10 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
     ...(mission ? { mission } : {}),
     // The app's secret store (a test gives a stand-in: resolve, describe, set, unset).
     ...(credentials ? { credentials } : {}),
+    // The app's approval card (a test gives `request`).
+    ...(approval ? { approval } : {}),
+    // Any other service a test wants the add-on to find (Recon's, Mission's).
+    ...more,
     // The Cowork sidebar's Scratch service: the folder a Scratch conversation is kept to.
     ...(scratch ? { coworkScratch: { folderOf: (agent) => (scratch.has(agent?.id) ? `/home/scratch/${agent.id}` : '') } } : {}),
     ...(world.presets
@@ -134,9 +139,11 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
       : {}),
   };
   let service;
+  /** Services other than `modes` that Modes provides (e.g. `toolAccess`). */
+  const provided = new Map();
   const ctx = {
     logger: { warn: () => {}, info: () => {}, error: () => {} },
-    get: (name) => (name === 'modes' ? service : services[name]),
+    get: (name) => (name === 'modes' ? service : provided.has(name) ? provided.get(name) : services[name]),
     on: (name, handler, options) => {
       // As the app: `prepend` puts a listener outermost.
       handlers.set(name, options?.prepend ? [handler, ...(handlers.get(name) ?? [])] : [...(handlers.get(name) ?? []), handler]);
@@ -149,9 +156,11 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
     },
     provide: (name, value) => {
       if (name === 'modes') service = value;
+      else provided.set(name, value);
       return () => {};
     },
     inject: (names, callback) => {
+      if (names.includes('tools')) callback({ tools: ctx.tools, effect: (start) => start() });
       if (names.includes('commands')) callback({ commands: { register: (spec) => { command = spec; return () => {}; } }, effect: (start) => start() });
     },
     tools: {
@@ -166,6 +175,8 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
         return () => registered.delete(definition.name);
       },
       restrict: () => () => {},
+      // The app's PTC preset: a conversation in `viaPrograms` (a Set of ids) reaches its tools only through `run_code`.
+      ...(viaPrograms ? { selectExecutor: (agent) => ({ describe: () => ({ knownNames: viaPrograms.has(agent?.id) ? ['run_code'] : known }) }) } : {}),
     },
   };
   /** A live conversation on its stored log; `masks` records the tool masks put on it. */
@@ -223,6 +234,7 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
     pickTier: (id, tier) => currentTier.set(id, tier),
     opened,
     service: () => service,
+    provided: (name) => provided.get(name),
     emit,
     /** Open a conversation: `source` is the app's: startup (just created) or resume (reloaded). */
     open: async (id, { source = 'startup', lastTurn = 0, header = {} } = {}) => {

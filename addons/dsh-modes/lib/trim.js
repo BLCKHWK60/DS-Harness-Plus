@@ -75,7 +75,8 @@ export function allowed(known, added) {
 
 /** Tools the app knows that are neither core nor in a family: listed by name in the catalog. */
 export function others(known) {
-  return known.filter((name) => !CORE.includes(name) && !familyOf(name) && !['web_search', 'web_fetch', 'run_code', 'other_search', 'other_read'].includes(name));
+  // The two Tool access tools are never offered through the finder: they are there on their own while Tool access is on, and not at all while it is off.
+  return known.filter((name) => !CORE.includes(name) && !familyOf(name) && !['web_search', 'web_fetch', 'run_code', 'other_search', 'other_read', 'tools_catalog', 'request_tool_access'].includes(name));
 }
 
 /** Whether a tool is one of a family's. */

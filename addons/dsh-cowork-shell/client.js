@@ -500,6 +500,7 @@ window.__ModuleLoader__.load({
         'needs.approval': 'Waiting for your approval',
         'needs.plan-review': 'Plan waiting for your review',
         'needs.question': 'Waiting for your answer',
+        'needs.permission': 'The AI asks to use a tool',
         'move.to': 'Move to {tab}',
         'move.label': 'Move "{title}" to another tab',
         'move.failed': 'Could not move the conversation.',
@@ -2057,6 +2058,10 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             });
           }
         } catch { /* no status service: nothing is shown as waiting */ }
+        // The AI asking for a tool (Tool access): the card sits in that conversation; the sidebar says so while it is not on screen.
+        try {
+          for (const id of window.__dshToolCard?.ids?.() ?? []) if (!waiting[id]) waiting[id] = 'permission';
+        } catch { /* no permission card here */ }
         return {
           ok: true,
           workspaces: Array.isArray(ws.items) ? ws.items : [],
@@ -2077,6 +2082,7 @@ html[data-cws-plain-chat] [class*='_heroWorkspaceRow'] > button[aria-haspopup='m
             get('sessions')?.list?.subscribe?.(update),
             get('uiWorkspace')?.selection?.subscribe?.(update),
             get('uiSession')?.sessionStatus?.subscribe?.(update),
+            window.__dshToolCard?.subscribe?.(update),
           ];
           // Titles and times change without always notifying; refresh gently.
           // Looks again every 5 s while the window is shown, none while it is hidden.

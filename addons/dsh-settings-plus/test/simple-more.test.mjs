@@ -319,3 +319,26 @@ test('More settings does not claim that nothing is missing, and says how many ca
 test('no document of the colour schemes add-on carries the old name MindsHub', () => {
   for (const file of ['README.md', 'passport/brief.md']) assert.ok(!/mindshub/i.test(readFileSync(path.join(ADDONS, 'dsh-color-schemes', file), 'utf8')), file);
 });
+
+test('first-run step 4 is true for a new install and an existing one, on or off', () => {
+  const on = plugin.toolAccessLine(true);
+  const off = plugin.toolAccessLine(false);
+  // On: names what a new install starts with, and that an existing setup keeps what it has. It never says nothing changes.
+  assert.match(on, /new install starts with accounts and connectors, other Mac apps, and app and plugins on Ask in Cowork and Code/);
+  assert.match(on, /existing setup keeps the choices it has/);
+  assert.ok(!/nothing changes|stays exactly|every tab keeps the tools it has today/i.test(on));
+  // Off (an existing install until the owner switches it on): every tab has exactly its own tools.
+  assert.match(off, /switched off/);
+  assert.match(off, /exactly the tools it has always had/);
+  assert.equal(plugin.toolAccessLine(undefined), on, 'unknown reads as the default (on)');
+});
+
+test('Settings search finds "Tool permissions", and the Simple view row is wired to appear and to open the page', () => {
+  assert.ok(RAW.some((entry) => entry.page === 'start-here' && entry.label === 'Tool permissions' && entry.kind === 'button'));
+  // A row another add-on adds after the page was drawn makes the page draw again; opening goes through the one safe opener.
+  assert.match(SOURCE, /rowListeners\.add\(again\)/);
+  assert.match(SOURCE, /\.openPage = \(appCtx, id, label\) => openSettingsOn\(appCtx, id, label\)/);
+  const modes = readFileSync(path.join(ADDONS, 'dsh-modes', 'client.js'), 'utf8');
+  assert.match(modes, /window\.__dshSettingsPlus\.openPage\(appCtx, id, 'Tool access'\)/);
+  assert.match(modes, /hub\.rowListeners/);
+});

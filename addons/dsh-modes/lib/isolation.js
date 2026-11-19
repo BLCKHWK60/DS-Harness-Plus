@@ -4,6 +4,9 @@
  * changes are refused. Kept apart from the plugin so it can be tested without the app.
  */
 import { webReaching } from './mask.js';
+import { isOwnTool } from './catalog.js';
+import { reconMayAsk } from './online.js';
+import { NO_TOOL_MODES } from './access.js';
 
 /** What a conversation gets that began in an ordinary mode and was then given an isolated one: no tools, and it can be given its own mode back. */
 export const LATE_MODE = Object.freeze({
@@ -53,9 +56,18 @@ export function heldMode({ found, wasIsolated, fresh }) {
  * @param {boolean} [want.child] - the caller is a helper agent.
  * @param {boolean} [want.off] - the conversation's tools are switched off.
  * @param {boolean} [want.webOff] - the conversation's Web button is on Off.
+ * @param {boolean} [want.granted] - the user allowed this tool for this one conversation in its own popup (Tool access). Never for a helper,
+ *   never the secret store, the Keychain or Recon's route rules, never a tool only Settings may open, and never a tool that can go online (the Terminal, connectors,
+ *   engines, helpers, web tools: the one list in lib/online.js, Web On or Off), so a stored permission can never run `curl` here.
+ * @param {string[]} [want.online] - image tools found to go online.
  * @returns {boolean} true when the call may run.
  */
-export function isolatedMayRun({ mode, name, child = false, off = false, webOff = false, long }) {
+export function isolatedMayRun({ mode, name, child = false, off = false, webOff = false, long, granted = false, online = [] }) {
+  if (NO_TOOL_MODES.includes(mode?.id)) return false;
+  // The two Tool access tools: the conversation itself may look at the catalogue and ask (the user decides).
+  if (!child && !off && isOwnTool(name)) return true;
+  // A permission the user gave in this conversation's own popup. Recon's own checks (its model rules, its export rules) still run after this.
+  if (granted && !child && !off && reconMayAsk(name, { online })) return true;
   // A Long run (Recon, 16 November): the conversation conducts it, its helpers do the work with the
   // mode's own tools and, with Files on, the file tools (in the run's folder; Mission keeps them there).
   if (long && !off) {

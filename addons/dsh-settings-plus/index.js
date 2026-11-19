@@ -9,11 +9,13 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildExport, FORMATS, LEVELS } from './lib/export.js';
 import { clearDamagedNotes, damagedNotes } from './lib/json-store.js';
+import { CARD_PATH, createCardBridge } from './lib/toolcard.js';
 
 export const name = 'dsh-settings-plus';
 export const INDEX_PATH = '/dsh-settings-plus/index';
 export const EXPORT_PATH = '/dsh-settings-plus/export';
 export const ABOUT_PATH = '/dsh-settings-plus/about';
+export { CARD_PATH };
 
 const triple = (version) => {
   const m = /^(\d+)\.(\d+)\.(\d+)/.exec(String(version ?? '').trim());
@@ -199,6 +201,39 @@ export function apply(ctx, config, standIns = {}) {
         },
       }),
       'settings-plus: about route',
+    );
+  });
+  // The permission card (Tool access): what is waiting for an answer, and the answer. See lib/toolcard.js.
+  const bridge = createCardBridge({ service: () => { try { return ctx.get('toolAccess'); } catch { return undefined; } } });
+  ctx.inject(['webServer', 'connection'], (inner) => {
+    inner.effect(() => () => bridge.stop(), 'settings-plus: card bridge');
+    inner.effect(
+      () => inner.webServer.register({
+        kind: 'exact',
+        path: CARD_PATH,
+        handler: async (req, res) => {
+          const refused = inner.connection.requestRejection(req);
+          if (refused !== undefined) return send(res, refused, 'text/plain', '');
+          const json = (status, value) => send(res, status, 'application/json; charset=utf-8', JSON.stringify(value));
+          try {
+            if (plain(config?.enabled) === false) return json(200, { ready: false, requests: [] });
+            if (req.method === 'GET') return json(200, bridge.poll());
+            if (req.method !== 'POST') return send(res, 405, 'text/plain', '', { allow: 'GET, POST' });
+            const chunks = [];
+            let size = 0;
+            for await (const chunk of req) {
+              size += chunk.length;
+              if (size > 4096) return json(413, { ok: false, reason: 'Too large.' });
+              chunks.push(chunk);
+            }
+            const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+            return json(200, bridge.answer({ id: body?.id, choice: typeof body?.choice === 'string' ? body.choice : '' }));
+          } catch {
+            return json(400, { ok: false, reason: 'The answer could not be read.' });
+          }
+        },
+      }),
+      'settings-plus: permission card route',
     );
   });
   // The Export button's file. A conversation another add-on keeps apart (Recon's) is not exported here: its own door is the one way out.

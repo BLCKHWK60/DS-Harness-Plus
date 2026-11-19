@@ -14,9 +14,13 @@ import { randomUUID } from 'node:crypto';
 import { dirname, resolve as resolvePath } from 'node:path';
 import z from '@deepseek-ai/schemastery';
 import { LEVEL_NAMES, VERIFIED_START, addressesIn, addressesOf, levelAllows, mixesOf, pickedLevel, verifiedList } from './lib/weblevel.js';
-import { IMAGE_TOOLS, WEB_TOOLS, goesOnline, imageToolsOffline, longRunMask, longToolsFor, oldWebMarks, parentIdOf, programGoesOnline, researchTab, rootOf, toolMaskFor, webFor, webReaching } from './lib/mask.js';
+import { IMAGE_TOOLS, RESEARCH_TOOL, WEB_TOOLS, goesOnline, imageToolsOffline, longRunMask, longToolsFor, oldWebMarks, parentIdOf, programGoesOnline, researchTab, rootOf, toolMaskFor, webFor, webReaching } from './lib/mask.js';
 import { trashedIds } from './lib/trashed.js';
 import { fromScheduler, scheduledModeId } from './lib/scheduled.js';
+import { wireToolAccess } from './lib/wire.js';
+import { SHELL_NAMES } from './lib/online.js';
+import { isOwnTool } from './lib/catalog.js';
+import { TOOL_ACCESS_PATH, toolAccessHandler } from './lib/route.js';
 import { PROGRAM_TOOL, programNote, programOnly, SLOW_TOOLS } from './lib/ptc.js';
 import { helpersBelow, onlyStopNotes, stoppedByUser } from './lib/stop.js';
 import { CORE, FAMILIES, FIND_TOOL, appOfficeFolder, brings, catalog as trimCatalog, mentioned, others as trimOthers, resolveRequest, skillFamilies, skillFolderIn } from './lib/trim.js';
@@ -280,6 +284,15 @@ export const Config = z.object({
   sessionToolSets: z.string().default('{}').volatile(),
   /** Done once (0.55.1): old "Search off" marks cleared where Web Off would now block a tab's own search tools. */
   webMarksCleared: z.boolean().default(false).volatile(),
+  /**
+   * Tool access (lib/access.js): what each tool is set to in each mode, as JSON
+   * `{ modeId: { groups: { groupId: 'on'|'ask'|'off' }, tools: { toolName: 'on'|'ask'|'off' } } }`.
+   * Nothing chosen: every mode keeps exactly the tools it has. A tool the mode does not offer starts on Ask.
+   * Settings → Tool access. Kept on each Mac (never shared).
+   */
+  toolAccess: z.string().default('{}').volatile(),
+  /** Tool access on: the AI gets `tools_catalog` and `request_tool_access`, and your choices and permissions apply. */
+  toolAccessOn: z.boolean().default(false).volatile(),
   /** Done once (0.57.0): 'data' added to a stored `trimModes` list that lacked it (Data loads its tools as needed). */
   dataTrimAdded: z.boolean().default(false).volatile(),
 });
@@ -382,6 +395,8 @@ export function apply(ctx, config) {
   const pendingIdle = new Map();
   /** Agent id -> prompt section disposer. */
   const promptDisposers = new Map();
+  /** Tool access (lib/wire.js), set up further down. */
+  let access;
 
   /**
    * @param {unknown} error - failure to log.
@@ -466,6 +481,8 @@ export function apply(ctx, config) {
   const claimed = new Set();
   /** Fresh sessions whose first message came from the app's scheduler. */
   const scheduled = new Set();
+  /** Conversations whose current run was started by the scheduler (an Automation that re-runs in a conversation that already exists). */
+  const scheduledRun = new Set();
   /**
    * @param {object} agent - live Agent.
    * @returns {boolean} true when the Agent has never run a turn. Unknown counts as "has run".
@@ -577,6 +594,12 @@ export function apply(ctx, config) {
    * @returns {{allow?: string[], deny?: string[]} | null} mask, or null for no restriction.
    */
   function toolMask(sessionId, mode, added) {
+    const own = baseToolMask(sessionId, mode, added);
+    // The Tool access grid and the user's permissions: they only add tools, never lift a fence.
+    return access ? access.withAccess(sessionId, mode, own, { researchHelper: topOf(sessionId) !== sessionId && researchOn(sessionId) }) : own;
+  }
+  /** The mask the mode's own rules give, before Tool access. */
+  function baseToolMask(sessionId, mode, added) {
     // A Long run in this conversation (Mission): its tab keeps its own tools and gains what the run needs.
     const long = longRunOf(sessionId);
     // In an isolated conversation (Recon) a Long run keeps to the mode's own tools: the step tool for
@@ -1289,7 +1312,8 @@ export function apply(ctx, config) {
           const id = exec?.agent?.id;
           if (exec?.name !== PROGRAM_TOOL || !id) return undefined;
           const mask = toolMask(id, modeOf(id));
-          return Array.isArray(mask?.allow) && mask.allow.length === 0 ? NO_PROGRAMS : undefined;
+          // The two Tool access tools (the catalogue and the request) are no tools to call from a program: Chat still has none.
+          return Array.isArray(mask?.allow) && mask.allow.every(isOwnTool) ? NO_PROGRAMS : undefined;
         } catch {
           return undefined;
         }
@@ -1299,7 +1323,7 @@ export function apply(ctx, config) {
   // Web off: the app's sandbox limits file writing only, not the network, so a shell command that
   // goes online (curl, a web address, fetching code, an install) is stopped here, and so is a
   // program (`run_code`, the PTC preset) that fetches, opens a socket or starts curl and the like.
-  const SHELL_TOOLS = new Set(['bash', 'shell', 'pwsh', 'powershell', 'terminal_send']);
+  const SHELL_TOOLS = new Set(SHELL_NAMES);
   ctx.effect(
     () =>
       ctx.tools.guard((exec) => {
@@ -1336,7 +1360,7 @@ export function apply(ctx, config) {
           const mode = modeOf(id);
           if (!mode?.isolated) return undefined;
           const long = longRunOf(id);
-          if (isolatedMayRun({ mode, name: exec.name, child: topOf(id) !== id, off: toolsOff(id), webOff: isolatedWebOff(id), long })) {
+          if (isolatedMayRun({ mode, name: exec.name, child: topOf(id) !== id, off: toolsOff(id), webOff: isolatedWebOff(id), long, granted: access?.grantedFor(id, exec.name, exec) === true, online: onlineImageTools() })) {
             runOverCalls.delete(id);
             return undefined;
           }
@@ -1459,9 +1483,23 @@ export function apply(ctx, config) {
       () => agent.ctx.systemPrompt.section({ name: 'modes:lens', order: 73, interpolate: false, text: () => lensSaid(agent) }),
       'modes lens section',
     );
+    const disposeAccess = agent.ctx.effect(
+      () => agent.ctx.systemPrompt.section({ name: 'modes:tool-access', order: 59, interpolate: false, text: () => {
+        try {
+          if (!access) return '';
+          // A model version that stands alone keeps its own instructions only.
+          if (ctx.get('modelTiers')?.instructionsReplaced?.(agent.id) === true) return '';
+          return access.promptLine(agent);
+        } catch {
+          return '';
+        }
+      } }),
+      'modes tool access section',
+    );
     promptDisposers.set(agent.id, () => {
       dispose?.();
       disposeLens?.();
+      disposeAccess?.();
     });
   }
 
@@ -1567,9 +1605,13 @@ export function apply(ctx, config) {
   // first turn. (Where the scheduler's hook above ran, the conversation is already marked.)
   ctx.on('session/event', (session, event) => {
     try {
-      if (event?.type !== 'agent/inbox/spliced' || !fromScheduler(event.data?.inserted)) return;
+      if (event?.type !== 'agent/inbox/spliced') return;
       const id = session?.id;
-      if (!id || !fresh.has(id) || scheduled.has(id)) return;
+      const fromTimer = fromScheduler(event.data?.inserted);
+      // An Automation that runs again in a conversation that already exists: that run has nobody to answer (until the user writes).
+      if (id && fromTimer) scheduledRun.add(id);
+      else if (id && Array.isArray(event.data?.inserted) && event.data.inserted.some((item) => (item?.source ?? item?.message?.source)?.kind === 'user')) scheduledRun.delete(id);
+      if (!fromTimer || !id || !fresh.has(id) || scheduled.has(id)) return;
       scheduled.add(id);
       const agent = ctx.get('agents')?.get?.(id);
       const mode = modeOf(id);
@@ -1705,6 +1747,9 @@ export function apply(ctx, config) {
   // Which turns the user spoke in; and input the user sends during the check step ends the check's block.
   ctx.on('agent/inbox/claimed', ({ agent, message, turn }) => {
     const id = agent?.id;
+    // A run the scheduler started has nobody to answer; a message the user wrote ends that.
+    if (id && message?.source?.kind === 'schedule') scheduledRun.add(id);
+    else if (id && USER_KINDS.has(message?.source?.kind)) scheduledRun.delete(id);
     if (!id || !USER_KINDS.has(message?.source?.kind)) return;
     userTurn.set(id, turn);
     checking.delete(id);
@@ -1784,6 +1829,7 @@ export function apply(ctx, config) {
       cutOff.delete(agent.id);
       for (const [helper, root] of checkHelpers) if (root === agent.id) checkHelpers.delete(helper);
     }
+    if (status === 'idle' && agent?.id) access?.idle(topOf(agent.id), agent.id);
     if (status === 'running') {
       // Before the turn's tools are put together.
       refit(agent);
@@ -1966,7 +2012,8 @@ export function apply(ctx, config) {
       // no descriptions from the agent's view
     }
     const fenced = isolatedTools();
-    return known.filter((name) => !fenced.includes(name)).map((name) => ({ name, description: described.get(name) }));
+    // The two Tool access tools are never found or added here (they are on their own while Tool access is on, absent while it is off).
+    return known.filter((name) => !fenced.includes(name) && !isOwnTool(name)).map((name) => ({ name, description: described.get(name) }));
   }
   function buildFindTool() {
     return {
@@ -2041,6 +2088,7 @@ export function apply(ctx, config) {
     fresh.delete(agent.id);
     claimed.delete(agent.id);
     scheduled.delete(agent.id);
+    scheduledRun.delete(agent.id);
     startTiers.delete(agent.id);
     overlay.delete(agent.id);
     pendingIdle.delete(agent.id);
@@ -2168,6 +2216,15 @@ export function apply(ctx, config) {
         } catch {
           // keep it when unsure
         }
+      }
+      // The permissions of a conversation that was deleted go with it (not those of one in the trash, which can come back).
+      try {
+        for (const sessionId of access?.store?.conversations?.() ?? []) {
+          if (live.has(sessionId) || trashed.has(sessionId)) continue;
+          if ((await persistence.stat(sessionId)) === undefined) access.forget(sessionId);
+        }
+      } catch {
+        // keep them when unsure
       }
       if (gone.size > 0) {
         // The one-time moves (Web levels into Depth, old Search-off marks) write some of these fields
@@ -2357,7 +2414,8 @@ export function apply(ctx, config) {
     noTools(sessionId) {
       try {
         const mask = toolMask(sessionId, modeOf(sessionId));
-        return Array.isArray(mask?.allow) && mask.allow.every((tool) => WEB_TOOLS.includes(tool));
+        // The two Tool access tools do not count: a conversation that has only them has no tools (Code map, Finance, Model tiers ask this).
+        return Array.isArray(mask?.allow) && mask.allow.every((tool) => WEB_TOOLS.includes(tool) || isOwnTool(tool));
       } catch {
         return false;
       }
@@ -2554,6 +2612,99 @@ export function apply(ctx, config) {
   };
   ctx.effect(() => ctx.provide('modes', Object.freeze(modes)), 'modes service');
 
+  // Tool access: the grid, permissions, `tools_catalog` and `request_tool_access` (lib/access.js, docs/MODES-AND-SETTINGS.md).
+  /** Mission's wait time, in minutes, or undefined when it cannot be read. */
+  function missionWaitMinutes() {
+    const value = plain(ctx.get('settings')?.describe?.().find((entry) => entry.ns === 'mission')?.value?.waitMinutes);
+    return typeof value === 'number' ? value : undefined;
+  }
+  /** Whether the newest message of a conversation came from the scheduler: also true after a restart, from the saved messages. */
+  function lastMessageFromScheduler(top) {
+    try {
+      const messages = ctx.get('agents')?.get?.(top)?.session?.deriveMessages?.();
+      if (!Array.isArray(messages)) return false;
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const message = messages[index];
+        if (message?.role !== 'user') continue;
+        const kind = (message.source ?? message.message?.source)?.kind;
+        // A message the app added by itself (a note, a reminder) is not the user's: look further back.
+        if (kind === 'schedule') return true;
+        if (kind === undefined || kind === 'user') return false;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+  access = wireToolAccess(ctx, {
+    config,
+    plain,
+    readModes: () => readModes(config),
+    modeOf,
+    topOf,
+    knownTools,
+    globalToolNames,
+    baseMask: (sessionId, mode) => baseToolMask(sessionId, mode),
+    currentMask: (sessionId) => toolMask(sessionId, modeOf(sessionId)),
+    isolatedTools,
+    isolatedWebOff,
+    webOn,
+    webTools: WEB_TOOLS,
+    researchTool: RESEARCH_TOOL,
+    otherTools: OTHER_TOOLS,
+    webReaching,
+    onlineImageTools,
+    toolsOff,
+    shellTools: SHELL_TOOLS,
+    goesOnline,
+    refreshTools,
+    // Does this conversation hold material that came out of Recon (an export that reached it, or a conversation moved
+    // out of Recon)? Asked of Recon's real services: `reconExports` (a marker in the messages, or the door's list) and
+    // `reconMoved` (the conversations a move opened). A damaged door.json counts for every conversation (Recon fails closed too).
+    reconExport: (top) => {
+      try {
+        const moved = ctx.get('reconMoved');
+        if (moved) {
+          if (moved.damaged?.() === true) return true;
+          if (typeof moved.holds === 'function' ? moved.holds(top) === true : moved.list?.().includes(top)) return true;
+        }
+        return ctx.get('reconExports')?.has?.(top) === true;
+      } catch {
+        // Recon cannot be asked: its limit applies (the tab that is not sure asks for less).
+        return Boolean(ctx.get('reconMoved') || ctx.get('reconExports'));
+      }
+    },
+    researchHelper: (id) => topOf(id) !== id && researchOn(id),
+    programOnly: (id) => {
+      try {
+        return programOnly(ctx.tools, ctx.get('agents')?.get?.(id)) === true;
+      } catch {
+        return false;
+      }
+    },
+    // Nobody is there to answer: an Automation's conversation (also one it re-runs in, and after a restart), or a Mission run that does not wait.
+    unattended: (top) => {
+      if (scheduled.has(top) || scheduledRun.has(top) || lastMessageFromScheduler(top)) return true;
+      try {
+        if (!ctx.get('mission')?.longRun?.(top)) return false;
+        return missionWaitMinutes() === 0;
+      } catch {
+        return false;
+      }
+    },
+    // A Mission run that waits for the user waits as long as its own wait time says (at most two hours here).
+    waitMs: (top) => {
+      try {
+        if (!ctx.get('mission')?.longRun?.(top)) return undefined;
+        const minutes = missionWaitMinutes();
+        return typeof minutes === 'number' && minutes > 0 ? minutes * 60_000 : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+  });
+  ctx.on('tools/result', (exec) => access?.markOutside(exec));
+
   /**
    * Which models a conversation and its helpers would use, for the chip in the chat box.
    * @param {object} agent - the conversation's agent.
@@ -2661,6 +2812,11 @@ export function apply(ctx, config) {
     } catch {
       // An older app: show what is known.
     }
+    // While Tool access is off the two tools of the feature are not there for the AI: the list shows what it showed before them.
+    if (access && !access.enabled()) {
+      can = can.filter((name) => !isOwnTool(name));
+      all = all.filter((name) => !isOwnTool(name));
+    }
     const notReady = await webNotReady(agent, can);
     can = can.filter((name) => !notReady.includes(name));
     const allowed = new Set(can);
@@ -2675,6 +2831,8 @@ export function apply(ctx, config) {
       off: toolsOff(sessionId),
       viaCode: programOnly(ctx.tools, agent),
       trimmed: loadsAsNeeded,
+      // Whether Tool access is on (the page leaves its section out while it is off).
+      access: access ? access.enabled() : false,
       can: can.sort(),
       later: later.sort(),
       cannot: all.filter((name) => !allowed.has(name) && !waiting.has(name)).sort(),
@@ -2714,6 +2872,16 @@ export function apply(ctx, config) {
           },
         }),
       'modes: GET tools route',
+    );
+    // Tool access: the page and the choice card reach the service `toolAccess` here (lib/route.js).
+    inner.effect(
+      () =>
+        inner.webServer.register({
+          kind: 'exact',
+          path: TOOL_ACCESS_PATH,
+          handler: toolAccessHandler({ service: () => access?.service, connection: inner.connection, lab: process.env.DSH_TOOL_ACCESS_LAB === '1' }),
+        }),
+      'modes: tool access route',
     );
     // Settings → Web sources → Other sources: which secrets are kept (never the secrets themselves), keeping
     // and forgetting one, and a test read. The sources themselves are saved as settings by the page.

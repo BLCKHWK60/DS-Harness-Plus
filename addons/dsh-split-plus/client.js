@@ -516,6 +516,7 @@ window.__ModuleLoader__.load({
 .dsh-sp-state[data-state="working"] { color: var(--dsw-alias-brand-primary); border-color: var(--dsw-alias-brand-primary); }
 .dsh-sp-state[data-state="blocked"] { color: var(--dsw-alias-label-primary); border-style: dashed; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dsh-sp-state[data-state="queued"] { color: var(--dsw-alias-label-primary); border-style: dashed; }
+.dsh-sp-state[data-ask="true"]::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: currentColor; vertical-align: 1px; }
 .dsh-sp-state[data-state="waiting"] { color: var(--dsw-alias-state-warning-primary, #b26b00); border-color: currentColor; }
 .dsh-sp-grow { flex: 1; }
 .dsh-sp-icon { flex: none; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; padding: 0; }
@@ -677,7 +678,11 @@ window.__ModuleLoader__.load({
         }
         return () => { controller.abort(); try { held?.release(); } catch { /* already released */ } setReference(null); };
       }, [appCtx, pane.sessionId]);
-      const state = status?.pendingInteraction ? 'waiting' : fileWait ? 'blocked' : localWait ? 'queued' : (status?.running ?? summary?.running) ? 'working' : summary?.blank ? 'new' : 'done';
+      // The AI asking for a tool (Tool access): its card sits inside this pane; the header shows a dot and says so.
+      const [, bumpAsk] = useState(0);
+      useEffect(() => window.__dshToolCard?.subscribe?.(() => bumpAsk((n) => n + 1)), []);
+      const toolAsk = window.__dshToolCard?.waiting?.(pane.sessionId) === true;
+      const state = status?.pendingInteraction || toolAsk ? 'waiting' : fileWait ? 'blocked' : localWait ? 'queued' : (status?.running ?? summary?.running) ? 'working' : summary?.blank ? 'new' : 'done';
       const stateText = { waiting: 'Waiting for you', blocked: fileWait ? (fileWait.kind === 'command' ? `Waiting: the ${fileWait.holder} pane is running a command in ${fileWait.file}` : `Waiting: the ${fileWait.holder} pane is changing ${fileWait.file}`) : '', queued: 'Waiting for the local model', working: 'Working', new: 'New', done: 'Done' }[state];
       const label = facts?.label ?? '…';
       const title = `${label}${facts?.folder ? ` · ${facts.folder}` : ''} · ${stateText}${summary?.displayTitle ? `\n${summary.displayTitle}` : ''}${summary?.cwd ? `\n${summary.cwd}` : ''}`;
@@ -687,7 +692,7 @@ window.__ModuleLoader__.load({
           h('span', { className: 'dsh-sp-name' }, summary?.displayTitle || label),
           facts?.folder ? h('span', { className: 'dsh-sp-folder' }, `· ${facts.folder}`) : null,
           h('span', { className: 'dsh-sp-grow' }),
-          h('span', { className: 'dsh-sp-state', 'data-state': state }, stateText),
+          h('span', { className: 'dsh-sp-state', 'data-state': state, 'data-ask': toolAsk ? 'true' : undefined, title: toolAsk ? 'The AI asks to use a tool. Answer on the card in this pane.' : undefined }, stateText),
           facts?.watching ? h('span', { className: 'dsh-sp-folder', title: 'This pane only reads the other pane and answers you; it cannot change, message or stop it' }, `· watching ${facts.watchingLabel}`) : null,
           facts?.watching ? h('button', { type: 'button', className: 'dsh-sp-icon', title: 'Stop watching (the conversation stays)', 'aria-label': 'Stop watching', onClick: () => void call({ action: 'unwatch', watcher: pane.sessionId }).catch(() => {}) }, h(Icon, { d: ICON_UNWATCH })) : null,
           !facts?.watching && facts && !facts.sealed ? h('button', { type: 'button', className: 'dsh-sp-icon', title: 'Watch this pane from a Chat pane beside it: ask what it is doing, without touching it', 'aria-label': 'Watch this pane', onClick: () => void startWatcher(appCtx, store, pane.sessionId).catch((error) => askInPage({ notice: true, title: 'Split Plus', text: error.message })) }, h(Icon, { d: ICON_WATCH })) : null,

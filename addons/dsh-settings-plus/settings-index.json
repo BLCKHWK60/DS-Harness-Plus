@@ -16801,6 +16801,25 @@
   "field": ""
  },
  {
+  "page": "start-here",
+  "pageLabel": "Start here",
+  "heading": "",
+  "label": "Tool permissions",
+  "description": "Which tools each tab may use, which the AI may only ask you for, and what you have allowed so far. Opens the Tool access page.",
+  "kind": "button",
+  "keywords": [
+   "tool permissions",
+   "tool access",
+   "permissions",
+   "allow",
+   "ask",
+   "tools",
+   "safety"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
   "page": "more-settings",
   "pageLabel": "More settings",
   "heading": "",
@@ -16850,5 +16869,213 @@
   "field": "budget.startingTokens",
   "tab": "main",
   "internal": true
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "",
+  "label": "Tool access: what each tab may use",
+  "description": "For each tab, each tool is On (offered), Ask (the AI can see it and ask you), Off (never offered, never listed) or Locked (fixed by the tab's own safety rules). Stored as JSON; the Tool access page writes it.",
+  "kind": "text",
+  "keywords": [
+   "tool access",
+   "tools",
+   "permission",
+   "ask",
+   "on",
+   "off",
+   "locked",
+   "grid",
+   "toolAccess",
+   "request",
+   "popup"
+  ],
+  "configOnly": true,
+  "field": "modes.toolAccess",
+  "internal": true
+ },
+ {
+  "page": "modes",
+  "pageLabel": "Modes",
+  "heading": "",
+  "label": "Tool access on",
+  "description": "Gives the AI a tool list (tools_catalog) and a way to ask you for one more tool (request_tool_access), and applies your Tool access choices and permissions. Off: tabs keep exactly their own tools and nothing can be requested.",
+  "kind": "switch",
+  "keywords": [
+   "tool access",
+   "request tool",
+   "ask permission",
+   "catalogue",
+   "toolAccessOn",
+   "tools_catalog",
+   "request_tool_access"
+  ],
+  "configOnly": true,
+  "field": "modes.toolAccessOn",
+  "internal": true
+ },
+ {
+  "page": "tool-access",
+  "pageLabel": "Tool access",
+  "heading": "",
+  "label": "Tool access",
+  "description": "Switch Tool access on or off, and decide per tab which tools the AI may use, may only ask you for, or never gets. Off keeps your choices, permissions and history.",
+  "kind": "section",
+  "keywords": [
+   "tool access on",
+   "tool access off",
+   "switch on",
+   "switch off",
+   "turn on",
+   "turn off",
+   "toolAccessOn",
+   "tool permissions",
+   "permissions",
+   "tools",
+   "ask",
+   "allow"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tool-access",
+  "pageLabel": "Tool access",
+  "heading": "Tabs",
+  "label": "On, Ask or Off for each kind of tool",
+  "description": "A grid of eleven kinds of tool (read files, change files, run commands, browse the web and so on) by tab. Click a cell to go from On to Ask to Off; switching a group On asks first. A padlock means the tab has its own safety rules and cannot be changed here.",
+  "kind": "segments",
+  "keywords": [
+   "on ask off",
+   "grid",
+   "groups",
+   "padlock",
+   "locked",
+   "run commands",
+   "change files",
+   "browse the web",
+   "recon",
+   "devices"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tool-access",
+  "pageLabel": "Tool access",
+  "heading": "Tabs",
+  "label": "Reset to defaults",
+  "description": "Under each tab in the grid: puts that tab back to the tools it has by default. Permissions you gave stay.",
+  "kind": "button",
+  "keywords": [
+   "reset",
+   "defaults",
+   "restore"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tool-access",
+  "pageLabel": "Tool access",
+  "heading": "Tabs",
+  "label": "Tool by tool",
+  "description": "Switches the grid to one row per tool with its plain name, what it does, where it comes from, its risk and its state. New tools nobody has sorted yet are listed first under Not sorted.",
+  "kind": "segments",
+  "keywords": [
+   "advanced",
+   "per tool",
+   "not sorted",
+   "risk",
+   "search tools",
+   "raw name"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tool-access",
+  "pageLabel": "Tool access",
+  "heading": "Tabs",
+  "label": "Show what the AI sees",
+  "description": "Shows the list of tools the AI is given in a tab when it asks what exists, the same list it really gets: what it can use now and what it can ask you for. Tools that are Off are never listed.",
+  "kind": "button",
+  "keywords": [
+   "preview",
+   "catalogue",
+   "tools_catalog",
+   "what the ai sees"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tool-access",
+  "pageLabel": "Tool access",
+  "heading": "Permissions given",
+  "label": "Permissions given",
+  "description": "What you allowed the AI to use without asking again: for one conversation, for a tab, or always, each with a Revoke button, and the tools you told it to stop asking for.",
+  "kind": "section",
+  "keywords": [
+   "revoke",
+   "allowed",
+   "grants",
+   "permissions given",
+   "dont ask again",
+   "stop asking"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tool-access",
+  "pageLabel": "Tool access",
+  "heading": "Permissions given",
+  "label": "Revoke everything",
+  "description": "Removes every permission and every “don’t ask again” mark. The AI has to ask again for anything it needs. It asks you to confirm first.",
+  "kind": "button",
+  "keywords": [
+   "revoke all",
+   "remove permissions",
+   "reset permissions"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tool-access",
+  "pageLabel": "Tool access",
+  "heading": "History",
+  "label": "History",
+  "description": "Every time the AI asked for a tool and what you answered, newest first, with a filter, a search, and a count for each conversation.",
+  "kind": "section",
+  "keywords": [
+   "log",
+   "record",
+   "asked",
+   "allowed",
+   "denied",
+   "audit"
+  ],
+  "configOnly": false,
+  "field": ""
+ },
+ {
+  "page": "tool-access",
+  "pageLabel": "Tool access",
+  "heading": "History",
+  "label": "Waiting for you",
+  "description": "Requests nobody answered because an automation ran or you were away. Each can be allowed for next time (only the lowest risk levels) or dismissed.",
+  "kind": "section",
+  "keywords": [
+   "unanswered",
+   "automation",
+   "away",
+   "allow",
+   "dismiss",
+   "pending requests"
+  ],
+  "configOnly": false,
+  "field": ""
  }
 ]

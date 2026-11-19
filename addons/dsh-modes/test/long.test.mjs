@@ -37,7 +37,7 @@ test('the mask while a Long run is on', () => {
 test('Modes follows Long runs: the mask, the shell guard, the note, the service, the settings', () => {
   assert.match(source, /const long = longRunOf\(sessionId\);[\s\S]{0,400}if \(long && mode\?\.isolated\) return isolatedRunMask\(\{ tools: mode\.tools, child: topOf\(sessionId\) !== sessionId, files: long\.files/);
   assert.match(source, /if \(long && !mode\?\.isolated\) \{\n      return longRunMask\(/);
-  assert.match(source, /const long = longRunOf\(id\);\s+if \(isolatedMayRun\(\{ mode, name: exec\.name, child: topOf\(id\) !== id, off: toolsOff\(id\), webOff: isolatedWebOff\(id\), long \}\)\)/);
+  assert.match(source, /const long = longRunOf\(id\);\s+if \(isolatedMayRun\(\{ mode, name: exec\.name, child: topOf\(id\) !== id, off: toolsOff\(id\), webOff: isolatedWebOff\(id\), long, granted: access\?\.grantedFor\(id, exec\.name, exec\) === true, online: onlineImageTools\(\) \}\)\)/);
   assert.match(source, /if \(mode\?\.isolated \|\| \(long \? long\.web : webOn\(id, mode\)\)\) return undefined;/);
   assert.match(source, /A Long run is on in this conversation\./);
   assert.match(source, /if \(event\?\.kind !== 'long' \|\| \(event\.type !== 'started' && event\.type !== 'finished'\)\) return;/);

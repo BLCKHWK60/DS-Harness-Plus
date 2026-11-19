@@ -32,10 +32,10 @@ The `include` setting adds other entries, for example the app's own `ui-theme`. 
 - Recon and Notify are not shared at all: Recon's private setup (search engine, news accounts, VPN names, folders) and the alert addresses stay on each Mac.
 - The fields in `skipFields`. By default these are the per-conversation choices:
   - `modes.sessionModes`, `sessionWeb` and `sessionResearch`;
-  - `modes.sessionIsolated`, `sessionSearchDepth`, `sessionDepth` (each conversation's Depth), `sessionLens` (each conversation's Lens), `depthMoved` (whether this Mac's old Web levels were moved into Depth), `sessionTools`, `sessionHelpers`, `sessionToolSets`, `sessionSandboxBase` (each conversation's earlier access level) and `extraModes` (the tabs this Mac's add-ons add); and the Skill architect's `skill-architect.nolearn` (the conversations you marked "never learn from this"); and Settings Plus's `settings-plus.view` (Simple or Advanced) and `settings-plus.setupPending` (this Mac's first-run card), so each Mac keeps its own;
+  - `modes.sessionIsolated`, `sessionSearchDepth`, `sessionDepth` (each conversation's Depth), `sessionLens` (each conversation's Lens), `depthMoved` (whether this Mac's old Web levels were moved into Depth), `sessionTools`, `sessionHelpers`, `sessionToolSets`, `sessionSandboxBase` (each conversation's earlier access level), `toolAccess` and `toolAccessOn` (which tools each tab may use, and whether Tool access is on) and `extraModes` (the tabs this Mac's add-ons add); and the Skill architect's `skill-architect.nolearn` (the conversations you marked "never learn from this"); and Settings Plus's `settings-plus.view` (Simple or Advanced) and `settings-plus.setupPending` (this Mac's first-run card), so each Mac keeps its own;
   - `model-tiers.activeTiers`, `sessionProfiles` and `modelProfilesMigrated`.
 
-  The ten `modes` fields on the second line stay on each Mac even when you set your own `skipFields`.
+  The twelve `modes` fields on the second line stay on each Mac even when you set your own `skipFields`.
 
 All of these stay on each Mac and are kept as they are when the file is applied.
 

@@ -149,3 +149,14 @@ test('no personal value is in the gear\'s code', () => {
   assert.doesNotMatch(SOURCE, /\/Users\/(?!you\/|someone\b)[a-z]/);
   assert.doesNotMatch(SOURCE, /\b(?:192\.168|10\.\d+\.\d+)\.\d+\b/);
 });
+
+test('searching for the Tool access on/off switch leads to the Tool access page, not to More settings', () => {
+  const list = readIndex(readFileSync(fileURLToPath(new URL('../settings-index.json', import.meta.url)), 'utf8'));
+  // The raw setting record is internal (not searchable, not on More settings); the page entry carries its words.
+  assert.ok(!list.some((entry) => entry.field === 'modes.toolAccessOn'), 'the setting record itself is not a search result');
+  const page = list.find((entry) => entry.page === 'tool-access' && entry.kind === 'section');
+  assert.ok(page && page.configOnly === false);
+  const words = page.keywords.join(' ').toLowerCase();
+  for (const word of ['tool access on', 'tool access off', 'switch off', 'toolaccesson']) assert.ok(words.includes(word), word);
+  assert.match(page.description, /on or off/);
+});

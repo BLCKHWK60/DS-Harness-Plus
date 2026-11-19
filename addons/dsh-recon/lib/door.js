@@ -423,6 +423,23 @@ export function openDoor(file) {
   };
 }
 
+/**
+ * The service `reconMoved`, for other add-ons (Shared sync leaves moved conversations out; Modes limits the tools a conversation
+ * that holds Recon material may ask for). `holds` is true for any conversation an export or a move reached, and for every
+ * conversation while the list is damaged (fail closed).
+ * @param {{has: (id: string) => boolean, problem: () => string, list: () => object[]}} door - the open door.
+ * @param {() => boolean} active - whether Recon is on.
+ * @returns {object} the frozen service.
+ */
+export function movedService(door, active) {
+  return Object.freeze({
+    active: () => active(),
+    damaged: () => door.problem() !== '',
+    list: () => door.list().filter((entry) => entry.what === 'move').flatMap((entry) => (entry.to ?? []).filter((to) => to.kind === 'conversation' && to.id).map((to) => String(to.id))),
+    holds: (id) => door.has(String(id ?? '')),
+  });
+}
+
 /** The words of a text that carry meaning (four letters or more), for telling the owner's words apart. */
 const meaningful = (text) => String(text ?? '').toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, ' ').split(' ').filter((word) => word.length >= 4);
 

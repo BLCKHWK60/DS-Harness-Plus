@@ -39,9 +39,11 @@
     {
       "id": "modes",
       "name": "@local/dsh-modes",
-      "why": "The code guides (reverse-engineer, PR review, fix loop, best-of-several, hunk review) are offered only in the Code tab. Each tab can switch them on in Settings → Code tools.",
+      "why": "The code guides (reverse-engineer, PR review, fix loop, best-of-several, hunk review) are offered only in the Code tab. Each tab can switch them on in Settings → Code tools. Cowork and Code start with connectors, other Mac apps and plugin tools on Ask (the AI can request them; you decide) instead of On. Tool access (the AI can ask for a tool; you decide) is switched on only here: an installed setup keeps it off until you switch it on in Settings.",
       "config": {
-        "skillsOff": "{\"chat\":[\"best-of-n\",\"ci-fix-loop\",\"hunk-review\",\"pr-review\",\"reverse-api-format\",\"reverse-app-binary\",\"reverse-codebase\",\"reverse-website\"],\"cowork\":[\"best-of-n\",\"ci-fix-loop\",\"hunk-review\",\"pr-review\",\"reverse-api-format\",\"reverse-app-binary\",\"reverse-codebase\",\"reverse-website\"]}"
+        "skillsOff": "{\"chat\":[\"best-of-n\",\"ci-fix-loop\",\"hunk-review\",\"pr-review\",\"reverse-api-format\",\"reverse-app-binary\",\"reverse-codebase\",\"reverse-website\"],\"cowork\":[\"best-of-n\",\"ci-fix-loop\",\"hunk-review\",\"pr-review\",\"reverse-api-format\",\"reverse-app-binary\",\"reverse-codebase\",\"reverse-website\"]}",
+        "toolAccess": "{\"cowork\":{\"groups\":{\"accounts\":\"ask\",\"mac\":\"ask\",\"app\":\"ask\"},\"tools\":{}},\"code\":{\"groups\":{\"accounts\":\"ask\",\"mac\":\"ask\",\"app\":\"ask\"},\"tools\":{}},\"_defaults\":{\"cowork\":{\"groups\":{\"accounts\":\"ask\",\"mac\":\"ask\",\"app\":\"ask\"},\"tools\":{}},\"code\":{\"groups\":{\"accounts\":\"ask\",\"mac\":\"ask\",\"app\":\"ask\"},\"tools\":{}}}}",
+        "toolAccessOn": true
       }
     },
     {
