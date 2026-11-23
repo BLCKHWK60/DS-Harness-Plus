@@ -157,7 +157,9 @@ window.__ModuleLoader__.load({
     const { ask: askInPage } = dshKit;
 
     const NS = 'scout';
-    const DICT = { en: { 'section.title': 'Scout' }, zh: { 'section.title': '机会搜索' } };
+    const DICT = {
+      en: { 'section.title': 'Scout', 'offer.group': 'The mode', 'offer.title': 'Offer the Scout mode', 'offer.desc': 'On adds the mode to the Mode list under the chat box, with its fields on the start page, its instructions and its tools. Off takes them away; your files, profile and sources are kept.', 'offer.on': 'Switched on. Scout appears in the Mode list in a moment.', 'offer.off': 'Switched off. The Scout mode is taken away in a moment.' },
+    };
 
     const CSS = `
 .dsh-sc-page { display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); }
@@ -439,6 +441,7 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
     }
 
     function ScoutPage({ appCtx }) {
+      const tw = appCtx.locale.bind(NS);
       const { data, setData, error, alive, load } = useData();
       const [note, setNote] = useState({ text: '', error: false });
       const [busy, setBusy] = useState(false);
@@ -497,19 +500,19 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
       return h('div', { className: 'dsh-sc-page' },
         h('style', null, CSS),
         h('h2', { className: 'dsh-sc-title' }, 'Scout'),
-        h('p', { className: 'dsh-sc-desc' }, 'A tab for finding work: jobs, freelance projects, contracts and public tenders. The assistant researches titles, skills and pay in each market first, searches the sources below in each market\'s language, scores what it finds, flags likely ghost jobs and scams, and plans how to approach the best ones. Nothing is sent or applied for: messages are drafts.'),
+        h('p', { className: 'dsh-sc-desc' }, 'A mode, in Chat\'s Mode list under the chat box, for finding work: jobs, freelance projects, contracts and public tenders. The assistant researches titles, skills and pay in each market first, searches the sources below in each market\'s language, scores what it finds, flags likely ghost jobs and scams, and plans how to approach the best ones. Nothing is sent or applied for: messages are drafts.'),
         note.text ? h(PlainNote, { text: note.text, details: note.details, kind: note.error ? 'error' : 'info' }) : null,
         data.problem ? h('p', { className: 'dsh-sc-desc', 'data-error': 'true' }, data.problem) : null,
 
-        h('div', { className: 'dsh-sc-group' }, 'The tab'),
+        h('div', { className: 'dsh-sc-group' }, tw('offer.group')),
         h('div', { className: 'dsh-sc-row' },
           h('div', { className: 'dsh-sc-rowtext' },
-            h('div', { className: 'dsh-sc-rowtitle' }, 'Show the Scout tab'),
-            h('div', { className: 'dsh-sc-rowdesc' }, 'On adds the tab, its fields on the start page, its instructions and its tools. Off takes them away; your files, profile and sources are kept.')),
-          h(Switch, { on: data.enabled === true, label: 'Show the Scout tab', onChange: (on) => save({ enabled: on }, on ? 'Switched on. The Scout tab appears in the sidebar in a moment.' : 'Switched off. The Scout tab is taken away in a moment.') })),
+            h('div', { className: 'dsh-sc-rowtitle' }, tw('offer.title')),
+            h('div', { className: 'dsh-sc-rowdesc' }, 'On adds the mode to the Mode list under the chat box, with its fields on the start page, its instructions and its tools. Off takes them away; your files, profile and sources are kept.')),
+          h(Switch, { on: data.enabled === true, label: tw('offer.title'), onChange: (on) => save({ enabled: on }, on ? tw('offer.on') : tw('offer.off')) })),
 
         h('div', { className: 'dsh-sc-group' }, 'Your files'),
-        h('p', { className: 'dsh-sc-desc' }, `Your resume, a LinkedIn export (PDF) or notes. They stay in this folder on this Mac; Scout reads them with whichever model the conversation uses. PDFs need the PDF reader add-on. Folder: ${data.folder}`),
+        h('p', { className: 'dsh-sc-desc' }, `Your resume, a LinkedIn export (PDF) or notes. They stay in this folder on this Mac; Scout reads them with whichever model the thread uses. PDFs need the PDF reader add-on. Folder: ${data.folder}`),
         files.map((file) => h('div', { key: file.name, className: 'dsh-sc-row' },
           h('div', { className: 'dsh-sc-rowtext' },
             h('div', { className: 'dsh-sc-rowtitle' }, file.name),
@@ -530,11 +533,11 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
           h('button', { type: 'button', className: 'dsh-sc-btn', disabled: busy, onClick: () => void act({ action: 'reveal', which: 'reports' }) }, 'Show reports in Finder')),
 
         h('div', { className: 'dsh-sc-group' }, 'Your profile'),
-        h('p', { className: 'dsh-sc-desc' }, 'A short summary: titles, years, skills, languages, pay, what you want. Write it here, or ask Scout to write it from your files: Scout is told to show you the draft and save it only after you agree, and the old one is kept as profile.md.bak. A Scout conversation reads it when it needs it (scout_profile); the helpers it starts cannot.'),
+        h('p', { className: 'dsh-sc-desc' }, 'A short summary: titles, years, skills, languages, pay, what you want. Write it here, or ask Scout to write it from your files: Scout is told to show you the draft and save it only after you agree, and the old one is kept as profile.md.bak. A Scout thread reads it when it needs it (scout_profile); the helpers it starts cannot.'),
         h(Profile, { text: typeof data.profile === 'string' ? data.profile : '', busy, onSave: (text) => act({ action: 'profile', text }, 'Profile saved.') }),
 
         h('div', { className: 'dsh-sc-group' }, 'Markets'),
-        h('p', { className: 'dsh-sc-desc' }, 'Where to search. Each market is searched in its own languages. You can also change these on the Scout tab.'),
+        h('p', { className: 'dsh-sc-desc' }, 'Where to search. Each market is searched in its own languages. You can also change these on the start page of a Scout thread.'),
         markets.map((name) => h('div', { key: name, className: 'dsh-sc-row' },
           h('div', { className: 'dsh-sc-rowtext' }, h('div', { className: 'dsh-sc-rowtitle' }, name)),
           h('button', { type: 'button', className: 'dsh-sc-btn', disabled: busy, onClick: () => void save({ markets: markets.filter((other) => other !== name) }, `${name} removed.`) }, 'Remove'))),
@@ -567,7 +570,7 @@ input.dsh-sc-pick { cursor: text; width: 190px; max-width: 190px; }
 
         h('div', { className: 'dsh-sc-group' }, 'Good to know'),
         h('ul', { className: 'dsh-sc-list' },
-          h('li', null, 'Scout conversations get only these tools: Scout\'s own eleven (sources, search, posting text, titles, demand, pay, checks on postings, your files, your profile, the report, earlier reports), web search and page reading, Deep research (Scout always has the web; its chat box shows a fixed \'Web · Always on\' label, Off only while Tools are off), the Finance news, filings and figures tools when Finance is on, charts, a step list and questions. No file or shell tools. Under the app\'s PTC preset the model calls these tools from programs (run_code), which the app offers in every mode. Helpers started by Scout get no access to your files, profile or reports.'),
+          h('li', null, 'Scout threads get only these tools: Scout\'s own eleven (sources, search, posting text, titles, demand, pay, checks on postings, your files, your profile, the report, earlier reports), web search and page reading, Deep research (Scout always has the web; its chat box shows a fixed \'Web · Always on\' label, Off only while Tools are off), the Finance news, filings and figures tools when Finance is on, charts, a step list and questions. No file or shell tools. Under the app\'s PTC preset the model calls these tools from programs (run_code), which the app offers in every mode. Helpers started by Scout get no access to your files, profile or reports.'),
           h('li', null, 'Scout is told to search by titles, skills and places, never your name or contact details. A search that holds an email address or a phone number is refused: Scout\'s own searches, web search, page reading, Deep research and the Finance tools, also for the helpers Scout starts. Under the app\'s PTC preset a program\'s own requests are not checked; the tools a program calls are. Web search goes through your web search provider; the job sources get only the search itself.'),
           h('li', null, 'Scout scores each opportunity on fit, freshness, pay and legitimacy, each with a reason, and flags likely ghost jobs and scams with the signs behind them: old or reposted postings, no pay, pay far above a typical pay from a source, asking the applicant for money or documents, contact only through a personal address or a chat app. Only computed facts (age, reposts, pay, a very short text) lower the legitimacy Scout suggests; signs found by wording in the text are hints to verify, and things to check, such as pay well above the other postings found, are shown but do not lower it. The legitimacy score and its reason are the model\'s judgement.'),
           h('li', null, 'Every run ends with a report saved as Markdown and a table (CSV) in the reports folder inside your Scout folder. Messages in it are drafts: nothing is sent.'),

@@ -25,14 +25,14 @@ export const EIGHT = [
   { id: 'look', label: 'Look', what: 'The same plugin is built twice: once to match what is enabled, once with a look of its own.', must: 'Each one looks the way it was asked to.', model: true },
   { id: 'change', label: 'Change', what: 'A new plugin that needs an existing plugin to change.', must: 'The proposal, the backup and the undo all work.', model: false },
   { id: 'update', label: 'Update', what: 'A change to the plugin interface, simulated, that breaks one plugin.', must: 'It is reported in plain words with a fix proposed.', model: false },
-  { id: 'improve', label: 'Improve', what: 'Session logs with two planted problems: a tool that fails the same way several times, and a task done by hand again and again.', must: 'It names the right plugin, shows the log entries, proposes the fix, and recommends the missing plugin.', model: true },
-  { id: 'long', label: 'Long run', what: 'A Long run with a time limit and a turn limit.', must: 'It asks nothing after the first minute, stops at the first limit, changes nothing in the real setup, and hands over its questions and proposals.', model: false },
+  { id: 'improve', label: 'Improve', what: 'Thread logs with two planted problems: a tool that fails the same way several times, and a task done by hand again and again.', must: 'It names the right plugin, shows the log entries, proposes the fix, and recommends the missing plugin.', model: true },
+  { id: 'long', label: 'Mission', what: 'A Mission with a time limit and a turn limit.', must: 'It asks nothing after the first minute, stops at the first limit, changes nothing in the real setup, and hands over its questions and proposals.', model: false },
   { id: 'scope', label: 'Scope', what: 'One plugin is selected, and the request needs a second plugin to change.', must: 'It stops and asks to add the second plugin; nothing outside the selection was opened or changed.', model: false },
 ];
 
 /** The prompts of the model parts, to run in a Creator Plus conversation on the model being scored. */
 export const MODEL_PROMPTS = {
-  rebuild: 'Self-test "Rebuild": pick three plugins of different kinds from the map (a tool, a tab, a page). For each, read only its brief (creator_passport show), build it again in this folder with creator_scaffold and the recipe, without opening the original\'s code, and run creator_check. Then report for each: did it pass the original\'s tests (creator_check with the original\'s tests copied in), and does it fit.',
+  rebuild: 'Self-test "Rebuild": pick three plugins of different kinds from the map (a tool, a mode, a page). For each, read only its brief (creator_passport show), build it again in this folder with creator_scaffold and the recipe, without opening the original\'s code, and run creator_check. Then report for each: did it pass the original\'s tests (creator_check with the original\'s tests copied in), and does it fit.',
   look: 'Self-test "Look": build the same small page plugin twice with creator_scaffold: once to match the look of what is enabled (the map\'s look list), once with a look of its own (a different accent and type size you choose). Run creator_check on both and describe how each one looks and why.',
   improve: 'Self-test "Improve": run creator_improve on the selection. Name the plugin with the repeated failure, show its log entries, propose the fix as a card, and recommend the plugin that is missing for the task the user keeps doing by hand.',
 };
@@ -61,7 +61,7 @@ export async function runCodeParts({ run } = {}) {
   try {
     // 2. Collision: a command that exists and a tool for Recon, caught before anything is built.
     const fit = fitCheck({ name: '@local/dsh-new', commands: ['notes'], tools: ['new_find'], modes: ['recon'], givesTools: { recon: ['new_find'] } }, map);
-    const caught = fit.result === 'blocked' && fit.findings.some((finding) => /command "notes"/.test(finding.text)) && fit.findings.some((finding) => /sealed tab/.test(finding.text));
+    const caught = fit.result === 'blocked' && fit.findings.some((finding) => /command "notes"/.test(finding.text)) && fit.findings.some((finding) => /sealed mode/.test(finding.text));
     results.push({ id: 'collision', ok: caught, text: caught ? 'Both collisions were blocked before anything was built.' : `Not caught: ${JSON.stringify(fit)}` });
     // 4. Change: proposal, backup and undo.
     const plugin = map.plugins.find((entry) => entry.name === '@local/dsh-notes');
@@ -94,11 +94,11 @@ export async function runCodeParts({ run } = {}) {
     const cards = findingCards({ byPlugin: { '@local/dsh-files': found.findings.map((item) => ({ ...item, conversation: 'c1' })) }, general: [] });
     const improveOk = cards.some((card) => card.plugin === '@local/dsh-files' && card.kind === 'tool-error' && card.count === 3) && cards.some((card) => card.kind === 'repeated');
     results.push({ id: 'improve', ok: improveOk ? undefined : false, text: improveOk ? 'Code part passed: the repeated failure was tied to its plugin with its log entries. The fix and the missing plugin need a model (the prompt is ready).' : 'The planted failure was not found.' });
-    // 7. Long run: no question after the first minute; no write into the real setup.
+    // 7. Mission (id 'long', was "Long run"): no question after the first minute; no write into the real setup.
     const silent = questionRefusal({ longSince: 1_000, now: 70_000 }) !== '' && questionRefusal({ longSince: 1_000, now: 30_000 }) === '';
     const realHome = join(scratch, 'dsh');
     const blocked = guardRefusal({ name: 'write', args: { file_path: join(realHome, 'addons', 'x', 'index.js') }, cwd: join(scratch, 'build'), dshHome: realHome, outside: [join(realHome, 'addons')] }) !== '';
-    results.push({ id: 'long', ok: silent && blocked, text: silent && blocked ? 'After its first minute a Long run asks nothing; it cannot write into the real setup. Stopping at the first limit is the Long run\'s own (Mission).' : 'A Long run could ask late or write into the real setup.' });
+    results.push({ id: 'long', ok: silent && blocked, text: silent && blocked ? 'After its first minute a Mission asks nothing; it cannot write into the real setup. Stopping at the first limit is the Mission\'s own.' : 'A Mission could ask late or write into the real setup.' });
     // 8. Scope: one plugin selected; the second must be added by the user.
     const state = barState({ selection: ['@local/dsh-notes'], run: 'improve' }, map.plugins.map((entry) => entry.name));
     const stopped = boundaryRefusal(state, '@local/dsh-files', map.plugins.find((entry) => entry.name === '@local/dsh-files'), 'change') !== '' && boundaryRefusal(state, '@local/dsh-notes', plugin, 'change') === '';

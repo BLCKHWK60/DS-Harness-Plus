@@ -180,8 +180,8 @@ export function openTrash(dir, { wiping = () => false } = {}) {
       return false;
     }
   };
-  const WIPED = 'This Recon conversation was ended with End and wipe: it is being deleted for good, not moved to the trash.';
-  const ERASING = 'This conversation is being deleted permanently: it cannot be put back.';
+  const WIPED = 'This Recon thread was ended with End and wipe: it is being deleted for good, not moved to the trash.';
+  const ERASING = 'This thread is being deleted permanently: it cannot be put back.';
   const PARTIAL = 'Its files did not all reach the trash, so it cannot be deleted permanently: put it back, then delete it again.';
   const pendingFile = join(dir, 'pending.json');
   const entryDir = (id) => join(dir, id);
@@ -379,12 +379,12 @@ export function openTrash(dir, { wiping = () => false } = {}) {
      */
     add(what) {
       const { id, title, parts, deletedAt = Date.now(), tab, fallbackTab } = what;
-      if (!safeId(id)) throw new Error('not a conversation id');
+      if (!safeId(id)) throw new Error('not a thread id');
       if (wiped(id)) throw new Error(WIPED);
       if (!Array.isArray(parts) || parts.length === 0 || parts[0].id !== id) throw new Error('nothing to move');
       for (const part of parts) {
-        if (!safeId(part.id)) throw new Error('not a conversation id');
-        if (!isAbsolute(String(part.folder)) || !isSessionFolder(part.folder)) throw new Error(`not a stored conversation: ${part.id}`);
+        if (!safeId(part.id)) throw new Error('not a thread id');
+        if (!isAbsolute(String(part.folder)) || !isSessionFolder(part.folder)) throw new Error(`not a stored thread: ${part.id}`);
       }
       // A Scratch thread's own files (its sub-folder of the Scratch place) go with it: a real folder, never a link.
       const folders = (Array.isArray(what.folders) ? what.folders : []).filter((folder) => {
@@ -404,7 +404,9 @@ export function openTrash(dir, { wiping = () => false } = {}) {
       const marked = waitingEntry?.erase === true;
       // A run of a group row keeps its group (given now, or kept with it while it waited).
       const group = groupFields(what).group ? groupFields(what) : groupFields(waitingEntry);
-      const info = { id, title: cleanTitle(title), deletedAt, ...tabField(tab), ...fallbackField(fallbackTab), ...group, ...(marked ? { erase: true } : {}), parts: parts.map((p) => ({ id: p.id, from: p.folder, cacheFrom: p.cache && existsSync(p.cache) ? p.cache : null })), ...(folders.length > 0 ? { folders: folders.map((from, index) => ({ from, name: `files-${index}` })) } : {}) };
+      // Final fix round (lab): Delete archived it itself, so Put back brings it back to the list, not to Archived.
+      const back = what.back === 'list' || waitingEntry?.back === 'list' ? { back: 'list' } : {};
+      const info = { id, title: cleanTitle(title), deletedAt, ...tabField(tab), ...fallbackField(fallbackTab), ...group, ...back, ...(marked ? { erase: true } : {}), parts: parts.map((p) => ({ id: p.id, from: p.folder, cacheFrom: p.cache && existsSync(p.cache) ? p.cache : null })), ...(folders.length > 0 ? { folders: folders.map((from, index) => ({ from, name: `files-${index}` })) } : {}) };
       // Written first: an interrupted move can still be put back from this record.
       writeJsonAtomic(join(target, 'info.json'), info);
       for (const part of info.parts) {
@@ -423,13 +425,13 @@ export function openTrash(dir, { wiping = () => false } = {}) {
      */
     addPending(what) {
       const { id, title, deletedAt = Date.now(), tab, fallbackTab } = what;
-      if (!safeId(id)) throw new Error('not a conversation id');
+      if (!safeId(id)) throw new Error('not a thread id');
       if (wiped(id)) throw new Error(WIPED);
       if (existsSync(entryDir(id))) return;
       const waiting = readPending();
       const prior = waiting.find((item) => item.id === id);
       const group = groupFields(what).group ? groupFields(what) : groupFields(prior);
-      const entry = { id, title: cleanTitle(title), deletedAt, ...tabField(safeTab(tab) ? tab : prior?.tab), ...fallbackField(safeTab(fallbackTab) ? fallbackTab : prior?.fallbackTab), ...group, ...(prior?.erase === true ? { erase: true, ...(typeof prior.markedStamp === 'string' ? { markedStamp: prior.markedStamp } : {}) } : {}) };
+      const entry = { id, title: cleanTitle(title), deletedAt, ...tabField(safeTab(tab) ? tab : prior?.tab), ...fallbackField(safeTab(fallbackTab) ? fallbackTab : prior?.fallbackTab), ...group, ...(what.back === 'list' || prior?.back === 'list' ? { back: 'list' } : {}), ...(prior?.erase === true ? { erase: true, ...(typeof prior.markedStamp === 'string' ? { markedStamp: prior.markedStamp } : {}) } : {}) };
       writePending([...waiting.filter((item) => item.id !== id), entry]);
     },
 
@@ -439,7 +441,7 @@ export function openTrash(dir, { wiping = () => false } = {}) {
      * @returns {boolean} true when it was waiting.
      */
     dropPending(id) {
-      if (!safeId(id)) throw new Error('not a conversation id');
+      if (!safeId(id)) throw new Error('not a thread id');
       const waiting = readPending();
       if (!waiting.some((item) => item.id === id)) return false;
       writePending(waiting.filter((item) => item.id !== id));
@@ -500,8 +502,19 @@ export function openTrash(dir, { wiping = () => false } = {}) {
      * @param {string} id - its id.
      * @returns {boolean} true when it was in the trash.
      */
+    /**
+     * Final fix round: whether Put back should also take it out of Archived (Delete archived it itself).
+     * @param {string} id - its id.
+     * @returns {boolean}
+     */
+    backToList(id) {
+      if (!safeId(id)) return false;
+      if (readPending().some((item) => item.id === id && item.back === 'list')) return true;
+      return readInfo(id)?.back === 'list';
+    },
+
     restore(id) {
-      if (!safeId(id)) throw new Error('not a conversation id');
+      if (!safeId(id)) throw new Error('not a thread id');
       if (wiped(id)) throw new Error(WIPED);
       const waiting = readPending();
       if (waiting.some((item) => item.id === id && item.erase === true)) throw new Error(ERASING);
@@ -516,7 +529,7 @@ export function openTrash(dir, { wiping = () => false } = {}) {
         const session = join(target, part.id, 'session');
         const cache = join(target, part.id, 'cache.json');
         if (existsSync(session)) {
-          if (existsSync(part.from)) throw new Error('a conversation is already in its place');
+          if (existsSync(part.from)) throw new Error('a thread is already in its place');
           moves.push([session, part.from]);
         }
         if (part.cacheFrom && isAbsolute(String(part.cacheFrom)) && existsSync(cache) && !existsSync(part.cacheFrom)) moves.push([cache, part.cacheFrom]);
@@ -556,7 +569,7 @@ export function openTrash(dir, { wiping = () => false } = {}) {
      * @returns {'erased' | 'marked' | 'absent'} what happened.
      */
     erase(id, { stamp } = {}) {
-      if (!safeId(id)) throw new Error('not a conversation id');
+      if (!safeId(id)) throw new Error('not a thread id');
       const target = entryDir(id);
       let entry = null;
       try {
@@ -565,7 +578,7 @@ export function openTrash(dir, { wiping = () => false } = {}) {
         entry = null;
       }
       // Only a conversation's folder (or a stray link, which alone goes): never the trash's own files.
-      if (entry && !entry.isDirectory() && !entry.isSymbolicLink()) throw new Error('not a conversation id');
+      if (entry && !entry.isDirectory() && !entry.isSymbolicLink()) throw new Error('not a thread id');
       if (entry) {
         const info = entry.isDirectory() ? readInfo(id) : null;
         // A move that broke off half-way: some files are still in the app's store. Erasing the record

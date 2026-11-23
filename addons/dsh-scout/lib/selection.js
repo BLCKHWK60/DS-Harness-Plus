@@ -44,7 +44,7 @@ export function selectionNote(selection, { profile, files, reports, model } = {}
     `Markets: ${selection.markets.length > 0 ? selection.markets.map((market) => `${market}${MARKETS[market] ? ` (${MARKETS[market].languages.join('/')})` : ''}`).join(', ') : 'none chosen; ask which'}`,
   ].filter(Boolean);
   return [
-    'Scout selection when this conversation started (the user\'s own entries; anything empty is for you to infer and state):',
+    'Scout selection when this thread started (the user\'s own entries; anything empty is for you to infer and state):',
     ...given.map((item) => `- ${item}`),
     model ? `Model: ${model}` : '',
     files ? `User's files: ${files}` : '',
@@ -56,7 +56,7 @@ export function selectionNote(selection, { profile, files, reports, model } = {}
 /** Which selection each conversation started with. Kept in a small file. */
 export function openPins(file, max = 500) {
   let table = {};
-  if (file) table = readJsonStore(file, () => ({}), { label: 'the choices Scout kept for each conversation', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
+  if (file) table = readJsonStore(file, () => ({}), { label: 'the choices Scout kept for each thread', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
   const write = () => {
     if (!file) return;
     try {

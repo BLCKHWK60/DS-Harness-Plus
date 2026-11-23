@@ -29,6 +29,39 @@ import { insideFolder, openOwned } from './lib/owned.js';
 import { openFolder, openProfile } from './lib/private.js';
 import { providerPlace, staysHome } from './lib/model.js';
 import { buildTools } from './lib/tools.js';
+import { makeGuardOf } from './lib/space-guard.js';
+
+/** The store methods that take a conversation id first (lib/store.js). */
+const STORE_METHODS = ['fileOf', 'request', 'add', 'get', 'note', 'noteAll', 'saved', 'reports', 'count', 'all'];
+
+/**
+ * Item 4A, stage 6a: one store for Scout's tools that keeps a sealed thread's postings (Recon, any mode) in memory
+ * only, so no record of it is written to or read from Scout's shared folder.
+ * @param {object} disk - the store with files.
+ * @param {object} memory - a store opened with no folder.
+ * @param {(id: string) => boolean} sealed - whether a conversation is sealed (true on a read error).
+ * @returns {object} the same methods as a store.
+ */
+export function splitStore(disk, memory, sealed) {
+  const pick = (id) => {
+    try {
+      return sealed(String(id ?? '')) === true ? memory : disk;
+    } catch {
+      return memory;
+    }
+  };
+  const out = {};
+  for (const method of STORE_METHODS) out[method] = (id, ...rest) => pick(id)[method](id, ...rest);
+  out.remove = (id) => {
+    memory.remove(id);
+    disk.remove(id);
+  };
+  out.forget = (id) => {
+    memory.forget(id);
+    disk.forget(id);
+  };
+  return out;
+}
 
 export const name = 'dsh-scout';
 /** The tools service: for the tools, and for the guard that keeps search-engine-only sources unfetched. */
@@ -38,7 +71,7 @@ const NS = 'scout';
 const MODES_NS = 'modes';
 
 export const Config = z.object({
-  /** The Scout mode and tab. Off leaves nothing of it in the app. */
+  /** The Scout mode. Off leaves nothing of it in the app. */
   enabled: z.boolean().default(false).volatile(),
   /** The start page: the work, in the user's words. */
   title: z.string().default('').volatile(),
@@ -96,6 +129,20 @@ export function apply(ctx, config) {
   const pins = openPins(scoutHome ? join(scoutHome, 'conversations.json') : '');
   const profile = openProfile(scoutHome ? join(scoutHome, 'profile.md') : '');
   const store = openStore(scoutHome ? join(scoutHome, 'postings') : '');
+  // Item 4A, stage 6a: a sealed thread (Recon, any mode; a Modes read error counts) keeps its postings and its
+  // selection in memory only, never reads the user's Scout files or profile, and saves reports only in its Recon
+  // room. No Modes service: as before.
+  const guardOf = makeGuardOf(() => ctx.get('modes'));
+  const sealedId = (id) => Boolean(id) && guardOf(String(id)).sealed === true;
+  const sealedStore = openStore('');
+  const sealedPins = new Map();
+  const roomFolderOf = (id) => {
+    try {
+      return String(ctx.get('recon')?.roomFolderOf?.(String(id ?? '')) ?? '');
+    } catch {
+      return '';
+    }
+  };
   // Scratch (steps 40 and 41): what a Scratch conversation leaves here (its reports in Scout's own folder,
   // its postings, its selection) goes when that conversation is deleted for good. Reports stay listed and
   // compared until then. A Scout folder you picked yourself is never touched.
@@ -205,7 +252,7 @@ export function apply(ctx, config) {
       const service = ctx.get('settings');
       const row = service?.describe?.().find((entry) => entry.ns === MODES_NS);
       if (!row) {
-        problem = 'The Modes add-on is not running, so there is no Scout tab.';
+        problem = 'The Modes add-on is not running, so there is no Scout mode. Switch Modes on on the Plugins page.';
         return;
       }
       if (row.value?.extraModes === undefined) {
@@ -216,11 +263,14 @@ export function apply(ctx, config) {
       const ops = [];
       const next = withScout(row.value.extraModes, on);
       if (next !== undefined) ops.push({ op: 'set', path: ['extraModes'], value: next });
+      // Item 4A, stage 6b (D14): without the Cowork sidebar (and in the lab with spaces off) `defaultMode` still picks a new
+      // thread's mode, so it must not name a mode that is gone. With spaces, Modes already skips a start mode whose
+      // add-on is off and keeps the owner's choice (lib/spaces.js draftStartMode, startModeGone).
       if (!on && row.value.defaultMode === MODE_ID) ops.push({ op: 'set', path: ['defaultMode'], value: 'cowork' });
       if (ops.length > 0) await service.mutate(MODES_NS, ops);
       problem = '';
     } catch (error) {
-      problem = `The Scout tab could not be ${settings().enabled ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
+      problem = `The Scout mode could not be ${settings().enabled ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
       warn(problem);
     } finally {
       syncing = false;
@@ -297,7 +347,9 @@ export function apply(ctx, config) {
               const now = settings();
               if (!now.enabled || !inScout(agent)) return '';
               const root = rootOf(agent);
-              // Helpers do not get the user's files or profile, so their note does not mention them.
+              // Helpers do not get the user's files or profile, so their note does not mention them. Item 4A, stage
+              // 6a: neither does a sealed thread (Recon), which keeps its selection in memory.
+              if (sealedId(root)) return selectionNote(sealedPins.get(root) ?? now.selection, { model: placeText(agent) });
               if (isHelper(agent)) return selectionNote(pins.get(root) ?? now.selection, { model: placeText(agent) });
               const count = currentFolder().list().length;
               const files = `${count} file${count === 1 ? '' : 's'} in the Scout folder (scout_files)`;
@@ -321,6 +373,8 @@ export function apply(ctx, config) {
   ctx.on('agent/disposed', ({ agent }) => {
     sections.delete(agent?.id);
     store.forget(agent?.id);
+    sealedStore.forget(agent?.id);
+    sealedPins.delete(agent?.id);
   });
   try {
     for (const agent of ctx.get('agents')?.list?.() ?? []) install(agent);
@@ -344,8 +398,10 @@ export function apply(ctx, config) {
       if (event?.type !== 'turn/start' || session?.header?.origin === 'subagent') return;
       const id = session?.id;
       const now = settings();
-      if (!id || !now.enabled || pins.get(id) || modes()?.get?.(id) !== MODE_ID) return;
-      pins.pin(id, now.selection);
+      if (!id || !now.enabled || pins.get(id) || sealedPins.has(id) || modes()?.get?.(id) !== MODE_ID) return;
+      // Item 4A, stage 6a: a sealed thread's selection stays in memory.
+      if (sealedId(id)) sealedPins.set(id, now.selection);
+      else pins.pin(id, now.selection);
     } catch (error) {
       warn(`could not remember a conversation's selection: ${String(error?.message ?? error)}`);
     }
@@ -363,14 +419,16 @@ export function apply(ctx, config) {
         enabled: () => settings().enabled,
         registry: () => settings().registry,
         // The selection the conversation started with, so the tools' defaults match its note.
-        selection: (exec) => pins.get(rootOf(exec?.agent)) ?? settings().selection,
+        selection: (exec) => sealedPins.get(rootOf(exec?.agent)) ?? pins.get(rootOf(exec?.agent)) ?? settings().selection,
         keyOf,
         hasKey: (id) => keys[id]?.set === true,
-        store,
+        store: splitStore(store, sealedStore, sealedId),
         folder: { list: () => currentFolder().list(), read: (file) => currentFolder().read(file), ensure: () => currentFolder().ensure(), root: () => currentFolder().root },
         profile,
         gate,
         idOf: (exec) => rootOf(exec?.agent),
+        sealed: (exec) => sealedId(String(exec?.agent?.id ?? '')) || sealedId(rootOf(exec?.agent)),
+        roomOf: (exec) => roomFolderOf(rootOf(exec?.agent)),
       });
       const offered = (tool, agent) => settings().enabled && inScout(agent) && !(TOP_ONLY.includes(tool.name) && isHelper(agent));
       toolsOff = built.map((tool) => tools.register(tool, { when: ({ agent }) => offered(tool, agent) }));
@@ -425,12 +483,12 @@ export function apply(ctx, config) {
 
   const status = (agent) => {
     if (!settings().enabled) return 'Scout is switched off (Settings → Scout).';
-    if (!inScout(agent)) return 'This is not a Scout conversation. Start one from the Scout tab.';
+    if (!inScout(agent)) return 'This is not a Scout thread. Start a new thread in the Chat space and pick Scout in the Mode list.';
     return [
       `Model: ${placeText(agent)}.`,
       `Your files: ${currentFolder().list().length} in the Scout folder, readable by this model.`,
       `Your profile: ${profile.read().trim() ? 'saved, available to this model' : 'none yet'}.`,
-      `Saved reports: ${countReports(folderPath())}, which this conversation can read and compare with.`,
+      `Saved reports: ${countReports(folderPath())}, which this thread can read and compare with.`,
       `Folder: ${folderPath()}`,
     ].join('\n');
   };
@@ -438,7 +496,7 @@ export function apply(ctx, config) {
     inner.effect(
       () => inner.commands.register({
         name: 'scout',
-        description: 'Scout conversation: show which model it uses and what it can read',
+        description: 'Scout thread: show which model it uses and what it can read',
         input: { hint: '[status]' },
         handler: async ({ agent, rawInput }) => {
           try {

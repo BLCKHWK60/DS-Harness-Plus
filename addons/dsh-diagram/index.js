@@ -45,7 +45,7 @@ export const Config = z.object({
   enabled: z.boolean().default(true).volatile(),
   /** Colours of the saved file: `auto` follows light or dark mode of whatever shows it. */
   theme: z.string().default('auto').volatile(),
-  /** Name of the folder, inside the conversation's folder, that pictures are saved in. */
+  /** Name of the folder, inside the thread's folder, that pictures are saved in. */
   folder: z.string().default('diagrams').volatile(),
   /** Save the picture as a file. Off shows it in the chat only. */
   save: z.boolean().default(true).volatile(),
@@ -194,7 +194,7 @@ export function turnDrawings(records, session, from, to) {
  * @returns {string} text.
  */
 export function answerText(result, saved) {
-  const lines = [`Drawn: ${result.title} (${result.kind}, ${result.width} × ${result.height}). It is shown to the user in the chat.`];
+  const lines = [`Drawn: ${result.title} (${result.kind}, ${result.width} × ${result.height}). It is shown to the user in the thread.`];
   if (saved.file) lines.push(`Saved as: ${saved.file}`);
   if (saved.note) lines.push(saved.note);
   lines.push(`Diagram id: ${saved.id}`, '', 'What was drawn:', result.outline);
@@ -202,6 +202,9 @@ export function answerText(result, saved) {
   else lines.push('', 'No problems found. Check the outline against what you meant.');
   return lines.join('\n');
 }
+
+/** Item 4A, stage 6a: a sealed thread (Recon, any mode) without its own run folder in Recon's room keeps its drawing in the chat only. */
+export const SEALED_NOT_SAVED = 'Not saved as a file: this Recon thread is not in Recon\'s room.';
 
 /**
  * @param {import('@deepseek-ai/cordis').Context} ctx - plugin context.
@@ -226,7 +229,19 @@ export function apply(ctx, config) {
     const kept = readJsonStore(indexFile, () => [], { label: 'the list of Diagram drawings', valid: (value) => Array.isArray(value) });
     records = kept.filter((row) => row && typeof row.id === 'string' && typeof row.session === 'string' && Number.isFinite(row.at));
   }
-  const remember = (row) => {
+  /**
+   * Item 4A, stage 6a: drawings of a sealed thread (Recon, any mode) are kept in memory only: the shared list
+   * (diagrams/index.json) would hold their titles. They still show in the chat until the app restarts.
+   */
+  let sealedRecords = [];
+  /** Every drawing the chat may show: the saved list and the sealed threads' memory-only ones. */
+  const allRecords = () => (sealedRecords.length > 0 ? [...records, ...sealedRecords] : records);
+  const remember = (row, { sealed = false } = {}) => {
+    if (sealed) {
+      sealedRecords.push(row);
+      if (sealedRecords.length > 200) sealedRecords = sealedRecords.slice(-200);
+      return;
+    }
     records.push(row);
     if (records.length > 600) records = records.slice(-600);
     if (!indexFile) return;
@@ -234,6 +249,37 @@ export function apply(ctx, config) {
       writeFileSync(indexFile, JSON.stringify(records));
     } catch (error) {
       ctx.logger?.warn?.(`diagram: could not update the list of pictures: ${error?.message ?? error}`);
+    }
+  };
+  /**
+   * Item 4A, stage 6a: what Modes says about a thread's space (STAGE6A-DESIGN.md 2.6, copied: no import across add-ons).
+   * No Modes: not sealed (as today); a Modes that throws: sealed (fail closed).
+   */
+  const sealedThread = (id) => {
+    let modes;
+    try {
+      modes = ctx.get('modes');
+    } catch {
+      return false;
+    }
+    if (!modes) return false;
+    try {
+      if (typeof modes.guardOf === 'function') return modes.guardOf(String(id ?? ''))?.sealed !== false;
+      return modes.isolated?.(id) === true || String(modes.spaces?.of?.(id) ?? '') === 'recon';
+    } catch {
+      return true;
+    }
+  };
+  /**
+   * Item 4A, stage 6a (I8): the thread's own run folder in Recon's room (`run-<id>`, which End and wipe deletes), or ''
+   * when Recon cannot give one (Recon off, an older Recon, an error, a thread outside the room). Then nothing is saved.
+   */
+  const reconRunFolder = (id) => {
+    try {
+      const folder = ctx.get('recon')?.roomFolderOf?.(String(id ?? ''));
+      return typeof folder === 'string' ? folder : '';
+    } catch {
+      return '';
     }
   };
   /** Is the picture of this drawing still to be had: in memory, or as a saved file of ours? */
@@ -297,12 +343,16 @@ export function apply(ctx, config) {
           const saved = { id };
           const agent = exec?.agent;
           const session = String(agent?.session?.id ?? agent?.sessionId ?? agent?.id ?? '');
+          // Item 4A, stage 6a: a sealed thread (Recon, any mode) saves only inside Recon's room, and is not listed in the shared index.
+          const sealed = sealedThread(agent?.id ?? session);
           if (now.save) {
             try {
-              const cwd = await folderOfAgent(agent, exec?.signal);
-              if (!cwd) saved.note = 'It was not saved as a file, because this conversation has no folder.';
+              // A sealed thread saves only under its own run folder in the room (never the shared room root).
+              const base = sealed ? reconRunFolder(agent?.id ?? session) : await folderOfAgent(agent, exec?.signal);
+              if (sealed && !base) saved.note = SEALED_NOT_SAVED;
+              else if (!base) saved.note = 'It was not saved as a file, because this thread has no folder.';
               else {
-                const dir = join(cwd, now.folder);
+                const dir = join(base, now.folder);
                 mkdirSync(dir, { recursive: true });
                 const wished = typeof args?.name === 'string' && args.name.trim() !== '';
                 saved.file = savePath(dir, slug(wished ? args.name : result.title), wished);
@@ -313,7 +363,7 @@ export function apply(ctx, config) {
               saved.note = `It could not be saved as a file (${String(error?.code ?? error?.message ?? error).slice(0, 80)}).`;
             }
           }
-          remember({ id, session, at: Date.now(), title: result.title, file: saved.file ?? '', problems: result.problems.length });
+          remember({ id, session, at: Date.now(), title: result.title, file: saved.file ?? '', problems: result.problems.length }, { sealed });
           return { text: answerText(result, saved) };
         },
       }),
@@ -355,7 +405,8 @@ export function apply(ctx, config) {
       // An SVG file the add-on saved of the same drawing (Data's chart files) is recorded with it, so
       // the picture shows again after a restart. It is served only while it carries this add-on's mark.
       const svgFile = typeof picture.file === 'string' && picture.file.toLowerCase().endsWith('.svg') ? picture.file : '';
-      remember({ id, session, at: Date.now(), title: String(picture.title || result.title).slice(0, 120), file: svgFile, problems: 0 });
+      // Item 4A, stage 6a: a sealed thread's picture is kept in memory only.
+      remember({ id, session, at: Date.now(), title: String(picture.title || result.title).slice(0, 120), file: svgFile, problems: 0 }, { sealed: sealedThread(agent?.id ?? session) });
       return { ok: true, id, outline: result.outline };
     }
     const file = String(picture?.file ?? '');
@@ -365,7 +416,7 @@ export function apply(ctx, config) {
     } catch {
       return { ok: false, errors: ['The picture file is not there.'] };
     }
-    remember({ id, session, at: Date.now(), title: String(picture.title || 'Chart').slice(0, 120), file, problems: 0, picture: mime });
+    remember({ id, session, at: Date.now(), title: String(picture.title || 'Chart').slice(0, 120), file, problems: 0, picture: mime }, { sealed: sealedThread(agent?.id ?? session) });
     return { ok: true, id };
   };
   ctx.effect(() => ctx.provide('diagrams', Object.freeze({ apiVersion: 2, draw: (description) => draw(description), show })), 'diagram service');
@@ -412,7 +463,7 @@ export function apply(ctx, config) {
             let svg = '';
             if (/^[0-9a-f]{12}$/.test(id)) {
               const kept = recent.get(id);
-              const stored = kept ? undefined : records.find((item) => item.id === id);
+              const stored = kept ? undefined : allRecords().find((item) => item.id === id);
               if (stored?.picture) {
                 // A picture file another add-on made (a chart from Python, for instance): sent as it is.
                 try {
@@ -429,7 +480,7 @@ export function apply(ctx, config) {
               if (kept) svg = kept.svg({ theme, background: false });
               else {
                 // After a restart only the saved file is left. It is shown as it was saved, if it is still one of ours.
-                const row = records.find((item) => item.id === id);
+                const row = allRecords().find((item) => item.id === id);
                 try {
                   const text = row?.file ? readFileSync(row.file, 'utf8') : '';
                   if (text.slice(0, 600).includes(MARK) && text.length < 2_000_000) svg = text;
@@ -459,7 +510,7 @@ export function apply(ctx, config) {
             if (!guard(req, res)) return;
             res.setHeader('content-type', 'application/json; charset=utf-8');
             const session = String(req.headers?.['x-dsh-session'] ?? '');
-            res.end(JSON.stringify({ items: turnDrawings(records, session, Number(req.headers?.['x-dsh-from']), Number(req.headers?.['x-dsh-to'])).filter(available) }));
+            res.end(JSON.stringify({ items: turnDrawings(allRecords(), session, Number(req.headers?.['x-dsh-from']), Number(req.headers?.['x-dsh-to'])).filter(available) }));
           },
         }),
       'diagram: GET list route',

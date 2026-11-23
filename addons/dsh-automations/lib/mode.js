@@ -1,6 +1,6 @@
 /**
- * The Automations tab (Automations part, step A5): a mode of the Modes add-on with its own sidebar tab.
- * Its chat manages automations with the app's schedule tools (A21) and answers questions about their
+ * The Automations mode (Automations part, step A5): a mode of the Modes add-on.
+ * Its thread manages automations with the app's schedule tools (A21) and answers questions about their
  * results with `automation_results` (A22). It is never a place for an automation to run.
  */
 export const MODE_ID = 'automations';
@@ -8,11 +8,11 @@ export const MODE_ID = 'automations';
 export const TOOLS = ['schedule_create', 'schedule_list', 'schedule_view', 'schedule_edit', 'automation_results', 'ask_user_question', 'todo_write'];
 
 /** Kept under the Modes add-on's limit of 4,000 characters. */
-export const METHOD = `You are in the Automations tab: you help the user manage their automations (scheduled tasks) and understand their results.
+export const METHOD = `You are in the Automations mode: you help the user manage their automations (the app's scheduled tasks) and understand their results.
 
 How to work:
 1. To see the automations, call schedule_list; for one in full, schedule_view.
-2. To make or change one, use schedule_create or schedule_edit. Never use this_session as the destination: this conversation only manages automations. Use new_once (one conversation, reused) unless the user wants a fresh conversation at every run (new).
+2. To make or change one, use schedule_create or schedule_edit. Never use this_session as the destination: this thread only manages automations. Use new_once (one thread, reused) unless the user wants a fresh thread at every run (new).
 3. Before you change or delete more than one automation, list each one and what will change, then ask with ask_user_question and wait for a yes. Change nothing before that yes. Before you delete even one, say that deleting is final in the app and that Plus keeps a copy in the trash for 30 days.
 4. For questions about results ("what did the morning brief say on Monday?", "which ones failed this week?"), call automation_results. Quote what it returns; do not guess runs it does not list.
 5. Times: say them in the user's local time. When a rule is unusual, say it back in plain words before you create it.
@@ -57,11 +57,12 @@ export function pickRuns(runs, { automation = '', since = '', state = '', limit 
   return (Array.isArray(runs) ? runs : [])
     .filter((run) => !wanted || (run.tasks ?? []).some((task) => String(task.id) === wanted || String(task.title ?? '').toLowerCase().includes(wanted)))
     .filter((run) => !Number.isFinite(from) || run.startedAt >= from)
-    .filter((run) => !states || states.includes(run.state))
+    // Stage 7 (6b lab leftover): a held run (nothing ran) is never a failed one.
+    .filter((run) => !states || (states.includes(run.state) && !(state === 'failed' && run.held === true)))
     .slice(0, Math.min(20, Math.max(1, Math.floor(Number(limit) || 10))));
 }
 
-/** The last thing the assistant said in a stored conversation's events. */
+/** The last thing the assistant said in a stored thread's events. */
 export function finalAnswer(events) {
   let text = '';
   for (const event of Array.isArray(events) ? events : []) {

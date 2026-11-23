@@ -13,7 +13,7 @@ const addons = readdirSync(join(ROOT, 'addons')).filter((d) => existsSync(join(R
 const WORDS = { Forty: 40, 'Forty-one': 41, 'Forty-two': 42, 'Forty-eight': 48, 'Forty-nine': 49, Thirty: 30, 'Thirty-four': 34 };
 
 test('every "N add-ons" claim in the user documents is the real number', () => {
-  assert.equal(addons.length, 48, 'the product has 48 add-ons; change this test and the documents together');
+  assert.equal(addons.length, 49, 'the product has 49 add-ons; change this test and the documents together');
   for (const file of ['README.md', 'docs/ADD-ONS.md', 'docs/GUIDE.md', 'docs/guide-part1.md', 'docs/HOW-IT-WORKS.md', 'docs/MODES-AND-SETTINGS.md']) {
     const text = read(file);
     for (const m of text.matchAll(/\b(\d+|Forty-eight|Forty-nine|Forty-two|Forty-one|Forty|Thirty-four|Thirty)\s+add-ons\b/g)) {
@@ -42,10 +42,10 @@ test('the README has the glossary and the not-affiliated line, and the guide has
   const readme = read('README.md');
   assert.match(readme, /\*\*Not affiliated with DeepSeek\.\*\*/);
   assert.match(readme, /## Words used in this guide/);
-  for (const word of ['Add-on', 'Mode', 'Tab', 'Conversation', 'Workspace', 'Tier']) assert.match(readme, new RegExp(`\\*\\*${word}[^*]*:\\*\\*`), word);
+  for (const word of ['Add-on', 'Space', 'Mode', 'Thread', 'Workspace', 'Tier']) assert.match(readme, new RegExp(`\\*\\*${word}[^*]*:\\*\\*`), word);
   const guide = read('docs/GUIDE.md');
   assert.match(guide, /### 3\. The chat box, button by button/);
-  for (const button of ['Access level', 'Web', 'Depth', 'Models chip', 'Tools', 'Long run', 'Export', 'Settings gear', 'Send', 'Place chip', 'Scout', 'Finance', 'Creator Plus']) assert.ok(guide.includes(`**${button}`), `the guide describes ${button}`);
+  for (const button of ['Access level', 'Web', 'Depth', 'Models chip', 'Tools', 'Start Mission', 'Mode', 'Export', 'Settings gear', 'Send', 'Place chip', 'Scout', 'Finance', 'Creator Plus']) assert.ok(guide.includes(`**${button}`), `the guide describes ${button}`);
 });
 
 test('the guide is what the generator makes from guide-part1.md (run node scripts/dev-guide.mjs)', () => {

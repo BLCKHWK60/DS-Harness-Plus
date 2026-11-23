@@ -56,7 +56,7 @@ test('only a new, empty conversation takes its tab from the Split page', async (
     assert.equal((await hit(routes, { method: 'POST', body: { action: 'claim', sessionId: 'fresh', mode: 'research' } })).status, 200);
     const old = await hit(routes, { method: 'POST', body: { action: 'claim', sessionId: 'old', mode: 'research' } });
     assert.equal(old.status, 400);
-    assert.match(old.data.error, /Only a new, empty conversation/);
+    assert.match(old.data.error, /Only a new, empty thread/);
     assert.deepEqual(set, [['fresh', 'research']]);
   } finally {
     rmSync(home, { recursive: true, force: true });
@@ -69,9 +69,9 @@ test('requests name conversations by real ids only; no id is special to the stor
   const home = folder();
   try {
     const { routes } = standIn(home);
-    assert.match((await hit(routes, { query: '?tray=__proto__' })).data.error, /not a conversation id/);
-    assert.match((await hit(routes, { query: '?files=../x' })).data.error, /not a conversation id/);
-    assert.match((await hit(routes, { method: 'POST', body: { action: 'send', fromSessionId: '__proto__', toSessionId: 'c1', kind: 'selection', text: 'x' } })).data.error, /not a conversation id/);
+    assert.match((await hit(routes, { query: '?tray=__proto__' })).data.error, /not a thread id/);
+    assert.match((await hit(routes, { query: '?files=../x' })).data.error, /not a thread id/);
+    assert.match((await hit(routes, { method: 'POST', body: { action: 'send', fromSessionId: '__proto__', toSessionId: 'c1', kind: 'selection', text: 'x' } })).data.error, /not a thread id/);
     assert.match((await hit(routes, { method: 'POST', body: [1, 2] })).data.error, /an object/);
     // A stored tray or pane set with such a key from an old file is plain data, never the object's prototype.
     writeFileSync(join(home, 'tray.json'), '{"__proto__":[{"id":"X","card":"c"}],"ok":[]}');

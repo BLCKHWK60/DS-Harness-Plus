@@ -98,15 +98,15 @@ export function inReconRoom(path) {
  * @returns {string} its real path.
  */
 export function realRoot(root) {
-  if (!root) throw new Error('This conversation has no folder. Start a Content conversation in a folder (picked on the start page), or in Scratch.');
+  if (!root) throw new Error('This thread has no folder. Start a Content thread in a folder (picked on the start page), or in Scratch.');
   let real;
   try {
     real = realpathSync.native(root);
   } catch {
-    throw new Error(`The conversation's folder ${root} is not there any more.`);
+    throw new Error(`The thread's folder ${root} is not there any more.`);
   }
-  if (inReconRoom(real) || inReconRoom(root)) throw new Error("This conversation's folder is Recon's sealed room. Content does not read or write there. Start the Content conversation in another folder, or in Scratch.");
-  if (!lstatSync(real).isDirectory()) throw new Error(`The conversation's folder ${root} is not a folder.`);
+  if (inReconRoom(real) || inReconRoom(root)) throw new Error("This thread's folder is Recon's sealed room. Content does not read or write there. Start the Content thread in another folder, or in Scratch.");
+  if (!lstatSync(real).isDirectory()) throw new Error(`The thread's folder ${root} is not a folder.`);
   return real;
 }
 
@@ -262,7 +262,7 @@ export function inventory(root, { has } = {}) {
 
   // The user's files, by kind.
   if (own.length === 0) {
-    lines.push('', 'Files of the user: none. The material can come from other conversations (content_bring_in), from what the user writes, or from the web.');
+    lines.push('', 'Files of the user: none. The material can come from other threads (content_bring_in), from what the user writes, or from the web.');
   } else {
     lines.push('', `Files of the user: ${own.length}${cut ? ` (the first ${SCAN_MAX} entries looked at; there are more)` : ''}, ${sizeText(own.reduce((sum, file) => sum + file.size, 0))} in all.`);
     const groups = [...KINDS, { id: 'other', label: 'Other files', reader: '' }];

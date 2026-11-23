@@ -165,8 +165,11 @@ window.__ModuleLoader__.load({
     // routes on its own timer, even in a hidden window. This gives all of them ONE shared Settings copy (read once, renewed when
     // Settings changes or after 30 seconds at the most) and one kind of polling loop that stops while the window is hidden.
     // The first copy of this block to run puts the shared state on `window.__dshPoll`; later copies reuse it, so 30 add-ons share one.
+    // A newer copy (higher API) replaces an older shared object instead of reusing it, so an older page file that runs first (an
+    // add-on edited in creator mode, a partly updated install) cannot keep the whole page on an older helper. Raise API with every
+    // change to how the shared state behaves.
     const dshPoll = (() => {
-      const API = 1;
+      const API = 2;
       const root = typeof window !== 'undefined' ? window : globalThis;
       if (root.__dshPoll && root.__dshPoll.api >= API) return root.__dshPoll;
 
@@ -175,7 +178,7 @@ window.__ModuleLoader__.load({
       /** Without the change event (an older app) the copy is only trusted for a moment. */
       const SETTINGS_TTL_NO_EVENTS = 2000;
       const WRITES = ['mutate', 'update', 'replace'];
-      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0 };
+      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0, changes: 0, repeats: 0, watchers: 0 };
       const cache = { value: undefined, at: 0, inflight: null, gen: 0, events: false };
       const changeListeners = new Set();
       const watched = new WeakSet();
@@ -195,38 +198,72 @@ window.__ModuleLoader__.load({
         cache.gen += 1;
       }
 
-      /** Listen once per page connection for "Settings changed" (the app sends it after every write, from any window). */
+      /** Changes already handled, `ns + revision` -> when: the same change reaches the page once per add-on that listens. */
+      const heard = new Map();
+      /** How long a change counts as "the same one" when it arrives again through another add-on's connection. */
+      const HEARD_MS = 2000;
+      /** The app's own marker for a wrapped service: `ctx.remote` hands out a NEW wrapper object at every read. */
+      const ORIGINAL = typeof Symbol === 'function' ? Symbol.for('cordis.original') : '__original';
+      /** Marks our own write wrapper, so it is never wrapped a second time. */
+      const OURS = '__dshPollWrite';
+
+      /**
+       * One "Settings changed" event from the app. Every add-on that listens hears the same event; it is acted on once.
+       * Bug of 21 November 2026 (a new chat made the page read Settings 12-17 times a second, the app ran at 100% and the
+       * tab crashed): `ctx.remote` is a new object at every read, so the old `watched.has(remote)` never matched and every
+       * read added one more listener; one change then woke every listener and each one started its own read.
+       */
+      function changed(ns, revision) {
+        if (typeof revision === 'number' || typeof revision === 'string') {
+          const now = Date.now();
+          for (const [key, at] of heard) if (now - at > HEARD_MS) heard.delete(key);
+          const key = `${String(ns)}\u0000${String(revision)}`;
+          if (heard.has(key)) { stats.repeats += 1; return; }
+          heard.set(key, now);
+        }
+        stats.changes += 1;
+        invalidate();
+        for (const listener of [...changeListeners]) {
+          try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
+        }
+      }
+
+      /** Listen once per add-on for "Settings changed" (the app sends it after every write, from any window). */
       function watch(ctx) {
         const remote = ctx && ctx.remote;
-        if (!remote || watched.has(remote)) return;
-        watched.add(remote);
+        if (!remote) return;
+        // Keyed on the add-on's own context, which stays the same object (its `remote` does not).
+        const key = ctx !== null && (typeof ctx === 'object' || typeof ctx === 'function') ? ctx : (remote[ORIGINAL] || remote);
+        if (watched.has(key)) return;
+        watched.add(key);
         try {
           if (typeof remote.$on === 'function') {
-            remote.$on('settings/document-updated', (ns) => {
-              invalidate();
-              for (const listener of [...changeListeners]) {
-                try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
-              }
-            });
+            remote.$on('settings/document-updated', changed);
+            stats.watchers += 1;
             cache.events = true;
           }
         } catch { /* no change event here: the short copy time covers it */ }
         try {
-          if (typeof ctx.on === 'function') ctx.on('connection/reset', invalidate);
+          if (typeof ctx.on === 'function') ctx.on('connection/reset', () => { heard.clear(); invalidate(); });
         } catch { /* optional */ }
         // This page's own writes drop the copy before their answer comes back, so a read that follows a write is never behind it.
         const settings = remote.settings;
-        if (settings && !wrapped.has(settings)) {
-          wrapped.add(settings);
+        const target = settings && (settings[ORIGINAL] || settings);
+        if (settings && !wrapped.has(target)) {
+          wrapped.add(target);
           for (const name of WRITES) {
             const original = settings[name];
-            if (typeof original !== 'function') continue;
+            // Already ours (put there through another add-on's wrapper object): wrapping it again would stack wrappers.
+            // An older copy's wrapper (marked `true`) is wrapped once more: it drops only the older copy's own cache.
+            if (typeof original !== 'function' || original[OURS] === API) continue;
             try {
-              settings[name] = function (...args) {
+              const write = function (...args) {
                 invalidate();
                 const done = original.apply(this, args);
                 return done && typeof done.then === 'function' ? done.then((out) => { invalidate(); return out; }, (error) => { invalidate(); throw error; }) : done;
               };
+              write[OURS] = API;
+              settings[name] = write;
             } catch { /* a frozen object keeps the plain call */ }
           }
         }
@@ -376,10 +413,11 @@ window.__ModuleLoader__.load({
       return shared;
     })();
     // ---- dsh-poll:end ----
-    // ---- dsh-ui:begin ---- shared page parts (switch, button, row, heading, empty state, chips); the same block in every page file that uses it.
+    // ---- dsh-ui:begin ---- shared page parts (switch, button, row, heading, empty state, chips, (i) pop-up, state line, error note); the same block in every page file that uses it.
     // The master copy is docs/shared/dsh-ui.js. Change it there, then run `node scripts/sync-kit.mjs`; `bash scripts/check.sh` fails when a copy has drifted.
     // All classes start with "dshu-" and belong to this block only: no add-on defines or restyles them. The look follows docs/UI-STYLE.md.
     // React is passed in: `const ui = dshUi.makeParts(React);` then `h(ui.Switch, { on, label, onChange })`, `h(ui.Row, { title, desc }, control)` and so on.
+    // Pass ReactDOM too (`dshUi.makeParts(React, ReactDOM)`) where an (i) needs `portal: true` (its pop-up then goes to the page body).
     const dshUi = (() => {
       const STYLE_ID = 'dsh-ui-style';
       const CSS = `
@@ -419,6 +457,31 @@ window.__ModuleLoader__.load({
     .dshu-link { padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; text-decoration: underline; cursor: pointer; }
     .dshu-wait { margin: 16px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
     .dshu-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .dshu-infowrap { display: inline-flex; vertical-align: middle; margin-left: 4px; }
+    .dshu-info { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+    .dshu-info:hover, .dshu-info[aria-expanded="true"] { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+    .dshu-info svg { display: block; width: 12px; height: 12px; }
+    .dshu-info:focus-visible, .dshu-pop:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+    .dshu-pop { position: fixed; z-index: 2147482000; box-sizing: border-box; width: max-content; max-width: min(320px, calc(100vw - 16px)); overflow: auto; padding: 10px 12px; border-radius: 12px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base)); color: var(--dsw-alias-label-primary); box-shadow: 0 14px 36px color-mix(in srgb, #000 28%, transparent); font-size: 12px; line-height: 18px; font-weight: 400; text-align: left; text-transform: none; white-space: normal; overflow-wrap: anywhere; cursor: auto; }
+    .dshu-pop:focus:not(:focus-visible) { outline: none; }
+    .dshu-pop-title { margin: 0 0 4px; font-size: 13px; line-height: 20px; font-weight: 600; }
+    .dshu-pop-line { margin: 6px 0 0; }
+    .dshu-pop-title + .dshu-pop-line { margin-top: 0; }
+    .dshu-pop-head { display: block; font-weight: 600; color: var(--dsw-alias-label-secondary); }
+    .dshu-state { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; margin: 4px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
+    .dshu-state-dot { flex: none; align-self: center; width: 8px; height: 8px; border-radius: 50%; background: var(--dsw-alias-label-secondary); }
+    .dshu-state[data-state="ok"] .dshu-state-dot { background: var(--dsw-alias-state-success-primary); }
+    .dshu-state[data-state="busy"] .dshu-state-dot { background: var(--dsw-alias-brand-primary); }
+    .dshu-state[data-state="warn"] .dshu-state-dot { background: var(--dsw-alias-state-warn-primary); }
+    .dshu-state[data-state="error"] .dshu-state-dot { background: var(--dsw-alias-state-error-primary); }
+    .dshu-state[data-state="off"] .dshu-state-dot { background: transparent; box-shadow: inset 0 0 0 1px var(--dsw-alias-label-secondary); }
+    .dshu-state-next { color: var(--dsw-alias-label-secondary); }
+    .dshu-errnote { margin: 8px 0 0; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+    .dshu-errnote-what { margin: 0; color: var(--dsw-alias-state-error-primary); }
+    .dshu-errnote-fix { margin: 2px 0 0; color: var(--dsw-alias-label-primary); }
+    .dshu-errnote-act { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+    .dshu-errnote-act .dshu-link { font-size: 12px; }
+    .dshu-errnote-details { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); color: var(--dsw-alias-label-secondary); font: 11px/16px ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; user-select: text; }
     `;
       const ensureStyle = () => {
         if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
@@ -446,8 +509,86 @@ window.__ModuleLoader__.load({
         } catch { return false; }
       };
 
-      const makeParts = (React) => {
+      /** The three fixed heads of an (i) pop-up, in this order. `changes` is accepted as another name for `change`. */
+      const INFO_HEADS = [['what', 'What it does'], ['when', 'When to use it'], ['change', 'If you change it']];
+      /** The same heads, and the button's "About". Plus is English only: every page gets these words. */
+      const INFO_WORDS = {
+        en: { what: 'What it does', when: 'When to use it', change: 'If you change it', about: (name) => (name ? `About ${name}` : 'About this') },
+      };
+      /** @returns {object} the (i)'s fixed words. `lang` is still accepted (older callers pass it) but every language gets English. */
+      const infoWords = () => INFO_WORDS.en;
+      /** What an (i) pop-up shows: the title and only the lines that were given. `lang` is accepted and ignored (English only). */
+      const infoLines = ({ title, label, what, when, change, changes } = {}) => {
+        const given = { what, when, change: change ?? changes };
+        const words = infoWords();
+        const blank = (v) => v == null || v === false || (typeof v === 'string' && v.trim() === '');
+        return {
+          title: blank(title) ? (blank(label) ? '' : label) : title,
+          lines: INFO_HEADS.filter(([key]) => !blank(given[key])).map(([key]) => ({ key, head: words[key], text: given[key] })),
+        };
+      };
+
+      /**
+       * Where a pop-up goes: below its button, or above when there is more room there; its left edge follows the button
+       * and is pulled in so the whole panel stays on screen. Sizes in pixels; returns { top, left, side, maxHeight }.
+       */
+      const placePop = ({ anchor, pop, view, gap = 6, margin = 8 }) => {
+        const below = view.height - anchor.bottom - gap - margin;
+        const above = anchor.top - gap - margin;
+        const side = pop.height <= below || below >= above ? 'below' : 'above';
+        const maxHeight = Math.max(80, Math.floor(side === 'below' ? below : above));
+        const height = Math.min(pop.height, maxHeight);
+        const top = side === 'below' ? anchor.bottom + gap : Math.max(margin, anchor.top - gap - height);
+        const left = Math.max(margin, Math.min(anchor.left, view.width - margin - pop.width));
+        return { top: Math.round(top), left: Math.round(left), side, maxHeight };
+      };
+
+      /**
+       * A failed call as { text, details }: the plain sentence and the raw text. Uses the error helper's wording
+       * (dshKit.plain) when the page also carries the dsh-kit block, so the two never say different things.
+       */
+      const explainError = (raw) => {
+        try {
+          // eslint-disable-next-line no-undef
+          if (typeof dshKit !== 'undefined' && dshKit && typeof dshKit.plain === 'function') return dshKit.plain(raw);
+        } catch { /* no error helper on this page */ }
+        const message = typeof raw === 'string' ? raw : String(raw?.message ?? raw?.error ?? '');
+        const details = raw && typeof raw === 'object' && typeof raw.details === 'string' ? raw.details : message;
+        // A message that reads as a sentence is said as it is (as the error helper does); a bare code is not.
+        const said = message.trim();
+        if (/\s/.test(said) && !/^[a-z][\w-]*(?:\/[\w.-]+)+:/i.test(said)) return { text: said, details: details === message ? '' : details };
+        return { text: 'Something went wrong. Try again; the Details say what the app reported.', details };
+      };
+
+      /** Raw details as text to show behind Details. */
+      const detailText = (details) => {
+        if (details == null || details === '') return '';
+        if (typeof details === 'string') return details;
+        if (details instanceof Error) return details.stack || String(details.message);
+        try { return JSON.stringify(details, null, 2); } catch { return String(details); }
+      };
+
+      let infoCount = 0;
+
+      /**
+       * The words of a row title for its (i): the text itself, or the text written directly inside a simple element
+       * title (`h('span', null, 'Keep awake', badge)` gives "Keep awake"; the badge is left out). Anything else gives
+       * undefined: then pass `info.label`, or the (i) is only "About this".
+       */
+      const plainTitle = (title) => {
+        if (typeof title === 'string') return title;
+        if (typeof title === 'number') return String(title);
+        if (!title || typeof title !== 'object') return undefined;
+        const kids = [].concat(title.props?.children ?? title.children ?? []);
+        const text = kids.filter((kid) => typeof kid === 'string' || typeof kid === 'number').join(' ').replace(/\s+/g, ' ').trim();
+        return text || undefined;
+      };
+
+      const makeParts = (React, ReactDOM) => {
         ensureStyle();
+        // The pop-up of an (i) with `portal: true` is drawn in the page body, out of a box that clips it or moves fixed
+        // children (a header with container-type, say). Without ReactDOM it stays where it is, as before.
+        const portalTo = (node) => (ReactDOM && typeof ReactDOM.createPortal === 'function' && typeof document !== 'undefined' && document.body ? ReactDOM.createPortal(node, document.body) : node);
         const h = React.createElement;
         /** The page frame: a title, one sentence under it, then the page. */
         const Page = ({ title, desc, children }) => h('div', { className: 'dshu-page' },
@@ -457,9 +598,11 @@ window.__ModuleLoader__.load({
         const Group = ({ children }) => h('div', { className: 'dshu-group' }, children);
         /** A short line in the page's description style; `error` draws it in the error colour. */
         const Desc = ({ error, children, role }) => h('p', { className: 'dshu-desc', 'data-error': String(error === true), role: role ?? (error ? 'alert' : undefined) }, children);
-        /** One setting: text on the left, the control(s) on the right. */
-        const Row = ({ title, desc, children }) => h('div', { className: 'dshu-row' },
-          h('div', { className: 'dshu-rowtext' }, h('div', { className: 'dshu-rowtitle' }, title), desc ? h('div', { className: 'dshu-rowdesc' }, desc) : null),
+        /** One setting: text on the left, the control(s) on the right. `info` ({ what, when, change }) adds an (i) after the title. */
+        const Row = ({ title, desc, info, children }) => h('div', { className: 'dshu-row' },
+          h('div', { className: 'dshu-rowtext' },
+            h('div', { className: 'dshu-rowtitle' }, title, info ? h(Info, { title: plainTitle(title), ...info }) : null),
+            desc ? h('div', { className: 'dshu-rowdesc' }, desc) : null),
           children);
         const Side = ({ children }) => h('div', { className: 'dshu-side' }, children);
         /** `danger`: when it is on, the switch is drawn in the error colour (a safety rule that has been turned off). */
@@ -487,9 +630,140 @@ window.__ModuleLoader__.load({
           chips && chips.length > 0 ? h(Chips, { items: chips, onPick: onPick ?? (() => {}) }) : null,
           children);
         const Wait = ({ children }) => h('p', { className: 'dshu-wait', role: 'status' }, children ?? 'Loading…');
-        return { Page, Group, Desc, Row, Side, Switch, Button, Field, CopyButton, Chips, Empty, Wait };
+
+        const useLayout = React.useLayoutEffect ?? React.useEffect;
+        // The (i) drawn as a ring with an "i" in the text colour, like the app's own info icon.
+        const infoIcon = () => h('svg', { viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false', fill: 'none', stroke: 'currentColor', strokeWidth: 1.3, strokeLinecap: 'round' },
+          h('circle', { cx: 8, cy: 8, r: 6.6 }),
+          h('path', { d: 'M8 7.3v4' }),
+          h('circle', { cx: 8, cy: 4.9, r: 0.45, fill: 'currentColor' }));
+        /**
+         * A small (i) button that opens a pop-up saying what a control does, when to use it and what changes if you change it.
+         * `title` is the bold first line, `label` names the control for screen readers ("About <label>"; defaults to the title).
+         * Opens on click, Enter or Space; Esc, a click outside or Tab away closes it; Esc puts the focus back on the (i).
+         * `more` is one last line, or a list of lines. `portal: true` draws the pop-up in the page body (needs ReactDOM in makeParts).
+         * `lang` is accepted and ignored: the heads and button name are always English.
+         */
+        const Info = (props) => {
+          const { label, more, side, portal } = props;
+          const extra = (Array.isArray(more) ? more : [more]).filter((line) => line != null && line !== false && line !== '');
+          const { title, lines } = infoLines(props);
+          const [open, setOpen] = React.useState(false);
+          const [place, setPlace] = React.useState(null);
+          const wrap = React.useRef(null);
+          const button = React.useRef(null);
+          const pop = React.useRef(null);
+          const autoId = React.useId ? React.useId() : null;
+          const fallbackId = React.useRef(null);
+          if (!autoId && fallbackId.current == null) { infoCount += 1; fallbackId.current = `dshu-info-${infoCount}`; }
+          const id = `dshu-pop-${String(autoId ?? fallbackId.current).replace(/[^\w-]/g, '')}`;
+          const name = label ?? (typeof title === 'string' ? title : '');
+          const about = infoWords().about;
+          const measure = () => {
+            const b = button.current; const p = pop.current;
+            if (!b || !p || typeof window === 'undefined') return;
+            const r = b.getBoundingClientRect();
+            const found = placePop({ anchor: r, pop: { width: p.offsetWidth, height: p.scrollHeight }, view: { width: window.innerWidth, height: window.innerHeight } });
+            // `side: 'above'` asks for the top first; it still flips when it does not fit.
+            setPlace(side === 'above' && r.top - 6 - 8 >= p.scrollHeight ? { ...found, side: 'above', top: Math.round(r.top - 6 - p.scrollHeight) } : found);
+          };
+          useLayout(() => {
+            if (!open) { setPlace(null); return undefined; }
+            measure();
+            try { pop.current?.focus({ preventScroll: true }); } catch { /* the panel is gone */ }
+            return undefined;
+          }, [open]);
+          React.useEffect(() => {
+            if (!open || typeof document === 'undefined') return undefined;
+            // The pop-up may sit in the page body (portal): a click in it is not outside.
+            const inPop = (node) => Boolean(pop.current) && typeof pop.current.contains === 'function' && pop.current.contains(node);
+            const inside = (node) => Boolean(node) && ((wrap.current && wrap.current.contains(node)) || inPop(node));
+            const onDown = (event) => { if (wrap.current && !inside(event.target)) setOpen(false); };
+            const onKey = (event) => {
+              if (event.key !== 'Escape') return;
+              // Only while the focus is in the (i) or its pop-up; then only the pop-up closes, not the dialog or menu
+              // around it. On the window, first in the capture phase, so it runs before the panels' own Esc listeners
+              // on the document; stopImmediatePropagation keeps every later listener from seeing it.
+              const focused = typeof document !== 'undefined' ? document.activeElement : null;
+              if (!wrap.current || !focused || !inside(focused)) return;
+              event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation?.();
+              setOpen(false);
+              try { button.current?.focus(); } catch { /* the button is gone */ }
+            };
+            const onMove = () => measure();
+            document.addEventListener('pointerdown', onDown, true);
+            window.addEventListener('keydown', onKey, true);
+            window.addEventListener('resize', onMove);
+            window.addEventListener('scroll', onMove, true);
+            return () => {
+              document.removeEventListener('pointerdown', onDown, true);
+              window.removeEventListener('keydown', onKey, true);
+              window.removeEventListener('resize', onMove);
+              window.removeEventListener('scroll', onMove, true);
+            };
+          }, [open]);
+          // Clicks inside never reach a row or menu item the (i) sits in; nor do the keys such a row or menu acts on.
+          const stop = (event) => { event.stopPropagation(); };
+          const stopKeys = (event) => { if (['Enter', ' ', 'Spacebar', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) event.stopPropagation(); };
+          return h('span', {
+            ref: wrap, className: 'dshu-infowrap', onClick: stop, onPointerDown: stop, onMouseDown: stop, onKeyDown: stopKeys,
+            onBlur: (event) => { if (open && wrap.current && event.relatedTarget && !wrap.current.contains(event.relatedTarget) && !(pop.current && typeof pop.current.contains === 'function' && pop.current.contains(event.relatedTarget))) setOpen(false); },
+          },
+          h('button', {
+            ref: button, type: 'button', className: 'dshu-info', 'aria-label': about(name), 'aria-expanded': open,
+            'aria-haspopup': 'dialog', 'aria-controls': open ? id : undefined, onClick: () => setOpen(!open),
+          }, infoIcon()),
+          open ? (portal ? portalTo : (node) => node)(h('div', {
+            ref: pop, id, className: 'dshu-pop', role: 'dialog', tabIndex: -1, 'data-side': place?.side,
+            'aria-label': title ? undefined : about(name), 'aria-labelledby': title ? `${id}-t` : undefined,
+            style: place ? { top: place.top, left: place.left, maxHeight: place.maxHeight } : { top: 0, left: 0, visibility: 'hidden' },
+          },
+          title ? h('p', { id: `${id}-t`, className: 'dshu-pop-title' }, title) : null,
+          lines.map((line) => h('p', { key: line.key, className: 'dshu-pop-line' }, h('span', { className: 'dshu-pop-head' }, line.head), line.text)),
+          extra.map((line, index) => h('p', { key: `more-${index}`, className: 'dshu-pop-line' }, line)))) : null);
+        };
+
+        const STATES = ['ok', 'busy', 'idle', 'off', 'warn', 'error'];
+        /**
+         * One line that says in words what is happening and what to do next: a coloured dot, `words`, then `next`
+         * (text or a button). `state` is ok, busy, idle, off, warn or error; anything else counts as idle.
+         * `live: false` keeps the line out of screen readers' announcements (for words that change every few
+         * seconds, such as a step count); then announce only the changes that matter somewhere else.
+         */
+        const StateLine = ({ state, words, next, live = true, children }) => {
+          const shown = STATES.includes(state) ? state : 'idle';
+          return h('p', { className: 'dshu-state', 'data-state': shown, role: live === false ? undefined : shown === 'error' ? 'alert' : 'status' },
+            h('span', { className: 'dshu-state-dot', 'aria-hidden': 'true' }),
+            words ? h('span', { className: 'dshu-state-words' }, words) : null,
+            next ? h('span', { className: 'dshu-state-next' }, next) : null,
+            children);
+        };
+
+        /**
+         * An error in plain words: what went wrong (`what`), what to do or click (`fix`, and any buttons as children),
+         * and the raw text only behind a Details toggle. Give `error` instead of `what` to word a failed call the way
+         * the error helper does; `details` (text or an object) wins over the raw text it keeps.
+         */
+        const ErrorNote = ({ what, fix, details, error, children }) => {
+          const [open, setOpen] = React.useState(false);
+          const hasError = error !== undefined && error !== null && error !== '';
+          const fromError = hasError ? explainError(error) : { text: '', details: '' };
+          // With your own `what`, the raw error itself goes behind Details.
+          const rawError = hasError ? (fromError.details || (typeof error === 'string' ? error : error.details || error.message || error)) : '';
+          const text = what || fromError.text;
+          const raw = detailText(details ?? (what ? rawError : fromError.details));
+          if (!text && !fix && !raw) return null;
+          return h('div', { className: 'dshu-errnote', role: 'alert' },
+            h('p', { className: 'dshu-errnote-what' }, text || 'Something went wrong.'),
+            fix ? h('p', { className: 'dshu-errnote-fix' }, fix) : null,
+            children || raw ? h('div', { className: 'dshu-errnote-act' },
+              children,
+              raw ? h('button', { type: 'button', className: 'dshu-link', 'aria-expanded': open, onClick: () => setOpen(!open) }, open ? 'Hide details' : 'Details') : null) : null,
+            open && raw ? h('pre', { className: 'dshu-errnote-details' }, raw) : null);
+        };
+        return { Page, Group, Desc, Row, Side, Switch, Button, Field, CopyButton, Chips, Empty, Wait, Info, StateLine, ErrorNote };
       };
-      return { makeParts, ensureStyle, copyText };
+      return { makeParts, ensureStyle, copyText, infoLines, placePop, explainError };
     })();
     // ---- dsh-ui:end ----
     dshUi.ensureStyle();
@@ -561,7 +835,7 @@ window.__ModuleLoader__.load({
         'map.hint':
           'A compact map of your project: its files, the functions and classes in them, and what uses what. The assistant looks things up in the map and reads one function at a time, instead of reading whole files. That uses far fewer tokens on a large project. Nothing is installed and nothing is written into your project.',
         'row.enabled': 'Use the code map',
-        'row.enabled.hint': 'Gives the assistant five look-up tools in conversations that have tools (Cowork and Code). When it is off they are not offered at all.',
+        'row.enabled.hint': 'Gives the assistant five look-up tools in threads that have tools (Cowork and Code). When it is off they are not offered at all.',
         'row.hint': 'Tell the assistant about it',
         'row.hint.hint': 'Adds three lines to its instructions in code projects, so it uses the map before reading files.',
         'group.folders': 'Mapped folders',
@@ -592,7 +866,7 @@ window.__ModuleLoader__.load({
         'group.how': 'Good to know',
         'how.1': 'The map lists names, line numbers and connections. It does not hold your code, and it is kept in the app\'s own data folder.',
         'how.2': 'Connections are found by reading the text, not by compiling. They are right for ordinary code and can miss unusual constructs.',
-        'how.3': 'Only the folder a conversation works in is mapped. Links to other folders are never followed.',
+        'how.3': 'Only the folder a thread works in is mapped. Links to other folders are never followed.',
         'saved': 'Saved',
         'saving': 'Saving…',
         'loading': 'Loading…',
@@ -1002,7 +1276,7 @@ textarea.dsh-cm-field { width: 100%; height: auto; min-height: 84px; padding: 9p
         loadModes(appCtx).then((loaded) => { if (alive) setState(loaded ? { table: loaded.table, missing: false } : { table: undefined, missing: true }); }).catch((error) => { if (alive) setNote((error instanceof Error ? error.message : String(error))); });
         return () => { alive = false; };
       }, []);
-      if (state.missing) return h('p', { className: 'dshu-desc' }, 'The Modes add-on is not installed, so every tab is offered these guides.');
+      if (state.missing) return h('p', { className: 'dshu-desc' }, 'The Modes add-on is not installed, so every mode is offered these guides.');
       if (!state.table) return h('p', { className: 'dshu-desc' }, note || 'Loading…');
       const flip = async (tab, on, only) => {
         setNote('');
@@ -1017,7 +1291,7 @@ textarea.dsh-cm-field { width: 100%; height: auto; min-height: 84px; padding: 9p
         React.Fragment,
         null,
         h('div', { className: 'dshu-group' }, 'Where these guides are offered'),
-        h('p', { className: 'dshu-desc', style: { marginTop: 0 } }, 'The reverse-engineer guides and the review and fix guides. A new install offers them only in the Code tab. The first three switches turn all eight guides on or off in a tab; the list below switches each guide on its own. Guides you type yourself with / always work.'),
+        h('p', { className: 'dshu-desc', style: { marginTop: 0 } }, 'The reverse-engineer guides and the review and fix guides. A new install offers them only in Code mode. The first three switches turn all eight guides on or off in a mode; the list below switches each guide on its own. Guides you type yourself with / always work.'),
         PLACES.map(([tab, label]) =>
           h('div', { className: 'dsh-cm-row', key: tab },
             h('div', { className: 'dshu-rowtext' }, h('div', { className: 'dshu-rowtitle' }, `Offer all of them in ${label}`)),

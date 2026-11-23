@@ -1,0 +1,31 @@
+{
+  "harness": "0.2.2-rc.2",
+  "engines": ">=0.2.2-rc.1 <0.3.0",
+  "services": [
+    "dshHomePath",
+    "tools",
+    "modes",
+    "toolAccess",
+    "agentPresets",
+    "mission",
+    "agents",
+    "sessions",
+    "workspaceRegistry",
+    "coworkTrash",
+    "webServer",
+    "connection"
+  ],
+  "inject": [
+    "tools"
+  ],
+  "events": [
+    "tools/pre-execute",
+    "tools/execute",
+    "tools/result",
+    "session/event",
+    "agent/disposed"
+  ],
+  "places": [
+    "settings.section"
+  ]
+}

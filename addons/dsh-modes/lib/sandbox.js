@@ -21,6 +21,8 @@ export function readEntry(value) {
   const entry = {};
   const is = (pattern, text) => typeof text === 'string' && pattern.test(text);
   if (is(MODE_ID, value.mode)) entry.mode = value.mode;
+  // Item 4A, stage 6a: the effective mode's key (lib/spacerules.js modeKey), beside its id.
+  if (entry.mode && typeof value.key === 'string' && value.key.length > 0 && value.key.length <= 200) entry.key = value.key;
   if (is(LEVEL, value.base)) {
     entry.base = value.base;
     if (is(LEVEL, value.set)) entry.set = value.set;
@@ -43,10 +45,14 @@ export function readBase(value) {
  * Move writes only the conversation's mode): its level was last applied for another mode.
  * @param {{mode?: string} | undefined} entry - the stored entry.
  * @param {string} modeId - the mode the conversation is in now.
+ * @param {string} [key] - item 4A, stage 6a: the effective mode's key (lib/spacerules.js modeKey), only for a sealed or
+ *   guarded copy ('' or none for a mode as it is): the same mode moved into a guarded space while closed counts as moved.
  * @returns {boolean} true when the mode changed since its level was last applied.
  */
-export function movedSince(entry, modeId) {
-  return Boolean(entry?.mode) && entry.mode !== modeId;
+export function movedSince(entry, modeId, key) {
+  if (!entry?.mode) return false;
+  if (entry.mode !== modeId) return true;
+  return (entry.key ?? '') !== (typeof key === 'string' ? key : '');
 }
 
 /**
@@ -75,4 +81,24 @@ export function sandboxStep({ sandbox, start, level, known, before }) {
   if (!known) return start && before && before !== level ? { write: before } : {};
   // Leaving a mode that set the level: the earlier one comes back, unless the level was changed by hand since.
   return untouched && level !== known.base ? { write: known.base } : {};
+}
+
+/**
+ * Item 4A, fix round 2: a reused blank draft claimed again for another space or mode (the chat box's claim, before the
+ * first message) takes the start access of its new mode: the mode's own level, or for a mode that leaves the level
+ * alone (`inherit`) the level from before a mode changed it. Only when Modes set the level now in force (the level was
+ * not changed by hand on the draft since): a level picked by hand, or one Modes never set, stays.
+ * @param {object} want - the draft.
+ * @param {string} want.sandbox - the new mode's sandbox.
+ * @param {string} want.level - the level in force.
+ * @param {{base: string, set?: string} | undefined} want.known - the stored entry (readBase).
+ * @param {string} [want.wrote] - the last level Modes wrote on this draft in this run.
+ * @returns {{write?: string}} the level to write, if any.
+ */
+export function draftAccessStep({ sandbox, level, known, wrote }) {
+  const setByModes = wrote !== undefined ? level === wrote : known?.set !== undefined && level === known.set;
+  if (!setByModes) return {};
+  const target = sandbox && sandbox !== 'inherit' ? sandbox : known?.base;
+  if (!target || !LEVEL.test(target) || target === level) return {};
+  return { write: target };
 }

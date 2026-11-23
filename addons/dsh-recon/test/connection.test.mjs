@@ -38,7 +38,7 @@ test('a conversation opens only addresses it was shown', () => {
   assert.equal(trail.has('c1', `https://${ONION}/`), true);
   assert.equal(trail.has('c1', `http://${ONION}/?q=the+users+words`), false, 'a front page with something added is not');
   assert.equal(trail.has('c1', `http://${ONION}/other`), false);
-  assert.equal(trail.has('c2', `http://${ONION}/list`), false, 'another conversation was not shown it');
+  assert.equal(trail.has('c2', `http://${ONION}/list`), false, 'another thread was not shown it');
   assert.equal(trail.count('c1'), 1);
   trail.forget('c1');
   assert.equal(trail.has('c1', `http://${ONION}/list`), false);

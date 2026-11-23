@@ -13,7 +13,7 @@ test('starting values per mode: nothing is set until the owner picks something',
   assert.deepEqual(startOps(none, {}, 's'), [], 'no values, no writes');
 });
 
-test('each value lands in the setting its button writes, for this conversation only', () => {
+test('each value lands in the setting its button writes, for this thread only', () => {
   const start = normalizeStart({ web: 'verified', depth: 'Thorough', helpers: 'roles', tools: 'off' });
   assert.deepEqual(start, { web: 'verified', depth: 'thorough', helpers: 'roles', tools: 'off' });
   const out = fields(startOps(start, { sessionWeb: '{"x":false}', sessionDepth: {}, sessionHelpers: '{"x":"same"}' }, 's'));
@@ -54,6 +54,6 @@ test('the setting, the hook and the page are wired', () => {
   assert.match(body, /catch \(error\)/, 'a listener that must never throw');
   assert.match(client, /saveNow\('modeStart', JSON\.stringify\(next\)\)/);
   for (const key of ['start.group', 'start.hint', 'start.usual', 'start.web.everything', 'start.isolated']) {
-    assert.equal(client.split('\n').filter((line) => line.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+    assert.equal(client.split('\n').filter((line) => line.includes(`'${key}':`)).length, 1, `${key}: once, English only`);
   }
 });

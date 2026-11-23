@@ -54,7 +54,7 @@ Recon reaches the Tor network (.onion sites) and Usenet.
   * You are responsible for what you do with Recon, and for following the laws and the rules that apply
     to you. The makers of Plus are not responsible for how you use it.
   * Recon does not make you anonymous or safe.
-  * Privacy: a Recon conversation is kept apart from the rest of the app. Logins and VPN files are kept
+  * Privacy: a Recon thread is kept apart from the rest of the app. Logins and VPN files are kept
     in the macOS Keychain, not in a file and not shown to the model. Searches go out through Tor, Usenet
     or the Internet Archive. With a cloud model, what Recon finds is held back until you type /recon cloud.
   * Recon needs the "tor" program (brew install tor). Plus does not install it.

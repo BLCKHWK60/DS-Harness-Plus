@@ -246,10 +246,10 @@ test('the working-folder guard: a Scratch thread cannot move out of its own fold
   mkdirSync(join(app.place, ID, 'sub'));
   mkdirSync(join(app.place, OTHER), { recursive: true });
   await app.workingDirectory.set(thread, join(app.place, ID, 'sub'));
-  await assert.rejects(app.workingDirectory.set(thread, app.dir), /Scratch conversation/);
-  await assert.rejects(app.workingDirectory.set(thread, join(app.place, OTHER)), /Scratch conversation/);
-  await assert.rejects(app.workingDirectory.set(thread, app.place), /Scratch conversation/);
-  await assert.rejects(app.workingDirectory.set(thread, '../..'), /Scratch conversation/, 'relative to where it is now');
+  await assert.rejects(app.workingDirectory.set(thread, app.dir), /Scratch thread/);
+  await assert.rejects(app.workingDirectory.set(thread, join(app.place, OTHER)), /Scratch thread/);
+  await assert.rejects(app.workingDirectory.set(thread, app.place), /Scratch thread/);
+  await assert.rejects(app.workingDirectory.set(thread, '../..'), /Scratch thread/, 'relative to where it is now');
   await app.workingDirectory.set(thread, '..');
   assert.equal(app.cwdOf.get(ID), join(app.place, ID));
   // A conversation that is not Scratch goes anywhere, as before.

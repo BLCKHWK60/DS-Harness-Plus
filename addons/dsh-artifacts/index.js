@@ -460,7 +460,7 @@ export function apply(ctx, config, standIns = {}) {
    * refused: a clean-up is never a deletion for good.
    */
   const cleanUp = async (ids, alsoFiles) => {
-    if (!trashHandle) throw new Error('Clean-up needs the app\'s trash (the Cowork sidebar). Nothing was removed.');
+    if (!trashHandle) throw new Error('Clean-up needs the app\'s trash, which comes with the Left panel add-on. Nothing was removed. Switch it on on the Plugins page.');
     const stamp = store.newStamp();
     pendingStamps.add(stamp);
     try {
@@ -497,7 +497,7 @@ export function apply(ctx, config, standIns = {}) {
   const mayShow = (item, asking) => {
     if (!item) return 'There is no such artifact.';
     if (item.noRender && !danger('dangerShowBackups')) return 'A Devices backup is listed and never shown: it can hold passwords and keys.';
-    if (sealedHidden(item, asking)) return 'This artifact belongs to a sealed conversation (Recon) and shows only there.';
+    if (sealedHidden(item, asking)) return 'This artifact belongs to a sealed thread (Recon) and shows only there.';
     return '';
   };
   /** Every change of the Danger zone is noted (`danger.jsonl`). */

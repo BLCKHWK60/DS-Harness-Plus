@@ -90,7 +90,7 @@ export function labelOf(snapshot, settings) {
         text = `${words ? (detail.count === 1 ? 'Sub-agent' : 'Sub-agents') : 'BG'} ${detail.count}${figures ? ` · ${shortTime(detail.seconds)}` : ''}`;
         break;
       case 'other':
-        text = `${words ? (detail.count === 1 ? 'Other chat' : 'Other chats') : 'OC'} ${detail.count}`;
+        text = `${words ? (detail.count === 1 ? 'Other thread' : 'Other threads') : 'OC'} ${detail.count}`;
         break;
       default:
         break;

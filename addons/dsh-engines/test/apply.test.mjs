@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { apply, listing, pending, undoLast } from '../lib/apply.js';
 import * as opencode from '../lib/engines/opencode.js';
-import { engineModels, taskOf } from '../lib/model.js';
+import { AGAIN_TEXT, answeredAlready, engineModels, taskOf } from '../lib/model.js';
 import { clearRoom, prepareRoom } from '../lib/room.js';
 
 const room = () => realpathSync(mkdtempSync(join(tmpdir(), 'dsh-engines-')));
@@ -118,6 +118,47 @@ test('an engine offered as a model: the newest message is its task, its text is 
   assert.equal((await run('default', 'title')).find((chunk) => chunk.type === 'block-end').block.text, 'A title');
   assert.equal(calls.length, 2, 'a request without tools (a title, a summary) never starts an engine');
   assert.match((await run('default', 'boom')).find((chunk) => chunk.type === 'block-end').block.text, /could not do this: it broke/);
+});
+
+test('engine-not-run-twice: a step the app asks again after its own note (Scratch folder moved) runs nothing', async () => {
+  const user = { role: 'user', content: 'add a file', source: { kind: 'user' } };
+  const answer = { role: 'assistant', content: 'done' };
+  const note = { role: 'user', content: '<system-reminder>The working directory changed.</system-reminder>', source: { kind: 'runtime-context' } };
+  assert.equal(answeredAlready([user]), false);
+  assert.equal(answeredAlready([user, answer, note]), true);
+  assert.equal(answeredAlready([user, answer, note, { role: 'user', content: 'and another', source: { kind: 'user' } }]), false);
+  assert.equal(answeredAlready([]), false);
+  const calls = [];
+  const { adapter } = engineModels({
+    adapters: { opencode },
+    models: () => [],
+    turn: async (input) => { calls.push(input.task); input.say('ran'); return { input: 1, output: 1 }; },
+    aside: async () => 'title',
+  });
+  const run = async (messages, again) => {
+    const call = await adapter.prepareCall('engine-opencode', 'default');
+    const chunks = [];
+    for await (const chunk of call.stream({ provider: 'engine-opencode', model: 'default', tools: [{ name: 'read' }], messages })) chunks.push(chunk);
+    return chunks.find((chunk) => chunk.type === 'block-end').block.text;
+  };
+  assert.equal(await run([user]), 'ran');
+  assert.equal(await run([user, answer, note]), AGAIN_TEXT);
+  assert.deepEqual(calls, ['add a file'], 'the engine ran once for one message');
+});
+
+test('engine-switch-capacity: the engine model states its context capacity the way the app reads it', async () => {
+  // A thread that already has turns and switches to the engine is checked by compaction-basic, which reads
+  // `context.contextWindow` (and `defaultMaxTokens`) from resolveModel; without them the switch failed with
+  // MODEL_SWITCH_COMPACTION_FAILED (stage 6b lab recheck).
+  const { adapter } = engineModels({ adapters: { opencode }, models: () => ['local/test-model'], turn: async () => ({ input: 0, output: 0 }), aside: async () => '' });
+  for (const model of ['default', 'local/test-model']) {
+    const info = await adapter.resolveModel('engine-opencode', model);
+    assert.equal(info.provider, 'engine-opencode');
+    assert.equal(info.id, model);
+    assert.ok(Number.isInteger(info.context?.contextWindow) && info.context.contextWindow > 64_000 + 65_536, 'room for the output and the default headroom');
+    assert.ok(Number.isSafeInteger(info.defaultMaxTokens) && info.defaultMaxTokens > 0);
+    assert.ok(info.defaultMaxTokens < info.context.contextWindow);
+  }
 });
 
 test('OpenCode carries on from its own session', () => {

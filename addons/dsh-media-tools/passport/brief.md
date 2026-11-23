@@ -2,7 +2,7 @@
 
 What it is for: Image generation and editing tools for an OpenAI-compatible images API (saved as files for the present tool), and an approval gate for browser-use and computer-use tools.
 
-This brief was written by Creator Plus from the plugin's own files. Its README below is the full description, complete enough to rebuild the plugin from; improve this brief by hand, with the user's yes.
+This brief was written by Creator Plus from the add-on's own files. Its README below is the full description, complete enough to rebuild the add-on from; improve this brief by hand, with the user's yes.
 
 ## What it must keep doing
 
@@ -12,12 +12,12 @@ This brief was written by Creator Plus from the plugin's own files. Its README b
 
 # Media tools
 
-Host plugin `@local/dsh-media-tools` (dsh 0.2.2-rc.1). It does two things and **nothing else**; both are off until you configure them:
+Host add-on `@local/dsh-media-tools` (dsh 0.2.2-rc.1). It does two things and **nothing else**; both are off until you configure them:
 
-1. **Image tools** `generate_image` and `edit_image` for an OpenAI-compatible images API. The result is saved as a file in the session's working folder and the model is told to hand it over with dsh's `present` tool, so it appears as a **deliverable**.
+1. **Image tools** `generate_image` and `edit_image` for an OpenAI-compatible images API. The result is saved as a file in the thread's working folder and the model is told to hand it over with dsh's `present` tool, so it appears as a **deliverable**.
 2. An **approval gate**: dsh asks you before the first (or every) call of the browser-use or computer-use tools you name.
 
-Browser agent, computer use and voice are **dsh features**, not code in this plugin: the guide below says how to switch them on and what to watch for.
+Browser agent, computer use and voice are **dsh features**, not code in this add-on: the guide below says how to switch them on and what to watch for.
 
 ## Configuration
 
@@ -59,14 +59,14 @@ Safety, copied from the fork's image tool:
 - Error messages are fixed text; an upstream body or URL is never shown to the model.
 - A result that is a URL is downloaded only if it resolves to **public addresses** (checked, then the connection is pinned to the checked address; every redirect hop is checked again; no credentials in the URL; image content types only; 25 MB cap). Set `allowUrlResults: false` to refuse URL results altogether.
 - An edit input must be a regular image file **inside the working folder**: links, paths that leave the folder, GIFs and non-images are refused. The output folder is refused if it resolves outside the working folder.
-- A per-session call cap (`maxCallsPerSession`); only real API calls count, not calls refused for bad input.
+- A per-thread call cap (`maxCallsPerSession`); only real API calls count, not calls refused for bad input.
 - Images arrive as bytes; the content is checked by magic bytes, not by file name.
 
 ## Approval gate
 
-`approval` for the image tools and `gate.patterns` for anything else use dsh's `tools/pre-execute` **ask**: dsh shows the question and runs the call only if you allow it. `first` asks until one call has actually run in that session, `every` asks every time. If another plugin (for example Tier's `browser: false`) already denies the call, that denial stays. With `--approval-policy never` (headless), an `ask` is a denial.
+`approval` for the image tools and `gate.patterns` for anything else use dsh's `tools/pre-execute` **ask**: dsh shows the question and runs the call only if you allow it. `first` asks until one call has actually run in that thread, `every` asks every time. If another add-on (for example Tier's `browser: false`) already denies the call, that denial stays. With `--approval-policy never` (headless), an `ask` is a denial.
 
-The gate does not choose tool names for you, because they depend on the provider you pick. Playwright MCP tools are named `mcp__playwright-mcp__<tool>` (dsh docs); look at the real list in your session, then for example:
+The gate does not choose tool names for you, because they depend on the provider you pick. Playwright MCP tools are named `mcp__playwright-mcp__<tool>` (dsh docs); look at the real list in your thread, then for example:
 
 ```yaml
 gate:
@@ -75,7 +75,7 @@ gate:
 
 ## Guide: browser agent, computer use, voice (dsh features)
 
-None of these is enabled or chosen by this plugin. All are **experimental** in dsh.
+None of these is enabled or chosen by this add-on. All are **experimental** in dsh.
 
 **Browser agent.** Mount `@deepseek-ai/dsh-browser-use` and **exactly one** provider (a second is rejected):
 
@@ -85,9 +85,9 @@ None of these is enabled or chosen by this plugin. All are **experimental** in d
 | Chrome DevTools MCP (`...-chrome-devtools-mcp`) | Same options; DevTools-style inspection. |
 | Stagehand (`...-stagehand-native`) | Needs its **own cloud model** (`model.modelName` plus a key); DeepSeek endpoints and `baseURL` overrides are unsupported, and its model calls are not in dsh's usage accounting. |
 
-A launched browser belongs to one session and is closed with it; login state is not restored. Screenshots need an attachment store and an image-capable model route. Leave browser tools under `<unlisted-tools>` if you set `toolOrder`. **Tier interplay:** Tier's `browser: false` denies tool names matching `browser|ego`, which includes `browser_*` tools; set the tier's browser switch on for tiers that should browse.
+A launched browser belongs to one thread and is closed with it; login state is not restored. Screenshots need an attachment store and an image-capable model route. Leave browser tools under `<unlisted-tools>` if you set `toolOrder`. **Tier interplay:** Tier's `browser: false` denies tool names matching `browser|ego`, which includes `browser_*` tools; set the tier's browser switch on for tiers that should browse.
 
-**Computer use (macOS).** In the app: **Plugins, More, Computer use** (experimental). It ships with dsh, downloads nothing, and needs Accessibility and Screen Recording permission. It is installed only in **PTC** sessions, and **asks separately before accessing each application** (decisions saved per profile), so it brings its own approval; this plugin's gate is mainly for browsers. The other provider is Cua Driver over MCP (`command: cua-driver`), only if you already run that.
+**Computer use (macOS).** In the app: **Plugins, More, Computer use** (experimental). It ships with dsh, downloads nothing, and needs Accessibility and Screen Recording permission. It is installed only in **PTC** threads, and **asks separately before accessing each application** (decisions saved per profile), so it brings its own approval; this add-on's gate is mainly for browsers. The other provider is Cua Driver over MCP (`command: cua-driver`), only if you already run that.
 
 **Voice input.** dsh ships an experimental **Voice Input** bundle (the spec said none existed): in `dsh web`, open Plugins, enable **Voice Input**, let it download and prepare its local speech model (SenseVoice on the CPU), then use the microphone button next to Send; Stop inserts the transcript. It runs on the Host, off by default, and recordings never go into model requests. It works in the web app; whether the desktop app shows it is untested here. **Read-aloud**: dsh has none; use macOS **System Settings, Accessibility, Spoken Content, Speak selection**. **Dictation**: macOS dictation (Fn twice by default) works in any composer.
 

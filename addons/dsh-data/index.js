@@ -28,6 +28,7 @@ import { createPython } from './lib/python.js';
 import { openStore } from './lib/store.js';
 import { openOwned } from './lib/owned.js';
 import { OUTPUT_FOLDER, buildTools, changedFiles } from './lib/tools.js';
+import { makeGuardOf } from './lib/space-guard.js';
 
 export const name = 'dsh-data';
 
@@ -39,7 +40,7 @@ const DIAGRAMS_NS = 'diagram';
 const FOLDER_MODES = [MODE_ID, 'finance'];
 
 export const Config = z.object({
-  /** The Data mode and tab. Off leaves nothing of it in the app; saved analyses are kept. */
+  /** The Data mode. Off leaves nothing of it in the app; saved analyses are kept. */
   enabled: z.boolean().default(false).volatile(),
   /**
    * Python for statistics and charts: set up Plus's own private Python folder the first time Data
@@ -100,6 +101,30 @@ export function apply(ctx, config) {
       warn(`what Scratch conversations leave in Data will stay after they are deleted: ${String(error?.message ?? error)}`);
     }
   });
+  // Item 4A, stage 6a: a sealed thread's (Recon, any mode) query log lives in memory only. End and wipe forget
+  // it there, and anything an older version wrote to queries.json for that conversation goes too.
+  const sealedStore = openStore('', '');
+  const forgetWiped = (ids) => {
+    for (const id of ids) {
+      try {
+        sealedStore.forget(String(id));
+        store.forget(String(id));
+      } catch (error) {
+        warn(`could not forget a wiped conversation's queries: ${String(error?.message ?? error)}`);
+      }
+    }
+  };
+  ctx.inject(['reconWipe'], (inner) => {
+    try {
+      const wipe = inner.reconWipe ?? inner.get?.('reconWipe');
+      const ids = wipe?.list?.();
+      if (Array.isArray(ids) && ids.length > 0) forgetWiped(ids);
+      const off = wipe?.onChange?.((id) => forgetWiped([id]));
+      if (typeof off === 'function') inner.effect(() => off, 'data: Recon wipe events');
+    } catch (error) {
+      warn(`a wiped Recon conversation's queries may stay until the next start: ${String(error?.message ?? error)}`);
+    }
+  });
   const engine = createEngine();
   ctx.effect(() => () => engine.stop(), 'data: engine');
   const python = dir ? createPython(join(dir, 'python')) : undefined;
@@ -107,7 +132,7 @@ export function apply(ctx, config) {
   const show = (exec, picture) => {
     try {
       const diagrams = ctx.get('diagrams');
-      if (typeof diagrams?.show !== 'function') return { ok: false, errors: ['The Diagrams add-on is not running, so the picture cannot be shown in the chat.'] };
+      if (typeof diagrams?.show !== 'function') return { ok: false, errors: ['The Diagrams add-on is not running, so the picture cannot be shown in the thread.'] };
       return diagrams.show(exec?.agent, picture);
     } catch (error) {
       return { ok: false, errors: [String(error?.message ?? error).slice(0, 200)] };
@@ -173,6 +198,19 @@ export function apply(ctx, config) {
   };
   /** Only Data conversations keep their charts as files: other modes that use data_chart get none. */
   const savesCharts = (exec) => Boolean(exec?.agent?.id) && modeOf(exec.agent.id) === MODE_ID;
+  // Item 4A, stage 6a: a sealed thread (Recon, any mode; a Modes read error counts) saves no analysis and keeps a
+  // chart file only in Recon's room. No Modes service: as before.
+  const guardOf = makeGuardOf(() => ctx.get('modes'));
+  const sealedCall = (exec) => guardOf(String(exec?.agent?.id ?? '')).sealed === true;
+  /** A sealed thread's own run folder in Recon's room ('' when there is none or Recon fails: then nothing is saved). */
+  const reconRunFolder = (exec) => {
+    try {
+      const folder = ctx.get('recon')?.roomFolderOf?.(conversationOf(exec?.agent));
+      return typeof folder === 'string' ? folder : '';
+    } catch {
+      return '';
+    }
+  };
 
   // ---- the mode: kept in step with the switch ------------------------------------------------
 
@@ -185,7 +223,7 @@ export function apply(ctx, config) {
       const service = ctx.get('settings');
       const row = service?.describe?.().find((entry) => entry.ns === MODES_NS);
       if (!row) {
-        problem = 'The Modes add-on is not running, so there is no Data tab.';
+        problem = 'The Modes add-on is not running, so the Data mode cannot be offered. Switch Modes on on the Plugins page.';
         return;
       }
       if (row.value?.extraModes === undefined) {
@@ -196,12 +234,14 @@ export function apply(ctx, config) {
       const ops = [];
       const next = withData(row.value.extraModes, on);
       if (next !== undefined) ops.push({ op: 'set', path: ['extraModes'], value: next });
-      // A tab that no longer exists must not stay selected.
+      // Item 4A, stage 6b (D14): without the Cowork sidebar (and in the lab with spaces off) `defaultMode` still picks a new
+      // thread's mode, so it must not name a mode that is gone. With spaces, Modes already skips a start mode whose
+      // add-on is off and keeps the owner's choice (lib/spaces.js draftStartMode, startModeGone).
       if (!on && row.value.defaultMode === MODE_ID) ops.push({ op: 'set', path: ['defaultMode'], value: 'cowork' });
       if (ops.length > 0) await service.mutate(MODES_NS, ops);
       problem = '';
     } catch (error) {
-      problem = `The Data tab could not be ${enabled() ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
+      problem = `The Data mode could not be ${enabled() ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
       warn(problem);
     } finally {
       syncing = false;
@@ -216,7 +256,7 @@ export function apply(ctx, config) {
     if (on && !toolsOff) {
       const tools = ctx.get('tools');
       if (!tools?.register) return;
-      toolsOff = buildTools({ enabled, rootOf: (exec) => folderOf(exec?.agent), conversationOf: (exec) => conversationOf(exec?.agent), engine, store, python, show, svgOf, saves: savesCharts }).map((tool) => tools.register(tool));
+      toolsOff = buildTools({ enabled, rootOf: (exec) => folderOf(exec?.agent), conversationOf: (exec) => conversationOf(exec?.agent), engine, store, python, show, svgOf, saves: savesCharts, sealed: sealedCall, runFolderOf: reconRunFolder, sealedStore }).map((tool) => tools.register(tool));
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
       toolsOff = undefined;
@@ -254,13 +294,13 @@ export function apply(ctx, config) {
     if (mode !== MODE_ID) {
       // Finance: the same tools work on the user's own files, next to the market data.
       if (!folder) return '';
-      return [`The folder of this conversation is ${folder}. When the user's own files matter (a portfolio, exported statements, a spreadsheet of figures), work on them with the data tools: data_files, data_profile, data_query, data_chart (a chart straight from a query), data_python (statistics and special charts) and data_text. Cite each run's id, like [Q7]. New files go into ${OUTPUT_FOLDER}; never change the user's files.`, pythonLine()].join('\n');
+      return [`The folder of this thread is ${folder}. When the user's own files matter (a portfolio, exported statements, a spreadsheet of figures), work on them with the data tools: data_files, data_profile, data_query, data_chart (a chart straight from a query), data_python (statistics and special charts) and data_text. Cite each run's id, like [Q7]. New files go into ${OUTPUT_FOLDER}; never change the user's files.`, pythonLine()].join('\n');
     }
-    if (!folder) return 'This Data conversation has no folder, so there are no files to analyse. Tell the user to start a conversation in the folder that holds their data (the folder is picked on the start page).';
+    if (!folder) return 'This Data thread has no folder, so there are no files to analyse. Tell the user to start a thread in the folder that holds their data (the folder is picked on the start page).';
     const scratch = scratchFolderOf(agent) !== '';
     const lines = [scratch
-      ? `This is a Scratch conversation: its data folder is its own folder (the working directory), never one of the user's. Files the user drops into the chat are copied there under their own names. Paths you give the data tools are relative to it. Files you make go into ${OUTPUT_FOLDER} inside it: write them with data_python (data_chart saves its charts there by itself). An analysis saved here can be run again only while this conversation exists: deleting it deletes its files.`
-      : `The data folder of this conversation is ${folder}. Paths you give the data tools are relative to it. Files you make go into ${OUTPUT_FOLDER} inside it: write them with data_python (data_chart saves its charts there by itself).`, pythonLine()];
+      ? `This is a Scratch thread: its data folder is its own folder (the working directory), never one of the user's. Files the user drops into the chat are copied there under their own names. Paths you give the data tools are relative to it. Files you make go into ${OUTPUT_FOLDER} inside it: write them with data_python (data_chart saves its charts there by itself). An analysis saved here can be run again only while this thread exists: deleting it deletes its files.`
+      : `The data folder of this thread is ${folder}. Paths you give the data tools are relative to it. Files you make go into ${OUTPUT_FOLDER} inside it: write them with data_python (data_chart saves its charts there by itself).`, pythonLine()];
     const mine = store.analyses().filter((analysis) => analysis.folder === folder).slice(0, 12);
     if (mine.length > 0) {
       lines.push('Saved analyses for this folder:');

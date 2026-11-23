@@ -10,6 +10,11 @@
  *   hand-off (lib/handoff.js); the eight self-tests (lib/eight.js); the tools (lib/tools.js).
  * - The real setup changes only from the Creator Plus page, by the user (fixed rule 2).
  *
+ * Item 4A, stage 6a: the Workshop space keeps Creator Plus's guard for any mode. Another mode in the Workshop space (a
+ * guest), and a thread whose space Modes cannot read (`guardedBy: 'unknown'`), get the same fixed rules and allow-list
+ * as a Creator Plus conversation, but not the creator_ tools (they need the bar and the method). `guestsGuarded: true`
+ * and `allowed()` on the service tell Modes this version guards guests (STAGE6A-DESIGN.md P3).
+ *
  * Off until switched on in Settings → Creator Plus. Needs the Modes add-on and the Cowork sidebar for the tab.
  * Route: `GET/POST /dsh-creator-plus/data`.
  */
@@ -31,7 +36,8 @@ import { MODE_ID, withCreator } from './lib/mode.js';
 import { readOrigin } from './lib/passport.js';
 import { LOG_READERS, providerPlace } from './lib/place.js';
 import { loadRecipes } from './lib/recipes.js';
-import { BUILD_FOLDER, FIXED_RULES, folderRefusal, guardRefusal, real, within } from './lib/rules.js';
+import { ALLOWED, BUILD_FOLDER, FIXED_RULES, GUEST_EXTRA, NOT_ALLOWED, WORKSHOP_GUEST_CREATOR_TOOLS, WORKSHOP_GUEST_NOTE, folderRefusal, guardRefusal, guestRefusal, guestText, real, within } from './lib/rules.js';
+import { makeGuardOf } from './lib/space-guard.js';
 import { sandboxed } from './lib/sandbox.js';
 import { scanAddon, scanAddons } from './lib/scan.js';
 import { buildTools } from './lib/tools.js';
@@ -46,11 +52,13 @@ export const inject = ['tools'];
 const MODES_NS = 'modes';
 const NS = 'creator-plus';
 const HERE = dirname(fileURLToPath(import.meta.url));
+/** Item 4A, stage 6a: the spaces whose guard is Creator Plus's: Workshop, and a thread whose space Modes could not read. */
+const GUEST_SPACES = ['workshop', 'unknown'];
 
 export const Config = z.object({
-  /** The Creator Plus tab and tools. Off leaves nothing of it in the app; its folder stays. */
+  /** The Creator Plus mode, the Workshop space and their tools. Off leaves nothing of it in the app; its folder stays. */
   enabled: z.boolean().default(false).volatile(),
-  /** Which models may read the session logs: this-mac (default), my-network, any. */
+  /** Which models may read the thread logs: this-mac (default), my-network, any. */
   logReaders: z.string().default('this-mac').volatile(),
   /** Models the user marked as strong, one "provider/model" per line: they may replace a recipe's default steps. */
   strongModels: z.string().default('').volatile(),
@@ -58,7 +66,7 @@ export const Config = z.object({
   plusFolder: z.string().default('').volatile(),
   /** Saved runs of the bar, as JSON: [{ name, state, sentence }]. */
   savedRuns: z.string().default('[]').volatile(),
-  /** Each conversation's bar, as JSON: { sessionId: { selection, all, run, lookOnly, logsFrom } }. */
+  /** Each thread's bar, as JSON: { sessionId: { selection, all, run, lookOnly, logsFrom } }. */
   sessionBars: z.string().default('{}').volatile(),
 });
 
@@ -149,28 +157,70 @@ export function apply(ctx, config, standIns = {}) {
       return undefined;
     }
   };
-  const topOf = (agent) => {
+  /** The parent a header names: a string, or an object with an id (Item 4A, stage 6a). */
+  const parentOf = (agent) => {
+    const raw = agent?.header?.parentSession ?? agent?.session?.header?.parentSession;
+    const id = raw && typeof raw === 'object' ? raw.id ?? raw.sessionId : raw;
+    return id ? String(id) : '';
+  };
+  /** Creator Plus's own walk up the headers (up to 8 levels); a parent that is not loaded still counts. */
+  const ownWalk = (agent) => {
     let id = String(agent?.id ?? '');
-    let parent = agent?.header?.parentSession ?? agent?.session?.header?.parentSession;
+    let parent = parentOf(agent);
     for (let depth = 0; parent && depth < 8; depth += 1) {
-      id = String(parent);
+      id = parent;
       let above;
       try {
         above = ctx.get('agents')?.get?.(id);
       } catch {
         above = undefined;
       }
-      parent = above?.header?.parentSession ?? above?.session?.header?.parentSession;
+      parent = parentOf(above);
     }
     return id;
   };
-  const inCreator = (agent) => {
+  /** The thread a helper works for. Item 4A, stage 6a: Modes' `topOf` first, the own walk with an older Modes. */
+  const topOf = (agent) => {
+    const id = String(agent?.id ?? '');
+    const own = ownWalk(agent);
+    try {
+      const viaModes = modes()?.topOf?.(id);
+      if (typeof viaModes === 'string' && viaModes && viaModes !== id) return viaModes;
+    } catch {
+      /* the own walk */
+    }
+    return own;
+  };
+  /** Item 4A, stage 6a: what Modes says about the thread's space (lib/space-guard.js; no Modes: no space). */
+  const guardOf = makeGuardOf(() => ctx.get('modes'));
+  const guardFor = (agent) => guardOf(typeof modes()?.guardOf === 'function' ? String(agent?.id ?? '') : topOf(agent));
+  /** A Creator Plus conversation or one of its helpers (the mode test of before). */
+  const isCreatorMode = (agent) => {
     const id = topOf(agent);
     try {
       return Boolean(id) && modes()?.get?.(id) === MODE_ID;
     } catch {
       return false;
     }
+  };
+  /**
+   * Item 4A, stage 6a: whose calls Creator Plus's guard decides: the Creator Plus mode, and, while Creator Plus is on,
+   * any mode in the Workshop space and any thread whose space Modes could not read (fail closed).
+   */
+  const inWorkshop = (agent) => isCreatorMode(agent) || (Boolean(agent) && enabled() && GUEST_SPACES.includes(guardFor(agent).guardedBy));
+  const inCreator = inWorkshop;
+  /** Lab fix (6a): a guest's mode by its shown name (Modes' modeName when it has one, else the id with a capital). */
+  const guestModeName = (agent) => {
+    const id = topOf(agent);
+    let mode = '';
+    try {
+      mode = String(modes()?.get?.(id) ?? '');
+      const shown = typeof modes()?.modeName === 'function' ? modes().modeName(mode, 'en') : '';
+      if (typeof shown === 'string' && shown.trim()) return shown.trim();
+    } catch {
+      /* the id below */
+    }
+    return mode ? `${mode.charAt(0).toUpperCase()}${mode.slice(1).replace(/-/g, ' ')}` : '';
   };
 
   // ---- the map, kept with the one before -----------------------------------------------------------
@@ -434,22 +484,25 @@ export function apply(ctx, config, standIns = {}) {
       const service = ctx.get('settings');
       const row = service?.describe?.().find((entry) => entry.ns === MODES_NS);
       if (!row) {
-        problem = 'The Modes add-on is not running, so there is no Creator Plus tab.';
+        problem = 'The Modes add-on is not running, so there is no Creator Plus mode. Switch Modes on on the Plugins page.';
         return;
       }
       if (row.value?.extraModes === undefined) {
-        problem = 'The Modes add-on is an older version that cannot take a new tab. Update Plus.';
+        problem = 'The Modes add-on is an older version that cannot take a new mode. Update Plus.';
         return;
       }
       const on = enabled();
       const ops = [];
       const next = withCreator(row.value.extraModes, on);
       if (next !== undefined) ops.push({ op: 'set', path: ['extraModes'], value: next });
+      // Item 4A, stage 6b (D14): without the Cowork sidebar (and in the lab with spaces off) `defaultMode` still picks a new
+      // thread's mode, so it must not name a mode that is gone. With spaces, Modes already skips a start mode whose
+      // add-on is off and keeps the owner's choice (lib/spaces.js draftStartMode, startModeGone).
       if (!on && row.value.defaultMode === MODE_ID) ops.push({ op: 'set', path: ['defaultMode'], value: 'cowork' });
       if (ops.length > 0) await service.mutate(MODES_NS, ops);
       problem = '';
     } catch (error) {
-      problem = `The Creator Plus tab could not be ${enabled() ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
+      problem = `The Creator Plus mode could not be ${enabled() ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
       warn(problem);
     } finally {
       syncing = false;
@@ -463,13 +516,26 @@ export function apply(ctx, config, standIns = {}) {
     runs, backups, cards, userSaid, longSince, depthOf, approve, reader, sources, installedDir, modules: () => join(HERE, 'node_modules'), passportsHome: () => join(home, 'passports'), checkedHome: () => join(home, 'checked'),
     preparedHome: () => join(home, 'prepared'), buildsHome: () => join(home, 'builds'), folderRefusal: unsafeFolder, userCount, routeOf,
     settingsOf: () => ({ logReaders: String(setting('logReaders') ?? 'this-mac') }), placeOf, logsDeps,
+    // Mission stage E: a card a Mission's helper made waits for the owner's yes in the Mission's card too.
+    missionYes: async (exec, request) => {
+      try {
+        const mission = ctx.get('mission');
+        const sessionId = String(exec?.agent?.id ?? '');
+        if (typeof mission?.askYes !== 'function' || !sessionId) return undefined;
+        const said = await mission.askYes({ sessionId, addon: 'creatorPlus', ...request });
+        return said && typeof said === 'object' ? said : undefined;
+      } catch {
+        return undefined;
+      }
+    },
   };
   const syncTools = () => {
     const on = enabled();
     if (on && !toolsOff) {
       const tools = ctx.get('tools');
       if (!tools?.register) return;
-      toolsOff = buildTools(deps).map((tool) => tools.register(tool, { when: ({ agent }) => enabled() && inCreator(agent) && !isToolless(agent) }));
+      // The creator_ tools need the bar and Creator Plus's method: only the Creator Plus mode, never a guest.
+      toolsOff = buildTools(deps).map((tool) => tools.register(tool, { when: ({ agent }) => enabled() && isCreatorMode(agent) && !isToolless(agent) }));
     } else if (!on && toolsOff) {
       for (const dispose of toolsOff) if (typeof dispose === 'function') dispose();
       toolsOff = undefined;
@@ -517,11 +583,27 @@ export function apply(ctx, config, standIns = {}) {
   }, 'creator-plus: follow the switch');
 
   // ---- the guard: the fixed rules, the bar's boundary, the reader's lock, the Long run's quiet ----------
+  // Lab re-check fix (6a, problem 4): every refusal a guest reaches is said in the guest's own mode's words, never
+  // pointing to creator_ tools or the Creator Plus conversation.
   const decide = (exec) => {
+    const why = decideHome(exec);
+    if (!why || !exec?.agent || isCreatorMode(exec.agent) || isToolless(exec.agent)) return why;
+    const name = String(exec.name ?? '');
+    // Item 4A, stage 6b (J14, point 27): a guest in Workshop may schedule (no path arguments; Modes' fences decide where
+    // its runs go). The home mode keeps its allow-list, without schedules (D15).
+    // The 'unknown' guard (a space that could not be read) keeps refusing them (fail closed).
+    if (GUEST_EXTRA.some((prefix) => name.startsWith(prefix)) && guardFor(exec.agent).guardedBy === 'workshop') return '';
+    // Item 4A, stage 6a: a guest never runs Creator Plus's own tools (they change add-ons).
+    if (/^creator_/.test(name)) return guestText(WORKSHOP_GUEST_CREATOR_TOOLS, { mode: guestModeName(exec.agent) });
+    return guestRefusal(why, { mode: guestModeName(exec.agent), tool: name });
+  };
+  const decideHome = (exec) => {
     const agent = exec?.agent;
     if (!agent || !inCreator(agent)) return '';
     const name = String(exec.name ?? '');
     if (isToolless(agent)) return 'You are Creator Plus\'s reader: you have no tools. Answer with text only.';
+    // Item 4A, stage 6a: a guest never runs Creator Plus's own tools (decide gives it the guest's sentence).
+    if (/^creator_/.test(name) && !isCreatorMode(agent)) return NOT_ALLOWED;
     if (name === 'ask_user_question') {
       const late = questionRefusal({ longSince: longSince(exec) });
       if (late) return late;
@@ -595,7 +677,9 @@ export function apply(ctx, config, standIns = {}) {
         interpolate: false,
         text: () => {
           try {
-            if (!enabled() || modes()?.get?.(agent.id) !== MODE_ID || topOf(agent) !== agent.id) return '';
+            if (!enabled() || topOf(agent) !== agent.id) return '';
+            // Item 4A, stage 6a: another mode in the Workshop space gets the guest note (top-level only).
+            if (modes()?.get?.(agent.id) !== MODE_ID) return guardOf(agent.id).guardedBy === 'workshop' ? WORKSHOP_GUEST_NOTE : '';
             const exec = { agent };
             const state = bar(exec);
             const current = map();
@@ -631,6 +715,14 @@ export function apply(ctx, config, standIns = {}) {
   // ---- the service: saved runs for the Automations tab -----------------------------------------------
   ctx.effect(() => ctx.provide('creatorPlus', Object.freeze({
     apiVersion: 1,
+    /** Item 4A, stage 6a: this version guards guests in the Workshop space (Modes opens Workshop to other modes only then). */
+    guestsGuarded: true,
+    /**
+     * Item 4A, stage 6a: the Workshop allow-list (tool names), for the Settings line that says what a mode loses there.
+     * @returns {readonly string[]} the names, sorted.
+     */
+    // Stage 6b (3.4): what a guest may run in Workshop: the allow-list plus the schedule tools (prefix form).
+    allowed: () => Object.freeze([...ALLOWED, ...GUEST_EXTRA].sort()),
     /** @returns {{name: string, sentence: string}[]} the saved runs (empty while switched off). */
     savedRuns: () => (enabled() ? savedRunsOf(setting('savedRuns')).map(({ name: runName, sentence }) => ({ name: runName, sentence })) : []),
     /** @returns {string} the message an automation sends for a saved run ('' when there is none). */
@@ -642,13 +734,15 @@ export function apply(ctx, config, standIns = {}) {
      * Mission asks this at the start of a Long run (as it asks Bench): in a Creator Plus conversation, its
      * check commands run in Mission's strictest fence (no network, nothing of the home folder, writing only
      * in the run's folder) with no keys in their environment, and its helpers run no commands. Undefined
-     * anywhere else and while Creator Plus is off: Mission as always.
+     * anywhere else and while Creator Plus is off: Mission as always. Item 4A, stage 6a: also for any mode in the
+     * Workshop space, and for a thread whose space Modes could not read.
      * @param {string} id - the conversation.
      * @returns {{offlineChecks: true, cleanEnv: true} | undefined} the rules.
      */
     longRunRules: (id) => {
       try {
-        if (!enabled() || modes()?.get?.(String(id ?? '')) !== MODE_ID) return undefined;
+        if (!enabled()) return undefined;
+        if (modes()?.get?.(String(id ?? '')) !== MODE_ID && !GUEST_SPACES.includes(guardOf(String(id ?? '')).guardedBy)) return undefined;
         // A Long run checks its work in the conversation's folder: a folder Creator Plus would not build in is refused.
         let agent;
         try {
@@ -660,6 +754,25 @@ export function apply(ctx, config, standIns = {}) {
         return { offlineChecks: true, cleanEnv: true, ...(why ? { refuse: why } : {}) };
       } catch {
         return undefined;
+      }
+    },
+    /**
+     * Mission stage E: the owner pressed Allow in a Mission's card for a ready plugin or a prepared change that a
+     * Mission's helper made. It does what Apply on that card in Settings → Creator Plus does, with the same checks
+     * (the checked copy unchanged, a way back kept); only for that conversation's own card.
+     * @param {{sessionId: string, key?: string, ref: {card: string}}} request
+     * @returns {Promise<{ok: boolean, text: string}>}
+     */
+    missionAllow: async (request) => {
+      try {
+        if (!enabled()) return { ok: false, text: 'Creator Plus is switched off in Settings → Creator Plus.' };
+        const card = cards.get(String(request?.ref?.card ?? ''));
+        if (!card) return { ok: false, text: 'That card is not on the Creator Plus page any more.' };
+        if (!card.conversation || card.conversation !== String(request?.sessionId ?? '')) return { ok: false, text: 'That card belongs to another thread.' };
+        if (card.status === 'applied') return { ok: true, text: 'Already applied from Settings → Creator Plus.' };
+        return { ok: true, text: await applyById(card.id) };
+      } catch (error) {
+        return { ok: false, text: String(error?.message ?? error).slice(0, 400) };
       }
     },
   })), 'creator-plus service');
@@ -714,19 +827,19 @@ export function apply(ctx, config, standIns = {}) {
       const manager = ctx.get('pluginManager');
       if (!manager?.installBundle) throw new Error('The app\'s plugin manager is not available here: install it with the Plus installer instead.');
       const folder = String(card.data?.folder ?? '');
-      if (!folder || !within(real(folder), real(join(home, 'checked'))) || !existsSync(join(folder, 'package.json'))) throw new Error('The checked copy of this plugin is gone; run creator_check again.');
+      if (!folder || !within(real(folder), real(join(home, 'checked'))) || !existsSync(join(folder, 'package.json'))) throw new Error('The checked copy of this add-on is gone; run creator_check again.');
       // What is installed is what was checked: every file as it was, nothing added.
       const differs = mismatched(folder, card.data?.hashes);
       const extra = filesOf(folder).filter((rel) => !Object.hasOwn(card.data?.hashes ?? {}, rel));
       if (differs.length > 0 || extra.length > 0) throw new Error(`The checked copy changed since the checks (${[...differs, ...extra].slice(0, 5).join(', ')}): nothing was installed. Run creator_check again.`);
       // A new plugin never replaces one that is there (the fit check blocks its name; checked again now).
       const name = String(card.data?.name ?? '');
-      if (!name || map(true).plugins.some((plugin) => plugin.name === name)) throw new Error(`${name || 'This plugin'} is already a plugin of your setup: a new plugin never replaces one. Nothing was installed.`);
+      if (!name || map(true).plugins.some((plugin) => plugin.name === name)) throw new Error(`${name || 'This add-on'} is already an add-on of your setup: a new add-on never replaces one. Nothing was installed.`);
       // What cannot be shown in full is not installed: binary files, modules other than Creator Plus's own, too much code.
       const code = codeOf(folder);
-      if (code.binary.length || code.modules.length || code.tooLong) throw new Error(`This plugin cannot be shown in full (${code.binary.length ? `binary files: ${code.binary.slice(0, 3).join(', ')}` : code.modules.length ? `modules that are not Creator Plus's own: ${code.modules.slice(0, 3).join(', ')}` : 'too much code'}), so it is not installed from here.`);
+      if (code.binary.length || code.modules.length || code.tooLong) throw new Error(`This add-on cannot be shown in full (${code.binary.length ? `binary files: ${code.binary.slice(0, 3).join(', ')}` : code.modules.length ? `modules that are not Creator Plus's own: ${code.modules.slice(0, 3).join(', ')}` : 'too much code'}), so it is not installed from here.`);
       const target = join(home, 'plugins', folder.split('/').pop());
-      if (existsSync(target)) throw new Error(`There is already a plugin folder ${folder.split('/').pop()} from an earlier Apply: Remove that one first. Nothing was installed.`);
+      if (existsSync(target)) throw new Error(`There is already an add-on folder ${folder.split('/').pop()} from an earlier Apply: Remove that one first. Nothing was installed.`);
       mkdirSync(join(home, 'plugins'), { recursive: true });
       cpSync(folder, target, { recursive: true, dereference: false, filter: (path) => !/\/test(\/|$)/.test(path.slice(folder.length)) });
       const result = await manager.installBundle(target, { activate: true });
@@ -734,7 +847,7 @@ export function apply(ctx, config, standIns = {}) {
     }
     if (card.kind === 'change') {
       const plugin = map().plugins.find((entry) => entry.name === card.plugin);
-      if (!plugin || plugin.locked) throw new Error('That plugin cannot be changed here.');
+      if (!plugin || plugin.locked) throw new Error('That add-on cannot be changed here.');
       const target = installedDir(plugin);
       if (!target) throw new Error(`${plugin.name}'s folder was not found.`);
       const copy = String(card.data?.copy ?? '');
@@ -752,7 +865,28 @@ export function apply(ctx, config, standIns = {}) {
       }
       return { text: `Applied to ${plugin.name} in your real setup; it takes effect when the app starts again. Way back: Undo on this card. A Plus update replaces it; the installer keeps your changed files.`, data: { applyBackup: backup } };
     }
-    throw new Error('Only a ready plugin or a prepared change can be applied.');
+    throw new Error('Only a ready add-on or a prepared change can be applied.');
+  };
+  /**
+   * Apply a card: the page's Apply, and Allow in a Mission's card (Mission stage E), which does exactly the same.
+   * Marked first, so a second click while it runs is refused (MOVES has no "applying" → apply).
+   * @returns {Promise<string>} what was done.
+   */
+  const applyById = async (cardId) => {
+    const card = cards.get(String(cardId ?? ''));
+    if (!card) throw new Error('There is no such card.');
+    const refusal = moveRefusal(card, 'apply');
+    if (refusal) throw new Error(refusal);
+    cards.set(card.id, 'applying');
+    let done;
+    try {
+      done = await applyCard(card);
+    } catch (error) {
+      cards.set(card.id, card.status);
+      throw error;
+    }
+    cards.set(card.id, 'applied', done.text, done.data);
+    return done.text;
   };
   const view = (session = '') => {
     // Switched off, the page and the bar get the switch alone, and nothing is read.
@@ -780,7 +914,8 @@ export function apply(ctx, config, standIns = {}) {
       cards: cards.list().slice(-120).reverse(),
       learning: learning.list().slice(-120).reverse(),
       backups,
-      ...(session ? { session: { inCreator: enabled() && modes()?.get?.(session) === MODE_ID, bar: barState(bars[session], current.plugins.map((plugin) => plugin.name)) } } : {}),
+      // Item 4A, stage 6a: any mode in the Workshop space gets the bar (its reads follow the bar's selection).
+      ...(session ? { session: { inCreator: enabled() && inWorkshop({ id: session }), guest: !isCreatorMode({ id: session }), bar: barState(bars[session], current.plugins.map((plugin) => plugin.name)) } } : {}),
     };
   };
   ctx.inject(['webServer', 'connection'], (inner) => {
@@ -809,7 +944,7 @@ export function apply(ctx, config, standIns = {}) {
             const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
             const session = String(body.sessionId ?? '').slice(0, 200);
             if (body.action === 'bar') {
-              if (!session) throw new Error('Which conversation?');
+              if (!session) throw new Error('Which thread?');
               const state = barState(body.state, map().plugins.map((plugin) => plugin.name));
               await mutate([{ op: 'set', path: ['sessionBars'], value: JSON.stringify({ ...readObject(setting('sessionBars')), [session]: state }) }]);
               note = runSentence(state);
@@ -844,17 +979,7 @@ export function apply(ctx, config, standIns = {}) {
                 const tried = await trial().check([folder]);
                 cards.set(card.id, 'tried', tried.ok ? 'Tried in a trial copy: it installed and loaded without warnings.' : `Tried in a trial copy: ${String(tried.problem || tried.warnings).slice(0, 400)}`);
               } else if (body.act === 'apply') {
-                // Marked first, so a second click while it runs is refused (MOVES has no "applying" → apply).
-                cards.set(card.id, 'applying');
-                let done;
-                try {
-                  done = await applyCard(card);
-                } catch (error) {
-                  cards.set(card.id, card.status);
-                  throw error;
-                }
-                cards.set(card.id, 'applied', done.text, done.data);
-                note = done.text;
+                note = await applyById(card.id);
               } else if (body.act === 'undo') {
                 if (card.kind === 'new-plugin') {
                   const manager = ctx.get('pluginManager');

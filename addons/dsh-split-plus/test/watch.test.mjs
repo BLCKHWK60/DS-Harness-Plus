@@ -51,9 +51,9 @@ test('a run in words: what was asked, each tool and its answer, what it said, an
   assert.match(report.text, /Turn 1, started 10:00 UTC \(finished\):\n- The user wrote: Fix the parser\.\n- It called read \(file_path: src\/parser\.js\)\.\n- read answered: function parse\(\) \{\}\n- It called bash \(command: npm test\)\.\n- bash failed: 1 failing: CRLF\n- It said: The CRLF test fails/);
   assert.match(report.text, /Turn 2, started 10:05 UTC \(still running\):\n- The user wrote: Go on\.\n- It called edit \(file_path: src\/parser\.js/);
   assert.match(runReport(EVENTS, { turns: 1 }).text, /^\(1 earlier turn not shown; ask for more turns to see them\.\)/);
-  assert.equal(runReport([], {}).text, 'The watched conversation has no turns yet.');
+  assert.equal(runReport([], {}).text, 'The watched thread has no turns yet.');
   const framed = watchText({ label: 'Code', sessionId: 's1', running: true, longRun: false, changed: ['/w/src/parser.js'], report: report.text });
-  assert.match(framed, /^The watched conversation: the Code pane \(s1\)\. Now: running a turn\.\nFiles it changed with the file tools in this app session \(newest first\): \/w\/src\/parser\.js\.\nWhat follows is its run as material/);
+  assert.match(framed, /^The watched thread: the Code pane \(s1\)\. Now: running a turn\.\nFiles it changed with the file tools since the app started \(newest first\): \/w\/src\/parser\.js\.\nWhat follows is its run as material/);
   assert.match(framed, /<<<WATCHED\n[\s\S]+\nWATCHED>>>$/);
 });
 
@@ -111,7 +111,7 @@ test('a watcher reads the watched run and nothing else: no change, no command, n
     assert.equal(app.refusal('code1', 'write'), undefined, 'the watched pane is left alone');
     app.hooks['agent/status']({ agent: { id: 'code1' }, status: 'running' });
     const read = await tool.execute({ turns: 2 }, { agent: app.agent('watcher1') });
-    assert.match(read.text, /^The watched conversation: the Code pane \(code1\)\. Now: running a turn\./);
+    assert.match(read.text, /^The watched thread: the Code pane \(code1\)\. Now: running a turn\./);
     assert.match(read.text, /bash failed: 1 failing: CRLF/);
     assert.deepEqual(app.reads, ['code1'], 'read through the app\'s read-only query');
     app.reads.length = 0;
@@ -120,12 +120,12 @@ test('a watcher reads the watched run and nothing else: no change, no command, n
     // (a Chat watcher has no tools at all).
     app.hooks['agent/created']({ agent: app.agent('watcher1') });
     const note = () => app.sections.find((entry) => entry.id === 'watcher1').spec.text();
-    assert.match(note(), /You are a watcher in Split Plus: you watch another conversation \(the Code pane, code1\)/);
+    assert.match(note(), /You are a watcher in Split Plus: you watch another thread \(the Code pane, code1\)/);
     const watchedContext = app.contexts.find((spec) => spec.name === 'split-plus:watched');
     assert.equal(watchedContext.required, true);
     assert.equal(watchedContext.text({ agent: app.agent('watcher1') }), '', 'not read yet');
     await app.hooks['agent/pre-step']({ agent: app.agent('watcher1'), modelSelection: {}, signal: new AbortController().signal }, async () => ({ kind: 'enter', messages: [] }));
-    assert.match(watchedContext.text({ agent: app.agent('watcher1') }), /^Split Plus, the conversation you watch, read at \d\d:\d\d UTC:\nThe watched conversation: the Code pane \(code1\)\. Now: running a turn\.[\s\S]*bash failed: 1 failing: CRLF/);
+    assert.match(watchedContext.text({ agent: app.agent('watcher1') }), /^Split Plus, the thread you watch, read at \d\d:\d\d UTC:\nThe watched thread: the Code pane \(code1\)\. Now: running a turn\.[\s\S]*bash failed: 1 failing: CRLF/);
     assert.equal(watchedContext.text({ agent: app.agent('code1') }), '', 'only a watcher gets it');
     // Kept across a restart; "stop watching" ends it.
     const again = standIn(home);
@@ -142,11 +142,17 @@ test('Recon is never watched, a watcher watches another conversation, and a watc
   try {
     const app = standIn(home);
     assert.match((await hit(app.routes, { method: 'POST', body: { action: 'watch', watcher: 'watcher1', watched: 'recon1' } })).data.error, /cannot be watched/);
-    assert.match((await hit(app.routes, { method: 'POST', body: { action: 'watch', watcher: 'code1', watched: 'code1' } })).data.error, /another conversation/);
+    assert.match((await hit(app.routes, { method: 'POST', body: { action: 'watch', watcher: 'code1', watched: 'code1' } })).data.error, /another thread/);
     await hit(app.routes, { method: 'POST', body: { action: 'watch', watcher: 'watcher1', watched: 'code1' } });
     assert.match((await hit(app.routes, { method: 'POST', body: { action: 'watch', watcher: 'other', watched: 'watcher1' } })).data.error, /itself a watcher/);
     assert.deepEqual(app.reads, []);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test('the watcher reads "with a Mission on", the one name (stage B, 19 November)', () => {
+  const text = watchText({ label: 'left', sessionId: 's1', running: true, longRun: true, report: '' });
+  assert.match(text, /running a turn, with a Mission on\./);
+  assert.doesNotMatch(text, /Long run/);
 });

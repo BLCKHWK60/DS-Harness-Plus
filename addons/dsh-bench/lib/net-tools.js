@@ -126,7 +126,7 @@ export function buildNetworkTools(options) {
       const bound = card.permissions?.bound?.net;
       if (bound?.id && keys.fingerprints.includes(bound.id)) return `${card.name} is already trusted (key ${bound.id}).`;
       if (bound?.id) throw new Error(`${card.name}'s card is linked to the device with key ${bound.id}, and ${where.net.address} answers with ${keys.fingerprints[0]}. It may be another device, or it was reset. The user unlinks the card on Settings → Devices first if it is the same device.`);
-      await yes(exec, `Trust the device at ${where.net.address}:${where.net.port} as "${card.name}"? Its key fingerprint is ${keys.fingerprints[0]}${keys.fingerprints.length > 1 ? ` (and ${keys.fingerprints.length - 1} more of its keys)` : ''}. If you can, check it matches what the device shows. Devices then links the card to this device and refuses any other key.`, `trusting ${card.name}'s key`);
+      await yes(exec, `Trust the device at ${where.net.address}:${where.net.port} as "${card.name}"? Its key fingerprint is ${keys.fingerprints[0]}${keys.fingerprints.length > 1 ? ` (and ${keys.fingerprints.length - 1} more of its keys)` : ''}. If you can, check it matches what the device shows. Devices then links the card to this device and refuses any other key.`, `trusting ${card.name}'s key`, { helperMay: true, exact: `${where.net.address}:${where.net.port}|${keys.fingerprints.join(',')}` });
       forgetKeys(where.files.knownHosts, where.alias);
       trustKeys(where.files.knownHosts, keys.lines, where.alias);
       card = bench.link(card, 'net', { id: keys.fingerprints[0], label: `${where.net.address} (${keys.fingerprints[0]})` }, now());

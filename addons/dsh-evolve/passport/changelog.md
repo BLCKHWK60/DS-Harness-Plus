@@ -1,5 +1,6 @@
 # Changelog: @local/dsh-evolve
 
+- 2026-11-23 Item 4A, stage 7 (words only, unit-tested): English only: the Chinese Settings name is gone. "Conversation" is "thread" in the page and its errors; Model Tiers is Model tiers.
 - 2026-11-17 The exam gate's lines say Tuner Plus (the name the owner uses)
 - 2026-11-17 The rest of the Content and Bench plan: Web levels, Ultra Code and the work loop, the Recon export door, the Voice Library, and Bench's network, server, phone and Bluetooth doors
 - 2026-11-15 Full audit of every mode, grouped and searchable Settings (0.56.0)

@@ -3,7 +3,7 @@
  * the record and the marks). A part of its own with its own switch: while it is off, nothing here runs,
  * writes or asks, and Tuner Plus is what it was before.
  *
- * It lists every skill the app can see (the default folder, the folders of the conversations Tuner Plus
+ * It lists every skill the app can see (the default folder, the folders of the threads Tuner Plus
  * may read, never Recon's, and the projects where a door stamped a skill), gives each its mark by code
  * (lib/skills/marks.js), keeps the record in Tuner Plus's own folder (`skills/records.jsonl`,
  * lib/skills/records.js), makes the app ask the owner before a model's file tools write a skill and stamps
@@ -135,7 +135,7 @@ export function plusNamesIn(folder, names) {
 
 /**
  * The folders to list skills from, in this order: the default folder; the project of every skill a door
- * stamped; each readable conversation's folder, and its own folder inside it (a Scratch conversation
+ * stamped; each readable thread's folder, and its own folder inside it (a Scratch thread
  * works in <its folder>/<its id>, while the index names the shared Scratch folder). Recon's rooms never.
  * @param {{usual?: string, read?: object[], stamped?: string[]}} where
  * @returns {string[]} absolute folders, each once (at most 80).
@@ -175,7 +175,7 @@ const placeInKey = (key) => String(key).split('|').slice(1).join('|');
  * @param {(text: string) => void} deps.warn
  * @param {(card: object) => object} deps.addCard - a card on Tuner Plus's page.
  * @param {(key: string) => boolean} deps.hasCard - whether a card with that key is there already (done or not).
- * @param {() => Promise<object>} deps.readable - the conversations Tuner Plus may read (never Recon's).
+ * @param {() => Promise<object>} deps.readable - the threads Tuner Plus may read (never Recon's).
  * @param {() => boolean} [deps.liveWithoutExam] - whether a draft the owner typed may go live before it has an exam (his choice).
  * @param {object} [deps.standIns] - for tests: `listSkills`, `learnedFile`, `plusFolder`, `appContents`, `dshHome`, `defaultFolder`.
  */
@@ -209,7 +209,7 @@ export function openSkills({ ctx, store, on, now = () => Date.now(), warn = () =
   const agentsHome = () => standIns.agentsHome ?? (process.env.DSH_AGENTS_HOME?.trim() ? process.env.DSH_AGENTS_HOME : join(homedir(), '.agents'));
   /**
    * Every skill the app can see, once each: from the default folder, stamped projects and the readable
-   * conversations' folders. On the way, the skills hidden behind another of the same name in each project.
+   * threads' folders. On the way, the skills hidden behind another of the same name in each project.
    */
   const listSkills = standIns.listSkills ?? (async () => {
     const skills = ctx.get('skills');
@@ -551,11 +551,11 @@ export function openSkills({ ctx, store, on, now = () => Date.now(), warn = () =
     return run;
   };
   const draft = (want) => oneAtATime(() => makeDraft(want));
-  /** Where a draft came from: a skill idea's card, or a conversation (and the outside material the owner pointed at). */
+  /** Where a draft came from: a skill idea's card, or a thread (and the outside material the owner pointed at). */
   const originOf = (value) => {
     if (!value || typeof value !== 'object' || !['chat', 'idea', 'bar', 'improve', 'merge', 'split'].includes(value.kind)) return null;
     const clean = (text, size) => mask(String(text ?? '')).text.replace(/\s+/g, ' ').trim().slice(0, size);
-    // A conversation's id is kept as it is when it looks like one (the masking would take a long id for a key).
+    // A thread's id is kept as it is when it looks like one (the masking would take a long id for a key).
     const session = String(value.session ?? '');
     return { kind: value.kind, title: clean(value.title, 200), session: /^[\w.:-]{1,120}$/.test(session) ? session : '', source: clean(value.source, 500), ...(value.night === true ? { night: true } : {}) };
   };
@@ -664,7 +664,7 @@ export function openSkills({ ctx, store, on, now = () => Date.now(), warn = () =
   const checkAfterUpdate = (rows, byKey = new Map()) => {
     const versions = { app: appVersion(), plus: plusVersions() };
     // Only the places an update can touch: the app's own skills, Plus's and the providers', and the shared
-    // folders at home. A project's folders come and go with its conversations, so they are never news here.
+    // folders at home. A project's folders come and go with its threads, so they are never news here.
     // (Places are kept with links resolved, so the folders are compared the same way.)
     const homes = [join(dshHome(), 'skills'), join(agentsHome(), 'skills'), appContents, plusFolder].filter((one) => isAbsolute(one)).flatMap((one) => [one, physical(one)]);
     const updatable = (where) => where.startsWith('provider:') || homes.some((home) => within(where, home));
@@ -909,8 +909,8 @@ export function openSkills({ ctx, store, on, now = () => Date.now(), warn = () =
     return { done, problems };
   };
   /**
-   * Count the skills' uses in the conversations Tuner Plus may read (never Recon, never one holding a Recon
-   * export): at most `most` conversations a time, each read again after six hours.
+   * Count the skills' uses in the threads Tuner Plus may read (never Recon, never one holding a Recon
+   * export): at most `most` threads a time, each read again after six hours.
    */
   let healthJob;
   const refreshHealth = ({ most = 200 } = {}) => {
@@ -954,7 +954,7 @@ export function openSkills({ ctx, store, on, now = () => Date.now(), warn = () =
           warn(`skills to teach could not be looked for: ${String(error?.message ?? error).slice(0, 200)}`);
         }
       }
-      // Readable conversations not counted yet (beyond this pass's limit, or not readable now).
+      // Readable threads not counted yet (beyond this pass's limit, or not readable now).
       const missing = [...readIds].filter((id) => !sessions[id] && !skippedExport.has(id)).length;
       return { ...saved, missing };
     })().finally(() => {
@@ -1021,12 +1021,12 @@ export function openSkills({ ctx, store, on, now = () => Date.now(), warn = () =
       return true;
     }
   };
-  /** The folder the app's file tools resolve a conversation's relative paths in (its own working folder). */
+  /** The folder the app's file tools resolve a thread's relative paths in (its own working folder). */
   const workingFolder = async (agent, signal) => {
     try {
       const folder = await ctx.get('workingDirectory')?.ensure?.(agent, signal);
       if (typeof folder === 'string' && isAbsolute(folder)) return folder;
-    } catch { /* the conversation's folder below */ }
+    } catch { /* the thread's folder below */ }
     const cwd = headerOf(agent).cwd;
     return typeof cwd === 'string' ? cwd : '';
   };
@@ -1078,7 +1078,7 @@ export function openSkills({ ctx, store, on, now = () => Date.now(), warn = () =
   } else {
     ctx.effect(() => ctx.get('tools')?.guard?.(finalRule) ?? (() => {}), 'tuning: skills closed folders, final');
   }
-  // When the write happened: the skill is stamped AI-made with the model of that conversation (never in Recon).
+  // When the write happened: the skill is stamped AI-made with the model of that thread (never in Recon).
   ctx.on('fs/observed', (target, observation, exec) => {
     try {
       if (!on() || !WRITE_TOOLS.includes(exec?.name) || observation?.kind !== 'present') return;
@@ -1298,8 +1298,8 @@ export function openSkills({ ctx, store, on, now = () => Date.now(), warn = () =
    * @returns {Promise<object[]>} the ideas found.
    */
   /**
-   * The harvest's rows Tuner Plus may still read today: a row from a conversation is used only while that
-   * conversation is among the readable ones (one marked "never learn from this", trashed or given a Recon
+   * The harvest's rows Tuner Plus may still read today: a row from a thread is used only while that
+   * thread is among the readable ones (one marked "never learn from this", trashed or given a Recon
    * export since it was gathered is left out; the review of step 8). Rows from elsewhere (reports, ledgers) stay.
    */
   const rowsReadableNow = async () => {
@@ -1796,11 +1796,11 @@ export function openSkills({ ctx, store, on, now = () => Date.now(), warn = () =
           const stopped = run.abort.signal.aborted;
           card(`${stopped ? 'Stopped' : 'Done'}: ${sentence}`, `${lines.join('\n')}${lookOnly ? '\nLook only: nothing was written.' : '\nNothing is used before you say yes on its draft (read it, then Use it).'}`);
         } else if (type === 'retire') {
-          // Count first: a skill is "unused" only when every conversation Tuner Plus may read was counted.
+          // Count first: a skill is "unused" only when every thread Tuner Plus may read was counted.
           run.current = 'counting uses';
           const counted = await refreshHealth({ most: 5000 });
           if (counted.missing > 0) {
-            if (on()) addCard?.({ kind: 'skills-retire', key: `skills-retire-${run.id}`, title: `Nothing proposed yet: ${sentence}`, text: `Uses are not counted yet in ${counted.missing} conversation${counted.missing === 1 ? '' : 's'} Tuner Plus may read, so no skill can be called unused. Count uses again (under Skills), then run this again. Nothing was changed.`, buttons: ['later'] });
+            if (on()) addCard?.({ kind: 'skills-retire', key: `skills-retire-${run.id}`, title: `Nothing proposed yet: ${sentence}`, text: `Uses are not counted yet in ${counted.missing} thread${counted.missing === 1 ? '' : 's'} Tuner Plus may read, so no skill can be called unused. Count uses again (under Skills), then run this again. Nothing was changed.`, buttons: ['later'] });
             return;
           }
           const tally = tallyUses(Object.values(counted.sessions ?? {}));
@@ -1821,7 +1821,7 @@ export function openSkills({ ctx, store, on, now = () => Date.now(), warn = () =
               lines.push(`${name}: not used for ${UNUSED_DAYS} days or more.`);
             }
           }
-          if (on()) addCard?.({ kind: 'skills-retire', key: `skills-retire-${run.id}`, title: retire.length > 0 ? `Retire unused: ${retire.map((key) => last.skills.get(key)?.name ?? key).join(', ')}` : `Nothing to retire: ${sentence}`, text: `${lines.join('\n')}\n${retire.length > 0 ? 'Retire them switches them off and keeps them: Put back is under Skills. Uses are counted from the conversations Tuner Plus may read.' : 'Nothing was changed.'}`, retire, buttons: retire.length > 0 ? ['retire', 'later', 'never'] : ['later'] });
+          if (on()) addCard?.({ kind: 'skills-retire', key: `skills-retire-${run.id}`, title: retire.length > 0 ? `Retire unused: ${retire.map((key) => last.skills.get(key)?.name ?? key).join(', ')}` : `Nothing to retire: ${sentence}`, text: `${lines.join('\n')}\n${retire.length > 0 ? 'Retire them switches them off and keeps them: Put back is under Skills. Uses are counted from the threads Tuner Plus may read.' : 'Nothing was changed.'}`, retire, buttons: retire.length > 0 ? ['retire', 'later', 'never'] : ['later'] });
         } else {
           const ideas = await findIdeas();
           card(`Done: ${sentence}`, ideas.length === 0 ? 'No new skill ideas in what was gathered. Changed nothing.' : `${ideas.length} skill idea${ideas.length === 1 ? '' : 's'}: see their cards. Changed nothing.`);

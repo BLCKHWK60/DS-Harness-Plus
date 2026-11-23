@@ -116,7 +116,7 @@ test('the chat box shows the selection of a started Finance conversation, and no
   const tree = draw();
   assert.equal(app.calls[0].url, 'http://127.0.0.1:1/dsh-finance/data?session=s1');
   const group = find(tree, (el) => el.props.role === 'group');
-  assert.equal(group.props['aria-label'], 'What this Finance conversation is about');
+  assert.equal(group.props['aria-label'], 'What this Finance thread is about');
   assert.match(text(tree), /Company .*United States .*Full picture .*1 year/);
   assert.equal(find(tree, (el) => el.type === 'input').props.value, 'NVIDIA');
   assert.deepEqual(find(tree, (el) => el.type === 'datalist').children.map((option) => option.props.value), ['NVIDIA', 'ASML']);
@@ -141,7 +141,7 @@ test('a pick in the chat box is sent as this conversation\'s selection and shown
   find(draw(), (el) => el.props['aria-label'] === 'Market: United States').props.onClick();
   const list = draw();
   // The note is read again before every step, so a change reaches a reply that is still running.
-  assert.match(text(list), /For this conversation only, from the assistant's next step\./);
+  assert.match(text(list), /For this thread only, from the assistant's next step\./);
   assert.ok(!/next message/.test(text(list)), text(list));
   // The subject box's tooltip carries the same note.
   assert.match(find(list, (el) => el.type === 'input').props.title, /from the assistant's next step/);

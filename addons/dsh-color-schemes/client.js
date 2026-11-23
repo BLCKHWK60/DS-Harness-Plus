@@ -159,8 +159,11 @@ window.__ModuleLoader__.load({
     // routes on its own timer, even in a hidden window. This gives all of them ONE shared Settings copy (read once, renewed when
     // Settings changes or after 30 seconds at the most) and one kind of polling loop that stops while the window is hidden.
     // The first copy of this block to run puts the shared state on `window.__dshPoll`; later copies reuse it, so 30 add-ons share one.
+    // A newer copy (higher API) replaces an older shared object instead of reusing it, so an older page file that runs first (an
+    // add-on edited in creator mode, a partly updated install) cannot keep the whole page on an older helper. Raise API with every
+    // change to how the shared state behaves.
     const dshPoll = (() => {
-      const API = 1;
+      const API = 2;
       const root = typeof window !== 'undefined' ? window : globalThis;
       if (root.__dshPoll && root.__dshPoll.api >= API) return root.__dshPoll;
 
@@ -169,7 +172,7 @@ window.__ModuleLoader__.load({
       /** Without the change event (an older app) the copy is only trusted for a moment. */
       const SETTINGS_TTL_NO_EVENTS = 2000;
       const WRITES = ['mutate', 'update', 'replace'];
-      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0 };
+      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0, changes: 0, repeats: 0, watchers: 0 };
       const cache = { value: undefined, at: 0, inflight: null, gen: 0, events: false };
       const changeListeners = new Set();
       const watched = new WeakSet();
@@ -189,38 +192,72 @@ window.__ModuleLoader__.load({
         cache.gen += 1;
       }
 
-      /** Listen once per page connection for "Settings changed" (the app sends it after every write, from any window). */
+      /** Changes already handled, `ns + revision` -> when: the same change reaches the page once per add-on that listens. */
+      const heard = new Map();
+      /** How long a change counts as "the same one" when it arrives again through another add-on's connection. */
+      const HEARD_MS = 2000;
+      /** The app's own marker for a wrapped service: `ctx.remote` hands out a NEW wrapper object at every read. */
+      const ORIGINAL = typeof Symbol === 'function' ? Symbol.for('cordis.original') : '__original';
+      /** Marks our own write wrapper, so it is never wrapped a second time. */
+      const OURS = '__dshPollWrite';
+
+      /**
+       * One "Settings changed" event from the app. Every add-on that listens hears the same event; it is acted on once.
+       * Bug of 21 November 2026 (a new chat made the page read Settings 12-17 times a second, the app ran at 100% and the
+       * tab crashed): `ctx.remote` is a new object at every read, so the old `watched.has(remote)` never matched and every
+       * read added one more listener; one change then woke every listener and each one started its own read.
+       */
+      function changed(ns, revision) {
+        if (typeof revision === 'number' || typeof revision === 'string') {
+          const now = Date.now();
+          for (const [key, at] of heard) if (now - at > HEARD_MS) heard.delete(key);
+          const key = `${String(ns)}\u0000${String(revision)}`;
+          if (heard.has(key)) { stats.repeats += 1; return; }
+          heard.set(key, now);
+        }
+        stats.changes += 1;
+        invalidate();
+        for (const listener of [...changeListeners]) {
+          try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
+        }
+      }
+
+      /** Listen once per add-on for "Settings changed" (the app sends it after every write, from any window). */
       function watch(ctx) {
         const remote = ctx && ctx.remote;
-        if (!remote || watched.has(remote)) return;
-        watched.add(remote);
+        if (!remote) return;
+        // Keyed on the add-on's own context, which stays the same object (its `remote` does not).
+        const key = ctx !== null && (typeof ctx === 'object' || typeof ctx === 'function') ? ctx : (remote[ORIGINAL] || remote);
+        if (watched.has(key)) return;
+        watched.add(key);
         try {
           if (typeof remote.$on === 'function') {
-            remote.$on('settings/document-updated', (ns) => {
-              invalidate();
-              for (const listener of [...changeListeners]) {
-                try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
-              }
-            });
+            remote.$on('settings/document-updated', changed);
+            stats.watchers += 1;
             cache.events = true;
           }
         } catch { /* no change event here: the short copy time covers it */ }
         try {
-          if (typeof ctx.on === 'function') ctx.on('connection/reset', invalidate);
+          if (typeof ctx.on === 'function') ctx.on('connection/reset', () => { heard.clear(); invalidate(); });
         } catch { /* optional */ }
         // This page's own writes drop the copy before their answer comes back, so a read that follows a write is never behind it.
         const settings = remote.settings;
-        if (settings && !wrapped.has(settings)) {
-          wrapped.add(settings);
+        const target = settings && (settings[ORIGINAL] || settings);
+        if (settings && !wrapped.has(target)) {
+          wrapped.add(target);
           for (const name of WRITES) {
             const original = settings[name];
-            if (typeof original !== 'function') continue;
+            // Already ours (put there through another add-on's wrapper object): wrapping it again would stack wrappers.
+            // An older copy's wrapper (marked `true`) is wrapped once more: it drops only the older copy's own cache.
+            if (typeof original !== 'function' || original[OURS] === API) continue;
             try {
-              settings[name] = function (...args) {
+              const write = function (...args) {
                 invalidate();
                 const done = original.apply(this, args);
                 return done && typeof done.then === 'function' ? done.then((out) => { invalidate(); return out; }, (error) => { invalidate(); throw error; }) : done;
               };
+              write[OURS] = API;
+              settings[name] = write;
             } catch { /* a frozen object keeps the plain call */ }
           }
         }
@@ -384,8 +421,8 @@ window.__ModuleLoader__.load({
         'use': 'Use',
         'light': 'Light',
         'dark': 'Dark',
-        'mac.opaque': 'Solid sidebar on the Mac',
-        'mac.opaque.hint': 'On the Mac desktop app, paint the sidebar in the scheme\'s colour instead of see-through. Stock keeps the app\'s own look.',
+        'mac.opaque': 'Solid left panel on the Mac',
+        'mac.opaque.hint': 'On the Mac desktop app, paint the left panel in the scheme\'s colour instead of see-through. Stock keeps the app\'s own look.',
         'custom.title': 'Custom scheme',
         'custom.hint': 'For advanced use: JSON with "label", "dark" and "light" maps of colour names (for example "--dsw-alias-bg-base") to colours. Names you leave out keep the app\'s value.',
         'custom.save': 'Save custom scheme',
@@ -404,34 +441,6 @@ window.__ModuleLoader__.load({
         'scheme.forest.d': 'Deep green with mint accents.',
         'scheme.custom': 'Custom',
         'scheme.custom.d': 'Your own colours (below).',
-      },
-      zh: {
-        'section.title': '配色',
-        'head.hint': '整个应用的配色。每个方案都有浅色和深色版本，跟随 设置 → 通用 → 外观。原版即 DeepSeek Harness 出厂配色。',
-        'in.use': '使用中',
-        'use': '使用',
-        'light': '浅色',
-        'dark': '深色',
-        'mac.opaque': 'Mac 上使用不透明侧边栏',
-        'mac.opaque.hint': '在 Mac 桌面应用中，用方案颜色绘制侧边栏，而不是半透明。原版保持应用自身外观。',
-        'custom.title': '自定义方案',
-        'custom.hint': '高级用法：JSON，包含 "label"、"dark" 和 "light"，把颜色名（例如 "--dsw-alias-bg-base"）映射到颜色。未列出的保持应用原值。',
-        'custom.save': '保存自定义方案',
-        'custom.bad': '无效：{message}',
-        'custom.saved': '已保存。',
-        'failed': '无法保存：{message}',
-        'loading': '加载中…',
-        'unavailable': '无法读取配色设置。',
-        'scheme.stock': 'DeepSeek Harness',
-        'scheme.stock.d': '应用自身配色，与出厂一致。',
-        'scheme.harbor': 'Harbor',
-        'scheme.harbor.d': '深海军蓝配青色强调色。',
-        'scheme.graphite': 'Graphite',
-        'scheme.graphite.d': '中性灰配琥珀色强调色。',
-        'scheme.forest': 'Forest',
-        'scheme.forest.d': '深绿配薄荷色强调色。',
-        'scheme.custom': '自定义',
-        'scheme.custom.d': '你自己的配色（见下方）。',
       },
     };
 

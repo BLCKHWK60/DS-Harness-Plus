@@ -21,7 +21,7 @@ const catalog = (entries, { update = false, id = 'm1' } = {}) => ({
     type: 'text',
     text: [
       '<system-reminder>',
-      update ? 'The available skill catalog changed. This complete catalog replaces every earlier available-skills list in this session:' : 'A skill is a reusable set of task-specific instructions. The following skills are available in this session:',
+      update ? 'The available skill catalog changed. This complete catalog replaces every earlier available-skills list in this thread:' : 'A skill is a reusable set of task-specific instructions. The following skills are available in this session:',
       '',
       '<available_skills>',
       ...entries.map(catalogLine),
@@ -111,14 +111,14 @@ test('in the app: only the tab with skills switched off changes; Recon still get
     assert.deepEqual(cowork.messages[2].source.entries.map((one) => one.name), ['draw-diagram', 'read-pdf']);
     const denied = await call(c1, 'office');
     assert.equal(denied.kind, 'deny');
-    assert.match(denied.reason, /switched off in the Cowork tab/);
+    assert.match(denied.reason, /switched off in the Cowork mode/);
     assert.equal((await call(c1, 'read-pdf')).kind, 'allow');
     // Code is untouched; Recon still gets no list at all.
     assert.deepEqual((await step(k1)).messages[2].source.entries, ENTRIES);
     assert.equal((await call(k1, 'office')).kind, 'allow');
     assert.deepEqual((await step(r1)).messages.map((one) => one.source.kind), ['user']);
-    await assert.rejects(app.service().setSkillsOff('recon', ['office']), /isolated tab/);
-    await assert.rejects(app.service().setSkillsOff('nowhere', ['office']), /no tab "nowhere"/);
+    await assert.rejects(app.service().setSkillsOff('recon', ['office']), /sealed mode/);
+    await assert.rejects(app.service().setSkillsOff('nowhere', ['office']), /no mode "nowhere"/);
     // Back on: as before.
     assert.deepEqual(await app.service().setSkillsOff('cowork', []), []);
     await settle();
@@ -167,7 +167,7 @@ test('review of step 14: the refusal is a guard too, so it holds whatever anothe
     assert.equal(app.guard({ agent: c1, name: 'skill', arguments: { name: 'office' } }), undefined);
     await app.service().setSkillsOff('cowork', ['office']);
     await settle();
-    assert.match(app.guard({ agent: c1, name: 'skill', arguments: { name: 'office' } }), /switched off in the Cowork tab/);
+    assert.match(app.guard({ agent: c1, name: 'skill', arguments: { name: 'office' } }), /switched off in the Cowork mode/);
     assert.equal(app.guard({ agent: c1, name: 'skill', arguments: { name: 'read-pdf' } }), undefined);
     assert.equal(app.guard({ agent: c1, name: 'bash', arguments: { name: 'office' } }), undefined);
     // Another add-on asks the user first: still refused.

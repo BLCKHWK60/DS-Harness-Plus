@@ -421,7 +421,7 @@ export function apply(ctx, config) {
     isConcurrencySafe: () => false,
     async execute(args, exec) {
       const parent = exec.agent;
-      if (!parent?.id) throw new Error('judge_candidates needs a live parent Session.');
+      if (!parent?.id) throw new Error('judge_candidates needs a live parent thread.');
       if (childIds.has(parent.id)) throw new Error('judge_candidates cannot be called from one of its own judge agents.');
       const candidates = Array.isArray(args.candidates) ? args.candidates : [];
       if (candidates.length < 2 || candidates.length > 5) throw new Error('Give between 2 and 5 candidates.');

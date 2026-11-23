@@ -15,7 +15,7 @@ test('the reason names the searchers\' model, and offers the conversation\'s mod
   assert.match(same, /not set up .*\(a \/ m\)/);
   assert.doesNotMatch(same, /One model for everything/);
   const byProvider = (answers) => ({ searchReady: async (provider) => answers[provider] });
-  assert.match(await searchProblem(byProvider({ b: false, a: true }), { provider: 'b' }, { provider: 'a' }), /One model for everything.*This conversation's model/);
+  assert.match(await searchProblem(byProvider({ b: false, a: true }), { provider: 'b' }, { provider: 'a' }), /One model for everything.*"Same as the thread"/);
   assert.doesNotMatch(await searchProblem(ready(false), { provider: 'b' }, { provider: 'a' }), /One model for everything/, 'not offered when the conversation\'s own model cannot search either');
 });
 

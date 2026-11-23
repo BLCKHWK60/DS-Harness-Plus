@@ -133,7 +133,7 @@ test('the skills are complete and all carry the rules', () => {
     assert.match(skill.name, /^finance-[a-z-]+$/);
     assert.ok(skill.description.length > 40 && skill.description.length < 260, skill.name);
     assert.ok(skill.whenToUse.length > 40, skill.name);
-    assert.match(skill.content, /a figure needs a source you fetched in this conversation/);
+    assert.match(skill.content, /a figure needs a source you fetched in this thread/);
     assert.match(skill.content, /never say buy, sell or hold/);
     assert.match(skill.content, /What you could not find|what you could not find/);
     assert.ok(skill.content.length < 3500, `${skill.name} is ${skill.content.length} characters`);

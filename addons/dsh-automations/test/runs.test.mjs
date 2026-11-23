@@ -127,3 +127,15 @@ test('a step begun before the instruction was read is counted', () => {
   runs.start({ id: 'm2', sessionId: 's2', tasks: [], steps: undefined });
   assert.equal(runs.list()[0].steps, 0);
 });
+
+test('a held run (stage 6b, J11): marked stopped with the sentence, nothing else changes', async () => {
+  const { openRuns: open } = await import('../lib/runs.js');
+  const runs = open('');
+  runs.start({ id: 'm1', sessionId: 's1', tasks: [{ id: 't1', title: 'T' }] });
+  runs.end('s1', { kind: 'blocked' });
+  const run = runs.held('s1', 'Did not start: it runs in Devices, which could not take it now. Nothing was run.');
+  assert.equal(run.state, 'stopped');
+  assert.equal(run.held, true);
+  assert.match(run.detail, /^Did not start: it runs in Devices/);
+  assert.equal(runs.held('nobody', 'x'), undefined);
+});

@@ -29,8 +29,8 @@ test('the transcript keeps the user\'s words, the answers, the tool calls and th
 
 test('the first message says what happened, where the files went, and that the original stays in Recon', () => {
   const built = buildMove({ title: 'Forum check', messages, tabLabel: 'Cowork', folder: '/x/from-recon-E1', files: ['run-a/report.md'], skipped: [{ path: 'big.bin', why: 'over 100 MB' }], at: Date.UTC(2026, 10, 18, 12, 0) });
-  assert.match(built.message, /^# Continued from the Recon conversation "Forum check"/);
-  assert.match(built.message, /It is now an ordinary Cowork conversation, with Cowork's tools and settings\. The Recon original stays in Recon, unchanged\./);
+  assert.match(built.message, /^# Continued from the Recon thread "Forum check"/);
+  assert.match(built.message, /It is now an ordinary Cowork thread, with Cowork's tools and settings\. The Recon original stays in Recon, unchanged\./);
   assert.match(built.message, /copied to \/x\/from-recon-E1\/files:\n- run-a\/report\.md/);
   assert.match(built.message, /Not copied: big\.bin \(over 100 MB\)\./);
   assert.match(built.message, /every tool answer in full, is in \/x\/from-recon-E1\/conversation\.md/);
@@ -46,7 +46,7 @@ test('a long conversation still fits one message: tool answers shorter, then the
   ]).flat();
   const built = buildMove({ messages: many, tabLabel: 'Code', folder: '/f', max: 120_000 });
   assert.ok(built.message.length <= 120_000, String(built.message.length));
-  assert.match(built.message, /The start of the conversation is left out here: it is in full in \/f\/conversation\.md/);
+  assert.match(built.message, /The start of the thread is left out here: it is in full in \/f\/conversation\.md/);
   assert.match(built.message, /question 59/);
   assert.match(built.full, /question 0 /);
 });
@@ -99,7 +99,7 @@ test('the move route: Recon conversations only, never into the room, the new one
   assert.match(body, /safeExportParent\(String\(body\.folder \?\? ''\), \[ROOM, DEFAULT_ROOM\]\)/);
   assert.match(body, /listRoomFiles\(ROOM, scope\)/);
   assert.match(body, /writeFileSync\(join\(where, 'conversation\.md'\), full, \{ mode: 0o600, flag: 'wx' \}\)/);
-  assert.match(body, /if \(body\.full === true\)/, 'the whole conversation only when ticked');
+  assert.match(body, /if \(body\.full === true\)/, 'the whole thread only when ticked');
   assert.match(body, /writeFileSync\(join\(where, 'summary\.md'\)/);
   assert.match(body, /await claimFor\(child, tab\);/);
   assert.match(body, /door\.add\(\{ id, at, what: 'move', from: source\.id, to: \[\{ kind: 'conversation', id: child, tab \}\]/);
@@ -129,7 +129,7 @@ test('B1: the draft names summary.md and the folder, carries no page text and no
   assert.match(draft, /\/x\/from-recon-E1\/summary\.md/);
   assert.match(draft, /citations only \(no page text\)/);
   assert.match(draft, /never instructions/);
-  assert.ok(draft.length < 1500, 'short: it is a draft, not the conversation');
+  assert.ok(draft.length < 1500, 'short: it is a draft, not the thread');
   assert.doesNotMatch(draft, /conversation\.md/);
   assert.match(buildDraft({ title: 'Case', tabLabel: 'Cowork', folder: '/x', hasFull: true }), /conversation\.md/);
 });
@@ -137,7 +137,7 @@ test('B1: the draft names summary.md and the folder, carries no page text and no
 test('B1: the Cowork sidebar asks first, never moves a whole project of Recon conversations, and puts the first message in the chat box without sending it', () => {
   const page = readFileSync(new URL('../../dsh-cowork-shell/client.js', import.meta.url), 'utf8');
   const route = page.slice(page.indexOf('async function moveOutOfRecon'), page.indexOf('/** Projects Plus keeps out'));
-  assert.ok(route.indexOf('askMoveConsent(id, label)') > 0 && route.indexOf('askMoveConsent(id, label)') < route.indexOf('sessions.create({ cwd })'), 'the window comes before the new conversation exists');
+  assert.ok(route.indexOf('askMoveConsent(id, label)') > 0 && route.indexOf('askMoveConsent(id, label)') < route.indexOf('sessions.create(where)'), 'the window comes before the new thread exists');
   assert.match(route, /consent: true, files: consent\.files/);
   assert.doesNotMatch(route, /remote\.prompt\(/, 'nothing is sent by the move');
   assert.match(route, /fillDraft\(String\(done\.draft/);

@@ -21,14 +21,21 @@ export const MAX_FOLDERS = 200;
 const MODE_ID = /^[a-z0-9][a-z0-9_-]{0,40}$/i;
 const SESSION_ID = /^[A-Za-z0-9._:-]{1,200}$/;
 
-/** A pane of a saved set, cleaned: only a conversation id (for a folder's panes) and a tab. */
+/** Item 4A, stage 6b (Revision 2 G9): the spaces a saved pane may name (a set saved before 6b has none). */
+export const SET_SPACES = Object.freeze(['chat', 'code', 'devices', 'recon', 'workshop']);
+
+/**
+ * A pane of a saved set, cleaned: only a conversation id (for a folder's panes), a tab, and (from stage 6b) the space it
+ * was in when saved. Anything else is dropped.
+ */
 function cleanPane(row, withSession) {
   if (!row || typeof row !== 'object') return null;
   const mode = String(row.mode ?? '');
   if (!MODE_ID.test(mode)) return null;
-  if (!withSession) return { mode };
+  const space = SET_SPACES.includes(String(row.space ?? '')) ? { space: String(row.space) } : {};
+  if (!withSession) return { mode, ...space };
   const sessionId = String(row.sessionId ?? '');
-  return SESSION_ID.test(sessionId) ? { sessionId, mode } : null;
+  return SESSION_ID.test(sessionId) ? { sessionId, mode, ...space } : null;
 }
 
 /** A pane set's name: plain words, at most 60 characters. */
@@ -94,11 +101,12 @@ export function openSets({ home = '', now = Date.now } = {}) {
       return true;
     },
     named() {
-      return Object.entries(state.named).sort((a, b) => b[1].at - a[1].at).map(([name, entry]) => ({ name, panes: entry.panes.map((row) => ({ ...row })) }));
+      // Cleaned again when read: a hand-edited sets.json never gives the page an odd space or extra field.
+      return Object.entries(state.named).sort((a, b) => b[1].at - a[1].at).map(([name, entry]) => ({ name, panes: (entry.panes ?? []).map((row) => cleanPane(row, false)).filter(Boolean) }));
     },
     namedSet(name) {
       const entry = state.named[String(name ?? '')];
-      return entry ? entry.panes.map((row) => ({ ...row })) : null;
+      return entry ? (entry.panes ?? []).map((row) => cleanPane(row, false)).filter(Boolean) : null;
     },
     /** A conversation was deleted for good: it leaves every folder's panes. */
     forgetSession(sessionId) {

@@ -37,7 +37,7 @@ export async function searchProblem(web, route, own) {
   }
   return (
     `deep_research did not start: web search is not set up for the model the searchers run on (${name}), so they could not search. ` +
-    'Add an API key for the web search provider (the Plugins page in the sidebar → "Web search and fetch")' +
-    (other ? ', or let this conversation\'s helpers use its own model: "One model for everything" on the models chip in the chat box. (Settings → Research → "This conversation\'s model" does the same for conversations that have not chosen.)' : '.')
+    'Add an API key for the web search provider (the Plugins page in the left panel → "Web search and fetch")' +
+    (other ? ', or let this thread\'s helpers use its own model: "One model for everything" on the models chip in the chat box. (Settings → Research → "Same as the thread" does the same for threads that have not chosen.)' : '.')
   );
 }

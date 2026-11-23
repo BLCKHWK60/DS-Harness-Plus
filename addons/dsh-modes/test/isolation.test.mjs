@@ -61,7 +61,7 @@ test('an isolated conversation is not handed the app\'s own notes; what the user
 test('the service refuses a way in and a way out', () => {
   assert.match(modeChangeRefusal({ wasIsolated: true, current: 'recon', target: 'cowork', targetIsolated: false, fresh: false }), /cannot change its mode/);
   assert.equal(modeChangeRefusal({ wasIsolated: true, current: 'recon', target: 'recon', targetIsolated: true, fresh: false }), '');
-  assert.match(modeChangeRefusal({ wasIsolated: false, current: 'cowork', target: 'recon', targetIsolated: true, fresh: false }), /cannot become isolated/);
+  assert.match(modeChangeRefusal({ wasIsolated: false, current: 'cowork', target: 'recon', targetIsolated: true, fresh: false }), /cannot become sealed/);
   assert.equal(modeChangeRefusal({ wasIsolated: false, current: 'cowork', target: 'recon', targetIsolated: true, fresh: true }), '', 'a new conversation may');
   assert.equal(modeChangeRefusal({ wasIsolated: false, current: 'cowork', target: 'code', targetIsolated: false, fresh: false }), '');
 });

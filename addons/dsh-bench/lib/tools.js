@@ -69,7 +69,7 @@ export function buildTools({ enabled, bench, identify }) {
     },
     {
       name: 'bench_card',
-      description: 'Make a card for a device, or update the fields you give (fields left out stay as they are). Write only what you know. Passwords and keys are never written: anything that looks like one is masked. Permissions are not set here: a new card starts at Read and Ask-Auto, and only the user changes them. Every change is noted in the device\'s logbook.',
+      description: 'Make a card for a device, or update the fields you give (fields left out stay as they are). Write only what you know. Passwords and keys are never written: anything that looks like one is masked. Permissions are not set here: a new card starts at Read and Ask, and only the user changes them. Every change is noted in the device\'s logbook.',
       parameters: {
         type: 'object',
         properties: {

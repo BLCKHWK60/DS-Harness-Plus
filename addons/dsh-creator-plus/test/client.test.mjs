@@ -41,3 +41,8 @@ test('no personal value is in the add-on\'s files', () => {
   }
   assert.match(readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8'), /enabled: false/);
 });
+
+test('review of Mission stage E: the eight tests row says Mission, as the tests themselves do (no "Long run" left on the page)', () => {
+  assert.match(SOURCE, /Collision, Change, Update, Mission, Scope and part of Improve/);
+  assert.doesNotMatch(SOURCE, /Long run/);
+});

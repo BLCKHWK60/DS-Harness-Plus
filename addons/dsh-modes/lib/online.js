@@ -14,6 +14,14 @@ export const SHELL_NAMES = Object.freeze(['bash', 'shell', 'pwsh', 'powershell',
 export const PROGRAM_NAMES = Object.freeze(['run_code', 'data_python']);
 /** Tools of connectors (mail, calendar, drives, stores): every call leaves this Mac. */
 const isConnector = (name) => name.startsWith('mcp__') || ['read_mcp_resource', 'list_mcp_resources', 'list_mcp_resource_templates'].includes(name);
+/**
+ * Item 4A, stage 6a: tools that write to notes other threads read (Memory, the Finance profile, saved analyses, Automations'
+ * results, Scout's profile, Learn, Content). Never in Recon, for any mode, and never asked for there (I7).
+ */
+export const SHARED_STORES = Object.freeze({
+  names: Object.freeze(['remember', 'finance_profile_save', 'data_save_analysis', 'data_rerun_analysis', 'automation_results', 'scout_profile']),
+  prefixes: Object.freeze(['learn_', 'content_']),
+});
 /** The groups Recon is never given anything from: they run commands, call services, start other models, drive other apps or devices, or change the app. */
 const RECON_CLOSED_GROUPS = ['run', 'accounts', 'helpers', 'mac', 'devices', 'app'];
 
@@ -51,6 +59,8 @@ export function reconMayAsk(name, options) {
   const entry = classify(raw);
   if (!entry.sorted || entry.tier >= SETTINGS_ONLY || HIDDEN_FROM_AI(raw) || RECON_NEVER.includes(raw)) return false;
   if (RECON_CLOSED_GROUPS.includes(entry.group) || entry.addon === 'dsh-creator-plus') return false;
+  // Item 4A, stage 6a: what Recon reads never goes into notes other threads read (I7).
+  if (SHARED_STORES.names.includes(raw) || SHARED_STORES.prefixes.some((prefix) => raw.startsWith(prefix))) return false;
   return !canGoOnline(raw, options);
 }
 

@@ -294,7 +294,7 @@ test('the goal is offered only while the skills part is on; a run from chat keep
     // "new" from chat writes a draft: asked first on the app's card; the owner said no.
     assert.match((await run.tool.execute({ type: 'new', what: 'planning stand-ups' }, { agent: agent('c1'), name: 'tuning_skills_run' })).text, /The owner said no/);
     assert.match(asked.find((one) => one.approval)?.approval ?? '', /^Write a new skill for "planning stand-ups"/);
-    assert.match((await run.tool.execute({ type: 'check', mark: 'all' }, { agent: agent('c1', { parentSession: 'c0' }), name: 'tuning_skills_run' })).text, /Only the conversation itself/);
+    assert.match((await run.tool.execute({ type: 'check', mark: 'all' }, { agent: agent('c1', { parentSession: 'c0' }), name: 'tuning_skills_run' })).text, /Only the thread itself/);
     assert.equal(run.opts.when({ agent: agent('c1', { parentSession: 'c0' }) }), false, 'never offered to a helper');
   } finally {
     release();
@@ -413,7 +413,7 @@ test('review 4 and 5: a helper left out counts against its conversation; the cha
     await new Promise((resolve) => setTimeout(resolve, 3200));
     const draft = registered.get('tuning_skill_draft');
     const run = registered.get('tuning_skills_run');
-    assert.match((await draft.tool.execute({ name: 'a-b', description: 'x', text: 'y' }, { agent: agent('c2'), name: 'tuning_skill_draft' })).text, /A helper of this conversation is left out \(marked "never learn from this"\)/);
+    assert.match((await draft.tool.execute({ name: 'a-b', description: 'x', text: 'y' }, { agent: agent('c2'), name: 'tuning_skill_draft' })).text, /A helper of this thread is left out \(marked "never learn from this"\)/);
     // Not a run that can start (no line saying what it is for): refused before anyone is asked.
     assert.match((await run.tool.execute({ type: 'new', what: '   ' }, { agent: agent('c1'), name: 'tuning_skills_run' })).text, /what the new skill is for/);
     assert.equal(asked.some((one) => one.approval), false);

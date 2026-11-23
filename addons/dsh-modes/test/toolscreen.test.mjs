@@ -89,7 +89,7 @@ test('the tool list puts "Not sorted" first and searches name, raw name and purp
 test('what the AI sees leaves out Off tools and says how each one is had', () => {
   const sees = logic.tgAiPreview(rows());
   assert.deepEqual(sees.map((r) => [r.name, r.status]), [['bash', 'available now'], ['new_tool', 'can be requested'], ['todo', 'available now']]);
-  assert.equal(logic.tgAiPreview(rows().map((r) => ({ ...r, state: 'locked' })))[0].status, 'fixed by this tab');
+  assert.equal(logic.tgAiPreview(rows().map((r) => ({ ...r, state: 'locked' })))[0].status, 'fixed by this mode');
 });
 
 test('permissions are sorted into this conversation, this tab and always, and the blocks are listed apart', () => {
@@ -124,7 +124,7 @@ test('the record reads in plain words and filters by kind, words and conversatio
     { t: 1, type: 'revoked-all', reason: '4 removed' },
   ];
   const plainOf = (n) => (n === 'bash' ? 'Run commands in Terminal' : n);
-  assert.equal(logic.tgEventText(events[0], plainOf), 'Allowed: Run commands in Terminal (for the conversation)');
+  assert.equal(logic.tgEventText(events[0], plainOf), 'Allowed: Run commands in Terminal (for the thread)');
   assert.match(logic.tgEventText(events[3], plainOf), /Not answered: Run commands in Terminal · nobody was there to answer/);
   assert.equal(logic.tgEventText(events[4], plainOf), 'Everything revoked: 4 removed');
   assert.equal(logic.tgHistoryFilter(events, { kind: 'allowed' }, plainOf).length, 1);
@@ -158,7 +158,7 @@ test('the chat-box panel shows only the permissions that apply here, each with i
   const out = logic.tgPanelSections(catalogue, grants, { sessionId: 'here', modeId: 'code' });
   assert.deepEqual(out.now.map((r) => r.name), ['read']);
   assert.deepEqual(out.ask.map((r) => r.name), ['bash', 'pdf_read']);
-  assert.deepEqual(out.allowed.map((a) => [a.id, a.scope]), [['g1', 'this conversation'], ['g3', 'in this tab'], ['g5', 'always']]);
+  assert.deepEqual(out.allowed.map((a) => [a.id, a.scope]), [['g1', 'this thread'], ['g3', 'in this mode'], ['g5', 'always']]);
 });
 
 test('"2 minutes ago" and friends', () => {
@@ -307,10 +307,10 @@ test('conversations show by title and tabs by their label, never an id fragment'
   assert.equal(logic.tgConvoLabel('abc-1234', { 'abc-1234': 'Plan the trip' }), 'Plan the trip');
   assert.equal(logic.tgConvoLabel('abc-1234', { 'abc-1234': 'x'.repeat(200) }).length, 60);
   const gone = logic.tgConvoLabel('abc-1234', {}, Date.now() - 120000);
-  assert.equal(gone, 'An earlier conversation (2 minutes ago)');
+  assert.equal(gone, 'An earlier thread (2 minutes ago)');
   assert.ok(!gone.includes('1234'));
   assert.equal(logic.tgTabLabel('creator-plus', { 'creator-plus': 'Creator Plus' }), 'Creator Plus');
-  assert.equal(logic.tgTabLabel('old-tab', {}), 'A tab that is gone');
+  assert.equal(logic.tgTabLabel('old-tab', {}), 'A mode that is gone');
   assert.equal(logic.tgTabLabel('', {}), '');
 });
 
@@ -332,7 +332,7 @@ test('the highest-risk tools: never switched On or Ask here; Off only, and an On
 });
 
 test('the page switches off, says so, and the first things on it are the real ones', () => {
-  assert.match(source, /Off\. Every tab has exactly its own tools/);
+  assert.match(source, /Off\. Every mode has exactly its own tools/);
   assert.match(source, /body\.current\.inert = off/);
   assert.match(source, /tgCall\('catalogueForMode', \{ modeId \}\)/, 'the preview asks the service the same question the AI tool does');
   assert.match(source, /'data-settings-only'/);

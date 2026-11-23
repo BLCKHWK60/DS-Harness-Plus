@@ -5,7 +5,8 @@
  *
  *   - Learned skills: plain text in this add-on's own folder, served to the app's skill list by a provider
  *     of its own (never in any skill folder of yours, a project's, Plus's or the app's). Each has a reach:
- *     every tab, one tab, or one project. Recon never gets one.
+ *     every tab, one tab, or one project. Recon never gets one (Item 4A, stage 6a: nor any sealed thread, so no mode
+ *     in the Recon space).
  *   - The reader lists the conversations it would read and why, without any model. It reads nothing when
  *     the Modes add-on cannot say which conversations are isolated (Recon), and leaves out helpers, the
  *     trash, Self-improve's own runs and conversations you marked "never learn from this".
@@ -23,6 +24,7 @@ import { openLibrary, readReach } from './lib/library.js';
 import { CANDIDATES_MAX, isPrivate, learnPrompt, pickConversations, proposalsOf, signalsOf, whereOf } from './lib/learn.js';
 import { openProposals, visibleTo } from './lib/proposals.js';
 import { readJsonStore } from './lib/json-store.js';
+import { makeGuardOf } from './lib/space-guard.js';
 
 /**
  * The marker lines of a Recon export (dsh-recon/lib/door.js: EXPORT_LINE_RE, and each source's
@@ -39,11 +41,11 @@ const RANK = 900;
 export const Config = z.object({
   /** Off: learned skills are not offered and nothing is read. */
   enabled: z.boolean().default(true).volatile(),
-  /** The model that reads your conversations, as JSON `{provider, model}`. Empty: the first model on this Mac or your network. */
+  /** The model that reads your threads, as JSON `{provider, model}`. Empty: the first model on this Mac or your network. */
   readingModel: z.string().default('').volatile(),
   /** Allow a reading model on the internet. You still see what would be sent before anything is. */
   allowInternet: z.boolean().default(false).volatile(),
-  /** Conversations never to learn from (ids, as JSON). Kept on each Mac. */
+  /** Threads never to learn from (ids, as JSON). Kept on each Mac. */
   nolearn: z.string().default('[]').volatile(),
   /** Project folders where learned skills are off ("Start clean"), as JSON. */
   projectsOff: z.string().default('[]').volatile(),
@@ -160,24 +162,36 @@ export function apply(ctx, config) {
     takenCache = { at: Date.now(), names: [...names] };
     return names;
   };
-  /** The conversation's tab when the app says which conversation asks ('' when it cannot be told). */
-  const tabOf = (options) => {
+  /** The conversation that asks, when the app says which one (undefined when it cannot be told). */
+  const askerOf = (options) => {
     try {
       const scope = options?.scope;
-      if (!scope) return '';
-      const agent = (ctx.get('agents')?.list?.() ?? []).find((item) => item === scope || item?.ctx === scope || item?.scope === scope || item?.id === scope);
+      if (!scope) return undefined;
+      return (ctx.get('agents')?.list?.() ?? []).find((item) => item === scope || item?.ctx === scope || item?.scope === scope || item?.id === scope);
+    } catch {
+      return undefined;
+    }
+  };
+  /** The conversation's tab when the app says which conversation asks ('' when it cannot be told). */
+  const tabOf = (agent) => {
+    try {
       return agent ? String(ctx.get('modes')?.get?.(agent.id) ?? '') : '';
     } catch {
       return '';
     }
   };
+  /** Item 4A, stage 6a: what Modes says about the asking thread's space (lib/space-guard.js; no Modes: not sealed). */
+  const guardOf = makeGuardOf(() => ctx.get('modes'));
   const shownFor = (options) => {
     if (!enabled()) return [];
     const cwd = trimSlash(options?.cwd);
     if (cwd && inReconRoom(cwd)) return [];
     if (cwd && listOf(config?.projectsOff).map(trimSlash).includes(cwd)) return [];
-    const tab = tabOf(options);
+    const asker = askerOf(options);
+    const tab = tabOf(asker);
     if (tab === 'recon') return [];
+    // Item 4A, stage 6a: no learned skill in a sealed thread (any mode in the Recon space, an owner's isolated mode).
+    if (asker?.id && guardOf(String(asker.id)).sealed === true) return [];
     return library.list().filter((skill) => visibleTo(skill, { cwd, tab }));
   };
   ctx.inject(['skills'], (inner) => {
@@ -262,10 +276,10 @@ export function apply(ctx, config) {
 
   const readable = async () => {
     const query = ctx.get('sessionQuery');
-    if (!query?.listSessions) return { known: false, reason: 'The app\'s conversation index is not available.', read: [], left: [] };
+    if (!query?.listSessions) return { known: false, reason: 'The app\'s thread index is not available.', read: [], left: [] };
     const modes = settingsOf('modes');
     // Fail closed, as Sync does: without Modes nobody can say which conversations are Recon's.
-    if (!modes) return { known: false, reason: 'The Modes add-on is not running, so it cannot say which conversations are isolated (Recon). Nothing is read.', read: [], left: [] };
+    if (!modes) return { known: false, reason: 'The Modes add-on is not running, so it cannot say which threads are sealed (Recon). Nothing is read. Switch Modes on on the Plugins page.', read: [], left: [] };
     let isolatedMarks = {};
     try {
       isolatedMarks = JSON.parse(modes.sessionIsolated || '{}') ?? {};
@@ -280,13 +294,13 @@ export function apply(ctx, config) {
       known: true,
       why: (id, header) => {
         const cwd = trimSlash(header.cwd);
-        if (isolatedMarks[id] === true) return 'isolated (Recon)';
+        if (isolatedMarks[id] === true) return 'sealed (Recon)';
         try {
-          if (ctx.get('modes')?.isolated?.(id) === true) return 'isolated (Recon)';
+          if (ctx.get('modes')?.isolated?.(id) === true) return 'sealed (Recon)';
         } catch {
-          return 'isolated (Recon)';
+          return 'sealed (Recon)';
         }
-        if (inReconRoom(cwd)) return 'isolated (Recon)';
+        if (inReconRoom(cwd)) return 'sealed (Recon)';
         const exported = fromRecon(id);
         if (exported) return exported;
         if (nolearn.has(id)) return 'you marked it "never learn from this"';
@@ -331,6 +345,8 @@ export function apply(ctx, config) {
     const out = [];
     try {
       const lines = readFileSync(join(home('mission'), 'runs.jsonl'), 'utf8').trim().split('\n').slice(-30);
+      // A continued Mission (stage C) writes a line at each end, with the same id: read newest first, once.
+      const seen = new Set();
       for (const line of lines.reverse()) {
         if (out.length >= 5) break;
         let entry;
@@ -339,6 +355,9 @@ export function apply(ctx, config) {
         } catch {
           continue;
         }
+        const runId = String(entry?.id ?? '');
+        if (runId && seen.has(runId)) continue;
+        if (runId) seen.add(runId);
         const folder = trimSlash(entry.folder);
         if (!folder || inReconRoom(folder)) continue;
         // A run of a conversation that received an export from Recon is never read; with Recon's export
@@ -358,7 +377,7 @@ export function apply(ctx, config) {
         // A run with the work loop on (plan step S8): its recipe and what its checker said, so a recipe change can be proposed.
         const loop = run.loop && typeof run.loop === 'object' ? run.loop : undefined;
         const loopExcerpts = loop ? [
-          `A Mission run used the work loop: kind ${String(loop.kind ?? '?').slice(0, 20)}, Depth ${String(loop.depth ?? '?').slice(0, 20)}, ${loop.ultra ? 'Ultra Code on' : 'switched on for its tab'}${loop.recipe ? `, recipe "${String(loop.recipe.id ?? '').slice(0, 60)}" (${String(loop.recipe.name ?? '').slice(0, 80)}): ${(Array.isArray(loop.recipe.steps) ? loop.recipe.steps : []).slice(0, 8).map((step, index) => `${index + 1}. (${String(step.role ?? '').slice(0, 10)}) ${String(step.does ?? '').slice(0, 160)} Checked by: ${String(step.check ?? '').slice(0, 120)}`).join(' ')}` : ''}. Its checks: ${Number(loop.checks?.passed) || 0} passed, ${Number(loop.checks?.failed) || 0} failed; ${Number(loop.escalations) || 0} steps went up to the strongest model. The run ended ${String(run.status ?? '?').slice(0, 20)}.`,
+          `A Mission run used the work loop: kind ${String(loop.kind ?? '?').slice(0, 20)}, Depth ${String(loop.depth ?? '?').slice(0, 20)}, ${loop.ultra ? 'Ultra Code on' : 'switched on for its mode'}${loop.recipe ? `, recipe "${String(loop.recipe.id ?? '').slice(0, 60)}" (${String(loop.recipe.name ?? '').slice(0, 80)}): ${(Array.isArray(loop.recipe.steps) ? loop.recipe.steps : []).slice(0, 8).map((step, index) => `${index + 1}. (${String(step.role ?? '').slice(0, 10)}) ${String(step.does ?? '').slice(0, 160)} Checked by: ${String(step.check ?? '').slice(0, 120)}`).join(' ')}` : ''}. Its checks: ${Number(loop.checks?.passed) || 0} passed, ${Number(loop.checks?.failed) || 0} failed; ${Number(loop.escalations) || 0} steps went up to the strongest model. The run ended ${String(run.status ?? '?').slice(0, 20)}.`,
           ...(run.items ?? []).filter((item) => /^Checker: /.test(String(item.note ?? ''))).slice(0, 3).map((item) => `In that run the checker sent back the item "${String(item.title ?? '').slice(0, 120)}": ${String(item.note ?? '').slice(0, 300)}`),
         ] : [];
         if (stuck.length === 0 && loopExcerpts.length === 0) continue;
@@ -414,7 +433,7 @@ export function apply(ctx, config) {
   const learn = async ({ seen = false } = {}) => {
     if (learning) throw new Error('A learning run is already going.');
     const ready = await prepare();
-    if (!ready.text) return { proposals: [], note: 'Nothing to learn from: no conversation has a correction, a Stop, a thumbs down with a note, or feedback.' };
+    if (!ready.text) return { proposals: [], note: 'Nothing to learn from: no thread has a correction, a Stop, a thumbs down with a note, or feedback.' };
     if (!isPrivate(ready.where)) {
       if (plain(config?.allowInternet) !== true) throw new Error('The reading model is on the internet. Allow that on Settings → Learned skills first, or pick a model on this Mac or your own network.');
       if (!seen) throw new Error('See what would be sent first (Show what it would send), then learn.');
@@ -478,7 +497,7 @@ export function apply(ctx, config) {
     // The final check asks afresh: a skill file written moments ago must count.
     const taken = await takenNames({ fresh: true });
     const reach = merged.reach === 'project' && merged.folder ? { kind: 'project', folder: merged.folder } : merged.reach === 'tab' && merged.tab ? { kind: 'tab', tab: merged.tab } : { kind: 'all' };
-    library.add({ name: merged.name, description: merged.description, text: merged.text, reach, by: 'learned', why: `Learned from your conversations: ${merged.why}${exam ? ` Your own exam (Tuner Plus): ${exam.why}.` : anyway ? ' Added anyway after the exam.' : ''}` }, (name) => taken.has(name));
+    library.add({ name: merged.name, description: merged.description, text: merged.text, reach, by: 'learned', why: `Learned from your threads: ${merged.why}${exam ? ` Your own exam (Tuner Plus): ${exam.why}.` : anyway ? ' Added anyway after the exam.' : ''}` }, (name) => taken.has(name));
     invalidate();
     proposals.decide(id, 'accepted');
     return `The skill "${merged.name}" is added.${exam ? ` On your own exam (Tuner Plus) with ${exam.model}: ${exam.why}.` : ''}`;
@@ -524,11 +543,11 @@ export function apply(ctx, config) {
       const saved = mission.saveRecipe(merged.recipe);
       said = `The recipe "${saved.name}" is saved as version ${saved.version}${saved.kept ? `; the earlier one is kept as ${saved.kept}` : ''}. Runs with the work loop use it from the next one.`;
     } else if (merged.kind === 'version') {
-      said = 'Change it yourself on Settings → Model Tiers → Model versions, on the version it is about. Changing it by itself is not built.';
+      said = 'Change it yourself on Settings → Model tiers → Model versions, on the version it is about. Changing it by itself is not built.';
     } else if (merged.kind === 'rule') {
       const projectsService = ctx.get('coworkProjects');
-      if (!projectsService?.appendRule) throw new Error('The Cowork sidebar is off, so the rule cannot be added to the project.');
-      if (!merged.folder) throw new Error('This rule came from a conversation with no project.');
+      if (!projectsService?.appendRule) throw new Error('The Left panel add-on is off, so the rule cannot be added to the project. Switch it on on the Plugins page.');
+      if (!merged.folder) throw new Error('This rule came from a thread with no project.');
       projectsService.appendRule(merged.folder, merged.text);
       said = 'The rule is added to the project\'s instructions, as a new version you can put back on its page.';
     } else {
@@ -739,7 +758,7 @@ export function apply(ctx, config) {
             return { kind: 'success', text: done.proposals.length > 0 ? `${done.proposals.length} proposal${done.proposals.length === 1 ? '' : 's'} wait for your yes on Settings → Learned skills. Nothing is installed until you accept.` : done.note };
           }
           const skills = library.list().filter((skill) => !skill.deleted);
-          return { kind: 'success', text: skills.length > 0 ? `${skills.length} learned skill${skills.length === 1 ? '' : 's'}. Click for the list.\n${skills.map((skill) => `${skill.name}: ${skill.description} (${skill.reach.kind === 'all' ? 'every tab' : skill.reach.kind === 'tab' ? `tab ${skill.reach.tab}` : `project ${skill.reach.folder}`})`).join('\n')}` : 'No learned skills yet. /skills learn reads your past corrections and proposes some; Settings → Learned skills adds one by hand.' };
+          return { kind: 'success', text: skills.length > 0 ? `${skills.length} learned skill${skills.length === 1 ? '' : 's'}. Click for the list.\n${skills.map((skill) => `${skill.name}: ${skill.description} (${skill.reach.kind === 'all' ? 'every mode' : skill.reach.kind === 'tab' ? `mode ${skill.reach.tab}` : `project ${skill.reach.folder}`})`).join('\n')}` : 'No learned skills yet. /skills learn reads your past corrections and proposes some; Settings → Learned skills adds one by hand.' };
         } catch (error) {
           return { kind: 'error', text: String(error?.message ?? error).slice(0, 400) };
         }

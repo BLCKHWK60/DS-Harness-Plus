@@ -26,8 +26,8 @@ export const LEVELS = [
 ];
 export const ASKS = [
   { id: 'restricted', label: 'Restricted' },
-  { id: 'ask-auto', label: 'Ask-Auto' },
-  { id: 'full-auto', label: 'Full Auto' },
+  { id: 'ask-auto', label: 'Ask' },
+  { id: 'full-auto', label: 'Auto' },
 ];
 /** Where every new card starts. Only the user changes it (a later step adds the controls). */
 export const START_PERMISSIONS = Object.freeze({ level: 'read', asks: 'ask-auto' });
@@ -164,7 +164,7 @@ export function linkedText(card) {
 /** The card for people. */
 export function cardText(card) {
   const level = LEVELS.find((entry) => entry.id === card.permissions?.level)?.label ?? 'Read';
-  const asks = ASKS.find((entry) => entry.id === card.permissions?.asks)?.label ?? 'Ask-Auto';
+  const asks = ASKS.find((entry) => entry.id === card.permissions?.asks)?.label ?? 'Ask';
   const rows = FIELDS.filter((field) => field.id !== 'protectedParts' && field.id !== 'notes' && card[field.id])
     .map((field) => `| ${field.label} | ${String(card[field.id]).replace(/\|/g, '\\|').replace(/\n/g, '<br>')} |`);
   return [
@@ -355,7 +355,7 @@ export function openBench(folderOf) {
       const { slug: _slug, ...stored } = card;
       replaceFile(join(dir, 'card.json'), `${JSON.stringify(stored, null, 2)}\n`);
       replaceFile(join(dir, 'card.md'), cardText(card));
-      append(card, had ? 'Card updated' : 'Card made', [['Changed', had ? changed.join(', ') : 'new card'], ['Permissions', had ? '' : 'start at Read and Ask-Auto; only the user changes them'], ['Look-only', marked ? `marked: one of the ${family}; Devices only reads it, and only the user lifts this on Settings → Devices` : '']], at);
+      append(card, had ? 'Card updated' : 'Card made', [['Changed', had ? changed.join(', ') : 'new card'], ['Permissions', had ? '' : 'start at Read and Ask; only the user changes them'], ['Look-only', marked ? `marked: one of the ${family}; Devices only reads it, and only the user lifts this on Settings → Devices` : '']], at);
       return { card, made: !had, changed, file: join(dir, 'card.md') };
     },
     /**
@@ -393,7 +393,7 @@ export function openBench(folderOf) {
       const card = find(name);
       if (!card) throw new Error(`There is no card for "${clip(name, 80)}".`);
       if (!LEVELS.some((entry) => entry.id === level)) throw new Error('Pick a level: Identify, Read, Adjust or Write.');
-      if (!ASKS.some((entry) => entry.id === asks)) throw new Error('Pick how it asks: Restricted, Ask-Auto or Full Auto.');
+      if (!ASKS.some((entry) => entry.id === asks)) throw new Error('Pick how it asks: Restricted, Ask or Auto.');
       const kept = String(ranges ?? '').trim().slice(0, 400);
       if (kept && !/^(\s*0x[0-9a-f]{1,8}\s*-\s*0x[0-9a-f]{1,8}\s*)([,;\n](\s*0x[0-9a-f]{1,8}\s*-\s*0x[0-9a-f]{1,8}\s*))*$/i.test(kept)) throw new Error('Protected parts are address ranges such as 0x9000-0xF000, separated by commas.');
       const before = card.permissions ?? {};

@@ -2,6 +2,9 @@
  * Matching for Global Search, kept apart from the page so it can be tested without the app.
  */
 
+/** Item 4A, stage 6b (J18, Revision 2 G8): at most this many results per space; the rest are counted (`more`). */
+export const SPACE_CAP = 60;
+
 /** Words of a query, lower-case, without empty ones. */
 export function wordsOf(query) {
   return String(query ?? '').toLowerCase().split(/\s+/).filter(Boolean).slice(0, 12);
@@ -47,9 +50,12 @@ export function marked(text, words) {
  * @param {object} input - `query`, `sessions` ([{id, title, updatedAt, tab}]), `hits` ([{sessionId, snippet}] from the
  *   app's text search), `projects` ([{id, title, path}]), `tabs` ([{id, label}] in the sidebar's order), `hidden`
  *   (whether a conversation is never shown: an isolated one; neither its title nor its text is matched).
+ *   Item 4A, stage 6b (J18): `groupBy: 'space'` with `spaces` ([{id, label}] in the sidebar's order): grouped by each
+ *   item's `space` instead, its `modeName` kept as `tag`, at most 60 per space (`more`: how many were cut); an item whose
+ *   space has no heading is left out (the caller mapped every shown item to a heading; Recon never has one).
  * @returns {{groups: {tab: string, label: string, items: object[]}[], projects: object[], total: number}}
  */
-export function results({ query, sessions = [], hits = [], projects = [], tabs = [], hidden = () => false }) {
+export function results({ query, sessions = [], hits = [], projects = [], tabs = [], hidden = () => false, groupBy = '', spaces = [] }) {
   const words = wordsOf(query);
   if (words.length === 0) return { groups: [], projects: [], total: 0 };
   const shown = (Array.isArray(sessions) ? sessions : []).filter((session) => !hidden(session?.id));
@@ -64,6 +70,19 @@ export function results({ query, sessions = [], hits = [], projects = [], tabs =
     if (have) have.snippet = have.snippet || String(hit.snippet ?? '');
     else found.set(session.id, { ...session, by: 'text', snippet: String(hit.snippet ?? '') });
   }
+  const rank = (item) => (item.by === 'title' ? 0 : 1);
+  const newestFirst = (a, b) => rank(a) - rank(b) || (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+  const places = projects.filter((project) => holds(`${project.title} ${project.path}`, words)).slice(0, 8);
+  if (groupBy === 'space') {
+    const heads = (Array.isArray(spaces) ? spaces : []).filter((space) => space && typeof space.id === 'string' && space.id && space.id !== 'recon');
+    const bySpace = new Map(heads.map((space) => [space.id, []]));
+    for (const item of found.values()) bySpace.get(item.space)?.push({ ...item, tag: String(item.modeName ?? '') });
+    const grouped = heads.filter((space) => bySpace.get(space.id).length > 0).map((space) => {
+      const items = bySpace.get(space.id).sort(newestFirst);
+      return { tab: space.id, space: space.id, label: String(space.label ?? space.id), items: items.slice(0, SPACE_CAP), more: Math.max(0, items.length - SPACE_CAP) };
+    });
+    return { groups: grouped, projects: places, total: grouped.reduce((sum, group) => sum + group.items.length, 0) + places.length, bySpace: true };
+  }
   const labelOf = new Map(tabs.map((tab) => [tab.id, tab.label]));
   const order = [...tabs.map((tab) => tab.id)];
   const groups = new Map();
@@ -72,10 +91,8 @@ export function results({ query, sessions = [], hits = [], projects = [], tabs =
     if (!groups.has(tab)) groups.set(tab, []);
     groups.get(tab).push(item);
   }
-  const rank = (item) => (item.by === 'title' ? 0 : 1);
   const sorted = [...groups.entries()]
     .sort((a, b) => (order.indexOf(a[0]) < 0 ? 999 : order.indexOf(a[0])) - (order.indexOf(b[0]) < 0 ? 999 : order.indexOf(b[0])))
-    .map(([tab, items]) => ({ tab, label: labelOf.get(tab) ?? 'Other', items: items.sort((a, b) => rank(a) - rank(b) || (b.updatedAt ?? 0) - (a.updatedAt ?? 0)).slice(0, 30) }));
-  const places = projects.filter((project) => holds(`${project.title} ${project.path}`, words)).slice(0, 8);
+    .map(([tab, items]) => ({ tab, label: labelOf.get(tab) ?? 'Other', items: items.sort(newestFirst).slice(0, 30) }));
   return { groups: sorted, projects: places, total: sorted.reduce((sum, group) => sum + group.items.length, 0) + places.length };
 }

@@ -100,9 +100,9 @@ export function createManager(options) {
      * @returns {string | null} a plain reason when it may not, otherwise null.
      */
     refusal(root) {
-      if (typeof root !== 'string' || root.trim() === '') return 'This conversation has no folder to map.';
+      if (typeof root !== 'string' || root.trim() === '') return 'This thread has no folder to map.';
       if (tooBroad(root)) return 'This folder is too broad to map (a home or system folder). Open a project folder instead.';
-      if (!existsSync(root)) return 'The folder of this conversation no longer exists.';
+      if (!existsSync(root)) return 'The folder of this thread no longer exists.';
       return null;
     },
 

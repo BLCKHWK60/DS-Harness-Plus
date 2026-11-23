@@ -1,6 +1,6 @@
 # Deep research
 
-Host plugin `@local/dsh-deep-research` (dsh 0.2.2-rc.2). It adds one tool, `deep_research`, that the model can call for questions that need several sources. It wraps what dsh already has (child agents, the `web_search` / `web_fetch` tools and whichever search backend `dsh-web` uses); the new code is the orchestration, the citation check and the labels that say which sources a helper read.
+Host add-on `@local/dsh-deep-research` (dsh 0.2.2-rc.2). It adds one tool, `deep_research`, that the model can call for questions that need several sources. It wraps what dsh already has (child agents, the `web_search` / `web_fetch` tools and whichever search backend `dsh-web` uses); the new code is the orchestration, the citation check and the labels that say which sources a helper read.
 
 **Settings (Plus 1.0).** The engine settings have a page (`client.js`): inside **Settings → Research → Advanced: research engine** when the Research add-on is installed, or as **Settings → Deep research** when it is not. Most fields are marked `volatile` so the page can save them; names and defaults are unchanged, and `toolName` stays file-only. The shared merge helper (`dshMerge`, copied between the `dsh-merge:begin/end` lines) lets the Research page show this add-on's page as a part and removes this add-on's own page from the list while it does.
 
@@ -33,7 +33,7 @@ The `## Checks` list counts the cited sources of the last two kinds, one line ea
 
 ## Depth: Quick, Standard, Thorough
 
-Since Plus 0.59.0 a run is as big as the **Depth of the conversation that starts it**: the Modes add-on's Depth button, the same in every tab (`modes.depthOf(sessionId)`; a helper follows its conversation). An older Modes without `depthOf`: its `researchDepth()`; without Modes: this add-on's `depth`. (Before 0.59.0 it was one setting for all conversations, Modes' `researchDepth`, chosen with a Depth dropdown in a Research conversation's chat box or in Settings → Research.)
+Since Plus 0.59.0 a run is as big as the **Depth of the thread that starts it**: the Modes add-on's Depth button, the same in every space and mode (`modes.depthOf(sessionId)`; a helper follows its thread). An older Modes without `depthOf`: its `researchDepth()`; without Modes: this add-on's `depth`. (Before 0.59.0 it was one setting for all threads, Modes' `researchDepth`, chosen with a Depth dropdown in a Research thread's chat box or in Settings → Research.)
 
 | Depth | Rounds | Helpers at once | Sub-questions | Follow-ups per later round | Findings per helper | Time limit | Sources |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -41,7 +41,7 @@ Since Plus 0.59.0 a run is as big as the **Depth of the conversation that starts
 | Standard | 2 | up to 6 | up to 6 | up to 6 | 8 | 25 min | 60 |
 | Thorough | 3 | up to 8 | up to 8 | up to 8 | 10 | 45 min | 120 |
 
-- **Helpers at once are also held to the Tier add-on's sub-agent limit** (Settings → Model Tiers, 4 unless changed). To really get 8, raise that limit to 8.
+- **Helpers at once are also held to the Tier add-on's sub-agent limit** (Settings → Model tiers, 4 unless changed). To really get 8, raise that limit to 8.
 - A new round starts only while at least 30% of the time is left, so the report always gets written.
 - The numbers are upper bounds in the settings too (`maxParallel`, `maxSubquestions`, `maxSources`, `maxMinutes`); the depth is held to them.
 - More rounds mean more model calls: Thorough can make over 25 helper runs for one question.
@@ -50,16 +50,16 @@ Since Plus 0.59.0 a run is as big as the **Depth of the conversation that starts
 
 Before any helper starts, the tool asks the app whether web search works on the model the searchers run on (`searchReady`, no network call). It asks only when the app's own `web_search` is the searchers' only search tool (`searchToolNames`); another search tool, such as a connector's, is not checked. If it does not, for example because the search provider has no API key for that model's provider, the tool stops at once with a reason that names the model, instead of failing minutes later with "found no usable sources".
 
-Inside a program (the app's PTC preset) a run ends early enough to finish before the app's program time limit, keeping 3 minutes for the report: with the app's default limit of 10 minutes that is about 7 minutes at any depth. The Research tab shows this number (`deepResearch.programMinutes()`).
+Inside a program (the app's PTC preset) a run ends early enough to finish before the app's program time limit, keeping 3 minutes for the report: with the app's default limit of 10 minutes that is about 7 minutes at any depth. Research mode shows this number (`deepResearch.programMinutes()`).
 
 **Wide mode** (`mode: "wide"`, with `items` and `columns`): one searcher per item returns one row; the tool returns CSV text (RFC 4180) with `Sources` (only pages a helper read, by the same rule as above) and `Notes` columns. It does not write a file: save the text with your own file tool (so the sandbox applies) and use `present`. Wide mode has no rounds; the depth only sets how many helpers work at once. A row's Notes column says "sources no helper read were left out" when a helper named pages it did not read (never fetched, or the fetch failed).
 
 ## Models
 
-Which model the helpers run on is chosen in Settings → Research (**Model for the helpers**), kept by the Modes add-on as `researchModel` for all conversations; one conversation can choose its own with the models chip in its chat box ("One model for everything" or "Different models", kept as `sessionHelpers`).
+Which model the helpers run on is chosen in Settings → Research (**Model for the helpers**), kept by the Modes add-on as `researchModel` for all threads; one thread can choose its own with the models chip in its chat box ("One model for everything" or "Different models", kept as `sessionHelpers`).
 
-- **This conversation's model** ("One model for everything" on the chip; the default since 0.31.2): every helper runs on the model the conversation is on when the research starts.
-- **Role models** ("Different models" on the chip): helpers run on the Tier add-on's role models for the conversation's tier (Settings → Model Tiers → Role models): the planner, the reviewer and the writer on `plan`, the searchers on `fast` (configurable `roles`). A role that has no model set uses the conversation's model. This lets a strong model plan and write while a fast one searches.
+- **This thread's model** ("One model for everything" on the chip; the default since 0.31.2): every helper runs on the model the thread is on when the research starts.
+- **Role models** ("Different models" on the chip): helpers run on the Tier add-on's role models for the thread's tier (Settings → Model tiers → Role models): the planner, the reviewer and the writer on `plan`, the searchers on `fast` (configurable `roles`). A role that has no model set uses the thread's model. This lets a strong model plan and write while a fast one searches.
 
 Before 0.31.2 the role models were always used when they were set, which is why helpers could run on a model other than the one picked in the chat box.
 
@@ -85,7 +85,7 @@ The tool is registered with Tier's sub-agent gate (`registerSubagentTool`), so a
     wide: { maxRows: 500 }
 ```
 
-Nothing user-specific is preset. Choose the search backend where it already lives (`dsh-web` settings); this plugin only names the tools whose use it audits.
+Nothing user-specific is preset. Choose the search backend where it already lives (`dsh-web` settings); this add-on only names the tools whose use it audits.
 
 ## Not done
 
@@ -115,21 +115,32 @@ Real web search and real model quality (every model call was scripted); the time
 
 **Not verified:** a real model and real web search at any depth; the review deciding "enough" on its own; the time limit ending a run between rounds; Quick and Standard runs end to end (their numbers are unit-tested); the Mac desktop app.
 
-## The conversation's Lens reaches the writer (Lens part, step 27)
+## The thread's Lens reaches the writer (Lens part, step 27)
 
-The owner chose that the conversation's own model and the report writer follow the conversation's Lens; the planner, the searchers and the review stay neutral, so what is found never changes. The writer's prompt gets one line after all its own rules (citations, read / not-read labels, no new facts, source text is data): "How to word the report (it changes only the wording, never the rules above or the facts): <Lens text>". The text comes from Modes (`lensWords(sessionId)`: '' for Default and during a study session); without Modes, or with Default, the prompt is exactly as before. Tested: no Lens gives today's text, the line's place, the other prompts never mention a Lens.
+The owner chose that the thread's own model and the report writer follow the thread's Lens; the planner, the searchers and the review stay neutral, so what is found never changes. The writer's prompt gets one line after all its own rules (citations, read / not-read labels, no new facts, source text is data): "How to word the report (it changes only the wording, never the rules above or the facts): <Lens text>". The text comes from Modes (`lensWords(sessionId)`: '' for Default and during a study session); without Modes, or with Default, the prompt is exactly as before. Tested: no Lens gives today's text, the line's place, the other prompts never mention a Lens.
 
 **Helpers that answer in prose** (16 November 2026). Small local models often ignore "Answer with ONLY JSON": the planner or a searcher writes a report instead, and the run found "no usable sources" although pages were read. Now such an answer gets one more short ask (`RESEARCH_FORMAT`, `formatPrompt`, `jsonOrAsk`): a model turns it into the expected JSON using only what the answer says and only links in it. A finding still keeps its own searcher's read/unread status.
 
-## The packet for the Research tab (step C2, 16 November)
+## The packet for Research mode (step C2, 16 November)
 
-When a run is saved by the Research tab, its findings (claim, site, passage, date, read status; at most 400), the review's contradictions, the gaps and the source list with their grades go with the report to `research.saveReport`, which writes the packet beside it. Nothing else changed: no model is asked for it, and a run outside the Research tab is as before. Deep research opens no page itself (its helpers use the web tools, where the Modes add-on's web levels apply).
+When a run is saved by Research mode, its findings (claim, site, passage, date, read status; at most 400), the review's contradictions, the gaps and the source list with their grades go with the report to `research.saveReport`, which writes the packet beside it. Nothing else changed: no model is asked for it, and a run outside Research mode is as before. Deep research opens no page itself (its helpers use the web tools, where the Modes add-on's web levels apply).
 
 ## Ultra Code (16 November, the owner's answer)
 
-"Research and Recon keep the loops as is today, but Ultra Code expands it." With Ultra Code on for the conversation (`modes.ultraCode(id) === true`, from Model Tiers' switch; off or unknown: exactly today's run, helper for helper, which a test checks), the same loop runs wider (`lib/ultra.js`): twice the sub-questions per round (at most 12, and never past the `maxSubquestions` setting) and twice the helpers at once, still held to the settings, Model Tiers' sub-agent cap, Mission's calls at once for the searchers' provider and 8; a counter-search on up to three key claims (from pages that were read first, one per source), by searchers of the same kind, whose findings the writers see as possible contradictions; two drafts of the report side by side and a judge with no tools (`RESEARCH_JUDGE`; every tool call it makes is refused, by its id and by its task) that picks or merges them; its answer is taken only when it ended normally, kept the citations and is of a sane length, else draft 1 is the report and the Checks say so. Drafts are cut at 60,000 characters and sit between markers with a random part. The judge's refusal is scoped to its own id (cleared when it ends) or a helper of a conversation whose run has a judge at work, and holds again as a final `tools.guard`. Depth still sets the rounds and the time. The report's Checks say what Ultra Code did.
+"Research and Recon keep the loops as is today, but Ultra Code expands it." With Ultra Code on for the thread (`modes.ultraCode(id) === true`, from Model tiers' switch; off or unknown: exactly today's run, helper for helper, which a test checks), the same loop runs wider (`lib/ultra.js`): twice the sub-questions per round (at most 12, and never past the `maxSubquestions` setting) and twice the helpers at once, still held to the settings, Model tiers' sub-agent cap, Mission's calls at once for the searchers' provider and 8; a counter-search on up to three key claims (from pages that were read first, one per source), by searchers of the same kind, whose findings the writers see as possible contradictions; two drafts of the report side by side and a judge with no tools (`RESEARCH_JUDGE`; every tool call it makes is refused, by its id and by its task) that picks or merges them; its answer is taken only when it ended normally, kept the citations and is of a sane length, else draft 1 is the report and the Checks say so. Drafts are cut at 60,000 characters and sit between markers with a random part. The judge's refusal is scoped to its own id (cleared when it ends) or a helper of a thread whose run has a judge at work, and holds again as a final `tools.guard`. Depth still sets the rounds and the time. The report's Checks say what Ultra Code did.
 
 
-## The conversation's Web sources reach the helpers (18 November 2026)
+## The thread's Web sources reach the helpers (18 November 2026)
 
-With the one Web selector (Modes' README), a run's planner and searchers are told which kinds of source the conversation ticked and how to word searches for them (`modes.webSourcesSaid`, passed as `sources` to `planPrompt` and `searchPrompt` in `lib/rounds.js`); with All they are told nothing new. Results and pages of unticked kinds are left out and refused by Modes for every helper, as for the conversation. In a Research conversation the `focus` now comes from the ticks (Research's README). Test: `test/websources.test.mjs`.
+With the one Web selector (Modes' README), a run's planner and searchers are told which kinds of source the thread ticked and how to word searches for them (`modes.webSourcesSaid`, passed as `sources` to `planPrompt` and `searchPrompt` in `lib/rounds.js`); with All they are told nothing new. Results and pages of unticked kinds are left out and refused by Modes for every helper, as for the thread. In a Research thread the `focus` now comes from the ticks (Research's README). Test: `test/websources.test.mjs`.
+
+## Shared page parts check (19 November 2026)
+
+The page now carries the newer shared page parts block (the (i) pop-up, state line and error note, copied in by `scripts/sync-kit.mjs`). Its pop-up shadow uses the one fixed colour UI-STYLE allows (black mixed with `color-mix`), so the test "no question box or raw error text in the page" now looks for fixed colours only after the shared blocks (from `dsh-ui:end`), as it already did for `dsh-kit`. The page itself is unchanged. Verified: all 64 tests and the full release check pass; nothing was looked at in the app.
+
+## Stage 6a: a space keeps its rules for any mode (item 4A, 22 November 2026)
+
+Deep research does not run in Recon (the owner's choice for now): its helpers would search the web outside Recon's
+routes. The Modes add-on leaves `deep_research` out of every sealed thread; the tool itself also answers "Deep research
+does not run in Recon: its helpers would search the web outside Recon's routes. Use recon_web_search and recon_web_read
+here." Without the Modes add-on it runs as before.

@@ -128,13 +128,13 @@ test('after a restart the sources, their numbers and the shown addresses come ba
   assert.equal(after[1].partial, true);
   assert.equal(after[1].sha256, '');
   assert.equal(after[1].prefix, before[1].sha256.slice(0, 16));
-  assert.match(after[1].text, /\[Part 2 of 2 was not read in this conversation\.\]/);
+  assert.match(after[1].text, /\[Part 2 of 2 was not read in this thread\.\]/);
   // The Archive copy keeps its route.
   assert.equal(after[3].via, 'direct');
 
   // Citations work again, with what is known.
-  assert.match(sources.cite(sources.find(id, 'S1')), new RegExp(`^\\[S1\\] Forum post\\nSource: ${FOUND.replace(/[.?/]/g, '\\$&')}\\n[\\s\\S]*Text fingerprint \\(SHA-256\\): ${before[0].sha256}\\nRebuilt from the saved conversation after the app restarted\\.$`));
-  assert.match(sources.cite(sources.find(id, 'S2')), new RegExp(`Text fingerprint \\(SHA-256\\), its first 16 characters: ${before[1].sha256.slice(0, 16)}…\\nRebuilt from the saved conversation after the app restarted; not all of its text was in the conversation\\.`));
+  assert.match(sources.cite(sources.find(id, 'S1')), new RegExp(`^\\[S1\\] Forum post\\nSource: ${FOUND.replace(/[.?/]/g, '\\$&')}\\n[\\s\\S]*Text fingerprint \\(SHA-256\\): ${before[0].sha256}\\nRebuilt from the saved thread after the app restarted\\.$`));
+  assert.match(sources.cite(sources.find(id, 'S2')), new RegExp(`Text fingerprint \\(SHA-256\\), its first 16 characters: ${before[1].sha256.slice(0, 16)}…\\nRebuilt from the saved thread after the app restarted; not all of its text was in the thread\\.`));
   assert.match(sources.cite(sources.find(id, 'S3')), /Usenet, alt\.privacy, Message-ID <abc@example\.net>[\s\S]*through Usenet/);
   assert.match(sources.cite(sources.find(id, 'S4')), /directly from the Internet Archive, not through Tor/);
 
@@ -195,7 +195,7 @@ test('the assistant\'s notes come back for the export, marked as from before the
   const text = exportText({ sources: sources.full(id), cite: (source) => sources.cite(source), log: sources.log(id), notes });
   assert.match(text, /Note 1, from before the app restarted:\n<<<UNTRUSTED QUOTED MATERIAL\n> The post \[S1\] names Acme\./);
   assert.match(text, /Note 2, 2026-11-15T09:00:00Z \(UTC\):/);
-  assert.match(text, /\[S2\] Dump[\s\S]*> \[Part 2 of 2 was not read in this conversation\.\]/);
+  assert.match(text, /\[S2\] Dump[\s\S]*> \[Part 2 of 2 was not read in this thread\.\]/);
 });
 
 test('a history with nothing of Recon, or condensed, gives nothing but its numbers', () => {
@@ -390,11 +390,11 @@ test('in the running add-on: the first tool call after a restart rebuilds the re
     let read = 0;
     const agent = recon.agentOf(id, () => { read += 1; return messages; });
     const cite = (source) => recon.tools.get('recon_cite').execute({ source }, { agent });
-    assert.equal((await cite('S1')).text, live.sources.cite(live.sources.find(id, 'S1')).replace(/$/, '\nRebuilt from the saved conversation after the app restarted.'));
+    assert.equal((await cite('S1')).text, live.sources.cite(live.sources.find(id, 'S1')).replace(/$/, '\nRebuilt from the saved thread after the app restarted.'));
     assert.match((await cite('S4')).text, /as captured by the Internet Archive at timestamp 20261114103000/);
     assert.equal(read, 1, 'the history is read once');
     const log = await recon.run('log', agent);
-    assert.match(log.text, /restored: rebuilt from the saved conversation after the app started: 4 sources, 5 addresses it was shown/);
+    assert.match(log.text, /restored: rebuilt from the saved thread after the app started: 4 sources, 5 addresses it was shown/);
     assert.match((await recon.run('', agent)).text, /Read so far: 4 sources\./);
   } finally {
     recon.stop();
@@ -410,13 +410,13 @@ test('in the running add-on: the log says "restored" only when something was put
     recon.emit('session/event', { id: 'fresh' }, { type: 'user/message', data: { source: { kind: 'user' }, content: words } });
     const agent = recon.agentOf('fresh', () => fresh);
     await recon.tools.get('recon_cite').execute({ source: 'S1' }, { agent });
-    assert.equal((await recon.run('log', agent)).text, 'Research log of this conversation\n\nNothing was searched or read in this conversation yet.');
+    assert.equal((await recon.run('log', agent)).text, 'Research log of this thread\n\nNothing was searched or read in this thread yet.');
 
     // After a restart with one source and one address: singular.
     const one = answered('recon_onion_read', oldRead({ url: PAGE, body: 'Text.' }));
     const other = recon.agentOf('one', () => one);
     await recon.tools.get('recon_cite').execute({ source: 'S1' }, { agent: other });
-    assert.match((await recon.run('log', other)).text, /restored: rebuilt from the saved conversation after the app started: 1 source, 1 address it was shown$/m);
+    assert.match((await recon.run('log', other)).text, /restored: rebuilt from the saved thread after the app started: 1 source, 1 address it was shown$/m);
   } finally {
     recon.stop();
   }
@@ -429,13 +429,13 @@ test('in the running add-on: after /recon end, what the conversation read is not
     const agent = recon.agentOf(id, () => messages);
     const cite = (source) => recon.tools.get('recon_cite').execute({ source }, { agent });
     assert.match((await cite('S1')).text, /^\[S1\] Forum post/);
-    assert.match((await recon.run('end confirm', agent)).text, /^Ended\. What this conversation read is forgotten/);
+    assert.match((await recon.run('end confirm', agent)).text, /^Ended\. What this thread read is forgotten/);
     // The conversation is still there (here the stand-in app never lets go of it): its history is not read back.
-    assert.equal((await recon.run('log', agent)).text, 'Research log of this conversation\n\nNothing was searched or read in this conversation yet.');
+    assert.equal((await recon.run('log', agent)).text, 'Research log of this thread\n\nNothing was searched or read in this thread yet.');
     const exported = await recon.run('export', agent);
     assert.equal(exported.kind, 'error');
     assert.match(exported.text, /^There is nothing to export/);
-    assert.match((await cite('S1')).text, /^Nothing was read in this conversation yet/);
+    assert.match((await cite('S1')).text, /^Nothing was read in this thread yet/);
     assert.match((await recon.run('', agent)).text, /Read so far: 0 sources\./);
   } finally {
     recon.stop();

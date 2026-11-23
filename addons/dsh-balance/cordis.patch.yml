@@ -2,5 +2,5 @@
     - id: balance
       name: '@local/dsh-balance'
       config:
-        # Shows your DeepSeek balance at the bottom of the sidebar.
+        # Shows your DeepSeek balance at the bottom of the left panel.
         enabled: true

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Experimental: A Devices mode and tab for the devices you connect to your Mac: 44 tools for boards, phones, routers, servers, debug probes, instruments, cards and tags, a live device dashboard, and a list of the programs it can use. It keeps a card and a logbook for each device. Writes follow each device's card; the owner's Allow risky writes switch lifts the backup and source conditions. Off until you switch it on.",
+  "description": "Experimental: A Devices mode and space for the devices you connect to your Mac: 44 tools for boards, phones, routers, servers, debug probes, instruments, cards and tags, a live device dashboard, and a list of the programs it can use. It keeps a card and a logbook for each device. Writes follow each device's card; the owner's Allow risky writes switch lifts the backup and source conditions. Off until you switch it on.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

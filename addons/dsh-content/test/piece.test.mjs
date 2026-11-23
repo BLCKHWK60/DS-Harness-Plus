@@ -347,7 +347,7 @@ test('custom format cards and the continue text', async () => {
     await app.call('content_ledger', { action: 'source', sources: [{ title: 'Onion page', url: 'http://abcdefghijklmnop.onion/x', origin: 'recon' }] });
     await app.call('content_ledger', { action: 'add', claims: [{ text: 'X was there', sources: ['S1'] }] });
     const research = await app.call('content_continue', { to: 'research', question: 'Was X there?', claim: 'C1' });
-    assert.match(research, /new Research conversation[\s\S]*Was X there\?[\s\S]*The claim: X was there/);
+    assert.match(research, /new Research thread[\s\S]*Was X there\?[\s\S]*The claim: X was there/);
     assert.doesNotMatch(research, /onion/, 'a Recon source is not carried into Research');
   } finally {
     app.close();
@@ -358,7 +358,7 @@ test('approval gates in plain words; the note says where the work stands', () =>
   const state = { claims: [{ id: 'C1', ruled: null, pinned: false, standing: 'reported' }], pieces: [] };
   const piece = { brief: { approved: null }, drafts: [], checks: [], flags: [], named: [] };
   assert.deepEqual(approvalGaps(state, piece), ['The brief is not approved by the owner yet.', 'There is no draft yet.']);
-  assert.match(folderNote({ folder: '/x', scratch: false, status: 'Where the work stands: 1 claims' }), /subject folder of this conversation is \/x\.[\s\S]*\nWhere the work stands/);
+  assert.match(folderNote({ folder: '/x', scratch: false, status: 'Where the work stands: 1 claims' }), /subject folder of this thread is \/x\.[\s\S]*\nWhere the work stands/);
   assert.equal(statusOf({ claims: [], pieces: [], angles: [], sources: [] }), 'Nothing is recorded yet: start with step 1.');
   assert.ok(METHOD.length < 4000, `${METHOD.length}`);
 });

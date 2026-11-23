@@ -690,7 +690,7 @@ You said "Yes, as sketched", and it is built that way:
 
 ### Step 13: marks on the Cowork Skills page (done)
 
-- **On the page:** a mark beside each skill's name and a filter by mark, with how many of each, in the page's language (English or Chinese).
+- **On the page:** a mark beside each skill's name and a filter by mark, with how many of each, in English.
 - **Asked from Tuner Plus's service.** It tells names, files or providers, and marks, never a skill's text. It answers at once from its last look; a look older than a minute is made again in the background, one at a time.
 - **Without Tuner Plus** (absent, off, its skills part off, failing or slow), the page and its answer are exactly as before. A test checks the answer field by field, and the lab showed the same answer with the part switched off.
 - **Lab:** marks Default 5, Downloaded 1, Plus 11, Mine 1; "Mine" left only the made-up lab skill.

@@ -34,7 +34,7 @@ export function rowsFromPacket(packet, { report }) {
 const QUERY_TOOLS = new Set(['data_query', 'finance_prices', 'finance_company_figures', 'finance_economy']);
 
 /**
- * Finance and Data rows from a conversation's turns: a question and the query that answered it, when the
+ * Finance and Data rows from a thread's turns: a question and the query that answered it, when the
  * analysis was saved and, later, run again with the same numbers (the proof).
  * @param {object[]} turns - from turnsOf.
  * @param {{mode: string, session: string}} meta

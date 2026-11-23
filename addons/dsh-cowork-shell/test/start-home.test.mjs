@@ -86,13 +86,12 @@ test('the warning texts say the automation is deleted for good and cannot be put
 
 test('the Delete permanently question says it cannot be put back and where copies may remain', () => {
   const lines = source.split('\n').filter((text) => text.includes("'trash.erase.confirm':"));
-  assert.equal(lines.length, 2, 'English and Chinese');
+  assert.equal(lines.length, 1, 'English only');
   const en = lines.find((text) => /[a-z]{4}/.test(text.split(':').slice(1).join(':')));
   assert.match(en, /\{title\}/);
   assert.match(en, /cannot be put back/);
   assert.match(en, /Time Machine/);
   assert.match(en, /Sync/);
-  assert.match(lines.find((text) => text !== en), /\{title\}/);
   // A row being erased offers no Put back and no second delete.
   assert.match(source, /item\.erasing\s*\?\s*\[dot\('d1'\), h\('span', \{ key: 'erasing'/);
   // Two lines: the title alone on the first, so a narrow sidebar does not cut it to one letter.
@@ -114,7 +113,8 @@ test('each tab\'s Trash list shows only what was deleted from it; nothing delete
 });
 
 test('both ways to delete keep the tab, and the Trash list counts and lists only this tab\'s', () => {
-  assert.equal((source.match(/trash\.remove\(id, (?:title|titleOf\(id\)), tabOf\(id\)\)/g) ?? []).length, 3, 'Delete, the right-click Delete and the Scratch clean-up');
+  // Final fix round: Delete also says whether it archived the thread itself ({ ...tabOf(id), back }).
+  assert.equal((source.match(/trash\.remove\(id, (?:title|titleOf\(id\)), (?:tabOf\(id\)|where)/g) ?? []).length, 3, 'Delete, the right-click Delete and the Scratch clean-up');
   assert.equal((source.match(/trash\.remove\(/g) ?? []).length, 3, 'no other delete call');
   assert.match(source, /t\('trash\.title', \{ n: binHere\.length \}\)/);
   assert.match(source, /shown \? binHere\.map\(/);
@@ -207,15 +207,15 @@ test('Empty trash sends a long list in parts, adds up what failed, and stops at 
   assert.equal(done.failed, 3, 'the failed part and the one never sent');
 });
 
-test('Empty trash texts: true in English and Chinese, and the sidebar wires them to this tab\'s list', () => {
+test('Empty trash texts are true, and the left panel wires them to this space\'s list', () => {
   for (const key of ['trash.empty.confirm', 'trash.empty.confirm.one', 'trash.empty.untold', 'trash.empty.untold.one']) {
     const lines = source.split('\n').filter((text) => text.includes(`'${key}':`));
-    assert.equal(lines.length, 2, `${key}: English and Chinese`);
+    assert.equal(lines.length, 1, `${key}: English only`);
   }
   for (const key of ['trash.empty.confirm', 'trash.empty.confirm.one']) {
     const en = source.split('\n').find((text) => text.includes(`'${key}':`) && /[a-z]{4}/.test(text.split(':').slice(1).join(':')));
     assert.match(en, /cannot be put back/);
-    assert.match(en, /other tabs is not touched/);
+    assert.match(en, /other spaces is not touched/);
     assert.match(en, /Time Machine/);
   }
   assert.match(source, /items: binHere, state, tabIds, selectedId: selected\.id, t,/);
@@ -277,7 +277,8 @@ test('a tab whose name does not fit shows its icon alone, measured as if selecte
   assert.match(source, /keep\(iconOnlyIds\(shownTabs, list\.querySelectorAll\('\[role=tab\]'\), \(el\) => getComputedStyle\(el\), pen\)\)/);
   assert.match(source, /watch\.observe\(list\);/);
   assert.match(source, /\}, \[wide, tabsKey, state\.iconOnlyTabs\]\);/);
-  assert.match(source, /'aria-label': arranging \? t\('tabs\.arrange\.move', \{ tab: m\.label \}\) : \(wide && !iconOnly\.ids\.has\(m\.id\) \? undefined : m\.label\)/);
+  // Every tab (a space button too) carries its name for screen readers, also while its name shows (stage 7 lab finding).
+  assert.match(source, /'aria-label': arranging \? t\('tabs\.arrange\.move', \{ tab: m\.label \}\) : m\.label,/);
   assert.match(source, /wide && !iconOnly\.ids\.has\(m\.id\) \? h\('span', null, m\.label\) : null/);
 });
 
@@ -357,10 +358,11 @@ test('arranging: an edit button in the wide sidebar, pointer dragging (not the p
   assert.match(source, /onClick: \(\) => \{ if \(!arranging && m\.id !== selected\.id\) switchTab\(m\); \}/, 'no tab switch while arranging');
   assert.match(source, /if \(arranging\) \{ onArrangeKey\(event\); return; \}/);
   assert.match(source, /void model\.setOption\('tabOrder', mergeOrder\(ids, state\.tabOrder\)\)/);
-  assert.match(source, /void model\.setOption\('tabOrder', \[\]\)/, 'Reset order');
+  // Reset order: the tab order, or (item 4A) the space buttons' own order.
+  assert.match(source, /void model\.setOption\(spacesOn \? 'spaceOrder' : 'tabOrder', \[\]\)/, 'Reset order');
   assert.doesNotMatch(source, /draggable: true|onDragStart/, 'no HTML drag and drop: it would bring up the app\'s file-drop cover');
   for (const key of ['tabs.arrange', 'tabs.arrange.hint', 'tabs.arrange.move', 'tabs.arrange.reset', 'tabs.arrange.done']) {
-    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 1, `${key}: English only`);
   }
   const server = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
   assert.match(server, /tabOrder: z\.array\(z\.string\(\)\)\.default\(\[\]\)\.volatile\(\),/);
@@ -376,7 +378,8 @@ test('arranging changes only the order: which tab a conversation or Trash row be
   assert.equal(pick.tabOfSession('s', {}, { path: '/projects/x' }, state, usual), 'write');
   assert.equal(pick.trashTab({ id: 's', tab: 'finance' }, state, usual), 'write');
   // The sidebar passes the usual order wherever it decides membership.
-  assert.match(source, /const tabIds = usualTabsOf\(state\)\.map\(\(m\) => m\.id\);/);
+  // (Item 4A: with the space buttons the shown spaces decide instead.)
+  assert.match(source, /const tabIds = spacesOn \? tabs\.map\(\(m\) => m\.id\) : usualTabsOf\(state\)\.map\(\(m\) => m\.id\);/);
   assert.match(source, /tabOfSession\(id, sess, ws, now, usualTabsOf\(now\)\.map\(\(m\) => m\.id\)\)/);
 });
 
@@ -394,6 +397,8 @@ test('a drag lives only while arranging, follows the pointer on the window, and 
 function modelWith({ readDelay = 5, writeDelay = 20 } = {}) {
   const make = new Function('window', 'dshPoll', `const NS = 'coworkShell'; const SETTINGS_NS = 'cowork-shell'; const MODES_NS = 'modes'; const LOCAL_KEY = 'k';
     const FALLBACK_MODES = [{ id: 'chat', label: 'Chat' }]; const DEFAULT_TABS = {};
+    ${constLine('SPACE_IDS')}\n${constLine('MODE_SPACE')}\n${constLine('SPACE_TAB')}\n${constLine('SPACE_KEY')}\n${constLine('SPACES_ON_KEY')}\n${constLine('isSpaceId')}\n${constLine('spaceMode')}
+    ${functionText('spaceOfModeId')}\n${functionText('spaceOfTabId')}\n${functionText('readSpaceLocal')}\n${functionText('readSpacesOn')}
     ${functionText('readObject')}\n${functionText('readOrder')}\n${constLine('DEFAULT_START_PLACES')}\n${functionText('startPlacesOf')}\n${constLine('startPlaceTable')}\n${functionText('createModel')}\nreturn createModel;`)({ localStorage: { getItem: () => null, setItem() {} } }, { settings: (ctx, options) => ctx.remote.settings.describe(options?.fresh === true ? undefined : undefined) });
   const store = { revision: 1, value: { tabOrder: [] } };
   const wait = (ms) => new Promise((done) => setTimeout(done, ms));
@@ -479,7 +484,7 @@ test('a group row (old runs of an automation): its second line, its tab, and Emp
   assert.match(source, /restore: \(row\) => \(row\?\.kind === 'group' \? call\(\{ method: 'POST', body: JSON\.stringify\(\{ action: 'restore', itemId: row\.id \}\) \}\)/);
   assert.match(source, /onClick: \(\) => void putBack\(item\) \}/);
   for (const key of ['trash.empty.confirm.rows', 'trash.empty.confirm.rows.one', 'trash.erase.confirm.group', 'trash.count', 'trash.left.oldest', 'trash.back.needs', 'trash.back.newer', 'trash.back.partly']) {
-    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 1, `${key}: English only`);
   }
   const en = source.split('\n').find((text) => text.includes("'trash.erase.confirm.group':") && /[a-z]{4}/.test(text.split(':').slice(1).join(':')));
   assert.match(en, /cannot be put back/);
@@ -493,7 +498,7 @@ test('row actions: a Delete names what the list showed; partial results and the 
   assert.match(source, /itemIds, shown \}/);
   assert.match(source, /for \(const note of Array\.isArray\(done\?\.notes\) \? done\.notes : \[\]\)/);
   assert.match(source, /model\.fail\(t\('trash\.erase\.partly'/);
-  for (const key of ['trash.erase.partly', 'trash.folder', 'trash.folder.its']) assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 2, key);
+  for (const key of ['trash.erase.partly', 'trash.folder', 'trash.folder.its']) assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 1, `${key}: English only`);
 });
 
 // ---- Scratch (step 32) ------------------------------------------------------------------------
@@ -586,7 +591,7 @@ test('Scratch has its own group in each tab, the switch sits beside the picker (
   assert.match(source, /list\(scratchRows, '__scratch', null\)/);
   assert.match(source, /if \(!scratchPlace\.path \|\| !selected \|\| selected\.id === 'recon'\) return null;/);
   assert.match(source, /id: 'cowork-place', order: 5/);
-  assert.match(source, /if \(selected\.id !== 'recon' && inScratchNow\(library\.get\(\)\)\) \{\s*startInScratch\(appCtx, library, options\)/);
+  assert.match(source, /if \(selected\.id !== 'recon' && inScratchNow\(library\.get\(\)\)\) \{\s*startInScratch\(appCtx, library, options, selected\.id\)/);
   assert.match(source, /\(!!currentWs && hidden\.has\(roomKey\(currentWs\.path\)\)\)/, 'Chat hides the picker in Scratch too');
   assert.match(source, /id: 'cowork-scratch-mark'/);
 });
@@ -613,7 +618,7 @@ test('Scratch clean-up: only old ones go; working, open and pinned ones are name
   assert.deepEqual(plan.take, ['old']);
   assert.deepEqual(plan.skipped, [{ id: 'busy-old', why: 'running' }, { id: 'open-old', why: 'open' }, { id: 'pin-old', why: 'pinned' }]);
   assert.deepEqual(cleanupPlan(['young'], lib, { days: 2, now, pinned: new Set() }).take, ['young']);
-  for (const key of ['cleanup.why.running', 'cleanup.why.open', 'cleanup.why.pinned']) assert.equal((source.match(new RegExp(`'${key.replace(/\./g, '\\.')}':`, 'g')) ?? []).length, 2, `${key} in English and Chinese`);
+  for (const key of ['cleanup.why.running', 'cleanup.why.open', 'cleanup.why.pinned']) assert.equal((source.match(new RegExp(`'${key.replace(/\./g, '\\.')}':`, 'g')) ?? []).length, 1, `${key} in English only`);
 });
 
 // ---- Scratch step 44: start places ------------------------------------------------------------
@@ -638,8 +643,9 @@ test('start places: every tab but Code starts in Scratch, Recon in its room; a s
 
 test('New, a tab switch and Cmd-N start in the tab\'s start place; Scratch falls back to a folder when it cannot start', () => {
   assert.match(source, /const place = startPlaceOf\(tabId\);/);
-  assert.match(source, /startInScratch\(appCtx, library\)\.then\(\(done\) => \{ if \(!done\) inFolder\(\); \}, inFolder\);/);
-  assert.match(source, /command\.resolve = \(context\) => \(startPlaceTable\.newKey === false \? original\(context\) : \{ status: 'handled', run: \(\) => startNew\(ctx, library, model\.get\(\)\.selected\) \}\);/);
+  assert.match(source, /startInScratch\(appCtx, library, undefined, tabId\)\.then\(\(done\) => \{ if \(!done\) inFolder\(\); \}, inFolder\);/);
+  // Cmd-N: the open tab's (with spaces, the open space's own tab's) start place; Workshop without Creator Plus: the app's own.
+  assert.match(source, /if \(startPlaceTable\.newKey === false \|\| \(now\.spacesOn && selectedTab\(now\)\.space === 'workshop' && workshopWithoutCreator\(now\)\)\) return original\(context\);\s*return \{ status: 'handled', run: \(\) => startNew\(ctx, library, selectedTab\(now\)\.id\) \};/);
   assert.match(source, /if \(gone\) startNew\(appCtx, library, m\.id\);/, 'a tab switch with nothing to reopen starts in the start place');
-  for (const key of ['start.title', 'start.hint', 'start.newkey', 'start.recon.room']) assert.equal((source.match(new RegExp(`'${key.replace(/\./g, '\\.')}':`, 'g')) ?? []).length, 2, `${key} in English and Chinese`);
+  for (const key of ['start.title', 'start.hint', 'start.newkey', 'start.recon.room']) assert.equal((source.match(new RegExp(`'${key.replace(/\./g, '\\.')}':`, 'g')) ?? []).length, 1, `${key} in English only`);
 });

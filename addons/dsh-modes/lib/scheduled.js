@@ -25,3 +25,36 @@ export function scheduledModeId(modes, wanted) {
   if (typeof wanted === 'string' && wanted && wanted !== 'automations' && modes?.[wanted]) return wanted;
   return Object.keys(modes ?? {}).find((id) => modes[id]?.tools === 'all');
 }
+
+/**
+ * Item 4A, stage 6b (Revision 2 L4): the task ids of the scheduler's messages put into an inbox, read as Automations and
+ * Finance read them (the "[SCHEDULE REMINDER" text with `schedule_id_json` or `reminders_json`).
+ * @param {unknown} inserted - the `inserted` list of an `agent/inbox/spliced` event.
+ * @returns {string[]} the ids, each once.
+ */
+export function scheduledTaskIds(inserted) {
+  const ids = [];
+  for (const item of Array.isArray(inserted) ? inserted : []) {
+    const message = item?.message ?? item;
+    if ((message?.source ?? item?.source)?.kind !== 'schedule') continue;
+    const text = (Array.isArray(message?.content) ? message.content : []).map((block) => (block?.type === 'text' ? String(block.text ?? '') : '')).join('\n');
+    if (!text.trimStart().startsWith('[SCHEDULE REMINDER')) continue;
+    const one = /^schedule_id_json: (.+)$/m.exec(text);
+    if (one) {
+      try {
+        ids.push(String(JSON.parse(one[1])));
+      } catch {
+        /* not a task id */
+      }
+    }
+    const many = /^reminders_json: (.+)$/m.exec(text);
+    if (many) {
+      try {
+        for (const entry of JSON.parse(many[1])) if (entry?.schedule_id) ids.push(String(entry.schedule_id));
+      } catch {
+        /* not a list */
+      }
+    }
+  }
+  return [...new Set(ids)];
+}

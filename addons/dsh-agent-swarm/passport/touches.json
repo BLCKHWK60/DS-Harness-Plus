@@ -1,12 +1,13 @@
 {
   "name": "@local/dsh-agent-swarm",
   "folder": "dsh-agent-swarm",
-  "at": "2026-11-17",
+  "at": "2026-11-21",
   "provides": [],
   "uses": [
     "agents",
     "modelTiers",
     "modes",
+    "ptcRuntime",
     "routeHealth",
     "subagents",
     "tools"
@@ -14,7 +15,9 @@
   "events": [
     "session/event",
     "agent/disposed",
-    "agent/created"
+    "agent/created",
+    "tools/pre-execute",
+    "tools/result"
   ],
   "tools": [],
   "commands": [],

@@ -1,5 +1,5 @@
 /**
- * Host half of the Model Tiers bundle.
+ * Host half of the Model tiers bundle.
  *
  * Responsibilities:
  *  - own the five starter tiers, custom tiers, saved model versions and the global sub-agent cap;
@@ -16,6 +16,7 @@
  */
 import z from '@deepseek-ai/schemastery';
 import { trashedIds } from './lib/trashed.js';
+import { createProgramClock, timeBudget, shortenedNote, MIN_RUN_MS, SALVAGE_MS } from './lib/program-time.js';
 
 /**
  * Start a helper agent. App 0.2.2-rc.2 takes the task's fields (prompt, parent, agentOptions) at
@@ -55,7 +56,7 @@ const LEGACY_TIER_LABELS = {
 };
 
 /** Built-in guidance of each starter tier, used while the tier has no instructions of its own. */
-/** The same behaviour for a conversation with no tools (Chat, or the Tools switch Off): nothing to edit or run. */
+/** The same behaviour for a thread with no tools (Chat, or the Tools switch Off): nothing to edit or run. */
 const STARTER_GUIDANCE_BARE = {
   haiku: 'prefer fast, direct answers. Answer the question asked, briefly, without broad detours.',
   sonnet: 'plan briefly, answer, then check the answer once. Balance speed against completeness.',
@@ -163,17 +164,35 @@ const REVIEW_ANGLE_IDS = Object.keys(REVIEW_ANGLES);
 /**
  * Wait for a started child agent, stopping it when the signal aborts.
  * The host's own signal only covers start-up, so a running child is stopped through its receipt.
+ * When the stop is a program's time running out (PTC), `salvageMs` gives the stopped child a short
+ * wait to hand back what it had written; such a result comes back marked `partial`.
  * @param {{result: Promise<object>, dispose?: () => Promise<void>}} started - the activation receipt.
  * @param {AbortSignal | undefined} signal - the caller's signal.
+ * @param {() => number} [salvageMs] - how long to wait for an unfinished answer after the stop (0: none).
  * @returns {Promise<object>} the child's result.
  */
-async function awaitChild(started, signal) {
+async function awaitChild(started, signal, salvageMs) {
   if (!signal) return started.result;
   let onAbort;
-  const aborted = new Promise((_, reject) => {
+  const aborted = new Promise((resolve, reject) => {
     onAbort = () => {
       Promise.resolve(started.dispose?.()).catch(() => {});
-      reject(signal.reason instanceof Error ? signal.reason : new Error('Cancelled.'));
+      const fail = () => reject(signal.reason instanceof Error ? signal.reason : new Error('Cancelled.'));
+      const wait = Number(salvageMs?.()) || 0;
+      if (wait <= 0) {
+        fail();
+        return;
+      }
+      let timer;
+      const late = new Promise((r) => {
+        timer = setTimeout(() => r(undefined), wait);
+        timer.unref?.();
+      });
+      Promise.race([Promise.resolve(started.result).catch(() => undefined), late]).then((result) => {
+        clearTimeout(timer);
+        if (childText(result)) resolve({ ...result, partial: true });
+        else fail();
+      }, fail);
     };
     if (signal.aborted) onAbort();
     else signal.addEventListener('abort', onAbort, { once: true });
@@ -184,6 +203,68 @@ async function awaitChild(started, signal) {
   } finally {
     signal.removeEventListener('abort', onAbort);
   }
+}
+
+/**
+ * The text a child handed back.
+ * @param {object | undefined} result - SubagentResult.
+ * @returns {string} its text blocks, joined and trimmed.
+ */
+function childText(result) {
+  return (result?.output ?? [])
+    .filter((block) => block?.type === 'text')
+    .map((block) => String(block.text ?? ''))
+    .join('\n')
+    .trim();
+}
+
+/** What every helper tool tells the model about programs (PTC). */
+const PTC_HINT =
+  "Called inside a program (PTC), it shortens itself to end before the program's time limit and returns what it found; " +
+  'for a long run, call it alone in a program with timeoutMs 600000, or use the Standard preset.';
+
+/** Marks put before a helper's text when PTC's program time limit stopped it (plain words for the model). */
+const PTC_MARKS = {
+  partial: "(cut short by the program's time limit; unfinished answer)",
+  partialWork: "(cut short by the program's time limit; unfinished report. The workspace may hold part of its changes.)",
+  empty: "(not answered: the program's time limit came first)",
+  emptyWork: "(not answered: the program's time limit came first. The workspace may hold part of its changes.)",
+  notStarted: "(not started: the program's time limit came first)",
+};
+
+/**
+ * One helper-tool run's time, inside a program (PTC) or not. Inside a program whose remaining time
+ * is shorter than the tool's own limit, a timer stops the run before the program's limit, and a
+ * stopped helper is given a short wait to hand back what it has. Outside a program nothing changes.
+ * @param {{signal?: AbortSignal}} exec - the tool call.
+ * @param {number} ownMs - the tool's own time limit.
+ * @param {null | {limitMs: number, remainingMs: number, exact: boolean}} window - the program's time, or null.
+ * @returns {object} plan, view (for the result), signal, cutByTime(), salvageMs(), leftMs(), end().
+ */
+function programRun(exec, ownMs, window) {
+  const plan = timeBudget({ ownMs, window });
+  const view = window ? { limitMs: window.limitMs, budgetMs: plan.ms, exact: window.exact, shortened: plan.shortened } : null;
+  const timeUp = new AbortController();
+  let timer;
+  if (plan.shortened && !plan.tooShort) {
+    timer = setTimeout(() => timeUp.abort(new Error("The program's time limit is near.")), Math.max(1, plan.ms));
+    timer.unref?.();
+  }
+  const deadline = Date.now() + plan.ms;
+  const signal = exec.signal ? AbortSignal.any([exec.signal, timeUp.signal]) : timeUp.signal;
+  /** The stop is the program's time running out, not a cancel. */
+  const cutByTime = () => timeUp.signal.aborted && exec.signal?.aborted !== true;
+  return {
+    plan,
+    view,
+    window,
+    signal,
+    cutByTime,
+    salvageMs: () => (cutByTime() ? SALVAGE_MS : 0),
+    /** Too little time left to start another helper. */
+    noRoom: () => plan.shortened && (timeUp.signal.aborted || deadline - Date.now() < MIN_RUN_MS),
+    end: () => clearTimeout(timer),
+  };
 }
 
 function childResultNote(result) {
@@ -199,7 +280,7 @@ function childResultNote(result) {
 
 /**
  * Starter tier defaults. No model is preconfigured: a starter applies its
- * rules to whatever model the conversation uses until the user picks one.
+ * rules to whatever model the thread uses until the user picks one.
  */
 const STARTER_DEFAULTS = { webSearch: true, webFetch: true, browser: true, subagents: true };
 const DEFAULTS = {
@@ -278,16 +359,16 @@ export const Config = z.object({
   customTiers: z.string().default('[]').volatile(),
   /** Named tier decks scoped to Workspaces, plus each project's default profile. */
   projectProfiles: z.string().default('{"profiles":[],"projects":{}}').volatile(),
-  /** Optional per-Session profile override; project default applies otherwise. */
+  /** Optional per-thread profile override; project default applies otherwise. */
   sessionProfiles: z.string().default('{}').volatile(),
   /** Ordered fallback routes per tier: `{ tierId: [{provider, model}] }`. */
   fallbackChains: z.string().default('{}').volatile(),
   /** Role routes per tier: `{ tierId: { plan|implement|review|fast: {provider, model} } }`. */
   roleModels: z.string().default('{}').volatile(),
   /**
-   * The Ultra Code switch beside Effort, per conversation, as JSON: `{ sessionId: true }` (plan step S1).
+   * The Ultra Code switch beside Effort, per thread, as JSON: `{ sessionId: true }` (plan step S1).
    * Off unless switched on (the owner's choice). Ultra Code is a switch, not an effort level: on, the
-   * conversation spreads its work over helpers at whatever effort is set. The top effort step "Ultra
+   * thread spreads its work over helpers at whatever effort is set. The top effort step "Ultra
    * Code" keeps working and means the switch on at the highest effort.
    */
   sessionUltra: z.string().default('{}').volatile(),
@@ -296,10 +377,10 @@ export const Config = z.object({
    * `{ tierId: { lead, helpers: [..], checker, judge } }`, each a `{ provider, model }` or `{ version: id }`.
    * The lead plans and takes a step that failed twice; helpers do the steps (several models make attempts
    * differ more); the checker checks; the judge picks between attempts. Used only while the work loop is
-   * on and the conversation's helpers use different models (the models chip); empty: as before.
+   * on and the thread's helpers use different models (the models chip); empty: as before.
    */
   teams: z.string().default('{}').volatile(),
-  /** Drop per-Session tier and profile entries whose stored Session no longer exists, once per start. */
+  /** Drop per-thread tier and profile entries whose stored thread no longer exists, once per start. */
   pruneStaleSessions: z.boolean().default(true),
 });
 
@@ -695,7 +776,7 @@ function readVersionPresets(value) {
  *  - "Replace" also leaves out the other added instructions: the tier's, the
  *    mode's and the role prompts. The app's own text about its tools always stays.
  * @param {object | undefined} version - normalized version.
- * @param {string | undefined} presetId - the conversation's agent preset.
+ * @param {string | undefined} presetId - the thread's agent preset.
  * @returns {{texts: string[], replace: boolean}} what to add, and whether it stands alone.
  */
 function versionInstructions(version, presetId) {
@@ -1175,7 +1256,7 @@ function tierForRoute(
  * @param {Record<string, Record<string, {provider: string, model: string}>>} [roles] - role routes.
  * @param {{skillText?: (name: string) => string | undefined, version?: {name: string, texts: string[], replace: boolean}, bare?: boolean, webOff?: boolean}} [extras] -
  *   loaded skill text by skill name, the instructions of the model version in use, and `bare` when the
- *   conversation has no tools at all (Chat mode, or the Tools switch Off), `webOff` when its Web is Off.
+ *   thread has no tools at all (Chat mode, or the Tools switch Off), `webOff` when its Web is Off.
  * @returns {string} prompt section text, or an empty string.
  */
 function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = {}) {
@@ -1302,7 +1383,7 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
   if (bare) {
     // No sub-agents, workflows or roles to talk about.
   } else if (!tier.subagents) {
-    lines.push('Sub-agent delegation is disabled for this tier; do all work in this Session.');
+    lines.push('Sub-agent delegation is disabled for this tier; do all work in this thread.');
   } else {
     lines.push(
       `You may delegate to sub-agents, with at most ${maxSubagents} concurrent children for this tier. Prefer local models for cheap independent checks and cloud models for hard reasoning when both are configured.`,
@@ -1318,7 +1399,7 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
   // The switch alone (Ultra Code on beside a lower effort): only how to spread the work, never the top
   // step's exhaustive reasoning or its checks; a tier without sub-agents runs no helpers, so nothing is said.
   if (extras.ultra === true && tier.effort !== 'ultra' && !alone && !bare) {
-    // Only when delegation is pushed at all (Settings → Model Tiers: Ultra auto-delegation).
+    // Only when delegation is pushed at all (Settings → Model tiers: Ultra auto-delegation).
     if (tier.subagents && ultraAutoDelegate) {
       lines.push(
         '**Ultra Code.** Decompose the task before acting. When two or more pieces are genuinely independent, start them as sub-agents together in one assistant message and keep doing useful work while they run.',
@@ -1396,11 +1477,11 @@ function tierPrompt(tier, maxSubagents, ultraAutoDelegate, roles = {}, extras = 
  */
 export function apply(ctx, config) {
   /**
-   * The role models a conversation's helpers use. With "one model for everything" (the Modes
-   * add-on's choice for the conversation) every role is the conversation's own model, so no
+   * The role models a thread's helpers use. With "one model for everything" (the Modes
+   * add-on's choice for the thread) every role is the thread's own model, so no
    * second model has to be loaded; otherwise the tier's role models as set.
-   * @param {object} agent - the conversation's agent.
-   * @param {{id: string}} tier - the conversation's tier.
+   * @param {object} agent - the thread's agent.
+   * @param {{id: string}} tier - the thread's tier.
    * @returns {Record<string, {provider: string, model: string}>} role -> model.
    */
   const roleModelsFor = (agent, tier) => {
@@ -1484,7 +1565,7 @@ export function apply(ctx, config) {
   }
 
   /**
-   * The app's agent preset of one conversation (Standard, PTC, Minimal, Creator, or the user's own).
+   * The app's agent preset of one thread (Standard, PTC, Minimal, Creator, or the user's own).
    * @param {object} agent - live Agent.
    * @returns {string | undefined} preset id, or undefined when it is not known.
    */
@@ -1692,12 +1773,91 @@ export function apply(ctx, config) {
   // Session) receive the same section without waiting for a restart.
   for (const agent of ctx.get('agents')?.list() ?? []) installPrompt(agent);
 
+  // Programs (the PTC preset's run_code): when each began and how long it may run, so a helper tool
+  // called from one knows how much of the program's time is left. Watching only; nothing is changed
+  // or refused. Its own listener, so the tier checks below never skip it.
+  const clock = createProgramClock();
+  const programLimits = () => {
+    try {
+      return ctx.get('ptcRuntime')?.timeout;
+    } catch {
+      return undefined;
+    }
+  };
+  // A program's time limit starts when it is dispatched, after any approval wait in the tool pipeline: so its start is
+  // noted in tools/execute (at dispatch), not in tools/pre-execute (before the "ask" approval), or the owner's time to
+  // approve would count as program time used and the helper tools would stop far too early.
+  ctx.on('tools/execute', (exec, next) => {
+    try {
+      clock.seen(exec, programLimits());
+    } catch {
+      // Watching must never disturb a tool call.
+    }
+    return next();
+  });
+  ctx.on('tools/result', (exec) => {
+    try {
+      clock.done(exec);
+    } catch {
+      // nothing to forget
+    }
+  });
+  /**
+   * The time of one helper-tool call: shortened to fit a program when called from one.
+   * @param {object} exec - the tool call.
+   * @param {number} ownMs - the tool's own time limit.
+   * @returns {ReturnType<typeof programRun>} the run's time.
+   */
+  const helperTime = (exec, ownMs) => programRun(exec, ownMs, clock.windowFor(exec?.callId, programLimits()));
+
+  /**
+   * Start one helper and wait for it. A stop by the program's time limit is not an error: what the
+   * helper had written comes back with `partial`, and nothing written comes back with `cut`.
+   * @param {object} subagents - the app's sub-agent service.
+   * @param {object} spec - startChild's spec (its signals are replaced by the run's).
+   * @param {ReturnType<typeof programRun>} run - the run's time.
+   * @returns {Promise<{childId?: string, stopReason?: string, text: string, partial?: boolean, cut?: boolean}>} the answer.
+   */
+  async function runHelper(subagents, spec, run) {
+    let started;
+    try {
+      started = await startChild(subagents, { ...spec, request: { ...spec.request, signal: run.signal }, signal: run.signal });
+      const result = await awaitChild(started, run.signal, run.salvageMs);
+      const partial = result.partial === true || (run.cutByTime() && result.stopReason !== 'completed');
+      const text = childText(result);
+      // Stopped by the program's time with nothing written: the same as never answering.
+      if (partial && !text) return { childId: started.childId, stopReason: result.stopReason, text: '', cut: true };
+      return {
+        childId: started.childId,
+        stopReason: result.stopReason,
+        text,
+        ...(result.diagnostic ? { diagnostic: result.diagnostic } : {}),
+        ...(partial ? { partial: true } : {}),
+      };
+    } catch (error) {
+      if (!run.cutByTime()) throw error;
+      return { ...(started?.childId ? { childId: started.childId } : {}), text: '', cut: true };
+    }
+  }
+
+  /**
+   * The "not started" answer when a program has too little time left.
+   * @param {string} tool - the tool's name.
+   * @param {ReturnType<typeof programRun>} run - the run's time.
+   * @returns {{text: string, ptc: object}} the note and the run's PTC facts.
+   */
+  const notStarted = (tool, run) => ({
+    text: shortenedNote({ tool, limitMs: run.window.limitMs, budgetMs: run.plan.ms, tooShort: true, leftMs: run.window.remainingMs }),
+    ptc: { ...run.view, cut: true, started: false },
+  });
+
   const delegateRoleTool = {
     name: 'delegate_role',
     description:
       'Delegate one focused task to a child Agent running a role-specific model configured for the active tier. ' +
       'Roles: plan (investigate and return a plan), implement (make scoped changes), review (strict review/findings), fast (narrow quick check). ' +
-      'The parent tier\'s access and concurrent sub-agent policy still apply. Configure role routes in Settings → Model Tiers.',
+      'The parent tier\'s access and concurrent sub-agent policy still apply. Configure role routes in Settings → Model tiers. ' +
+      PTC_HINT,
     parameters: {
       type: 'object',
       properties: {
@@ -1728,6 +1888,7 @@ export function apply(ctx, config) {
           childId: { type: 'string' },
           stopReason: { type: 'string' },
           text: { type: 'string' },
+          ptc: { type: 'object', description: "Inside a program (PTC): the program's time limit, the run's time, and whether it was cut short." },
         },
         required: ['role', 'childId', 'text'],
       },
@@ -1739,9 +1900,9 @@ export function apply(ctx, config) {
     isConcurrencySafe: () => false,
     async execute(args, exec) {
       const sessionId = exec.agent?.id;
-      if (!sessionId) throw new Error('delegate_role needs a live parent Session.');
+      if (!sessionId) throw new Error('delegate_role needs a live parent thread.');
       const tier = tierForSession(sessionId, lastRoute, config);
-      if (!tier) throw new Error('delegate_role needs an active model tier in this Session.');
+      if (!tier) throw new Error('delegate_role needs an active model tier in this thread.');
       if (!tier.subagents) {
         throw new Error(`The ${tierLabel(tier)} tier has sub-agent delegation disabled.`);
       }
@@ -1753,7 +1914,7 @@ export function apply(ctx, config) {
       if (!route) {
         throw new Error(
           `No ${ROLE_META[role].label} role model is configured for the ${tierLabel(tier)} tier. ` +
-            'Add it in Settings → Model Tiers → Role models.',
+            'Add it in Settings → Model tiers → Role models.',
         );
       }
       const prompt = typeof args?.prompt === 'string' ? args.prompt.trim() : '';
@@ -1765,37 +1926,54 @@ export function apply(ctx, config) {
         typeof args?.description === 'string' && args.description.trim()
           ? args.description.trim().slice(0, 200)
           : `${ROLE_META[role].label} · ${tierLabel(tier)}`;
-      const started = await startChild(subagents, {
-        provider: 'spawn',
-        label,
-        request: {
-          prompt: [
-            {
-              type: 'text',
-              text: `${ROLE_META[role].instruction}\n\n${prompt}`,
+      // Inside a program (PTC) the app stops everything when the program's time is up: end before that.
+      const run = helperTime(exec, delegateRoleTool.timeoutMs);
+      if (run.plan.tooShort) {
+        run.end();
+        return { role, childId: '', stopReason: 'not-started', ...notStarted(delegateRoleTool.name, run) };
+      }
+      let answer;
+      try {
+        answer = await runHelper(
+          subagents,
+          {
+            provider: 'spawn',
+            label,
+            request: {
+              prompt: [
+                {
+                  type: 'text',
+                  text: `${ROLE_META[role].instruction}\n\n${prompt}`,
+                },
+              ],
+              parent: exec.agent,
+              agentOptions: {
+                provider: route.provider,
+                model: route.model,
+              },
             },
-          ],
-          parent: exec.agent,
-          signal: exec.signal,
-          agentOptions: {
-            provider: route.provider,
-            model: route.model,
+            delivery: 'parent',
           },
-        },
-        delivery: 'parent',
-        signal: exec.signal,
-      });
-      const result = await awaitChild(started, exec.signal);
-      const text = (result.output ?? [])
-        .filter((block) => block.type === 'text')
-        .map((block) => block.text)
-        .join('\n')
-        .trim();
+          run,
+        );
+      } finally {
+        run.end();
+      }
+      const ptc = run.view ? { ptc: { ...run.view, cut: Boolean(answer.partial || answer.cut), started: true } } : {};
+      if (answer.partial || answer.cut) {
+        const work = role === 'implement';
+        const body = answer.partial
+          ? `${work ? PTC_MARKS.partialWork : PTC_MARKS.partial}\n${answer.text}`
+          : work ? PTC_MARKS.emptyWork : PTC_MARKS.empty;
+        const note = shortenedNote({ tool: delegateRoleTool.name, limitMs: run.window.limitMs, budgetMs: run.plan.ms });
+        return { role, childId: answer.childId ?? '', stopReason: answer.stopReason ?? 'cancelled', text: `${note}\n\n${body}`, ...ptc };
+      }
       return {
         role,
-        childId: started.childId,
-        stopReason: result.stopReason,
-        text: text || `(The child returned no text output${childResultNote(result)}.)`,
+        childId: answer.childId,
+        stopReason: answer.stopReason,
+        text: answer.text || `(The child returned no text output${childResultNote(answer)}.)`,
+        ...ptc,
       };
     },
   };
@@ -1806,7 +1984,8 @@ export function apply(ctx, config) {
     description:
       'Run up to three independent review lanes in parallel on the active tier\'s configured Review role model. ' +
       'Angles cover correctness, security, tests, and performance. Use this for a substantive diff or scoped implementation review; ' +
-      'the parent tier enforces access and the concurrent sub-agent cap. Configure the Review role in Settings → Model Tiers → Role models.',
+      'the parent tier enforces access and the concurrent sub-agent cap. Configure the Review role in Settings → Model tiers → Role models. ' +
+      PTC_HINT,
     parameters: {
       type: 'object',
       properties: {
@@ -1845,10 +2024,13 @@ export function apply(ctx, config) {
                 stopReason: { type: 'string' },
                 text: { type: 'string' },
                 error: { type: 'string' },
+                partial: { type: 'boolean' },
+                cut: { type: 'boolean' },
               },
               required: ['angle', 'label'],
             },
           },
+          ptc: { type: 'object', description: "Inside a program (PTC): the program's time limit, the run's time, and whether it was cut short." },
         },
         required: ['summary', 'lanes'],
       },
@@ -1860,9 +2042,9 @@ export function apply(ctx, config) {
     isConcurrencySafe: () => false,
     async execute(args, exec) {
       const sessionId = exec.agent?.id;
-      if (!sessionId) throw new Error('review_lanes needs a live parent Session.');
+      if (!sessionId) throw new Error('review_lanes needs a live parent thread.');
       const tier = tierForSession(sessionId, lastRoute, config);
-      if (!tier) throw new Error('review_lanes needs an active model tier in this Session.');
+      if (!tier) throw new Error('review_lanes needs an active model tier in this thread.');
       if (!tier.subagents) {
         throw new Error(`The ${tierLabel(tier)} tier has sub-agent delegation disabled.`);
       }
@@ -1870,7 +2052,7 @@ export function apply(ctx, config) {
       if (!route) {
         throw new Error(
           `No Review role model is configured for the ${tierLabel(tier)} tier. ` +
-            'Add it in Settings → Model Tiers → Role models.',
+            'Add it in Settings → Model tiers → Role models.',
         );
       }
       const target = typeof args?.target === 'string' ? args.target.trim() : '';
@@ -1901,11 +2083,19 @@ export function apply(ctx, config) {
       }
       const selected = angles.slice(0, Math.min(3, available));
 
+      // Inside a program (PTC) the app stops everything when the program's time is up: end before that.
+      const run = helperTime(exec, reviewLanesTool.timeoutMs);
+      if (run.plan.tooShort) {
+        run.end();
+        const { text, ptc } = notStarted(reviewLanesTool.name, run);
+        return { summary: text, lanes: [], ptc };
+      }
+
       const lanes = await Promise.all(
         selected.map(async (angle) => {
           const label = `${REVIEW_ANGLES[angle].label} · ${tierLabel(tier)}`;
           try {
-            const started = await startChild(subagents, {
+            const answer = await runHelper(subagents, {
               provider: 'spawn',
               label,
               request: {
@@ -1922,24 +2112,18 @@ export function apply(ctx, config) {
                   },
                 ],
                 parent: exec.agent,
-                signal: exec.signal,
                 agentOptions: route,
               },
               delivery: 'parent',
-              signal: exec.signal,
-            });
-            const result = await awaitChild(started, exec.signal);
-            const text = (result.output ?? [])
-              .filter((block) => block.type === 'text')
-              .map((block) => block.text)
-              .join('\n')
-              .trim();
+            }, run);
+            if (answer.cut) return { angle, label, ...(answer.childId ? { childId: answer.childId } : {}), text: '', cut: true };
             return {
               angle,
               label,
-              childId: started.childId,
-              stopReason: result.stopReason,
-              text: text || `(No findings text returned${childResultNote(result)}.)`,
+              childId: answer.childId,
+              stopReason: answer.stopReason,
+              text: answer.text || `(No findings text returned${childResultNote(answer)}.)`,
+              ...(answer.partial ? { partial: true } : {}),
             };
           } catch (error) {
             return {
@@ -1949,15 +2133,31 @@ export function apply(ctx, config) {
             };
           }
         }),
-      );
+      ).finally(() => run.end());
 
+      const cut = lanes.some((lane) => lane.partial || lane.cut);
+      const laneBody = (lane) => {
+        if (lane.cut) return PTC_MARKS.empty;
+        if (lane.partial) return `${PTC_MARKS.partial}\n${lane.text}`;
+        return lane.error ? `Lane failed: ${lane.error}` : lane.text;
+      };
       const summary = [
         `### Review lanes (${tierLabel(tier)})`,
-        ...lanes.map((lane) =>
-          `#### ${lane.label}\n${lane.error ? `Lane failed: ${lane.error}` : lane.text}`,
-        ),
+        ...(cut
+          ? [
+              shortenedNote({
+                tool: reviewLanesTool.name,
+                limitMs: run.window.limitMs,
+                budgetMs: run.plan.ms,
+                finished: lanes.filter((lane) => !lane.partial && !lane.cut && !lane.error).length,
+                total: lanes.length,
+                unit: 'lanes finished',
+              }),
+            ]
+          : []),
+        ...lanes.map((lane) => `#### ${lane.label}\n${laneBody(lane)}`),
       ].join('\n\n');
-      return { summary, lanes };
+      return { summary, lanes, ...(run.view ? { ptc: { ...run.view, cut, started: true } } : {}) };
     },
   };
   ctx.effect(() => ctx.tools.register(reviewLanesTool));
@@ -1967,7 +2167,8 @@ export function apply(ctx, config) {
     description:
       'Run a plan → implement → review pipeline on the active tier\'s configured Plan, Implement, and (optionally) Review role models. ' +
       'Plan investigates without edits, Implement makes scoped changes in the current workspace, and Review inspects the result. ' +
-      'Use for feature-sized work when role models are configured. The parent still owns final synthesis and verification.',
+      'Use for feature-sized work when role models are configured. The parent still owns final synthesis and verification. ' +
+      PTC_HINT,
     parameters: {
       type: 'object',
       properties: {
@@ -1999,6 +2200,7 @@ export function apply(ctx, config) {
           planChildId: { type: 'string' },
           implementChildId: { type: 'string' },
           reviewChildId: { type: 'string' },
+          ptc: { type: 'object', description: "Inside a program (PTC): the program's time limit, the run's time, and whether it was cut short." },
         },
         required: ['summary', 'plan', 'implementation'],
       },
@@ -2010,9 +2212,9 @@ export function apply(ctx, config) {
     isConcurrencySafe: () => false,
     async execute(args, exec) {
       const sessionId = exec.agent?.id;
-      if (!sessionId) throw new Error('run_pipeline needs a live parent Session.');
+      if (!sessionId) throw new Error('run_pipeline needs a live parent thread.');
       const tier = tierForSession(sessionId, lastRoute, config);
-      if (!tier) throw new Error('run_pipeline needs an active model tier in this Session.');
+      if (!tier) throw new Error('run_pipeline needs an active model tier in this thread.');
       if (!tier.subagents) {
         throw new Error(`The ${tierLabel(tier)} tier has sub-agent delegation disabled.`);
       }
@@ -2026,7 +2228,7 @@ export function apply(ctx, config) {
           .join(' and ');
         throw new Error(
           `run_pipeline needs ${missing} role models for the ${tierLabel(tier)} tier. ` +
-            'Add them in Settings → Model Tiers → Role models.',
+            'Add them in Settings → Model tiers → Role models.',
         );
       }
       const subagents = ctx.get('subagents');
@@ -2047,75 +2249,111 @@ export function apply(ctx, config) {
         if (error instanceof Error && error.message.includes('concurrent sub-agents')) throw error;
       }
 
+      // Inside a program (PTC) the app stops everything when the program's time is up: end before that.
+      const run = helperTime(exec, runPipelineTool.timeoutMs);
+      if (run.plan.tooShort) {
+        run.end();
+        const { text, ptc } = notStarted(runPipelineTool.name, run);
+        return { summary: text, plan: '', implementation: '', review: '', ptc };
+      }
+      /** Set when the program's time ended the run early: a step unfinished or never started. */
+      let timeCut = false;
+
       const runStage = async (role, route, prompt) => {
-        const started = await startChild(subagents, {
-          provider: 'spawn',
-          label: `${ROLE_META[role].label} · ${tierLabel(tier)}`,
-          request: {
-            prompt: [{ type: 'text', text: prompt }],
-            parent: exec.agent,
-            signal: exec.signal,
-            agentOptions: route,
+        // Inside a program: no next step once the time is up, or with too little time left to answer.
+        if (timeCut || run.noRoom()) {
+          timeCut = true;
+          return { text: '', notStarted: true };
+        }
+        const answer = await runHelper(
+          subagents,
+          {
+            provider: 'spawn',
+            label: `${ROLE_META[role].label} · ${tierLabel(tier)}`,
+            request: {
+              prompt: [{ type: 'text', text: prompt }],
+              parent: exec.agent,
+              agentOptions: route,
+            },
+            delivery: 'parent',
           },
-          delivery: 'parent',
-          signal: exec.signal,
-        });
-        const result = await awaitChild(started, exec.signal);
-        const text = (result.output ?? [])
-          .filter((block) => block.type === 'text')
-          .map((block) => block.text)
-          .join('\n')
-          .trim();
-        return { childId: started.childId, stopReason: result.stopReason, text };
+          run,
+        );
+        if (answer.partial || answer.cut) timeCut = true;
+        return answer;
       };
 
-      const plan = await runStage(
-        'plan',
-        roles.plan,
-        `${ROLE_META.plan.instruction}\n\n` +
-          `Task:\n${task}\n\n` +
-          `Context:\n${context || '(none provided)'}\n\n` +
-          'Return a decision-complete implementation plan, including the files and checks the implementer should use.',
-      );
-      const implementation = await runStage(
-        'implement',
-        roles.implement,
-        `${ROLE_META.implement.instruction}\n\n` +
-          `Task:\n${task}\n\n` +
-          `Context:\n${context || '(none provided)'}\n\n` +
-          `Plan:\n${plan.text || '(no plan text returned)'}\n\n` +
-          'Work in the current workspace. Keep the change scoped, run the narrowest checks, and report exact files changed and verification results.',
-      );
-
+      let plan;
+      let implementation;
       let review = null;
-      if (args?.review !== false && roles.review) {
-        review = await runStage(
-          'review',
-          roles.review,
-          `${ROLE_META.review.instruction}\n\n` +
+      const wantReview = args?.review !== false && Boolean(roles.review);
+      try {
+        plan = await runStage(
+          'plan',
+          roles.plan,
+          `${ROLE_META.plan.instruction}\n\n` +
             `Task:\n${task}\n\n` +
-            `Plan:\n${plan.text || '(no plan text returned)'}\n\n` +
-            `Implementation report:\n${implementation.text || '(no implementation text returned)'}\n\n` +
-            'Inspect the current workspace and diff. Report concrete findings first, ordered by severity, with file:line. If nothing is wrong, say so and name the checks you ran.',
+            `Context:\n${context || '(none provided)'}\n\n` +
+            'Return a decision-complete implementation plan, including the files and checks the implementer should use.',
         );
+        implementation = await runStage(
+          'implement',
+          roles.implement,
+          `${ROLE_META.implement.instruction}\n\n` +
+            `Task:\n${task}\n\n` +
+            `Context:\n${context || '(none provided)'}\n\n` +
+            `Plan:\n${plan.text || '(no plan text returned)'}\n\n` +
+            'Work in the current workspace. Keep the change scoped, run the narrowest checks, and report exact files changed and verification results.',
+        );
+        if (wantReview) {
+          review = await runStage(
+            'review',
+            roles.review,
+            `${ROLE_META.review.instruction}\n\n` +
+              `Task:\n${task}\n\n` +
+              `Plan:\n${plan.text || '(no plan text returned)'}\n\n` +
+              `Implementation report:\n${implementation.text || '(no implementation text returned)'}\n\n` +
+              'Inspect the current workspace and diff. Report concrete findings first, ordered by severity, with file:line. If nothing is wrong, say so and name the checks you ran.',
+          );
+        }
+      } finally {
+        run.end();
       }
 
+      /**
+       * One step's section text.
+       * @param {object} stage - the step's answer.
+       * @param {boolean} work - the step changes the workspace.
+       * @returns {string} plain text.
+       */
+      const stageBody = (stage, work = false) => {
+        if (stage.notStarted) return PTC_MARKS.notStarted;
+        if (stage.cut) return work ? PTC_MARKS.emptyWork : PTC_MARKS.empty;
+        if (stage.partial) return `${work ? PTC_MARKS.partialWork : PTC_MARKS.partial}\n${stage.text}`;
+        return stage.text || `(empty${childResultNote(stage)})`;
+      };
+      const all = [plan, implementation, ...(wantReview ? [review] : [])];
+      const finished = all.filter((stage) => stage && !stage.notStarted && !stage.cut && !stage.partial).length;
       const stages = [
-        `#### Plan\n${plan.text || `(empty${childResultNote(plan)})`}`,
-        `#### Implement\n${implementation.text || `(empty${childResultNote(implementation)})`}`,
+        `#### Plan\n${stageBody(plan)}`,
+        `#### Implement\n${stageBody(implementation, true)}`,
         review
-          ? `#### Review\n${review.text || `(empty${childResultNote(review)})`}`
+          ? `#### Review\n${stageBody(review)}`
           : '#### Review\nSkipped: no Review role configured or review disabled.',
       ];
-      const summary = [`### Pipeline (${tierLabel(tier)})`, ...stages].join('\n\n');
+      const note = timeCut
+        ? [shortenedNote({ tool: runPipelineTool.name, limitMs: run.window.limitMs, budgetMs: run.plan.ms, finished, total: all.length, unit: 'steps finished' })]
+        : [];
+      const summary = [`### Pipeline (${tierLabel(tier)})`, ...note, ...stages].join('\n\n');
       return {
         summary,
         plan: plan.text,
         implementation: implementation.text,
         review: review?.text ?? '',
-        planChildId: plan.childId,
-        implementChildId: implementation.childId,
-        ...(review ? { reviewChildId: review.childId } : {}),
+        ...(plan.childId ? { planChildId: plan.childId } : {}),
+        ...(implementation.childId ? { implementChildId: implementation.childId } : {}),
+        ...(review?.childId ? { reviewChildId: review.childId } : {}),
+        ...(run.view ? { ptc: { ...run.view, cut: timeCut, started: true } } : {}),
       };
     },
   };
@@ -2185,7 +2423,7 @@ export function apply(ctx, config) {
     await loadTierSkills(agent);
   });
   ctx.on('agent/pre-step', async (payload, next) => {
-    // An isolated conversation keeps the model it was given: no tier, no skills, no rerouting.
+    // An isolated thread keeps the model it was given: no tier, no skills, no rerouting.
     if (ctx.get('modes')?.isolated?.(payload.agent?.id) === true) return next();
     await loadTierSkills(payload.agent);
     const decision = await next();
@@ -2264,7 +2502,7 @@ export function apply(ctx, config) {
     if (!persistence || !settings) return;
     try {
       const live = new Set((ctx.get('agents')?.list() ?? []).map((agent) => agent.id));
-      // A conversation in the Cowork sidebar's trash is not listed by the app, but can be put back:
+      // A thread in the Cowork sidebar's trash is not listed by the app, but can be put back:
       // its tier and profile stay. When the trash cannot be read, nothing goes.
       const home = ctx.get('dshHomePath');
       // Without an app home there is no trash (the Cowork sidebar keeps it there).
@@ -2520,10 +2758,10 @@ export function apply(ctx, config) {
    * @param {string} sessionId - Agent id.
    * @returns {object | undefined} tier, or undefined when no tier applies.
    */
-  /** @returns {boolean} whether the conversation (or the one a helper works for) has the Ultra Code switch on. */
+  /** @returns {boolean} whether the thread (or the one a helper works for) has the Ultra Code switch on. */
   function ultraSwitch(sessionId) {
     try {
-      // Up the chain of helpers (a helper's helper too), as Modes finds a conversation's top.
+      // Up the chain of helpers (a helper's helper too), as Modes finds a thread's top.
       let top = String(sessionId ?? '');
       for (let depth = 0; depth < 8; depth += 1) {
         const agent = ctx.get('agents')?.get?.(top);
@@ -2538,7 +2776,7 @@ export function apply(ctx, config) {
   }
 
   /**
-   * Whether the switch's words go to this agent: only to the conversation itself, never to a helper (a
+   * Whether the switch's words go to this agent: only to the thread itself, never to a helper (a
    * helper told to start helpers would spread the work again, and a run's readers must not start any).
    */
   function ultraSwitchHere(agent) {
@@ -2633,7 +2871,7 @@ export function apply(ctx, config) {
    * @returns {Promise<{tierId: string, from: object, to: object} | null>} the move, or null when there is no next route.
    */
   async function advanceFallbackFor(agent, skip) {
-    // An isolated conversation keeps the model it was given: what it read goes to that model only.
+    // An isolated thread keeps the model it was given: what it read goes to that model only.
     if (ctx.get('modes')?.isolated?.(agent?.id) === true) return null;
     const current = agent.model?.current?.();
     if (!current) return null;
@@ -2660,7 +2898,7 @@ export function apply(ctx, config) {
    * @returns {Promise<{from: object, to: object} | null>} the move, or null when already there.
    */
   async function restorePrimaryFor(agent, tierId) {
-    // Nor is it moved back: an isolated conversation never changes model from here.
+    // Nor is it moved back: an isolated thread never changes model from here.
     if (ctx.get('modes')?.isolated?.(agent?.id) === true) return null;
     const current = agent.model?.current?.();
     const primary = primaryRouteOf(agent.id, tierId);
@@ -2707,7 +2945,7 @@ export function apply(ctx, config) {
      */
     instructionsReplaced(sessionId) {
       try {
-        // An isolated conversation gets no version text from here (the prompt section is empty for
+        // An isolated thread gets no version text from here (the prompt section is empty for
         // it), so its own mode's rules must never be left out either.
         if (ctx.get('modes')?.isolated?.(sessionId) === true) return false;
         const agent = ctx.get('agents')?.get(sessionId);
@@ -2727,7 +2965,7 @@ export function apply(ctx, config) {
     },
 
     /**
-     * Whether Ultra Code is on for a conversation: its switch beside Effort, or the top effort step.
+     * Whether Ultra Code is on for a thread: its switch beside Effort, or the top effort step.
      * Off unless switched on (plan step S1).
      * @param {string} sessionId - Agent id.
      * @returns {boolean}
@@ -2752,8 +2990,8 @@ export function apply(ctx, config) {
       const tier = readTiers(config)[tierId];
       if (!tier) throw new Error(`model-tiers: unknown tier "${tierId}"`);
       const agent = ctx.get('agents')?.get(sessionId);
-      if (!agent) throw new Error(`model-tiers: unknown session "${sessionId}"`);
-      // A tier with no model of its own applies its rules to the model the conversation is on.
+      if (!agent) throw new Error(`model-tiers: unknown thread "${sessionId}"`);
+      // A tier with no model of its own applies its rules to the model the thread is on.
       const current = agent.model?.current?.();
       const route =
         tier.provider && tier.model
@@ -2761,7 +2999,7 @@ export function apply(ctx, config) {
           : current
             ? { provider: current.provider, model: current.model }
             : undefined;
-      if (!route) throw new Error(`model-tiers: tier "${tierId}" has no model and the session has none selected`);
+      if (!route) throw new Error(`model-tiers: tier "${tierId}" has no model and the thread has none selected`);
       const entry = { tier: tierId, provider: route.provider, model: route.model, effort: tier.effort };
       const from = resolveTierOf(sessionId)?.id;
       overlay.set(sessionId, entry);
@@ -2800,7 +3038,7 @@ export function apply(ctx, config) {
      * @returns {{provider: string, model: string} | null} the role's route, or null.
      */
     /**
-     * The model for one role of the work loop's team on a conversation's tier (plan step S6): 'lead'
+     * The model for one role of the work loop's team on a thread's tier (plan step S6): 'lead'
      * (also the strongest, for a step that failed twice), 'helper' (the index picks one of several, so
      * attempts differ), 'checker' or 'judge'. Null when the tier has no team or no member for the role.
      * @param {string} sessionId - Agent id.
@@ -2887,7 +3125,7 @@ export function apply(ctx, config) {
      */
     async advanceFallback(sessionId, options = {}) {
       const agent = ctx.get('agents')?.get(sessionId);
-      if (!agent) throw new Error(`model-tiers: unknown session "${sessionId}"`);
+      if (!agent) throw new Error(`model-tiers: unknown thread "${sessionId}"`);
       return advanceFallbackFor(agent, options.skip);
     },
 
@@ -2899,7 +3137,7 @@ export function apply(ctx, config) {
      */
     async restorePrimary(sessionId, tierId) {
       const agent = ctx.get('agents')?.get(sessionId);
-      if (!agent) throw new Error(`model-tiers: unknown session "${sessionId}"`);
+      if (!agent) throw new Error(`model-tiers: unknown thread "${sessionId}"`);
       return restorePrimaryFor(agent, tierId);
     },
 
@@ -2944,7 +3182,7 @@ export function apply(ctx, config) {
   // chain with `agent.model.select()`; the next message uses it. The failed
   // step still ends with the provider error.
   ctx.on('agent/request-error', async (payload, next) => {
-    // No fallback to another model for an isolated conversation: its content goes to one model only.
+    // No fallback to another model for an isolated thread: its content goes to one model only.
     if (ctx.get('modes')?.isolated?.(payload.agent?.id) === true) return next();
     const downstream = await next();
     if (downstream?.kind === 'retry' || payload.signal.aborted) return downstream;
@@ -2991,14 +3229,14 @@ export function apply(ctx, config) {
       return {
         kind: 'deny',
         reason:
-          `The ${tierLabel(tier)} tier has web search disabled. Answer from local context, or ask the user to enable it in Settings → Model Tiers.`,
+          `The ${tierLabel(tier)} tier has web search disabled. Answer from local context, or ask the user to enable it in Settings → Model tiers.`,
       };
     }
     if (exec.name === 'web_fetch' && !tier.webFetch) {
       return {
         kind: 'deny',
         reason:
-          `The ${tierLabel(tier)} tier has web fetch disabled. Work from local files, or ask the user to enable it in Settings → Model Tiers.`,
+          `The ${tierLabel(tier)} tier has web fetch disabled. Work from local files, or ask the user to enable it in Settings → Model tiers.`,
       };
     }
     if (!tier.browser) {
@@ -3007,7 +3245,7 @@ export function apply(ctx, config) {
         return {
           kind: 'deny',
           reason:
-            `The ${tierLabel(tier)} tier has browser access disabled. Do not launch ego-browser; ask the user to enable it in Settings → Model Tiers.`,
+            `The ${tierLabel(tier)} tier has browser access disabled. Do not launch ego-browser; ask the user to enable it in Settings → Model tiers.`,
         };
       }
     }
@@ -3015,7 +3253,7 @@ export function apply(ctx, config) {
     if (Array.isArray(tier.connectors) && exec.name.startsWith('mcp__') && !connectorAllowed(exec.name, tier.connectors)) {
       return {
         kind: 'deny',
-        reason: `The ${tierLabel(tier)} tier does not include this connector. Work without it, or ask the user to allow it in Settings → Model Tiers.`,
+        reason: `The ${tierLabel(tier)} tier does not include this connector. Work without it, or ask the user to allow it in Settings → Model tiers.`,
       };
     }
 
@@ -3023,7 +3261,7 @@ export function apply(ctx, config) {
       if (!tier.subagents) {
         return {
           kind: 'deny',
-          reason: `The ${tierLabel(tier)} tier has sub-agent delegation disabled. Do the work directly in this Session.`,
+          reason: `The ${tierLabel(tier)} tier has sub-agent delegation disabled. Do the work directly in this thread.`,
         };
       }
       if (exec.name !== 'workflow' && exec.name !== 'spawn_teammate') {
@@ -3045,7 +3283,7 @@ export function apply(ctx, config) {
             kind: 'deny',
             reason:
               `This tier allows at most ${max} concurrent sub-agents and ${running} are already running. ` +
-              'Wait for a completion notice, then delegate again, or raise the cap in Settings → Model Tiers.',
+              'Wait for a completion notice, then delegate again, or raise the cap in Settings → Model tiers.',
           };
         }
       }

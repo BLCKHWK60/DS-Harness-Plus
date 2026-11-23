@@ -1,21 +1,21 @@
-// lib/git.mjs — git 命令层（零 DSH 依赖；runner 由 index.mjs 经 ctx.subprocess 注入）。
+// lib/git.mjs — the git command layer (no DSH dependency; index.mjs passes the runner in through ctx.subprocess).
 //
-// 安全边界：
-// - 动词白名单 + 参数断言（运行时强制执行，防未来改坏）；
-// - 绝不发出 force push（`-f`/`--force`/`--force-with-lease`/`+refspec` 全拒绝）；
-// - 绝不发出 reset/clean/rebase/checkout 分支切换——工作树只经 add/commit/
-//   merge(--no-commit)/checkout(--ours|--theirs 显式路径) 变更；
-// - 错误消息嵌入前统一脱敏（remote 凭据、token 形态一律 redactText）。
+// Safety limits:
+// - an allow list of verbs + argument assertions (enforced at run time, so a future change cannot break them);
+// - never sends a force push (`-f`/`--force`/`--force-with-lease`/`+refspec` are all refused);
+// - never sends reset/clean/rebase or a checkout that switches branch — the work tree changes only through add/commit/
+//   merge(--no-commit)/checkout(--ours|--theirs with explicit paths);
+// - error messages are cleaned before they are embedded (remote credentials and token shapes always go through redactText).
 //
-// runner 契约（index.mjs 构造）：
+// The runner contract (built by index.mjs):
 //   run(args, { cwd, signal, timeoutMs, binary, maxBytes }) → { code, stdout, stderr }
-//   stdout：binary=false 时为 UTF-8 文本；binary=true 时为 Buffer（原始字节）。
+//   stdout: UTF-8 text when binary=false; a Buffer (raw bytes) when binary=true.
 
 import { redactText } from './sanitize.mjs'
 import { gitFailed, pushRejected } from './errors.mjs'
 import { LIMITS } from './constants.mjs'
 
-/** 允许的顶层动词。 */
+/** The allowed top-level verbs. */
 export const ALLOWED_VERBS = new Set([
   'init',
   'config',
@@ -38,7 +38,7 @@ export const ALLOWED_VERBS = new Set([
   'status',
 ])
 
-/** 断言命令是白名单内的安全原语。 */
+/** Assert that a command is a safe primitive on the allow list. */
 export function assertSafe(args) {
   const verb = args[0] ?? ''
   if (!ALLOWED_VERBS.has(verb)) {
@@ -63,28 +63,28 @@ export function assertSafe(args) {
 }
 
 /**
- * git 同步后端。所有命令串行经内部互斥链执行（每仓库一把）。
+ * The git sync backend. Every command runs one at a time through an internal lock chain (one per repository).
  */
 export class GitBackend {
   /** @type {(args: string[], opts?: object) => Promise<{code: number, stdout: string|Buffer, stderr: string}>} */
   #run
-  /** @type {string} 工作树根。 */
+  /** @type {string} the work-tree root. */
   #repoDir
-  /** @type {string} 远端地址（未脱敏原文，只用于 git 命令；展示一律 sanitizeRemote）。 */
+  /** @type {string} the remote address (as given, not cleaned; only for git commands; always shown through sanitizeRemote). */
   #remote
-  /** @type {string} 分支名。 */
+  /** @type {string} the branch name. */
   #branch
-  /** @type {string} 提交者名。 */
+  /** @type {string} the committer name. */
   #commitName
-  /** @type {string} 提交者邮箱。 */
+  /** @type {string} the committer email. */
   #commitEmail
-  /** @type {Promise<unknown>} 每仓库串行链。 */
+  /** @type {Promise<unknown>} the per-repository serial chain. */
   #chain = Promise.resolve()
-  /** @type {number} 单条命令超时。 */
+  /** @type {number} the time limit for one command. */
   #timeoutMs
 
   /**
-   * @param {object} deps - {repoDir, remote, branch, commitName, commitEmail, run, timeoutMs}。
+   * @param {object} deps - {repoDir, remote, branch, commitName, commitEmail, run, timeoutMs}.
    */
   constructor(deps) {
     this.#run = deps.run
@@ -97,9 +97,9 @@ export class GitBackend {
   }
 
   /**
-   * 串行执行：同一仓库的所有操作按序排队（镜像/推/拉互不穿插）。
+   * Run in order: every operation on one repository queues in turn (mirror, push and pull never interleave).
    * @template T
-   * @param {() => Promise<T>} fn - 排队的操作。
+   * @param {() => Promise<T>} fn - the queued operation.
    * @returns {Promise<T>}
    */
   schedule(fn) {
@@ -109,9 +109,9 @@ export class GitBackend {
   }
 
   /**
-   * 执行一条 git 命令（白名单断言 → runner → 失败包装）。
-   * @param {string[]} args - git 参数（不含 gitBin）。
-   * @param {object} [opts] - {binary?: boolean, signal?: AbortSignal}。
+   * Run one git command (allow-list assertion → runner → failure wrapping).
+   * @param {string[]} args - the git arguments (without gitBin).
+   * @param {object} [opts] - {binary?: boolean, signal?: AbortSignal}.
    * @returns {Promise<{code: number, stdout: string|Buffer, stderr: string}>}
    */
   async #git(args, opts = {}) {
@@ -128,7 +128,7 @@ export class GitBackend {
     }
   }
 
-  /** 必成功的 git 调用（code !== 0 → gitFailed，stderr 尾部脱敏嵌入）。 */
+  /** A git call that must succeed (code !== 0 → gitFailed, with the tail of stderr cleaned and embedded). */
   async #must(args, opts = {}) {
     const result = await this.#git(args, opts)
     if (result.code !== 0) {
@@ -138,37 +138,37 @@ export class GitBackend {
     return result
   }
 
-  /** 可选成功的 git 调用（非零退出返回 null；runner/白名单错误照常抛出）。 */
+  /** A git call that may fail (a non-zero exit returns null; runner and allow-list errors still throw). */
   async #maybe(args, opts = {}) {
     const result = await this.#git(args, opts)
     return result.code === 0 ? result : null
   }
 
-  /** 该目录是否已是 git 仓库。 */
+  /** Whether the folder is already a git repository. */
   async isRepo() {
     const out = await this.#maybe(['rev-parse', '--is-inside-work-tree'])
     return out !== null && String(out.stdout).trim() === 'true'
   }
 
   /**
-   * 本地初始化（无 remote、无提交）：init（如缺）→ 禁用行尾转换 → 提交者身份。
-   * 供 status 与 bootstrap 共用；repoDir 必须已由调用方（引擎）建好。
+   * Local init (no remote, no commit): init (if missing) → turn off line-ending conversion → committer identity.
+   * Shared by status and bootstrap; the caller (the engine) must already have made repoDir.
    * @returns {Promise<void>}
    */
   async ensureRepo() {
     if (!(await this.isRepo())) {
       await this.#must(['init', '-b', this.#branch])
     }
-    // 字节镜像必须逐字节保真：core.autocrlf=false 关闭 checkout/checkin 的
-    // CRLF/LF 转换（否则 Windows 检出会把 LF 会话字节改成 CRLF，破坏镜像）。
+    // The byte mirror must keep every byte: core.autocrlf=false turns off the checkout/checkin
+    // CRLF/LF conversion (otherwise a Windows checkout would turn LF session bytes into CRLF and break the mirror).
     await this.#must(['config', 'core.autocrlf', 'false'])
     await this.#must(['config', 'user.name', this.#commitName])
     await this.#must(['config', 'user.email', this.#commitEmail])
   }
 
   /**
-   * 引导仓库：本地初始化 → origin remote（增/改）→ 初始提交。
-   * 幂等：每次挂载/首次操作都走一遍，代价为几条本地命令。
+   * Bootstrap the repository: local init → origin remote (add or change) → first commit.
+   * Idempotent: runs on every mount or first operation, at the cost of a few local commands.
    * @returns {Promise<void>}
    */
   async bootstrap() {
@@ -185,40 +185,40 @@ export class GitBackend {
     }
   }
 
-  /** 当前 HEAD sha；unborn 时为 undefined。 */
+  /** The current HEAD sha; undefined when unborn. */
   async headSha() {
     const out = await this.#maybe(['rev-parse', '--verify', 'HEAD'])
     const sha = out === null ? '' : String(out.stdout).trim()
     return sha === '' ? undefined : sha
   }
 
-  /** 远端跟踪引用（refs/remotes/origin/<branch>）sha；未拉取过为 undefined。 */
+  /** The remote-tracking ref (refs/remotes/origin/<branch>) sha; undefined if never fetched. */
   async remoteHeadSha() {
     const out = await this.#maybe(['rev-parse', '--verify', `refs/remotes/origin/${this.#branch}`])
     const sha = out === null ? '' : String(out.stdout).trim()
     return sha === '' ? undefined : sha
   }
 
-  /** 任意引用 sha；不存在为 undefined。 */
+  /** Any ref's sha; undefined when it does not exist. */
   async refSha(ref) {
     const out = await this.#maybe(['rev-parse', '--verify', ref])
     const sha = out === null ? '' : String(out.stdout).trim()
     return sha === '' ? undefined : sha
   }
 
-  /** 移动一个引用指向某提交（插件自有 refs/dsh-sync/ 命名空间；不触工作树）。 */
+  /** Move a ref to a commit (the plugin's own refs/dsh-sync/ namespace; does not touch the work tree). */
   async setRef(ref, sha) {
     await this.#must(['update-ref', ref, sha])
   }
 
-  /** 两提交的合并基点 sha；无公共祖先为 undefined。 */
+  /** The merge base sha of two commits; undefined when they have no common ancestor. */
   async mergeBaseOf(left, right) {
     const out = await this.#maybe(['merge-base', left, right])
     const sha = out === null ? '' : String(out.stdout).trim()
     return sha === '' ? undefined : sha
   }
 
-  /** 提交数统计（log --oneline 行数；rev-list 不进白名单）。 */
+  /** Count commits (the number of log --oneline lines; rev-list is not on the allow list). */
   async countCommitsSafe(left, right) {
     if (left === right) return 0
     const out = await this.#maybe(['log', '--oneline', `${left}..${right}`])
@@ -228,10 +228,10 @@ export class GitBackend {
   }
 
   /**
-   * 工作树全量提交（add -A → 有变更才 commit）。返回新 HEAD sha 或
-   * 无变更时的 null。
-   * @param {string} message - 提交信息（长度已截断）。
-   * @param {object} [opts] - {allowEmpty?: boolean}。
+   * Commit the whole work tree (add -A → commit only when something changed). Returns the new HEAD sha, or
+   * null when nothing changed.
+   * @param {string} message - the commit message (already cut to length).
+   * @param {object} [opts] - {allowEmpty?: boolean}.
    * @returns {Promise<string|null>}
    */
   async commitAll(message, opts = {}) {
@@ -243,9 +243,9 @@ export class GitBackend {
   }
 
   /**
-   * push 到远端（显式 refspec HEAD:refs/heads/<branch>，与本地分支名解耦）。
-   * 被拒（远端领先）→ PUSH_REJECTED；绝不重试强推。
-   * @param {object} [opts] - {signal?: AbortSignal}。
+   * Push to the remote (explicit refspec HEAD:refs/heads/<branch>, independent of the local branch name).
+   * Refused (the remote is ahead) → PUSH_REJECTED; never retries with a force push.
+   * @param {object} [opts] - {signal?: AbortSignal}.
    * @returns {Promise<void>}
    */
   async push(opts = {}) {
@@ -256,10 +256,10 @@ export class GitBackend {
   }
 
   /**
-   * fetch 远端分支到远端跟踪引用（+ 只影响跟踪引用，绝不触碰工作树）。
-   * 远端尚无该分支（首次 push 前）返回 false。
-   * @param {object} [opts] - {signal?: AbortSignal}。
-   * @returns {Promise<boolean>} 是否拿到远端分支。
+   * Fetch the remote branch into the remote-tracking ref (the + affects only the tracking ref, never the work tree).
+   * Returns false when the remote has no such branch yet (before the first push).
+   * @param {object} [opts] - {signal?: AbortSignal}.
+   * @returns {Promise<boolean>} whether the remote branch was fetched.
    */
   async fetch(opts = {}) {
     const result = await this.#git(['fetch', 'origin', `${this.#branch}:refs/remotes/origin/${this.#branch}`], { signal: opts.signal })
@@ -270,13 +270,13 @@ export class GitBackend {
   }
 
   /**
-   * 开始合并：git merge --no-commit --allow-unrelated-histories <remoteHead>。
-   * 干净自动合并退出 0（变更已暂存，待 commit --no-edit 落合并提交）；
-   * 冲突退出 1（工作树为 ours + 冲突标记，逐路径 resolve 后 add）。
-   * 已是最新退出 0 且无 MERGE_HEAD。
-   * --allow-unrelated-histories：首拉场景（本地空仓库 + 远端独立历史）必
-   * 需；两历史已相关时该旗标是无害 no-op。
-   * @param {string} remoteHead - 远端头 sha。
+   * Start a merge: git merge --no-commit --allow-unrelated-histories <remoteHead>.
+   * A clean automatic merge exits 0 (changes staged, waiting for commit --no-edit to make the merge commit);
+   * a conflict exits 1 (the work tree is ours + conflict markers; resolve each path, then add).
+   * Already up to date exits 0 with no MERGE_HEAD.
+   * --allow-unrelated-histories: needed for a first pull (an empty local repository + an independent remote
+   * history); when the two histories are related, the flag is a harmless no-op.
+   * @param {string} remoteHead - the remote head sha.
    * @returns {Promise<{conflicted: boolean, inProgress: boolean}>}
    */
   async beginMerge(remoteHead) {
@@ -303,20 +303,20 @@ export class GitBackend {
     return this.mergeInProgress()
   }
 
-  /** 是否存在进行中的合并（MERGE_HEAD）。 */
+  /** Whether a merge is in progress (MERGE_HEAD). */
   async mergeInProgress() {
     const out = await this.#maybe(['rev-parse', '--verify', 'MERGE_HEAD'])
     return out !== null && String(out.stdout).trim() !== ''
   }
 
-  /** 放弃进行中的合并（失败路径恢复用）。 */
+  /** Abandon the merge in progress (used to recover on a failure path). */
   async abortMerge() {
     if (!(await this.mergeInProgress())) return
     await this.#must(['merge', '--abort'])
   }
 
   /**
-   * 冲突路径清单（ls-files -u 解析：stage 1=base、2=ours、3=theirs）。
+   * The list of conflicting paths (parsed from ls-files -u: stage 1=base, 2=ours, 3=theirs).
    * @returns {Promise<Array<{path: string, base?: string, ours?: string, theirs?: string}>>}
    */
   async conflictedPaths() {
@@ -324,7 +324,7 @@ export class GitBackend {
     const byPath = new Map()
     for (const line of String(out.stdout).split('\n')) {
       if (line.trim() === '') continue
-      // 格式：<mode> <sha> <stage>\t<path>（未合并路径的 sha 为全零时也有 stage）。
+      // Format: <mode> <sha> <stage>\t<path> (an unmerged path has a stage even when its sha is all zeros).
       const [meta, ...rest] = line.split('\t')
       const rel = rest.join('\t')
       const stage = (meta ?? '').split(/\s+/)[2]
@@ -341,10 +341,10 @@ export class GitBackend {
   }
 
   /**
-   * 读冲突索引阶段 blob 的原始字节（cat-file blob :<stage>:<path>）。
-   * @param {string} stage - 1|2|3。
-   * @param {string} rel - 仓库相对路径。
-   * @returns {Promise<Buffer|undefined>} 内容；阶段缺失为 undefined。
+   * Read the raw bytes of a conflict index stage blob (cat-file blob :<stage>:<path>).
+   * @param {string} stage - 1|2|3.
+   * @param {string} rel - the repository-relative path.
+   * @returns {Promise<Buffer|undefined>} the content; undefined when the stage is missing.
    */
   async readStageBlob(stage, rel) {
     const out = await this.#maybe(['cat-file', 'blob', `:${stage}:${rel}`], { binary: true })
@@ -353,35 +353,35 @@ export class GitBackend {
   }
 
   /**
-   * 从索引阶段检出单文件到工作树（仅 --ours/--theirs + 显式路径）。
-   * @param {'ours'|'theirs'} which - 检出哪一侧。
-   * @param {string} rel - 仓库相对路径。
+   * Check out one file from an index stage into the work tree (only --ours/--theirs + an explicit path).
+   * @param {'ours'|'theirs'} which - which side to check out.
+   * @param {string} rel - the repository-relative path.
    * @returns {Promise<void>}
    */
   async checkoutStage(which, rel) {
     await this.#must(['checkout', `--${which}`, '--', rel])
   }
 
-  /** 暂存全部（冲突解决后、合并提交前）。 */
+  /** Stage everything (after conflicts are resolved, before the merge commit). */
   async addAll() {
     await this.#must(['add', '-A'])
   }
 
-  /** 落合并提交（MERGE_HEAD 在时生成真正的双亲合并提交）。 */
+  /** Make the merge commit (a real two-parent merge commit when MERGE_HEAD is there). */
   async commitMerge() {
     if (!(await this.mergeInProgress())) return null
     await this.#must(['commit', '--no-edit'])
     return this.headSha() ?? null
   }
 
-  /** 最近 N 条提交摘要（log --oneline -n）。 */
+  /** The summaries of the last N commits (log --oneline -n). */
   async recentCommits(limit) {
     const out = await this.#maybe(['log', '--oneline', `-n${Math.max(1, Math.floor(limit))}`])
     if (out === null) return []
     return String(out.stdout).trim().split('\n').filter(line => line.length > 0)
   }
 
-  /** 工作树脏状态（status --porcelain 原始行）。 */
+  /** The work tree's dirty state (the raw lines of status --porcelain). */
   async dirtyLines() {
     // -uall: list every untracked FILE individually (porcelain otherwise
     // collapses a fully-untracked directory into one '?? dir/' entry).
@@ -389,17 +389,17 @@ export class GitBackend {
     return String(out.stdout).split('\n').filter(line => line.trim() !== '')
   }
 
-  /** 已跟踪文件清单（ls-files）。 */
+  /** The list of tracked files (ls-files). */
   async lsFiles() {
     const out = await this.#must(['ls-files'])
     return String(out.stdout).split('\n').filter(line => line.length > 0)
   }
 
   /**
-   * 某提交下全部已跟踪文件（ls-tree -r --name-only；encrypted 后端读取
-   * 远端/基点提交的密文树用）。只读、不触工作树。
-   * @param {string} rev - 提交 sha 或引用名。
-   * @returns {Promise<string[]>} 仓库相对路径清单（空提交/不可解析为空数组）。
+   * Every tracked file at a commit (ls-tree -r --name-only; used by the encrypted backend to read
+   * the encrypted tree of the remote or base commit). Read-only; does not touch the work tree.
+   * @param {string} rev - a commit sha or ref name.
+   * @returns {Promise<string[]>} repository-relative paths (an empty array for an empty or unreadable commit).
    */
   async listFilesAtRev(rev) {
     const out = await this.#maybe(['ls-tree', '-r', '--name-only', rev])
@@ -408,10 +408,10 @@ export class GitBackend {
   }
 
   /**
-   * 读某提交下单文件 blob 的原始字节（cat-file blob <rev>:<rel>）。
-   * @param {string} rev - 提交 sha 或引用名。
-   * @param {string} rel - 仓库相对路径。
-   * @returns {Promise<Buffer|undefined>} 内容；路径/提交缺失为 undefined。
+   * Read the raw bytes of one file's blob at a commit (cat-file blob <rev>:<rel>).
+   * @param {string} rev - a commit sha or ref name.
+   * @param {string} rel - the repository-relative path.
+   * @returns {Promise<Buffer|undefined>} the content; undefined when the path or commit is missing.
    */
   async readFileAtRev(rev, rel) {
     const out = await this.#maybe(['cat-file', 'blob', `${rev}:${rel}`], { binary: true })
@@ -419,7 +419,7 @@ export class GitBackend {
     return Buffer.isBuffer(out.stdout) ? out.stdout : Buffer.from(String(out.stdout))
   }
 
-  /** 两提交的路径差异统计（diff --stat）。 */
+  /** Path change counts between two commits (diff --stat). */
   async diffStat(left, right) {
     const out = await this.#maybe(['diff', '--stat', left, right])
     if (out === null) return ''

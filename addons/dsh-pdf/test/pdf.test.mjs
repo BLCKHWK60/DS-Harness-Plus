@@ -48,7 +48,7 @@ test('which PDFs may be opened', (t) => {
   assert.equal(resolvePdf('a.pdf', { cwd: work }).file, join(work, 'a.pdf'));
   assert.equal(resolvePdf('sub/b.PDF', { cwd: work }).file, join(work, 'sub', 'b.PDF'));
   assert.equal(resolvePdf(join(papers, 'c.pdf'), { cwd: work, folders: [papers] }).file, join(papers, 'c.pdf'));
-  assert.match(resolvePdf(join(papers, 'c.pdf'), { cwd: work }).error, /outside this conversation's folder/);
+  assert.match(resolvePdf(join(papers, 'c.pdf'), { cwd: work }).error, /outside this thread's folder/);
   assert.match(resolvePdf('../secret/d.pdf', { cwd: work }).error, /outside/);
   assert.match(resolvePdf('link.pdf', { cwd: work }).error, /outside/, 'a link out of the folder is followed and refused');
   assert.equal(resolvePdf(join(secret, 'd.pdf'), { cwd: work, anywhere: true }).file, join(secret, 'd.pdf'));

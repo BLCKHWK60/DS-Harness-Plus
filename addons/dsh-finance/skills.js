@@ -3,7 +3,7 @@
  * into the model's context only when it is used, so each is kept short. All of them follow the
  * mode's rules: figures only from sources fetched in the conversation, both sides, no advice.
  */
-const RULES = `Rules for every step: a figure needs a source you fetched in this conversation, with its date. Keep apart reported facts, management's claims, other people's opinions and your own reading. This is research, not advice: never say buy, sell or hold.`;
+const RULES = `Rules for every step: a figure needs a source you fetched in this thread, with its date. Keep apart reported facts, management's claims, other people's opinions and your own reading. This is research, not advice: never say buy, sell or hold.`;
 
 export const SKILLS = [
   {
@@ -136,7 +136,7 @@ ${RULES}
 2. Use finance_company_filings, finance_prices and finance_news first where they cover the subject (finance_economy for an economy), then web search. List only what is new inside the window, most important first: results and guidance, news, price and valuation moves if they can be sourced, changes in mood, new dates on the calendar.
 3. For each item: what happened, when, the source, and why it matters.
 4. Say what did not change that the user might expect to hear about.
-5. If an earlier brief or note is available in the conversation or in the user's Library, compare against it and say what is different from then.
+5. If an earlier brief or note is available in the thread or in the user's Library, compare against it and say what is different from then.
 6. End with what to watch next, with dates, then what you could not find, then the sources.
 Keep it short: this is an update, not a full report.`,
   },

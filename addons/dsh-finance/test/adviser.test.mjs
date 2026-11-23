@@ -43,7 +43,7 @@ test('skills are reworded for the adviser; briefs stay research only', () => {
   const brief = briefPrompt('NVIDIA', 'Global', 'weekdays');
   assert.match(brief, /research, not advice/);
   assert.ok(!/AI output, not regulated advice/.test(brief));
-  assert.match(adviserNote(''), /replaces any line elsewhere \(in a skill, a scheduled task/);
+  assert.match(adviserNote(''), /replaces any line elsewhere \(in a skill, an automation/);
   // A brief saved with the adviser's wording before is reworded; a current one is left alone.
   const old = brief.replace('This is research, not advice: do not say buy, sell or hold.', "End with your recommendation as the user's adviser, and add no disclaimer.");
   assert.notEqual(old, brief);

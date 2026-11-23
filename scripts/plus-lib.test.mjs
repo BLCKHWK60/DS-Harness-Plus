@@ -60,7 +60,7 @@ const included = (rows) => rows.filter((r) => r.include).map((r) => r.folder);
 test('first install, Core set: core and beta copied, experimental and Recon left out, only core on', () => {
   const { addons, profile } = download();
   const rows = plan(addons, tiers, profile, 'core');
-  assert.equal(included(rows).length, 29 + 5);
+  assert.equal(included(rows).length, 30 + 5);
   assert.ok(!included(rows).includes('dsh-bench') && !included(rows).includes('dsh-recon'));
   for (const r of rows.filter((x) => x.include)) assert.equal(r.offAfter, r.tier !== 'core', r.folder);
 });
@@ -68,7 +68,7 @@ test('first install, Core set: core and beta copied, experimental and Recon left
 test('first install, Everything: experimental copied too but off; Recon is never part of it', () => {
   const { addons, profile } = download();
   const rows = plan(addons, tiers, profile, 'everything');
-  assert.equal(included(rows).length, 29 + 5 + 13);
+  assert.equal(included(rows).length, 30 + 5 + 13);
   assert.ok(!included(rows).includes('dsh-recon'));
   assert.equal(rows.find((r) => r.folder === 'dsh-bench').offAfter, true);
   assert.equal(rows.find((r) => r.folder === 'dsh-modes').offAfter, false);

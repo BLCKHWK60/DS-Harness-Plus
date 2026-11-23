@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { holds, marked, results, wordsOf } from '../lib/match.js';
 import { searchText } from '../lib/text.js';
 
@@ -194,4 +195,71 @@ test('Thorough\'s check before finishing is never a hit, even in one conversatio
     items: events.filter(([, text]) => text.toLowerCase().includes(query.toLowerCase())).map(([sessionId, text]) => ({ header: { id: sessionId }, bestMatch: { sessionId, snippet: `… ${text} …` } })),
   });
   assert.deepEqual((await searchText(search, 'request')).hits.map((hit) => hit.sessionId), ['c2']);
+});
+
+// ---- item 4A, stage 6a: the Recon space keeps its rules for any mode (STAGE6A-DESIGN.md, P4 belt) -------------------
+
+test('hidden-by-space: a thread recorded in the Recon space is hidden whatever its mode; the Chat space is not', async () => {
+  const { isolatedCheck } = await import('../lib/hidden.js');
+  const modes = { sessionSpaces: JSON.stringify({ rr: 'recon', ch: 'chat', dv: 'devices' }), sessionModes: JSON.stringify({ rr: 'research', ch: 'research', dv: 'code' }) };
+  const isolated = isolatedCheck({ modes });
+  assert.equal(isolated('rr'), true, 'Research in Recon, closed, no mark');
+  assert.equal(isolated('ch'), false);
+  assert.equal(isolated('dv'), false, 'Devices is guarded, not sealed: still found');
+});
+
+test('hidden-by-room-folder: a closed thread with no space and no mark whose folder is Recon\'s room is hidden; Recon asked once per folder', async () => {
+  const { isolatedCheck } = await import('../lib/hidden.js');
+  const asked = [];
+  const folders = { lost: '/tmp/dsh-recon-room/run-x', ch: '/Users/me/app', ch2: '/Users/me/app' };
+  const isolated = isolatedCheck({ modes: {}, folderOf: (id) => folders[id] ?? '', isRoom: (folder) => { asked.push(folder); return folder.startsWith('/tmp/dsh-recon-room'); } });
+  assert.equal(isolated('lost'), true);
+  assert.equal(isolated('ch'), false);
+  assert.equal(isolated('ch2'), false);
+  assert.equal(isolated('none'), false, 'no folder known');
+  assert.deepEqual(asked, ['/tmp/dsh-recon-room/run-x', '/Users/me/app']);
+  assert.equal(isolatedCheck({ modes: {}, folderOf: () => '/x', isRoom: () => { throw new Error('x'); } })('a'), false, 'a Recon that cannot say hides nothing more');
+});
+
+test('hidden-by-room-folder: the route hides a thread whose folder (sent by the page) is Recon\'s room', async () => {
+  const { apply } = await import('../index.js');
+  const routes = {};
+  const services = {
+    settings: { describe: () => [{ ns: 'modes', value: { sessionSpaces: JSON.stringify({ rr: 'recon' }) } }] },
+    modes: { isolated: () => false, get: () => 'research' },
+    agents: { get: () => undefined },
+    recon: { isRoom: (folder) => folder === '/tmp/dsh-recon-room' },
+  };
+  const ctx = { get: (name) => services[name], inject: (_deps, fn) => fn({ effect: (start) => start(), webServer: { register: (spec) => { routes[spec.path] = spec.handler; return () => {}; } }, connection: { requestRejection: () => undefined } }) };
+  apply(ctx, { shortcut: true });
+  const body = { query: 'leak', sessions: [{ id: 'rr', title: 'Leak notes', tab: 'research' }, { id: 'room', title: 'Leak room', tab: 'research', cwd: '/tmp/dsh-recon-room' }, { id: 'ch', title: 'Leak report', tab: 'research', cwd: '/Users/me' }] };
+  const req = { method: 'POST', async *[Symbol.asyncIterator]() { yield Buffer.from(JSON.stringify(body)); } };
+  let sent = '';
+  await routes['/dsh-search/match'](req, { statusCode: 200, setHeader: () => {}, end: (text) => { sent = text ?? ''; } });
+  const ids = JSON.parse(sent).groups.flatMap((group) => group.items.map((item) => item.id));
+  assert.deepEqual(ids, ['ch']);
+});
+
+test('held-devices-thread-found (stage 7 lab): Devices off holds its open threads (Modes answers "isolated"), and ⌘K still finds them', async () => {
+  const { isolatedCheck } = await import('../lib/hidden.js');
+  const modes = { sessionSpaces: JSON.stringify({ dv: 'devices', ws: 'workshop', rr: 'recon', ch: 'chat' }), sessionIsolated: JSON.stringify({ was: true }) };
+  const isolated = isolatedCheck({ modes, loaded: () => true, isolated: () => true, modeOf: () => 'isolated-locked' });
+  assert.equal(isolated('dv'), false, 'a held Devices thread is found');
+  assert.equal(isolated('ws'), false, 'a held Workshop thread is found');
+  assert.equal(isolated('rr'), true, 'Recon stays hidden');
+  assert.equal(isolated('ch'), true, 'a locked thread elsewhere stays hidden');
+  assert.equal(isolated('was'), true, 'a thread that ran sealed stays hidden');
+  const sealedMode = isolatedCheck({ modes, loaded: () => true, isolated: () => true, modeOf: () => 'recon' });
+  assert.equal(sealedMode('dv'), true, 'only the locked copy counts as a hold');
+});
+
+// s7c lab (Low): ⌘K kept the thread list from when its box opened, so a thread made while it stayed open was not found.
+test('s7c lab: the search box reads the thread list again once it is older than a few seconds', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  const fresh = client.match(/const BASE_FRESH_MS = (\d+);/);
+  assert.ok(fresh, 'a freshness limit exists');
+  assert.ok(Number(fresh[1]) > 0 && Number(fresh[1]) <= 10_000, 'a few seconds at most');
+  const box = client.slice(client.indexOf('function SearchBox('), client.indexOf('const flat = ', client.indexOf('function SearchBox(')));
+  assert.doesNotMatch(box, /base\.current = base\.current \?\? await gather/, 'no longer kept for the life of the box');
+  assert.match(box, /if \(!base\.current \|\| Date\.now\(\) - baseAt\.current > BASE_FRESH_MS\) \{\s*base\.current = await gather\(appCtx\);\s*baseAt\.current = Date\.now\(\);/);
 });

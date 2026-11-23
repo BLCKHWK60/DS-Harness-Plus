@@ -183,7 +183,7 @@ window.__ModuleLoader__.load({
       const lines = [];
       for (const source of data.sources ?? []) lines.push(`${source.label}: ${source.wallets.length > 0 ? source.wallets.map((wallet) => wallet.text).join(', ') : source.problem}`);
       if (lines.length === 0 && data.problem) lines.push(data.problem);
-      if (data.at) lines.push(`Read at ${new Date(data.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}. Press to read again.`);
+      if (data.at) lines.push(`Read at ${new Date(data.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}. Press to read again.`);
       return lines.join('\n');
     }
 

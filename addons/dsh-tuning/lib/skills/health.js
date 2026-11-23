@@ -1,7 +1,7 @@
 /**
  * The health list (step 10; the owner's prompt, part 6): for each skill, how often it was loaded, how often
  * the turn it was loaded in ended well, when it was last used, how much room it takes, what it clashes
- * with, and whether it is hidden behind another. Uses are counted from the conversations Tuner Plus may read
+ * with, and whether it is hidden behind another. Uses are counted from the threads Tuner Plus may read
  * (the harvest's rules: never Recon), from the app's own log: the model's `skill` tool call that worked, or
  * the owner's typed /name (a "skill-invocation" message).
  */
@@ -23,8 +23,8 @@ const textOf = (message) => {
 };
 
 /**
- * The skill uses in one conversation's own events (a fork's copied turns are its parent's, counted there).
- * @param {object[]} events - the conversation's events.
+ * The skill uses in one thread's own events (a fork's copied turns are its parent's, counted there).
+ * @param {object[]} events - the thread's events.
  * @param {number} [inherited] - how many of them a fork copied in.
  * @returns {{name: string, at: number, how: 'model'|'owner', well: boolean}[]}
  */
@@ -105,7 +105,7 @@ export function usesIn(events, inherited = 0) {
 }
 
 /**
- * Every skill's uses, from the uses of every conversation (each with its tab).
+ * Every skill's uses, from the uses of every thread (each with its tab).
  * @param {{mode: string, uses: object[]}[]} sessions
  * @returns {Map<string, {loads: number, well: number, owner: number, last: number, byMode: Record<string, number>}>}
  */
@@ -137,7 +137,7 @@ export function roomOf(name, description) {
  * cannot give a tab only some of them; choosing per tab is a later step), and the skills never loaded there.
  * @param {{name: string, description: string}[]} catalog - the list the model gets.
  * @param {Map<string, object>} tally - the uses.
- * @param {string[]} tabs - the tabs seen in the conversations read.
+ * @param {string[]} tabs - the tabs seen in the threads read.
  */
 export function listCost(catalog, tally, tabs) {
   const lines = catalog.map((one) => roomOf(one.name, one.description));

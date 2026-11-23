@@ -92,7 +92,7 @@ export function openSendRoom({ home = '', now = Date.now, random = Math.random }
       log({ event: 'sent', id, kind, ...(plain ? { unmarked: true } : {}), ...(recon ? { recon: true } : {}), from: from.sessionId, fromLabel: from.label, to: to.sessionId, toLabel: to.label, chars: material.length, cut: material.length > MAX_CHARS, sources, file, how: start ? 'start' : 'tray' });
       if (start) return { id, text: card };
       const tray = Array.isArray(trays[to.sessionId]) ? trays[to.sessionId] : [];
-      if (tray.length >= MAX_TRAY) throw new Error(`That conversation already has ${MAX_TRAY} cards waiting. Send or remove some first.`);
+      if (tray.length >= MAX_TRAY) throw new Error(`That thread already has ${MAX_TRAY} cards waiting. Send or remove some first.`);
       trays[to.sessionId] = [...tray, { id, at, kind, from, file, chars: material.length, sources: sources.length, preview: material.slice(0, 280), card }];
       saveTrays();
       return { id };
@@ -111,7 +111,7 @@ export function openSendRoom({ home = '', now = Date.now, random = Math.random }
     deliver(sessionId, id, sentence, how) {
       const tray = Array.isArray(trays[sessionId]) ? trays[sessionId] : [];
       const card = tray.find((entry) => entry.id === id);
-      if (!card) throw new Error('That card is not in this conversation\'s tray any more.');
+      if (!card) throw new Error('That card is not in this thread\'s tray any more.');
       trays[sessionId] = tray.filter((entry) => entry.id !== id);
       if (trays[sessionId].length === 0) delete trays[sessionId];
       saveTrays();

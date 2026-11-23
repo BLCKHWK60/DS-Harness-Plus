@@ -3,5 +3,5 @@
       name: '@local/dsh-artifacts'
       config:
         # Off until you switch it on in Settings > Artifacts. It then shows a card for every file a
-        # conversation makes, and adds an Artifacts page to the sidebar.
+        # thread makes, and adds an Artifacts page to the left panel.
         enabled: false

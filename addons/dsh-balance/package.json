@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Shows your DeepSeek balance at the bottom of the sidebar, from your signed-in account or your DeepSeek API key.",
+  "description": "Shows your DeepSeek balance at the bottom of the left panel, from your signed-in account or your DeepSeek API key.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

@@ -148,7 +148,7 @@ export function ownTasksOf(catalog, marked) {
   const ids = new Set((Array.isArray(marked) ? marked : []).map(String));
   return (Array.isArray(catalog) ? catalog : [])
     .filter((task) => task?.id !== undefined && !String(task?.title ?? '').startsWith(BRIEF_PREFIX) && task?.status !== 'ended')
-    .map((task) => ({ id: String(task.id), title: cleanName(task.title) || 'Untitled task', status: String(task.status ?? 'active'), finance: ids.has(String(task.id)) }));
+    .map((task) => ({ id: String(task.id), title: cleanName(task.title) || 'Untitled automation', status: String(task.status ?? 'active'), finance: ids.has(String(task.id)) }));
 }
 
 /**

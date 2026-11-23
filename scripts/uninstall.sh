@@ -7,8 +7,8 @@
 #   3. unregisters every Plus add-on with the app's own tool (dsh plugin remove)
 #   4. deletes <app data>/addons/deepseek-harness-plus
 #
-# It removes the add-ons only. What stays is printed at the end: your conversations, the add-ons'
-# own data folders, Keychain passwords, a shared settings file, trashed conversations and the saved
+# It removes the add-ons only. What stays is printed at the end: your threads, the add-ons'
+# own data folders, Keychain passwords, a shared settings file, trashed threads and the saved
 # setup copies. An optional last step ("also remove my Plus data") can remove the data folders; it
 # lists each folder with its size, asks twice and the default is No.
 #

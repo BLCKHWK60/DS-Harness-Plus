@@ -63,7 +63,7 @@ const redditPost = (key) => (/^[a-z0-9]{3,12}$/i.test(String(key ?? '')) ? `http
  * @returns {object} `search(id, args)` and `read(id, args)`.
  */
 export function createBoards({ fetch, sources, trail, on = () => true }) {
-  const route = (how) => (how === 'wireguard' ? 'through WireGuard' : 'directly (you allowed it for this conversation)');
+  const route = (how) => (how === 'wireguard' ? 'through WireGuard' : 'directly (you allowed it for this thread)');
   const json = async (id, url) => {
     const got = await fetch(id, url, { shape: 'json', maxBytes: 4_000_000 });
     if (!got.ok) throw new Error(`${new URL(url).hostname} could not be read: ${got.why}`);
@@ -238,7 +238,7 @@ export function createBoards({ fetch, sources, trail, on = () => true }) {
       const no = number(thread);
       if (!where || !no) return { refuse: 'Give the board and the thread\'s number, as a search listed them.' };
       const url = `https://boards.4chan.org/${where}/thread/${no}`;
-      if (!trail.has(id, url)) return { refuse: 'That thread was not shown in this conversation, so it was not read. Search first, or the user names it.' };
+      if (!trail.has(id, url)) return { refuse: 'That forum thread was not shown in this Recon thread, so it was not read. Search first, or the user names it.' };
       const { data, how } = await json(id, `https://a.4cdn.org/${where}/thread/${no}.json`);
       const posts = (data?.posts ?? []).slice(0, POSTS);
       const text = posts.map((post) => `No. ${post.no} | ${oneLine(post.name, 60)} | ${post.now ?? ''}${post.sub ? ` | ${oneLine(plainText(post.sub), 120)}` : ''}\n${plainText(post.com)}`).join('\n\n');
@@ -250,7 +250,7 @@ export function createBoards({ fetch, sources, trail, on = () => true }) {
       const site = ARCHIVES.find((one) => one.id === archive) ?? ARCHIVES.find((one) => trail.has(id, `https://${one.host}/${where}/thread/${no}/`));
       if (!where || !no || !site) return { refuse: 'Give the archive, the board and the thread\'s number, as a search listed them.' };
       const url = `https://${site.host}/${where}/thread/${no}/`;
-      if (!trail.has(id, url)) return { refuse: 'That thread was not shown in this conversation, so it was not read. Search first.' };
+      if (!trail.has(id, url)) return { refuse: 'That forum thread was not shown in this Recon thread, so it was not read. Search first.' };
       const { data, how } = await json(id, `https://${site.host}/_/api/chan/thread/?board=${where}&num=${no}`);
       const entry = data?.[no] ?? {};
       const posts = [entry.op, ...Object.values(entry.posts ?? {})].filter(Boolean).slice(0, POSTS);
@@ -261,7 +261,7 @@ export function createBoards({ fetch, sources, trail, on = () => true }) {
       const key = word(post, 12).replace(/^t3_/, '');
       if (!/^[a-z0-9]{3,12}$/i.test(key)) return { refuse: 'Give the post\'s id, as a search listed it.' };
       // Checked before anything is sent: the id must be one a search showed (review, 16 November).
-      if (!trail.has(id, redditPost(key))) return { refuse: 'That post was not shown in this conversation, so it was not read. Search first, or the user names it.' };
+      if (!trail.has(id, redditPost(key))) return { refuse: 'That post was not shown in this thread, so it was not read. Search first, or the user names it.' };
       const { data, how } = await json(id, `https://api.pullpush.io/reddit/search/submission/?ids=${enc(key)}`);
       const top = data?.data?.[0];
       if (!top?.permalink) return { refuse: 'That post was not found in the Reddit archive.' };
@@ -276,7 +276,7 @@ export function createBoards({ fetch, sources, trail, on = () => true }) {
       const name = String(channel ?? '').replace(/^@/, '').replace(/^https?:\/\/t\.me\/(s\/)?/, '').split(/[/?#]/)[0];
       if (!/^[A-Za-z][A-Za-z0-9_]{3,31}$/.test(name)) return { refuse: 'Give the public channel\'s name (the part after t.me/).' };
       // Only a channel the conversation was shown (a search result, a page, the user): its address is t.me/<name> or t.me/s/<name>.
-      if (!trail.has(id, `https://t.me/${name}`) && !trail.has(id, `https://t.me/s/${name}`)) return { refuse: `The channel ${name} was not shown in this conversation, so it was not read. Find it first (for example recon_web_search with site:t.me and words), or the user names it.` };
+      if (!trail.has(id, `https://t.me/${name}`) && !trail.has(id, `https://t.me/s/${name}`)) return { refuse: `The channel ${name} was not shown in this thread, so it was not read. Find it first (for example recon_web_search with site:t.me and words), or the user names it.` };
       const words = oneLine(query, 100);
       const url = `https://t.me/s/${name}${words ? `?q=${enc(words)}` : ''}`;
       const got = await fetch(id, url, { maxBytes: 1_500_000 });
@@ -289,7 +289,7 @@ export function createBoards({ fetch, sources, trail, on = () => true }) {
       const no = number(item);
       if (!no) return { refuse: 'Give the item\'s number, as a search listed it.' };
       const url = `https://news.ycombinator.com/item?id=${no}`;
-      if (!trail.has(id, url)) return { refuse: 'That item was not shown in this conversation, so it was not read. Search first.' };
+      if (!trail.has(id, url)) return { refuse: 'That item was not shown in this thread, so it was not read. Search first.' };
       const { data, how } = await json(id, `https://hn.algolia.com/api/v1/items/${no}`);
       const lines = [];
       const walk = (node, depth) => {
@@ -305,7 +305,7 @@ export function createBoards({ fetch, sources, trail, on = () => true }) {
       const no = number(post);
       if (!no) return { refuse: 'Give the post\'s number, as a search listed it.' };
       const url = `https://lemmy.world/post/${no}`;
-      if (!trail.has(id, url)) return { refuse: 'That post was not shown in this conversation, so it was not read. Search first.' };
+      if (!trail.has(id, url)) return { refuse: 'That post was not shown in this thread, so it was not read. Search first.' };
       const { data, how } = await json(id, `https://lemmy.world/api/v3/post?id=${no}`);
       const got = await json(id, `https://lemmy.world/api/v3/comment/list?post_id=${no}&limit=50&sort=Top`);
       const view = data?.post_view ?? {};

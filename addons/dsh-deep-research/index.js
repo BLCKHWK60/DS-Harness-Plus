@@ -29,6 +29,16 @@ import { searchProblem } from './lib/ready.js';
 import { FOCUS, analysisOf, analyzePrompt, capped, depthOf, followupsOf, jsonOrAsk, planPrompt, roundLeft, searchAnswer, searchPrompt, tasksOf, writePrompt } from './lib/rounds.js';
 import { droppedNote, fetchSucceeded, moreCertain, notRead, sourceLines, statusOf, unreadNotes } from './lib/sources.js';
 import { GRADES_NOTE, gradeSources, primaryOf, singleBlock, withSingleBlock } from './lib/grades.js';
+import { makeGuardOf } from './lib/space-guard.js';
+
+/**
+ * Item 4A, stage 6a: Deep research does not run in Recon (owner, 22 Nov 2026). Its helpers search with
+ * `web_search`/`web_fetch` on any model, outside Recon's routes and its cloud-model gate. The Modes add-on leaves the
+ * tool out of every sealed thread's list; this answer is the belt at the tool.
+ */
+export const DEEP_REFUSED = Object.freeze({
+  en: 'Deep research does not run in Recon: its helpers would search the web outside Recon\'s routes. Use recon_web_search and recon_web_read here.',
+});
 
 /**
  * Start a helper agent. App 0.2.2-rc.2 takes the task's fields (prompt, parent, agentOptions) at
@@ -81,10 +91,10 @@ export const Config = z.object({
     .default({ planner: 'plan', searcher: 'fast', writer: 'plan' }),
   /**
    * Which model the helpers run on when the Modes add-on is not there to say: `same` (the model of
-   * the conversation that started the research) or `roles` (the Tier add-on's role models).
+   * the thread that started the research) or `roles` (the Tier add-on's role models).
    */
   helperModel: z.union([z.const('same'), z.const('roles')]).default('same').volatile(),
-  /** Used when the Modes add-on is not there to give the conversation's Depth. */
+  /** Used when the Modes add-on is not there to give the thread's Depth. */
   depth: z.union([z.const('quick'), z.const('standard'), z.const('thorough')]).default('standard').volatile(),
   /** Upper bounds. The chosen depth decides the actual numbers and is held to these. */
   maxSubquestions: z.number().min(1).max(12).default(8).volatile(),
@@ -192,6 +202,7 @@ function csvField(value) {
 }
 
 export function apply(ctx, config) {
+  const guardOf = makeGuardOf(() => ctx.get('modes'));
   if (plain(config.enabled) === false) return;
 
   /** Agents this plugin started, which may not start research themselves. */
@@ -450,7 +461,7 @@ export function apply(ctx, config) {
         items: { type: 'array', items: { type: 'string' }, maxItems: 5000, description: 'Wide mode only: the entities to research, one row each.' },
         columns: { type: 'array', items: { type: 'string' }, maxItems: 30, description: 'Wide mode only: the columns to fill for each item.' },
         maxSources: { type: 'integer', minimum: 1, description: 'Upper bound on distinct sources (capped by configuration).' },
-        focus: { type: 'string', enum: Object.keys(FOCUS), description: 'web (default), news (recent dated reporting) or academic (papers and research). In the Research tab the tab\'s own choice is used.' },
+        focus: { type: 'string', enum: Object.keys(FOCUS), description: 'web (default), news (recent dated reporting) or academic (papers and research). In Research mode the mode\'s own choice is used.' },
         maxMinutes: { type: 'number', minimum: 1, description: 'Time budget in minutes (capped by configuration).' },
       },
       required: ['question'],
@@ -468,8 +479,10 @@ export function apply(ctx, config) {
     isConcurrencySafe: () => false,
     async execute(args, exec) {
       const parent = exec.agent;
-      if (!parent?.id) throw new Error('deep_research needs a live parent Session.');
+      if (!parent?.id) throw new Error('deep_research needs a live parent thread.');
       if (childIds.has(parent.id)) throw new Error('deep_research cannot be called from one of its own research agents.');
+      // Item 4A, stage 6a: never in a sealed thread (Recon, any mode; a Modes read error counts). No Modes: as before.
+      if (guardOf(parent.id).sealed === true) return { text: DEEP_REFUSED.en };
       const startedAt = Date.now();
       // Inside a program (the app's PTC preset) the app stops everything after a fixed time: finish before that.
       let programMaxMs;

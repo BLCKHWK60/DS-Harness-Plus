@@ -145,7 +145,7 @@ test('on the stand-in app: what a Code conversation writes becomes a card and a 
     assert.match(page.headers['content-security-policy'], /sandbox/);
     assert.equal(page.headers['x-content-type-options'], 'nosniff');
     const reconId = (await hit(routes, { query: '?session=r1' })).data.cards[0].id;
-    assert.match((await hit(routes, { query: `?content=${reconId}&v=1&session=c1` })).data.error, /sealed conversation/);
+    assert.match((await hit(routes, { query: `?content=${reconId}&v=1&session=c1` })).data.error, /sealed thread/);
     assert.match((await hit(routes, { method: 'POST', body: { action: 'openApp', id: reconId, session: 'c1' } })).data.error, /sealed/);
     await run('c1', 'write', { file_path: 'notes.md' }, () => write(join(work, 'notes.md'), '# notes'));
     const notes = (await hit(routes, {})).data.items.find((one) => one.name === 'notes.md');

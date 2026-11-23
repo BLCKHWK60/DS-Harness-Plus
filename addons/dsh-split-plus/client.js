@@ -164,8 +164,11 @@ window.__ModuleLoader__.load({
     // routes on its own timer, even in a hidden window. This gives all of them ONE shared Settings copy (read once, renewed when
     // Settings changes or after 30 seconds at the most) and one kind of polling loop that stops while the window is hidden.
     // The first copy of this block to run puts the shared state on `window.__dshPoll`; later copies reuse it, so 30 add-ons share one.
+    // A newer copy (higher API) replaces an older shared object instead of reusing it, so an older page file that runs first (an
+    // add-on edited in creator mode, a partly updated install) cannot keep the whole page on an older helper. Raise API with every
+    // change to how the shared state behaves.
     const dshPoll = (() => {
-      const API = 1;
+      const API = 2;
       const root = typeof window !== 'undefined' ? window : globalThis;
       if (root.__dshPoll && root.__dshPoll.api >= API) return root.__dshPoll;
 
@@ -174,7 +177,7 @@ window.__ModuleLoader__.load({
       /** Without the change event (an older app) the copy is only trusted for a moment. */
       const SETTINGS_TTL_NO_EVENTS = 2000;
       const WRITES = ['mutate', 'update', 'replace'];
-      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0 };
+      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0, changes: 0, repeats: 0, watchers: 0 };
       const cache = { value: undefined, at: 0, inflight: null, gen: 0, events: false };
       const changeListeners = new Set();
       const watched = new WeakSet();
@@ -194,38 +197,72 @@ window.__ModuleLoader__.load({
         cache.gen += 1;
       }
 
-      /** Listen once per page connection for "Settings changed" (the app sends it after every write, from any window). */
+      /** Changes already handled, `ns + revision` -> when: the same change reaches the page once per add-on that listens. */
+      const heard = new Map();
+      /** How long a change counts as "the same one" when it arrives again through another add-on's connection. */
+      const HEARD_MS = 2000;
+      /** The app's own marker for a wrapped service: `ctx.remote` hands out a NEW wrapper object at every read. */
+      const ORIGINAL = typeof Symbol === 'function' ? Symbol.for('cordis.original') : '__original';
+      /** Marks our own write wrapper, so it is never wrapped a second time. */
+      const OURS = '__dshPollWrite';
+
+      /**
+       * One "Settings changed" event from the app. Every add-on that listens hears the same event; it is acted on once.
+       * Bug of 21 November 2026 (a new chat made the page read Settings 12-17 times a second, the app ran at 100% and the
+       * tab crashed): `ctx.remote` is a new object at every read, so the old `watched.has(remote)` never matched and every
+       * read added one more listener; one change then woke every listener and each one started its own read.
+       */
+      function changed(ns, revision) {
+        if (typeof revision === 'number' || typeof revision === 'string') {
+          const now = Date.now();
+          for (const [key, at] of heard) if (now - at > HEARD_MS) heard.delete(key);
+          const key = `${String(ns)}\u0000${String(revision)}`;
+          if (heard.has(key)) { stats.repeats += 1; return; }
+          heard.set(key, now);
+        }
+        stats.changes += 1;
+        invalidate();
+        for (const listener of [...changeListeners]) {
+          try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
+        }
+      }
+
+      /** Listen once per add-on for "Settings changed" (the app sends it after every write, from any window). */
       function watch(ctx) {
         const remote = ctx && ctx.remote;
-        if (!remote || watched.has(remote)) return;
-        watched.add(remote);
+        if (!remote) return;
+        // Keyed on the add-on's own context, which stays the same object (its `remote` does not).
+        const key = ctx !== null && (typeof ctx === 'object' || typeof ctx === 'function') ? ctx : (remote[ORIGINAL] || remote);
+        if (watched.has(key)) return;
+        watched.add(key);
         try {
           if (typeof remote.$on === 'function') {
-            remote.$on('settings/document-updated', (ns) => {
-              invalidate();
-              for (const listener of [...changeListeners]) {
-                try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
-              }
-            });
+            remote.$on('settings/document-updated', changed);
+            stats.watchers += 1;
             cache.events = true;
           }
         } catch { /* no change event here: the short copy time covers it */ }
         try {
-          if (typeof ctx.on === 'function') ctx.on('connection/reset', invalidate);
+          if (typeof ctx.on === 'function') ctx.on('connection/reset', () => { heard.clear(); invalidate(); });
         } catch { /* optional */ }
         // This page's own writes drop the copy before their answer comes back, so a read that follows a write is never behind it.
         const settings = remote.settings;
-        if (settings && !wrapped.has(settings)) {
-          wrapped.add(settings);
+        const target = settings && (settings[ORIGINAL] || settings);
+        if (settings && !wrapped.has(target)) {
+          wrapped.add(target);
           for (const name of WRITES) {
             const original = settings[name];
-            if (typeof original !== 'function') continue;
+            // Already ours (put there through another add-on's wrapper object): wrapping it again would stack wrappers.
+            // An older copy's wrapper (marked `true`) is wrapped once more: it drops only the older copy's own cache.
+            if (typeof original !== 'function' || original[OURS] === API) continue;
             try {
-              settings[name] = function (...args) {
+              const write = function (...args) {
                 invalidate();
                 const done = original.apply(this, args);
                 return done && typeof done.then === 'function' ? done.then((out) => { invalidate(); return out; }, (error) => { invalidate(); throw error; }) : done;
               };
+              write[OURS] = API;
+              settings[name] = write;
             } catch { /* a frozen object keeps the plain call */ }
           }
         }
@@ -375,10 +412,11 @@ window.__ModuleLoader__.load({
       return shared;
     })();
     // ---- dsh-poll:end ----
-    // ---- dsh-ui:begin ---- shared page parts (switch, button, row, heading, empty state, chips); the same block in every page file that uses it.
+    // ---- dsh-ui:begin ---- shared page parts (switch, button, row, heading, empty state, chips, (i) pop-up, state line, error note); the same block in every page file that uses it.
     // The master copy is docs/shared/dsh-ui.js. Change it there, then run `node scripts/sync-kit.mjs`; `bash scripts/check.sh` fails when a copy has drifted.
     // All classes start with "dshu-" and belong to this block only: no add-on defines or restyles them. The look follows docs/UI-STYLE.md.
     // React is passed in: `const ui = dshUi.makeParts(React);` then `h(ui.Switch, { on, label, onChange })`, `h(ui.Row, { title, desc }, control)` and so on.
+    // Pass ReactDOM too (`dshUi.makeParts(React, ReactDOM)`) where an (i) needs `portal: true` (its pop-up then goes to the page body).
     const dshUi = (() => {
       const STYLE_ID = 'dsh-ui-style';
       const CSS = `
@@ -418,6 +456,31 @@ window.__ModuleLoader__.load({
     .dshu-link { padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; text-decoration: underline; cursor: pointer; }
     .dshu-wait { margin: 16px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
     .dshu-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .dshu-infowrap { display: inline-flex; vertical-align: middle; margin-left: 4px; }
+    .dshu-info { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+    .dshu-info:hover, .dshu-info[aria-expanded="true"] { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+    .dshu-info svg { display: block; width: 12px; height: 12px; }
+    .dshu-info:focus-visible, .dshu-pop:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+    .dshu-pop { position: fixed; z-index: 2147482000; box-sizing: border-box; width: max-content; max-width: min(320px, calc(100vw - 16px)); overflow: auto; padding: 10px 12px; border-radius: 12px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base)); color: var(--dsw-alias-label-primary); box-shadow: 0 14px 36px color-mix(in srgb, #000 28%, transparent); font-size: 12px; line-height: 18px; font-weight: 400; text-align: left; text-transform: none; white-space: normal; overflow-wrap: anywhere; cursor: auto; }
+    .dshu-pop:focus:not(:focus-visible) { outline: none; }
+    .dshu-pop-title { margin: 0 0 4px; font-size: 13px; line-height: 20px; font-weight: 600; }
+    .dshu-pop-line { margin: 6px 0 0; }
+    .dshu-pop-title + .dshu-pop-line { margin-top: 0; }
+    .dshu-pop-head { display: block; font-weight: 600; color: var(--dsw-alias-label-secondary); }
+    .dshu-state { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; margin: 4px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
+    .dshu-state-dot { flex: none; align-self: center; width: 8px; height: 8px; border-radius: 50%; background: var(--dsw-alias-label-secondary); }
+    .dshu-state[data-state="ok"] .dshu-state-dot { background: var(--dsw-alias-state-success-primary); }
+    .dshu-state[data-state="busy"] .dshu-state-dot { background: var(--dsw-alias-brand-primary); }
+    .dshu-state[data-state="warn"] .dshu-state-dot { background: var(--dsw-alias-state-warn-primary); }
+    .dshu-state[data-state="error"] .dshu-state-dot { background: var(--dsw-alias-state-error-primary); }
+    .dshu-state[data-state="off"] .dshu-state-dot { background: transparent; box-shadow: inset 0 0 0 1px var(--dsw-alias-label-secondary); }
+    .dshu-state-next { color: var(--dsw-alias-label-secondary); }
+    .dshu-errnote { margin: 8px 0 0; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+    .dshu-errnote-what { margin: 0; color: var(--dsw-alias-state-error-primary); }
+    .dshu-errnote-fix { margin: 2px 0 0; color: var(--dsw-alias-label-primary); }
+    .dshu-errnote-act { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+    .dshu-errnote-act .dshu-link { font-size: 12px; }
+    .dshu-errnote-details { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); color: var(--dsw-alias-label-secondary); font: 11px/16px ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; user-select: text; }
     `;
       const ensureStyle = () => {
         if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
@@ -445,8 +508,86 @@ window.__ModuleLoader__.load({
         } catch { return false; }
       };
 
-      const makeParts = (React) => {
+      /** The three fixed heads of an (i) pop-up, in this order. `changes` is accepted as another name for `change`. */
+      const INFO_HEADS = [['what', 'What it does'], ['when', 'When to use it'], ['change', 'If you change it']];
+      /** The same heads, and the button's "About". Plus is English only: every page gets these words. */
+      const INFO_WORDS = {
+        en: { what: 'What it does', when: 'When to use it', change: 'If you change it', about: (name) => (name ? `About ${name}` : 'About this') },
+      };
+      /** @returns {object} the (i)'s fixed words. `lang` is still accepted (older callers pass it) but every language gets English. */
+      const infoWords = () => INFO_WORDS.en;
+      /** What an (i) pop-up shows: the title and only the lines that were given. `lang` is accepted and ignored (English only). */
+      const infoLines = ({ title, label, what, when, change, changes } = {}) => {
+        const given = { what, when, change: change ?? changes };
+        const words = infoWords();
+        const blank = (v) => v == null || v === false || (typeof v === 'string' && v.trim() === '');
+        return {
+          title: blank(title) ? (blank(label) ? '' : label) : title,
+          lines: INFO_HEADS.filter(([key]) => !blank(given[key])).map(([key]) => ({ key, head: words[key], text: given[key] })),
+        };
+      };
+
+      /**
+       * Where a pop-up goes: below its button, or above when there is more room there; its left edge follows the button
+       * and is pulled in so the whole panel stays on screen. Sizes in pixels; returns { top, left, side, maxHeight }.
+       */
+      const placePop = ({ anchor, pop, view, gap = 6, margin = 8 }) => {
+        const below = view.height - anchor.bottom - gap - margin;
+        const above = anchor.top - gap - margin;
+        const side = pop.height <= below || below >= above ? 'below' : 'above';
+        const maxHeight = Math.max(80, Math.floor(side === 'below' ? below : above));
+        const height = Math.min(pop.height, maxHeight);
+        const top = side === 'below' ? anchor.bottom + gap : Math.max(margin, anchor.top - gap - height);
+        const left = Math.max(margin, Math.min(anchor.left, view.width - margin - pop.width));
+        return { top: Math.round(top), left: Math.round(left), side, maxHeight };
+      };
+
+      /**
+       * A failed call as { text, details }: the plain sentence and the raw text. Uses the error helper's wording
+       * (dshKit.plain) when the page also carries the dsh-kit block, so the two never say different things.
+       */
+      const explainError = (raw) => {
+        try {
+          // eslint-disable-next-line no-undef
+          if (typeof dshKit !== 'undefined' && dshKit && typeof dshKit.plain === 'function') return dshKit.plain(raw);
+        } catch { /* no error helper on this page */ }
+        const message = typeof raw === 'string' ? raw : String(raw?.message ?? raw?.error ?? '');
+        const details = raw && typeof raw === 'object' && typeof raw.details === 'string' ? raw.details : message;
+        // A message that reads as a sentence is said as it is (as the error helper does); a bare code is not.
+        const said = message.trim();
+        if (/\s/.test(said) && !/^[a-z][\w-]*(?:\/[\w.-]+)+:/i.test(said)) return { text: said, details: details === message ? '' : details };
+        return { text: 'Something went wrong. Try again; the Details say what the app reported.', details };
+      };
+
+      /** Raw details as text to show behind Details. */
+      const detailText = (details) => {
+        if (details == null || details === '') return '';
+        if (typeof details === 'string') return details;
+        if (details instanceof Error) return details.stack || String(details.message);
+        try { return JSON.stringify(details, null, 2); } catch { return String(details); }
+      };
+
+      let infoCount = 0;
+
+      /**
+       * The words of a row title for its (i): the text itself, or the text written directly inside a simple element
+       * title (`h('span', null, 'Keep awake', badge)` gives "Keep awake"; the badge is left out). Anything else gives
+       * undefined: then pass `info.label`, or the (i) is only "About this".
+       */
+      const plainTitle = (title) => {
+        if (typeof title === 'string') return title;
+        if (typeof title === 'number') return String(title);
+        if (!title || typeof title !== 'object') return undefined;
+        const kids = [].concat(title.props?.children ?? title.children ?? []);
+        const text = kids.filter((kid) => typeof kid === 'string' || typeof kid === 'number').join(' ').replace(/\s+/g, ' ').trim();
+        return text || undefined;
+      };
+
+      const makeParts = (React, ReactDOM) => {
         ensureStyle();
+        // The pop-up of an (i) with `portal: true` is drawn in the page body, out of a box that clips it or moves fixed
+        // children (a header with container-type, say). Without ReactDOM it stays where it is, as before.
+        const portalTo = (node) => (ReactDOM && typeof ReactDOM.createPortal === 'function' && typeof document !== 'undefined' && document.body ? ReactDOM.createPortal(node, document.body) : node);
         const h = React.createElement;
         /** The page frame: a title, one sentence under it, then the page. */
         const Page = ({ title, desc, children }) => h('div', { className: 'dshu-page' },
@@ -456,9 +597,11 @@ window.__ModuleLoader__.load({
         const Group = ({ children }) => h('div', { className: 'dshu-group' }, children);
         /** A short line in the page's description style; `error` draws it in the error colour. */
         const Desc = ({ error, children, role }) => h('p', { className: 'dshu-desc', 'data-error': String(error === true), role: role ?? (error ? 'alert' : undefined) }, children);
-        /** One setting: text on the left, the control(s) on the right. */
-        const Row = ({ title, desc, children }) => h('div', { className: 'dshu-row' },
-          h('div', { className: 'dshu-rowtext' }, h('div', { className: 'dshu-rowtitle' }, title), desc ? h('div', { className: 'dshu-rowdesc' }, desc) : null),
+        /** One setting: text on the left, the control(s) on the right. `info` ({ what, when, change }) adds an (i) after the title. */
+        const Row = ({ title, desc, info, children }) => h('div', { className: 'dshu-row' },
+          h('div', { className: 'dshu-rowtext' },
+            h('div', { className: 'dshu-rowtitle' }, title, info ? h(Info, { title: plainTitle(title), ...info }) : null),
+            desc ? h('div', { className: 'dshu-rowdesc' }, desc) : null),
           children);
         const Side = ({ children }) => h('div', { className: 'dshu-side' }, children);
         /** `danger`: when it is on, the switch is drawn in the error colour (a safety rule that has been turned off). */
@@ -486,9 +629,140 @@ window.__ModuleLoader__.load({
           chips && chips.length > 0 ? h(Chips, { items: chips, onPick: onPick ?? (() => {}) }) : null,
           children);
         const Wait = ({ children }) => h('p', { className: 'dshu-wait', role: 'status' }, children ?? 'Loading…');
-        return { Page, Group, Desc, Row, Side, Switch, Button, Field, CopyButton, Chips, Empty, Wait };
+
+        const useLayout = React.useLayoutEffect ?? React.useEffect;
+        // The (i) drawn as a ring with an "i" in the text colour, like the app's own info icon.
+        const infoIcon = () => h('svg', { viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false', fill: 'none', stroke: 'currentColor', strokeWidth: 1.3, strokeLinecap: 'round' },
+          h('circle', { cx: 8, cy: 8, r: 6.6 }),
+          h('path', { d: 'M8 7.3v4' }),
+          h('circle', { cx: 8, cy: 4.9, r: 0.45, fill: 'currentColor' }));
+        /**
+         * A small (i) button that opens a pop-up saying what a control does, when to use it and what changes if you change it.
+         * `title` is the bold first line, `label` names the control for screen readers ("About <label>"; defaults to the title).
+         * Opens on click, Enter or Space; Esc, a click outside or Tab away closes it; Esc puts the focus back on the (i).
+         * `more` is one last line, or a list of lines. `portal: true` draws the pop-up in the page body (needs ReactDOM in makeParts).
+         * `lang` is accepted and ignored: the heads and button name are always English.
+         */
+        const Info = (props) => {
+          const { label, more, side, portal } = props;
+          const extra = (Array.isArray(more) ? more : [more]).filter((line) => line != null && line !== false && line !== '');
+          const { title, lines } = infoLines(props);
+          const [open, setOpen] = React.useState(false);
+          const [place, setPlace] = React.useState(null);
+          const wrap = React.useRef(null);
+          const button = React.useRef(null);
+          const pop = React.useRef(null);
+          const autoId = React.useId ? React.useId() : null;
+          const fallbackId = React.useRef(null);
+          if (!autoId && fallbackId.current == null) { infoCount += 1; fallbackId.current = `dshu-info-${infoCount}`; }
+          const id = `dshu-pop-${String(autoId ?? fallbackId.current).replace(/[^\w-]/g, '')}`;
+          const name = label ?? (typeof title === 'string' ? title : '');
+          const about = infoWords().about;
+          const measure = () => {
+            const b = button.current; const p = pop.current;
+            if (!b || !p || typeof window === 'undefined') return;
+            const r = b.getBoundingClientRect();
+            const found = placePop({ anchor: r, pop: { width: p.offsetWidth, height: p.scrollHeight }, view: { width: window.innerWidth, height: window.innerHeight } });
+            // `side: 'above'` asks for the top first; it still flips when it does not fit.
+            setPlace(side === 'above' && r.top - 6 - 8 >= p.scrollHeight ? { ...found, side: 'above', top: Math.round(r.top - 6 - p.scrollHeight) } : found);
+          };
+          useLayout(() => {
+            if (!open) { setPlace(null); return undefined; }
+            measure();
+            try { pop.current?.focus({ preventScroll: true }); } catch { /* the panel is gone */ }
+            return undefined;
+          }, [open]);
+          React.useEffect(() => {
+            if (!open || typeof document === 'undefined') return undefined;
+            // The pop-up may sit in the page body (portal): a click in it is not outside.
+            const inPop = (node) => Boolean(pop.current) && typeof pop.current.contains === 'function' && pop.current.contains(node);
+            const inside = (node) => Boolean(node) && ((wrap.current && wrap.current.contains(node)) || inPop(node));
+            const onDown = (event) => { if (wrap.current && !inside(event.target)) setOpen(false); };
+            const onKey = (event) => {
+              if (event.key !== 'Escape') return;
+              // Only while the focus is in the (i) or its pop-up; then only the pop-up closes, not the dialog or menu
+              // around it. On the window, first in the capture phase, so it runs before the panels' own Esc listeners
+              // on the document; stopImmediatePropagation keeps every later listener from seeing it.
+              const focused = typeof document !== 'undefined' ? document.activeElement : null;
+              if (!wrap.current || !focused || !inside(focused)) return;
+              event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation?.();
+              setOpen(false);
+              try { button.current?.focus(); } catch { /* the button is gone */ }
+            };
+            const onMove = () => measure();
+            document.addEventListener('pointerdown', onDown, true);
+            window.addEventListener('keydown', onKey, true);
+            window.addEventListener('resize', onMove);
+            window.addEventListener('scroll', onMove, true);
+            return () => {
+              document.removeEventListener('pointerdown', onDown, true);
+              window.removeEventListener('keydown', onKey, true);
+              window.removeEventListener('resize', onMove);
+              window.removeEventListener('scroll', onMove, true);
+            };
+          }, [open]);
+          // Clicks inside never reach a row or menu item the (i) sits in; nor do the keys such a row or menu acts on.
+          const stop = (event) => { event.stopPropagation(); };
+          const stopKeys = (event) => { if (['Enter', ' ', 'Spacebar', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) event.stopPropagation(); };
+          return h('span', {
+            ref: wrap, className: 'dshu-infowrap', onClick: stop, onPointerDown: stop, onMouseDown: stop, onKeyDown: stopKeys,
+            onBlur: (event) => { if (open && wrap.current && event.relatedTarget && !wrap.current.contains(event.relatedTarget) && !(pop.current && typeof pop.current.contains === 'function' && pop.current.contains(event.relatedTarget))) setOpen(false); },
+          },
+          h('button', {
+            ref: button, type: 'button', className: 'dshu-info', 'aria-label': about(name), 'aria-expanded': open,
+            'aria-haspopup': 'dialog', 'aria-controls': open ? id : undefined, onClick: () => setOpen(!open),
+          }, infoIcon()),
+          open ? (portal ? portalTo : (node) => node)(h('div', {
+            ref: pop, id, className: 'dshu-pop', role: 'dialog', tabIndex: -1, 'data-side': place?.side,
+            'aria-label': title ? undefined : about(name), 'aria-labelledby': title ? `${id}-t` : undefined,
+            style: place ? { top: place.top, left: place.left, maxHeight: place.maxHeight } : { top: 0, left: 0, visibility: 'hidden' },
+          },
+          title ? h('p', { id: `${id}-t`, className: 'dshu-pop-title' }, title) : null,
+          lines.map((line) => h('p', { key: line.key, className: 'dshu-pop-line' }, h('span', { className: 'dshu-pop-head' }, line.head), line.text)),
+          extra.map((line, index) => h('p', { key: `more-${index}`, className: 'dshu-pop-line' }, line)))) : null);
+        };
+
+        const STATES = ['ok', 'busy', 'idle', 'off', 'warn', 'error'];
+        /**
+         * One line that says in words what is happening and what to do next: a coloured dot, `words`, then `next`
+         * (text or a button). `state` is ok, busy, idle, off, warn or error; anything else counts as idle.
+         * `live: false` keeps the line out of screen readers' announcements (for words that change every few
+         * seconds, such as a step count); then announce only the changes that matter somewhere else.
+         */
+        const StateLine = ({ state, words, next, live = true, children }) => {
+          const shown = STATES.includes(state) ? state : 'idle';
+          return h('p', { className: 'dshu-state', 'data-state': shown, role: live === false ? undefined : shown === 'error' ? 'alert' : 'status' },
+            h('span', { className: 'dshu-state-dot', 'aria-hidden': 'true' }),
+            words ? h('span', { className: 'dshu-state-words' }, words) : null,
+            next ? h('span', { className: 'dshu-state-next' }, next) : null,
+            children);
+        };
+
+        /**
+         * An error in plain words: what went wrong (`what`), what to do or click (`fix`, and any buttons as children),
+         * and the raw text only behind a Details toggle. Give `error` instead of `what` to word a failed call the way
+         * the error helper does; `details` (text or an object) wins over the raw text it keeps.
+         */
+        const ErrorNote = ({ what, fix, details, error, children }) => {
+          const [open, setOpen] = React.useState(false);
+          const hasError = error !== undefined && error !== null && error !== '';
+          const fromError = hasError ? explainError(error) : { text: '', details: '' };
+          // With your own `what`, the raw error itself goes behind Details.
+          const rawError = hasError ? (fromError.details || (typeof error === 'string' ? error : error.details || error.message || error)) : '';
+          const text = what || fromError.text;
+          const raw = detailText(details ?? (what ? rawError : fromError.details));
+          if (!text && !fix && !raw) return null;
+          return h('div', { className: 'dshu-errnote', role: 'alert' },
+            h('p', { className: 'dshu-errnote-what' }, text || 'Something went wrong.'),
+            fix ? h('p', { className: 'dshu-errnote-fix' }, fix) : null,
+            children || raw ? h('div', { className: 'dshu-errnote-act' },
+              children,
+              raw ? h('button', { type: 'button', className: 'dshu-link', 'aria-expanded': open, onClick: () => setOpen(!open) }, open ? 'Hide details' : 'Details') : null) : null,
+            open && raw ? h('pre', { className: 'dshu-errnote-details' }, raw) : null);
+        };
+        return { Page, Group, Desc, Row, Side, Switch, Button, Field, CopyButton, Chips, Empty, Wait, Info, StateLine, ErrorNote };
       };
-      return { makeParts, ensureStyle, copyText };
+      return { makeParts, ensureStyle, copyText, infoLines, placePop, explainError };
     })();
     // ---- dsh-ui:end ----
     const ui = dshUi.makeParts(React);
@@ -496,7 +770,7 @@ window.__ModuleLoader__.load({
     const { ask: askInPage } = dshKit;
 
     const NS = 'split-plus';
-    const DICT = { en: { 'section.title': 'Split Plus', 'page.title': 'Split' }, zh: { 'section.title': 'Split Plus', 'page.title': '分屏' } };
+    const DICT = { en: { 'section.title': 'Split Plus', 'page.title': 'Split' } };
     const STORE_KEY = 'dsh-split-plus.panes.v1';
     const MAX_PANES = 4;
 
@@ -555,7 +829,10 @@ window.__ModuleLoader__.load({
 
     /** Talk to the server half. */
     async function call(body, query = '') {
-      const response = await fetch(new URL(`dsh-split-plus/data${query}`, document.baseURI), {
+      const url = new URL(`dsh-split-plus/data${query}`, document.baseURI);
+      // Item 4A, stage 6b: the page's language, so space names come in it.
+      if (!body) url.searchParams.set('lang', pageLang());
+      const response = await fetch(url, {
         method: body ? 'POST' : 'GET', cache: 'no-store', credentials: 'same-origin',
         headers: body ? { accept: 'application/json', 'content-type': 'application/json' } : { accept: 'application/json' },
         body: body ? JSON.stringify(body) : undefined,
@@ -666,15 +943,15 @@ window.__ModuleLoader__.load({
       const [error, setError] = useState('');
       useEffect(() => {
         const sessions = appCtx.get('sessions');
-        if (!sessions?.retain) { setError('This version of the app cannot show a conversation here.'); return undefined; }
+        if (!sessions?.retain) { setError('This version of the app cannot show a thread here.'); return undefined; }
         const controller = new AbortController();
         let held;
         try {
           held = sessions.retain(pane.sessionId, { source: 'splitPlus', signal: controller.signal });
           setReference(held);
-          held.ready?.catch?.((problem) => setError(`This conversation could not be opened: ${problem?.message ?? problem}`));
+          held.ready?.catch?.((problem) => setError(`This thread could not be opened: ${problem?.message ?? problem}`));
         } catch (problem) {
-          setError(`This conversation could not be opened: ${problem?.message ?? problem}`);
+          setError(`This thread could not be opened: ${problem?.message ?? problem}`);
         }
         return () => { controller.abort(); try { held?.release(); } catch { /* already released */ } setReference(null); };
       }, [appCtx, pane.sessionId]);
@@ -685,20 +962,23 @@ window.__ModuleLoader__.load({
       const state = status?.pendingInteraction || toolAsk ? 'waiting' : fileWait ? 'blocked' : localWait ? 'queued' : (status?.running ?? summary?.running) ? 'working' : summary?.blank ? 'new' : 'done';
       const stateText = { waiting: 'Waiting for you', blocked: fileWait ? (fileWait.kind === 'command' ? `Waiting: the ${fileWait.holder} pane is running a command in ${fileWait.file}` : `Waiting: the ${fileWait.holder} pane is changing ${fileWait.file}`) : '', queued: 'Waiting for the local model', working: 'Working', new: 'New', done: 'Done' }[state];
       const label = facts?.label ?? '…';
-      const title = `${label}${facts?.folder ? ` · ${facts.folder}` : ''} · ${stateText}${summary?.displayTitle ? `\n${summary.displayTitle}` : ''}${summary?.cwd ? `\n${summary.cwd}` : ''}`;
+      // Item 4A, stage 6b (J19): "{mode} · {space}" when the pane's space is not the window's (a pane brought back from another).
+      const chip = paneChip(facts, windowSpace());
+      const title = `${chip}${facts?.folder ? ` · ${facts.folder}` : ''} · ${stateText}${summary?.displayTitle ? `\n${summary.displayTitle}` : ''}${summary?.cwd ? `\n${summary.cwd}` : ''}`;
       return h('section', { className: 'dsh-sp-pane', 'data-focused': focused ? 'true' : 'false', 'data-split-pane': pane.id, onMouseDownCapture: onFocus, onFocusCapture: onFocus },
         h('div', { className: 'dsh-sp-head', title },
-          h('span', { className: 'dsh-sp-abbr', 'aria-label': label }, facts?.abbr ?? '…'),
+          h('span', { className: 'dsh-sp-abbr', 'aria-label': chip }, facts?.abbr ?? '…'),
           h('span', { className: 'dsh-sp-name' }, summary?.displayTitle || label),
+          chip !== label ? h('span', { className: 'dsh-sp-folder', 'data-pane-space': facts?.space ?? '' }, `· ${chip}`) : null,
           facts?.folder ? h('span', { className: 'dsh-sp-folder' }, `· ${facts.folder}`) : null,
           h('span', { className: 'dsh-sp-grow' }),
           h('span', { className: 'dsh-sp-state', 'data-state': state, 'data-ask': toolAsk ? 'true' : undefined, title: toolAsk ? 'The AI asks to use a tool. Answer on the card in this pane.' : undefined }, stateText),
           facts?.watching ? h('span', { className: 'dsh-sp-folder', title: 'This pane only reads the other pane and answers you; it cannot change, message or stop it' }, `· watching ${facts.watchingLabel}`) : null,
-          facts?.watching ? h('button', { type: 'button', className: 'dsh-sp-icon', title: 'Stop watching (the conversation stays)', 'aria-label': 'Stop watching', onClick: () => void call({ action: 'unwatch', watcher: pane.sessionId }).catch(() => {}) }, h(Icon, { d: ICON_UNWATCH })) : null,
+          facts?.watching ? h('button', { type: 'button', className: 'dsh-sp-icon', title: 'Stop watching (the thread stays)', 'aria-label': 'Stop watching', onClick: () => void call({ action: 'unwatch', watcher: pane.sessionId }).catch(() => {}) }, h(Icon, { d: ICON_UNWATCH })) : null,
           !facts?.watching && facts && !facts.sealed ? h('button', { type: 'button', className: 'dsh-sp-icon', title: 'Watch this pane from a Chat pane beside it: ask what it is doing, without touching it', 'aria-label': 'Watch this pane', onClick: () => void startWatcher(appCtx, store, pane.sessionId).catch((error) => askInPage({ notice: true, title: 'Split Plus', text: error.message })) }, h(Icon, { d: ICON_WATCH })) : null,
           h(FileSend, { appCtx, store, sessionId: pane.sessionId }),
-          h('button', { type: 'button', className: 'dsh-sp-icon', title: 'Open this conversation on its own (it stays in the Split page too)', 'aria-label': 'Open on its own', onClick: () => appCtx.get('uiWorkspace')?.openSession?.(pane.sessionId) }, h(Icon, { d: ICON_OPEN })),
-          h('button', { type: 'button', className: 'dsh-sp-icon', title: 'Take this pane out of the Split page (the conversation is kept)', 'aria-label': 'Close pane', onClick: onClose }, h(Icon, { d: ICON_CLOSE }))),
+          h('button', { type: 'button', className: 'dsh-sp-icon', title: 'Open this thread on its own (it stays in the Split page too)', 'aria-label': 'Open on its own', onClick: () => appCtx.get('uiWorkspace')?.openSession?.(pane.sessionId) }, h(Icon, { d: ICON_OPEN })),
+          h('button', { type: 'button', className: 'dsh-sp-icon', title: 'Take this pane out of the Split page (the thread is kept)', 'aria-label': 'Close pane', onClick: onClose }, h(Icon, { d: ICON_CLOSE }))),
         h('div', { className: 'dsh-sp-body' },
           error ? h('p', { className: 'dsh-sp-note', 'data-error': 'true', style: { padding: 12 } }, error)
             : reference ? h(SessionProvider, { session: reference }, renderSlot('splitplus.pane', {})) : null));
@@ -743,14 +1023,27 @@ window.__ModuleLoader__.load({
       };
       const open = (set) => run(async () => {
         // New conversations of these tabs, in the selected pane's folder (a sealed tab only in its room).
+        // Item 4A, stage 6b (Revision 2 G9): each pane in the space it was saved in; an older set's panes in this window's
+        // space when it offers the mode, else in Chat when Chat does, else in the mode's own space as before 6b. Where each
+        // one goes is shown before anything opens.
+        const plan = restorePlan(set.panes, windowSpace(), data.spaces);
+        if (data.spaces) {
+          const where = plan.map((one) => {
+            const label = data.modes?.find((row) => row.id === one.mode)?.label ?? one.mode;
+            const space = one.space || one.shown || '';
+            return space ? `${label} · ${data.spaceNames?.[space] || space}` : label;
+          }).join(', ');
+          const yes = await askInPage({ title: words6b('restoreTitle', {}, pageLang()), text: words6b('restoreWhere', { list: where }, pageLang()), ok: words6b('restoreOk', {}, pageLang()) });
+          if (!yes) return;
+        }
         const ids = [];
-        for (const pane of set.panes) ids.push(await startConversation(appCtx, data, { mode: pane.mode, choice: from?.cwd ? 'same' : 'scratch', from }));
+        for (const one of plan) ids.push(await startConversation(appCtx, data, { mode: one.mode, choice: from?.cwd ? 'same' : 'scratch', from, ...(one.space ? { space: one.space } : {}) }));
         store.replace(ids);
         onClose();
       });
       return h('div', { className: 'dsh-sp-pop', role: 'dialog', 'aria-label': 'Pane sets' },
         h('strong', null, 'Pane sets'),
-        h('p', { className: 'dsh-sp-note' }, 'A pane set keeps tabs and their order (never a permission or a sign-in). Opening one starts new conversations of those tabs in the selected pane\'s folder. The panes open for a folder come back by themselves when you open that folder again.'),
+        h('p', { className: 'dsh-sp-note' }, 'A pane set keeps modes and their order (never a permission or a sign-in). Opening one starts new threads in those modes in the selected pane\'s folder. The panes open for a folder come back by themselves when you open that folder again.'),
         state.panes.length > 0 ? h('label', null, 'Save these panes as',
           h('div', { className: 'dsh-sp-row' },
             h('input', { className: 'dsh-sp-input', style: { flex: 1 }, value: name, onChange: (event) => setName(event.target.value) }),
@@ -792,22 +1085,28 @@ window.__ModuleLoader__.load({
     /**
      * Start a new conversation in a tab and a place: the same folder as `from`, a scratch thread, or another
      * folder; a sealed tab (Recon) only in its own room. Made in its folder's project, then given its tab.
+     * Item 4A, stage 6a: `space` is the window's space (Add pane only; a watcher claims Chat). In a Recon window any mode
+     * is sealed, so the pane opens in Recon's room; the claim carries the space so its rules hold for any mode.
      * @returns {Promise<string>} the new conversation.
      */
-    async function startConversation(appCtx, data, { mode, choice, folder = '', from = null }) {
-      const sealed = data.modes?.find((row) => row.id === mode)?.sealed === true;
+    async function startConversation(appCtx, data, { mode, choice, folder = '', from = null, space = '' }) {
+      const sealed = space === 'recon' || data.modes?.find((row) => row.id === mode)?.sealed === true;
       const sessions = appCtx.get('sessions');
-      if (!sessions?.create) throw new Error('This version of the app cannot start a conversation from here.');
+      if (!sessions?.create) throw new Error('This version of the app cannot start a thread from here.');
       // Every sealed tab's room (Recon's): its own pane opens there, and no other pane ever does.
       const rooms = {};
-      for (const row of (data.modes ?? []).filter((one) => one.sealed)) {
+      const roomTabs = (data.modes ?? []).filter((one) => one.sealed).map((one) => one.id);
+      if (space === 'recon' && !roomTabs.includes('recon')) roomTabs.push('recon');
+      for (const id of roomTabs) {
         try {
-          const response = await fetch(new URL(`dsh-${row.id}/state`, document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
+          const response = await fetch(new URL(`dsh-${id}/state`, document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
           const place = response.ok ? String((await response.json()).room ?? '') : '';
-          if (place) rooms[row.id] = place;
+          if (place) rooms[id] = place;
         } catch { /* that tab is off: it has no room to keep others out of */ }
       }
-      const placed = (await call({ action: 'place', mode, choice, folder, fromCwd: from?.cwd ?? '', fromSessionId: from?.sessionId ?? '', room: sealed ? (rooms[mode] ?? '') : '', rooms: Object.values(rooms) })).place;
+      // In a Recon window the room is Recon's, whatever the mode.
+      const room = !sealed ? '' : space === 'recon' ? (rooms.recon ?? '') : (rooms[mode] ?? '');
+      const placed = (await call({ action: 'place', mode, choice, folder, fromCwd: from?.cwd ?? '', fromSessionId: from?.sessionId ?? '', room, rooms: Object.values(rooms), ...(space ? { space } : {}) })).place;
       if (placed.kind === 'refused') throw new Error(placed.why);
       let cwd = placed.cwd;
       let title = '';
@@ -816,16 +1115,16 @@ window.__ModuleLoader__.load({
         const answer = response.ok ? await response.json() : {};
         cwd = String(answer.place ?? '');
         title = String(answer.title || 'Scratch');
-        if (!cwd) throw new Error('Scratch is not available here (it needs the Cowork sidebar). Pick a folder instead.');
+        if (!cwd) throw new Error('Scratch is not available here (it needs the Left panel add-on). Pick a folder instead.');
       } else if (sealed) {
-        title = `${data.modes.find((row) => row.id === mode)?.label ?? mode} room`;
+        title = space === 'recon' ? 'Recon room' : `${data.modes.find((row) => row.id === mode)?.label ?? mode} room`;
       }
       // The app lets you type in a new conversation once it belongs to a project, so it is made in the
       // project of its folder: the same project as the pane it is split from, or the folder's own.
       const sameProject = placed.kind === 'cwd' && choice === 'same' && !sealed && from?.sessionId ? workspaceOf(appCtx, from.sessionId) : undefined;
       const workspaceId = sameProject && sameFolder(sameProject.path, cwd) ? sameProject.workspaceId : await projectFor(appCtx, cwd, title);
       const child = await sessions.create({ workspaceId });
-      await call({ action: 'claim', sessionId: child, mode });
+      await call({ action: 'claim', sessionId: child, mode, ...(space ? { space } : {}) });
       return child;
     }
 
@@ -836,8 +1135,11 @@ window.__ModuleLoader__.load({
      */
     async function startWatcher(appCtx, store, watched) {
       const data = await call(null, `?sessions=${encodeURIComponent(watched)}`);
-      if (data.panes?.[watched]?.sealed) throw new Error('A sealed conversation (Recon) cannot be watched.');
-      const child = await startConversation(appCtx, data, { mode: 'chat', choice: 'scratch' });
+      if (data.panes?.[watched]?.sealed) throw new Error('A sealed thread (Recon) cannot be watched.');
+      // Item 4A, stage 6a: a watcher is a Chat pane in any window, so it claims the Chat space (never Recon's or Devices'),
+      // in the Chat mode when the Chat space offers it, else in that space's start mode (watcherClaim).
+      const claim = watcherClaim(data);
+      const child = await startConversation(appCtx, data, { mode: claim.mode, choice: 'scratch', space: claim.space });
       await call({ action: 'watch', watcher: child, watched });
       const chosen = String(data.watcherModel ?? '').trim();
       if (chosen.includes('/')) {
@@ -855,28 +1157,235 @@ window.__ModuleLoader__.load({
       return child;
     }
 
-    /** The Add pane window: a new conversation in a mode and a place, or a conversation you already have. */
+    /**
+     * Item 4A, final fix round: the modes a new pane may take. With spaces on, the window's space's (the Cowork sidebar
+     * marks it on the page as data-cws-space), its start mode first; else every mode, as before.
+     */
+    const offeredModes = (data) => {
+      const all = data?.modes ?? [];
+      const space = document.documentElement.getAttribute('data-cws-space') || '';
+      const here = data?.spaces?.[space];
+      // `fromSpace`: the list is the space's own offered rows (item 4A, stage 6a: only then does the claim carry the space).
+      if (!here || !Array.isArray(here.modes)) return { rows: all, start: all[0]?.id ?? 'chat', fromSpace: false };
+      const rows = all.filter((row) => here.modes.includes(row.id));
+      const ordered = [...rows.filter((row) => row.id === here.start), ...rows.filter((row) => row.id !== here.start)];
+      return ordered.length > 0 ? { rows: ordered, start: ordered[0].id, fromSpace: true } : { rows: all, start: all[0]?.id ?? 'chat', fromSpace: false };
+    };
+    // ---- split-plus:claim-helpers:begin ---- dependency-free (test/space-claim.test.mjs runs them).
+    /**
+     * Item 4A, stage 6a: what a watcher claims. Always the Chat space; the Chat mode when the Chat space offers it (not
+     * greyed), else the space's start mode, else its first offered mode. Without spaces data: the Chat mode, as before.
+     */
+    function watcherClaim(data) {
+      const here = data && data.spaces ? data.spaces.chat : undefined;
+      const offered = here && Array.isArray(here.modes) ? here.modes.map(String) : null;
+      if (!offered || offered.length === 0 || offered.includes('chat')) return { mode: 'chat', space: 'chat' };
+      const start = String(here.start || '');
+      return { mode: offered.includes(start) ? start : offered[0], space: 'chat' };
+    }
+    /**
+     * Item 4A, stage 6a: the space an Add pane claim carries. The window's space when the mode list came from that
+     * space's offered rows; when the list fell back to every mode, only a guarded space (Recon, Devices, Workshop) is
+     * still sent (Modes then refuses a mode it does not offer there, which keeps its rules); else none.
+     */
+    function claimSpace(offered, space) {
+      const name = String(space || '');
+      if (!name) return '';
+      if (offered && offered.fromSpace === true) return name;
+      return ['recon', 'devices', 'workshop'].includes(name) ? name : '';
+    }
+    /**
+     * Lab fix (6a): the note an Add pane shows instead of the folder choices when the pane can only open in Recon's room:
+     * a Recon window (any mode in Recon is sealed, and Recon's panes open in its room whatever was picked) or a sealed
+     * mode. '' when the folder can be chosen. English only (decision 28): `lang` is accepted and ignored.
+     */
+    function roomOnlyNote(sealed, space, lang) { // eslint-disable-line no-unused-vars
+      if (String(space || '') === 'recon') return 'In Recon, a new pane always opens in its own room folder, so no folder can be picked here.';
+      if (sealed === true) return 'A sealed mode works only in its own room, never in a shared folder.';
+      return '';
+    }
+
+    // Item 4A, stage 6b, Part C (STAGE6B-DESIGN.md J19, 7.3, Revision 2 G9): Split follows the window's space.
+    /** The page's words for stage 6b (English only, decision 28). */
+    const SPLIT_6B_WORDS = {
+      en: {
+        thisSpace: 'This space ({space})',
+        unsorted: 'Some threads are not listed because their space could not be read. Close this and open it again.',
+        sendNewRecon: 'In a Recon window, Send to cannot start a new thread. Start one with Recon\'s New button, or use Send to from a window of another space.',
+        continueSealed: 'This pane is sealed (Recon), so its text cannot start a thread outside it. Copy what you need inside Recon, or start the Research thread from a Recon window.',
+        continueInChat: 'Research is not offered in {space}, so the thread beside starts in Chat.',
+        continueReconWindow: 'In a Recon window, the thread beside starts in Chat: nothing goes into Recon this way.',
+        restoreWhere: 'These panes open in: {list}.',
+        restoreTitle: 'Open this pane set here?',
+        restoreOk: 'Open here',
+      },
+    };
+    /** One of those sentences, with `{name}` filled in. `lang` is accepted and ignored: Plus is English only. */
+    function words6b(key, vars, lang) { // eslint-disable-line no-unused-vars
+      let text = SPLIT_6B_WORDS.en[key] || '';
+      for (const name of Object.keys(vars || {})) text = text.split(`{${name}}`).join(String(vars[name]));
+      return text;
+    }
+    /** The spaces in the order headings come after the window's own (Recon last: it is listed only in a Recon window). */
+    const PICK_ORDER = ['chat', 'code', 'devices', 'workshop', 'recon'];
+    /**
+     * The "thread I already have" pickers (J19): the window's space first, then other spaces under their names. Recon
+     * threads (and any sealed thread) only in a Recon window, where they come first. A row whose space the server could
+     * not give is left out (`left` counts them; the page says so). Without Modes' spaces (`live: false`): today's list
+     * without sealed rows. `answer` null: not known yet (nothing listed).
+     * @param {{id: string}[]} rows - the threads, newest first.
+     * @param {{live?: boolean, spaces?: object, names?: object} | null} answer - the server's `spacesOf`.
+     * @returns {{groups: {space: string, label: string, rows: object[]}[], left: number}}
+     */
+    function pickerGroups(rows, answer, windowSpace, lang, max) {
+      const cap = Number(max) > 0 ? Number(max) : 40;
+      if (!answer || typeof answer !== 'object') return { groups: [], left: 0 };
+      const facts = answer.spaces && typeof answer.spaces === 'object' ? answer.spaces : {};
+      const list = Array.isArray(rows) ? rows : [];
+      let left = 0;
+      if (answer.live !== true) {
+        const kept = [];
+        for (const row of list) {
+          const one = facts[row.id];
+          if (!one) { left += 1; continue; }
+          if (one.sealed !== true && kept.length < cap) kept.push(row);
+        }
+        return { groups: kept.length > 0 ? [{ space: '', label: '', rows: kept }] : [], left };
+      }
+      const win = String(windowSpace || '');
+      const inRecon = win === 'recon';
+      const names = answer.names && typeof answer.names === 'object' ? answer.names : {};
+      const buckets = {};
+      let count = 0;
+      for (const row of list) {
+        const one = facts[row.id];
+        const space = one && typeof one.space === 'string' ? one.space : '';
+        if (!one || !space) { left += 1; continue; }
+        if ((space === 'recon' || one.sealed === true) && !inRecon) continue;
+        if (count >= cap) continue;
+        (buckets[space] = buckets[space] || []).push(row);
+        count += 1;
+      }
+      const order = [...(win ? [win] : []), ...PICK_ORDER.filter((id) => id !== win), ...Object.keys(buckets).filter((id) => id !== win && PICK_ORDER.indexOf(id) < 0)];
+      const groups = [];
+      for (const space of order) {
+        if (!buckets[space]) continue;
+        const name = String(names[space] || space);
+        groups.push({ space, label: space === win ? words6b('thisSpace', { space: name }, lang) : name, rows: buckets[space] });
+      }
+      return { groups, left };
+    }
+    /**
+     * Revision 2 G9: where each pane of a pane set opens. A pane saved with its space opens there (Modes refuses with its
+     * sentence if that space cannot take it; it is never moved). An older pane (no space) opens in the window's space when
+     * the mode is offered there, else in Chat when Chat offers it, else with no space, exactly as before 6b (Modes puts it
+     * in its mode's own space; review finding: a Devices pane of an older set must still open). `shown`: the space named
+     * in the confirm line for such a pane (the first that offers the mode, '' when none says). Without spaces data: no
+     * space, as before.
+     * @returns {{mode: string, space: string, shown?: string}[]}
+     */
+    function restorePlan(panes, windowSpace, spaces) {
+      const win = String(windowSpace || '');
+      const offers = (space, mode) => Boolean(space && spaces[space] && Array.isArray(spaces[space].modes) && spaces[space].modes.indexOf(mode) >= 0);
+      return (Array.isArray(panes) ? panes : []).map((pane) => {
+        const mode = String((pane && pane.mode) || '');
+        if (!spaces || typeof spaces !== 'object') return { mode, space: '' };
+        if (pane && typeof pane.space === 'string' && pane.space) return { mode, space: pane.space };
+        if (offers(win, mode)) return { mode, space: win };
+        if (offers('chat', mode)) return { mode, space: 'chat' };
+        const shown = ['code', 'devices', 'workshop', 'recon'].find((space) => offers(space, mode)) || '';
+        return { mode, space: '', shown };
+      });
+    }
+    /**
+     * J19: where "Start in Research beside" opens. The window's space when it offers Research; else Chat, with a line
+     * (`note`: 'chat', or 'recon' in a Recon window: nothing goes into Recon this way). Without spaces data: as before.
+     * @returns {{space: string, note: string}}
+     */
+    function continuePlace(spaces, windowSpace) {
+      const win = String(windowSpace || '');
+      if (!spaces || typeof spaces !== 'object' || !win) return { space: '', note: '' };
+      if (win === 'recon') return { space: 'chat', note: 'recon' };
+      const here = spaces[win];
+      if (here && Array.isArray(here.modes) && here.modes.indexOf('research') >= 0) return { space: win, note: '' };
+      return { space: 'chat', note: 'chat' };
+    }
+    /** J19: "Send to → A new chat in…" claims the window's space (as Add pane does); null in a Recon window (refused). */
+    function sendNewSpace(offered, windowSpace) {
+      if (String(windowSpace || '') === 'recon') return null;
+      return claimSpace(offered, windowSpace);
+    }
+    /** J19: a pane's chip, "{mode} · {space}" only when its space differs from the window's. */
+    function paneChip(facts, windowSpace) {
+      const label = (facts && facts.label) || '…';
+      const space = facts && typeof facts.space === 'string' ? facts.space : '';
+      const win = String(windowSpace || '');
+      return space && win && space !== win ? `${label} · ${(facts && facts.spaceName) || space}` : label;
+    }
+    // ---- split-plus:claim-helpers:end ----
+
+    /**
+     * Item 4A, stage 6b: the window's space (the left panel marks it on the page). The page's language is always 'en':
+     * Plus is English only (decision 28), even when the app is set to Chinese; the server still accepts `lang`.
+     */
+    const windowSpace = () => document.documentElement.getAttribute('data-cws-space') || '';
+    const pageLang = () => 'en';
+    /**
+     * Item 4A, stage 6b (J19): the server's answer for the threads a picker lists (their space, sealed when unsure).
+     * null while it is asked; a failed ask lists nothing (each row left out, with the note).
+     */
+    function useSpacesOf(ids) {
+      const key = ids.join(',');
+      const [answer, setAnswer] = useState(null);
+      useEffect(() => {
+        let alive = true;
+        setAnswer(null);
+        if (ids.length === 0) { setAnswer({ live: false, spaces: {}, names: {} }); return undefined; }
+        call({ action: 'spacesOf', ids, lang: pageLang() }).then((value) => { if (alive) setAnswer(value); }, () => { if (alive) setAnswer({ live: true, spaces: {}, names: {} }); });
+        return () => { alive = false; };
+      }, [key]);
+      return answer;
+    }
+    /** The options of a grouped picker (headings as option groups). */
+    function pickerOptions(grouped, label) {
+      return grouped.groups.map((group) => (group.label
+        ? h('optgroup', { key: group.space, label: group.label }, group.rows.map((row) => h('option', { key: row.id, value: row.id }, label(row))))
+        : group.rows.map((row) => h('option', { key: row.id, value: row.id }, label(row)))));
+    }
+
+    /** The Add pane window: a new thread in a mode and a place, or a thread you already have. */
     function AddPane({ appCtx, data, list, panes, from, onDone, onCancel }) {
+      const offered = useMemo(() => offeredModes(data), [data]);
       const [kind, setKind] = useState('new');
-      const [mode, setMode] = useState(data.modes?.[0]?.id ?? 'chat');
+      const [mode, setMode] = useState(offered.start);
       const [choice, setChoice] = useState(from ? 'same' : 'scratch');
       const [folder, setFolder] = useState('');
       const [existing, setExisting] = useState('');
       const [busy, setBusy] = useState(false);
       const [error, setError] = useState('');
       const folders = useMemo(() => knownFolders(list), [list]);
-      const recent = useMemo(() => (list.ids ?? []).map((id) => list.byId[id]).filter((row) => row && !row.parentId && row.origin !== 'subagent' && !row.blank && !panes.some((pane) => pane.sessionId === row.id)).slice(0, 40), [list, panes]);
-      const sealed = data.modes?.find((row) => row.id === mode)?.sealed === true;
+      const recent = useMemo(() => (list.ids ?? []).map((id) => list.byId[id]).filter((row) => row && !row.parentId && row.origin !== 'subagent' && !row.blank && !panes.some((pane) => pane.sessionId === row.id)).slice(0, 80), [list, panes]);
+      // Item 4A, stage 6b (J19): this space's threads first, then others under their names; Recon only in a Recon window.
+      const known = useSpacesOf(kind === 'existing' ? recent.map((row) => row.id) : []);
+      const grouped = useMemo(() => pickerGroups(recent, known, windowSpace(), pageLang(), 40), [recent, known]);
+      const listed = grouped.groups.reduce((sum, group) => sum + group.rows.length, 0);
+      // Lab fix (6a): in a Recon window every mode opens in the room, so the folder choices are not offered there either.
+      const roomNote = roomOnlyNote(data.modes?.find((row) => row.id === mode)?.sealed === true, document.documentElement.getAttribute('data-cws-space') || '', document.documentElement.getAttribute('lang') || '');
+      const sealed = roomNote !== '';
       const go = async () => {
         setBusy(true);
         setError('');
         try {
           if (kind === 'existing') {
-            if (!existing) throw new Error('Pick a conversation.');
+            if (!existing) throw new Error('Pick a thread.');
+            // Only a thread the grouped list shows (the server gave its space, and Recon only in a Recon window).
+            if (!grouped.groups.some((group) => group.rows.some((row) => row.id === existing))) throw new Error('Pick a thread from the list.');
             onDone(existing);
             return;
           }
-          const child = await startConversation(appCtx, data, { mode, choice, folder, from });
+          // Item 4A, stage 6a: the window's space goes with the claim (and a Recon window's pane opens in the room).
+          const space = claimSpace(offered, document.documentElement.getAttribute('data-cws-space') || '');
+          const child = await startConversation(appCtx, data, { mode, choice, folder, from, space });
           onDone(child);
         } catch (problem) {
           setError(problem?.message ?? String(problem));
@@ -887,18 +1396,20 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dsh-sp-pop', role: 'dialog', 'aria-label': 'Add a pane' },
         h('label', null, 'What',
           h('select', { value: kind, onChange: (event) => setKind(event.target.value) },
-            h('option', { value: 'new' }, 'A new conversation'),
-            h('option', { value: 'existing' }, 'A conversation I already have'))),
+            h('option', { value: 'new' }, 'A new thread'),
+            h('option', { value: 'existing' }, 'A thread I already have'))),
         kind === 'existing'
-          ? h('label', null, 'Conversation',
-            h('select', { value: existing, onChange: (event) => setExisting(event.target.value) },
-              h('option', { value: '' }, recent.length ? 'Choose…' : 'None to choose from'),
-              recent.map((row) => h('option', { key: row.id, value: row.id }, row.displayTitle || row.id))))
+          ? h(React.Fragment, null,
+            h('label', null, 'Thread',
+              h('select', { value: existing, onChange: (event) => setExisting(event.target.value) },
+                h('option', { value: '' }, known === null ? 'Loading…' : listed ? 'Choose…' : 'None to choose from'),
+                pickerOptions(grouped, (row) => row.displayTitle || row.id))),
+            grouped.left > 0 ? h('p', { className: 'dsh-sp-note', 'data-unsorted': '' }, words6b('unsorted', {}, pageLang())) : null)
           : [
             h('label', { key: 'mode' }, 'Mode',
-              h('select', { value: mode, onChange: (event) => setMode(event.target.value) }, (data.modes ?? []).map((row) => h('option', { key: row.id, value: row.id }, row.label)))),
+              h('select', { value: mode, onChange: (event) => setMode(event.target.value) }, offered.rows.map((row) => h('option', { key: row.id, value: row.id }, row.label)))),
             sealed
-              ? h('p', { key: 'room', className: 'dsh-sp-note' }, 'A sealed tab works only in its own room, never in a shared folder.')
+              ? h('p', { key: 'room', className: 'dsh-sp-note', 'data-room-only': '' }, roomNote)
               : h('label', { key: 'place' }, 'Folder',
                 h('select', { value: choice, onChange: (event) => setChoice(event.target.value) },
                   from ? h('option', { value: 'same' }, `Same folder as the selected pane${from.cwd ? ` (${from.cwd.split('/').pop()})` : ''}`) : null,
@@ -985,7 +1496,7 @@ window.__ModuleLoader__.load({
 
       if (data && data.enabled !== true) {
         return h('div', { className: 'dsh-sp-page' }, h('style', null, CSS),
-          h('div', { className: 'dsh-sp-empty' }, h('h2', null, 'Split Plus is off'), h('p', { className: 'dsh-sp-note' }, 'Switch it on in Settings → Split Plus to put conversations side by side.')));
+          h('div', { className: 'dsh-sp-empty' }, h('h2', null, 'Split Plus is off'), h('p', { className: 'dsh-sp-note' }, 'Switch it on in Settings → Split Plus to put threads side by side.')));
       }
       const focusedPane = state.panes.find((pane) => pane.id === state.focus) ?? state.panes[0];
       const from = focusedPane ? { sessionId: focusedPane.sessionId, cwd: list.byId?.[focusedPane.sessionId]?.cwd ?? '' } : null;
@@ -994,11 +1505,11 @@ window.__ModuleLoader__.load({
         h('style', null, CSS),
         h('div', { className: 'dsh-sp-bar' },
           h('span', { className: 'title' }, 'Split'),
-          h('button', { type: 'button', className: 'dsh-sp-btn', disabled: full || !data, title: full ? `At most ${MAX_PANES} panes` : 'Open another conversation beside these', onClick: () => { setAdding(!adding); setSetsOpen(false); } }, '＋ Add pane'),
+          h('button', { type: 'button', className: 'dsh-sp-btn', disabled: full || !data, title: full ? `At most ${MAX_PANES} panes` : 'Open another thread beside these', onClick: () => { setAdding(!adding); setSetsOpen(false); } }, '+ Add pane'),
           h('button', { type: 'button', className: 'dsh-sp-btn', disabled: !data, onClick: () => { setSetsOpen(!setsOpen); setAdding(false); } }, 'Pane sets'),
           offer ? h('button', { type: 'button', className: 'dsh-sp-btn', title: offer.folder, onClick: () => { store.replace(offer.ids); setOffer(null); } }, `Bring back the ${offer.ids.length} pane${offer.ids.length === 1 ? '' : 's'} of ${offer.folder.split('/').pop()}`) : null,
           (data?.danger ?? []).length > 0 ? h('span', { className: 'dsh-sp-state', 'data-danger': 'true', style: { color: 'var(--dsw-alias-state-error-primary)', borderColor: 'currentColor' }, title: data.danger.map((one) => one.what).join('\n') }, `Careful: ${data.danger.length} safety rule${data.danger.length === 1 ? '' : 's'} switched off`) : null,
-          h('span', { className: 'hint' }, error ? `Split Plus: ${error}` : state.panes.length ? 'Each pane is a full conversation: its own mode, its own buttons, its own permission mode.' : '')),
+          h('span', { className: 'hint' }, error ? `Split Plus: ${error}` : state.panes.length ? 'Each pane is a full thread: its own mode, its own buttons, its own access level.' : '')),
         setsOpen && data ? h(PaneSets, { appCtx, store, data, list, from, onClose: () => setSetsOpen(false) }) : null,
         adding && data ? h(AddPane, {
           appCtx, data, list, panes: state.panes, from,
@@ -1009,9 +1520,9 @@ window.__ModuleLoader__.load({
         }) : null,
         state.panes.length === 0
           ? h('div', { className: 'dsh-sp-empty' },
-            h('h2', null, 'Conversations side by side'),
+            h('h2', null, 'Threads side by side'),
             h('p', { className: 'dsh-sp-note' }, 'Add a pane to start. A pane opened from another one works in the same folder, so Code can work while you research or ask beside it.'),
-            h('button', { type: 'button', className: 'dsh-sp-btn', 'data-main': 'true', disabled: !data, onClick: () => setAdding(true) }, '＋ Add pane'))
+            h('button', { type: 'button', className: 'dsh-sp-btn', 'data-main': 'true', disabled: !data, onClick: () => setAdding(true) }, '+ Add pane'))
           : h('div', { className: 'dsh-sp-grid', style: { gridTemplateColumns: `repeat(${state.panes.length}, minmax(0, 1fr))` } },
             state.panes.map((pane) => h(Pane, {
               key: pane.id, appCtx, store, pane,
@@ -1072,7 +1583,7 @@ window.__ModuleLoader__.load({
         call(null, `?sessions=${encodeURIComponent([fromSessionId, ...others].join(','))}`).then((value) => {
           if (!alive) return;
           setData(value);
-          setMode(value.modes?.find((row) => !row.sealed)?.id ?? '');
+          setMode(offeredModes(value).rows.find((row) => !row.sealed)?.id ?? '');
           const firstPane = others.find((id) => value.panes?.[id] && !value.panes[id].sealed);
           setTarget(firstPane ? `pane:${firstPane}` : 'new');
         }, (problem) => { if (alive) { setNote(problem.message); setError(true); } });
@@ -1083,7 +1594,11 @@ window.__ModuleLoader__.load({
         document.addEventListener('keydown', onKey);
         return () => document.removeEventListener('keydown', onKey);
       }, [onClose]);
-      const recent = useMemo(() => (list.ids ?? []).map((id) => list.byId[id]).filter((row) => row && row.id !== fromSessionId && !row.parentId && row.origin !== 'subagent' && !row.blank && !/\/dsh-recon[^/]*(\/|$)/.test(row.cwd ?? '')).slice(0, 40), [list, fromSessionId]);
+      const recent = useMemo(() => (list.ids ?? []).map((id) => list.byId[id]).filter((row) => row && row.id !== fromSessionId && !row.parentId && row.origin !== 'subagent' && !row.blank && !/\/dsh-recon[^/]*(\/|$)/.test(row.cwd ?? '')).slice(0, 80), [list, fromSessionId]);
+      // Item 4A, stage 6b (J19): grouped by space, this window's first; Recon (and sealed threads) only in a Recon window.
+      const known = useSpacesOf(recent.map((row) => row.id));
+      const grouped = useMemo(() => pickerGroups(recent, known, windowSpace(), pageLang(), 40), [recent, known]);
+      const listed = grouped.groups.reduce((sum, group) => sum + group.rows.length, 0);
       const sealedFrom = data?.panes?.[fromSessionId]?.sealed === true;
       // Research to Content travels as a research packet (Content's own "bring": the claims with their sources and grades).
       const toPane = target.startsWith('pane:') ? target.slice(5) : '';
@@ -1104,10 +1619,15 @@ window.__ModuleLoader__.load({
         try {
           let to = '';
           if (target.startsWith('pane:')) to = target.slice(5);
-          else if (target === 'existing') to = existing;
-          else if (target === 'new') {
-            if (!mode) throw new Error('Pick a tab.');
-            to = await startConversation(appCtx, data, { mode, choice: 'scratch' });
+          else if (target === 'existing') {
+            if (existing && !grouped.groups.some((group) => group.rows.some((row) => row.id === existing))) throw new Error('Pick a thread from the list.');
+            to = existing;
+          } else if (target === 'new') {
+            if (!mode) throw new Error('Pick a mode.');
+            // Item 4A, stage 6b (J19): the new thread is in the window's space, under its rules; never out of a Recon window.
+            const space = sendNewSpace(offeredModes(data), windowSpace());
+            if (space === null) throw new Error(words6b('sendNewRecon', {}, pageLang()));
+            to = await startConversation(appCtx, data, { mode, choice: 'scratch', space });
           }
           if (!to) throw new Error('Pick where it goes.');
           if (packetDoor && report) {
@@ -1119,7 +1639,7 @@ window.__ModuleLoader__.load({
             const title = list.byId?.[fromSessionId]?.displayTitle ?? '';
             const done = await call({ action: 'send', fromSessionId, fromTitle: title, toSessionId: to, kind: 'result', text: `The user sent the Research report ${report} as a research packet. ${answer.received?.text ?? ''}`, file: report, start });
             if (start && done.text) await promptInto(appCtx, to, done.text, 'queue');
-            setNote(start ? 'The packet is in Content\'s ledger, and that conversation goes on.' : 'The packet is in Content\'s ledger; a card in that conversation\'s chat box says so.');
+            setNote(start ? 'The packet is in Content\'s ledger, and that thread goes on.' : 'The packet is in Content\'s ledger; a card in that thread\'s chat box says so.');
             setTimeout(onClose, 1800);
             return;
           }
@@ -1131,7 +1651,7 @@ window.__ModuleLoader__.load({
             // Show where it went: a pane when there is room, else that conversation itself.
             try { store.add(to); } catch { appCtx.get('uiWorkspace')?.openSession?.(to); }
           }
-          setNote(start ? 'Sent: that conversation has it and goes on (after its running turn, if one is running).' : 'Sent: the card waits in that conversation\'s chat box until you send it there.');
+          setNote(start ? 'Sent: that thread has it and goes on (after its running turn, if one is running).' : 'Sent: the card waits in that thread\'s chat box until you send it there.');
           setTimeout(onClose, 1600);
         } catch (problem) {
           setNote(problem?.message ?? String(problem));
@@ -1150,23 +1670,24 @@ window.__ModuleLoader__.load({
           h('button', { type: 'button', className: 'dsh-sp-icon', 'aria-label': 'Close', onClick: onClose }, h(Icon, { d: ICON_CLOSE }))),
         !data && !note ? h('p', { className: 'dsh-sp-note' }, 'Loading…') : null,
         data && sealedFrom ? [
-          h('p', { key: 'sealed', className: 'dsh-sp-note' }, 'This conversation is sealed (Recon). Nothing leaves it except through its own Export window, after its run.'),
+          h('p', { key: 'sealed', className: 'dsh-sp-note' }, 'This thread is sealed (Recon). Nothing leaves it except through its own Export window, after its run.'),
           h('div', { key: 'door', className: 'dsh-sp-row' }, h('button', { type: 'button', className: 'dsh-sp-btn', 'data-main': 'true', onClick: () => { window.dispatchEvent(new CustomEvent('dsh-split-plus:recon-export', { detail: { sessionId: fromSessionId } })); onClose(); } }, 'Open Recon\'s Export…')),
         ] : null,
         data && !sealedFrom ? [
           ...others.filter((id) => data.panes?.[id] && !data.panes[id].sealed).map((id) => option(`pane:${id}`, `The ${data.panes[id].label} pane${list.byId?.[id]?.displayTitle ? ` — ${list.byId[id].displayTitle.slice(0, 48)}${list.byId[id].displayTitle.length > 48 ? '…' : ''}` : ''}`)),
-          option('new', 'A new chat in', h('select', { value: mode, onChange: (event) => { setMode(event.target.value); setTarget('new'); } }, (data.modes ?? []).filter((row) => !row.sealed).map((row) => h('option', { key: row.id, value: row.id }, row.label)))),
-          option('existing', 'A conversation I have', h('select', { value: existing, onChange: (event) => { setExisting(event.target.value); setTarget('existing'); } },
-            h('option', { value: '' }, recent.length ? 'Choose…' : 'None'),
-            recent.map((row) => h('option', { key: row.id, value: row.id }, (row.displayTitle || row.id).slice(0, 60))))),
+          option('new', 'A new thread in', h('select', { value: mode, onChange: (event) => { setMode(event.target.value); setTarget('new'); } }, offeredModes(data).rows.filter((row) => !row.sealed).map((row) => h('option', { key: row.id, value: row.id }, row.label)))),
+          option('existing', 'A thread I have', h('select', { value: existing, onChange: (event) => { setExisting(event.target.value); setTarget('existing'); } },
+            h('option', { value: '' }, known === null ? 'Loading…' : listed ? 'Choose…' : 'None'),
+            pickerOptions(grouped, (row) => (row.displayTitle || row.id).slice(0, 60)))),
+          grouped.left > 0 ? h('p', { key: 'unsorted', className: 'dsh-sp-note', 'data-unsorted': '' }, words6b('unsorted', {}, pageLang())) : null,
           packetDoor ? h('label', { key: 'packet', className: 'dsh-sp-choice' }, h('span', null, 'As a research packet:'),
             h('select', { value: report, onChange: (event) => setReport(event.target.value) },
               h('option', { value: '' }, reports === null ? 'Loading…' : reports.length ? `No: send ${KIND_WORDS[kind] ?? 'it'} as it is` : 'No saved report'),
               (reports ?? []).map((one) => h('option', { key: one.name, value: one.name }, (one.title || one.name).slice(0, 60))))) : null,
           h('p', { key: 'rule', className: 'dsh-sp-note' }, packetDoor && report ? 'Content brings the report in with its claims, sources and grades, marked as from Research; you rule on each claim there.' : 'It goes as material with its source, never as your instruction. Add your own sentence in the receiving chat box.'),
           h('div', { key: 'buttons', className: 'dsh-sp-row' },
-            h('button', { type: 'button', className: 'dsh-sp-btn', disabled: busy, onClick: () => void go(true), title: 'Send it there and start that conversation at once' }, 'Send and start'),
-            h('button', { type: 'button', className: 'dsh-sp-btn', 'data-main': 'true', disabled: busy, onClick: () => void go(false), title: 'Put it in that conversation\'s chat box; you send it from there' }, busy ? 'Sending…' : 'Send')),
+            h('button', { type: 'button', className: 'dsh-sp-btn', disabled: busy, onClick: () => void go(true), title: 'Send it there and start that thread at once' }, 'Send and start'),
+            h('button', { type: 'button', className: 'dsh-sp-btn', 'data-main': 'true', disabled: busy, onClick: () => void go(false), title: 'Put it in that thread\'s chat box; you send it from there' }, busy ? 'Sending…' : 'Send')),
         ] : null,
         note ? h('p', { className: 'dsh-sp-note', 'data-error': error ? 'true' : 'false' }, note) : null), document.body);
     }
@@ -1179,7 +1700,7 @@ window.__ModuleLoader__.load({
       const [place, setPlace] = useState(null);
       if (!on || !sessionId || !messageId) return null;
       return h(React.Fragment, null,
-        h('button', { type: 'button', className: 'dsh-sp-icon', title: 'Send this answer to another pane or chat', 'aria-label': 'Send to', onClick: (event) => setPlace(placeNear(event.currentTarget.getBoundingClientRect())) }, h(Icon, { d: ICON_SEND })),
+        h('button', { type: 'button', className: 'dsh-sp-icon', title: 'Send this answer to another pane or thread', 'aria-label': 'Send to', onClick: (event) => setPlace(placeNear(event.currentTarget.getBoundingClientRect())) }, h(Icon, { d: ICON_SEND })),
         place ? h(SendMenu, { appCtx, store, fromSessionId: sessionId, kind: 'message', getText: async () => (await call({ action: 'message', sessionId, messageId })).text, place, onClose: () => setPlace(null) }) : null);
     }
 
@@ -1270,19 +1791,24 @@ window.__ModuleLoader__.load({
         await call({ action: 'drop', sessionId, id: card.id }).catch(() => {});
         setTick((value) => value + 1);
       };
-      const when = (at) => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const when = (at) => new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
       const continueBeside = async () => {
         setProblem('');
         try {
-          const taken = await fetch(new URL('dsh-content/data', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ action: 'continued', sessionId, taken: true }) }).then((response) => response.json());
-          if (!taken?.continued?.text) throw new Error('That starting text is not there any more.');
           const text = besideDraft.trim();
           if (!text) throw new Error('The starting text is empty.');
-          const data = await call(null, '?sessions=');
-          const child = await startConversation(appCtx, data, { mode: 'research', choice: 'scratch' });
+          // Item 4A, stage 6b (J19): never out of a sealed pane; else in the window's space when it offers Research, else Chat.
+          // Asked before the starting text is taken, so a refusal leaves it offered.
+          const data = await call(null, `?sessions=${encodeURIComponent(sessionId)}`);
+          if (data.panes?.[sessionId]?.sealed !== false) throw new Error(words6b('continueSealed', {}, pageLang()));
+          const where = continuePlace(data.spaces, windowSpace());
+          const taken = await fetch(new URL('dsh-content/data', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ action: 'continued', sessionId, taken: true }) }).then((response) => response.json());
+          if (!taken?.continued?.text) throw new Error('That starting text is not there any more.');
+          const child = await startConversation(appCtx, data, { mode: 'research', choice: 'scratch', ...(where.space ? { space: where.space } : {}) });
           try { store.add(child); } catch { appCtx.get('uiWorkspace')?.openSession?.(child); }
           await promptInto(appCtx, child, text, 'queue');
           setBeside(null);
+          if (where.note) void askInPage({ notice: true, title: 'Split Plus', text: where.note === 'recon' ? words6b('continueReconWindow', {}, pageLang()) : words6b('continueInChat', { space: data.spaceNames?.[windowSpace()] || windowSpace() }, pageLang()) });
         } catch (error) {
           setProblem(error.message);
         }
@@ -1290,23 +1816,23 @@ window.__ModuleLoader__.load({
       return h(React.Fragment, null,
         h('style', null, CSS),
         beside && beside.at !== hiddenAt ? h('div', { className: 'dsh-sp-card' },
-          h('div', { className: 'dsh-sp-cardname' }, 'Continue in Research: this conversation\'s model wrote a starting text for a Research conversation. Read it, change it if you like; it goes as your message.'),
-          h('textarea', { className: 'dsh-sp-input', 'aria-label': 'Starting text for the Research conversation', rows: 8, style: { width: '100%', minHeight: 120, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }, value: besideDraft, onChange: (event) => setBesideDraft(event.target.value) }),
+          h('div', { className: 'dsh-sp-cardname' }, 'Continue in Research: this thread\'s model wrote a starting text for a Research thread. Read it, change it if you like; it goes as your message.'),
+          h('textarea', { className: 'dsh-sp-input', 'aria-label': 'Starting text for the Research thread', rows: 8, style: { width: '100%', minHeight: 120, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }, value: besideDraft, onChange: (event) => setBesideDraft(event.target.value) }),
           h('div', { className: 'dsh-sp-row dsh-sp-cardrow' },
             h('button', { type: 'button', className: 'dsh-sp-btn', onClick: () => setHiddenAt(beside.at), title: 'Hide it; you can still paste the text yourself' }, 'Not now'),
-            h('button', { type: 'button', className: 'dsh-sp-btn', 'data-main': 'true', onClick: () => void continueBeside(), title: 'Start a Research conversation in the pane beside with this text' }, 'Start in Research beside')),
+            h('button', { type: 'button', className: 'dsh-sp-btn', 'data-main': 'true', onClick: () => void continueBeside(), title: 'Start a Research thread in the pane beside with this text' }, 'Start in Research beside')),
           problem && !tray.length ? h('p', { className: 'dsh-sp-note', 'data-error': 'true' }, problem) : null) : null,
-        tray.length > 0 ? h('div', { className: 'dsh-sp-tray', 'aria-label': 'Sent to this conversation' },
+        tray.length > 0 ? h('div', { className: 'dsh-sp-tray', 'aria-label': 'Sent to this thread' },
           tray.map((card) => h('div', { key: card.id, className: 'dsh-sp-card' },
             h('div', { className: 'dsh-sp-cardhead' },
               h('span', { className: 'dsh-sp-abbr' }, '↘'),
-              h('span', { className: 'dsh-sp-cardname', title: card.from?.title ?? '' }, `${(KIND_WORDS[card.kind] ?? 'material').replace(/^(the|this) /, '').replace(/^./, (c) => c.toUpperCase())} from the ${card.from?.label ?? 'other'} conversation · ${when(card.at)}${card.sources ? ` · ${card.sources} source${card.sources === 1 ? '' : 's'}` : ''}`)),
+              h('span', { className: 'dsh-sp-cardname', title: card.from?.title ?? '' }, `${(KIND_WORDS[card.kind] ?? 'material').replace(/^(the|this) /, '').replace(/^./, (c) => c.toUpperCase())} from the ${card.from?.label ?? 'other'} thread · ${when(card.at)}${card.sources ? ` · ${card.sources} source${card.sources === 1 ? '' : 's'}` : ''}`)),
             h('div', { className: 'dsh-sp-preview' }, card.file ? `${card.file}\n${card.preview}` : card.preview),
             h('div', { className: 'dsh-sp-row dsh-sp-cardrow' },
               h('input', { className: 'dsh-sp-input', style: { flex: '1 1 160px', minWidth: 0 }, placeholder: 'Your sentence (optional)', value: sentences[card.id] ?? '', onChange: (event) => setSentences({ ...sentences, [card.id]: event.target.value }) }),
               h('button', { type: 'button', className: 'dsh-sp-btn', onClick: () => void drop(card), title: 'Take it out; nothing is sent' }, 'Remove'),
               running ? h('button', { type: 'button', className: 'dsh-sp-btn', onClick: () => void deliver(card, 'handover'), title: 'The running job reads it at its next step, without stopping' }, 'Hand over now') : null,
-              h('button', { type: 'button', className: 'dsh-sp-btn', 'data-main': 'true', onClick: () => void deliver(card, 'send'), title: running ? 'Held until the running job ends, then sent' : 'Send it into this conversation' }, running ? 'Send when done' : 'Send')))),
+              h('button', { type: 'button', className: 'dsh-sp-btn', 'data-main': 'true', onClick: () => void deliver(card, 'send'), title: running ? 'Held until the running job ends, then sent' : 'Send it into this thread' }, running ? 'Send when done' : 'Send')))),
           problem ? h('p', { className: 'dsh-sp-note', 'data-error': 'true' }, problem) : null) : null,
         pick && !menu ? ReactDOM.createPortal(h('button', { type: 'button', className: 'dsh-sp-float', style: { left: Math.min(pick.rect.right, window.innerWidth - 110), top: Math.max(4, pick.rect.top - 34) }, onMouseDown: (event) => event.preventDefault(), onClick: () => { setMenu({ ...pick, place: placeNear(pick.rect) }); setPick(null); } }, h(Icon, { d: ICON_SEND, size: 12 }), ' Send to…'), document.body) : null,
         menu ? h(SendMenu, { appCtx, store, fromSessionId: sessionId, kind: menu.kind, file: menu.file ?? '', getText: async () => (menu.file ? (await call({ action: 'file', sessionId, path: menu.file })).text : menu.text), place: menu.place, onClose: () => setMenu(null) }) : null);
@@ -1343,10 +1869,10 @@ window.__ModuleLoader__.load({
     /** The Danger zone's switches (the server half's DANGERS), in the order Settings shows them. */
     const DANGER_SWITCHES = [
       ['dangerFileHolds', 'Let panes change the same file at once', 'No waiting for a file another pane is changing, and a change to a file that changed since the pane read it is no longer refused.'],
-      ['dangerSealedSends', 'Send out of and into Recon panes', 'Send to works out of and into Recon panes, without Recon\'s Export window. What Recon read can then reach other tabs.'],
+      ['dangerSealedSends', 'Send out of and into Recon panes', 'Send to works out of and into Recon panes, without Recon\'s Export window. What Recon read can then reach other threads.'],
       ['dangerWatchSealed', 'Watch Recon panes', 'A watcher may read a Recon pane\'s run. What Recon read then reaches the watcher\'s model.'],
-      ['dangerWatcherTools', 'Let watchers use every tool', 'A watcher may change files and run commands like any conversation of its tab, not only read.'],
-      ['dangerUnmarked', 'Send without the card', 'Sends go as plain text, without the "material, not instructions" card: the receiving conversation, Devices, Content and Creator Plus read it as your own words.'],
+      ['dangerWatcherTools', 'Let watchers use every tool', 'A watcher may change files and run commands like any thread in its mode, not only read.'],
+      ['dangerUnmarked', 'Send without the card', 'Sends go as plain text, without the "material, not instructions" card: the receiving thread, Devices, Content and Creator Plus read it as your own words.'],
     ];
 
     /** Settings → Split Plus. */
@@ -1365,10 +1891,10 @@ window.__ModuleLoader__.load({
       };
       if (!data) return h(ui.Page, { title: 'Split Plus' }, note.text ? h(PlainNote, { text: note.text, details: note.details, kind: 'error' }) : h(ui.Wait, null, 'Loading…'));
       const on = data.enabled === true;
-      return h(ui.Page, { title: 'Split Plus', desc: 'Two to four conversations side by side in one window, each in any mode with its own buttons and permission mode.' },
+      return h(ui.Page, { title: 'Split Plus', desc: 'Two to four threads side by side in one window, each in any mode with its own buttons and access level.' },
         note.text ? h(PlainNote, { text: note.text, details: note.details, kind: note.error ? 'error' : 'info' }) : null,
         h(ui.Row, { title: 'Split page', desc: 'A pane opened from another works in the same folder; a Recon pane works only in Recon\'s own room.' },
-          h(ui.Switch, { on, label: 'Show the Split page', disabled: busy, onChange: () => void run(() => saveSetting(appCtx, 'enabled', !on), on ? 'Switched off.' : 'Switched on: the Split page is in the sidebar.') })),
+          h(ui.Switch, { on, label: 'Show the Split page', disabled: busy, onChange: () => void run(() => saveSetting(appCtx, 'enabled', !on), on ? 'Switched off.' : 'Switched on: the Split page is in the left panel.') })),
         on ? h(React.Fragment, null,
           h(ui.Group, null, 'Local models'),
           h(ui.Row, { title: 'Panes on a local model at once', desc: 'How many panes may use a model on this Mac or your own server at the same time (1 to 4). A pane over the limit waits and says so. Online models never count.' },

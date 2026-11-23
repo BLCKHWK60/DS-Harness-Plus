@@ -1,0 +1,57 @@
+{
+  "name": "@local/dsh-tool-ledger",
+  "folder": "dsh-tool-ledger",
+  "at": "2026-11-19",
+  "provides": [
+    "toolLedger"
+  ],
+  "uses": [
+    "dshHomePath",
+    "tools",
+    "modes",
+    "toolAccess",
+    "agentPresets",
+    "mission",
+    "agents",
+    "sessions",
+    "workspaceRegistry",
+    "coworkTrash"
+  ],
+  "events": [
+    "tools/pre-execute",
+    "tools/execute",
+    "tools/result",
+    "session/event",
+    "agent/disposed"
+  ],
+  "tools": [],
+  "commands": [],
+  "routes": [
+    "/dsh-tool-ledger/summary",
+    "/dsh-tool-ledger/export",
+    "/dsh-tool-ledger/clear"
+  ],
+  "slots": [
+    {
+      "name": "settings.section",
+      "id": "tool-ledger"
+    }
+  ],
+  "settings": [
+    "enabled",
+    "keepDays"
+  ],
+  "sections": [],
+  "modes": [],
+  "storage": [
+    "tool-ledger"
+  ],
+  "config": [
+    "enabled",
+    "keepDays"
+  ],
+  "instructionChars": 0,
+  "rows": [
+    "tool-ledger"
+  ]
+}

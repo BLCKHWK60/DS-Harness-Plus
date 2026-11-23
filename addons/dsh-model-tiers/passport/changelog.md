@@ -1,5 +1,8 @@
 # Changelog: @local/dsh-model-tiers
 
+- 2026-11-23 Item 4A, stage 7 (words only): English only (decision 28): `locale/zh.json` and the Chinese dictionary are gone. Title "Model tiers" (sentence case); "thread" for conversation and Session (also in the model-visible delegation lines); the app's agent presets are called presets ("Instructions per preset"). Ids, settings and the service are unchanged.
+- 2026-11-21 Item 7, second lab round: the program clock starts when the program is dispatched (tools/execute), so time waiting for the owner's approval is not counted as program time
+- 2026-11-21 Item 7: inside a program (PTC) delegate_role, review_lanes and run_pipeline shorten themselves to end before the program's time limit, keep finished and unfinished answers, and say why and how to get a full run (Standard, or a higher timeoutMs).
 - 2026-11-17 The adapter field on a team member says Tuner Plus
 - 2026-11-17 The rest of the Content and Bench plan: Web levels, Ultra Code and the work loop, the Recon export door, the Voice Library, and Bench's network, server, phone and Bluetooth doors
 - 2026-11-16 Long run in every tab with a Run button, and the overnight work

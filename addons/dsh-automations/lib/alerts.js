@@ -2,7 +2,7 @@
  * Alerts: a short line on this Mac and, when set up, on your phone.
  *
  * The line is built here from fixed words plus a name: the task's name for a scheduled task, or the
- * project folder's name for a conversation you started. It never contains your instruction or the
+ * project folder's name for a thread you started. It never contains your instruction or the
  * assistant's answer. Kept apart from the plugin so it can be tested without the app.
  */
 import { execFile } from 'node:child_process';
@@ -34,23 +34,59 @@ export function cleanName(value) {
  * @param {'failed' | 'needs' | 'finished'} what.event - the kind.
  * @param {string} [what.name] - the task's name, or the project folder's.
  * @param {boolean} [what.scheduled] - whether it is a scheduled task.
- * @param {string} [what.waiting] - for `needs`: approval, question or plan-review.
+ * @param {string} [what.waiting] - for `needs`: approval, question or plan-review; for a Mission (`run`) also you.
  * @param {string} [what.state] - for `failed`: failed or stopped.
+ * @param {string} [what.run] - 'long' or 'mission' for a Mission; empty for a task.
+ * @param {number} [what.until] - a Mission waiting for you ('you'): when it ends with no answer (ms since 1970); 0 means
+ *   it waits until you answer. Older events have none.
+ * @param {number} [what.left] - a finished Mission: how many things are left for you (questions, requests for your yes,
+ *   items not done). Older events have none.
+ * @param {boolean} [what.canContinue] - a finished Mission: whether Finish it can take it up again.
+ * @param {string} [what.endKind] - a finished Mission: how it ended ('down': its model server did not answer for 2 hours).
+ *   `state` 'down' (for `failed`): a Mission waiting for its model server.
+ * @param {boolean} [what.sealed] - an automation of Recon (item 6): the line says "A Recon automation", never its name.
  * @returns {string} the line.
  */
-export function alertText({ event, name, scheduled, waiting, state, run }) {
+export function alertText({ event, name, scheduled, waiting, state, run, until, left, canContinue, endKind, sealed }) {
   const clean = cleanName(name);
-  // A Mission or Long run (Long run part, step 54): only the project folder's name, never the goal's text.
+  // A Mission (Long run part, step 54): only the project folder's name, never the goal's text. Mission and Long run are
+  // one thing since stage B (19 November 2026), so both kinds read "A Mission"; `run` ('long' or 'mission') stays as wired.
   if (run) {
-    const what = `${run === 'long' ? 'A long run' : 'A mission run'}${clean ? ` in ${clean}` : ''}`;
-    if (event === 'needs') return `${what} needs your yes`;
+    const what = `A Mission${clean ? ` in ${clean}` : ''}`;
+    // Mission stage D (20 November 2026): what it waits for (a helper's question, an approval, or only you can move it on).
+    if (event === 'needs') {
+      if (waiting === 'question') return `${what} has a question for you`;
+      // Point 17 (20 November 2026): the wait says when it ends, or that it waits until you answer.
+      if (waiting === 'you') return `${what} is waiting for you${waitEnd(until)}`;
+      return `${what} needs your yes`;
+    }
+    // Mission stage E (20 November 2026): a Mission waiting for its model server tries again by itself.
+    if (event === 'failed' && state === 'down') return `${what} is waiting for your model server (it tries again by itself for up to 2 hours)`;
     if (event === 'failed') return state === 'restart' ? `${what} was interrupted when the app closed: open it to resume or end it` : `${what} stopped by itself (the model did not answer)`;
+    if (endKind === 'down') return `${what} ended: your model server did not answer for 2 hours`;
+    if (Number(left) > 0 && canContinue !== false) return `${what} finished; some things are left for you (Finish it, above the chat box)`;
     return `${what} finished`;
   }
-  const who = scheduled ? clean || 'A scheduled task' : clean ? `A task in ${clean}` : 'A task';
+  // Item 6: an automation of Recon is never named (an alert can go to an outside service, ntfy).
+  const who = sealed ? 'A Recon automation' : scheduled ? clean || 'An automation' : clean ? `A thread in ${clean}` : 'A thread';
   if (event === 'needs') return `${who} ${WAIT_WORDS[waiting] ?? 'needs you'}`;
   if (event === 'failed') return `${who} ${state === 'stopped' ? 'was stopped before it finished' : 'failed'}`;
   return `${who} finished`;
+}
+
+/**
+ * When a Mission's wait ends, in words for the alert.
+ * @param {unknown} until - ms since 1970; 0 = until you answer; anything else (older events) says nothing.
+ * @returns {string} '' or a part starting with a space.
+ */
+function waitEnd(until) {
+  if (until === 0) return ' (until you answer)';
+  const at = Number(until);
+  if (typeof until !== 'number' || !Number.isFinite(at) || at <= 0) return '';
+  const when = new Date(at);
+  const hh = String(when.getHours()).padStart(2, '0');
+  const mm = String(when.getMinutes()).padStart(2, '0');
+  return ` (with no answer it ends at ${hh}:${mm})`;
 }
 
 /**

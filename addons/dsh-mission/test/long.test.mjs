@@ -21,8 +21,8 @@ test('a /mission run keeps every rule it had: no clock, no laps, the same limits
 });
 
 test('a Long run: its own settings in range, laps decide steps and reviews (decision 1)', () => {
-  assert.deepEqual(readLong({ minutes: 5, laps: 99, fullTime: 'yes' }), { minutes: 10, laps: 50, fullTime: false });
-  assert.deepEqual(readLong({}), { minutes: 120, laps: 10, fullTime: false });
+  assert.deepEqual(readLong({ minutes: 5, laps: 99, fullTime: 'yes' }), { minutes: 10, laps: 50, fullTime: false, steps: 0 });
+  assert.deepEqual(readLong({}), { minutes: 120, laps: 10, fullTime: false, steps: 0 });
   const run = long({ laps: 30 });
   assert.equal(run.kind, 'long');
   assert.equal(run.long.deadline, T0 + 60 * 60000);
@@ -170,7 +170,7 @@ test('the runner: a Long run that breaks a passing check in a later lap is undon
     const runner = createRunner(ctx, { settings: () => ({ limits: { maxItems: 12, maxTries: 3, maxReviews: 2, maxSteps: 60, waitMinutes: 3 }, roles: {}, projects: {} }), pointsOf: () => points, afterCommand: async () => [], warn: () => {}, home: undefined });
     const agent = { id: 'conv', model: { current: () => ({ provider: 'p', model: 'm' }) } };
     const started = await runner.start(agent, 'keep the state good and try things', { mode: 'auto', root }, { kind: 'long', long: { minutes: 60, laps: 5 } });
-    assert.match(started, /^Long run started \(Full Auto\)/);
+    assert.match(started, /^Mission started \(Auto\)/);
     const texts = [];
     for (let i = 0; i < 30 && runner.isOn('conv'); i += 1) texts.push(await runner.step(agent, new AbortController().signal, 120000));
     const all = texts.join("\n---\n"); if (process.env.SHOW) console.log(all);
@@ -180,7 +180,7 @@ test('the runner: a Long run that breaks a passing check in a later lap is undon
     const run = runner.runOf('conv');
     assert.equal(run.long.undone.length >= 1, true);
     assert.equal(existsSync(join(root, '.dsh-mission', 'runs', run.id, 'run.json')), true, 'the run\'s own record is never put back');
-    assert.match(all, /Long run complete: all 2 items done and checked\./);
+    assert.match(all, /Mission complete: all 2 items done and checked\./);
     assert.match(all, /Lap 3 broke grep -q good state\.txt and was undone\. Its work is kept as checkpoint \d+/);
     assert.match(all, /It ended because two laps in a row found nothing more to do\./);
   } finally {
@@ -199,7 +199,7 @@ test('effort by role: a Long run\'s planner and reviewer think High, its workers
     let made = false;
     const goals = { create: () => { made = true; goal.phase = 'active'; return goal; }, get: () => (made ? goal : undefined), pause: () => {}, resume: () => {}, complete: () => { goal.phase = 'complete'; made = false; }, clear: () => { made = false; } };
     const seen = [];
-    const subagents = { startActivation: async (spec) => { seen.push([spec.label, spec.agentOptions?.reasoningEffort]); return { childId: 'c', result: Promise.resolve({ output: [{ type: 'text', text: spec.label === 'Mission: planner' ? '{"items":[{"title":"x","check":"true"}],"checks":[]}' : '{"items":[]}' }], stopReason: 'end' }) }; } };
+    const subagents = { startActivation: async (spec) => { seen.push([spec.label, spec.agentOptions?.reasoningEffort]); return { childId: 'c', result: Promise.resolve({ output: [{ type: 'text', text: spec.label === 'Mission: planner' ? '{"items":[{"title":"x","check":"true"}],"checks":[]}' : '{"verdict":"approve","items":[]}' }], stopReason: 'end' }) }; } };
     const points = { take: async () => ({ id: 'p', number: 1 }), files: async () => ({ files: [], more: false }), idOf: async () => 'p', changes: async () => '' };
     const runner = createRunner({ get: (name) => ({ goals, subagents })[name] }, { settings: () => ({ limits: { maxItems: 12, maxTries: 3, maxReviews: 1, maxSteps: 60, waitMinutes: 3 }, roles: {}, projects: {} }), pointsOf: () => points, afterCommand: async () => [], warn: () => {}, home: undefined });
     const agent = { id: 'c1', model: { current: () => ({ provider: 'p', model: 'm' }) } };
@@ -253,7 +253,9 @@ test('a model that refuses a thinking level is asked again without one; helpers 
         // Like deepseek-flash: High is taken, Medium is refused at once.
         // Like the app: the failure comes with no detail.
         if (spec.agentOptions?.reasoningEffort === 'medium') return { childId: 'c', result: Promise.resolve({ output: [], stopReason: 'error' }) };
-        if (workersFail && spec.label.startsWith('Mission: item')) return { childId: 'c', result: Promise.resolve({ output: [], stopReason: 'error', diagnostic: 'connection refused' }) };
+        // (Stage E: a failure that says the server does not answer makes the Mission wait for it; this one does not.)
+        if (workersFail && spec.label.startsWith('Mission: item')) return { childId: 'c', result: Promise.resolve({ output: [], stopReason: 'error', diagnostic: 'the model crashed' }) };
+        if (workersFail && spec.label === 'Mission: repair helper') return { childId: 'c', result: Promise.resolve({ output: [{ type: 'text', text: '{"cause": "the model crashes", "fixed": false, "own": [], "ask": []}' }], stopReason: 'end' }) };
         const text = spec.label === 'Mission: planner' ? '{"items":[{"title":"one"},{"title":"two"},{"title":"three"},{"title":"four"}],"checks":[]}' : 'did it';
         return { childId: 'c', result: Promise.resolve({ output: [{ type: 'text', text }], stopReason: 'end' }) };
       },
@@ -272,10 +274,12 @@ test('a model that refuses a thinking level is asked again without one; helpers 
     workersFail = true;
     const texts = [];
     for (let i = 0; i < FAIL_STREAK; i += 1) texts.push(await runner.step(agent, new AbortController().signal, 60000));
+    // Stage E: the repair helper looks first; it fixes nothing, so the run pauses as before (with a tail).
+    texts.push(await runner.step(agent, new AbortController().signal, 60000));
     const run = runner.runOf('f1');
-    assert.ok(run.items.filter((item) => item.note.includes('connection refused')).length >= 1);
-    assert.equal(run.items.some((item) => item.status === 'unverified' && item.note.includes('connection refused')), false);
-    assert.match(texts.at(-1), /The run is paused: 3 helpers in a row could not do their item\. The last one: The helper's model failed: connection refused/);
+    assert.ok(run.items.filter((item) => item.note.includes('the model crashed')).length >= 1);
+    assert.equal(run.items.some((item) => item.status === 'unverified' && item.note.includes('the model crashed')), false);
+    assert.match(texts.at(-1), /The run is paused: 3 helpers in a row failed\. The last one: The helper's model failed: the model crashed The repair helper could not fix it by itself\./);
     await new Promise((resolve) => setTimeout(resolve, 5));
     assert.deepEqual(paused, ['pause']);
     assert.match(runner.runOf('f1').stalled, /^Paused: 3 helpers in a row/);
@@ -439,14 +443,14 @@ test('a Recon conversation\'s run: commands are dropped (the reviewer judges), h
     assert.match(worked, /no command proves it, so the reviewer will judge it/);
     assert.ok(seen[1].prompt.includes(NO_COMMANDS_WORK));
     assert.ok(seen[1].prompt.includes(`Working folder: ${root}. Keep every file you write inside it.`));
-    assert.deepEqual([...new Set(seen.map((entry) => entry.model))], ['home-model'], 'every helper on the conversation\'s own model');
+    assert.deepEqual([...new Set(seen.map((entry) => entry.model))], ['home-model'], 'every helper on the thread\'s own model');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
 /** A Devices conversation's Long run with stand-in helpers: the planner's answer, and what each helper was told and on which model. */
-async function benchRun({ checks, plan, long }) {
+async function benchRun({ checks, plan, long, liveRules }) {
   const { createRunner } = await import('../runner.js');
   const { mkdtempSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
@@ -466,7 +470,7 @@ async function benchRun({ checks, plan, long }) {
   const modes = { helperModels: () => 'roles' };
   const modelTiers = { resolveTier: () => ({ id: 't' }), roleRoute: () => ({ provider: 'cloud', model: 'role-model' }) };
   const points = { take: async () => ({ id: 'p', number: 1 }), files: async () => ({ files: [], more: false }), idOf: async () => 'p', changes: async () => '' };
-  const runner = createRunner({ get: (name) => ({ goals, subagents, modes, modelTiers })[name] }, { settings: () => ({ limits: { maxItems: 12, maxTries: 3, maxReviews: 2, maxSteps: 60, waitMinutes: 3 }, roles: {}, projects: {} }), pointsOf: () => points, afterCommand: async () => [], warn: () => {}, home: undefined });
+  const runner = createRunner({ get: (name) => ({ goals, subagents, modes, modelTiers })[name] }, { settings: () => ({ limits: { maxItems: 12, maxTries: 3, maxReviews: 2, maxSteps: 60, waitMinutes: 3 }, roles: {}, projects: {} }), pointsOf: () => points, afterCommand: async () => [], warn: () => {}, home: undefined, liveRules });
   const agent = { id: 'bc', model: { current: () => ({ provider: 'local', model: 'home-model' }) } };
   const events = [];
   runner.onEvent((event) => events.push(event));
@@ -498,7 +502,7 @@ test('a Devices conversation\'s run, checks on: they run as in every tab, with t
       assert.ok(second.includes(PORTS_CLOSED_NOTE), second);
       assert.notEqual(run.items[1].status, 'verified');
     }
-    assert.ok(seen.some((entry) => entry.model === 'role-model'), 'helpers keep the conversation\'s model choice (not Recon\'s one model)');
+    assert.ok(seen.some((entry) => entry.model === 'role-model'), 'helpers keep the thread\'s model choice (not Recon\'s one model)');
     await new Promise((resolve) => setTimeout(resolve, 10));
     assert.ok(events.some((event) => event.goal === 'look up the board'), 'its events carry the goal, unlike Recon\'s');
   } finally {
@@ -803,6 +807,61 @@ test('a check leaves no process behind: its process group is stopped when it end
     await new Promise((resolve) => setTimeout(resolve, 2500));
     assert.equal(existsSync(join(root, 'late.txt')), false);
   } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('mission-space-live (stage 6a integration): a run started in Chat takes on Devices rules before its next check once the thread sits in Devices; a guarded space without rules runs no check', async () => {
+  const { rmSync } = await import('node:fs');
+  const { SPACE_HELD_TEXT } = await import('../runner.js');
+  const plan = { items: [{ title: 'Write the notes', check: 'echo ok' }, { title: 'More notes', check: 'echo ok' }], checks: [] };
+  let live = {};
+  const { runner, agent, root } = await benchRun({ checks: true, plan, long: { minutes: 30, laps: 1 }, liveRules: () => live });
+  try {
+    await runner.step(agent, new AbortController().signal, 60000); // plan
+    const run = runner.runOf('bc');
+    assert.equal(run.long.bench, undefined, 'started in Chat: no Devices rules');
+    live = { bench: { checks: true, closedPorts: true } };
+    const first = await runner.step(agent, new AbortController().signal, 60000); // item 1
+    assert.deepEqual(run.long.bench, { checks: true, closedPorts: true }, 'the Devices rules are taken on for good');
+    assert.match(first, /PASSED: its command was run and passed/);
+    live = { held: true };
+    const second = await runner.step(agent, new AbortController().signal, 60000); // item 2
+    assert.ok(second.includes(SPACE_HELD_TEXT), second);
+    assert.notEqual(run.items[1].status, 'verified');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('mission-devices-home-checks (owner\'s answer after review): the Devices mode\'s own run checks as before 6a (the app\'s environment, not the Devices fence); once Bench reads a guest, the run is fenced for good', { skip: !(process.platform === 'darwin' && existsSync('/usr/bin/sandbox-exec')) && 'needs the Mac sandbox' }, async () => {
+  const { rmSync } = await import('node:fs');
+  // A check that passes only outside the Devices fence: it sees a variable of the app's environment (a clean one has none).
+  const check = 'test "$DSH_TEST_HOME_MARK" = here && echo ok';
+  const plan = { items: [{ title: 'One', check }, { title: 'Two', check }], checks: [] };
+  let live = { bench: { checks: true, closedPorts: true, home: true } };
+  process.env.DSH_TEST_HOME_MARK = 'here';
+  const { runner, agent, root } = await benchRun({ checks: true, plan, long: { minutes: 30, laps: 1, bench: { checks: true, closedPorts: true, home: true } }, liveRules: () => live });
+  try {
+    await runner.step(agent, new AbortController().signal, 60000); // plan
+    const run = runner.runOf('bc');
+    assert.deepEqual(run.long.bench, { checks: true, closedPorts: true, home: true });
+    const first = await runner.step(agent, new AbortController().signal, 60000); // item 1
+    assert.equal(run.items[0].status, 'verified', first);
+    // The thread now reads as a guest (or Mission is not sure): the mark goes, and the check runs in the Devices fence.
+    live = { bench: { checks: true, closedPorts: true } };
+    const second = await runner.step(agent, new AbortController().signal, 60000); // item 2
+    assert.match(second, /Its command did not pass/, second);
+    assert.equal(run.long.bench.home, undefined, 'the home mark is gone for good');
+    assert.notEqual(run.items[1].status, 'verified', 'fenced: no app environment');
+    // Bench reads the Devices mode again: the run stays fenced (the stricter rules are kept).
+    live = { bench: { checks: true, closedPorts: true, home: true } };
+    const again = await runner.step(agent, new AbortController().signal, 60000); // item 2, try 2
+    assert.match(again, /Its command did not pass/, again);
+    assert.equal(run.long.bench.home, undefined);
+    assert.notEqual(run.items[1].status, 'verified');
+  } finally {
+    delete process.env.DSH_TEST_HOME_MARK;
     rmSync(root, { recursive: true, force: true });
   }
 });

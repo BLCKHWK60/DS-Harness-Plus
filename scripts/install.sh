@@ -258,7 +258,7 @@ if [ "$INSTALLED_BEFORE" = 0 ] && [ "$RETURNING" = 0 ] && [ -f "$HERE/new-instal
       case "$id" in
         budget) NICE="$NICE a lower limit per task (Budget);" ;;
         activity) NICE="$NICE words instead of codes in Activity;" ;;
-        model-tiers) NICE="$NICE Code review at High effort (Model Tiers);" ;;
+        model-tiers) NICE="$NICE Code review at High effort (Model tiers);" ;;
         modes) NICE="$NICE the code guides off in Chat and Cowork (Modes);" ;;
         settings-plus) NICE="$NICE the Simple settings view and a first-run card;" ;;
         *) NICE="$NICE $id;" ;;

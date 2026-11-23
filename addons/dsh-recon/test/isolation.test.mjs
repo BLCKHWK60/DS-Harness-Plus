@@ -23,7 +23,7 @@ test('a history holds findings only when a recon tool ran and answered', () => {
   assert.equal(holdsFindings([asked]), false);
   assert.equal(holdsFindings([asked, call('c1'), answer('c1', 'Results for "x":\n1. A title')]), true);
   // A refusal holds nothing found, so the model may still tell the user why.
-  assert.equal(holdsFindings([asked, call('c1'), answer('c1', 'This conversation uses a cloud model (DeepSeek). What Recon finds would be sent to it.')]), false);
+  assert.equal(holdsFindings([asked, call('c1'), answer('c1', 'This thread uses a cloud model (DeepSeek). What Recon finds would be sent to it.')]), false);
   assert.equal(holdsFindings([asked, call('c1'), answer('c1', 'Recon is switched off in Settings → Recon.')]), false);
   assert.equal(holdsFindings([asked, call('c1'), answer('c1', 'not run', { isError: true })]), false);
   // Another tool's answer is not Recon's.
@@ -130,7 +130,7 @@ test('no mention crosses into or out of an isolated conversation', async () => {
     assert.equal(text(into.messages), `See ${LEFT_OUT} and @[Notes](${uriOf('other')}).`, 'only the isolated one is taken out');
     const recon = agentOf('r1', [], LOCAL);
     const out = await app.step(recon, LOCAL, wrote(`Use ${uriOf('other')}.`));
-    assert.equal(text(out.messages), `Use ${LEFT_OUT}.`, 'an isolated conversation takes in nothing');
+    assert.equal(text(out.messages), `Use ${LEFT_OUT}.`, 'an isolated thread takes in nothing');
   } finally {
     app.dispose();
   }
@@ -184,10 +184,10 @@ test('a Long run\'s helpers in Recon: the conversation\'s agreement covers them,
     const fresh = { id: 'helper-new-9', header: { parentSession: 'session-r1', cwd: ROOM }, session: { header: { parentSession: 'session-r1', cwd: ROOM }, deriveMessages: () => [asked] }, model: { current: () => CLOUD } };
     await assert.rejects(app.step(fresh, CLOUD), /holds what Recon found/);
     assert.equal((await app.say(conversation, 'cloud')).kind, 'success');
-    assert.equal((await app.step(helper, CLOUD)).kind, 'enter', 'the conversation\'s agreement covers its helper');
+    assert.equal((await app.step(helper, CLOUD)).kind, 'enter', 'the thread\'s agreement covers its helper');
     // Mission's question: may a run happen here, and where does it keep its files.
     assert.equal(app.provided.recon.runs('session-r1'), true);
-    assert.equal(app.provided.recon.runs('helper-plan-1'), false, 'a helper is not a conversation of its own');
+    assert.equal(app.provided.recon.runs('helper-plan-1'), false, 'a helper is not a thread of its own');
     assert.equal(app.provided.recon.runs('nobody'), false);
     assert.equal(app.provided.recon.runFolder('helper-plan-1'), '', 'no folder for one that may not run');
     const folder = app.provided.recon.runFolder('session-r1');
@@ -209,7 +209,7 @@ test('a Long run\'s helpers in Recon: the conversation\'s agreement covers them,
     assert.equal(existsSync(join(sessionsDir, 'project', 'session-r1')), false);
     assert.equal(existsSync(join(sessionsDir, 'project', 'helper-plan-1')), false, 'its helper');
     assert.equal(existsSync(join(sessionsDir, 'project', 'helper-deep-2')), false, 'and its helper\'s helper');
-    assert.equal(existsSync(join(sessionsDir, 'project', 'other-helper-3')), true, 'another conversation\'s helper stays');
+    assert.equal(existsSync(join(sessionsDir, 'project', 'other-helper-3')), true, 'another thread\'s helper stays');
   } finally {
     app.dispose();
     rmSync(sessionsDir, { recursive: true, force: true });
@@ -220,11 +220,11 @@ test('outside Tor without WireGuard: blocked until the user allows direct connec
   const conversation = { id: 'session-w1', header: { cwd: ROOM }, session: { header: { cwd: ROOM }, deriveMessages: () => [] }, model: { current: () => LOCAL } };
   const app = start({ modeOf: { 'session-w1': { mode: 'recon', isolated: true } }, agents: { 'session-w1': conversation } });
   try {
-    assert.match((await app.say(conversation, 'status')).text, /Outside Tor \(the Internet Archive read directly, Usenet, the ordinary web\): blocked: no WireGuard is set up, and direct connections are not allowed in this conversation \(\/recon direct\)\./);
+    assert.match((await app.say(conversation, 'status')).text, /Outside Tor \(the Internet Archive read directly, Usenet, the ordinary web\): blocked: no WireGuard is set up, and direct connections are not allowed in this thread \(\/recon direct\)\./);
     const allowed = await app.say(conversation, 'direct');
     assert.equal(allowed.kind, 'success');
     assert.match(allowed.text, /sites see its internet address/);
-    assert.match((await app.say(conversation, 'status')).text, /Outside Tor [^\n]*: directly \(you allowed it for this conversation; no WireGuard is set up\)/);
+    assert.match((await app.say(conversation, 'status')).text, /Outside Tor [^\n]*: directly \(you allowed it for this thread; no WireGuard is set up\)/);
     assert.match((await app.say(conversation, 'block')).text, /^Blocked again/);
     assert.match((await app.say(conversation, 'status')).text, /: blocked: no WireGuard is set up/);
     // Not in a conversation that is not Recon's.
@@ -269,4 +269,11 @@ test('Long run checks: off unless switched on in Settings → Recon; Mission rea
     plainApp.dispose();
     checking.dispose();
   }
+});
+
+test('Recon\'s status names Mission and Start Mission, never "the Run button" (stage B, 19 November)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  assert.match(source, /a Mission \(Start Mission beside Send\) adds helpers/);
+  assert.doesNotMatch(source, /Run button/);
 });

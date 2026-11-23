@@ -9,6 +9,18 @@ import test from 'node:test';
 import { setImmediate as tick } from 'node:timers/promises';
 import { apply, Config } from '../index.js';
 
+/** Run with spaces switched off (the lab switch DSH_SPACES_LAB=0): the old tab paths, as before item 4A stage 3a. */
+async function tabsOnly(run) {
+  const before = process.env.DSH_SPACES_LAB;
+  process.env.DSH_SPACES_LAB = '0';
+  try {
+    return await run();
+  } finally {
+    if (before === undefined) delete process.env.DSH_SPACES_LAB;
+    else process.env.DSH_SPACES_LAB = before;
+  }
+}
+
 const FINANCE = { label: 'Finance', tools: 'all', sandbox: 'inherit', defaultTier: '', prompt: 'Finance method.' };
 
 /** Modes on stand-in services. `tabs` turns the Cowork sidebar on. */
@@ -103,7 +115,7 @@ test('a scheduled brief that Finance claims stays in Finance through its first t
   }
 });
 
-test('without a claim the tab still decides before the first message (the /mode rule is unchanged)', async () => {
+test('without a claim the tab still decides before the first message (the /mode rule is unchanged)', () => tabsOnly(async () => {
   const app = running();
   try {
     const { agent } = await app.open('plain-1');
@@ -115,7 +127,7 @@ test('without a claim the tab still decides before the first message (the /mode 
   } finally {
     app.stop();
   }
-});
+}));
 
 test('a claim made after the first turn is an ordinary switch', async () => {
   const app = running();
@@ -193,6 +205,22 @@ test('real timing: the move is not awaited and the first turn starts at once; Co
     await tick();
     assert.equal(app.service().get('brief-3'), 'finance');
     assert.equal(sessionModes(app.config)['brief-3'], 'finance');
+  } finally {
+    app.stop();
+  }
+});
+
+test('item 6: a claim with settle waits until the new mode is applied, and the scheduled hook then keeps it', async () => {
+  const app = running();
+  try {
+    const { agent, masks } = await app.open('early-1');
+    await app.service().set('early-1', 'finance', { claim: true, settle: true });
+    assert.equal(app.service().get('early-1'), 'finance');
+    assert.ok(masks.length > 0 && masks.every((entry) => entry.undone), 'Cowork\'s list was taken off before set() returned');
+    await app.emit('session/event', { id: 'early-1' }, app.reminder);
+    await app.firstTurn(agent);
+    await tick();
+    assert.equal(app.service().get('early-1'), 'finance', 'the scheduler\'s starting mode does not undo the claim');
   } finally {
     app.stop();
   }

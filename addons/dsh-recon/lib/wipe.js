@@ -47,7 +47,7 @@ export function openWipeList(file, onChange) {
     } catch (error) {
       if (error?.code !== 'ENOENT') {
         blocked = true;
-        trouble = `Recon's list of ended conversations waiting to be deleted (wipe.json) could not be read (${String(error?.code ?? error?.message ?? error).slice(0, 60)}), so it was left exactly as it is and no conversation can be ended until it can be read. Their files are deleted once it can.`;
+        trouble = `Recon's list of ended threads waiting to be deleted (wipe.json) could not be read (${String(error?.code ?? error?.message ?? error).slice(0, 60)}), so it was left exactly as it is and no thread can be ended until it can be read. Their files are deleted once it can.`;
       }
     }
     if (text !== undefined) {
@@ -67,7 +67,7 @@ export function openWipeList(file, onChange) {
         const kept = keepCopy(file, text);
         ids = salvage(text);
         blocked = !kept.copied;
-        trouble = `Recon's list of ended conversations waiting to be deleted (wipe.json) was damaged. ${kept.copied ? `A copy was kept as ${kept.aside}.` : 'No copy could be made, so the file was left as it is and no conversation can be ended until that is fixed.'} ${ids.length} ended conversation${ids.length === 1 ? ' was' : 's were'} recovered and will still be deleted. If an ended conversation is still in your Archived list, end it again with /recon end confirm.`;
+        trouble = `Recon's list of ended threads waiting to be deleted (wipe.json) was damaged. ${kept.copied ? `A copy was kept as ${kept.aside}.` : 'No copy could be made, so the file was left as it is and no thread can be ended until that is fixed.'} ${ids.length} ended thread${ids.length === 1 ? ' was' : 's were'} recovered and will still be deleted. If an ended thread is still in your Archived list, end it again with /recon end confirm.`;
       }
     }
   }
@@ -111,7 +111,7 @@ export function wipeFiles({ id, folder, cache }, root) {
   if (existsSync(folder)) {
     const real = realpathSync(folder);
     const base = realpathSync(root);
-    if (basename(real) !== id || !real.startsWith(base + sep) || real === base) throw new Error('that folder is not a conversation of this app; nothing was deleted');
+    if (basename(real) !== id || !real.startsWith(base + sep) || real === base) throw new Error('that folder is not a thread of this app; nothing was deleted');
     rmSync(real, { recursive: true, force: true });
   }
   if (cache && basename(cache) === `${id}.json`) rmSync(cache, { force: true });

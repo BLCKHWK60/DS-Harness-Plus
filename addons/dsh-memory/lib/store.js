@@ -60,7 +60,7 @@ function day(ms) {
  */
 export function renderSection(entries) {
   if (entries.length === 0) return '';
-  const lines = [START, '## What the user asked you to remember', '', 'Lasting facts and preferences the user saved. Follow them unless the user says otherwise in this conversation.'];
+  const lines = [START, '## What the user asked you to remember', '', 'Lasting facts and preferences the user saved. Follow them unless the user says otherwise in this thread.'];
   for (const group of GROUPS) {
     const mine = entries.filter((entry) => groupOf(entry.group) === group);
     if (mine.length === 0) continue;

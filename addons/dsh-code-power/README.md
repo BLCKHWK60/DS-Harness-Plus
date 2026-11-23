@@ -5,7 +5,7 @@
 Tests: `test/power.test.mjs` (defaults, registration, off = nothing registered, skill text from the settings, the blind judge with its reversed-order check) and `test/client.test.mjs` (tab and own-page logic with Code map).
 
 
-Host plugin `@local/dsh-code-power` (dsh 0.2.2-rc.1). Mostly prompt assets, as the spec says, plus one small tool where code is more reliable than a prompt.
+Host add-on `@local/dsh-code-power` (dsh 0.2.2-rc.1). Mostly prompt assets, as the spec says, plus one small tool where code is more reliable than a prompt.
 
 ## Skills (model- and user-invocable)
 
@@ -20,13 +20,13 @@ They are registered with dsh's skill service; the model loads one with the `skil
 
 ## Tool `judge_candidates`
 
-Compares 2 to 5 candidate solutions (usually diffs) to one task, blind: the candidates get **deterministically shuffled opaque labels** (A, B, ...), a judge child scores each on the criteria (1 to 5) and picks a winner or a tie; with `consistencyCheck` (default on) the judgement is **repeated with the order reversed**, and if the two rounds name different winners the result is a **tie flagged as split** (position bias). The judge prompt is the owner's Model Arena judge, worded for solutions. Candidate text is treated as untrusted (tags escaped, the judge is told to ignore instructions inside it). The judge child runs on Tier's `judgeRole` route when Tier is loaded, otherwise on the parent's route; the tool is registered with Tier's sub-agent gate, and a judge agent cannot call it again.
+Compares 2 to 5 candidate solutions (usually diffs) to one task, blind: the candidates get **deterministically shuffled opaque labels** (A, B, ...), a judge child scores each on the criteria (1 to 5) and picks a winner or a tie; with `consistencyCheck` (default on) the judgement is **repeated with the order reversed**, and if the two rounds name different winners the result is a **tie flagged as split** (position bias). The judge prompt is the owner's Model arena judge, worded for solutions. Candidate text is treated as untrusted (tags escaped, the judge is told to ignore instructions inside it). The judge child runs on Tier's `judgeRole` route when Tier is loaded, otherwise on the parent's route; the tool is registered with Tier's sub-agent gate, and a judge agent cannot call it again.
 
-The plugin itself runs no git command and writes no file: all changes go through the model's own tools, so dsh's sandbox and approvals apply.
+The add-on itself runs no git command and writes no file: all changes go through the model's own tools, so dsh's sandbox and approvals apply.
 
 ## Service `candidateJudge`
 
-The same judge is offered to other plugins: `candidateJudge.compare({task, texts, criteria, consistencyCheck, signal, parent | ask})` returns `{winner (index or 'tie'), consistent, average, verdicts}`. Pass `parent` to run the judge as a child agent, or `ask(prompt, signal)` to send it yourself (the model arena does this). Model arena uses it, so there is one judge in the project.
+The same judge is offered to other add-ons: `candidateJudge.compare({task, texts, criteria, consistencyCheck, signal, parent | ask})` returns `{winner (index or 'tie'), consistent, average, verdicts}`. Pass `parent` to run the judge as a child agent, or `ask(prompt, signal)` to send it yourself (the model arena does this). Model arena uses it, so there is one judge in the project.
 
 ## Configuration
 

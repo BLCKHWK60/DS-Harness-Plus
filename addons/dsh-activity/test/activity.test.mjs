@@ -165,7 +165,7 @@ test('the text: short codes, words, figures, and what is switched off', () => {
   const base = { hidden: [], figures: true, words: false, promptSpeed: true, context: true };
   assert.equal(labelOf(all, base).text, 'TG 42 t/s · 378 tokens · Tool read_file 2s · Web web_search 4s · Run bash 31s · BG 2 · 1m 12s · OC 1 · PP 1,850 t/s · ctx 46.2k');
   assert.equal(labelOf(all, { ...base, figures: false }).text, 'TG · Tool read_file · Web web_search · Run bash · BG 2 · OC 1');
-  assert.equal(labelOf(all, { ...base, words: true, figures: false }).text, 'Writing · Tool read_file · Web web_search · Script bash · Sub-agents 2 · Other chat 1');
+  assert.equal(labelOf(all, { ...base, words: true, figures: false }).text, 'Writing · Tool read_file · Web web_search · Script bash · Sub-agents 2 · Other thread 1');
   assert.equal(labelOf(all, { ...base, hidden: ['tool', 'web', 'script', 'sub', 'other'], promptSpeed: false, context: false }).text, 'TG 42 t/s · 378 tokens');
   assert.deepEqual(shownKinds(all, { hidden: ['write'] }), ['tool', 'web', 'script', 'sub', 'other']);
 

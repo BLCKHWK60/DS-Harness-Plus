@@ -313,7 +313,7 @@ test('one writer: Ultra Code on, but code work gets one worker and no attempts; 
   try {
     await recon.steps({ kind: 'long', long: { minutes: 30, laps: 1, isolated: true }, loop: open }, 'qwxz looking around');
     assert.equal(recon.seen.some((entry) => /attempt|judge|checker|checking|senior/.test(entry.label)), false, 'Recon: the app\'s own checks only');
-    assert.equal(recon.seen.every((entry) => entry.model === 'conv'), true, 'and the conversation\'s own model');
+    assert.equal(recon.seen.every((entry) => entry.model === 'conv'), true, 'and the thread\'s own model');
   } finally {
     recon.close();
   }
@@ -348,7 +348,7 @@ test('Thorough: checking questions answered separately (the answerer never sees 
 });
 
 /** Mission on a stand-in app, to start a /mission run the way the owner does. */
-async function plugin({ ultra = false, tab = 'cowork', loopTabs = '[]' } = {}) {
+async function plugin({ ultra = false, tab = 'cowork', loopTabs = '[]', longHelpers } = {}) {
   const { apply } = await import('../index.js');
   const home = scratch();
   const folder = scratch();
@@ -383,7 +383,7 @@ async function plugin({ ultra = false, tab = 'cowork', loopTabs = '[]' } = {}) {
     on: (name, handler) => { handlers.set(name, [...(handlers.get(name) ?? []), handler]); return () => {}; },
     inject: (_deps, fn) => fn({ effect: (start) => start(), tools: { register: (spec) => { tools[spec.name] = spec; return () => {}; } }, commands: { register: (spec) => { commands[spec.name] = spec; return () => {}; } }, webServer: { register: () => () => {} }, connection: { requestRejection: () => undefined } }),
   };
-  apply(ctx, { loopTabs });
+  apply(ctx, { loopTabs, longKeepAwake: false, ...(longHelpers ? { longHelpers } : {}) });
   return {
     provided, prompts, home, handlers, folder, busy,
     start: async (goal) => commands.mission.handler({ agent, rawInput: `auto ${goal}` }),
@@ -406,7 +406,8 @@ test('on a stand-in app: a /mission run with Ultra Code off and no tab switch is
   const ultra = await plugin({ ultra: true });
   try {
     const said = await ultra.start('write a blog post about heat pumps');
-    assert.match(said.text, /Work loop: on \(Ultra Code, Depth standard, recipe "A piece of writing"/);
+    // Stage B: a typed /mission is a Mission (kind 'long'), so the loop runs at the Mission's own level.
+    assert.match(said.text, /Work loop: on \(Ultra Code, Depth long, recipe "A piece of writing"/);
     await ultra.step();
     assert.match(ultra.prompts[0][1], /Work by this recipe for a piece of writing/);
     assert.equal(existsSync(join(ultra.home, 'mission', 'recipes', 'writing-piece.json')), true);
@@ -415,7 +416,7 @@ test('on a stand-in app: a /mission run with Ultra Code off and no tab switch is
   }
   const tab = await plugin({ tab: 'code', loopTabs: '["code"]' });
   try {
-    assert.match((await tab.start('write a blog post about heat pumps')).text, /Work loop: on \(switched on for this tab/);
+    assert.match((await tab.start('write a blog post about heat pumps')).text, /Work loop: on \(switched on for this mode/);
   } finally {
     tab.close();
   }
@@ -603,16 +604,29 @@ test('a finished run\'s line names its conversation (so a conversation that rece
 });
 
 test('the owner\'s answer: calls at once per model server default to 4, so attempts on one server run side by side unless the owner sets 1', async () => {
-  const app = await plugin({ ultra: true });
+  // One helper at once: one item's three attempts side by side.
+  const app = await plugin({ ultra: true, longHelpers: 1 });
   try {
     await app.start('research the sources about heat pumps');
     await app.step();
     app.busy.most = 0;
     await app.step();
-    assert.equal(app.prompts.filter(([label]) => /attempt/.test(label)).length, 2);
-    assert.equal(app.busy.most, 2, 'two attempts at once with nothing set');
+    // A Mission (typed /mission included since stage B) makes three attempts.
+    assert.equal(app.prompts.filter(([label]) => /attempt/.test(label)).length, 3);
+    assert.equal(app.busy.most, 3, 'three attempts at once with nothing set');
   } finally {
     app.close();
+  }
+  // Stage D: several helpers at once, each with its attempts: never more than Calls at once (4) on one server.
+  const many = await plugin({ ultra: true });
+  try {
+    await many.start('research the sources about heat pumps');
+    await many.step();
+    many.busy.most = 0;
+    await many.step();
+    assert.ok(many.busy.most <= 4, `at most 4 at once, was ${many.busy.most}`);
+  } finally {
+    many.close();
   }
   const { CALLS_AT_ONCE } = await import('../lib/loop.js');
   assert.deepEqual(CALLS_AT_ONCE, { start: 4, min: 1, max: 16 });

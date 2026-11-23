@@ -9,10 +9,10 @@ dsh's `schedule` service stores tasks on the Host. In the web app, the **Automat
 What to design around:
 - **The Host must be running.** The Host is the machine whose dsh app or `dsh web` is open. Pick the always-on Mac for tasks you rely on.
 - **After a restart only the latest missed run fires**, not every one you missed.
-- A task delivers its instruction to a conversation: an existing one, one conversation reused for every run, or a new conversation per run. The record only confirms the instruction **reached the conversation**; read the conversation for the result.
+- A task delivers its instruction to a thread: an existing one, one thread reused for every run, or a new thread per run. The record only confirms the instruction **reached the thread**; read the thread for the result.
 - A scheduled run is an ordinary turn, so **turn-end notifications (part 2) cover it**, and so does the usage ledger.
 
-Not tested here: creating a real task and waiting for it to fire (needs the app and real time). Check once: create a task for a minute ahead, with the Host running, and look at the conversation.
+Not tested here: creating a real task and waiting for it to fire (needs the app and real time). Check once: create a task for a minute ahead, with the Host running, and look at the thread.
 
 ## 2. Notifications (`addons/dsh-notify`)
 
@@ -46,7 +46,7 @@ sh dsh-backup.sh --dest <ABSOLUTE_FOLDER> [--keep 14] [--max-attachment-mb 25] [
 - Default source is `$DSH_HOME`, else `~/.dsh`. `--dest` is required and must be absolute; it must not be inside the source, and the source must not be inside it. A lock folder stops two backups from overlapping.
 - **Left out:** `dsh-runtimes/`, every `node_modules/` (this alone is most of a profile: 342 MB of 342 MB in one live profile), attachments larger than `--max-attachment-mb`, and the **profile config files** (`profiles/*/cordis.patch.yml`, `cordis.yml`, `package.json`).
 - **Why the profile config is left out:** it can hold plaintext keys or tokens, and a backup in a cloud-synced folder would copy them there. `--include-profile-config` copies them anyway and prints a warning; keep such a backup out of synced and shared folders. Keep the profile config safe another way (it is small).
-- **Session logs are copied as they are** and hold whatever was said in your conversations, including anything pasted into them. Treat the backup folder as private.
+- **Thread logs (the `sessions` folder) are copied as they are** and hold whatever was said in your threads, including anything pasted into them. Treat the backup folder as private.
 - Restoring is a manual copy of what you need back into the dsh home; runtimes and `node_modules` are rebuilt by dsh.
 
 ### Nightly with a LaunchAgent

@@ -191,9 +191,9 @@ export function openCheckpoints(root, hooks = {}) {
 
   const prepare = async () => {
     if (!(await gitUsable())) {
-      throw new Refusal('Checkpoints are off: this Mac does not have Apple\'s Git command-line tools yet. To get them, open Terminal, run xcode-select --install and let macOS install them, then switch the mode on again. Everything else works without checkpoints.');
+      throw new Refusal('Checkpoints are off: this Mac does not have Apple\'s Git command-line tools yet. To get them, open Terminal, run xcode-select --install and let macOS install them, then switch Mission access on again. Everything else works without checkpoints.');
     }
-    if (!existsSync(root) || !statSync(root).isDirectory()) throw new Error('the conversation\'s folder is not there');
+    if (!existsSync(root) || !statSync(root).isDirectory()) throw new Error('the thread\'s folder is not there');
     const hasStore = existsSync(join(store, 'HEAD'));
     if (tooBroad(root, homeDir)) {
       // Checkpoints kept before this rule stay reachable, read only: they can be listed and gone back to, but no new one
@@ -202,14 +202,14 @@ export function openCheckpoints(root, hooks = {}) {
         readOnly = true;
         return;
       }
-      throw new Refusal('Checkpoints are off for this folder: it is too broad (a home, Documents, Desktop, Downloads, Pictures, Music, Movies, cloud-drive, external-disk or system folder), so copying it would fill the disk and take very long. Open a project folder to get checkpoints. Everything else, including the Long run, works without them.');
+      throw new Refusal('Checkpoints are off for this folder: it is too broad (a home, Documents, Desktop, Downloads, Pictures, Music, Movies, cloud-drive, external-disk or system folder), so copying it would fill the disk and take very long. Open a project folder to get checkpoints. Everything else, including a Mission, works without them.');
     }
     const fresh = !hasStore;
     const madeFolder = !existsSync(join(root, OWN_FOLDER));
     if (fresh) {
       mkdirSync(join(root, OWN_FOLDER), { recursive: true });
       await run(['init', '--quiet', '--initial-branch=checkpoints']);
-      writeFileSync(join(root, OWN_FOLDER, 'README.txt'), 'This folder holds the checkpoints that DeepSeek Harness Plus takes of this folder while a Mission mode is on.\nYou can go back to one with /mission back <number> in the conversation.\nDeleting this folder deletes the checkpoints and nothing else.\n');
+      writeFileSync(join(root, OWN_FOLDER, 'README.txt'), 'This folder holds the checkpoints that DeepSeek Harness Plus takes of this folder while Mission access is on.\nYou can go back to one with /mission back <number> in the thread.\nDeleting this folder deletes the checkpoints and nothing else.\n');
     }
     mkdirSync(join(store, 'info'), { recursive: true });
     writeFileSync(join(store, 'info', 'exclude'), `${ALWAYS_OUT.join('\n')}\n`);
@@ -222,7 +222,7 @@ export function openCheckpoints(root, hooks = {}) {
         rmSync(store, { recursive: true, force: true });
         rmSync(join(root, OWN_FOLDER, 'README.txt'), { force: true });
         if (madeFolder) rmSync(join(root, OWN_FOLDER), { recursive: true, force: true });
-        throw new Refusal(`Checkpoints are off for this folder: ${tooMuch}, too much to copy. Open a smaller project folder to get checkpoints. Everything else, including the Long run, works without them.`);
+        throw new Refusal(`Checkpoints are off for this folder: ${tooMuch}, too much to copy. Open a smaller project folder to get checkpoints. Everything else, including a Mission, works without them.`);
       }
     }
     // Keep the store out of the project's own git status, without touching a file the project shares.

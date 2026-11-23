@@ -91,7 +91,8 @@ test('the app itself reads the values from the setup file after a real install',
 
 test('code guides: a new install offers them only in the Code tab, and any tab can switch them on', async () => {
   const table = JSON.parse(row('modes').config.skillsOff);
-  assert.deepEqual(Object.keys(table).sort(), ['chat', 'cowork'], 'off in Chat and Cowork only; Code is not listed');
+  assert.deepEqual(Object.keys(table).sort(), ['chat', 'cowork', 'plain'], 'off in Chat, Cowork and Plain chat (item 4A) only; Code is not listed');
+  assert.deepEqual(table.plain, table.cowork, 'Plain chat has the same list as Cowork');
   assert.equal(table.chat.length, 8);
   // Modes' own reader accepts the table, and its writer can empty a tab's list (the Settings → Code tools switch does that).
   const { offIn, withOff } = await import('../addons/dsh-modes/lib/skilloff.js');
@@ -99,9 +100,20 @@ test('code guides: a new install offers them only in the Code tab, and any tab c
   assert.equal(offIn(table, 'code').size, 0);
   assert.equal(offIn(withOff(table, 'chat', []), 'chat').size, 0, 'a person can switch them on in Chat');
   assert.equal(offIn(withOff(table, 'cowork', []), 'cowork').size, 0, 'and in Cowork');
+  assert.equal(offIn(table, 'plain').size, 8, 'off in Plain chat too');
   // The names are the real ones.
   const code = readFileSync(join(ROOT, 'addons', 'dsh-code-power', 'index.js'), 'utf8') + readFileSync(join(ROOT, 'addons', 'dsh-code-map', 'skills.js'), 'utf8');
   for (const name of table.chat) assert.ok(code.includes(`name: '${name}'`), name);
+});
+
+test('item 4A, stage 4: Plain chat starts where Cowork does (Tool access on Ask, and its shipped start), and Modes adds nothing more on top', async () => {
+  const config = row('modes').config;
+  const access = JSON.parse(config.toolAccess);
+  assert.deepEqual(access.plain, access.cowork);
+  assert.deepEqual(access._defaults.plain, access._defaults.cowork);
+  const { plainAddOps } = await import('../addons/dsh-modes/lib/plain.js');
+  const ops = plainAddOps({ trimModes: ['cowork', 'code', 'data', 'plain'], skillsOff: config.skillsOff, toolAccess: config.toolAccess });
+  assert.deepEqual(ops, [{ op: 'set', path: ['plainAdded'], value: true }], 'a new install needs only the one-time flag');
 });
 
 test('only a first install is marked for the first-run card and starts on the Simple list', () => {

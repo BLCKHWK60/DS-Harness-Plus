@@ -1,5 +1,5 @@
 /**
- * The ladder (plan, "What goes where"): each kind of knowledge goes to its cheapest home, and Tuning Plus
+ * The ladder (plan, "What goes where"): each kind of knowledge goes to its cheapest home, and Tuner Plus
  * tries the lowest rung first, climbing only when that rung has stopped improving on the exam.
  */
 
@@ -17,7 +17,7 @@ export const RUNGS = [
  * number: the six rung numbers keep their meaning for the cards and the bar's Method choice. A rule that always
  * applies belongs in instructions; know-how for one kind of job, needed only sometimes, in a skill.
  */
-export const SKILL_HOME = Object.freeze({ n: 'skill', name: 'Skill', what: 'know-how for one kind of job, loaded only when that job comes up (works on every model)', cost: 'minutes', where: 'Tuner Plus (Skills on its page, or ask in a conversation)' });
+export const SKILL_HOME = Object.freeze({ n: 'skill', name: 'Skill', what: 'know-how for one kind of job, loaded only when that job comes up (works on every model)', cost: 'minutes', where: 'Tuner Plus (Skills on its page, or ask in a thread)' });
 /** The homes in the ladder's order; the skill is among them only while the skills part is on. */
 export const homes = (skills = false) => (skills ? [RUNGS[0], RUNGS[1], SKILL_HOME, ...RUNGS.slice(2)] : [...RUNGS]);
 

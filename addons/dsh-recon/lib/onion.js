@@ -35,7 +35,7 @@ export function createOnion({ tor, run, blocklist, trail, sources, engine, waitM
     throw new Error(`${String(result.error?.message ?? result.error)} Nothing was sent.`);
   };
   const send = async (id, proxyPort, request) => {
-    if (sources.count(id) > MAX_FETCHES) throw new Error(`This conversation has made ${MAX_FETCHES} requests, which is its limit. Start a new Recon conversation to go on.`);
+    if (sources.count(id) > MAX_FETCHES) throw new Error(`This thread has made ${MAX_FETCHES} requests, which is its limit. Start a new Recon thread to go on.`);
     return run({ op: 'get', ...request, proxyPort, user: `recon-${id}` }, { proxyPort });
   };
   const host = () => {
@@ -112,7 +112,7 @@ export function createOnion({ tor, run, blocklist, trail, sources, engine, waitM
       // A later part comes from memory, unless the source was rebuilt after a restart without all its text.
       const again = sources.find(id, parsed.url);
       if (again && !again.partial && Number(part) > 1) return show(again, part);
-      if (!trail.has(id, parsed.url)) return 'That exact address was not shown in this conversation, so it was not opened. Use an address exactly as a search result or a page gave it, with its full path, or the bare front page of a site that was shown (the .onion name alone). Do not shorten or change an address. If the user wants another address read, they paste it themselves.';
+      if (!trail.has(id, parsed.url)) return 'That exact address was not shown in this thread, so it was not opened. Use an address exactly as a search result or a page gave it, with its full path, or the bare front page of a site that was shown (the .onion name alone). Do not shorten or change an address. If the user wants another address read, they paste it themselves.';
       const ready = await port();
       if (ready.wait) return ready.wait;
       const warning = await freshList(id, ready.port);

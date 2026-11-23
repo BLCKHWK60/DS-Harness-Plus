@@ -40,8 +40,34 @@ export function saidYes(text) {
  * @param {object} deps - what the tools need (index.js gives the real ones; tests give stand-ins).
  * @returns {object[]} tool definitions.
  */
+/** Mission stage E: the question in a Mission's card for a card a Mission's helper made. */
+export const CREATOR_REASON = 'Allow does what Apply on its card in Settings → Creator Plus does: it installs exactly the checked copy, with a way back. Read the code there first (Show the code).';
+/** The same for a prepared change: Allow applies exactly the change on its card. */
+export const CREATOR_CHANGE_REASON = 'Allow does what Apply on its card in Settings → Creator Plus does: it applies exactly the change shown there, after a backup, with a way back (Undo). Read the change there first.';
+/** Said to a Mission's helper after its plugin passed the checks: the install waits for the owner. */
+export const CREATOR_INSTALL_NOTE = 'Installing it in your real setup needs the user\'s yes: it waits in the Mission\'s card above the chat box.';
+/** The same for a prepared change. */
+export const CREATOR_CHANGE_NOTE = 'Applying it to your real setup needs the user\'s yes: it waits in the Mission\'s card above the chat box.';
+
 export function buildTools(deps) {
-  const { enabled, conversation, map, previousMap, saveMap, bar, cwdOf, recipes, strong, learning, trial, runs, backups, node, cards, userSaid, longSince, depthOf, approve, reader, sources, installedDir, modules, passportsHome, checkedHome, preparedHome, buildsHome, folderRefusal, userCount, routeOf, settingsOf, placeOf, logsDeps, now = () => Date.now() } = deps;
+  const { enabled, conversation, map, previousMap, saveMap, bar, cwdOf, recipes, strong, learning, trial, runs, backups, node, cards, userSaid, longSince, depthOf, approve, reader, sources, installedDir, modules, passportsHome, checkedHome, preparedHome, buildsHome, folderRefusal, userCount, routeOf, settingsOf, placeOf, logsDeps, missionYes, now = () => Date.now() } = deps;
+  /**
+   * Mission stage E: a ready plugin or a prepared change made by a Mission's helper also waits in the Mission's
+   * card (an act: Allow there does what Apply on the page does). Nothing is installed or applied here.
+   * @returns {Promise<string>} a line for the tool's answer, or '' (no Mission, not its helper, no card).
+   */
+  const missionNote = async (exec, card, what, note, reason = CREATOR_REASON) => {
+    if (!card?.id || typeof missionYes !== 'function') return '';
+    let said;
+    try {
+      said = await missionYes(exec, { key: `card:${card.id}`, what: oneLine(what, 300), reason, act: true, needed: false, ref: { card: card.id } });
+    } catch {
+      said = undefined;
+    }
+    if (!said || typeof said !== 'object') return '';
+    if (said.said === 'no' && typeof said.text === 'string' && said.text.trim()) return `\n${said.text}`;
+    return `\n${note}`;
+  };
   const output = {
     schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
     render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }],
@@ -73,7 +99,7 @@ export function buildTools(deps) {
   /** The conversation's folder by its real path: where every host write in the build folder checks for links from (lib/safewrite.js). */
   const baseOf = (exec) => {
     const cwd = cwdOf(exec);
-    if (!cwd) throw new Error('This conversation has no folder to build in.');
+    if (!cwd) throw new Error('This thread has no folder to build in.');
     const why = folderRefusal(exec);
     if (why) throw new Error(why);
     return real(cwd);
@@ -161,7 +187,7 @@ export function buildTools(deps) {
   return [
     {
       name: 'creator_map',
-      description: 'The map of the setup, read live from the running app: every plugin (who made it, on or off, version, locked or editable), every tab, every tool, and for the plugins selected on the bar what they touch (tools, commands, routes, places in the interface, services, settings, storage, instruction text). action "show" (default), "refresh" (read again now), or "diff" (what changed since the map before).',
+      description: 'The map of the setup, read live from the running app: every plugin (who made it, on or off, version, locked or editable), every mode, every tool, and for the plugins selected on the bar what they touch (tools, commands, routes, places in the interface, services, settings, storage, instruction text). action "show" (default), "refresh" (read again now), or "diff" (what changed since the map before).',
       parameters: { type: 'object', properties: { action: { type: 'string', enum: ['show', 'refresh', 'diff'] } }, additionalProperties: false },
       ...common,
       isConcurrencySafe: () => true,
@@ -268,7 +294,7 @@ export function buildTools(deps) {
     },
     {
       name: 'creator_scaffold',
-      description: 'Make the new plugin\'s first files from the approved plan, in its own folder inside this conversation\'s folder: a small plugin that already loads, is off until switched on, and passes its own tests (tests first). Existing files are kept. Needs the user\'s yes to the plan in their newest message (in a Long run the plan\'s assumptions are listed for the end instead).',
+      description: 'Make the new plugin\'s first files from the approved plan, in its own folder inside this thread\'s folder: a small plugin that already loads, is off until switched on, and passes its own tests (tests first). Existing files are kept. Needs the user\'s yes to the plan in their newest message (in a Mission the plan\'s assumptions are listed for the end instead).',
       parameters: { type: 'object', properties: { tool: str(60), method: str(3900) }, additionalProperties: false },
       ...common,
       execute: safely(async (args, exec) => {
@@ -286,12 +312,12 @@ export function buildTools(deps) {
         const done = writeScaffold(dir, files, modules(), baseOf(exec));
         // Its passport: brief (kept), and the rest from its files.
         writePassport(join(dir, 'passport'), passportFiles({ scan: scanAddon(dir), origin: 'creator-plus', appVersion: map().app.version, at: now() }), baseOf(exec));
-        return `Made ${BUILD_FOLDER}/${state.folder}: ${done.written.join(', ')}${done.kept.length ? `; kept as they were: ${done.kept.join(', ')}` : ''}. It loads, is off until switched on, and has its first tests. Now follow creator_recipe for "${state.kind}", then creator_check.${long ? ' (Long run: the plan was not approved by the user; its assumptions go on the list for the end.)' : ''}`;
+        return `Made ${BUILD_FOLDER}/${state.folder}: ${done.written.join(', ')}${done.kept.length ? `; kept as they were: ${done.kept.join(', ')}` : ''}. It loads, is off until switched on, and has its first tests. Now follow creator_recipe for "${state.kind}", then creator_check.${long ? ' (Mission: the plan was not approved by the user; its assumptions go on the list for the end.)' : ''}`;
       }),
     },
     {
       name: 'creator_check',
-      description: 'The four checks on a plugin in this conversation\'s folder, in order: the harness loads it without errors, its tests pass, the fit check is clear, the trial install works (installed and loaded in the trial copy, never in the real setup). At Quick the trial install is left out; at Thorough a checker that only reads also reads the result.',
+      description: 'The four checks on a plugin in this thread\'s folder, in order: the harness loads it without errors, its tests pass, the fit check is clear, the trial install works (installed and loaded in the trial copy, never in the real setup). At Quick the trial install is left out; at Thorough a checker that only reads also reads the result.',
       parameters: { type: 'object', properties: { folder: str(80) }, required: ['folder'], additionalProperties: false },
       ...common,
       timeoutMs: 40 * 60_000,
@@ -308,6 +334,7 @@ export function buildTools(deps) {
         const hashes = hashFiles(kept, filesOf(kept));
         const result = await fourChecks({ dir: kept, map: map(), intended: state.plan ?? {}, sandbox: inRun, trial: trial(), node: node(), skipTrial: depth === 'quick' });
         let second = '';
+        let waits = '';
         if (depth === 'thorough' || longSince(exec)) {
           try {
             second = await reader(exec, `CREATOR_READER\nRead this plugin's brief and the results of its checks, and say in at most 8 lines whether it does what the brief asks, and what is missing. Answer with plain text; then one last line exactly: VERDICT: ok or VERDICT: missing.\n\n${fence(state.brief ?? readFileSync(join(dir, 'passport', 'brief.md'), 'utf8'), 'The brief')}\n\n${checksText(result)}`);
@@ -318,15 +345,16 @@ export function buildTools(deps) {
         if (result.passed) {
           // What the user installs is what was checked: the copy above, which no file tool and no sandbox can change.
           const scan = scanAddon(kept);
-          const adds = [scan.tools.length ? `the tools ${scan.tools.join(', ')}` : '', scan.commands.length ? `the commands ${scan.commands.map((name) => `/${name}`).join(', ')}` : '', scan.modes.length ? `the tab ${scan.modes.join(', ')}` : '', scan.slots.length ? `places in the interface ${scan.slots.map((slot) => `${slot.name}#${slot.id}`).join(', ')}` : '', scan.routes.length ? `the page addresses ${scan.routes.join(', ')}` : ''].filter(Boolean).join('; ');
-          cards.add({ kind: 'new-plugin', title: `${state.title ?? args.folder}: ready to install`, text: `All four checks passed. It adds ${adds || 'a Settings page'}.${scan.uses.length ? ` It uses the app's services ${scan.uses.join(', ')}.` : ''} Once installed, a plugin runs inside the app with the app's rights. The check of its code is a help, not a guarantee: a model can hide what code does, so read the code (Show the code) before Apply. Apply installs exactly the version that was checked (kept in Creator Plus's own folder); a way back is kept.`, conversation: conversation(exec).id, data: { folder: kept, from: dir, name: scan.name || `@local/${args.folder}`, hashes } });
+          const adds = [scan.tools.length ? `the tools ${scan.tools.join(', ')}` : '', scan.commands.length ? `the commands ${scan.commands.map((name) => `/${name}`).join(', ')}` : '', scan.modes.length ? `the mode ${scan.modes.join(', ')}` : '', scan.slots.length ? `places in the interface ${scan.slots.map((slot) => `${slot.name}#${slot.id}`).join(', ')}` : '', scan.routes.length ? `the page addresses ${scan.routes.join(', ')}` : ''].filter(Boolean).join('; ');
+          const ready = cards.add({ kind: 'new-plugin', title: `${state.title ?? args.folder}: ready to install`, text: `All four checks passed. It adds ${adds || 'a Settings page'}.${scan.uses.length ? ` It uses the app's services ${scan.uses.join(', ')}.` : ''} Once installed, a plugin runs inside the app with the app's rights. The check of its code is a help, not a guarantee: a model can hide what code does, so read the code (Show the code) before Apply. Apply installs exactly the version that was checked (kept in Creator Plus's own folder); a way back is kept.`, conversation: conversation(exec).id, data: { folder: kept, from: dir, name: scan.name || `@local/${args.folder}`, hashes } });
           keepBuild(exec, { dir: kept, kept, scan, result, state, folder: String(args.folder ?? ''), key: dir });
+          waits = await missionNote(exec, ready, `Install ${scan.name || `@local/${args.folder}`} in your real setup`, CREATOR_INSTALL_NOTE);
         } else {
           rememberFailure(dir, kept, result);
           rmSync(dirname(kept), { recursive: true, force: true });
         }
         // The checks' output holds the plugin's own words and a test's output: material, masked.
-        return `${fence(checksText(result), 'The checks\' results')}${second ? `\n\n${fence(second, 'Second read (a checker with no tools)')}` : ''}`;
+        return `${fence(checksText(result), 'The checks\' results')}${second ? `\n\n${fence(second, 'Second read (a checker with no tools)')}` : ''}${waits}`;
       }),
     },
     {
@@ -355,8 +383,9 @@ export function buildTools(deps) {
         const diffFile = join(dirname(prepared.copy), 'change.diff');
         writeFileSync(diffFile, prepared.diff, { flag: 'wx', mode: 0o600 });
         const cut = Buffer.byteLength(prepared.diff) > SHOW_MAX;
-        cards.add({ kind: 'change', plugin: plugin.name, title: `Change ${plugin.name}: ${oneLine(args.why, 120)}`, text: `${oneLine(args.why, 400)}\n${prepared.summary}${cut ? '\nThis change is too long to show in full, so it cannot be applied from here.' : ''}\n${tests}`, conversation: conversation(exec).id, data: { copy: prepared.copy, backup: prepared.backup, files: Object.keys(checked.files), folder: plugin.folder, hashes: prepared.hashes, summary: prepared.summary, diffFile, cut } });
-        return `The change to ${plugin.name}, made in a copy only (the plugin itself is untouched). ${prepared.summary}\n${fence(`${prepared.diff.slice(0, 6000)}\n\n${tests}`, 'The change and its tests')}\nBacked up first. It is a card on the Creator Plus page, with the change one click away: the user tries it in the trial copy or applies it there.`;
+        const proposed = cards.add({ kind: 'change', plugin: plugin.name, title: `Change ${plugin.name}: ${oneLine(args.why, 120)}`, text: `${oneLine(args.why, 400)}\n${prepared.summary}${cut ? '\nThis change is too long to show in full, so it cannot be applied from here.' : ''}\n${tests}`, conversation: conversation(exec).id, data: { copy: prepared.copy, backup: prepared.backup, files: Object.keys(checked.files), folder: plugin.folder, hashes: prepared.hashes, summary: prepared.summary, diffFile, cut } });
+        const waits = cut ? '' : await missionNote(exec, proposed, `Apply the change to ${plugin.name} in your real setup`, CREATOR_CHANGE_NOTE, CREATOR_CHANGE_REASON);
+        return `The change to ${plugin.name}, made in a copy only (the plugin itself is untouched). ${prepared.summary}\n${fence(`${prepared.diff.slice(0, 6000)}\n\n${tests}`, 'The change and its tests')}\nBacked up first. It is a card on the Creator Plus page, with the change one click away: the user tries it in the trial copy or applies it there.${waits}`;
       }),
     },
     {
@@ -380,7 +409,7 @@ export function buildTools(deps) {
     },
     {
       name: 'creator_improve',
-      description: 'Read the session logs of the selected plugins (since the bar\'s "Logs from") and make cards: what goes wrong, how often, the evidence. Masked; Recon only as structure (which step failed and the kind of error), never its text. Then propose fixes with creator_change and missing plugins with creator_note.',
+      description: 'Read the thread logs of the selected plugins (since the bar\'s "Logs from") and make cards: what goes wrong, how often, the evidence. Masked; Recon only as structure (which step failed and the kind of error), never its text. Then propose fixes with creator_change and missing plugins with creator_note.',
       parameters: { type: 'object', properties: {}, additionalProperties: false },
       ...common,
       timeoutMs: 30 * 60_000,
@@ -395,13 +424,13 @@ export function buildTools(deps) {
         conversation(exec).lastImprove = now();
         const made = findingCards(found);
         for (const card of made) cards.add({ kind: 'finding', plugin: card.plugin, title: card.title, text: card.evidence.join('\n'), conversation: conversation(exec).id });
-        if (made.length === 0) return `Read ${found.read} conversations; nothing went wrong for the selected plugins.${found.left.length ? ` Left out: ${found.left.length} (Recon exports and the like).` : ''}`;
-        return fence(made.map((card) => `${card.title}\n${card.evidence.map((line) => `  - ${line}`).join('\n')}`).join('\n\n'), `Findings from ${found.read} conversations (cards on the Creator Plus page)`);
+        if (made.length === 0) return `Read ${found.read} threads; nothing went wrong for the selected plugins.${found.left.length ? ` Left out: ${found.left.length} (Recon exports and the like).` : ''}`;
+        return fence(made.map((card) => `${card.title}\n${card.evidence.map((line) => `  - ${line}`).join('\n')}`).join('\n\n'), `Findings from ${found.read} threads (cards on the Creator Plus page)`);
       }),
     },
     {
       name: 'creator_note',
-      description: 'Put something on the list for the user, shown as a card on the Creator Plus page at the end: a question (with your recommendation), an assumption you made (a Long run never waits), a proposal (a change or a missing plugin), or a self-test score.',
+      description: 'Put something on the list for the user, shown as a card on the Creator Plus page at the end: a question (with your recommendation), an assumption you made (a Mission never waits), a proposal (a change or a missing plugin), or a self-test score.',
       parameters: { type: 'object', properties: { kind: { type: 'string', enum: ['question', 'assumption', 'proposal', 'score'] }, text: str(1500), recommendation: str(600) }, required: ['kind', 'text'], additionalProperties: false },
       ...common,
       isConcurrencySafe: () => true,
@@ -412,7 +441,7 @@ export function buildTools(deps) {
     },
     {
       name: 'creator_handoff',
-      description: 'When a build is beyond Creator Plus: write a brief for an outside coding agent (the plan, the part of the map that matters, what was tried and failed, the rules) into this conversation\'s folder.',
+      description: 'When a build is beyond Creator Plus: write a brief for an outside coding agent (the plan, the part of the map that matters, what was tried and failed, the rules) into this thread\'s folder.',
       parameters: { type: 'object', properties: { title: str(80), goal: str(600), failed: list(20, 400) }, required: ['title', 'goal'], additionalProperties: false },
       ...common,
       execute: safely(async (args, exec) => {
@@ -423,8 +452,8 @@ export function buildTools(deps) {
         // Never over an earlier hand-off: a new file next to it.
         const file = existsSync(join(dir, 'HANDOFF.md')) ? `HANDOFF-${new Date(now()).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z')}.md` : 'HANDOFF.md';
         safeWrite(base, join(BUILD_FOLDER, file), text, { fresh: true });
-        cards.add({ kind: 'proposal', title: `Hand-off written: ${oneLine(args.title, 100)}`, text: `For an outside coding agent: ${BUILD_FOLDER}/${file} in this conversation's folder.`, conversation: state.id });
-        return `Wrote ${BUILD_FOLDER}/${file} in this conversation's folder. Tell the user where it is and why the build needs an outside agent.`;
+        cards.add({ kind: 'proposal', title: `Hand-off written: ${oneLine(args.title, 100)}`, text: `For an outside coding agent: ${BUILD_FOLDER}/${file} in this thread's folder.`, conversation: state.id });
+        return `Wrote ${BUILD_FOLDER}/${file} in this thread's folder. Tell the user where it is and why the build needs an outside agent.`;
       }),
     },
     {
@@ -439,7 +468,7 @@ export function buildTools(deps) {
     },
     {
       name: 'creator_selftest',
-      description: 'Run the code parts of Creator Plus\'s eight self-tests (Collision, Change, Update, Long run, Scope, and the code part of Improve) in a throwaway folder, and give the prompts of the parts only a model can do (Rebuild, Look, Improve).',
+      description: 'Run the code parts of Creator Plus\'s eight self-tests (Collision, Change, Update, Mission, Scope, and the code part of Improve) in a throwaway folder, and give the prompts of the parts only a model can do (Rebuild, Look, Improve).',
       parameters: { type: 'object', properties: {}, additionalProperties: false },
       ...common,
       execute: safely(async () => {

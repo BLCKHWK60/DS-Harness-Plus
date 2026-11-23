@@ -184,8 +184,8 @@ test('the folder: only files inside it, listed newest first, with what each is f
   assert.equal(inside(dir, 'a.csv').shown, 'a.csv');
   assert.equal(inside(dir, join(dir, 'sub', 'b.xlsx')).shown, join('sub', 'b.xlsx'));
   assert.throws(() => inside(dir, '../x.csv'), /no file|outside/);
-  assert.throws(() => inside(dir, join(other, 'secret.csv')), /outside this conversation's folder/);
-  assert.throws(() => inside(dir, 'link.csv'), /outside this conversation's folder/);
+  assert.throws(() => inside(dir, join(other, 'secret.csv')), /outside this thread's folder/);
+  assert.throws(() => inside(dir, 'link.csv'), /outside this thread's folder/);
   assert.throws(() => inside(dir, 'missing.csv'), /There is no file "missing\.csv"/);
   assert.throws(() => inside('', 'a.csv'), /has no folder/);
   assert.equal(useOf('a.tsv'), 'table');
@@ -306,10 +306,10 @@ test('the tools, end to end: profile, query with an id, save, change the file, r
   const call = async (name, args, root = dir) => (await tools[name].execute(args, { root })).text;
 
   assert.match(await call('data_files', {}), /- sales\.csv: table \(query it with data_query after data_profile\), 35 B/);
-  assert.match(await call('data_files', {}, ''), /This conversation has no folder/);
+  assert.match(await call('data_files', {}, ''), /This thread has no folder/);
   assert.match(await call('data_profile', { files: ['sales.csv'] }), /^Table sales: 2 rows, 2 columns\./);
   assert.match(await call('data_profile', { files: ['notes.txt'] }), /notes\.txt is not a table file/);
-  assert.match(await call('data_profile', { files: [join(other, 'secret.csv')] }), /outside this conversation's folder/);
+  assert.match(await call('data_profile', { files: [join(other, 'secret.csv')] }), /outside this thread's folder/);
 
   const first = await call('data_query', { files: ['sales.csv'], sql: 'SELECT region, revenue FROM sales ORDER BY region' });
   assert.match(first, /^Query Q1 over sales\.csv, run \d{4}-\d\d-\d\d \d\d:\d\d UTC\.\nTables: sales \(2 rows, from sales\.csv\)\./);
@@ -362,7 +362,7 @@ test('the tools, end to end: profile, query with an id, save, change the file, r
   assert.equal(pictures[0].file, chartFile);
   assert.match(await call('data_chart', { files: ['sales.csv'], sql: 'SELECT region FROM sales', title: 'x' }), /It did not work: A chart needs a result with at least two columns/);
   const ran = await call('data_python', { code: 'print(1); plt.savefig("x")', purpose: 'Mean revenue' });
-  assert.match(ran, /^Run (Q\d+) \(Python, 0\.2 s\): finished\.\nFiles written:\n- data-output\/plot\.png, 1,234 bytes \(shown to the user in the chat\)\n\nPrinted output:\nmean 150\.0/);
+  assert.match(ran, /^Run (Q\d+) \(Python, 0\.2 s\): finished\.\nFiles written:\n- data-output\/plot\.png, 1,234 bytes \(shown to the user in the thread\)\n\nPrinted output:\nmean 150\.0/);
   assert.equal(pictures[1].file, join(dir, 'data-output', 'plot.png'));
   assert.equal(pictures[1].description, undefined);
   const pyId = /^Run (Q\d+)/.exec(ran)[1];
@@ -529,7 +529,7 @@ test('a chart file is named after its title and query, and never replaces a file
   const other = folder();
   const linked = folder();
   symlinkSync(other, join(linked, 'data-output'));
-  assert.throws(() => saveChart(linked, 'data-output', 'x-q1', '<svg/>'), /leads outside this conversation's folder/);
+  assert.throws(() => saveChart(linked, 'data-output', 'x-q1', '<svg/>'), /leads outside this thread's folder/);
   assert.deepEqual(readdirSync(other), []);
   // A link with the chart's own name is not followed either.
   const target = join(other, 'secret.txt');
@@ -561,7 +561,7 @@ test('data_chart: a chart that is not shown leaves no file; a chart that cannot 
   // Drawing the file fails: the chart is still shown, and the answer says it was not saved.
   const pictures = [];
   const shown = await make((_exec, picture) => { pictures.push(picture); return { ok: true, outline: 'Bar chart.' }; }, () => { throw new Error('the Diagrams add-on is not running'); }).execute({ files: ['sales.csv'], sql, title: 'Monthly', chart: 'bar' }, {});
-  assert.match(shown.text, /It is shown to the user in the chat, under your answer\. It could not be saved as a file \(the Diagrams add-on is not running\)\./);
+  assert.match(shown.text, /It is shown to the user in the thread, under your answer\. It could not be saved as a file \(the Diagrams add-on is not running\)\./);
   assert.equal(pictures[0].file, undefined);
   assert.equal(pictures[0].description.chart, 'bar');
   // Without a drawing function there is no file and no note.
@@ -616,7 +616,7 @@ test('apply(): the Data tab is written Read Only with its first tools, and data_
     // A chart through the real query engine: drawn in Diagrams' file colours, saved, and handed over with its file.
     const chartTool = registered.find((tool) => tool.name === 'data_chart');
     const out = await chartTool.execute({ files: ['sales.csv'], sql: 'SELECT region, revenue FROM sales ORDER BY region', title: 'By region' }, { agent: { id: 'a1', header: { cwd: work } } });
-    assert.match(out.text, /^Chart "By region" drawn from query Q1 over sales\.csv \(2 rows\)\. It is shown to the user in the chat, under your answer\. It is also saved as data-output\/by-region-q1\.svg\./);
+    assert.match(out.text, /^Chart "By region" drawn from query Q1 over sales\.csv \(2 rows\)\. It is shown to the user in the thread, under your answer\. It is also saved as data-output\/by-region-q1\.svg\./);
     assert.deepEqual(themes, ['light']);
     assert.equal(readFileSync(join(work, 'data-output', 'by-region-q1.svg'), 'utf8'), '<svg><!-- dsh-diagram --><title>By region</title></svg>');
     assert.equal(shown[0].file, join(work, 'data-output', 'by-region-q1.svg'));
@@ -624,7 +624,7 @@ test('apply(): the Data tab is written Read Only with its first tools, and data_
     // Only Data conversations keep their charts as files: in Cowork and Finance the chart is shown, and no file is written.
     for (const [index, id] of [[1, 'a2'], [2, 'a3']]) {
       const other = await chartTool.execute({ files: ['sales.csv'], sql: 'SELECT region, revenue FROM sales ORDER BY region', title: 'Elsewhere' }, { agent: { id, header: { cwd: work } } });
-      assert.match(other.text, /^Chart "Elsewhere" drawn from query Q1 over sales\.csv \(2 rows\)\. It is shown to the user in the chat, under your answer\.\n/, id);
+      assert.match(other.text, /^Chart "Elsewhere" drawn from query Q1 over sales\.csv \(2 rows\)\. It is shown to the user in the thread, under your answer\.\n/, id);
       assert.doesNotMatch(other.text, /saved/, id);
       assert.equal(shown[index].file, undefined, id);
       assert.equal(shown[index].description.chart, 'bar', id);
@@ -669,7 +669,7 @@ test('data_chart: a file only where the conversation keeps its charts as files (
   assert.equal(pictures[2].file, join(dir, 'data-output', 'sales-q1.svg'));
   assert.deepEqual(drawn, ['Sales']);
   // The tool's description says the file is Data's.
-  assert.match(make(() => true).description, /In a Data conversation the chart is also saved as an SVG file in data-output\./);
+  assert.match(make(() => true).description, /In a Data thread the chart is also saved as an SVG file in data-output\./);
 });
 
 test('the privacy and Read Only texts say only what is true (data-1, data-7)', () => {
@@ -696,16 +696,18 @@ test('the privacy and Read Only texts say only what is true (data-1, data-7)', (
   const entry = (label) => index.find((item) => item.label === label)?.description ?? '';
   assert.match(entry('With Web on, the words the assistant searches for'), /Data's own tools never send your files anywhere\. The assistant is told not to put private details from your files .* into a search or a web address; that is an instruction, not a check\./);
   assert.match(entry('With Web Off there are no searches, no pages and no deep research'), /commands and programs that look like they go online are stopped \(a check on their text: it catches the usual ways, not every way\)/);
-  // Read Only: only conversations that start in Data or move into it; older ones keep theirs; a tab without its own permission gives the earlier one back.
-  assert.match(page, /A conversation that starts in Data, or is moved into it, runs Read Only/);
-  assert.match(page, /Data conversations started before version 0\.57\.0 keep their permission/);
-  assert.match(page, /a tab that does not set its own permission, such as Cowork, gives back the one it had before, unless you changed it by hand/);
-  assert.match(entry('A conversation that starts in Data, or is moved into it, runs Read Only'), /Data conversations started before 0\.57\.0 keep their permission\. .*such as Cowork, gives back the one it had before, unless you changed it by hand\./);
+  // Read Only: only threads that start in Data or are switched to it; older ones keep theirs; a mode without its own permission gives the earlier one back.
+  assert.match(page, /A thread that starts in Data, or is switched to it, runs Read Only/);
+  assert.match(page, /Data threads started before version 0\.57\.0 keep their permission/);
+  assert.match(page, /a mode that does not set its own permission, such as Cowork, gives back the one it had before, unless you changed it by hand/);
+  // The Settings search index (dsh-settings-plus/settings-index.json) copies these lines; it is updated by whoever owns
+  // that file, so either wording passes here (stage 7: "conversation" → "thread").
+  assert.match(entry('A thread that starts in Data, or is switched to it, runs Read Only') || entry('A conversation that starts in Data, or is moved into it, runs Read Only'), /Data (?:conversations|threads) started before 0\.57\.0 keep their permission\. .*such as Cowork, gives back the one it had before, unless you changed it by hand\./);
   assert.match(readme, /under Read Only that tool asks you first, and with the "never ask" approval setting it is refused/);
   assert.doesNotMatch(readme, /which Read Only refuses/);
-  // Chart files are a Data conversation's.
-  assert.match(page, /In a Data conversation each one is also saved as an SVG file/);
-  assert.match(entry('How to use it'), /in a Data conversation each also saved as an SVG file in data-output/);
+  // Chart files are a Data thread's.
+  assert.match(page, /In a Data thread each one is also saved as an SVG file/);
+  assert.match(entry('How to use it'), /in a Data (?:conversation|thread) each also saved as an SVG file in data-output/);
 });
 
 test('a Scratch conversation works in its own folder: the data tools read only there, and its note names no hidden path', async () => {

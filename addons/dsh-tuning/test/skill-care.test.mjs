@@ -403,7 +403,7 @@ test('review 6, 9, 10, 12: a name in two places is never changed by name; Retire
     await (await ws.startSkillsRun({ type: 'retire', mark: 'all' })).done;
     const nothing = w.state.cards.at(-1);
     assert.match(nothing.title, /^Nothing proposed yet/);
-    assert.match(nothing.text, /not counted yet in 1 conversation/);
+    assert.match(nothing.text, /not counted yet in 1 thread/);
     // A proposal whose skills cannot be retired now: the card stays.
     const key = await keyOfRow(w, 'my-notes');
     w.part.sort([key], 'mine');

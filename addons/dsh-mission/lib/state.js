@@ -18,7 +18,7 @@ export function openState(file) {
   /** @type {Map<string, {mode: string, root: string, approved: Set<string>, outside: Set<string>, preset: string, at: number}>} */
   const table = new Map();
   if (file) {
-    const read = readJsonStore(file, () => ({}), { label: 'what Mission remembers for each conversation', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
+    const read = readJsonStore(file, () => ({}), { label: 'what Mission remembers for each thread', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
     for (const [id, entry] of Object.entries(read)) {
       if (!MODES.includes(entry?.mode) || typeof entry.root !== 'string' || !entry.root) continue;
       const list = (value) => new Set((Array.isArray(value) ? value : []).filter((item) => typeof item === 'string'));

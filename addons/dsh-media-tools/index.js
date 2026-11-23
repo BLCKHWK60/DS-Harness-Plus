@@ -500,7 +500,7 @@ export function apply(ctx, config) {
   function countCall(exec) {
     const id = exec.agent?.id ?? '';
     const used = calls.get(id) ?? 0;
-    if (used >= maxCalls) throw new MediaError(`This session already made ${maxCalls} image calls. Nothing was sent.`, 'call_cap');
+    if (used >= maxCalls) throw new MediaError(`This thread already made ${maxCalls} image calls. Nothing was sent.`, 'call_cap');
     if (calls.size > 500) calls.clear();
     calls.set(id, used + 1);
   }

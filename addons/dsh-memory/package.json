@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A short list of lasting facts and preferences about you, given to every new conversation. You add, edit and delete every entry; the assistant can only suggest. Nothing to install.",
+  "description": "A short list of lasting facts and preferences about you, given to every new thread. You add, edit and delete every entry; the assistant can only suggest. Nothing to install.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

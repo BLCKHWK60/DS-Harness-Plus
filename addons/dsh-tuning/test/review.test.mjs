@@ -26,7 +26,8 @@ const answer = (text) => event('assistant/message', { message: { role: 'assistan
 const turn = (n, ...inner) => [event('turn/start', { turn: n }), event('request/header', { header: { config: { provider: 'local', model: 'small' } } }), ...inner, event('turn/end', { turn: n, reason: { kind: 'completed' } })];
 
 test('1. secrets in tool arguments are masked before the arguments are written as JSON, in every spelling; a web address with a password makes the row unsure', () => {
-  const secrets = /hunter22|correct horse|admin:pw|bob:pw|dXNlcjpwYXNz|ya29\.a0Af|abcd1234efgh|Hunter2\b|zz-key-value|s3cr3t-cookie|opensesame1|4321/;
+  // The pin as a whole number only: a row's `at` time (milliseconds) can hold the digits 4321 (it did on 23 Nov 2026).
+  const secrets = /hunter22|correct horse|admin:pw|bob:pw|dXNlcjpwYXNz|ya29\.a0Af|abcd1234efgh|Hunter2\b|zz-key-value|s3cr3t-cookie|opensesame1|\b4321\b/;
   const events = [
     user('set up the database config'),
     ...turn(1,

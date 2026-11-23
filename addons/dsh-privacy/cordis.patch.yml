@@ -1,7 +1,7 @@
 # Privacy: switch off the app's two reporting channels to its maker.
 #
-# 1. Conversation upload on feedback. The app's `session-telemetry-otel` row uploads a
-#    conversation, unredacted, when you rate an answer or use /feedback, for any model.
+# 1. Thread upload on feedback. The app's `session-telemetry-otel` row uploads a
+#    thread, unredacted, when you rate an answer or use /feedback, for any model.
 #    Switching the row off is what the app's own DSH_TELEMETRY_DISABLED switch does.
 # 2. Usage events. On the desktop app the `product-analytics` row reports an event for each
 #    message sent (with the model name), model and mode switches, and plugin changes, with

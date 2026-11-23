@@ -138,17 +138,17 @@ export function catalogUpdate(entries, incomplete = false) {
       incomplete
         ? 'No skills could be confirmed in this discovery attempt. Do not use names from earlier skill catalogs.'
         : 'No skills are currently available through the `skill` tool. Do not use names from earlier skill catalogs.',
-      'A user may still invoke a skill directly; its <skill_content> block then appears in this conversation. Follow it, and do not call the `skill` tool for it.',
+      'A user may still invoke a skill directly; its <skill_content> block then appears in this thread. Follow it, and do not call the `skill` tool for it.',
     ]
     : [
       'Use only names in this replacement catalog. If the user names a listed skill, or the task clearly matches its description, call the `skill` tool with the exact name before acting.',
-      'A user may also invoke a skill directly; its <skill_content> block then appears in this conversation. Follow it, and do not call the `skill` tool again for that skill.',
+      'A user may also invoke a skill directly; its <skill_content> block then appears in this thread. Follow it, and do not call the `skill` tool again for that skill.',
     ];
   const text = [
     '<system-reminder>',
     incomplete
-      ? 'Skill discovery is incomplete. This catalog of currently available skills replaces every earlier available-skills list in this session:'
-      : 'The available skill catalog changed. This complete catalog replaces every earlier available-skills list in this session:',
+      ? 'Skill discovery is incomplete. This catalog of currently available skills replaces every earlier available-skills list in this thread:'
+      : 'The available skill catalog changed. This complete catalog replaces every earlier available-skills list in this thread:',
     '',
     '<available_skills>',
     ...entries.map(catalogLine),

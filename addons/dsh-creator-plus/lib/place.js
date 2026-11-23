@@ -54,5 +54,5 @@ export const LOG_READERS = {
 export function logRefusal(setting, place) {
   const rule = LOG_READERS[setting] ?? LOG_READERS['this-mac'];
   if (rule.allows(place?.where)) return '';
-  return `The session logs are read only by ${rule.label.toLowerCase()} (your setting on the Creator Plus page), and this conversation's model runs ${place?.where === 'cloud' ? `outside this Mac (${place.name || 'a cloud service'})` : place?.where === 'network' ? `on another machine in your network (${place.host})` : 'in a place that cannot be told'}. Nothing was read. Switch to a model on this Mac, or change the setting.`;
+  return `The thread logs are read only by ${rule.label.toLowerCase()} (your setting on the Creator Plus page), and this thread's model runs ${place?.where === 'cloud' ? `outside this Mac (${place.name || 'a cloud service'})` : place?.where === 'network' ? `on another machine in your network (${place.host})` : 'in a place that cannot be told'}. Nothing was read. Switch to a model on this Mac, or change the setting.`;
 }

@@ -16,23 +16,30 @@ import z from '@deepseek-ai/schemastery';
 import { LEVEL_NAMES, VERIFIED_START, addressesIn, addressesOf, levelAllows, mixesOf, pickedLevel, verifiedList } from './lib/weblevel.js';
 import { IMAGE_TOOLS, RESEARCH_TOOL, WEB_TOOLS, goesOnline, imageToolsOffline, longRunMask, longToolsFor, oldWebMarks, parentIdOf, programGoesOnline, researchTab, rootOf, toolMaskFor, webFor, webReaching } from './lib/mask.js';
 import { trashedIds } from './lib/trashed.js';
-import { fromScheduler, scheduledModeId } from './lib/scheduled.js';
+import { fromScheduler, scheduledModeId, scheduledTaskIds } from './lib/scheduled.js';
 import { wireToolAccess } from './lib/wire.js';
-import { SHELL_NAMES } from './lib/online.js';
-import { isOwnTool } from './lib/catalog.js';
-import { TOOL_ACCESS_PATH, toolAccessHandler } from './lib/route.js';
-import { PROGRAM_TOOL, programNote, programOnly, SLOW_TOOLS } from './lib/ptc.js';
+import { PROGRAM_NAMES, SHELL_NAMES } from './lib/online.js';
+import { classify, isOwnTool } from './lib/catalog.js';
+import { ENGINE_HELD_TAKEN_PATH, TOOL_ACCESS_PATH, engineHeldTakenHandler, modeHandler, toolAccessHandler } from './lib/route.js';
+import { engineHeldTexts } from './lib/engineheld.js';
+import { PROGRAM_TOOL, programNote, programOnly, SLOW_TOOLS, TIMED_TOOLS } from './lib/ptc.js';
+import { FALLBACK_MODE_IDS, LOCK_PRESET, PTC_PRESET, SPACE_LOCK_KEY, defaultLockOf, lockCaution, lockConflictLine, lockInSpace, lockOf, lockedPresetOf, loosenWarning, noProgramsPtcPrompt, presetInfo, ptcReach, reachLine, readLocks, refusesPrograms, restartPresetOf, swapNote, whereText } from './lib/presetlock.js';
 import { helpersBelow, onlyStopNotes, stoppedByUser } from './lib/stop.js';
-import { CORE, FAMILIES, FIND_TOOL, appOfficeFolder, brings, catalog as trimCatalog, mentioned, others as trimOthers, resolveRequest, skillFamilies, skillFolderIn } from './lib/trim.js';
-import { RUN_OVER_LIMIT, RUN_OVER_TEXT, RUN_STEP_TOOL, dropIsolatedNotes, heldMode, isolatedMayRun, isolatedRunMask, modeChangeRefusal } from './lib/isolation.js';
-import { DEPTH_CHECK_KIND, DEPTH_CHECK_PROMPT, DEPTH_CHECK_REFUSAL, DEPTH_CHECK_SUMMARY, promptText } from './lib/prompt.js';
+import { CORE, FAMILIES, FIND_TOOL, appOfficeFolder, brings, catalog as trimCatalog, closedHere, mentioned, others as trimOthers, resolveRequest, skillFamilies, skillFolderIn } from './lib/trim.js';
+import { LOCKED_MODE, RUN_OVER_LIMIT, RUN_OVER_TEXT, RUN_STEP_TOOL, dropIsolatedNotes, heldMode, isolatedMayRun, isolatedRunMask, modeChangeRefusal } from './lib/isolation.js';
+import { CHAT_PROMPT, DEPTH_CHECK_KIND, DEPTH_CHECK_PROMPT, DEPTH_CHECK_REFUSAL, DEPTH_CHECK_SUMMARY, promptText } from './lib/prompt.js';
 import { lensIdIn, lensTextIn, ownLensesOf } from './lib/lens.js';
-import { movedSince, readBase, readEntry, sandboxStep } from './lib/sandbox.js';
-import { normalizeStart, startOps } from './lib/start.js';
+import { draftAccessStep, movedSince, readBase, readEntry, sandboxStep } from './lib/sandbox.js';
+import { normalizeStart, restartOps, seededBy, startOps } from './lib/start.js';
 import { OTHER_TOOLS, SECRET_MARKS, WRITE_TOOLS, linkOn, openSecrets, otherSourcesOf, partsOf, readSource, requestOf, scrub, showPage } from './lib/other.js';
 import { ACADEMIC_START, KINDS, NETS, NEWS_START, PAGE_KINDS, kindsOf, filterSearchText, isAll, listsOf, selectionsOf, sourcesAllow, sourcesSaid, tickedWords, ticksFromLevel, ticksOf } from './lib/sources.js';
 import { beforeFirstMessage, sidebarTabs, tabCount } from './lib/tabs.js';
 import { offIn, withOff, withoutOffSkills, lastSeenCatalog } from './lib/skilloff.js';
+import { plainAddOps, plainCarryOps } from './lib/plain.js';
+import { FENCED_MODES, fenceCheck, fencePrompt, fenceRefusal } from './lib/fence.js';
+import { ADDON_NAMES, GUARDED, GUARDED_ADDON, SPACES, SPACE_NAMES, SPACE_SETTINGS_TEXT, draftStartMode, fillSpaces, guessSpace, isSpace, guardedReason, heldText, modeBlurb, modeList, modeName, modeRowsForPage, nextDescriptions, nextModeSpaces, nextSpaceSettings, spaceCards, modePickRefusal, modesInSpace, noteModeChange, spaceMovePlan, spaceOfMode, spaceOfTab, spaceOfThread, spaceText, spacesLive, spacesNow, turnOfPhase } from './lib/spaces.js';
+import { GUARDED_SPACES, SEALED_EXTRA_CHOICES, SPACE_RULES, guardRefusesEngine, guestRefuses, heldIn, lostIn, modeKey, reconRefusal, refusesProgramsIn, restartPresetIn, roomPathRefusal, spaceCopy, spaceRefuser, withoutGuestRefused } from './lib/spacerules.js';
+import { parseAccess, stateOf } from './lib/access.js';
 
 export { CODE_METHOD, COWORK_METHOD, DEPTH_CHECK_PROMPT, DEPTH_PROMPTS, DEPTH_SEARCH_PROMPTS, ISOLATED_DEPTH_PROMPTS, ISOLATED_LEVEL_PROMPTS, ISOLATED_OFF_PROMPT, SEARCH_DEPTH_PROMPTS } from './lib/prompt.js';
 
@@ -41,6 +48,10 @@ export const name = 'modes';
 export const TOOLS_PATH = '/dsh-modes/tools';
 /** Settings → Web sources asks here which secrets of the owner's own sources are kept, and keeps or forgets one. */
 export const OTHER_PATH = '/dsh-modes/other';
+/** The preset menu's (i), its lock and the PTC note ask here (header `x-dsh-session`); without a conversation, Settings → Modes reads each tab's choice. */
+export const PRESET_PATH = '/dsh-modes/preset';
+/** Item 4A, stage 2: the Mode list in the chat box (GET: the list for a thread; POST: a pick, or a new draft's start). */
+export const MODE_PATH = '/dsh-modes/mode';
 export const inject = ['tools'];
 /** The app's Contents folder (…/DeepSeek Harness.app/Contents), where its own Office skills live. */
 const APP_CONTENTS = resolvePath(dirname(process.execPath), '..');
@@ -52,22 +63,31 @@ const BUILTIN_MODES = {
     tools: 'none',
     sandbox: 'read-only',
     defaultTier: '',
-    prompt:
-      'You are in Chat mode: answer directly in one reply. You cannot read or change files or run commands. If a task needs those, say so and suggest switching to Cowork or Code mode.',
+    prompt: CHAT_PROMPT,
   },
   cowork: { label: 'Cowork', tools: 'all', sandbox: 'inherit', defaultTier: '', prompt: '' },
   code: { label: 'Code', tools: 'all', sandbox: 'workspace-write', defaultTier: '', prompt: '' },
 };
 
+/**
+ * Item 4A, stage 4: built-in modes added later. They join every list, the owner's own saved `modes` included, without
+ * replacing a mode of the same id there (merged like an add-on's mode, but with no tab of their own). Plain chat: the
+ * new start mode of the Chat space; every tool the space allows (a standalone thread reaches only its own folder, a
+ * project thread its project), no instructions and no working method of its own.
+ */
+export const ADDED_MODES = Object.freeze({
+  plain: Object.freeze({ label: 'Plain chat', tools: 'all', sandbox: 'inherit', defaultTier: '', prompt: '' }),
+});
+
 /** The answer to a program started in a conversation that has no tools (the app's PTC preset keeps `run_code` on offer). */
-const NO_PROGRAMS = 'no tools are available in this conversation, so programs are not run. Answer directly.';
+const NO_PROGRAMS = 'no tools are available in this thread, so programs are not run. Answer directly.';
 /** The answer to a shell command that goes online while Web is Off. */
-const SHELL_OFFLINE = 'web access is Off in this conversation, so commands that go online (curl, wget, web addresses, downloads, installs, code that fetches) are not run. Answer without the web, or ask the user to switch Web on in the chat box.';
+const SHELL_OFFLINE = 'web access is Off in this thread, so commands that go online (curl, wget, web addresses, downloads, installs, code that fetches) are not run. Answer without the web, or ask the user to switch Web on in the chat box.';
 /** The answer to a program that goes online while Web is Off. */
-const PROGRAM_OFFLINE = 'web access is Off in this conversation, so programs that go online (fetch, web sockets, network modules, or starting curl, wget and the like) are not run. Answer without the web, or ask the user to switch Web on in the chat box.';
+const PROGRAM_OFFLINE = 'web access is Off in this thread, so programs that go online (fetch, web sockets, network modules, or starting curl, wget and the like) are not run. Answer without the web, or ask the user to switch Web on in the chat box.';
 /** Added to the system prompt while the Deep research switch is on. */
 const RESEARCH_PROMPT =
-  'Deep research is switched on for this conversation: for questions that need looking things up, use the deep_research tool to research them thoroughly and answer with a cited report. For small talk or follow-ups about an earlier report, answer directly.';
+  'Deep research is switched on for this thread: for questions that need looking things up, use the deep_research tool to research them thoroughly and answer with a cited report. For small talk or follow-ups about an earlier report, answer directly.';
 
 /** The text of one message, whatever its shape. */
 function textOf(message) {
@@ -125,6 +145,28 @@ const SANDBOX_VALUES = ['inherit', 'read-only', 'workspace-write'];
 /** The app's Full access level, and the most a Scratch conversation starts with. */
 const FULL_ACCESS = 'danger-full-access';
 const SCRATCH_CAP = 'workspace-write';
+/** Item 4A fix round: what a refused mode for a new thread in Recon's room says (Modes' backstop under `set`). */
+export const ROOM_ONLY_RECON = "This new thread is in Recon's room, so it can only be a sealed Recon thread. To use another mode, start a new thread in another space.";
+/**
+ * Item 4A, stage 6a: the model-facing note of a guest in Recon (its tool, route and room-file sentences only; Recon's
+ * own `recon:space` section holds its METHOD rules, REGRESSION 20). English only: the model reads it.
+ */
+export const SEALED_SPACE_NOTE = 'This thread is in Recon, so it is sealed. Search and read the web only with Recon\'s tools (recon_web_search, recon_web_read and the other recon_ tools). web_search, web_fetch and deep_research are not available here. Files are read and written only in this thread\'s room folder. Nothing from this thread goes into notes other threads read.';
+/**
+ * Lab fix (6a): SEALED_SPACE_NOTE with the thread's room folder named and the mode's own web words redirected (Research's
+ * "call deep_research" would otherwise contradict the note).
+ * @param {string} [folder] - the thread's room folder ('' when not known: its file tools are then left out).
+ * @returns {string}
+ */
+export function sealedSpaceNote(folder = '') {
+  const where = folder ? ` This thread's room folder is ${folder}: give every file tool a full path inside it (glob and grep need path set to it); paths outside it, relative paths and calls without a path are refused.` : '';
+  return `${SEALED_SPACE_NOTE}${where} Where this mode's own instructions above say to call web_search, web_fetch or deep_research, call recon_web_search and recon_web_read instead.`;
+}
+/** Item 4A, stage 6a: how long a spaced draft's first turn waits for its claim (I3). */
+const CLAIM_WAIT_MS = 2000;
+/** Item 4A, stage 6a: a failed space or seal write is tried again this often, this many times. */
+const RETRY_MS = 5000;
+const RETRY_MAX = 5;
 
 export const Config = z.object({
   /** Mode definitions as a JSON object: `{ id: { label, tools, sandbox, defaultTier, prompt } }`. */
@@ -134,35 +176,35 @@ export const Config = z.object({
    * replace one of them. An add-on writes its own entry here and removes it when it is switched off.
    */
   extraModes: z.string().default('{}').volatile(),
-  /** Mode of a session that has not chosen one. */
+  /** Mode of a thread that has not chosen one. */
   defaultMode: z.string().default('cowork').volatile(),
   /**
-   * Mode of a conversation that an Automation task opens. Nobody picked a tab for it, so the tab last
+   * Mode of a thread that an automation opens. Nobody picked a mode for it, so the space last
    * looked at must not decide. An unknown id falls back to the first mode with all tools.
    * Chosen on Settings → Modes.
    */
   scheduledMode: z.string().default('cowork').volatile(),
-  /** Per-session choice as JSON: `{ sessionId: modeId }`. Written by the composer selector. */
+  /** Per-thread choice as JSON: `{ sessionId: modeId }`. Written by the composer selector. */
   sessionModes: z.string().default('{}').volatile(),
-  /** Conversations that began in an isolated mode (id -> true). They stay isolated whatever happens to the mode. */
+  /** Threads that began in a sealed mode (id -> true). They stay sealed whatever happens to the mode. */
   sessionIsolated: z.string().default('{}').volatile(),
   /**
-   * Skills switched off per tab, as JSON `{ tabId: [skill names] }` (Tuner Plus's step 14). In that tab the model
+   * Skills switched off per mode, as JSON `{ modeId: [skill names] }` (Tuner Plus's step 14). In that mode the model
    * does not see them in its skill list and cannot load them; the owner's own /name still works. Empty: as before.
    */
   skillsOff: z.string().default('{}').volatile(),
-  /** Drop per-session entries whose Session is no longer stored, once per start. */
+  /** Drop per-thread entries whose thread is no longer stored, once per start. */
   pruneStaleSessions: z.boolean().default(true),
   /**
-   * When a top-level Session starts its first turn without a chosen mode, record the mode it starts in.
-   * A later change of `defaultMode` (for example from a sidebar tab) then only affects new Sessions.
+   * When a top-level thread starts its first turn without a chosen mode, record the mode it starts in.
+   * A later change of `defaultMode` then only affects new threads.
    */
   pinOnFirstTurn: z.boolean().default(true),
-  /** Per-session web switch as JSON: `{ sessionId: true | false }`. Missing = the mode's default (off in a no-tools mode). */
+  /** Per-thread web switch as JSON: `{ sessionId: true | false }`. Missing = the mode's default (off in a no-tools mode). */
   sessionWeb: z.string().default('{}').volatile(),
   /**
-   * Per-session Web level as JSON (plan step S1): `{ sessionId: 'verified' | 'open' | 'everything' | 'custom:<name>' }`.
-   * Missing = On as before: no limit beyond the tab's own (the owner's choice: the levels are added, the
+   * Per-thread Web level as JSON (plan step S1): `{ sessionId: 'verified' | 'open' | 'everything' | 'custom:<name>' }`.
+   * Missing = On as before: no limit beyond the mode's own (the owner's choice: the levels are added, the
    * defaults kept). Only while the Web is on; lib/weblevel.js.
    */
   sessionWebLevel: z.string().default('{}').volatile(),
@@ -175,8 +217,8 @@ export const Config = z.object({
    */
   webMixes: z.string().default('{}').volatile(),
   /**
-   * Per-conversation Web sources as JSON: `{ sessionId: ['verified', 'forums', …] }` (the one Web selector, 18
-   * November 2026). Missing = All: the web as before, or, for a conversation that picked one of the older levels
+   * Per-thread Web sources as JSON: `{ sessionId: ['verified', 'forums', …] }` (the one Web selector, 18
+   * November 2026). Missing = All: the web as before, or, for a thread that picked one of the older levels
    * (`sessionWebLevel`), that level read as ticks. Only while the Web is on. lib/sources.js.
    */
   sessionWebSources: z.string().default('{}').volatile(),
@@ -190,22 +232,27 @@ export const Config = z.object({
    * secret store or the macOS Keychain, by each source's `store`. Settings → Web sources → Other sources.
    */
   otherSources: z.string().default('[]').volatile(),
-  /** Obsolete: the old per-conversation Deep research switch, no longer offered or read (kept so older settings files still load). Old entries are pruned with the others. */
+  /** Obsolete: the old per-thread Deep research switch, no longer offered or read (kept so older settings files still load). Old entries are pruned with the others. */
   sessionResearch: z.string().default('{}').volatile(),
-  /** Obsolete since 0.59.0: each conversation's former Web level, moved into `sessionDepth` once (`depthMoved`). Kept so older settings files still load. */
+  /** Obsolete since 0.59.0: each thread's former Web level, moved into `sessionDepth` once (`depthMoved`). Kept so older settings files still load. */
   sessionSearchDepth: z.string().default('{}').volatile(),
   /**
-   * Per-session Depth as JSON: `{ sessionId: 'quick' | 'standard' | 'thorough' }` (missing = where new
-   * conversations start, `searchDepth`). How much work the conversation gets: how much it searches when
+   * Per-thread Depth as JSON: `{ sessionId: 'quick' | 'standard' | 'thorough' }` (missing = where new
+   * threads start, `searchDepth`). How much work the thread gets: how much it searches when
    * Web is on, helpers, planning, checks and reviews. Set with the Depth button in the chat box, the
-   * same in every tab (the owner's rule): Recon gets the care note and then its search effort; Research
+   * same in every mode (the owner's rule): Recon gets the care note and then its search effort; Research
    * and Scout get the care note but no searching note (they search by their own method), and a research
-   * run started from the conversation is sized by it. Never for helpers, while a Mission run is on, or
+   * run started from the thread is sized by it. Never for helpers, while a Mission run is on, or
    * with tools off; a user's own /goal keeps it.
    */
   sessionDepth: z.string().default('{}').volatile(),
   /**
-   * Per-session Lens as JSON: `{ sessionId: 'blunt' | 'scientific' | 'journalistic' | 'data-only' |
+   * Threads whose Depth is on Mission (chosen, not started) as JSON: Start Mission is the main-looking button
+   * there; Send keeps the thread's own Depth.
+   */
+  sessionMission: z.string().default('{}').volatile(),
+  /**
+   * Per-thread Lens as JSON: `{ sessionId: 'blunt' | 'scientific' | 'journalistic' | 'data-only' |
    * 'skeptic' | 'encouraging' }` (missing or unknown = Default, which adds nothing). How the answer is
    * worded (lib/lens.js, texts approved word for word). Its own section after the standing texts.
    * Not for helpers, and paused during a /learn study session. No button yet (Lens part, step 28).
@@ -217,47 +264,49 @@ export const Config = z.object({
    * Settings → Modes; kept in these settings, so Shared settings carries them to a second Mac.
    */
   ownLenses: z.array(z.object({ id: z.string(), name: z.string(), text: z.string() })).default([]).volatile(),
-  /** Each conversation's former Web level has been moved into its Depth (once, since 0.59.0). */
+  /** Each thread's former Web level has been moved into its Depth (once, since 0.59.0). */
   depthMoved: z.boolean().default(false).volatile(),
   /**
-   * Each tab's starting choice of tools for a Long run, as JSON: `{ modeId: { files: boolean, web: boolean } }`
-   * (missing: files and commands on; the web on, off in an isolated tab). A run's card can change it for
-   * that run. Set on Settings → Modes → Long run tools.
+   * Each mode's starting choice of tools for a Mission, as JSON: `{ modeId: { files: boolean, web: boolean } }`
+   * (missing: files and commands on; the web on, off in a sealed mode). A run's card can change it for
+   * that run. Set on Settings → Modes → Mission tools.
    */
   longTools: z.string().default('{}').volatile(),
-  /** Per-session tools switch as JSON: `{ sessionId: false }`. While off, the model is offered no tool at all. */
+  /** Per-thread tools switch as JSON: `{ sessionId: false }`. While off, the model is offered no tool at all. */
   sessionTools: z.string().default('{}').volatile(),
-  /** The Depth new conversations start with (quick, standard, thorough), and that a conversation without its own pick follows. Set on Settings → Modes, and by every pick on the Depth button. (Named for the former Web level, which it replaced in 0.59.0.) */
+  /** The Depth new threads start with (quick, standard, thorough), and that a thread without its own pick follows. Set on Settings → Modes, and by every pick on the Depth button. (Named for the former Web level, which it replaced in 0.59.0.) */
   searchDepth: z.string().default('standard').volatile(),
   /** Give the Code mode a working method (read first, small changes, run the tests, report plainly) while it has no instructions of its own. */
   codeMethod: z.boolean().default(true).volatile(),
   /** Give the Cowork mode a working method (understand the task, a step list, care with the user's files, check the result, report plainly) while it has no instructions of its own. */
   coworkMethod: z.boolean().default(true).volatile(),
   /**
-   * Per-conversation access level from before a mode changed it, as JSON:
+   * Per-thread access level from before a mode changed it, as JSON:
    * `{ sessionId: { mode: 'chat', base: 'workspace-write', set: 'read-only' } }` (`mode`: the mode
    * the level was last applied for; `set`: the level that mode set). Leaving the mode puts `base`
-   * back, also after a restart, unless the level was changed by hand since. A conversation whose
+   * back, also after a restart, unless the level was changed by hand since. A thread whose
    * mode is no longer `mode` when it is opened was moved while closed: it gets its new mode's level.
    */
   sessionSandboxBase: z.string().default('{}').volatile(),
-  /** Obsolete since 0.59.0: the former separate Depth of Deep research runs. A run now follows the Depth of the conversation that starts it (`sessionDepth`, else `searchDepth`), the same in every tab. Kept so older settings files still load. */
+  /** Obsolete since 0.59.0: the former separate Depth of Deep research runs. A run now follows the Depth of the thread that starts it (`sessionDepth`, else `searchDepth`), the same in every mode. Kept so older settings files still load. */
   researchDepth: z.string().default('standard').volatile(),
   /**
-   * Which model Deep research's helpers run on: `same` (the model of the conversation that started
-   * the research) or `roles` (the role models set in Settings → Model Tiers). All conversations.
+   * Which model Deep research's helpers run on: `same` (the model of the thread that started
+   * the research) or `roles` (the role models set in Settings → Model tiers). All threads.
    */
   researchModel: z.string().default('same').volatile(),
   /**
-   * The same choice for one conversation, as JSON: `{ sessionId: 'same' | 'roles' }`. It decides for
+   * The same choice for one thread, as JSON: `{ sessionId: 'same' | 'roles' }`. It decides for
    * every tool that starts helper agents (Mission, Deep research, Agent swarm, the Tier tools, Code
-   * power). A conversation without an entry follows `researchModel`, which is the default for all.
+   * power). A thread without an entry follows `researchModel`, which is the default for all.
    */
   sessionHelpers: z.string().default('{}').volatile(),
-  /** A Rerun button under every answer: asks the same question again, with the model now selected, in a fresh copy of the conversation. */
+  /** A Rerun button under every answer: asks the same question again, with the model now selected, in a fresh copy of the thread. */
   rerunButton: z.boolean().default(true).volatile(),
   /** Hide the app's thumbs-up and thumbs-down buttons under answers. */
   hideFeedback: z.boolean().default(false).volatile(),
+  /** Recon and Devices colours (on by default): a red frame, space button, New button, tint and error boxes in Recon, a violet frame, space button and New button in Devices, and the same outline on Split panes. Off: every space looks the same. */
+  spaceColours: z.boolean().default(true).volatile(),
   /**
    * The chat box looks the same in every mode (on by default): the buttons' words (Web · On, Depth, One
    * model, Tools on) shrink by the window's width alone, not by what else a mode puts in the row, and the
@@ -267,10 +316,10 @@ export const Config = z.object({
   uniformBox: z.boolean().default(true).volatile(),
   /**
    * Starting values per mode as JSON: `{ modeId: { web, depth, helpers, tools } }` (lib/start.js). What the Web,
-   * Depth, Models and Tools buttons read in a conversation that begins in the mode; a missing or empty value
+   * Depth, Models and Tools buttons read in a thread that begins in the mode; a missing or empty value
    * is the usual one (the mode's own default, or the one setting for all modes). Written into the
-   * conversation's own settings when it starts, so a pick made by hand later replaces it.
-   * Settings → Modes → Starting values for new conversations.
+   * thread's own settings when it starts, so a pick made by hand later replaces it.
+   * Settings → Modes → Starting values for new threads.
    */
   modeStart: z.string().default('{}').volatile(),
   /** Name of the slash command that switches modes. */
@@ -279,10 +328,10 @@ export const Config = z.object({
    * Modes with all tools that load them as needed: a core set and `tools_find` at first, other
    * families when the model asks for them or the user's message mentions them.
    */
-  trimModes: z.array(z.string()).default(['cowork', 'code', 'data']).volatile(),
-  /** Tool families a conversation added, as JSON: `{ sessionId: ['pdf', 'data'] }`. */
+  trimModes: z.array(z.string()).default(['cowork', 'code', 'data', 'plain']).volatile(),
+  /** Tool families a thread added, as JSON: `{ sessionId: ['pdf', 'data'] }`. */
   sessionToolSets: z.string().default('{}').volatile(),
-  /** Done once (0.55.1): old "Search off" marks cleared where Web Off would now block a tab's own search tools. */
+  /** Done once (0.55.1): old "Search off" marks cleared where Web Off would now block a mode's own search tools. */
   webMarksCleared: z.boolean().default(false).volatile(),
   /**
    * Tool access (lib/access.js): what each tool is set to in each mode, as JSON
@@ -295,6 +344,94 @@ export const Config = z.object({
   toolAccessOn: z.boolean().default(false).volatile(),
   /** Done once (0.57.0): 'data' added to a stored `trimModes` list that lacked it (Data loads its tools as needed). */
   dataTrimAdded: z.boolean().default(false).volatile(),
+  /**
+   * Done once (item 4A, stage 4): Plain chat was given the Cowork mode's per-mode choices ("Load tools as needed", skills
+   * switched off, Tool access) where Cowork had them and Plain chat had none (lib/plain.js). Kept on each Mac.
+   */
+  plainAdded: z.boolean().default(false).volatile(),
+  /**
+   * Done once (item 4A, fix round 2): Plain chat was also given the Cowork mode's starting values (`modeStart`), its
+   * Mission tools (`longTools`), Mission's work loop choice and the other add-ons' per-mode choices where Cowork had them and
+   * Plain chat had none (lib/plain.js plainCarryOps). The old keys stay as they are. Kept on each Mac.
+   */
+  plainCarried: z.boolean().default(false).volatile(),
+  /**
+   * Final fix round: the other add-ons whose per-mode choices were already carried to Plain chat (JSON list of their
+   * namespaces: mission, sampling-presets, agent-swarm). An add-on installed or switched on later is still carried once.
+   * Kept on each Mac.
+   */
+  plainCarriedIn: z.string().default('[]').volatile(),
+  /**
+   * Keep Plain chat inside its folder (item 4A, fix round 2; on by default): a standalone Plain chat thread reads, writes,
+   * searches and runs commands only inside its own Scratch folder, a project thread only inside its project folder
+   * (lib/fence.js). Off: the app's own file sandbox only (writes anywhere in the thread's folder, which for a standalone
+   * thread is the whole Scratch place, reads anywhere). Settings → Modes.
+   */
+  plainFence: z.boolean().default(true).volatile(),
+  /**
+   * Preset in this space (item 7), as JSON `{ modeId: 'any' | 'standard' | 'creator' }` (lib/presetlock.js). Which of
+   * the app's presets a new thread of the mode (or space) starts in: Any (the usual choice), Standard only, or Creator only
+   * (the app's Creator preset). A mode without an entry has its default: Standard only for Recon, Devices and
+   * Automations, Creator only for Creator Plus, Any for every other mode. Settings → Spaces → Preset in this space.
+   */
+  presetLock: z.string().default('{}').volatile(),
+  /**
+   * Item 4A: each thread's space as JSON `{ sessionId: 'chat' | 'code' | 'devices' | 'recon' | 'workshop' }`
+   * (lib/spaces.js). Recorded at its first message (the space its draft was opened in), carried with a copy, pruned with
+   * the other per-thread entries. Since stage 3a it decides where a thread is listed; a mode change never moves it.
+   */
+  sessionSpaces: z.string().default('{}').volatile(),
+  /**
+   * Item 4A: the owner's own space ticks per mode as JSON `{ modeId: [{ space, adjust: {} }] }` (a mode without an entry has
+   * its default ticks; an empty list: offered in no space). Settings → Modes, "Modes and their spaces" (stage 5).
+   */
+  modeSpaces: z.string().default('{}').volatile(),
+  /**
+   * Item 4A: per-space settings as JSON `{ spaceId: { shown, startMode } }` (missing: shown, and the space's usual start
+   * mode). Settings → Spaces (stage 5). Where new threads start is the Left panel add-on's `startPlaces`, the preset is
+   * `presetLock`: each is kept in one place only.
+   */
+  spaceSettings: z.string().default('{}').volatile(),
+  /**
+   * Item 4A, stage 5: your own one-line description per mode as JSON `{ modeId: 'text' }`, for every mode, an add-on's
+   * included (its instructions stay the add-on's). Shown under the mode's name in the chat box's Mode list. Settings → Modes.
+   */
+  modeDescriptions: z.string().default('{}').volatile(),
+  /** Item 4A: every existing thread was given the space of its mode, once (`sessionSpaces`). */
+  spacesFilled: z.boolean().default(false).volatile(),
+  /**
+   * Item 4A, stage 3a: when spaces went live, every recorded space was made to match the thread's mode once more (where
+   * the old tabs last put it), once. Not shared: each Mac does its own.
+   */
+  spacesRefreshed: z.boolean().default(false).volatile(),
+  /**
+   * Item 4A, stage 2: the mode changes made after a thread's first message, as JSON `{ sessionId: [{ turn, from, to, at }] }`
+   * (lib/spaces.js noteModeChange): the quiet line "Mode changed to Research" after that turn. Pruned with the thread.
+   */
+  sessionModeChanges: z.string().default('{}').volatile(),
+  /**
+   * Item 4A, stage 6b (Revision 2 L4): automations made from a guest thread in Devices or Workshop that open new threads,
+   * as JSON `{ taskId: space }`. A run of one that nobody placed in its space is held (nothing runs), also when the
+   * Automations add-on is off or gone. Default `{}`; pruned when the task is gone. Per Mac; never changed by a repair.
+   */
+  guestRunSpaces: z.string().default('{}').volatile(),
+  /**
+   * Stage 7 (6b lab leftover): the mode each of those automations runs in, as JSON `{ taskId: modeId }`, so a run that
+   * nobody placed (Automations off) is recorded and named in its own mode, never the default mode for automations.
+   * Default `{}`; pruned with `guestRunSpaces`. Per Mac; never changed by a repair.
+   */
+  guestRunModes: z.string().default('{}').volatile(),
+  /**
+   * Item 4A, stage 6a: extra tools a mode keeps in Recon, as a JSON list (only `library_search`, `library_read`;
+   * lib/spacerules.js SEALED_EXTRA_CHOICES). Default empty: what these tools read can end up in Recon's web searches.
+   * Each is still checked by Recon's own limit. Settings → Modes → Spaces.
+   */
+  sealedExtra: z.string().default('[]').volatile(),
+  /**
+   * Item 4A, stage 6a: Tool access Off also applies in Devices and Workshop (on by default: an owner's Off is a removal and
+   * is kept there; a grid On never adds a tool to a guest there). Settings → Modes → Spaces.
+   */
+  gridInGuarded: z.boolean().default(true).volatile(),
 });
 
 /**
@@ -359,6 +496,8 @@ export function normalizeMode(id, value) {
     isolated: value.isolated === true,
     // Its prompt holds rules of its own (Scout): kept even under a model version that stands alone.
     keepPrompt: value.keepPrompt === true,
+    // Its own guard refuses programs (`run_code`), so it cannot work in the PTC preset (Devices and Creator Plus are known without it).
+    noPrograms: value.noPrograms === true,
     // Where tools load as needed: families (or tools) its conversations have from the first step (Data: data, pdf).
     startFamilies: Array.isArray(value.startFamilies)
       ? [...new Set(value.startFamilies.filter((entry) => typeof entry === 'string' && /^[a-z0-9][a-z0-9_-]{0,63}$/.test(entry)))].slice(0, 20)
@@ -371,13 +510,34 @@ export function normalizeMode(id, value) {
  * @param {object} config - live plugin Config.
  * @returns {Record<string, object>} id to mode, in definition order.
  */
-function readModes(config) {
+export function readModes(config) {
+  // Fix round (6a review, I29): memoised by the raw strings of `modes` and `extraModes`; the table is frozen (callers
+  // spread before they change anything).
+  const rawModes = plain(config.modes);
+  const rawExtra = plain(config.extraModes);
+  const memoable = (value) => value === undefined || value === null || typeof value === 'string';
+  if (memoable(rawModes) && memoable(rawExtra)) {
+    const key = `${rawModes ?? ''}\u0000${rawExtra ?? ''}`;
+    const hit = MODES_MEMO.get(key);
+    if (hit) return hit;
+    const value = Object.freeze(readModesNow(config));
+    if (MODES_MEMO.size > 16) MODES_MEMO.delete(MODES_MEMO.keys().next().value);
+    MODES_MEMO.set(key, value);
+    return value;
+  }
+  return readModesNow(config);
+}
+/** Parsed mode tables by their raw strings (a small LRU). */
+const MODES_MEMO = new Map();
+function readModesNow(config) {
   const result = {};
   for (const [id, value] of Object.entries(readObject(config.modes))) {
     const mode = normalizeMode(id, value);
     if (mode) result[id] = mode;
   }
   if (Object.keys(result).length === 0) for (const [id, value] of Object.entries(BUILTIN_MODES)) result[id] = normalizeMode(id, value);
+  // Built-in modes added later (Plain chat): there even when the owner saved a list of their own; theirs wins on the same id.
+  for (const [id, value] of Object.entries(ADDED_MODES)) if (!result[id]) result[id] = { ...normalizeMode(id, value), added: true };
   for (const [id, value] of Object.entries(readObject(config.extraModes))) {
     const mode = result[id] ? undefined : normalizeMode(id, value);
     // Marked: an add-on's mode always gets a sidebar tab, whatever the tab count.
@@ -386,11 +546,52 @@ function readModes(config) {
   return result;
 }
 
+/**
+ * Item 4A, stage 6a: a Set and a Map that say when they change, so the seam's memo (spaceOfTopRaw, the copies) is
+ * cleared on every change of what it reads (I29).
+ */
+class BumpSet extends Set {
+  constructor(onChange) {
+    super();
+    this.onChange = onChange;
+  }
+  add(value) {
+    if (!this.has(value)) this.onChange?.();
+    return super.add(value);
+  }
+  delete(value) {
+    if (this.has(value)) this.onChange?.();
+    return super.delete(value);
+  }
+  clear() {
+    if (this.size > 0) this.onChange?.();
+    super.clear();
+  }
+}
+class BumpMap extends Map {
+  constructor(onChange) {
+    super();
+    this.onChange = onChange;
+  }
+  set(key, value) {
+    if (!this.has(key) || this.get(key) !== value) this.onChange?.();
+    return super.set(key, value);
+  }
+  delete(key) {
+    if (this.has(key)) this.onChange?.();
+    return super.delete(key);
+  }
+  clear() {
+    if (this.size > 0) this.onChange?.();
+    super.clear();
+  }
+}
+
 export function apply(ctx, config) {
   /** Agent id -> what is applied: { modeId, unrestrict, sandboxBase }. */
   const applied = new Map();
   /** Choices made through the service that Settings could not store. */
-  const overlay = new Map();
+  const overlay = new BumpMap(() => bump());
   /** Work waiting for an Agent to become idle. */
   const pendingIdle = new Map();
   /** Agent id -> prompt section disposer. */
@@ -411,7 +612,7 @@ export function apply(ctx, config) {
    * @returns {object} mode definition.
    */
   /** Helper agent id -> the id of what started it. */
-  const parents = new Map();
+  const parents = new BumpMap(() => bump());
   /**
    * Note who started an agent, so a helper can follow its conversation.
    * @param {object} agent - live Agent.
@@ -420,46 +621,611 @@ export function apply(ctx, config) {
     const parent = parentIdOf(agent?.header ?? agent?.session?.header);
     if (parent && agent?.id && parent !== agent.id) parents.set(agent.id, parent);
   }
+  /**
+   * Item 4A, stage 6a (I5): the parent id a helper's header names, in any of the shapes the app and add-ons use.
+   * @returns {string} '' when none.
+   */
+  function headerParent(agent) {
+    for (const header of [agent?.header, agent?.session?.header]) {
+      if (!header || typeof header !== 'object') continue;
+      const raw = header.parentSession ?? header.parentSessionId ?? header.parent;
+      const id = raw && typeof raw === 'object' ? raw.id ?? raw.sessionId : raw;
+      if (typeof id === 'string' && id) return id;
+    }
+    return '';
+  }
+  /**
+   * Item 4A, stage 6a (I5): the thread an agent works for. `known` is false only for a loaded agent that is not top level
+   * and whose headers name no parent; a parent a header names counts even when it is not loaded (closed): its recorded
+   * space still decides.
+   * @returns {{top: string, known: boolean}}
+   */
+  function resolveTop(agentId) {
+    const id = String(agentId ?? '');
+    if (!id) return { top: '', known: false };
+    let at = id;
+    for (let depth = 0; depth < 12; depth += 1) {
+      if (parents.has(at)) {
+        at = parents.get(at);
+        continue;
+      }
+      let agent;
+      try {
+        agent = ctx.get('agents')?.get?.(at);
+      } catch {
+        agent = undefined;
+      }
+      if (!agent) {
+        // Fix round (6a review): a closed helper still links its live helpers to the thread.
+        if (closedParents.has(at) && closedParents.get(at) !== at) {
+          at = closedParents.get(at);
+          continue;
+        }
+        // Reached through a parent link, not loaded and with nothing recorded for it: not a known thread (a closed helper
+        // whose link is gone), so the unknown-helper rule holds (I5) instead of reading it as a Chat thread.
+        if (at !== id && !hasThreadRecord(at)) return { top: at, known: false };
+        return { top: at, known: true };
+      }
+      if (isTopLevel(agent)) return { top: at, known: true };
+      const parent = headerParent(agent);
+      if (!parent || parent === at) return { top: at, known: false };
+      parents.set(at, parent);
+      at = parent;
+    }
+    // Deeper than the walk goes: the top is not known (fail closed).
+    return { top: at, known: false };
+  }
+  /**
+   * Fix round (6a review): helper id -> the id of what started it, kept after the helper is closed, so a helper it started
+   * still reaches the thread (its guard does not fall back to Chat). Capped; the oldest go first.
+   */
+  const closedParents = new Map();
+  function rememberClosed(agent) {
+    try {
+      const id = agent?.id;
+      if (!id) return;
+      const parent = parents.get(id) ?? (isTopLevel(agent) ? '' : headerParent(agent));
+      if (!parent || parent === id) return;
+      closedParents.delete(id);
+      closedParents.set(id, parent);
+      if (closedParents.size > 5000) closedParents.delete(closedParents.keys().next().value);
+    } catch {
+      /* nothing to keep */
+    }
+  }
+  /** @returns {boolean} whether anything is recorded for a thread id (its mode, space or mark, stored or held). */
+  function hasThreadRecord(id) {
+    try {
+      if (overlay.has(id) || spaceOverlay.has(id) || isolatedSeen.has(id)) return true;
+      if (readTable(config.sessionModes)[id] !== undefined) return true;
+      if (readTable(config.sessionSpaces)[id] !== undefined) return true;
+      return readTable(config.sessionIsolated)[id] === true;
+    } catch {
+      return false;
+    }
+  }
   /** @returns {string} the conversation an agent works for: itself, or the top of its chain of starters. */
-  const topOf = (agentId) => rootOf(agentId, parents);
+  const topOf = (agentId) => resolveTop(agentId).top || agentId;
+
+  // ---- Item 4A, stage 6a: the seam (the space keeps its safety rules for any mode) ----------------------------------
+  /** Bumped on every change the seam reads that is not a stored value (drafts, claims, pins, moves, agents). */
+  let seamEpoch = 0;
+  const bump = () => {
+    seamEpoch += 1;
+  };
+  /** Parsed tables by their raw string (a small LRU; frozen: callers never write into them). */
+  const tableMemo = new Map();
+  function readTable(value) {
+    const raw = plain(value);
+    if (typeof raw !== 'string') return Object.freeze(readObject(raw));
+    if (tableMemo.has(raw)) return tableMemo.get(raw);
+    const parsed = Object.freeze(readObject(raw));
+    tableMemo.set(raw, parsed);
+    if (tableMemo.size > 16) tableMemo.delete(tableMemo.keys().next().value);
+    return parsed;
+  }
+  /**
+   * The seam's own reader of `sessionSpaces` and `sessionIsolated` (I4): a value that cannot be read, or a damaged one,
+   * throws (spaceOfTopRaw then fails closed), where readObject would read it as empty and open a guarded thread.
+   */
+  const strictMemo = new Map();
+  function readStrict(value) {
+    let raw = value;
+    if (raw && typeof raw === 'object' && typeof raw.get === 'function' && Object.isFrozen(raw)) raw = raw.get();
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw;
+    if (raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '')) return {};
+    if (typeof raw !== 'string') throw new Error('modes: a stored table is not readable');
+    if (strictMemo.has(raw)) return strictMemo.get(raw);
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('modes: a stored table is damaged');
+    const frozen = Object.freeze(parsed);
+    strictMemo.set(raw, frozen);
+    if (strictMemo.size > 16) strictMemo.delete(strictMemo.keys().next().value);
+    return frozen;
+  }
+  /** The stored values the seam reads: a memo holds while every one is the same string and the epoch is the same. */
+  const SEAM_KEYS = ['sessionSpaces', 'sessionIsolated', 'sessionModes', 'modes', 'extraModes', 'modeSpaces', 'spaceSettings', 'sealedExtra', 'defaultMode', 'scheduledMode'];
+  const seamInputs = () => [seamEpoch, ...SEAM_KEYS.map((key) => {
+    try {
+      return plain(config[key]);
+    } catch {
+      // Unreadable: never equal to anything, so nothing is kept from it.
+      return Symbol('unreadable');
+    }
+  })];
+  const sameInputs = (a, b) => Array.isArray(a) && a.length === b.length && a.every((value, index) => value === b[index]);
+  /** One memo per kind: key -> {inputs, value}. Cleared when it grows. */
+  function memo(table, key, compute) {
+    const inputs = seamInputs();
+    const hit = table.get(key);
+    if (hit && sameInputs(hit.inputs, inputs)) return hit.value;
+    const value = compute();
+    if (table.size > 500) table.clear();
+    table.set(key, { inputs, value });
+    return value;
+  }
+  const spaceMemo = new Map();
+  const copyMemo = new Map();
+  const roomMemo = new Map();
+  const liveMemo = new Map();
+  const isRoomMemo = new Map();
+  /** A thread -> the space a guarded claim gave it, until its `sessionSpaces` write succeeds (I3). Wins over a stale record. */
+  const spaceOverlay = new BumpMap(() => bump());
+  const isGuarded = (space) => GUARDED_SPACES.includes(space);
+  /** @returns {string | undefined} a thread's recorded space: the one not yet written first, else the stored one. */
+  function recordedSpace(top) {
+    const own = spaceOverlay.get(top);
+    if (isSpace(own)) return own;
+    const stored = readStrict(config.sessionSpaces)[top];
+    return isSpace(stored) ? stored : undefined;
+  }
+  /** recordedSpace for callers outside the seam: undefined when it cannot be read. */
+  function recordedSpaceSafe(top) {
+    try {
+      return recordedSpace(top);
+    } catch {
+      return isSpace(spaceOverlay.get(top)) ? spaceOverlay.get(top) : undefined;
+    }
+  }
+  /** The old test (marks only), for use inside the seam (no freshNow loop). */
+  function wasIsolatedRaw(sessionId) {
+    return isolatedSeen.has(sessionId) || readStrict(config.sessionIsolated)[sessionId] === true;
+  }
+  /**
+   * The space of a thread, read without ever asking for its mode (I18): never calls modeOf, spaces.of, guardOf or
+   * isIsolated. Memoised per thread and inputs (I29). On a read error: a guarded value it can still read, else Recon for
+   * a marked thread or one in the room, else 'unknown' (the base guard, I4).
+   * @param {string} top - the thread.
+   * @returns {string} a space id, or 'unknown'.
+   */
+  function spaceOfTopRaw(top) {
+    const id = String(top ?? '');
+    if (!id) return '';
+    return memo(spaceMemo, `${id}\u0000${folderOfThread(id)}`, () => {
+      try {
+        return spaceOfTopRead(id);
+      } catch {
+        try {
+          const own = spaceOverlay.get(id);
+          if (isGuarded(own)) return own;
+        } catch {
+          /* next */
+        }
+        try {
+          const stored = readObject(plain(config.sessionSpaces))[id];
+          if (isGuarded(stored)) return stored;
+        } catch {
+          /* next */
+        }
+        try {
+          if (wasIsolatedRaw(id) || roomSays(id) === true) return 'recon';
+        } catch {
+          /* next */
+        }
+        return 'unknown';
+      }
+    });
+  }
+  function spaceOfTopRead(top) {
+    const recorded = recordedSpace(top);
+    // (a) A guarded record wins over everything (a thread never leaves Devices, Recon or Workshop).
+    if (isGuarded(recorded)) return recorded;
+    // (b) Recon's room is Recon.
+    if (inReconRoom(top)) return 'recon';
+    // (c) A draft: the guarded space it was opened in (whatever `live` is), else its draft space.
+    const isFresh = freshNow(top);
+    if (isFresh) {
+      const drafted = draftSpaces.get(top);
+      if (isGuarded(drafted)) return drafted;
+      if (spacesLive()) return draftSpaceOf(top);
+      // Spaces off (a lab check only): the tab decides an unclaimed draft's mode, so its space too.
+      const own = overlay.get(top) ?? readTable(config.sessionModes)[top];
+      const byTab = tabsDecide() && !claimed.has(top) ? plain(config.defaultMode) : own;
+      if (typeof byTab === 'string' && byTab) return spaceOfMode(byTab);
+    }
+    // (d) Its recorded space.
+    if (recorded && spacesLive()) return recorded;
+    const stored = overlay.get(top) ?? readTable(config.sessionModes)[top];
+    // (e) Marked sealed: Recon, unless its stored mode is an owner's isolated mode (its own space, REGRESSION 16). A blank
+    // draft's mark is not (it read nothing; it is unmarked when it starts elsewhere).
+    if (!isFresh && wasIsolatedRaw(top)) {
+      const def = typeof stored === 'string' ? readModes(config)[stored] : undefined;
+      return def && def.isolated && def.id !== 'recon' ? spaceOfMode(def.id) : 'recon';
+    }
+    // With spaces off (a lab check only): its mode's space, as before.
+    if (!spacesLive() && typeof stored === 'string' && stored) return spaceOfMode(stored);
+    if (recorded) return recorded;
+    // (f) Its mode's space, else its folder's.
+    return typeof stored === 'string' && stored ? spaceOfMode(stored) : folderSpace(top);
+  }
+  /**
+   * Whether each guarded space's guard is ready (I25): `true`, else 'off' (its mode or add-on is off) or 'old' (on but too
+   * old to guard guests). Recon needs apiVersion 3 with `inSpace`; Devices `bench.guestsGuarded`; Workshop the
+   * `creator-plus` mode and `creatorPlus.guestsGuarded`.
+   * @returns {{devices: true|'off'|'old', recon: true|'off'|'old', workshop: true|'off'|'old'}}
+   */
+  function guardReady() {
+    const modes = readModes(config);
+    const service = (name) => {
+      try {
+        return ctx.get(name);
+      } catch {
+        return undefined;
+      }
+    };
+    const recon = service('recon');
+    const bench = service('bench');
+    const creator = service('creatorPlus');
+    // Lab fix (6a): an add-on switched off on the Plugins page is not running (no service), though its mode may still be
+    // listed: 'plugin' (switch it on on the Plugins page), never "too old". 'off': running, its mode not offered.
+    return {
+      devices: !bench ? 'plugin' : modes.bench ? (bench.guestsGuarded === true ? true : 'old') : 'off',
+      recon: !recon ? 'plugin' : modes.recon ? (Number(recon.apiVersion) >= 3 && typeof recon.inSpace === 'function' ? true : 'old') : 'off',
+      workshop: !creator ? 'plugin' : modes['creator-plus'] ? (creator.guestsGuarded === true ? true : 'old') : 'off',
+    };
+  }
+  /** @returns {{devices: boolean, workshop: boolean}} guard add-ons that are on but too old (their guests are held, I27). */
+  function oldGuards() {
+    const ready = guardReady();
+    return { devices: ready.devices === 'old', workshop: ready.workshop === 'old' };
+  }
+  /** @returns {string[]} a JSON list setting, read safely. */
+  function readList(value) {
+    const raw = plain(value);
+    try {
+      const list = typeof raw === 'string' ? JSON.parse(raw || '[]') : raw;
+      return Array.isArray(list) ? list.filter((item) => typeof item === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+  /** @returns {string} the thread's room folder as Recon says (`roomRunFolder`, which never asks Modes), '' when unknown. */
+  function roomFolder(top) {
+    const read = () => {
+      try {
+        const folder = ctx.get('recon')?.roomRunFolder?.(top);
+        return typeof folder === 'string' ? folder : '';
+      } catch {
+        return '';
+      }
+    };
+    const found = memo(roomMemo, `${top}\u0000${folderOfThread(top)}`, read);
+    // Not known yet (Recon still starting): asked again next time.
+    if (!found) roomMemo.delete(`${top}\u0000${folderOfThread(top)}`);
+    return found;
+  }
+  /**
+   * The effective mode of a thread: its mode under its space's rules (lib/spacerules.js spaceCopy). Memoised: the same
+   * inputs give the same frozen object (I29).
+   */
+  function copyFor(top, found) {
+    if (!found) return found;
+    const space = spaceOfTopRaw(top);
+    if (!isGuarded(space) && space !== 'unknown') return found;
+    const reconSpace = space === 'recon' && !['recon', LOCKED_MODE.id, 'isolated-late'].includes(found.id);
+    const roomKnown = reconSpace ? Boolean(roomFolder(top)) : false;
+    // Fix round (6a review): the guards' readiness is part of the key, so a guard that comes up, goes away or turns old
+    // changes the copy at once.
+    const ready = guardReady();
+    const readyKey = `${ready.devices}|${ready.recon}|${ready.workshop}`;
+    return memo(copyMemo, `${top}\u0000${modeKey(found)}\u0000${space}\u0000${roomKnown}\u0000${freshNow(top)}\u0000${readyKey}`, () => {
+      const modes = readModes(config);
+      return spaceCopy(found, space, {
+        ready,
+        oldGuard: { devices: ready.devices === 'old', workshop: ready.workshop === 'old' },
+        ranBefore: !freshNow(top),
+        reconNet: modes.recon?.tools ?? [],
+        deviceTools: (Array.isArray(modes.bench?.tools) ? modes.bench.tools : []).filter((name) => typeof name === 'string' && name.startsWith('bench_')),
+        roomKnown,
+        extra: readList(config.sealedExtra).filter((name) => SEALED_EXTRA_CHOICES.includes(name)),
+      });
+    });
+  }
+  /**
+   * Whether any loaded thread (or helper's thread) is in a guarded space, or could not be read (I5): an unknown helper is
+   * then held without tools.
+   */
+  function guardedLive() {
+    return memo(liveMemo, 'all', () => {
+      for (const agent of ctx.get('agents')?.list?.() ?? []) {
+        const top = resolveTop(agent?.id).top;
+        const space = top ? spaceOfTopRaw(top) : '';
+        if (isGuarded(space) || space === 'unknown') return true;
+      }
+      return false;
+    });
+  }
 
   function modeOf(agentId) {
     // A helper agent has no mode of its own: it follows the conversation that started it.
-    const sessionId = topOf(agentId);
+    const resolved = resolveTop(agentId);
+    const sessionId = resolved.top || agentId;
+    // Item 4A, stage 6a (I5): a helper no header names a parent for, while a thread in a guarded space is live: no tools.
+    if (!resolved.known && guardedLive()) return LOCKED_MODE;
     const modes = readModes(config);
     const fallback = plain(config.defaultMode);
     // With the Cowork sidebar, the selected tab (defaultMode) decides until the first message.
-    const chosen = overlay.get(sessionId) ?? readObject(config.sessionModes)[sessionId];
-    if (fresh.has(sessionId) && !claimed.has(sessionId)) {
+    const chosen = overlay.get(sessionId) ?? readTable(config.sessionModes)[sessionId];
+    const spaced = spacesLive() && tabsDecide();
+    if (freshNow(sessionId) && !claimed.has(sessionId)) {
       // Opened by an Automation task: its own starting mode, unless the conversation already has one.
       const own = scheduled.has(sessionId) ? scheduledModeId(modes, plain(config.scheduledMode)) : undefined;
-      if (own && (tabsDecide() || chosen === undefined)) return modes[own];
-      if (tabsDecide()) return modes[fallback] ?? Object.values(modes)[0];
+      // Item 4A fix round: with spaces, the selected space no longer writes `defaultMode`, so a draft no one has claimed
+      // yet (a quick first message, a failed claim, a restart, a thread started in the background) takes its space's
+      // start mode, and the mode it already has where the space offers it; Recon's room only ever gives Recon.
+      // Item 4A, stage 6a: the space's rules apply to a draft too, before its first message (I1, I13).
+      if (spaced) {
+        if (own && chosen === undefined && !inReconRoom(sessionId)) return copyFor(sessionId, modes[own]);
+        return copyFor(sessionId, draftModeOf(sessionId, modes, chosen));
+      }
+      if (own && (tabsDecide() || chosen === undefined)) return copyFor(sessionId, modes[own]);
+      if (tabsDecide()) return copyFor(sessionId, modes[fallback] ?? Object.values(modes)[0]);
     }
-    const found = modes[chosen] ?? modes[fallback] ?? Object.values(modes)[0];
+    // A mode that is gone (its add-on switched off): with spaces, the thread's space's start mode, never `defaultMode`.
+    const found = modes[chosen] ?? (spaced ? spaceStartModeOf(sessionId, modes) : undefined) ?? modes[fallback] ?? Object.values(modes)[0];
     // Once isolated, always isolated; and never isolated later. (The pages write the choice straight into Settings.)
-    return heldMode({ found, wasIsolated: wasIsolated(sessionId), fresh: fresh.has(sessionId) });
+    // Item 4A, stage 6a: the copy for the thread's space comes first (a guest in Recon is sealed, I1).
+    const effective = copyFor(sessionId, found);
+    // Held without tools by its space (guard off or too old, Recon off): no tools, not "began elsewhere" (I10, I16, I27).
+    // Stage 6a leftovers: a guest held by Devices or Workshop gets its own held copy (heldIn), which names the space.
+    if (effective === LOCKED_MODE || effective?.heldIn) return effective;
+    return heldMode({ found: effective, wasIsolated: wasIsolated(sessionId), fresh: fresh.has(sessionId) });
+  }
+
+  // ---- Item 4A fix round: a draft's space from what the server can see ----------------------------------------------
+  /** @returns {string} a live thread's folder ('' when unknown). */
+  function folderOfThread(agentId) {
+    try {
+      const agent = ctx.get('agents')?.get?.(agentId);
+      return String((agent?.header ?? agent?.session?.header)?.cwd ?? '');
+    } catch {
+      return '';
+    }
+  }
+  /**
+   * Whether a thread's folder is Recon's room, as Recon says (`recon.isRoom`). `undefined` when Recon cannot say (not
+   * there, or an older Recon): then the space the window sends is trusted, as before.
+   * @returns {boolean | undefined}
+   */
+  function roomSays(agentId) {
+    try {
+      const isRoom = ctx.get('recon')?.isRoom;
+      if (typeof isRoom !== 'function') return undefined;
+      const folder = folderOfThread(agentId);
+      // Item 4A, stage 6a (LEAK 16, REGRESSION 13): no folder yet is "cannot say", not "not the room"; Recon's answer is
+      // kept per folder until something the seam reads changes (I29).
+      return folder ? memo(isRoomMemo, folder, () => isRoom(folder) === true) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  /** @returns {boolean} whether a thread works in Recon's room (false when Recon cannot say). */
+  function inReconRoom(agentId) {
+    return roomSays(agentId) === true;
+  }
+  /** @returns {boolean} whether a path lies in Recon's room (false when Recon cannot say). */
+  function reconRoomOf(path) {
+    try {
+      return ctx.get('recon')?.isRoom?.(path) === true;
+    } catch {
+      return false;
+    }
+  }
+  /**
+   * Item 4A, fix round 2: the fence of a thread in a fenced mode (Plain chat) while "Keep Plain chat inside its folder"
+   * is on: its own Scratch folder when it is standalone, else its project folder (the session's folder).
+   * @param {string} top - the thread (not a helper).
+   * @returns {{root: string, standalone: boolean} | null} null: no fence.
+   */
+  function fenceOf(top) {
+    if (plain(config.plainFence) === false) return null;
+    const mode = modeOf(top);
+    if (!mode || mode.isolated || !FENCED_MODES.includes(mode.id)) return null;
+    let agent;
+    try {
+      agent = ctx.get('agents')?.get?.(top);
+    } catch {
+      agent = undefined;
+    }
+    if (!agent) return null;
+    let own = '';
+    try {
+      own = String(ctx.get('coworkScratch')?.folderOf?.(agent) ?? '');
+    } catch {
+      own = '';
+    }
+    const root = own || folderOfThread(top);
+    return root ? { root, standalone: Boolean(own) } : null;
+  }
+  /** The space a thread's folder suggests: Recon's room = Recon, Scratch = Chat, else lib/spaces.js guessSpace. */
+  function folderSpace(agentId) {
+    if (inReconRoom(agentId)) return 'recon';
+    let agent;
+    try {
+      agent = ctx.get('agents')?.get?.(agentId);
+    } catch {
+      agent = undefined;
+    }
+    if (agent && scratchConversation(agent)) return 'chat';
+    const folder = folderOfThread(agentId);
+    return guessSpace(folder ? { path: folder } : null);
+  }
+  /**
+   * The space a space-asked-for thread may be in: Recon's room gives Recon only, and Recon only a thread in the room
+   * (when Recon can say which folder that is).
+   * @param {string} agentId - the thread.
+   * @param {string | undefined} asked - the space a window or a stored entry names.
+   * @returns {string | undefined}
+   */
+  function roomRule(agentId, asked) {
+    const room = roomSays(agentId);
+    if (room === true) return 'recon';
+    if (room === false && asked === 'recon') return folderSpace(agentId);
+    return isSpace(asked) ? asked : undefined;
+  }
+  /**
+   * The space of a new draft: the one it was opened in, else its recorded one, else (claimed by another add-on: a
+   * Creator Plus or Split Plus claim) its claimed mode's space, else its folder's. The room rule comes first.
+   */
+  function draftSpaceOf(top) {
+    const own = overlay.get(top) ?? readTable(config.sessionModes)[top];
+    const byClaim = claimed.has(top) && typeof own === 'string' && own ? spaceOfMode(own) : undefined;
+    const space = roomRule(top, draftSpaces.get(top) ?? readTable(config.sessionSpaces)[top] ?? byClaim) ?? folderSpace(top);
+    // Final fix round (lab): an Automation's new thread runs its task's mode (scheduledMode); when the space its folder or
+    // window gives does not offer that mode (Cowork in Code), it goes to that mode's own space, so space and mode agree.
+    // Stage 6b (J8): a stored Chat or Code place claimed with `anyTick` stays where it was set.
+    if (scheduled.has(top) && space !== 'recon' && !(anyTicked.has(top) && draftSpaces.get(top) === space)) {
+      const modes = readModes(config);
+      const modeId = typeof own === 'string' && modes[own] ? own : scheduledModeId(modes, plain(config.scheduledMode));
+      if (modeId && !offeredIn(space).some((row) => row.id === modeId)) return spaceOfMode(modeId);
+    }
+    return space;
+  }
+  /**
+   * Item 4A, stage 6a: the modes a space offers now, each greyed while the space's guard is not ready (guardReady, I25).
+   * Every list of offered modes in this file comes from here.
+   */
+  function offeredIn(space, lang = 'en') {
+    return modesInSpace(String(space ?? ''), Object.values(readModes(config)), readObject(config.modeSpaces), { ready: guardReady(), lang });
+  }
+  /** A mode that is safe when a space offers none: Plain chat, else the first one that is not sealed. */
+  function safeMode(modes) {
+    return modes.plain ?? Object.values(modes).find((mode) => !mode.isolated) ?? Object.values(modes)[0];
+  }
+  /**
+   * The mode an unclaimed new draft runs in with spaces: the mode it has when its space offers it, else the space's start
+   * mode (Settings → Spaces, then the built-in table). Recon's room without the Recon mode: the locked mode (no tools).
+   */
+  function draftModeOf(top, modes, chosen) {
+    const space = draftSpaceOf(top);
+    const offered = offeredIn(space);
+    const id = draftStartMode({ space, stored: typeof chosen === 'string' ? chosen : undefined, offered, spaceSettings: readObject(config.spaceSettings) });
+    if (modes[id]) return modes[id];
+    // Item 4A, stage 6a (I16, LEAK 6): a guarded space that offers nothing now (its guard off or too old, Workshop shown
+    // through Tuner Plus only) gives no tools, never Plain chat.
+    if (isGuarded(space)) return heldIn(space);
+    return space === 'recon' && inReconRoom(top) ? LOCKED_MODE : safeMode(modes);
+  }
+  /** For a thread whose mode is gone: its space's start mode (never `defaultMode`, which may still name Recon). */
+  function spaceStartModeOf(top, modes) {
+    // Item 4A, stage 6a: the seam's space (a read error gives the 'unknown' guard, I4).
+    const seam = spaceOfTopRaw(top);
+    const space = isSpace(seam) || seam === 'unknown' ? seam : recordedSpaceSafe(top) ?? draftSpaces.get(top) ?? folderSpace(top);
+    const offered = offeredIn(space);
+    const found = modes[draftStartMode({ space, offered, spaceSettings: readObject(config.spaceSettings) })];
+    if (found) return found;
+    // Item 4A, stage 6a (I16): never Plain chat in a guarded space whose guard is not ready.
+    return isGuarded(space) ? heldIn(space) : safeMode(modes);
   }
 
   /** Conversations seen running in an isolated mode, before Settings has stored them. */
-  const isolatedSeen = new Set();
-  /** @returns {boolean} whether the conversation ever ran in an isolated mode. */
+  const isolatedSeen = new BumpSet(() => bump());
+  /**
+   * @returns {boolean} whether the conversation ever ran in an isolated mode. Item 4A, stage 6a (I2): also a thread that
+   * has run and whose recorded space is Recon, when its mark was lost.
+   */
   function wasIsolated(sessionId) {
-    return isolatedSeen.has(sessionId) || readObject(config.sessionIsolated)[sessionId] === true;
+    try {
+      if (wasIsolatedRaw(sessionId)) return true;
+    } catch {
+      if (isolatedSeen.has(sessionId)) return true;
+    }
+    return !fresh.has(sessionId) && recordedSpaceSafe(sessionId) === 'recon' && !freshNow(sessionId);
   }
   let isolatedChain = Promise.resolve();
-  /** Remember for good that a conversation is isolated. */
-  function markIsolated(sessionId) {
-    if (wasIsolated(sessionId)) return;
-    isolatedSeen.add(sessionId);
+  /** Item 4A, stage 6a: marks whose write failed, tried again (at most RETRY_MAX times each). */
+  const markRetry = new Map();
+  let retryTimer;
+  /** Try failed writes again in a moment (marks, space records, first-message pins). */
+  function retrySoon() {
+    if (retryTimer) return;
+    retryTimer = setTimeout(() => {
+      retryTimer = undefined;
+      retryWrites();
+    }, RETRY_MS);
+    retryTimer.unref?.();
+  }
+  function retryWrites() {
+    for (const [id, tries] of [...markRetry]) {
+      markRetry.delete(id);
+      if (tries >= RETRY_MAX) {
+        ctx.logger.warn(`modes: isolation of ${id} still not stored after ${tries} tries; kept in memory for this run`);
+        continue;
+      }
+      writeMark(id, tries + 1);
+    }
+    if (spaceOverlay.size > 0) flushSpaces();
+    if (pinQueue.size > 0) flushPins();
+  }
+  /** The write of one mark, read inside its queued step so two threads never lose each other's mark (REGRESSION 3). */
+  function writeMark(sessionId, tries = 0) {
     isolatedChain = isolatedChain.then(async () => {
       try {
         const settings = ctx.get('settings');
         if (!settings) return;
-        const next = { ...readObject(config.sessionIsolated), [sessionId]: true };
+        const table = readObject(config.sessionIsolated);
+        if (table[sessionId] === true) return;
+        const next = { ...table, [sessionId]: true };
         await settings.mutate('modes', [{ op: 'set', path: ['sessionIsolated'], value: JSON.stringify(next) }]);
       } catch (error) {
-        ctx.logger.warn(`modes: isolation of ${sessionId} not stored (${error?.message ?? error}); kept in memory`);
+        ctx.logger.warn(`modes: isolation of ${sessionId} not stored (${error?.message ?? error}); kept in memory, tried again`);
+        markRetry.set(sessionId, tries);
+        retrySoon();
+      }
+    });
+  }
+  /** Remember for good that a conversation is isolated. Only this and unmarkIsolated write `sessionIsolated`. */
+  function markIsolated(sessionId) {
+    try {
+      if (wasIsolatedRaw(sessionId)) return;
+    } catch {
+      if (isolatedSeen.has(sessionId)) return;
+    }
+    isolatedSeen.add(sessionId);
+    writeMark(sessionId);
+  }
+  /**
+   * Take the isolated mark off a conversation that never ran a turn and now starts in an ordinary tab (a blank draft
+   * an isolated tab left behind, reused from another tab): it read nothing in isolation, so "once isolated" does not
+   * apply. Only for a chat that is still blank; one that ran a turn keeps its mark for good.
+   */
+  function unmarkIsolated(sessionId) {
+    try {
+      if (!wasIsolatedRaw(sessionId)) return;
+    } catch {
+      return;
+    }
+    isolatedSeen.delete(sessionId);
+    isolatedChain = isolatedChain.then(async () => {
+      try {
+        const settings = ctx.get('settings');
+        const table = readObject(config.sessionIsolated);
+        if (!settings || table[sessionId] !== true) return;
+        const next = { ...table };
+        delete next[sessionId];
+        await settings.mutate('modes', [{ op: 'set', path: ['sessionIsolated'], value: JSON.stringify(next) }]);
+      } catch (error) {
+        ctx.logger.warn(`modes: isolation mark of ${sessionId} not removed (${error?.message ?? error})`);
       }
     });
   }
@@ -473,16 +1239,97 @@ export function apply(ctx, config) {
   }
 
   /** Sessions that have not run a turn yet. */
-  const fresh = new Set();
+  const fresh = new BumpSet(() => bump());
+  /**
+   * Item 4A, stage 2: the space a new draft was opened in (its window's space), until its first message records it in
+   * `sessionSpaces`. In memory only: after a restart the chat box claims the draft again.
+   */
+  const draftSpaces = new BumpMap(() => bump());
+  /**
+   * Item 4A, stage 5: drafts whose mode the chat box set by itself (the space's start mode), and drafts whose mode you
+   * picked in the Mode list. A reused draft keeps a mode you picked; one it only got automatically follows the space's
+   * start mode as it is now (Settings → Spaces), so a changed start mode reaches the next new thread.
+   */
+  const autoStarted = new Set();
+  /**
+   * Fix round: the mode you picked for a draft (Mode list, /mode, the Cowork switch carrying it), kept until its first
+   * message or a New: a draft the app reuses in another space gets it back where that space offers it.
+   */
+  const pickedModes = new BumpMap(() => bump());
   /**
    * Fresh sessions another add-on moved on purpose (`set(id, mode, {claim: true})`, a Finance brief):
    * the tab and the scheduled starting mode no longer decide for them, so the move survives the first turn.
    */
-  const claimed = new Set();
+  const claimed = new BumpSet(() => bump());
   /** Fresh sessions whose first message came from the app's scheduler. */
-  const scheduled = new Set();
+  const scheduled = new BumpSet(() => bump());
   /** Conversations whose current run was started by the scheduler (an Automation that re-runs in a conversation that already exists). */
   const scheduledRun = new Set();
+  /**
+   * Item 4A, stage 6b (J11): threads whose scheduled run is held (nothing runs) -> `{space, kind, mode, text, at}`. Memory
+   * only; cleared by a user message in the thread, at `agent/disposed`, or after HELD_RUN_MS.
+   */
+  const heldRuns = new Map();
+  /** Stage 6b (J8): scheduled threads claimed into a stored Chat or Code place with `anyTick` (memory only). */
+  const anyTicked = new Set();
+  const HELD_RUN_MS = 24 * 60 * 60 * 1000;
+  /** Stage 6b: ids the app's scheduler is resolving right now (Modes' own resolve-agent hook may run after another's). */
+  const schedulerResolving = new Set();
+  /** @returns {boolean} whether a thread is a scheduled one (its first message from the scheduler, or being resolved for it). */
+  function scheduledClaimable(id) {
+    return scheduled.has(id) || schedulerResolving.has(id);
+  }
+  /** @returns {{space: string, kind: string, mode: string, text: string, at: number} | undefined} a thread's held run, while recent. */
+  function heldRunOf(top) {
+    const held = heldRuns.get(top);
+    if (!held) return undefined;
+    if (Date.now() - held.at > HELD_RUN_MS) {
+      heldRuns.delete(top);
+      return undefined;
+    }
+    return held;
+  }
+  /**
+   * @returns {string} the chat box line of a held run. Stage 7 (6b lab leftover): with the Automations add-on off it names
+   * the automation's own space · mode and says to switch Automations on (never "its rules could not be read").
+   */
+  function runHeldLine(held, lang = 'en') {
+    const space = SPACE_NAMES.en[held?.space] ?? String(held?.space ?? '');
+    let label = '';
+    try {
+      const mode = held?.mode ? readModes(config)[held.mode] : undefined;
+      label = mode && mode.isolated !== true ? mode.label ?? '' : '';
+    } catch {
+      label = '';
+    }
+    const where = label ? `${space} · ${label}` : space;
+    if (held?.kind === 'automations') return spaceText('runHeldNoAutomations', lang, { where, space });
+    // Stage 7 (lab): the automation's own mode is named, and with the Automations add-on off the line first says to
+    // switch it on (its page is not there meanwhile).
+    return spaceText(automationsLoaded() ? 'runHeld' : 'runHeldAutomationsOff', lang, { where, space, reason: heldReasonText(held, lang) });
+  }
+  /** @returns {boolean} whether the Automations add-on is loaded (its page is there). */
+  function automationsLoaded() {
+    try {
+      return Boolean(ctx.get('automations'));
+    } catch {
+      return false;
+    }
+  }
+  /** @returns {string} why a held run's space cannot take it (runHeldReason; English for every `lang`). */
+  function heldReasonText(held, lang = 'en') {
+    if (held?.text) return String(held.text);
+    const words = SPACE_SETTINGS_TEXT.en.runHeldReason ?? {};
+    const key = held?.kind === 'guard' || held?.kind === 'mode' || held?.kind === 'automations' ? held.kind : 'other';
+    const addon = ADDON_NAMES.en[held?.space] ?? String(held?.space ?? '');
+    let label = String(held?.mode ?? '');
+    try {
+      label = readModes(config)[held?.mode]?.label ?? label;
+    } catch {
+      // the id
+    }
+    return String(words[key] ?? '').replaceAll('{addon}', addon).replaceAll('{mode}', label);
+  }
   /**
    * @param {object} agent - live Agent.
    * @returns {boolean} true when the Agent has never run a turn. Unknown counts as "has run".
@@ -490,6 +1337,33 @@ export function apply(ctx, config) {
   function neverRan(agent) {
     const phase = agent?.phase;
     return Boolean(phase) && phase.kind !== 'running' && phase.lastTurn === 0;
+  }
+  /** Conversations seen with a turn: they never count as fresh again. */
+  const ranSeen = new BumpSet(() => bump());
+  /**
+   * Whether a conversation is still a new chat, so the selected tab decides its mode. Besides the ones marked when
+   * they were created, a still-blank draft from an earlier run that the app reuses (its phase was not known when it
+   * loaded) counts too, so a reused draft follows the tab it is shown in, not the mode it was stored with (lab, item 7).
+   * @param {string} sessionId - the conversation.
+   * @returns {boolean} true while it is a new, blank, top-level chat.
+   */
+  function freshNow(sessionId) {
+    if (fresh.has(sessionId)) return true;
+    if (ranSeen.has(sessionId)) return false;
+    let agent;
+    try {
+      agent = ctx.get('agents')?.get?.(sessionId);
+    } catch {
+      agent = undefined;
+    }
+    if (!agent) return false;
+    if (isTopLevel(agent) && stillBlank(agent)) {
+      fresh.add(sessionId);
+      return true;
+    }
+    // Unknown (no phase, no turn boundary) is not remembered: it is asked again later.
+    if (agent.phase || typeof ctx.get('agents')?.turnBoundaryOf === 'function') ranSeen.add(sessionId);
+    return false;
   }
   /** @returns {boolean} true while the Cowork sidebar is on (its tabs choose the mode of new conversations). */
   function tabsDecide() {
@@ -596,10 +1470,67 @@ export function apply(ctx, config) {
   function toolMask(sessionId, mode, added) {
     const own = baseToolMask(sessionId, mode, added);
     // The Tool access grid and the user's permissions: they only add tools, never lift a fence.
-    return access ? access.withAccess(sessionId, mode, own, { researchHelper: topOf(sessionId) !== sessionId && researchOn(sessionId) }) : own;
+    const next = access ? access.withAccess(sessionId, mode, own, { researchHelper: topOf(sessionId) !== sessionId && researchOn(sessionId) }) : own;
+    return mode?.guardedBy ? guardedMask(sessionId, mode, next) : next;
+  }
+  /**
+   * Item 4A, stage 6a (I14, I17): a guest in Devices or Workshop (or a thread whose space could not be read) never gets a
+   * tool `guestRefuses` names, whatever was granted or set On; with "Tool access Off also applies in Devices and
+   * Workshop" on (default), the grid's Off for its mode still takes a tool away there (it never adds one).
+   */
+  function guardedMask(sessionId, mode, mask) {
+    const known = knownTools(sessionId);
+    // Stage 6b (J14, G13): schedules are open to a guest in Devices or Workshop, never to the 'unknown' guard or a Mission run.
+    let next = withoutGuestRefused(mask, known, guestOpts(sessionId, mode));
+    // Lab re-check fix (6a, problem 5): in Workshop, a guest is offered only what Creator Plus's guard lets run (its
+    // allow-list), so the tool list and the guard agree (Deep research, helpers, the device tools are not offered there).
+    const refused = spaceRefuser(mode, workshopAllowed());
+    const outside = known.filter((name) => refused(name));
+    if (outside.length > 0) next = next.allow ? { allow: next.allow.filter((name) => !refused(name)) } : { deny: [...new Set([...(next.deny ?? []), ...outside])] };
+    if (plain(config.gridInGuarded) === false || !access?.enabled?.()) return next;
+    let grid;
+    try {
+      grid = parseAccess(plain(config.toolAccess));
+    } catch {
+      return next;
+    }
+    if (!grid[mode.id]) return next;
+    const plainMode = { id: mode.id };
+    const off = known.filter((name) => stateOf(name, { mode: plainMode, access: grid, offered: true }) === 'off');
+    if (off.length === 0) return next;
+    if (next.allow) next = { allow: next.allow.filter((name) => !off.includes(name)) };
+    else next = { deny: [...new Set([...(next.deny ?? []), ...off])] };
+    return next;
+  }
+  /** Creator Plus's Workshop allow-list (`creatorPlus.allowed()`), or undefined when Creator Plus cannot say. */
+  function workshopAllowed() {
+    try {
+      const list = ctx.get('creatorPlus')?.allowed?.();
+      return Array.isArray(list) ? list : undefined;
+    } catch {
+      return undefined;
+    }
   }
   /** The mask the mode's own rules give, before Tool access. */
   function baseToolMask(sessionId, mode, added) {
+    const own = ownToolMask(sessionId, mode, added);
+    // Item 4A, stage 6a (I14): Modes' base rule for a guest in Devices or Workshop, whether Bench or Creator Plus is on.
+    return mode?.guardedBy ? withoutGuestRefused(own, knownTools(sessionId), guestOpts(sessionId, mode)) : own;
+  }
+  /**
+   * Item 4A, stage 6b (J14, Revision 2 L1 and G13): what `guestRefuses` needs to know: the guest's space (its effective
+   * `guardedBy`), and whether a Mission run is under way (an unattended run schedules nothing more).
+   */
+  function guestOpts(sessionId, mode) {
+    let mission = false;
+    try {
+      mission = Boolean(longRunOf(sessionId));
+    } catch {
+      mission = true;
+    }
+    return { space: String(mode?.guardedBy ?? 'unknown'), mission };
+  }
+  function ownToolMask(sessionId, mode, added) {
     // A Long run in this conversation (Mission): its tab keeps its own tools and gains what the run needs.
     const long = longRunOf(sessionId);
     // In an isolated conversation (Recon) a Long run keeps to the mode's own tools: the step tool for
@@ -613,8 +1544,9 @@ export function apply(ctx, config) {
       mode,
       trimmed: loadsAsNeeded,
       known: knownTools(sessionId),
-      // The families the mode starts with (Data: data, pdf) are there from the first step.
-      added: loadsAsNeeded ? [...new Set([...(mode?.startFamilies ?? []), ...(added ?? addedOf(sessionId))])] : [],
+      // The families the mode starts with (Data: data, pdf) are there from the first step. Lab fix (6a, I15): a guest in
+      // Devices has the device tools (bench_…) from the first step too, as the Devices mode has.
+      added: loadsAsNeeded ? [...new Set([...(mode?.startFamilies ?? []), ...devicesStart(sessionId, mode), ...(added ?? addedOf(sessionId))])] : [],
       web: webOn(sessionId, mode),
       research: researchOn(sessionId),
       off: toolsOff(sessionId),
@@ -653,6 +1585,11 @@ export function apply(ctx, config) {
     return toolMask(sessionId, mode, added)?.allow ?? [];
   }
 
+  /** Lab fix (6a, I15): the device tools a guest in Devices starts with where tools load as needed (none elsewhere). */
+  function devicesStart(sessionId, mode) {
+    if (mode?.guardedBy !== 'devices') return [];
+    return knownTools(sessionId).filter((name) => typeof name === 'string' && name.startsWith('bench_'));
+  }
   /** @returns {boolean} whether a conversation loads its tools as needed. A helper follows its conversation. */
   function trimmed(sessionId, mode) {
     if (!mode || mode.isolated || mode.tools !== 'all' || toolsOff(sessionId)) return false;
@@ -836,7 +1773,7 @@ export function apply(ctx, config) {
   }
 
   /** A command or program that goes online with no address to check, while not every kind of page is ticked. */
-  const LEVEL_COMMAND = 'Not every kind of web source is ticked for this conversation, and this command or program goes online without a web address Modes can check, so it was not run. Use the web tools for pages, or tell the user: they can pick All on the Web button.';
+  const LEVEL_COMMAND = 'Not every kind of web source is ticked for this thread, and this command or program goes online without a web address Modes can check, so it was not run. Use the web tools for pages, or tell the user: they can pick All on the Web button.';
 
   /** @returns {string} the note a conversation gets about its Web sources ('' for All, as before). */
   function levelSaid(sessionId) {
@@ -847,7 +1784,7 @@ export function apply(ctx, config) {
     if (mode?.isolated) {
       const nets = ticks.filter((kind) => NETS.includes(kind));
       const kinds = ticks.filter((kind) => KINDS.includes(kind));
-      return `\n\nRecon sources for this conversation: ${tickedWords([...kinds, ...nets])}. The recon tools for sources that are not ticked refuse, and web results of other kinds are left out.${kinds.includes('other') && otherNames(true).length > 0 ? ` The user's own sources allowed in Recon: ${otherNames(true).map((name) => `"${name}"`).join(', ')} (recon_other_search, recon_other_read).` : ''} If the research needs another source, say so; the user ticks more on the Web button.`;
+      return `\n\nRecon sources for this thread: ${tickedWords([...kinds, ...nets])}. The recon tools for sources that are not ticked refuse, and web results of other kinds are left out.${kinds.includes('other') && otherNames(true).length > 0 ? ` The user's own sources allowed in Recon: ${otherNames(true).map((name) => `"${name}"`).join(', ')} (recon_other_search, recon_other_read).` : ''} If the research needs another source, say so; the user ticks more on the Web button.`;
     }
     return sourcesSaid(ticks, { other: otherNames(false) });
   }
@@ -928,7 +1865,7 @@ export function apply(ctx, config) {
    *   (a Rerun copy gets its conversation's entry just after the app created it).
    */
   function keepBase(sessionId, entry, { note = false } = {}) {
-    const value = entry?.mode || entry?.base ? { ...(entry.mode ? { mode: entry.mode } : {}), ...(entry.base ? { base: entry.base, set: entry.set } : {}) } : null;
+    const value = entry?.mode || entry?.base ? { ...(entry.mode ? { mode: entry.mode } : {}), ...(entry.mode && entry.key ? { key: entry.key } : {}), ...(entry.base ? { base: entry.base, set: entry.set } : {}) } : null;
     if (!note) baseSeen.set(sessionId, value);
     baseChain = baseChain.then(async () => {
       try {
@@ -975,8 +1912,10 @@ export function apply(ctx, config) {
     return sandboxOf(read(() => presets.permissionState?.(session)?.preset)) ?? sandboxOf(read(() => presets.defaultPreset));
   }
 
+  /** Item 4A, stage 6a: the key stored beside a mode's id, only for a sealed or guarded copy (a mode as it is stores none). */
+  const storedKey = (mode) => (mode?.sealedBy || mode?.guardedBy ? modeKey(mode) : undefined);
   /** @returns {boolean} whether two stored entries say the same. */
-  const sameEntry = (a, b) => a?.mode === b?.mode && a?.base === b?.base && (a?.base ? a?.set === b?.set : true);
+  const sameEntry = (a, b) => a?.mode === b?.mode && (a?.key ?? '') === (b?.key ?? '') && a?.base === b?.base && (a?.base ? a?.set === b?.set : true);
 
   /**
    * Set the conversation's access level (the app's sandbox mode) for a mode, and put the earlier
@@ -1034,12 +1973,54 @@ export function apply(ctx, config) {
     }
     state.sandbox = step.known ?? null;
     if (lasting) {
-      const next = { mode: mode.id, ...(step.known ?? {}) };
+      const next = { mode: mode.id, ...(storedKey(mode) ? { key: storedKey(mode) } : {}), ...(step.known ?? {}) };
       // Opened with nothing stored and nothing changed: only note the mode, so a later move made
       // while it is closed is seen.
       if (!sameEntry(next, entry)) keepBase(agent.id, next, { note: !entry && !start && !step.write });
     }
-    if (step.write) session.append('sandbox/mode', { mode: step.write });
+    if (step.write) {
+      session.append('sandbox/mode', { mode: step.write });
+      // Item 4A, fix round 2: what Modes itself last set on a draft, so a re-claim can tell it from a level picked by hand.
+      if (lasting && fresh.has(agent.id)) levelsWritten.set(agent.id, step.write);
+    }
+  }
+  /** Item 4A, fix round 2: a draft -> the access level Modes last wrote on it in this run. */
+  const levelsWritten = new Map();
+  /**
+   * Item 4A, fix round 2: after the chat box claims a reused blank draft again (another space, another mode), its access
+   * level is the new mode's start access: the mode's own level, or for a mode that leaves it alone the level from before a
+   * mode changed it. A level picked by hand on the draft, or one Modes never set, stays (lib/sandbox.js draftAccessStep).
+   * The usual way (applySandbox on the switch) already does this; this makes sure of it once the switch is applied.
+   * @param {string} top - the draft.
+   */
+  async function settleDraftAccess(top) {
+    const agent = ctx.get('agents')?.get?.(top);
+    const policy = ctx.get('sandboxPolicy');
+    if (!agent || !policy || !freshNow(top)) return;
+    if (boundaryRuns.has(top)) {
+      let timer;
+      const waited = new Promise((resolve) => {
+        timer = setTimeout(resolve, SCHEDULED_WAIT_MS);
+        timer.unref?.();
+      });
+      await Promise.race([boundaryRuns.get(top).catch(() => {}), waited]);
+      clearTimeout(timer);
+    }
+    const mode = modeOf(top);
+    const level = policy.resolve({ session: agent.session }).mode;
+    const known = readBase(storedEntry(top));
+    const step = draftAccessStep({ sandbox: mode.sandbox, level, known, wrote: levelsWritten.get(top) });
+    let write = step.write;
+    if (!write) return;
+    // Scratch (step 35): at Workspace Write at most.
+    if (write === FULL_ACCESS && scratchConversation(agent)) write = SCRATCH_CAP;
+    if (write === level) return;
+    agent.session.append('sandbox/mode', { mode: write });
+    levelsWritten.set(top, write);
+    const state = applied.get(top);
+    const next = mode.sandbox === 'inherit' ? null : { base: known?.base ?? level, set: write };
+    if (state) state.sandbox = next;
+    keepBase(top, { mode: mode.id, ...(next ?? {}) });
   }
 
   /**
@@ -1056,10 +2037,12 @@ export function apply(ctx, config) {
     applied.set(agent.id, state);
     // Moved to another mode while it was not open (the Cowork sidebar's Move writes only its mode):
     // on opening, the new mode applies as on a switch, its access level and tier included.
-    const moved = !switching && state.modeId === undefined && isTopLevel(agent) && !fresh.has(agent.id) && movedSince(storedEntry(agent.id), mode.id);
+    const moved = !switching && state.modeId === undefined && isTopLevel(agent) && !fresh.has(agent.id) && movedSince(storedEntry(agent.id), mode.id, storedKey(mode));
     applyTools(agent, state, mode);
     applySandbox(agent, state, mode, switching || moved || fresh.has(agent.id));
     state.modeId = mode.id;
+    // Item 4A, stage 6a (I20): the effective mode's key, so the same id moving into a sealed or guarded copy re-applies.
+    state.modeKey = modeKey(mode);
     await applyTier(agent, mode, switching || moved, starting);
   }
 
@@ -1074,11 +2057,76 @@ export function apply(ctx, config) {
     try {
       const entry = readObject(config.modeStart)[mode.id];
       if (!entry) return;
-      const ops = startOps(normalizeStart(entry, { isolated: mode.isolated === true }), config, agent.id);
-      if (ops.length === 0) return;
-      await ctx.get('settings')?.mutate('modes', ops);
+      const ops = await writeFresh((current) => startOps(normalizeStart(entry, { isolated: mode.isolated === true }), current, agent.id));
+      if (ops.length > 0) seeded.set(agent.id, seededBy(ops, agent.id));
     } catch (error) {
       ctx.logger.warn(`modes: starting values of ${mode?.id} not applied (${error?.message ?? error})`);
+    }
+  }
+  /**
+   * Final fix round (lab: a started thread's own Web, Depth and Models were lost when a new draft was seeded): the
+   * per-thread maps (`sessionWeb`, `sessionDepth`, `sessionHelpers`, …) are each one setting, so a write replaces the
+   * whole map. Such writes are built here from the settings as they stand right now (the settings service's own view,
+   * not this add-on's copy), sent with that revision, and built again when another write landed in between (the
+   * service answers "conflict"), so no other thread's entry is ever dropped. One at a time.
+   * @param {(current: object) => Array<object>} build - the operations from the current values.
+   * @returns {Promise<Array<object>>} the operations written (none: nothing to write).
+   */
+  let freshChain = Promise.resolve();
+  function writeFresh(build) {
+    const run = freshChain.catch(() => {}).then(async () => {
+      const settings = ctx.get('settings');
+      for (let attempt = 0; ; attempt += 1) {
+        let row;
+        try {
+          row = settings?.describe?.().find((entry) => entry.ns === 'modes');
+        } catch {
+          row = undefined;
+        }
+        const current = row?.value && typeof row.value === 'object' ? { ...config, ...row.value } : config;
+        const ops = build(current);
+        if (!settings || ops.length === 0) return ops;
+        try {
+          await settings.mutate('modes', ops, typeof row?.revision === 'number' ? row.revision : undefined);
+          return ops;
+        } catch (error) {
+          const conflict = error?.code === 'SETTINGS_CONFLICT' || /conflict/i.test(`${error?.name ?? ''} ${error?.message ?? ''}`);
+          if (!conflict || attempt >= 4) throw error;
+        }
+      }
+    });
+    freshChain = run;
+    return run;
+  }
+  /** Item 4A, fix round 2: what a draft's start wrote (field -> value), so a later pick before its first message can take it back. */
+  const seeded = new Map();
+  /**
+   * Item 4A, fix round 2: a draft that gets another mode before its first message (the Mode list, a claim of the chat
+   * box or of another add-on) takes that mode's starting values (Settings → Modes → Starting values). What the earlier
+   * mode's start wrote is taken back where it is unchanged; what the owner set by hand on the draft stays. Never after
+   * the first message (a mode change then keeps Web, Depth and Lens). Never throws.
+   * @param {string} sessionId - the draft.
+   * @param {object} mode - its new mode.
+   */
+  async function reseedStart(sessionId, mode, before) {
+    try {
+      const starts = readObject(config.modeStart);
+      const start = normalizeStart(starts[mode.id] ?? {}, { isolated: mode.isolated === true });
+      // What the earlier mode's start wrote is kept in memory only; after a restart (a reused blank draft) it is taken to
+      // be that mode's starting values, so they are taken back where the draft still holds them unchanged.
+      let earlier = seeded.get(sessionId);
+      if (earlier === undefined && before) {
+        const prior = readModes(config)[before];
+        earlier = seededBy(startOps(normalizeStart(starts[before] ?? {}, { isolated: prior?.isolated === true }), {}, sessionId), sessionId);
+      }
+      let plan = { ops: [], seeded: {} };
+      await writeFresh((current) => {
+        plan = restartOps(start, current, sessionId, earlier);
+        return plan.ops;
+      });
+      seeded.set(sessionId, plan.seeded);
+    } catch (error) {
+      ctx.logger.warn(`modes: starting values of ${mode?.id} not applied to a new thread (${error?.message ?? error})`);
     }
   }
 
@@ -1128,9 +2176,16 @@ export function apply(ctx, config) {
    * @param {object} agent - live Agent.
    * @param {() => Promise<void>} work - task.
    */
+  /** Item 6: the modes that have a sidebar tab, kept 2 s (`list()`). */
+  const shownCache = { at: 0, shown: undefined };
+  /** Agent id -> the boundary work started last while it was idle (item 6: `set(..., { settle: true })` waits for it). */
+  const boundaryRuns = new Map();
   function atTurnBoundary(agent, work) {
-    if (agent.status === 'idle') void work().catch(report);
-    else pendingIdle.set(agent.id, work);
+    if (agent.status === 'idle') {
+      const run = work().catch(report);
+      boundaryRuns.set(agent.id, run);
+      void run.finally(() => { if (boundaryRuns.get(agent.id) === run) boundaryRuns.delete(agent.id); });
+    } else pendingIdle.set(agent.id, work);
   }
 
   /**
@@ -1140,7 +2195,7 @@ export function apply(ctx, config) {
   function reconcile(agent) {
     const desired = modeOf(agent.id);
     const state = applied.get(agent.id);
-    if (state?.modeId === desired.id) {
+    if (state?.modeId === desired.id && (state.modeKey === undefined || state.modeKey === modeKey(desired))) {
       // Same mode; the Web level or the tools switch may still have changed the tool mask.
       if (state.maskKey !== JSON.stringify(toolMask(agent.id, desired))) {
         atTurnBoundary(agent, async () => {
@@ -1152,10 +2207,24 @@ export function apply(ctx, config) {
     }
     atTurnBoundary(agent, async () => {
       const mode = modeOf(agent.id);
-      if (applied.get(agent.id)?.modeId !== mode.id) await applyMode(agent, mode, true);
+      const now = applied.get(agent.id);
+      if (now?.modeId !== mode.id || (now.modeKey !== undefined && now.modeKey !== modeKey(mode))) await applyMode(agent, mode, true);
     });
   }
 
+  // The Tool ledger (dsh-tool-ledger) records which rule of Modes refused a call. Optional: without the ledger nothing changes.
+  const ledgerNote = (exec, rule) => {
+    try {
+      ctx.get('toolLedger')?.note?.({ sessionId: exec?.agent?.id, tool: exec?.name, outcome: 'refused', rule, by: 'modes', exec });
+    } catch {
+      // the ledger is optional
+    }
+  };
+  const ledgered = (rule, guard) => (exec) => {
+    const reason = guard(exec);
+    if (reason !== undefined) ledgerNote(exec, rule);
+    return reason;
+  };
   // The Web sources (the one Web selector): a tool that opens an address of a kind that is not ticked is
   // refused, in the conversation and its helpers; so is a command or a program that goes online without an
   // address to check (unless every kind of page is ticked). All (nothing stored) changes nothing. Recon keeps
@@ -1163,7 +2232,7 @@ export function apply(ctx, config) {
   // judged by their own tools, not by the kind of their address.
   ctx.effect(
     () =>
-      ctx.tools.guard((exec) => {
+      ctx.tools.guard(ledgered('web-sources', (exec) => {
         let ticks;
         try {
           const id = exec?.agent?.id;
@@ -1192,9 +2261,9 @@ export function apply(ctx, config) {
           }
           return undefined;
         } catch {
-          return 'Modes could not check this call against the conversation\'s Web sources, so it was not run.';
+          return 'Modes could not check this call against the thread\'s Web sources, so it was not run.';
         }
-      }),
+      })),
     'modes: web sources',
   );
   // Search results of kinds that are not ticked are taken out before the model sees them (web_search, in
@@ -1230,7 +2299,7 @@ export function apply(ctx, config) {
   // Other is ticked (All ticks it), outside Recon (Recon has its own, through its own route). The web switch
   // and the tool mask decide the rest, as for web_search. The model gives a source's name, never an address
   // or a login; whatever comes back has every secret part taken out.
-  const OTHER_UNTICKED = 'Other is not ticked in this conversation\'s Web sources, so the user\'s own sources are not used. The user ticks Other on the Web button.';
+  const OTHER_UNTICKED = 'Other is not ticked in this thread\'s Web sources, so the user\'s own sources are not used. The user ticks Other on the Web button.';
   const otherOffered = (id) => {
     if (!id || otherList().length === 0) return false;
     if (modeOf(topOf(id))?.isolated) return false;
@@ -1291,23 +2360,23 @@ export function apply(ctx, config) {
   // in every tab. A barrier, not a wall: a command written to hide what it does is not caught.
   ctx.effect(
     () =>
-      ctx.tools.guard((exec) => {
+      ctx.tools.guard(ledgered('secrets', (exec) => {
         try {
           if (!exec?.agent?.id || OTHER_TOOLS.includes(exec.name) || WRITE_TOOLS.includes(exec.name)) return undefined;
           const args = exec.arguments;
           const text = typeof args === 'string' ? args : JSON.stringify(args ?? {});
-          return SECRET_MARKS.test(text.slice(0, 200_000)) ? 'This call names the place where the user\'s secrets (logins, keys, cookies) are kept, so it was not run. Secrets are never read or shown in a conversation; the user manages them on Settings → Web sources.' : undefined;
+          return SECRET_MARKS.test(text.slice(0, 200_000)) ? 'This call names the place where the user\'s secrets (logins, keys, cookies) are kept, so it was not run. Secrets are never read or shown in a thread; the user manages them on Settings → Web sources.' : undefined;
         } catch {
           return undefined;
         }
-      }),
+      })),
     'modes: secrets stay out of reach',
   );
   // The app's PTC preset offers `run_code` whatever the mask says. With nothing to call, a program is refused,
   // so "Tools off" and a mode without tools mean the same in every preset.
   ctx.effect(
     () =>
-      ctx.tools.guard((exec) => {
+      ctx.tools.guard(ledgered('no-programs', (exec) => {
         try {
           const id = exec?.agent?.id;
           if (exec?.name !== PROGRAM_TOOL || !id) return undefined;
@@ -1317,8 +2386,33 @@ export function apply(ctx, config) {
         } catch {
           return undefined;
         }
-      }),
+      })),
     'modes: no programs without tools',
+  );
+  // Item 4A, fix round 2: Plain chat stays inside its folder (the owner's answer: "a standalone chat reaches only its
+  // own folder, a project chat its project folder"). The app's sandbox limits writes to the session folder only, which
+  // for a standalone thread is the whole Scratch place, and reads not at all. A setting with a default (`plainFence`).
+  ctx.effect(
+    () =>
+      ctx.tools.guard(ledgered('plain-fence', (exec) => {
+        try {
+          const id = exec?.agent?.id;
+          if (!id) return undefined;
+          const fence = fenceOf(topOf(id));
+          if (!fence) return undefined;
+          let cwd = '';
+          try {
+            cwd = String(ctx.get('workingDirectory')?.get?.(exec.agent.session) ?? '');
+          } catch {
+            cwd = '';
+          }
+          const verdict = fenceCheck({ root: fence.root, name: exec.name, args: exec.arguments, cwd, isRoom: reconRoomOf });
+          return verdict.ok ? undefined : fenceRefusal(verdict, fence.root);
+        } catch {
+          return 'Modes could not check whether this call stays inside the thread\'s folder, so it was not run. Try again; if it keeps happening, switch off "Keep Plain chat inside its folder" in Settings → Modes.';
+        }
+      })),
+    'modes: Plain chat stays inside its folder',
   );
   // Web off: the app's sandbox limits file writing only, not the network, so a shell command that
   // goes online (curl, a web address, fetching code, an install) is stopped here, and so is a
@@ -1326,7 +2420,7 @@ export function apply(ctx, config) {
   const SHELL_TOOLS = new Set(SHELL_NAMES);
   ctx.effect(
     () =>
-      ctx.tools.guard((exec) => {
+      ctx.tools.guard(ledgered('web-off', (exec) => {
         try {
           const id = exec?.agent?.id;
           const name = exec?.name;
@@ -1341,7 +2435,7 @@ export function apply(ctx, config) {
         } catch {
           return undefined;
         }
-      }),
+      })),
     'modes: no network from the shell or from programs while the web is off',
   );
   /**
@@ -1353,7 +2447,7 @@ export function apply(ctx, config) {
   // no programs, no helpers, nothing of another add-on. A second lock behind the tool mask.
   ctx.effect(
     () =>
-      ctx.tools.guard((exec) => {
+      ctx.tools.guard(ledgered('isolated', (exec) => {
         try {
           const id = exec?.agent?.id;
           if (!id) return undefined;
@@ -1362,6 +2456,13 @@ export function apply(ctx, config) {
           const long = longRunOf(id);
           if (isolatedMayRun({ mode, name: exec.name, child: topOf(id) !== id, off: toolsOff(id), webOff: isolatedWebOff(id), long, granted: access?.grantedFor(id, exec.name, exec) === true, online: onlineImageTools() })) {
             runOverCalls.delete(id);
+            // Item 4A, stage 6a (I6, I8, LEAK 9): in a Recon-space thread (Recon mode included) file tools, granted or
+            // not, read and write only inside the thread's room folder.
+            const top = topOf(id);
+            if (spaceOfTopRaw(top) === 'recon') {
+              const refusal = roomPathRefusal({ name: exec.name, args: exec.arguments, cwd: threadCwd(exec, top), room: roomFolder(top), extra: readList(config.sealedExtra) });
+              if (refusal) return refusal;
+            }
             return undefined;
           }
           // The run's own step tool after the run ended: say so plainly, and count the calls.
@@ -1370,12 +2471,91 @@ export function apply(ctx, config) {
             return RUN_OVER_TEXT;
           }
           runOverCalls.delete(id);
-          return `the tool ${exec?.name} is not part of this isolated conversation and was not run.`;
+          // Lab fix (6a): in Recon (any mode) the refusal says why and what to use instead (2.7 SHARED_REFUSED, PROFILE_REFUSED,
+          // DEEP_REFUSED, the web through Recon's routes); an owner's isolated mode elsewhere keeps the plain sentence.
+          if (spaceOfTopRaw(topOf(id)) === 'recon') return reconRefusal(exec?.name);
+          return `the tool ${exec?.name} is not part of this sealed thread and was not run.`;
         } catch {
-          return 'this isolated conversation could not be checked, so the tool was not run.';
+          return 'this sealed thread could not be checked, so the tool was not run.';
         }
-      }),
+      })),
     'modes: isolated conversations',
+  );
+  /** @returns {string} the folder a call runs in: the app's working directory for the agent, else the thread's folder. */
+  function threadCwd(exec, top) {
+    try {
+      const cwd = ctx.get('workingDirectory')?.get?.(exec?.agent?.session);
+      if (typeof cwd === 'string' && cwd) return cwd;
+    } catch {
+      /* the thread's folder */
+    }
+    return folderOfThread(top);
+  }
+  /** Item 4A, stage 6a (I26): threads that ran the Terminal or a program in this app run (they cannot move into Devices or Workshop). */
+  const ranPrograms = new Set();
+  /** @returns {boolean} whether a tool runs a program or a command (the Terminal, a program, an engine, a workflow). */
+  const runsPrograms = (name) => classify(name).group === 'run' || name.startsWith('terminal_') || SHELL_NAMES.includes(name)
+    || PROGRAM_NAMES.includes(name) || name === 'engine' || name === 'workflow';
+  const notePrograms = (exec) => {
+    try {
+      const id = exec?.agent?.id;
+      const name = String(exec?.name ?? '');
+      if (id && name && runsPrograms(name)) ranPrograms.add(topOf(id));
+    } catch {
+      /* nothing to note */
+    }
+  };
+  // Fix round (6a review, design 10c): noted when the call is let through, not when it returns, so a thread whose long
+  // shell or program call is still running cannot move into Devices or Workshop. The result stays as a backstop.
+  ctx.on('tools/pre-execute', async (exec, next) => {
+    const decision = await next();
+    if (!decision?.kind || decision.kind === 'allow') notePrograms(exec);
+    return decision;
+  });
+  ctx.on('tools/result', (exec) => notePrograms(exec));
+  /** @returns {string} the sentence a guest's refused tool gets (2.7 BASE_NO_PROGRAMS). */
+  const baseNoPrograms = (space, tool) => spaceText('baseNoPrograms', 'en', { space: SPACE_NAMES.en[space] ?? (space === 'unknown' ? 'This space' : String(space ?? '')), tool: String(tool ?? '') });
+  /** Devices' folders (Bench's backups, `/dev`): the base rule's check for `mac_find_files` when Bench cannot say. */
+  function namesDevicesFolder(args) {
+    const text = typeof args === 'string' ? args : JSON.stringify(args ?? {});
+    if (/(^|["\s'=])\/dev(\/|["\s']|$)/.test(text)) return true;
+    try {
+      const folders = ctx.get('bench')?.folders?.() ?? [];
+      return (Array.isArray(folders) ? folders : []).some((folder) => typeof folder === 'string' && folder && text.includes(folder));
+    } catch {
+      return true;
+    }
+  }
+  // Item 4A, stage 6a (I14): the base rule of Devices and Workshop for every mode (a guest, or a thread whose space could
+  // not be read): no Terminal, programs, jobs, connectors, Mac app tools, Office files, app tools or unsorted (stage 6b:
+  // schedules only for the 'unknown' guard and a Mission run, J14),
+  // tools, whatever Bench or Creator Plus do (a belt; their own guards add the folder rules).
+  ctx.effect(
+    () =>
+      ctx.tools.guard(ledgered('space-guard', (exec) => {
+        const id = exec?.agent?.id;
+        if (!id) return undefined;
+        let mode;
+        try {
+          mode = modeOf(id);
+        } catch {
+          // The thread's mode cannot be read: the base rule as for an unknown space (I4).
+          try {
+            return guestRefuses(exec?.name, { space: 'unknown' }) ? baseNoPrograms('unknown', exec?.name) : undefined;
+          } catch {
+            return baseNoPrograms('unknown', exec?.name);
+          }
+        }
+        try {
+          if (!mode?.guardedBy) return undefined;
+          if (guestRefuses(exec.name, guestOpts(id, mode))) return baseNoPrograms(mode.guardedBy, exec.name);
+          if (exec.name === 'mac_find_files' && namesDevicesFolder(exec.arguments)) return baseNoPrograms(mode.guardedBy, exec.name);
+          return undefined;
+        } catch {
+          return baseNoPrograms(mode?.guardedBy ?? 'unknown', exec?.name);
+        }
+      })),
+    'modes: the base rule of Devices and Workshop',
   );
 
   /**
@@ -1394,7 +2574,28 @@ export function apply(ctx, config) {
       // Without the list the note still says where tools are called from.
     }
     if (reachable.length === 0) return '';
-    return programNote({ timeout, slow: SLOW_TOOLS.filter((tool) => reachable.includes(tool)) });
+    return programNote({ timeout, slow: SLOW_TOOLS.filter((tool) => reachable.includes(tool)), timed: TIMED_TOOLS.filter((tool) => reachable.includes(tool)) });
+  }
+
+  /**
+   * The programs note of a conversation, by its tab: the usual "call every tool from inside run_code" note; nothing in an
+   * isolated tab (its own PTC words come with promptText); and in a tab whose guard refuses programs (Devices, Creator
+   * Plus, a mode marked noPrograms) not that note, which would send the AI into a dead end, but plain words that the tab
+   * does not work in PTC and how to start again (item 7). A helper there gets nothing.
+   * @param {object} agent - live Agent.
+   * @param {object} mode - its mode.
+   * @param {boolean} [child] - the agent is a helper.
+   * @returns {string} the note, or ''.
+   */
+  function programsNoteFor(agent, mode, child = false) {
+    if (mode?.isolated) return '';
+    // Item 4A, stage 6a (I22): a guarded space refuses programs for every mode; the note then names the space.
+    const space = spaceOfTopRaw(topOf(agent.id));
+    if (!refusesProgramsIn(mode, space)) return viaPrograms(agent);
+    if (child || !programOnly(ctx.tools, agent)) return '';
+    const own = mode?.guardedBy || mode?.sealedBy ? readModes(config)[mode.id] ?? mode : mode;
+    const label = refusesPrograms(own) ? mode.label : SPACE_NAMES.en[space] ?? mode.label;
+    return noProgramsPtcPrompt(label, restartPresetIn(readLocks(plain(config.presetLock)), space, mode));
   }
 
   /**
@@ -1412,6 +2613,10 @@ export function apply(ctx, config) {
     }
   }
 
+  /** Item 4A, stage 6a: a guest in Recon is told its routes and its room (its tool and route sentences only). */
+  // Lab fix (6a): the note names the thread's own room folder (relative paths and calls without a path start in Recon's
+  // shared room, which the room rule refuses), and says what replaces the web tools the mode's own words may name.
+  const sealedNote = (mode, top) => (mode?.sealedBy === 'recon' && mode.id !== 'recon' ? `\n\n${sealedSpaceNote(roomFolder(top))}` : '');
   /**
    * Install the prompt section on one Agent.
    * @param {object} agent - live Agent.
@@ -1426,7 +2631,7 @@ export function apply(ctx, config) {
           interpolate: false,
           text: (context) => {
             // A helper gets no mode wording: "answer in one reply, no tools" would stop a searcher from searching.
-            if (topOf(agent.id) !== agent.id) return viaPrograms(agent);
+            if (topOf(agent.id) !== agent.id) return programsNoteFor(agent, modeOf(agent.id), true);
             const mode = modeOf(agent.id);
             // A model version that stands alone leaves out the mode's own wording; the notes about tools stay.
             let alone = false;
@@ -1437,9 +2642,9 @@ export function apply(ctx, config) {
             }
             const known = knownTools(agent.id);
             const images = onlineImageTools();
-            const isolatedRun = mode.isolated && longRunOf(agent.id) ? `\n\nA Long run is on in this conversation. You conduct it with mission_step; its helpers do the work with this mode's tools${longRunOf(agent.id).files ? ' and file tools in the run\'s own folder' : ''}. There are no programs, commands or other tools.` : '';
+            const isolatedRun = mode.isolated && longRunOf(agent.id) ? `\n\nA Mission is on in this thread. You conduct it with mission_step; its helpers do the work with this mode's tools${longRunOf(agent.id).files ? ' and file tools in the run\'s own folder' : ''}. There are no programs, commands or other tools.` : '';
             const long = mode.isolated ? undefined : longRunOf(agent.id);
-            const longNote = long ? `\n\nA Long run is on in this conversation. Until it ends, it and its helpers have the tools the run needs${long.files ? ' (files and commands' : ' (this tab\'s own tools'}${long.web ? ', and the web)' : ', no web)'}; this overrides what this tab says above about tools, files and the web. The tab's own way of working still applies.` : '';
+            const longNote = long ? `\n\nA Mission is on in this thread. Until it ends, it and its helpers have the tools the run needs${long.files ? ' (files and commands' : ' (this mode\'s own tools'}${long.web ? ', and the web)' : ', no web)'}; this overrides what this mode says above about tools, files and the web. The mode's own way of working still applies.` : '';
             return longNote ? `${promptText({
               mode,
               off: false,
@@ -1453,9 +2658,9 @@ export function apply(ctx, config) {
               trimmed: false,
               offline: [...webReaching(known), ...images.filter((name) => known.includes(name))],
               connectors: known.some((name) => name.startsWith('mcp__')),
-              programs: viaPrograms(agent),
+              programs: programsNoteFor(agent, mode),
               programOnly: false,
-            })}${longNote}${levelSaid(agent.id)}` : promptText({
+            })}${longNote}${levelSaid(agent.id)}${sealedNote(mode, topOf(agent.id))}` : promptText({
               mode,
               off: toolsOff(agent.id),
               alone,
@@ -1469,10 +2674,14 @@ export function apply(ctx, config) {
               trimmed: trimmed(agent.id, mode),
               offline: [...webReaching(known), ...images.filter((name) => known.includes(name))],
               connectors: known.some((name) => name.startsWith('mcp__')),
-              // An isolated tab runs no programs; under PTC it is told it cannot work there instead.
-              programs: mode.isolated ? '' : viaPrograms(agent),
-              programOnly: mode.isolated === true && programOnly(ctx.tools, agent),
-            }) + isolatedRun + levelSaid(agent.id);
+              // An isolated tab runs no programs; under PTC it is told it cannot work there instead. So is a tab
+              // whose guard refuses programs (Devices, Creator Plus). The two fallback modes have no tools in any
+              // preset: they are not told to start again in Standard, the cause is the mode.
+              programs: programsNoteFor(agent, mode),
+              programOnly: mode.isolated === true && !FALLBACK_MODE_IDS.includes(mode.id) && programOnly(ctx.tools, agent),
+              // Under PTC a mode without tools (Chat with Web on) is told how it may look things up.
+              ptc: mode.tools === 'none' && programOnly(ctx.tools, agent),
+            }) + isolatedRun + levelSaid(agent.id) + sealedNote(mode, topOf(agent.id));
           },
         }),
       'modes prompt section',
@@ -1496,10 +2705,24 @@ export function apply(ctx, config) {
       } }),
       'modes tool access section',
     );
+    // Item 4A, fix round 2: a fenced Plain chat thread is told its folder, so what it hears matches the fence (the app's
+    // file policy names the whole session folder, for a standalone thread the shared Scratch place). Helpers too.
+    const disposeFence = agent.ctx.effect(
+      () => agent.ctx.systemPrompt.section({ name: 'modes:fence', order: 60, interpolate: false, text: () => {
+        try {
+          const fence = fenceOf(topOf(agent.id));
+          return fence ? fencePrompt(fence.root, fence.standalone) : '';
+        } catch {
+          return '';
+        }
+      } }),
+      'modes fence section',
+    );
     promptDisposers.set(agent.id, () => {
       dispose?.();
       disposeLens?.();
       disposeAccess?.();
+      disposeFence?.();
     });
   }
 
@@ -1548,6 +2771,8 @@ export function apply(ctx, config) {
   // opening: never throw, and do the one-off cleanup in the background.
   ctx.on('agent/created', async ({ agent, source }) => {
     try {
+      // Item 4A, stage 6a (I29): the seam reads which agents are there.
+      bump();
       noteParent(agent);
       if (neverRan(agent)) fresh.add(agent.id);
       installPrompt(agent);
@@ -1562,6 +2787,7 @@ export function apply(ctx, config) {
     void clearOldWebMarks().catch(report);
     void moveWebLevels().catch(report);
     void addDataTrim().catch(report);
+    void addPlain().then(() => carryPlain()).catch(report);
   });
   // Loading the add-on is a reload: conversations already there keep their tier and their access
   // level, unless they never ran or their mode was changed while Modes did not see it (moved).
@@ -1580,7 +2806,16 @@ export function apply(ctx, config) {
   // settings write, then the model) is finished before the message starts the turn. The model of a
   // step is fixed before any step hook runs, so waiting there would come too late for the first step.
   ctx.on('schedule/resolve-agent', async (sessionId, next) => {
-    const agent = await next();
+    // Stage 6b (J11, G6): while the scheduler resolves a reserved thread, a claim from another add-on's hook counts as a
+    // scheduled claim (whichever hook runs first).
+    const asked = typeof sessionId === 'string' && sessionId ? sessionId : '';
+    if (asked) schedulerResolving.add(asked);
+    let agent;
+    try {
+      agent = await next();
+    } finally {
+      if (asked) schedulerResolving.delete(asked);
+    }
     try {
       const id = agent?.id ?? sessionId;
       if (agent && id && fresh.has(id) && !scheduled.has(id)) {
@@ -1610,7 +2845,25 @@ export function apply(ctx, config) {
       const fromTimer = fromScheduler(event.data?.inserted);
       // An Automation that runs again in a conversation that already exists: that run has nobody to answer (until the user writes).
       if (id && fromTimer) scheduledRun.add(id);
-      else if (id && Array.isArray(event.data?.inserted) && event.data.inserted.some((item) => (item?.source ?? item?.message?.source)?.kind === 'user')) scheduledRun.delete(id);
+      else if (id && Array.isArray(event.data?.inserted) && event.data.inserted.some((item) => (item?.source ?? item?.message?.source)?.kind === 'user')) {
+        scheduledRun.delete(id);
+        // Stage 6b (J11): the user wrote in a held thread: it runs again.
+        if (heldRuns.delete(id)) bump();
+        guestRunPending.delete(id);
+        guestRunPendingMode.delete(id);
+      }
+      // Stage 6b (Revision 2 L4): a fresh thread of a guest automation that opens new threads must be in its space before
+      // its first step; checked at that step (another add-on's claim may still come in this same event).
+      if (fromTimer && id && fresh.has(id)) {
+        const table = guestRunTable();
+        const taskId = scheduledTaskIds(event.data?.inserted).find((one) => table[one] === 'devices' || table[one] === 'workshop');
+        const space = taskId === undefined ? undefined : table[taskId];
+        if (space) {
+          guestRunPending.set(id, space);
+          // Stage 7 (6b lab leftover): the mode it runs in (named on its line and its row; '' when not known).
+          guestRunPendingMode.set(id, String(guestRunModeTable()[taskId] ?? ''));
+        }
+      }
       if (!fromTimer || !id || !fresh.has(id) || scheduled.has(id)) return;
       scheduled.add(id);
       const agent = ctx.get('agents')?.get?.(id);
@@ -1622,6 +2875,379 @@ export function apply(ctx, config) {
     }
   });
 
+  // ---- Preset in this tab (item 7) ------------------------------------------------------------------------
+  // The Cowork sidebar starts a locked tab's conversations in its preset ({ agentPreset } on the app's start). This is
+  // the backstop behind it: a still-blank conversation of a locked tab that gets another preset (a pick staged in
+  // another tab, the app's own Cmd-N, the app's default) is switched to the locked one. A started conversation is
+  // never touched (the app refuses with agent-preset/locked, which is ignored). Keyed on the setting, not on a tab id.
+
+  /** Conversations whose preset the backstop switched: id -> { from, to, why: 'pick' | 'default' }. Read by the (i). */
+  const presetOverrides = new Map();
+  /** How long a preset change settles before it is checked (the tab that a new conversation belongs to is saved meanwhile). */
+  const presetSettleMs = Math.max(0, Number(process.env.DSH_MODES_PRESET_SETTLE_MS ?? 600) || 0);
+  /** @returns {Record<string, string>} each tab's choice as stored. */
+  const presetLocks = () => readLocks(plain(config.presetLock));
+  /** @returns {Promise<Array<{id: string, broken?: string}> | null>} the app's presets, or null when it cannot say. */
+  async function presetRoster() {
+    // Kept a few seconds: every open (i) asks for it, and the app checks every preset's plugins for each answer.
+    if (rosterCache.list && Date.now() - rosterCache.at < ROSTER_TTL_MS) return rosterCache.list;
+    try {
+      const list = await ctx.get('agentPresets')?.list?.();
+      if (!Array.isArray(list)) return null;
+      rosterCache.list = list;
+      rosterCache.at = Date.now();
+      return list;
+    } catch {
+      return null;
+    }
+  }
+  /** The app's preset list, kept briefly (none in tests: DSH_MODES_PRESET_SETTLE_MS=0 also means no wait here). */
+  const ROSTER_TTL_MS = presetSettleMs === 0 ? 0 : 5000;
+  const rosterCache = { list: null, at: 0 };
+  /** @returns {string} the app's default preset ('' when it cannot say). */
+  function defaultPresetId() {
+    try {
+      const id = ctx.get('agentPresets')?.defaultId;
+      return typeof id === 'string' ? id : '';
+    } catch {
+      return '';
+    }
+  }
+  /** @returns {string} the preset a conversation runs, '' when unknown. */
+  function presetOfAgent(agent) {
+    const presets = ctx.get('agentPresets');
+    for (const read of [() => presets?.presetForSession?.(agent.session), () => presets?.composedPreset?.(agent.ctx)]) {
+      try {
+        const id = read();
+        if (typeof id === 'string' && id) return id;
+      } catch {
+        // the next way
+      }
+    }
+    return '';
+  }
+  /** @returns {boolean} whether no turn has started, by the rule the app's preset switch uses. */
+  function stillBlank(agent) {
+    try {
+      const boundary = ctx.get('agents')?.turnBoundaryOf?.(agent.session);
+      if (boundary && typeof boundary === 'object') return boundary.openTurnStartSeq === null && Number(boundary.lastTurn) === 0;
+    } catch {
+      // as below
+    }
+    return neverRan(agent);
+  }
+  /**
+   * Switch a still-blank conversation of a locked tab to the tab's preset.
+   * @param {string} sessionId - the conversation.
+   * @param {'pick' | 'default'} why - a pick (agent-preset/selected) or a new conversation on the app's default.
+   */
+  async function holdPreset(sessionId, why) {
+    const agent = ctx.get('agents')?.get?.(sessionId);
+    // Not a helper, not one an Automation task opened (its preset is the task's own). A conversation another add-on
+    // claimed into a tab (a Split Plus pane, Content, Finance) is held too: a claim moves the mode, it picks no preset.
+    if (!agent || !isTopLevel(agent) || !stillBlank(agent) || scheduled.has(sessionId)) return;
+    const mode = modeOf(sessionId);
+    const held = lockFor(sessionId, mode);
+    const wanted = held.lock === 'any' ? '' : LOCK_PRESET[held.lock];
+    if (!wanted) return;
+    const now = presetOfAgent(agent);
+    if (!now || now === wanted) return;
+    const roster = await presetRoster();
+    const row = roster?.find((one) => one?.id === wanted);
+    if (!row || row.broken) {
+      // Graceful: the (i) says the preset is missing and the menu stays free.
+      ctx.logger.warn(`modes: ${mode.label} is set to the preset "${wanted}", which the app does not offer now; ${sessionId} keeps "${now}"`);
+      return;
+    }
+    // What the draft goes back to when it is shown in an Any tab again: the preset it had before it was carried into a
+    // locked tab (kept through a chain of locked tabs), else the app's default. A refused pick is not given back.
+    const before = lockHeld.get(sessionId);
+    const back = before && before.to === now ? before.from : why === 'tab' ? now : '';
+    try {
+      await ctx.get('agentPresets').select(agent, wanted);
+      // The tab is kept with the record, so the (i) names the tab of the switch and drops the line once it no longer applies.
+      // Item 4A, stage 6a (map 1.2): the place is space and mode, so a draft re-claimed into another space starts over.
+      presetOverrides.set(sessionId, { from: now, to: wanted, why, modeId: mode?.id ?? '', space: held.space ?? '', label: mode?.label ?? '', at: Date.now() });
+      lockHeld.set(sessionId, { to: wanted, from: back });
+    } catch (error) {
+      const code = error?.code ?? error?.rpcError?.code;
+      if (code !== 'agent-preset/locked') report(error);
+    }
+  }
+  /**
+   * The lock that holds for a thread (item 4A, stage 3a): with spaces live, the stricter of its space's lock and its mode's
+   * (lib/presetlock.js lockInSpace; today's keys are read, nothing is rewritten); else its mode's (its tab's), as before.
+   * @returns {{lock: string, conflict: boolean, space?: string, spaceLock?: string, modeLock?: string}}
+   */
+  function lockFor(sessionId, mode, table = presetLocks()) {
+    if (!spacesLive()) return { lock: lockOf(table, mode?.id), conflict: false };
+    let space;
+    try {
+      space = modes.spaces.of(sessionId);
+    } catch {
+      // Item 4A, stage 6a (map 1.1): fail closed to the seam's space, then a mark or the room (Recon), then the folder.
+      try {
+        const raw = spaceOfTopRaw(topOf(sessionId));
+        space = isSpace(raw) ? raw : wasIsolated(sessionId) || inReconRoom(sessionId) ? 'recon' : folderSpace(sessionId);
+      } catch {
+        space = 'recon';
+      }
+    }
+    return { ...lockInSpace(table, space, mode?.id), space };
+  }
+  /** Check after the settle time; one timer per conversation. */
+  const presetTimers = new Map();
+  function holdPresetSoon(sessionId, why) {
+    if (typeof sessionId !== 'string' || !sessionId) return;
+    clearTimeout(presetTimers.get(sessionId));
+    const run = () => {
+      presetTimers.delete(sessionId);
+      void holdPreset(sessionId, why).catch(report);
+    };
+    if (presetSettleMs === 0) {
+      run();
+      return;
+    }
+    const timer = setTimeout(run, presetSettleMs);
+    timer.unref?.();
+    presetTimers.set(sessionId, timer);
+  }
+  ctx.on('agent-preset/selected', (sessionId) => {
+    try {
+      holdPresetSoon(sessionId, 'pick');
+    } catch (error) {
+      report(error);
+    }
+  });
+  // A new conversation the app made on its default (its own Cmd-N with "Cmd-N follows" off, a restored draft).
+  ctx.on('agent/created', ({ agent, source }) => {
+    try {
+      if (source === 'startup' && agent?.id && fresh.has(agent.id)) holdPresetSoon(agent.id, 'default');
+    } catch (error) {
+      report(error);
+    }
+  });
+  ctx.on('agent/disposed', ({ agent }) => {
+    bump();
+    // Stage 6b (J3): a refused message's text goes with its thread (Recon's End and wipe disposes it too).
+    engineHeldText.drop(agent?.id);
+    pageLangs.delete(agent?.id);
+    clearTimeout(presetTimers.get(agent?.id));
+    presetTimers.delete(agent?.id);
+    presetOverrides.delete(agent?.id);
+    presetSeen.delete(agent?.id);
+    lockHeld.delete(agent?.id);
+  });
+  // A tab's lock changed: check again only the blank chats whose tab is fixed (claimed or moved into a tab, a Split Plus
+  // pane). A blank draft that follows the selected tab is not checked on a tab switch: only the one actually shown is
+  // (noteShown, from the (i)'s own reads). Checking them all switched drafts of other tabs that were not on screen (lab, item 7).
+  let presetInputs = plain(config.presetLock);
+  ctx.on('loader/volatile-update', () => {
+    try {
+      const now = plain(config.presetLock);
+      if (now === presetInputs) return;
+      presetInputs = now;
+      const stored = readObject(config.sessionModes);
+      for (const agent of ctx.get('agents')?.list?.() ?? []) {
+        if (!agent?.id || !freshNow(agent.id) || !isTopLevel(agent)) continue;
+        if (claimed.has(agent.id) || overlay.has(agent.id) || Object.prototype.hasOwnProperty.call(stored, agent.id)) holdPresetSoon(agent.id, 'tab');
+      }
+    } catch (error) {
+      report(error);
+    }
+  });
+
+  /** Blank drafts the (i) was read for: id -> { modeId, first, last } (the tab it was shown in, and when). */
+  const presetSeen = new Map();
+  /** Blank drafts on a preset a locked tab gave them: id -> { to, from } (`from`: the preset to give back in an Any tab, '' for the app's default). */
+  const lockHeld = new Map();
+  /**
+   * How long apart two reads must be before a draft counts as shown in a tab: a read made during a tab switch (the old
+   * draft's (i) is told of the change before the new tab's draft replaces it, Recon's room draft can take a moment) is
+   * not enough. None in tests (DSH_MODES_PRESET_SETTLE_MS=0).
+   */
+  const SHOWN_GAP_MS = presetSettleMs === 0 ? 0 : Math.max(presetSettleMs, 1500);
+  /** A read later than this after the previous one starts the count again (the (i) reads every 2.5 seconds while shown). */
+  const SHOWN_GAP_MAX_MS = 8000;
+  /** How long the "switched" line stays in the (i) after the switch. */
+  const SWITCH_NOTE_MS = 2 * 60 * 1000;
+
+  /**
+   * A blank draft the (i) was read for: once it has stayed in the same tab for a moment, a locked tab switches it to its
+   * preset, and an Any tab gives back the preset a locked tab took away (the PTC pick it had before, else the app's default).
+   * Only the draft on screen is handled, so a draft of another tab is never changed by looking at a tab.
+   */
+  function noteShown(sessionId, agent, { modeId, lockedTo, preset, blank, space = '' }) {
+    if (!blank || !isTopLevel(agent) || scheduled.has(sessionId) || !freshNow(sessionId)) return;
+    const now = Date.now();
+    const seen = presetSeen.get(sessionId);
+    // Item 4A, stage 6a (map 1.3): compared by place (space and mode), so the same draft moved Chat → Recon starts over.
+    const place = `${space}:${modeId}`;
+    if (!seen || seen.place !== place || now - seen.last > SHOWN_GAP_MAX_MS) {
+      presetSeen.set(sessionId, { modeId, place, first: now, last: now });
+      return;
+    }
+    seen.last = now;
+    if (now - seen.first < SHOWN_GAP_MS) return;
+    if (lockedTo) {
+      if (preset !== lockedTo) holdPresetSoon(sessionId, 'tab');
+      else if (!lockHeld.has(sessionId)) lockHeld.set(sessionId, { to: lockedTo, from: '' });
+      return;
+    }
+    const held = lockHeld.get(sessionId);
+    if (!held) return;
+    lockHeld.delete(sessionId);
+    presetOverrides.delete(sessionId);
+    if (held.to !== preset) return;
+    void givePresetBack(agent, held).catch(report);
+  }
+  /** Put a blank draft shown in an Any tab back on the preset it had before a locked tab switched it (else the app's default). */
+  async function givePresetBack(agent, held) {
+    const back = held.from || defaultPresetId();
+    if (!back || back === held.to) return;
+    const roster = await presetRoster();
+    if (!roster?.some((one) => one?.id === back && !one.broken)) return;
+    if (!stillBlank(agent) || presetOfAgent(agent) !== held.to) return;
+    try {
+      await ctx.get('agentPresets').select(agent, back);
+    } catch (error) {
+      const code = error?.code ?? error?.rpcError?.code;
+      if (code !== 'agent-preset/locked') report(error);
+    }
+  }
+
+  /**
+   * What the preset menu's (i), its lock and the PTC note show; without a conversation, each tab's choice for Settings.
+   * @param {string} sessionId - the conversation, or ''.
+   * @returns {Promise<object>} see PRESET_PATH.
+   */
+  async function presetView(sessionId, locale = 'en') {
+    // Plus is English only: `locale` is accepted and ignored.
+    const lang = 'en';
+    const table = presetLocks();
+    const modes = readModes(config);
+    const roster = await presetRoster();
+    // true, false, or null when the app cannot say (then nothing is called missing).
+    const has = (id) => (roster === null ? null : roster.some((one) => one?.id === id && !one.broken));
+    const tabs = Object.values(modes).map((mode) => ({
+      id: mode.id,
+      label: mode.label,
+      lock: lockOf(table, mode.id),
+      defaultLock: defaultLockOf(mode.id),
+      saved: Object.prototype.hasOwnProperty.call(table, mode.id),
+      warn: loosenWarning(mode.id, 'any', mode.label, lang),
+      // Shown under the row at all times (not only once loosened): Recon's own plain warning.
+      caution: lockCaution(mode.id, lang),
+      swap: { standard: swapNote(mode.id, 'standard', lang), creator: swapNote(mode.id, 'creator', lang) },
+      refuses: refusesPrograms(mode),
+    }));
+    // Item 4A, stage 5: "Preset in this space" (Settings → Spaces). Each space reads today's key of its own tab, with that
+    // tab's default and warnings (Recon and Devices Standard, Workshop Creator, Chat and Code Any); every other key stays a
+    // lock of its mode (the Automations mode keeps its own Standard lock).
+    const spaceLocks = Object.entries(SPACE_LOCK_KEY).map(([space, key]) => {
+      const label = SPACE_NAMES[lang][space] ?? space;
+      return {
+        id: key,
+        space,
+        label,
+        lock: lockOf(table, key),
+        defaultLock: defaultLockOf(key),
+        saved: Object.prototype.hasOwnProperty.call(table, key),
+        warn: loosenWarning(key, 'any', label, lang),
+        caution: lockCaution(key, lang),
+        swap: { standard: swapNote(key, 'standard', lang), creator: swapNote(key, 'creator', lang) },
+      };
+    });
+    const out = {
+      tabs,
+      spaces: spaceLocks,
+      // The per-mode locks shown beside the spaces: the Automations mode always, and any other mode with a saved choice.
+      modeLocks: tabs.filter((tab) => !Object.values(SPACE_LOCK_KEY).includes(tab.id) && (tab.id === 'automations' || tab.saved)),
+      presets: { standard: has(LOCK_PRESET.standard), creator: has(LOCK_PRESET.creator) },
+      // The app's default preset: the Cowork sidebar starts an Any tab's new chats on it, so a blank left on another preset is not reused.
+      defaultPreset: defaultPresetId(),
+      where: whereText(lang, spacesLive()),
+    };
+    if (!sessionId) return out;
+    const agent = ctx.get('agents')?.get?.(sessionId) ?? (ctx.get('agents')?.list() ?? []).find((item) => item.id === sessionId);
+    if (!agent) return { ...out, known: false };
+    const mode = modeOf(sessionId);
+    const held = lockFor(sessionId, mode, table);
+    const lock = held.lock;
+    const lockedTo = lock === 'any' ? '' : LOCK_PRESET[lock];
+    // A space and a mode that lock to different presets: one line in the chat box says which holds (stage 3a).
+    const conflict = held.conflict ? lockConflictLine({ space: SPACE_NAMES[lang][held.space] ?? String(held.space ?? ''), mode: mode?.label ?? '', spaceLock: held.spaceLock, modeLock: held.modeLock, lang }) : '';
+    const missing = Boolean(lockedTo) && has(lockedTo) === false;
+    const preset = presetOfAgent(agent);
+    const blank = stillBlank(agent);
+    const ptc = preset === PTC_PRESET || programOnly(ctx.tools, agent);
+    // Item 4A, stage 6a (I22): the restart preset and the refusal follow the thread's space.
+    const reach = ptcReach(mode, { web: webOn(sessionId, mode), restart: restartPresetIn(table, held.space, mode), blank, lang });
+    // Greyed only while the chat is really on the locked preset, and only when the app's preset list could be read:
+    // a blank draft still on another preset keeps a free menu until the backstop has switched it.
+    const greyed = Boolean(lockedTo) && !missing && roster !== null && (!blank || preset === lockedTo);
+    // Only the conversation on screen asks with its id (the (i) beside its menu or label): a locked tab switches it, an Any tab gives back.
+    try {
+      noteShown(sessionId, agent, { modeId: mode?.id ?? '', lockedTo: missing ? '' : lockedTo, preset, blank, space: held.space ?? '' });
+    } catch (error) {
+      report(error);
+    }
+    // A switch record shows only while it still applies: same tab, still blank, still on the preset it was switched to,
+    // and for a short while after the switch (an old switch the owner never saw is not told later).
+    let overridden = presetOverrides.get(sessionId) ?? null;
+    const stale = Boolean(overridden) && Date.now() - (overridden.at ?? 0) > SWITCH_NOTE_MS;
+    const samePlace = (record) => record.modeId === (mode?.id ?? '') && (record.space === undefined || record.space === (held.space ?? ''));
+    if (overridden && (stale || !(blank && samePlace(overridden) && overridden.to === lockedTo && preset === overridden.to))) {
+      if (stale || !blank || !samePlace(overridden) || overridden.to !== lockedTo) presetOverrides.delete(sessionId);
+      overridden = null;
+    }
+    if (overridden) {
+      const { at: _at, space: _space, ...shown } = overridden;
+      overridden = shown;
+    }
+    return {
+      ...out,
+      known: true,
+      modeId: mode?.id ?? '',
+      modeLabel: mode?.label ?? '',
+      lock,
+      lockedTo,
+      missing,
+      preset,
+      blank,
+      ptc,
+      greyed,
+      overridden,
+      // One line under the menu, only while the conversation is in PTC (inform, never block).
+      note: conflict || (ptc ? reach.note : ''),
+      // With spaces, a lock that comes from the space is named after the space ("Recon is set to Standard only").
+      info: presetInfo({ label: held.from === 'space' && held.space ? SPACE_NAMES[lang][held.space] ?? mode?.label ?? '' : mode?.label ?? '', modeId: held.from === 'space' && held.space ? SPACE_LOCK_KEY[held.space] ?? mode?.id ?? '' : mode?.id ?? '', lock, missing, overridden, preset, started: !blank, reach: reachLine({ greyed, refuses: refusesProgramsIn(mode, held.space), preset, lockedTo, info: reach.info }), lang, spaces: spacesLive() }),
+    };
+  }
+
+  // Fix round (6a review): a guard add-on's service coming or going (Bench, Creator Plus, Recon) changes whether its
+  // space's guests are guarded (guardReady): the copies are worked out again and every live thread's tools follow.
+  const guardsChanged = () => {
+    try {
+      bump();
+      for (const agent of ctx.get('agents')?.list?.() ?? []) reconcile(agent);
+    } catch (error) {
+      report(error);
+    }
+  };
+  for (const name of ['bench', 'creatorPlus', 'recon']) {
+    ctx.inject([name], (inner) => {
+      try {
+        inner.effect(() => {
+          guardsChanged();
+          // Gone: checked once the service is really out of the app's list.
+          return () => setTimeout(guardsChanged, 0);
+        }, `modes: guests follow the ${name} guard`);
+      } catch (error) {
+        report(error);
+      }
+    });
+  }
   // A Long run starting or ending changes the tools of its conversation and its helpers (Mission says which).
   ctx.inject(['mission'], (inner) => {
     try {
@@ -1658,34 +3284,178 @@ export function apply(ctx, config) {
    */
   function pinStartingMode(agent) {
     // A first turn under the Cowork sidebar records the tab's mode, replacing any earlier choice.
-    const force = fresh.has(agent.id) && tabsDecide() && !claimed.has(agent.id);
-    const modeId = modeOf(agent.id).id;
+    const wasFresh = fresh.has(agent.id);
+    // With spaces, modeOf gives an unclaimed draft its space's start mode (or the mode it has, where offered), so the
+    // forced record below is what it really runs in, never a stale `defaultMode` (item 4A fix round).
+    const force = wasFresh && tabsDecide() && !claimed.has(agent.id);
+    const startMode = modeOf(agent.id);
+    let modeId = startMode.id;
+    // A blank draft an isolated tab left behind, now started from an ordinary tab: it read nothing there.
+    if (force && !startMode.isolated && wasIsolated(agent.id)) unmarkIsolated(agent.id);
+    // With spaces, a new thread is recorded in its draft's space: the one it was opened in, else its recorded one, else
+    // its folder's; Recon's room only ever Recon.
+    const spacedSpace = wasFresh && spacesLive() && tabsDecide() && isTopLevel(agent) ? draftSpaceOf(agent.id) : undefined;
+    // Item 4A, stage 6a (REGRESSION 4): the space is worked out before anything is forgotten; a guarded record (a claim
+    // not yet written, or written at the claim) wins over the draft's other guesses.
+    const guardedRecord = isGuarded(recordedSpaceSafe(agent.id)) ? recordedSpaceSafe(agent.id) : undefined;
+    // Stage 6b lab fix (check 15b): a guest automation's fresh thread that nobody placed (Automations off or gone) is
+    // recorded in its guest space from its first turn, never in the folder's space (Chat): the turn starts before its
+    // first step, where the hold below is decided.
+    // The hold is set here too, with the same rule as at that step (not placed in its space = held).
+    const guestRun = wasFresh && isTopLevel(agent) ? guestRunPending.get(agent.id) : undefined;
+    const unplaced = isGuarded(guestRun) && (draftSpaces.get(agent.id) ?? guardedRecord) !== guestRun;
+    const draftSpace = unplaced ? guestRun : guardedRecord ?? spacedSpace ?? draftSpaces.get(agent.id);
+    // Stage 7 (6b lab leftover): the thread is recorded in the automation's own mode (its row and Mode button name it,
+    // never the default mode for automations), and the line says why: Automations is off, or the space could not take it.
+    let runMode = '';
+    if (unplaced) {
+      runMode = String(guestRunPendingMode.get(agent.id) ?? '');
+      // Review: a sealed (Recon or own isolated) mode is never given to a guest run's thread.
+      if (!runMode || !readModes(config)[runMode] || readModes(config)[runMode].isolated === true) runMode = '';
+      if (runMode) modeId = runMode;
+      guestRunPending.delete(agent.id);
+      guestRunPendingMode.delete(agent.id);
+      draftSpaces.set(agent.id, guestRun);
+      void recordDraftSpace(agent.id, guestRun).catch(report);
+      heldRuns.set(agent.id, { space: guestRun, kind: automationsPlaceGuestRuns() ? 'other' : 'automations', mode: runMode, text: '', at: Date.now() });
+      ctx.logger.warn(`modes: held a scheduled run of ${agent.id}: its automation runs in ${guestRun} and was not placed there`);
+      bump();
+    } else if (wasFresh && isTopLevel(agent)) {
+      // Stage 7 (lab): a run held at its claim (its guarded space could not take it, e.g. Devices off) is recorded in the
+      // automation's own mode too, so its row and Mode button name it (never the space's start mode). Never a sealed mode.
+      const held = heldRunOf(agent.id);
+      const heldModeId = held && isGuarded(held.space) ? String(held.mode ?? '') : '';
+      if (heldModeId && readModes(config)[heldModeId] && readModes(config)[heldModeId].isolated !== true) {
+        runMode = heldModeId;
+        modeId = heldModeId;
+      }
+    }
     fresh.delete(agent.id);
+    ranSeen.add(agent.id);
     claimed.delete(agent.id);
     startTiers.delete(agent.id);
-    if (plain(config.pinOnFirstTurn) === false && !force) return;
-    if (!isTopLevel(agent) || pinQueue.has(agent.id)) return;
-    if (!force && (overlay.has(agent.id) || readObject(config.sessionModes)[agent.id] !== undefined)) return;
-    overlay.set(agent.id, modeId);
-    pinQueue.set(agent.id, { modeId, force });
+    pickedModes.delete(agent.id);
+    autoStarted.delete(agent.id);
+    seeded.delete(agent.id);
+    levelsWritten.delete(agent.id);
+    // "Pin the starting mode" off: the mode is not recorded (as before), but the space still is (item 4A).
+    const pinMode = force || plain(config.pinOnFirstTurn) !== false;
+    if (!isTopLevel(agent)) {
+      draftSpaces.delete(agent.id);
+      return;
+    }
+    // Item 4A: the thread's space is recorded at its first message too, from the mode it starts in (also when its mode
+    // was already chosen, by a claim or the chat box). Stage 6a: also when the stored value is stale (a reused draft).
+    const storedSpace = readObject(config.sessionSpaces)[agent.id];
+    const needSpace = storedSpace === undefined || (draftSpace !== undefined && storedSpace !== draftSpace);
+    const needMode = Boolean(runMode) || (pinMode && (force || !(overlay.has(agent.id) || readTable(config.sessionModes)[agent.id] !== undefined)));
+    const space = draftSpace ?? spaceOfMode(needMode ? modeId : readTable(config.sessionModes)[agent.id] ?? modeId);
+    // Held in memory until written (it wins over the stale value meanwhile), before any early return (REGRESSION 4).
+    if (needSpace && isSpace(space)) spaceOverlay.set(agent.id, space);
+    draftSpaces.delete(agent.id);
+    // A thread that starts in Recon is marked for good (its own write; the seal does not depend on it, I2).
+    if (space === 'recon' && wasFresh) {
+      markIsolated(agent.id);
+      if (roomSays(agent.id) === false) ctx.logger.warn(`modes: ${agent.id} was drafted in Recon but its folder is not Recon's room; it stays sealed in Recon, with no file tools`);
+    }
+    if (pinQueue.has(agent.id)) return;
+    if (!needMode && !needSpace) return;
+    if (needMode) overlay.set(agent.id, modeId);
+    // Item 4A, stage 2: a draft opened in a space (claimed with its start mode, or a mode picked from its list) is recorded
+    // in that space, whatever space its mode would give (Research picked in Code stays in Code).
+    pinQueue.set(agent.id, { modeId: needMode ? modeId : undefined, force: force || Boolean(runMode), spaceForce: needSpace, space, tries: 0 });
+    flushPins();
+  }
+  /**
+   * Write the first-message pins waiting (modes and spaces), in one line with the other writes of these maps. A failed
+   * write keeps them (and the space overlay) and is tried again (item 9).
+   */
+  function flushPins() {
     const settings = ctx.get('settings');
     if (!settings) return;
     pinChain = pinChain.then(async () => {
       if (pinQueue.size === 0) return;
       const batch = new Map(pinQueue);
       const next = { ...readObject(config.sessionModes) };
-      for (const [id, pin] of batch) if (pin.force || next[id] === undefined) next[id] = pin.modeId;
+      const spaces = { ...readObject(config.sessionSpaces) };
+      let modesChanged = false;
+      let spacesChanged = false;
+      for (const [id, pin] of batch) {
+        if (pin.modeId !== undefined && (pin.force || next[id] === undefined)) {
+          next[id] = pin.modeId;
+          modesChanged = true;
+        }
+        if ((pin.force || pin.spaceForce || spaces[id] === undefined) && spaces[id] !== pin.space) {
+          spaces[id] = pin.space;
+          spacesChanged = true;
+        }
+      }
+      const ops = [];
+      if (modesChanged) ops.push({ op: 'set', path: ['sessionModes'], value: JSON.stringify(next) });
+      if (spacesChanged) ops.push({ op: 'set', path: ['sessionSpaces'], value: JSON.stringify(spaces) });
       try {
-        await settings.mutate('modes', [{ op: 'set', path: ['sessionModes'], value: JSON.stringify(next) }]);
-        for (const id of batch.keys()) {
+        if (ops.length > 0) await settings.mutate('modes', ops);
+        for (const [id, pin] of batch) {
           pinQueue.delete(id);
-          overlay.delete(id);
+          if (pin.modeId !== undefined) overlay.delete(id);
+          if (spaceOverlay.get(id) === spaces[id]) spaceOverlay.delete(id);
         }
       } catch (error) {
-        ctx.logger.warn(`modes: starting mode not persisted (${error?.message ?? error}); kept in memory`);
-        for (const id of batch.keys()) pinQueue.delete(id);
+        ctx.logger.warn(`modes: starting mode not persisted (${error?.message ?? error}); kept in memory, tried again`);
+        // Item 4A, stage 6a: kept (the overlay too) and tried again, at most RETRY_MAX times.
+        for (const [id, pin] of batch) {
+          pin.tries = (pin.tries ?? 0) + 1;
+          if (pin.tries > RETRY_MAX) {
+            pinQueue.delete(id);
+            // Fix round (6a review): given up: an unguarded space held for it no longer outranks what is stored (a guarded
+            // one stays: it fails closed).
+            if (!isGuarded(spaceOverlay.get(id))) spaceOverlay.delete(id);
+          }
+        }
+        if (pinQueue.size > 0) retrySoon();
       }
     });
+  }
+  /**
+   * Item 4A, stage 6a (I3): write every space held in `spaceOverlay` into `sessionSpaces` (a guarded claim's space, a
+   * first message's space). Each entry goes once written; a failed write keeps them and is tried again.
+   */
+  let spaceTries = 0;
+  function flushSpaces() {
+    const settings = ctx.get('settings');
+    if (!settings || spaceOverlay.size === 0) return pinChain;
+    const run = pinChain.catch(() => {}).then(async () => {
+      if (spaceOverlay.size === 0) return;
+      const batch = new Map(spaceOverlay);
+      const spaces = { ...readObject(config.sessionSpaces) };
+      let changed = false;
+      for (const [id, space] of batch) {
+        if (spaces[id] !== space) {
+          spaces[id] = space;
+          changed = true;
+        }
+      }
+      try {
+        if (changed) await settings.mutate('modes', [{ op: 'set', path: ['sessionSpaces'], value: JSON.stringify(spaces) }]);
+        for (const [id, space] of batch) if (spaceOverlay.get(id) === space) spaceOverlay.delete(id);
+        spaceTries = 0;
+      } catch (error) {
+        spaceTries += 1;
+        ctx.logger.warn(`modes: thread space not stored (${error?.message ?? error}); kept in memory${spaceTries <= RETRY_MAX ? ', tried again' : ''}`);
+        if (spaceTries <= RETRY_MAX) retrySoon();
+        // Fix round (6a review): given up: unguarded spaces held no longer outrank what is stored.
+        else for (const [id, space] of batch) if (!isGuarded(space) && spaceOverlay.get(id) === space) spaceOverlay.delete(id);
+      }
+    });
+    pinChain = run.catch(() => {});
+    return run;
+  }
+  /** Item 4A, stage 6a (I3, LEAK 10): a draft claimed for a guarded space is recorded there at once, not at its first message. */
+  function recordDraftSpace(top, space) {
+    if (!isGuarded(space)) return pinChain;
+    if (readObject(config.sessionSpaces)[top] === space && !spaceOverlay.has(top)) return pinChain;
+    spaceOverlay.set(top, space);
+    return flushSpaces();
   }
 
   // ---- Thorough: one check before the turn ends (step 17) --------------------------------------
@@ -1749,7 +3519,15 @@ export function apply(ctx, config) {
     const id = agent?.id;
     // A run the scheduler started has nobody to answer; a message the user wrote ends that.
     if (id && message?.source?.kind === 'schedule') scheduledRun.add(id);
-    else if (id && USER_KINDS.has(message?.source?.kind)) scheduledRun.delete(id);
+    else if (id && USER_KINDS.has(message?.source?.kind)) {
+      scheduledRun.delete(id);
+      // Stage 6b (J11): a message from the user ends a held run. Stage 7 (6b lab leftover): and the engine refusal line
+      // (a new refusal of this message sets it again).
+      const lineGone = engineHeld.delete(id);
+      if (heldRuns.delete(id) || lineGone) bump();
+      guestRunPending.delete(id);
+      guestRunPendingMode.delete(id);
+    }
     if (!id || !USER_KINDS.has(message?.source?.kind)) return;
     userTurn.set(id, turn);
     checking.delete(id);
@@ -1805,7 +3583,7 @@ export function apply(ctx, config) {
   // plan to approve is noted, so a turn that ends waiting on the user gets no check.
   ctx.effect(
     () =>
-      ctx.tools.guard((exec) => {
+      ctx.tools.guard(ledgered('depth-check', (exec) => {
         try {
           const id = exec?.agent?.id;
           if (!id) return undefined;
@@ -1818,7 +3596,7 @@ export function apply(ctx, config) {
         } catch {
           return undefined;
         }
-      }),
+      })),
     'modes: the check before finishing never starts the work over',
   );
 
@@ -1834,10 +3612,21 @@ export function apply(ctx, config) {
       // Before the turn's tools are put together.
       refit(agent);
       wordsAddTools(agent);
-      // Only a conversation that begins in an isolated mode is marked; the mark is for good.
-      const begins = fresh.has(agent.id) && isTopLevel(agent) && isIsolated(agent.id);
+      // Item 6: an isolated conversation's mask follows "Scheduling from Recon" (Automations' setting) at each turn.
+      if (agent?.id && isIsolated(agent.id)) refreshTools(agent);
+      // Only a conversation that begins in an isolated mode is marked; the mark is for good. Stage 6a: a guest in Recon
+      // begins sealed (its copy is isolated), so it is marked too.
+      // Stage 6a leftovers: a thread held by Devices or Workshop (guard off or too old) is not marked: it gets its mode
+      // back once the guard is ready.
+      const begins = fresh.has(agent.id) && isTopLevel(agent) && isIsolated(agent.id) && !modeOf(agent.id)?.heldIn;
       if (begins) markIsolated(agent.id);
       pinStartingMode(agent);
+      // Item 4A, stage 6a: writes that failed earlier are tried again now.
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = undefined;
+        retryWrites();
+      }
     }
     if (status !== 'idle') return;
     const work = pendingIdle.get(agent.id);
@@ -1908,6 +3697,283 @@ export function apply(ctx, config) {
   ctx.on('session/event', (session, event) => {
     if (event?.type === 'turn/start' && session?.id) runOverCalls.delete(session.id);
   });
+  /**
+   * Stage 6a leftovers: the second layer behind dsh-engines' own guard. A thread whose space keeps its rules (sealed in
+   * Recon, guarded in Devices or Workshop, or a mode without programs) never takes a step on an engine model
+   * (provider `engine-…`): an engine is an outside program with its own shell and network. Fails closed: a guard that
+   * cannot be read refuses, and so does a model that cannot be read when the guard would refuse an engine.
+   * Owner point 26, "Home modes keep today's behaviour": the home mode of Devices (bench) or Workshop (creator-plus)
+   * is not refused here; as before 6a, dsh-engines' soft "Code space only" check (stage 6b) answers it and nothing runs. Recon's home
+   * mode is sealed, so it stays refused.
+   */
+  const engineHeld = new Map();
+  /**
+   * Item 4A, stage 6b (J3): the text of the user's refused message, per top thread, in memory only (lib/engineheld.js):
+   * the thread's own Mode-list view offers it, the chat box puts it back and says so (POST engine-held-taken).
+   */
+  const engineHeldText = engineHeldTexts();
+  /** @returns {boolean} whether a step of this agent on its current model must be refused. */
+  function engineRefused(agent) {
+    let provider = '';
+    let unread = false;
+    try {
+      provider = String(agent?.model?.current?.()?.provider ?? '');
+    } catch {
+      unread = true;
+    }
+    if (!unread && !provider.startsWith('engine-')) return false;
+    try {
+      return guardRefusesEngine(guardOf(agent.id));
+    } catch {
+      return true;
+    }
+  }
+  /** Whether an agent on an engine model is a home-mode thread of Devices or Workshop (dsh-engines refuses it softly). */
+  function engineAtHome(agent) {
+    try {
+      const provider = String(agent?.model?.current?.()?.provider ?? '');
+      if (!provider.startsWith('engine-')) return false;
+      const guard = guardOf(agent.id);
+      return guard?.homeMode === true && (guard.space === 'devices' || guard.space === 'workshop') && guard.sealed !== true;
+    } catch {
+      return false;
+    }
+  }
+  ctx.on('agent/pre-step', ({ agent, messages }, next) => {
+    try {
+      if (agent?.id && engineRefused(agent)) {
+        const top = topOf(agent.id) || agent.id;
+        engineHeld.set(top, Date.now());
+        if (engineHeld.size > 200) engineHeld.delete(engineHeld.keys().next().value);
+        // Stage 6b (J3): only a top thread's own step keeps the user's words (a helper's step carries none of theirs).
+        // Never logged: the warning below names the thread only.
+        if (top === agent.id) {
+          try {
+            engineHeldText.keep(top, messages);
+          } catch {
+            // nothing kept: the line still says what to do
+          }
+        }
+        ctx.logger.warn(`modes: refused a step of ${agent.id} on an engine model: its space keeps its own rules`);
+        bump();
+        return { kind: 'reject' };
+      }
+      // Review finding (point 27, "the typed message goes back into the chat box", no exception): the home mode of
+      // Devices or Workshop is still not refused here (J2: dsh-engines' soft refusal answers it and nothing runs), but the
+      // user's words are kept the same way, so the chat box gets them back too.
+      if (agent?.id && engineAtHome(agent)) {
+        const top = topOf(agent.id) || agent.id;
+        let kept = false;
+        if (top === agent.id) {
+          try {
+            kept = engineHeldText.keep(top, messages);
+          } catch {
+            kept = false;
+          }
+        }
+        if (kept) {
+          engineHeld.set(top, Date.now());
+          if (engineHeld.size > 200) engineHeld.delete(engineHeld.keys().next().value);
+          bump();
+        }
+      }
+    } catch (error) {
+      ctx.logger.warn(`modes: could not check for an engine model: ${error?.message ?? error}`);
+      return { kind: 'reject' };
+    }
+    return next();
+  }, { prepend: true });
+  // Item 4A, stage 6b (J11, Revision 2 L4): a held run never runs: every step of a held thread and of its helpers is
+  // rejected until a user message arrives in it. A guest automation's fresh thread that nobody placed in its space by
+  // its first step is held here too, whatever Automations does (it may be off or gone).
+  ctx.on('agent/pre-step', ({ agent }, next) => {
+    try {
+      const id = agent?.id;
+      if (!id) return next();
+      const top = topOf(id) || id;
+      const pending = guestRunPending.get(top);
+      if (pending !== undefined && top === id) {
+        guestRunPending.delete(top);
+        const pendingMode = String(guestRunPendingMode.get(top) ?? '');
+        guestRunPendingMode.delete(top);
+        const now = draftSpaces.get(top) ?? spaceOfTopRaw(top);
+        if (now !== pending) {
+          // Stage 6b lab fix (check 15b): also when its first turn already recorded it elsewhere (it is no longer "fresh"
+          // here): this thread was opened by this run and must stay in its guest space (a guarded record wins).
+          draftSpaces.set(top, pending);
+          void recordDraftSpace(top, pending).catch(report);
+          heldRuns.set(top, { space: pending, kind: automationsPlaceGuestRuns() ? 'other' : 'automations', mode: readModes(config)[pendingMode] && readModes(config)[pendingMode].isolated !== true ? pendingMode : '', text: '', at: Date.now() });
+          ctx.logger.warn(`modes: held a scheduled run of ${top}: its automation runs in ${pending} and was not placed there`);
+          bump();
+        }
+      }
+      if (heldRunOf(top)) return { kind: 'reject' };
+    } catch (error) {
+      ctx.logger.warn(`modes: could not check for a held run: ${error?.message ?? error}`);
+      if (heldRuns.size > 0 || guestRunPending.size > 0) return { kind: 'reject' };
+    }
+    return next();
+  }, { prepend: true });
+  /** Stage 6b (Revision 2 L4): fresh threads whose first message is a guest automation's run -> the space it must be in. */
+  const guestRunPending = new Map();
+  /** Stage 7 (6b lab leftover): those threads -> the mode their automation runs in ('' when not known). */
+  const guestRunPendingMode = new Map();
+  /** Stage 6b (L4): the stored `guestRunSpaces` plus what was noted since (kept in memory too: a failed write still holds). */
+  const guestRunMemory = new Map();
+  function guestRunTable() {
+    const stored = { ...readObject(config.guestRunSpaces) };
+    for (const [taskId, space] of guestRunMemory) stored[taskId] = space;
+    return stored;
+  }
+  /** Stage 7 (6b lab leftover): the stored `guestRunModes` plus what was noted since; '' marks one taken away. */
+  const guestRunModeMemory = new Map();
+  function guestRunModeTable() {
+    const stored = { ...readObject(config.guestRunModes) };
+    for (const [taskId, mode] of guestRunModeMemory) {
+      if (mode) stored[taskId] = mode;
+      else delete stored[taskId];
+    }
+    return stored;
+  }
+  /**
+   * Stage 6b (L4): note that a task opens new threads that must stay in a guarded space (Devices or Workshop); any other
+   * space (or '') takes the note away (the owner moved its runs to Chat or Code with a folder picked).
+   */
+  function noteGuestRun(taskId, space, mode) {
+    const id = String(taskId ?? '');
+    if (!id || id.length > 200) return false;
+    const guarded = space === 'devices' || space === 'workshop';
+    // Stage 7 (6b lab leftover): the mode it runs in, when the caller says (an older caller does not: none kept).
+    const modeId = guarded && typeof mode === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/i.test(mode) ? mode : '';
+    if (guarded) {
+      guestRunMemory.set(id, space);
+      if (guestRunMemory.size > 2000) guestRunMemory.delete(guestRunMemory.keys().next().value);
+    } else guestRunMemory.delete(id);
+    guestRunModeMemory.set(id, modeId);
+    if (guestRunModeMemory.size > 2000) guestRunModeMemory.delete(guestRunModeMemory.keys().next().value);
+    void writeFresh((current) => {
+      const ops = [];
+      const table = { ...readObject(current.guestRunSpaces) };
+      if (!(guarded ? table[id] === space : table[id] === undefined)) {
+        if (guarded) table[id] = space;
+        else delete table[id];
+        ops.push({ op: 'set', path: ['guestRunSpaces'], value: JSON.stringify(table) });
+      }
+      const modes = { ...readObject(current.guestRunModes) };
+      if (!(modeId ? modes[id] === modeId : modes[id] === undefined)) {
+        if (modeId) modes[id] = modeId;
+        else delete modes[id];
+        ops.push({ op: 'set', path: ['guestRunModes'], value: JSON.stringify(modes) });
+      }
+      return ops;
+    }).catch(report);
+    return true;
+  }
+  /** Stage 6b (L4): drop the tasks that are gone (only on a list the scheduler gave). */
+  async function pruneGuestRuns(schedule) {
+    const table = { ...readObject(config.guestRunModes), ...readObject(config.guestRunSpaces) };
+    if (Object.keys(table).length === 0 && guestRunMemory.size === 0 && guestRunModeMemory.size === 0) return;
+    let catalog;
+    try {
+      catalog = await schedule?.catalog?.();
+    } catch {
+      return;
+    }
+    if (!Array.isArray(catalog)) return;
+    const alive = new Set(catalog.map((task) => String(task?.id ?? '')));
+    for (const id of [...guestRunMemory.keys()]) if (!alive.has(id)) guestRunMemory.delete(id);
+    for (const id of [...guestRunModeMemory.keys()]) if (!alive.has(id)) guestRunModeMemory.delete(id);
+    const gone = Object.keys(table).filter((id) => !alive.has(id));
+    if (gone.length === 0) return;
+    await writeFresh((current) => {
+      const now = { ...readObject(current.guestRunSpaces) };
+      const modes = { ...readObject(current.guestRunModes) };
+      for (const id of gone) {
+        delete now[id];
+        delete modes[id];
+      }
+      return [{ op: 'set', path: ['guestRunSpaces'], value: JSON.stringify(now) }, { op: 'set', path: ['guestRunModes'], value: JSON.stringify(modes) }];
+    }).catch(report);
+  }
+  ctx.inject(['schedule'], (inner) => {
+    inner.on('schedule/changed', () => void pruneGuestRuns(inner.schedule));
+  });
+  /**
+   * @returns {string} the engine line for the chat box while recent ('' otherwise). Stage 6b: "Your message is back in the
+   * chat box" only when the user's text was kept AND this window is given it now (or a chat box already took it); else
+   * the line without that promise (a scheduled run, a helper, or a window that does not show the thread's space: review
+   * finding, the box there stays empty).
+   */
+  function takeEngineHeld(top, lang, offeredHere = false) {
+    const at = engineHeld.get(top);
+    if (at === undefined) return '';
+    if (Date.now() - at > 120_000) {
+      engineHeld.delete(top);
+      return '';
+    }
+    const back = engineHeldText.had(top) && (offeredHere || engineHeldText.taken(top));
+    return spaceText(back ? 'engineHeld' : 'engineHeldPlain', lang);
+  }
+  /**
+   * Item 4A, stage 6b (J3, L5): the refused message's text for the chat box to put back, while not taken and younger than
+   * 10 minutes; only for the thread itself (never a helper id) and only when the asking window shows the thread's space.
+   * @returns {{id: string, text: string} | null}
+   */
+  function takeEngineHeldDraft(sessionId, top, windowSpace) {
+    if (!top || sessionId !== top) return null;
+    if (typeof windowSpace !== 'string' || !windowSpace || windowSpace !== spaceOfTopRaw(top)) return null;
+    return engineHeldText.draft(top);
+  }
+  /** Item 4A, stage 6b (C5): the language each thread's page last asked its Mode list in (memory only). */
+  const pageLangs = new Map();
+  /** Fix round (6a review): threads whose first message went on before their space was known -> when (SPACE_WAIT). */
+  const spaceWaits = new Map();
+  /** How long the chat box shows the SPACE_WAIT line. */
+  const SPACE_WAIT_SHOWN_MS = 120_000;
+  /** @returns {string} the SPACE_WAIT line for a thread, in the page's language, while it is recent ('' otherwise). */
+  function takeSpaceWait(top, lang) {
+    const at = spaceWaits.get(top);
+    if (at === undefined) return '';
+    if (Date.now() - at > SPACE_WAIT_SHOWN_MS) {
+      spaceWaits.delete(top);
+      return '';
+    }
+    return spaceText('spaceWait', lang);
+  }
+  // Item 4A, stage 6a (I3): a spaced draft whose claim is still in flight holds its first step (at most CLAIM_WAIT_MS)
+  // until its space is known, then gets its space's tools; on time-out it goes on with what the seam reads (a guarded
+  // overlay already wins).
+  ctx.on('agent/pre-step', async ({ agent }, next) => {
+    try {
+      const id = agent?.id;
+      const waiting = id ? pendingClaims.get(id) : undefined;
+      if (waiting && isTopLevel(agent)) {
+        let timer;
+        let timedOut = false;
+        const waited = new Promise((resolve) => {
+          timer = setTimeout(() => {
+            timedOut = true;
+            resolve();
+          }, CLAIM_WAIT_MS);
+          timer.unref?.();
+        });
+        await Promise.race([waiting.catch(() => {}), waited]);
+        clearTimeout(timer);
+        bump();
+        if (timedOut) {
+          ctx.logger.warn(`modes: ${spaceText('spaceWait', 'en')} (${id})`);
+          // Fix round (6a review, 2.7 SPACE_WAIT): the chat box says it too (modeView `spaceWait`).
+          spaceWaits.set(id, Date.now());
+          if (spaceWaits.size > 200) spaceWaits.delete(spaceWaits.keys().next().value);
+        }
+        const state = applied.get(id);
+        if (state) applyTools(agent, state, modeOf(id));
+      }
+    } catch (error) {
+      ctx.logger.warn(`modes: could not wait for a draft's space: ${error?.message ?? error}`);
+    }
+    return next();
+  });
   // An isolated conversation is not handed the app's own notes either (see ISOLATED_DROPS).
   ctx.on('agent/pre-step', async ({ agent }, next) => {
     const decision = await next();
@@ -1945,15 +4011,15 @@ export function apply(ctx, config) {
     const name = typeof exec.arguments?.name === 'string' ? exec.arguments.name.trim() : '';
     const mode = modeOf(exec.agent.id);
     if (!name || !offIn(readObject(config.skillsOff), mode?.id).has(name)) return undefined;
-    return `The skill "${name}" is switched off in the ${mode?.label ?? 'this'} tab, so it is not loaded here. Do the task without it. (The user can switch it back on.)`;
+    return `The skill "${name}" is switched off in the ${mode?.label ?? 'this'} mode, so it is not loaded here. Do the task without it. (The user can switch it back on.)`;
   };
-  ctx.effect(() => (typeof ctx.tools?.guard === 'function' ? ctx.tools.guard((exec) => {
+  ctx.effect(() => (typeof ctx.tools?.guard === 'function' ? ctx.tools.guard(ledgered('skill-off', (exec) => {
     try {
       return skillOffReason(exec);
     } catch {
       return undefined;
     }
-  }) : undefined), 'modes: skills switched off per tab');
+  })) : undefined), 'modes: skills switched off per tab');
   // Loading tools as needed: a family the model added with tools_find is there from its next step
   // on. (The tools of the step are already chosen when this runs; the user's own words are read
   // earlier, when the turn starts: see wordsAddTools.)
@@ -2018,7 +4084,7 @@ export function apply(ctx, config) {
   function buildFindTool() {
     return {
       name: FIND_TOOL,
-      description: 'Only the core tools (files, shell, step list, questions, skills, and the web unless Web is Off) are loaded in this conversation, to keep it fast. Call this to see the other tool families and add the ones you need: give a family (pdf, data, finance, visual, schedule, helpers, goals, library, memory, mac, code, learn, mission, connectors, app, office), a tool name, or what you want to do. Added tools are there from your next step on, for the rest of the conversation. Without arguments it lists the families.',
+      description: 'Only the core tools (files, the step list, questions, skills, and the shell and the web where this thread may use them) are loaded in this thread, to keep it fast. Call this to see the other tool families and add the ones you need: give a family (pdf, data, finance, visual, schedule, helpers, goals, library, memory, mac, code, learn, mission, connectors, app, office), a tool name, or what you want to do. Added tools are there from your next step on, for the rest of the conversation. Without arguments it lists the families.',
       parameters: {
         type: 'object',
         properties: { need: { type: 'string', maxLength: 200, description: 'A family, a tool name, or what you need to do (for example "read a PDF", "make a chart").' } },
@@ -2033,24 +4099,34 @@ export function apply(ctx, config) {
       execute: async (args, exec) => {
         try {
           const agent = exec?.agent;
-          if (!agent?.id || !trimmed(agent.id, modeOf(agent.id))) return { text: 'All tools are already loaded in this conversation.' };
+          if (!agent?.id || !trimmed(agent.id, modeOf(agent.id))) return { text: 'All tools are already loaded in this thread.' };
           const known = knownTools(agent.id);
           // The catalog leaves out the tools of isolated modes: they cannot be added here.
           const fenced = isolatedTools();
-          const listing = () => trimCatalog(known.filter((name) => !fenced.includes(name)), [...startOf(agent.id), ...addedOf(agent.id)]);
+          const mode = modeOf(agent.id);
+          // Lab fix (6a, REGRESSION 18): a guest in Devices or Workshop is never offered what its space refuses.
+          const refusedHere = spaceRefuser(mode, workshopAllowed());
+          const live = known.filter((name) => !fenced.includes(name));
+          // Lab re-check fix (6a, problem 3): a family the space closes is left out of the list, and a request for it is
+          // answered "refused here" before anything else (never "already added").
+          const closedFamilies = mode?.guardedBy ? FAMILIES.map((family) => family.id).filter((id) => closedHere(id, live, refusedHere)) : [];
+          const listing = () => trimCatalog(live.filter((name) => !refusedHere(name)), [...startOf(agent.id), ...addedOf(agent.id)], closedFamilies);
           const need = String(args?.need ?? '').trim();
           if (!need) return { text: `Tool families you can add (call ${FIND_TOOL} with one of them):\n${listing()}` };
-          const mode = modeOf(agent.id);
           const wanted = resolveRequest(need, findable(agent, known));
           if (wanted.length === 0) return { text: `Nothing matches "${need}". The families:\n${listing()}` };
+          const closed = mode?.guardedBy ? wanted.filter((entry) => !CORE.includes(entry) && closedHere(entry, live, refusedHere)) : [];
           // Core tools need no adding; anything else only when it brings a tool that exists and that
           // this conversation's switches let through (a family whose add-on is off brings nothing).
           const core = wanted.filter((entry) => CORE.includes(entry));
-          const usable = wanted.filter((entry) => !CORE.includes(entry) && brings(entry, offeredWith(agent.id, mode, [entry]).filter((name) => known.includes(name))));
+          const usable = wanted.filter((entry) => !CORE.includes(entry) && !closed.includes(entry) && brings(entry, offeredWith(agent.id, mode, [entry]).filter((name) => known.includes(name))));
           const missing = wanted.filter((entry) => !CORE.includes(entry) && !usable.includes(entry));
+          const absent = missing.filter((entry) => !closed.includes(entry));
+          const spaceName = SPACE_NAMES.en[mode?.guardedBy] ?? 'This space';
           const notes = [
             core.length ? `${core.join(', ')} ${core.length === 1 ? 'is a core tool' : 'are core tools'}: offered whenever ${core.length === 1 ? 'it applies' : 'they apply'}, nothing to add.` : '',
-            missing.length ? `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not available here (not installed, switched off, or Web is off).` : '',
+            closed.length ? `${closed.join(', ')} ${closed.length === 1 ? 'is' : 'are'} refused here: ${spaceName} closes ${closed.length === 1 ? 'it' : 'them'} for every mode.` : '',
+            absent.length ? `${absent.join(', ')} ${absent.length === 1 ? 'is' : 'are'} not available here (not installed, switched off, or Web is off).` : '',
           ].filter(Boolean).join(' ');
           const tail = notes ? ` ${notes}` : '';
           if (usable.length === 0) return { text: missing.length ? `${notes} The families:\n${listing()}` : notes };
@@ -2086,14 +4162,27 @@ export function apply(ctx, config) {
     applied.get(agent.id)?.unrestrict?.();
     applied.delete(agent.id);
     fresh.delete(agent.id);
+    ranSeen.delete(agent.id);
     claimed.delete(agent.id);
     scheduled.delete(agent.id);
+    autoStarted.delete(agent.id);
+    pickedModes.delete(agent.id);
+    seeded.delete(agent.id);
+    levelsWritten.delete(agent.id);
+    draftReplies.delete(agent.id);
     scheduledRun.delete(agent.id);
+    heldRuns.delete(agent.id);
+    anyTicked.delete(agent.id);
+    guestRunPending.delete(agent.id);
+    guestRunPendingMode.delete(agent.id);
     startTiers.delete(agent.id);
     overlay.delete(agent.id);
     pendingIdle.delete(agent.id);
     promptDisposers.delete(agent.id);
+    // Fix round (6a review): the link is kept (closedParents) for the helpers this one started.
+    rememberClosed(agent);
     parents.delete(agent.id);
+    spaceWaits.delete(agent.id);
   });
 
   /**
@@ -2110,13 +4199,17 @@ export function apply(ctx, config) {
     marksDone = true;
     const settings = ctx.get('settings');
     if (!settings) return;
-    const webs = readObject(config.sessionWeb);
-    const cleared = oldWebMarks(webs, readObject(config.sessionModes), readModes(config));
-    const next = { ...webs };
-    for (const id of cleared) delete next[id];
-    const ops = [{ op: 'set', path: ['webMarksCleared'], value: true }];
-    if (cleared.length > 0) ops.push({ op: 'set', path: ['sessionWeb'], value: JSON.stringify(next) });
-    const writing = settings.mutate('modes', ops);
+    let cleared = [];
+    // Built from the settings as they stand (writeFresh), so no thread's newer Web choice is dropped.
+    const writing = writeFresh((current) => {
+      const webs = readObject(current.sessionWeb);
+      cleared = oldWebMarks(webs, readObject(current.sessionModes), readModes(config));
+      const next = { ...webs };
+      for (const id of cleared) delete next[id];
+      const ops = [{ op: 'set', path: ['webMarksCleared'], value: true }];
+      if (cleared.length > 0) ops.push({ op: 'set', path: ['sessionWeb'], value: JSON.stringify(next) });
+      return ops;
+    });
     marksWriting = writing.catch(() => {});
     await writing;
     if (cleared.length > 0) ctx.logger.info(`modes: cleared ${cleared.length} old "Search off" mark(s) in tabs with their own search`);
@@ -2135,14 +4228,16 @@ export function apply(ctx, config) {
     const settings = ctx.get('settings');
     if (!settings) return;
     depthMoveDone = true;
-    const { depths, start } = movedDepths(readObject(config.sessionSearchDepth), readObject(config.sessionDepth), config.searchDepth);
-    const ops = [
-      { op: 'set', path: ['depthMoved'], value: true },
-      { op: 'set', path: ['sessionDepth'], value: JSON.stringify(depths) },
-      { op: 'set', path: ['sessionSearchDepth'], value: '{}' },
-    ];
-    if (start !== config.searchDepth) ops.push({ op: 'set', path: ['searchDepth'], value: start });
-    const writing = settings.mutate('modes', ops);
+    const writing = writeFresh((current) => {
+      const { depths, start } = movedDepths(readObject(current.sessionSearchDepth), readObject(current.sessionDepth), current.searchDepth);
+      const ops = [
+        { op: 'set', path: ['depthMoved'], value: true },
+        { op: 'set', path: ['sessionDepth'], value: JSON.stringify(depths) },
+        { op: 'set', path: ['sessionSearchDepth'], value: '{}' },
+      ];
+      if (start !== current.searchDepth) ops.push({ op: 'set', path: ['searchDepth'], value: start });
+      return ops;
+    });
     depthMoving = writing.catch(() => {});
     try {
       await writing;
@@ -2177,15 +4272,147 @@ export function apply(ctx, config) {
     }
     if (ops.length > 1) ctx.logger.info('modes: Data now loads its tools as needed (added to "Load tools as needed")');
   }
+  /**
+   * Item 4A, stage 4: Plain chat starts with the Cowork mode's per-mode choices, once (lib/plain.js); a choice made for
+   * it afterwards stays.
+   */
+  let plainAddDone = false;
+  async function addPlain() {
+    if (plainAddDone || plain(config.plainAdded) === true) return;
+    const settings = ctx.get('settings');
+    if (!settings) return;
+    plainAddDone = true;
+    const ops = plainAddOps({ trimModes: plain(config.trimModes), skillsOff: plain(config.skillsOff), toolAccess: plain(config.toolAccess) });
+    try {
+      await settings.mutate('modes', ops);
+    } catch (error) {
+      plainAddDone = false;
+      throw error;
+    }
+    if (ops.length > 1) ctx.logger.info('modes: Plain chat starts with the Cowork mode\'s choices (load tools as needed, skills, Tool access)');
+  }
+  /**
+   * Item 4A, fix round 2: Plain chat also gets Cowork's other per-mode choices, once (lib/plain.js plainCarryOps): its
+   * starting values, its Mission tools, Mission's work loop tab, and the Sampling presets and Agent swarm choices per
+   * mode. Only where Cowork has one and Plain chat none; the Cowork entries stay. Another add-on's write that fails is
+   * tried again at the next start (the copy is only made where Plain chat has none, so a second run changes nothing).
+   */
+  let plainCarryDone = false;
+  async function carryPlain() {
+    const doneIn = new Set(plainList(config.plainCarriedIn));
+    const pending = CARRY_NAMESPACES.filter((ns) => !doneIn.has(ns));
+    if (plainCarryDone || (plain(config.plainCarried) === true && pending.length === 0)) return;
+    const settings = ctx.get('settings');
+    if (!settings) return;
+    plainCarryDone = true;
+    const rows = settings.describe?.() ?? [];
+    // Only the add-ons that are here now, and not carried yet; one that turns up later is carried at that start.
+    const others = {};
+    const present = [];
+    for (const ns of pending) {
+      const row = rows.find((entry) => entry.ns === ns);
+      if (row?.value) {
+        others[ns] = plain(row.value);
+        present.push(ns);
+      }
+    }
+    const own = plain(config.plainCarried) === true ? {} : { modeStart: plain(config.modeStart), longTools: plain(config.longTools) };
+    const plan = plainCarryOps(own, others);
+    const done = [...doneIn];
+    for (const ns of present) {
+      const ops = plan.others[ns];
+      try {
+        if (ops) await settings.mutate(ns, ops);
+        done.push(ns);
+      } catch (error) {
+        ctx.logger.warn(`modes: Plain chat could not take Cowork's ${ns} choice (${error?.message ?? error}); tried again at the next start`);
+      }
+    }
+    const ops = plain(config.plainCarried) === true ? [] : plan.modes;
+    if (done.length !== doneIn.size) ops.push({ op: 'set', path: ['plainCarriedIn'], value: JSON.stringify(done) });
+    try {
+      if (ops.length > 0) await settings.mutate('modes', ops);
+    } catch (error) {
+      plainCarryDone = false;
+      throw error;
+    }
+    if (plan.modes.length > 1 || Object.keys(plan.others).length > 0) ctx.logger.info('modes: Plain chat starts with the Cowork mode\'s other choices (starting values, Mission tools, work loop, sampling, swarm)');
+  }
+  /** The other add-ons whose per-mode choices Plain chat takes from Cowork once each (`plainCarriedIn`). */
+  const CARRY_NAMESPACES = ['mission', 'sampling-presets', 'agent-swarm'];
+  /** @returns {string[]} a stored JSON list. */
+  function plainList(value) {
+    try {
+      const list = JSON.parse(typeof value === 'string' ? value : '[]');
+      return Array.isArray(list) ? list.filter((item) => typeof item === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+  /**
+   * Item 4A, stage 1 (A4): every thread with a recorded mode gets the space of that mode, once (`spacesFilled`). Only
+   * `sessionSpaces` is written; the modes, the tab order and every other stored value stay as they are.
+   */
+  let spacesFillDone = false;
+  /** Its write while in flight (pruning waits for it, so it never writes the old value back). */
+  let spacesFilling = Promise.resolve();
+  async function fillSessionSpaces() {
+    // Stage 3a: the switch-over to spaces fills once more with `refresh` (spacesRefreshed), so a thread the tabs moved
+    // (Move to, /mode) is in the space where it was last put; from then on a mode change never moves a thread.
+    const refresh = spacesLive() && plain(config.spacesRefreshed) !== true;
+    if (spacesFillDone || (plain(config.spacesFilled) === true && !refresh)) return spacesFilling;
+    const settings = ctx.get('settings');
+    if (!settings) return;
+    spacesFillDone = true;
+    let added = 0;
+    let changed = 0;
+    // In the same line as the first-message writes (pinStartingMode), so neither writes over the other's entries.
+    const writing = pinChain.catch(() => {}).then(async () => {
+      // Item 4A, stage 6a (I21): marked threads and threads whose saved folder is Recon's room are never moved, and are
+      // added to Recon (an owner's isolated mode keeps its own space).
+      const keep = new Set(Object.keys(readObject(config.sessionIsolated)).filter((id) => readObject(config.sessionIsolated)[id] === true));
+      for (const id of new Set([...Object.keys(readObject(config.sessionSpaces)), ...Object.keys(readObject(config.sessionModes))])) {
+        if (keep.has(id)) continue;
+        try {
+          const folder = String(ctx.get('agents')?.header?.(id)?.cwd ?? ctx.get('agents')?.get?.(id)?.header?.cwd ?? '');
+          if (folder && reconRoomOf(folder)) keep.add(id);
+        } catch {
+          /* not known: left as it is */
+        }
+      }
+      const isolatedModes = Object.values(readModes(config)).filter((mode) => mode.isolated).map((mode) => mode.id);
+      const filled = fillSpaces(readObject(config.sessionModes), readObject(config.sessionSpaces), { refresh, keep, isolatedModes });
+      added = filled.added;
+      changed = filled.changed;
+      const ops = [{ op: 'set', path: ['spacesFilled'], value: true }];
+      if (refresh) ops.push({ op: 'set', path: ['spacesRefreshed'], value: true });
+      if (added > 0 || changed > 0) ops.push({ op: 'set', path: ['sessionSpaces'], value: JSON.stringify(filled.next) });
+      await settings.mutate('modes', ops);
+    });
+    pinChain = writing.catch(() => {});
+    spacesFilling = pinChain;
+    try {
+      await writing;
+    } catch (error) {
+      // Tried again at the next start.
+      spacesFillDone = false;
+      throw error;
+    }
+    if (added > 0) ctx.logger.info(`modes: ${added} existing thread(s) given the space of their mode (nothing else changed)`);
+    if (changed > 0) ctx.logger.info(`modes: spaces are live; ${changed} thread(s) placed in the space where the tabs last put them`);
+  }
+
   // Also a moment after loading, when Settings accepts this add-on's writes, for a start without any conversation opening.
   ctx.effect(() => {
     const timer = setTimeout(() => {
       void moveWebLevels().catch(report);
       void addDataTrim().catch(report);
+      void addPlain().catch(report);
+      void fillSessionSpaces().catch(report);
     }, 2000);
     timer.unref?.();
     return () => clearTimeout(timer);
-  }, 'modes: Web levels move into Depth, Data loads its tools as needed (once each)');
+  }, 'modes: Web levels move into Depth, Data loads its tools as needed, threads get their space (once each)');
 
   let pruned = false;
   /**
@@ -2206,7 +4433,7 @@ export function apply(ctx, config) {
       // Without an app home there is no trash (the Cowork sidebar keeps it there).
       const trashed = typeof home === 'function' ? trashedIds(home('trash', 'conversations')) : new Set();
       if (trashed === null) return;
-      const fields = ['sessionModes', 'sessionWeb', 'sessionWebLevel', 'sessionWebSources', 'sessionResearch', 'sessionSearchDepth', 'sessionDepth', 'sessionLens', 'sessionTools', 'sessionHelpers', 'sessionIsolated', 'sessionToolSets', 'sessionSandboxBase'];
+      const fields = ['sessionModes', 'sessionWeb', 'sessionWebLevel', 'sessionWebSources', 'sessionResearch', 'sessionSearchDepth', 'sessionDepth', 'sessionLens', 'sessionTools', 'sessionHelpers', 'sessionIsolated', 'sessionToolSets', 'sessionSandboxBase', 'sessionMission', 'sessionSpaces', 'sessionModeChanges'];
       const ids = new Set(fields.flatMap((field) => Object.keys(readObject(config[field]))));
       const gone = new Set();
       for (const sessionId of ids) {
@@ -2229,17 +4456,16 @@ export function apply(ctx, config) {
       if (gone.size > 0) {
         // The one-time moves (Web levels into Depth, old Search-off marks) write some of these fields
         // too: wait for them, so this write is built from their result and never undoes them.
-        await Promise.all([moveWebLevels().catch(() => {}), clearOldWebMarks().catch(() => {})]);
+        await Promise.all([moveWebLevels().catch(() => {}), clearOldWebMarks().catch(() => {}), fillSessionSpaces().catch(() => {})]);
         // Build from the current values (they may have changed while checking); write only the fields
         // that hold a gone id, and drop only those ids.
-        const ops = fields.flatMap((field) => {
-          const current = readObject(config[field]);
+        await writeFresh((values) => fields.flatMap((field) => {
+          const current = readObject(values[field]);
           if (![...gone].some((id) => Object.hasOwn(current, id))) return [];
           const next = { ...current };
           for (const id of gone) delete next[id];
           return [{ op: 'set', path: [field], value: JSON.stringify(next) }];
-        });
-        if (ops.length > 0) await settings.mutate('modes', ops);
+        }));
         ctx.logger.info(`modes: pruned ${gone.size} stale session entries`);
       }
     } catch (error) {
@@ -2249,11 +4475,400 @@ export function apply(ctx, config) {
 
   /** Mode API for other plugins and the command. */
   let skillsOffChain = Promise.resolve();
+  /** Item 4A, stage 6a: what `guardOf` answers when it cannot work it out (fail closed, 2.1). */
+  const ERROR_GUARD = Object.freeze({ top: '', space: '', mode: '', sealed: true, sealedBy: '', reconSpace: false, guardedBy: 'unknown', noPrograms: true, homeMode: false, fresh: false, unknownTop: true });
+  /**
+   * Item 4A, stage 6a (2.1): how a thread (or a helper's thread) is guarded, for the other add-ons. Never throws.
+   * `sealed` is for refusals, `reconSpace` for permissions, `guardedBy` for the Devices and Workshop guards.
+   */
+  function guardOf(id) {
+    try {
+      const raw = String(id ?? '');
+      if (!raw) return ERROR_GUARD;
+      const { top, known } = resolveTop(raw);
+      const space = known && top ? spaceOfTopRaw(top) : 'unknown';
+      const mode = modeOf(raw);
+      const sealed = mode?.isolated === true;
+      const reconSpace = known && space === 'recon';
+      const guardedBy = !known || space === 'unknown' ? 'unknown' : mode?.guardedBy || (space === 'devices' || space === 'workshop' ? space : '');
+      return Object.freeze({
+        top: known ? top : '',
+        space: isSpace(space) ? space : '',
+        mode: String(mode?.id ?? ''),
+        sealed,
+        sealedBy: !known ? '' : reconSpace || mode?.id === 'recon' ? 'recon' : sealed ? 'mode' : '',
+        reconSpace,
+        guardedBy,
+        noPrograms: sealed || Boolean(guardedBy) || refusesPrograms(mode),
+        homeMode: GUARDED[space] === mode?.id,
+        fresh: known && top ? freshNow(top) : false,
+        unknownTop: !known,
+      });
+    } catch {
+      return ERROR_GUARD;
+    }
+  }
   const modes = {
-    apiVersion: 1,
-    /** @returns {Array<{id: string, label: string}>} the available modes. */
-    list() {
-      return Object.values(readModes(config)).map((mode) => Object.freeze({ id: mode.id, label: mode.label }));
+    /** Item 4A, stage 6a: 2 adds guardOf, topOf, spaces.rules/guestRefuses/pending/ready, `set {space}`, `lockedPreset(id, opts)`. */
+    apiVersion: 2,
+    /**
+     * Preset in this tab (item 7): the preset a new conversation of a tab is locked to, '' for Any. Other add-ons
+     * read it; the Cowork sidebar reads the same setting itself when it starts a conversation.
+     * @param {string} modeId - the tab.
+     * @param {{space?: string, sessionId?: string}} [opts] - item 4A, stage 6a: `sessionId`: the lock that holds for that
+     *   thread (its space and mode); `space`: the lock of that space with this mode.
+     * @returns {string} the app's preset id ('standard', 'cordis') or ''.
+     */
+    lockedPreset(modeId, opts = {}) {
+      const table = readLocks(plain(config.presetLock));
+      try {
+        if (typeof opts?.sessionId === 'string' && opts.sessionId) {
+          const lock = lockFor(opts.sessionId, modeOf(opts.sessionId), table).lock;
+          return lock === 'any' ? '' : LOCK_PRESET[lock] ?? '';
+        }
+        if (typeof opts?.space === 'string' && isSpace(opts.space)) {
+          const lock = lockInSpace(table, opts.space, String(modeId ?? '')).lock;
+          return lock === 'any' ? '' : LOCK_PRESET[lock] ?? '';
+        }
+      } catch {
+        // as before
+      }
+      return lockedPresetOf(table, String(modeId ?? ''));
+    },
+    /** Item 4A, stage 6a (2.1): see guardOf above. */
+    guardOf(id) {
+      return guardOf(id);
+    },
+    /**
+     * Item 4A, stage 6a (2.1): the thread an agent works for: the id itself for a thread or a closed id; for a helper the
+     * highest parent id any header names (also when that agent is not loaded); '' when no header names a parent.
+     * @param {string} id
+     * @returns {string}
+     */
+    topOf(id) {
+      try {
+        const found = resolveTop(String(id ?? ''));
+        return found.known ? found.top : '';
+      } catch {
+        return '';
+      }
+    },
+    /**
+     * What the preset menu's (i) shows for a conversation (as PRESET_PATH answers), or each tab's choice without one.
+     * @param {string} [sessionId] - the conversation.
+     * @returns {Promise<object>} the view.
+     */
+    presetView(sessionId, locale) {
+      return presetView(typeof sessionId === 'string' ? sessionId : '', 'en');
+    },
+    /**
+     * What Tool access knows about a tool, for Mission's rule on what the assistant may do while a Mission is
+     * paused (Mission stage E: "Talk and look things up" allows only sorted tools of low tier that read or search).
+     * @param {string} name - the tool's raw name.
+     * @returns {{group: string, tier: number, sorted: boolean} | undefined} its group and tier; undefined if it cannot be read.
+     */
+    toolKind(name) {
+      try {
+        const entry = classify(String(name ?? ''));
+        return Object.freeze({ group: entry.group, tier: entry.tier, sorted: entry.sorted === true });
+      } catch {
+        return undefined;
+      }
+    },
+    /**
+     * Item 4A, stage 1: spaces underneath. Read only; nothing on screen uses them yet (lib/spaces.js).
+     * `list()`: the five spaces with `available` and `shown`; `of(sessionId)`: a thread's space (a helper asks for its
+     * thread); `modesIn(spaceId)`: the modes offered there, a greyed one waiting for its space's own rules; `ofMode(id)`.
+     */
+    spaces: Object.freeze({
+      /**
+       * Stage 6a leftovers: the five spaces' shown names (one copy for every add-on). English for every language.
+       * @param {string} [lang] - accepted and ignored: Plus is English only.
+       * @returns {Readonly<Record<string, string>>} space id -> name.
+       */
+      names(lang = 'en') {
+        return SPACE_NAMES.en;
+      },
+      list(spaceSettings = readObject(config.spaceSettings)) {
+        let addons = [];
+        try {
+          // Owner's answer (22 Nov): Tuner Plus counts only while it is switched on (an older one without isOn: when there).
+          const tuning = ctx.get('tuning');
+          addons = tuning && (typeof tuning.isOn !== 'function' || tuning.isOn() === true) ? ['tuning'] : [];
+        } catch {
+          addons = [];
+        }
+        return spacesNow({ modeIds: Object.keys(readModes(config)), addons, spaceSettings });
+      },
+      of(sessionId) {
+        // Item 4A, stage 6a (I18, LEAK 13): the same reader as modeOf; '' for a helper with no known thread (callers use
+        // guardOf for safety). The display fallback below only when the seam gives nothing.
+        const found = resolveTop(String(sessionId ?? ''));
+        if (!found.known && found.top) return '';
+        const top = found.top;
+        const raw = top ? spaceOfTopRaw(top) : '';
+        if (isSpace(raw)) return raw;
+        if (raw === 'unknown') return '';
+        // Item 4A, stage 2: a new draft is in the space it was opened in, until its first message records it. Fix round:
+        // else its recorded space, else its folder's (never the space of a stale `defaultMode`); Recon's room only Recon.
+        if (spacesLive() && freshNow(top)) return draftSpaceOf(top);
+        const stored = overlay.get(top) ?? readTable(config.sessionModes)[top];
+        let mode = stored;
+        if (typeof mode !== 'string') {
+          try {
+            mode = modeOf(top).id;
+          } catch {
+            mode = undefined;
+          }
+        }
+        return spaceOfThread(top, { sessionSpaces: readObject(config.sessionSpaces), sessionModes: typeof mode === 'string' ? { [top]: mode } : {} });
+      },
+      modesIn(spaceId) {
+        return offeredIn(spaceId);
+      },
+      /**
+       * Item 4A, stage 6a (2.1): the space rules other add-ons read (the guarded spaces, what a guest is refused, the
+       * stores Recon never writes to).
+       */
+      rules() {
+        return SPACE_RULES;
+      },
+      /**
+       * Item 4A, stage 6a (2.3): the one test whether a guest in Devices or Workshop is refused a tool. Stage 6b: `opts`
+       * `{space, mission}`; no space counts as the 'unknown' guard (schedules refused, Revision 2 L1).
+       */
+      guestRefuses(name, opts = {}) {
+        try {
+          return guestRefuses(name, opts && typeof opts === 'object' ? opts : {});
+        } catch {
+          return true;
+        }
+      },
+      /** Item 4A, stage 6a: the spaces recorded in memory and not yet written (`{ threadId: space }`; the sidebar lists them). */
+      pending() {
+        return Object.freeze(Object.fromEntries(spaceOverlay));
+      },
+      /** Item 4A, stage 6a (I25): whether each guarded space's guard is ready. */
+      ready() {
+        const ready = guardReady();
+        return Object.freeze({ devices: ready.devices === true, recon: ready.recon === true, workshop: ready.workshop === true });
+      },
+      ofMode(modeId) {
+        return spaceOfMode(modeId);
+      },
+      /**
+       * Item 4A, stage 6b (3.1, J11): mark an existing thread so its next scheduled turn is rejected (nothing runs): a
+       * session target whose guarded space cannot take the run now. Cleared by a user message in it, or after 24 h.
+       * @param {string} id - the thread (never a helper).
+       * @param {{space: string, reason: string}} info - its space, and why (a short phrase for the chat box line).
+       * @returns {boolean} false for a helper or an unknown id.
+       */
+      holdRun(id, info = {}) {
+        try {
+          const top = String(id ?? '');
+          if (!top || !ctx.get('agents')?.get?.(top) || topOf(top) !== top) return false;
+          const space = isSpace(info?.space) ? info.space : spaceOfTopRaw(top);
+          heldRuns.set(top, { space, kind: 'other', mode: '', text: String(info?.reason ?? '').slice(0, 300), at: Date.now() });
+          if (heldRuns.size > 500) heldRuns.delete(heldRuns.keys().next().value);
+          bump();
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      /**
+       * Item 4A, stage 6b: a thread's held run (`{space, reason}`), or null.
+       * @param {string} id - the thread or one of its helpers.
+       */
+      held(id) {
+        try {
+          const top = topOf(String(id ?? '')) || String(id ?? '');
+          const found = heldRunOf(top);
+          return found ? Object.freeze({ space: found.space, reason: heldReasonText(found, 'en') }) : null;
+        } catch {
+          return null;
+        }
+      },
+      /**
+       * Item 4A, stage 6b (J5, display only): where a scheduled thread opens in a folder (the rule of draftSpaceOf for a
+       * scheduled thread, without an agent): Recon's room gives `{space: 'recon', mode: ''}` (never shown as a run place).
+       * @param {string} cwd - the automation's folder ('' for none).
+       * @returns {Readonly<{space: string, mode: string}>}
+       */
+      scheduledPlace(cwd) {
+        const folder = typeof cwd === 'string' ? cwd : '';
+        if (folder && reconRoomOf(folder)) return Object.freeze({ space: 'recon', mode: '' });
+        const all = readModes(config);
+        const mode = scheduledModeId(all, plain(config.scheduledMode)) ?? '';
+        let space = guessSpace(folder ? { path: folder } : null);
+        if (mode && !offeredIn(space).some((row) => row.id === mode)) space = spaceOfMode(mode);
+        return Object.freeze({ space, mode });
+      },
+      /**
+       * Item 4A, stage 6b (Revision 2 L4): a task that opens new threads which must stay in Devices or Workshop. Its fresh
+       * threads that nobody placed there by their first step are held, also when Automations is off.
+       * @param {string} taskId - the automation.
+       * @param {string} space - 'devices' or 'workshop'.
+       * @returns {boolean} whether it was noted.
+       */
+      noteGuestRun(taskId, space, mode) {
+        try {
+          return noteGuestRun(taskId, space, mode);
+        } catch {
+          return false;
+        }
+      },
+      /**
+       * Final fix round: the mode a new thread in a space starts in (Settings → Spaces, then the built-in table), for
+       * other add-ons that start threads (Split Plus's Add pane).
+       * @param {string} spaceId - the space.
+       * @returns {string} the mode id ('' when the space offers none).
+       */
+      startOf(spaceId) {
+        const space = String(spaceId ?? '');
+        const offered = offeredIn(space);
+        return draftStartMode({ space, offered, spaceSettings: readObject(config.spaceSettings) }) ?? '';
+      },
+      /** Item 4A: whether spaces are live (stages 2 to 5 read this one switch; lib/spaces.js spacesLive). */
+      live() {
+        return spacesLive();
+      },
+      /**
+       * Item 4A, stage 2: what the chat box's Mode list shows for a thread.
+       * @param {string} sessionId - the thread.
+       * @param {string} [lang] - the page's language (ignored: Plus is English only) (the one-line descriptions and a greyed mode's reason).
+       * @returns {object} `{live, shown, space, current, fresh, claimed, modes, changes}`.
+       */
+      view(sessionId, lang = 'en', opts = {}) {
+        return modeView(String(sessionId ?? ''), lang, { windowSpace: typeof opts?.windowSpace === 'string' ? opts.windowSpace : '', page: opts?.page === true });
+      },
+      /**
+       * Item 4A, stage 6b (C5): the language the thread's page last showed its Mode list in: 'en', or '' when no page
+       * asked yet (Plus is English only, so it is never 'zh' now). dsh-engines says its sentences in it. Never throws.
+       * @param {string} sessionId - a thread or a helper of it.
+       * @returns {'en' | ''}
+       */
+      pageLang(sessionId) {
+        try {
+          return pageLangs.get(topOf(String(sessionId ?? ''))) ?? '';
+        } catch {
+          return '';
+        }
+      },
+      /**
+       * Item 4A, stage 6b (J3): the chat box put the refused message back (or the owner pressed Put back): its text is
+       * deleted. Only the thread's own id with the id the view gave.
+       * @returns {boolean} whether it was that thread's kept text.
+       */
+      engineHeldTaken(sessionId, id) {
+        const raw = String(sessionId ?? '');
+        if (!raw || topOf(raw) !== raw) return false;
+        return engineHeldText.take(raw, String(id ?? ''));
+      },
+      /**
+       * Item 4A, stage 2: a pick in the Mode list (or /mode). Only a mode ticked for the thread's space; a thread never
+       * changes space. Before the first message the pick is a claim, so it stands at the first message.
+       * @returns {Promise<void>} throws a plain sentence when refused.
+       */
+      pick(sessionId, modeId, { lang = 'en' } = {}) {
+        return pickMode(String(sessionId ?? ''), String(modeId ?? ''), lang);
+      },
+      /**
+       * Item 4A, stage 2: a new draft opened in a space is claimed with that space's start mode at once (the mode it has
+       * stays when the space offers it). Nothing happens to a thread that has run, or a draft another add-on claimed.
+       * @param {string} sessionId - the draft.
+       * @param {{space?: string, tab?: string}} where - the window's space; or the tab it was opened from (stage 2).
+       * @returns {Promise<{claimed: boolean, mode?: string, space?: string}>}
+       */
+      startDraft(sessionId, where = {}) {
+        return startDraft(String(sessionId ?? ''), where);
+      },
+      /**
+       * Item 4A, stage 3a: threads moved to another space (the sidebar's "Move to <space>"). Each keeps its mode when the
+       * new space offers it, else it gets the space's start mode, from its next message. A sealed thread never moves and
+       * nothing moves into Recon: a plain sentence says so, and nothing is written.
+       * @param {string[]} sessionIds - the threads.
+       * @param {string} spaceId - where to.
+       * @returns {Promise<{moved: number, changed: number}>} `changed`: how many got another mode.
+       */
+      move(sessionIds, spaceId, { lang = 'en' } = {}) {
+        return moveToSpace(Array.isArray(sessionIds) ? sessionIds : [sessionIds], String(spaceId ?? ''), lang);
+      },
+      /**
+       * Item 4A, stage 5: what Settings → Spaces and the ticks on Settings → Modes show: the five space cards and every
+       * mode with its description and its five ticks.
+       * @param {string} [lang] - the page's language (ignored: Plus is English only).
+       * @returns {{live: boolean, cards: object[], modes: object[]}}
+       */
+      page(lang = 'en') {
+        return settingsPage('en');
+      },
+      /**
+       * Item 4A, stage 5: one tick on Settings → Modes (`modeSpaces`). Refused with a sentence for a guarded mode, a guarded
+       * space (until stage 6a), or the last mode of a space; nothing is written then.
+       * @returns {Promise<object>} the page, as `page()`.
+       */
+      setTick(modeId, spaceId, on, { lang = 'en' } = {}) {
+        return writeTick(String(modeId ?? ''), String(spaceId ?? ''), on === true, 'en');
+      },
+      /**
+       * Item 4A, stage 5: a space's own settings on Settings → Spaces (`spaceSettings`): `{shown}` or `{startMode}`.
+       * @returns {Promise<object>} the page, as `page()`.
+       */
+      setSpace(spaceId, patch, { lang = 'en' } = {}) {
+        return writeSpace(String(spaceId ?? ''), patch && typeof patch === 'object' ? patch : {}, 'en');
+      },
+      /**
+       * Item 4A, stage 5: a mode's own one-line description (`modeDescriptions`); '' gives the usual line back.
+       * @returns {Promise<object>} the page, as `page()`.
+       */
+      describe(modeId, text, { lang = 'en' } = {}) {
+        return writeDescription(String(modeId ?? ''), String(text ?? ''), 'en');
+      },
+      /**
+       * Item 4A, stage 6a: Settings → Modes → Spaces: `{sealedExtra: string[]}` (extra tools a mode keeps in Recon, only the
+       * Library tools) and `{gridInGuarded: boolean}` (Tool access Off also applies in Devices and Workshop).
+       * @returns {Promise<object>} the page, as `page()`.
+       */
+      setRules(patch, { lang = 'en' } = {}) {
+        return writeRules(patch && typeof patch === 'object' ? patch : {}, 'en');
+      },
+    }),
+    /**
+     * @param {string} [lang] - stage 6a leftovers: the page's language (ignored now: Plus is English only). `label` and
+     *   `name` are the mode's stored name.
+     * @returns {Array<{id: string, label: string, name: string, isolated: boolean}>} the available modes (`isolated`: a sealed tab such as Recon).
+     */
+    list(lang) {
+      const all = Object.values(readModes(config));
+      // Item 6: `tab` says whether the mode has a sidebar tab (the Cowork sidebar shows the first few modes and every
+      // add-on's mode); a mode without one is reached only with /mode. Without the sidebar every mode counts. Reading
+      // the sidebar's settings is not free, so the answer is kept for 2 s (other add-ons ask often).
+      const now = Date.now();
+      if (now - shownCache.at > 2000) {
+        let shown;
+        try {
+          shown = ctx.get('settings')?.describe?.().some((entry) => entry.ns === 'cowork-shell') ? new Set(sidebarTabs(all, shellTabCount(), shellTabOrder()).map((mode) => mode.id)) : undefined;
+        } catch {
+          shown = undefined;
+        }
+        shownCache.at = now;
+        shownCache.shown = shown;
+      }
+      const shown = shownCache.shown;
+      const shownLang = 'en';
+      return all.map((mode) => Object.freeze({ id: mode.id, label: lang === undefined ? mode.label : modeName(mode, shownLang), name: modeName(mode, shownLang), isolated: mode.isolated === true, tab: shown ? shown.has(mode.id) || mode.extra === true || (mode.added === true && spacesLive()) : true }));
+    },
+    /**
+     * Stage 6a leftovers: a mode's shown name (its stored name; Plus is English only). An unknown id comes back as it is.
+     * @param {string} id - the mode id.
+     * @param {string} [lang] - the page's language (ignored: Plus is English only).
+     * @returns {string}
+     */
+    modeName(id, lang = 'en') {
+      const key = String(id ?? '');
+      const found = Object.hasOwn(readModes(config), key) ? readModes(config)[key] : undefined;
+      return found ? modeName(found, 'en') : key;
     },
     /** @returns {string} the Depth new conversations start with: quick, standard or thorough. */
     searchDepth() {
@@ -2349,8 +4964,8 @@ export function apply(ctx, config) {
      */
     async setSkillsOff(tabId, names) {
       const id = String(tabId ?? '');
-      if (!readModes(config)[id]) throw new Error(`There is no tab "${id}".`);
-      if (readModes(config)[id].isolated === true) throw new Error('An isolated tab gets no skill list at all.');
+      if (!readModes(config)[id]) throw new Error(`There is no mode "${id}".`);
+      if (readModes(config)[id].isolated === true) throw new Error('A sealed mode gets no skill list at all.');
       // One change at a time, each from the setting as it is then.
       const run = skillsOffChain.catch(() => {}).then(async () => {
         const settings = ctx.get('settings');
@@ -2581,36 +5196,562 @@ export function apply(ctx, config) {
      * Switch a Session's mode; it applies at the next turn boundary.
      * @param {string} sessionId - Agent id.
      * @param {string} modeId - mode id.
-     * @param {{claim?: boolean}} [options] - `claim`: for a conversation that has not run a turn yet,
-     *   the move stands over the selected tab and the scheduled starting mode (a Finance brief).
+     * Stage 6b (3.1): `anyTick` (Chat or Code only, a scheduled claim): run there also when the mode is no longer ticked;
+     * `hold` (a scheduled claim): on any refusal the thread is recorded in that space and held (J11), and the error has
+     * `held: true`. Both are ignored outside a claim of a scheduled thread that has not run (Revision 2 L11, G6).
+     * @param {{claim?: boolean, settle?: boolean, space?: string, anyTick?: boolean, hold?: boolean}} [options] - `claim`: for a conversation that has not run a turn yet,
+     *   the move stands over the selected tab and the scheduled starting mode (a Finance brief). `settle`: wait (at most
+     *   10 s) until the new mode is applied, its tier included, when the conversation is idle.
      * @returns {Promise<void>}
      */
     async set(sessionId, modeId, options = {}) {
-      const target = readModes(config)[modeId];
-      if (!target) throw new Error(`modes: unknown mode "${modeId}"`);
+      const asked = options?.space;
+      // Item 4A, stage 6b (3.1, Revision 2 L11): `anyTick` is for Automations' stored Chat or Code place only; a guarded
+      // space never (a programming error, in English).
+      if (options?.anyTick === true && isSpace(asked) && asked !== 'chat' && asked !== 'code') throw Object.assign(new Error('ANY_TICK_GUARDED: anyTick is only for the Chat and Code spaces.'), { code: 'ANY_TICK_GUARDED' });
       const agent = ctx.get('agents')?.get(sessionId);
+      // Stage 6b (J11, G6): `hold` and `anyTick` count only for a claim of a scheduled thread that has not run (else ignored).
+      const schedClaim = options?.claim === true && Boolean(agent) && scheduledClaimable(sessionId) && freshNow(sessionId) && isTopLevel(agent);
+      const holding = options?.hold === true && schedClaim && isSpace(asked);
+      const anyTick = options?.anyTick === true && schedClaim && (asked === 'chat' || asked === 'code');
+      // Plus is English only: `options.lang` is accepted and ignored.
+      const lang = 'en';
+      /**
+       * Stage 6b (J11): a refused held claim records the thread in its space and marks it held, synchronously, before the
+       * throw; its steps are then rejected until a user message arrives. Without `hold`: the throw alone, as before.
+       */
+      const refuse = (error, kind = 'other') => {
+        if (holding) {
+          try {
+            draftSpaces.set(sessionId, asked);
+            if (isGuarded(asked)) void recordDraftSpace(sessionId, asked).catch(report);
+            heldRuns.set(sessionId, { space: asked, kind, mode: modeId, text: '', at: Date.now() });
+            if (heldRuns.size > 500) heldRuns.delete(heldRuns.keys().next().value);
+            bump();
+          } catch (inner) {
+            report(inner);
+          }
+          error.held = true;
+        }
+        return error;
+      };
+      const target = readModes(config)[modeId];
+      if (!target) throw refuse(new Error(`modes: unknown mode "${modeId}"`), 'mode');
       if (!agent) throw new Error(`modes: unknown session "${sessionId}"`);
-      // No way in and no way out: what an isolated conversation has read must not meet other tools.
-      const refused = modeChangeRefusal({ wasIsolated: wasIsolated(sessionId), current: modeOf(sessionId).id, target: modeId, targetIsolated: target.isolated, fresh: fresh.has(sessionId) });
-      if (refused) throw new Error(refused);
-      if (options?.claim === true && fresh.has(sessionId)) claimed.add(sessionId);
+      // Item 4A, stage 6a (I23): a claim may name the space; the mode must be offered there (ticked, not greyed); a thread
+      // that has run never changes space; Recon only for a draft in its room.
+      let undoDraft;
+      if (asked !== undefined) {
+        if (!isSpace(asked)) throw new Error(`There is no space "${String(asked).slice(0, 40)}".`);
+        // A thread that has run never changes space.
+        const now = spaceOfTopRaw(topOf(sessionId));
+        if (!(freshNow(sessionId) && isTopLevel(agent)) && now !== asked) throw new Error(spaceText('spaceFixed', lang, { space: SPACE_NAMES[lang][now] ?? now }));
+        if (isGuarded(asked) && guardReady()[asked] !== true && holding) throw refuse(new Error(heldReasonText({ space: asked, kind: 'guard', mode: modeId }, lang)), 'guard');
+        const row = offeredIn(asked, lang).find((one) => one.id === modeId);
+        // Stage 6b (J8): a stored Chat or Code place runs there also when its mode is no longer ticked (the mode exists).
+        if (!anyTick && (!row || row.greyed)) throw refuse(new Error(modePickRefusal({ space: asked, modeId, modeLabel: target.label, offered: offeredIn(asked, lang), known: true, lang })), isGuarded(asked) && guardReady()[asked] !== true ? 'guard' : 'mode');
+        if (freshNow(sessionId) && isTopLevel(agent)) {
+          if (asked === 'recon' && roomSays(sessionId) === false) throw refuse(new Error(spaceText('reconRoomOnly', lang)));
+          const before = draftSpaces.get(sessionId);
+          draftSpaces.set(sessionId, asked);
+          if (anyTick) anyTicked.add(sessionId);
+          // A held thread keeps its space entry (J11): never undone when `hold` is set.
+          undoDraft = holding ? undefined : () => (before === undefined ? draftSpaces.delete(sessionId) : draftSpaces.set(sessionId, before));
+        }
+      }
+      try {
+        // No way in and no way out: what an isolated conversation has read must not meet other tools. Stage 6a (I11): a
+        // sealed thread in Recon may switch to another mode Recon offers; it stays sealed.
+        const space = asked ?? spaceOfTopRaw(topOf(sessionId));
+        const targetCopy = spaceCopy(target, space, { ready: guardReady(), oldGuard: oldGuards(), ranBefore: !freshNow(sessionId) });
+        const withinSealed = space === 'recon' && offeredIn('recon').some((row) => row.id === modeId && !row.greyed);
+        const refused = modeChangeRefusal({ wasIsolated: wasIsolated(sessionId), current: modeOf(sessionId).id, target: modeId, targetIsolated: targetCopy?.isolated === true, fresh: freshNow(sessionId), withinSealed });
+        if (refused) throw new Error(refused);
+        // Item 4A fix round: a new thread in Recon's room only takes a mode Recon offers (stage 6a: sealed, any of them).
+        if (spacesLive() && freshNow(sessionId) && isTopLevel(agent) && inReconRoom(sessionId) && !offeredIn('recon').some((row) => row.id === modeId && !row.greyed)) throw new Error(spaceText('roomOnlySealed', lang));
+      } catch (error) {
+        undoDraft?.();
+        throw refuse(error);
+      }
+      // A guarded claim is recorded at once (I3).
+      if (asked !== undefined && isGuarded(asked) && freshNow(sessionId) && isTopLevel(agent)) void recordDraftSpace(sessionId, asked).catch(report);
+      // Item 4A, stage 2: a change after the first message leaves a quiet line in the thread ("Mode changed to Research").
+      const before = modeOf(sessionId).id;
+      const noted = spacesLive() && !freshNow(sessionId) && before !== modeId && isTopLevel(agent) ? { turn: turnOfPhase(agent.phase), from: before, to: modeId, at: Date.now() } : null;
+      if (options?.claim === true && freshNow(sessionId)) claimed.add(sessionId);
       overlay.set(sessionId, modeId);
       // Applied now, while the conversation may still be idle, so its first turn gets the mode's tools.
       reconcile(agent);
       const settings = ctx.get('settings');
       if (settings) {
         try {
-          const next = { ...readObject(config.sessionModes), [sessionId]: modeId };
-          await settings.mutate('modes', [{ op: 'set', path: ['sessionModes'], value: JSON.stringify(next) }]);
+          await writeFresh((current) => {
+            const next = { ...readObject(current.sessionModes), [sessionId]: modeId };
+            const ops = [{ op: 'set', path: ['sessionModes'], value: JSON.stringify(next) }];
+            if (noted) {
+              const changes = readObject(current.sessionModeChanges);
+              ops.push({ op: 'set', path: ['sessionModeChanges'], value: JSON.stringify({ ...changes, [sessionId]: noteModeChange(changes[sessionId], noted) }) });
+            }
+            return ops;
+          });
           overlay.delete(sessionId);
         } catch (error) {
           ctx.logger.warn(`modes: choice for ${sessionId} not persisted (${error?.message ?? error}); kept in memory`);
         }
       }
       reconcile(agent);
+      // Item 4A, fix round 2: a draft that changes mode before its first message takes the new mode's starting values
+      // (what you set by hand on it stays). Not an Automation's thread: its task decides.
+      // Final fix round: also a draft the app made anew for the same mode (the Cowork switch picks a folder: a new draft is
+      // claimed) and never seeded gets its mode's starting values.
+      if ((before !== modeId || !seeded.has(sessionId)) && freshNow(sessionId) && isTopLevel(agent) && !scheduled.has(sessionId)) await reseedStart(sessionId, target, before);
+      // A new chat moved into a locked tab (a Split Plus pane, a Creator Plus claim) gets that tab's preset too.
+      if (freshNow(sessionId)) holdPresetSoon(sessionId, options?.claim === true ? 'claim' : 'tab');
+      // Item 6: `settle` waits (at most 10 s) until the new mode's tools, sandbox and tier are applied, so a scheduled
+      // chat claimed before its message arrives runs its first step with the new tab's model.
+      if (options?.settle === true && boundaryRuns.has(sessionId)) {
+        let timer;
+        const waited = new Promise((resolve) => {
+          timer = setTimeout(resolve, SCHEDULED_WAIT_MS);
+          timer.unref?.();
+        });
+        await Promise.race([boundaryRuns.get(sessionId), waited]);
+        clearTimeout(timer);
+      }
     },
   };
   ctx.effect(() => ctx.provide('modes', Object.freeze(modes)), 'modes service');
+
+  // ---- Item 4A, stage 2: the Mode list in the chat box ------------------------------------------------------------
+  /** @returns {object} the stored modes' own fields (a description, from stage 5's editor), by id. */
+  function rawModes() {
+    return { ...readObject(config.extraModes), ...readObject(config.modes) };
+  }
+  /** The modes the Mode list knows, with a stored description where there is one. */
+  function listedModes(lang = 'en') {
+    const raw = rawModes();
+    const own = readObject(config.modeDescriptions);
+    return Object.values(readModes(config)).map((mode) => ({ id: mode.id, label: modeName(mode, lang), description: typeof own[mode.id] === 'string' && own[mode.id].trim() ? own[mode.id] : raw[mode.id]?.description }));
+  }
+  /** Fix round 2: a draft -> the last /mode reply ({id, text, kind, at}); the app shows no command output on a draft. */
+  const draftReplies = new Map();
+  /** How long the chat box may still pick up a /mode reply. */
+  const REPLY_MS = 60_000;
+  function replyOf(top) {
+    const reply = top ? draftReplies.get(top) : undefined;
+    if (!reply) return null;
+    if (Date.now() - reply.at > REPLY_MS || !freshNow(top)) {
+      draftReplies.delete(top);
+      return null;
+    }
+    return reply;
+  }
+  function modeView(sessionId, lang, { windowSpace = '', page = false } = {}) {
+    const live = spacesLive();
+    const top = topOf(sessionId);
+    // Stage 6b (C5): the page's language, for dsh-engines' sentences in that thread.
+    if (page && top) {
+      pageLangs.delete(top);
+      pageLangs.set(top, 'en');
+      if (pageLangs.size > 500) pageLangs.delete(pageLangs.keys().next().value);
+    }
+    const heldDraft = top ? takeEngineHeldDraft(sessionId, top, windowSpace) : null;
+    const space = modes.spaces.of(top);
+    let current;
+    try {
+      current = modeOf(top).id;
+    } catch {
+      current = undefined;
+    }
+    const isFresh = top ? freshNow(top) : false;
+    const changes = readObject(config.sessionModeChanges)[top];
+    const ready = guardReady();
+    const list = modeList(space, listedModes(lang), readObject(config.modeSpaces), lang, { ready, lost: lostFor });
+    // Item 4A, stage 6a (2.1, item 27): the effective mode (its space's copy), and why a thread is held without tools.
+    let effectiveMode;
+    try {
+      effectiveMode = top ? modeOf(top) : undefined;
+    } catch {
+      effectiveMode = undefined;
+    }
+    const rawSpace = top ? spaceOfTopRaw(top) : '';
+    const chosenId = top ? overlay.get(top) ?? readTable(config.sessionModes)[top] : undefined;
+    const held = (() => {
+      if (!effectiveMode || effectiveMode.id !== LOCKED_MODE.id || !isGuarded(rawSpace)) return null;
+      const state = ready[rawSpace];
+      if (state === true) return null;
+      const addon = GUARDED_ADDON[GUARDED[rawSpace]] ?? rawSpace;
+      // Fix round (6a review): the add-on in the page's language; "new thread" only for one that has not run.
+      const reason = state === 'old' || state === 'plugin' ? state : 'off';
+      return { space: rawSpace, addon, reason, text: heldText(rawSpace, reason, { ran: !isFresh, lang }), mode: typeof chosenId === 'string' ? chosenId : '' };
+    })();
+    const effective = effectiveMode ? {
+      isolated: effectiveMode.isolated === true,
+      sealedBy: effectiveMode.sealedBy ?? '',
+      guardedBy: effectiveMode.guardedBy ?? '',
+      tools: Array.isArray(effectiveMode.tools) ? [...effectiveMode.tools] : effectiveMode.tools,
+      sandbox: effectiveMode.sandbox,
+      held,
+    } : null;
+    // Fix round: the current mode's own name and line, also when its space does not offer it (a thread keeps a mode
+    // unticked later), so the button never shows an inner id.
+    const known = listedModes(lang).find((mode) => mode.id === current);
+    const own = known ? modeBlurb(known.id, lang, known.description) : '';
+    // A guarded space whose own mode is gone (its add-on's "Offer" switch off): which add-on to switch on.
+    const home = GUARDED[space];
+    const needs = home && !readModes(config)[home] ? { space, section: home, addon: GUARDED_ADDON[home] ?? home } : null;
+    return {
+      live,
+      // The list shows under the chat box with the Cowork sidebar (without it, the former selector stays as it was).
+      shown: live && tabsDecide(),
+      space,
+      current,
+      fresh: isFresh,
+      claimed: claimed.has(top),
+      // Stage 6a: sealed by its mark, or by being in Recon (any mode).
+      sealed: wasIsolated(top) || effective?.sealedBy === 'recon',
+      effective,
+      // Fix round 2: the thread's folder is Recon's room (the chat box then follows it to Recon and says why).
+      room: top ? inReconRoom(top) : false,
+      // Fix round 2: the reply to /mode on a draft, which the app does not show there (the chat box shows it once).
+      reply: replyOf(top),
+      // Fix round (6a review): a thread its guarded space holds shows the mode it chose, else "No tools for now"; never
+      // Recon's "Sealed".
+      currentLabel: held ? listedModes(lang).find((mode) => mode.id === held.mode)?.label ?? spaceText('heldLabel', lang) : known?.label ?? (current === LOCKED_MODE.id || current === 'isolated-late' ? 'Sealed' : current ?? ''),
+      // Fix round (6a review, 2.7 SPACE_WAIT): its first message ran before its space was known (shown once).
+      spaceWait: top ? takeSpaceWait(top, lang) : '',
+      engineHeld: top ? takeEngineHeld(top, lang, Boolean(heldDraft)) : '',
+      // Stage 7 (6b lab leftover): when that line was set, so the chat box hides it at once when a message goes out and
+      // shows it again only for a newer refusal.
+      engineHeldAt: top && engineHeld.has(top) ? engineHeld.get(top) : 0,
+      // Stage 6b (J11): an automation's run held in this thread (nothing ran).
+      runHeld: top && heldRunOf(top) ? runHeldLine(heldRunOf(top), lang) : '',
+      // Stage 6b (J3): the refused message's text, for this thread's own chat box only; the line it shows when the box is
+      // busy (or the app gives no setDraft), with a Put back button.
+      engineHeldDraft: heldDraft,
+      engineHeldKept: heldDraft ? spaceText('engineHeldKept', lang) : '',
+      currentDesc: own,
+      currentOffered: list.some((mode) => mode.id === current && !mode.greyed),
+      needs,
+      modes: list,
+      // Stage 3a: the five spaces with `available` and `shown` (the Cowork sidebar draws its space buttons from these).
+      spaces: modes.spaces.list(),
+      changes: Array.isArray(changes) ? changes : [],
+    };
+  }
+  async function pickMode(sessionId, modeId, lang) {
+    const top = topOf(sessionId);
+    if (!ctx.get('agents')?.get(top)) throw new Error('This thread is not open. Open it again and try once more.');
+    const all = readModes(config);
+    const space = modes.spaces.of(top);
+    const offered = offeredIn(space, lang);
+    const current = modeOf(top).id;
+    if (modeId === current) return;
+    const isFresh = freshNow(top);
+    // Item 4A, stage 6a (I11): the target's copy for this space decides whether it is sealed; within Recon a switch stays sealed.
+    const targetCopy = all[modeId] ? spaceCopy(all[modeId], space, { ready: guardReady(), oldGuard: oldGuards(), ranBefore: !isFresh }) : undefined;
+    const withinSealed = space === 'recon' && offered.some((row) => row.id === modeId && !row.greyed);
+    const sealedRefusal = all[modeId] ? modeChangeRefusal({ wasIsolated: wasIsolated(top), current, target: modeId, targetIsolated: targetCopy?.isolated === true, fresh: isFresh, withinSealed }) : '';
+    const refused = modePickRefusal({ space, modeId, modeLabel: all[modeId]?.label, offered, known: Boolean(all[modeId]), sealedRefusal, lang });
+    if (refused) throw new Error(refused);
+    // A draft keeps its space: the pick is recorded in it at the first message, not in the space the mode would give.
+    // Stage 6a: set only once the checks passed, and undone when `set` refuses.
+    const placed = isFresh && !draftSpaces.has(top);
+    if (placed) draftSpaces.set(top, space);
+    try {
+      await modes.set(top, modeId, isFresh ? { claim: true } : {});
+    } catch (error) {
+      if (placed) draftSpaces.delete(top);
+      throw error;
+    }
+    if (isFresh) {
+      pickedModes.set(top, modeId);
+      autoStarted.delete(top);
+    }
+  }
+  /** Fix round (6a review): whether a thread has a Mission that has not ended (Mission says; false without Mission). */
+  function missionLive(id) {
+    try {
+      const mission = ctx.get('mission');
+      if (!mission) return false;
+      return Boolean(mission.runOf?.(id)) || mission.isRunning?.(id) === true || Boolean(mission.longRun?.(id));
+    } catch {
+      // Mission cannot say: as if one ran (a move into Devices or Workshop can wait).
+      return true;
+    }
+  }
+  async function moveToSpace(sessionIds, spaceId, lang) {
+    const ids = [...new Set(sessionIds.map((id) => topOf(String(id ?? ''))).filter(Boolean))].slice(0, 500);
+    if (ids.length === 0) throw new Error('No thread was named.');
+    const all = readModes(config);
+    const shown = modes.spaces.list().filter((row) => row.shown).map((row) => row.id);
+    const offered = isSpace(spaceId) ? offeredIn(spaceId, lang) : [];
+    const spaceSettings = readObject(config.spaceSettings);
+    const plans = [];
+    for (const id of ids) {
+      let current;
+      try {
+        current = modeOf(id).id;
+      } catch {
+        current = readObject(config.sessionModes)[id];
+      }
+      // Item 4A, stage 6a: sealed by its mark or by its space (C5); a thread that ran programs in this run stays out of
+      // Devices and Workshop (I26).
+      const plan = spaceMovePlan({ to: spaceId, from: modes.spaces.of(id), current, sealed: wasIsolated(id) || (spaceOfTopRaw(id) === 'recon' && !freshNow(id)), room: inReconRoom(id), ranPrograms: ranPrograms.has(id), missionLive: missionLive(id), shown, offered, spaceSettings, lang });
+      // One refusal stops the whole move, before anything is written.
+      if (plan.refusal) throw new Error(plan.refusal);
+      plans.push({ id, current, ...plan });
+    }
+    const settings = ctx.get('settings');
+    if (!settings) throw new Error('Settings cannot be saved right now. Try again in a moment.');
+    // In the same line as the first-message writes and the fill, so none writes over another's entries.
+    const writing = pinChain.catch(() => {}).then(async () => {
+      const spaces = { ...readObject(config.sessionSpaces) };
+      const nextModes = { ...readObject(config.sessionModes) };
+      const changes = readObject(config.sessionModeChanges);
+      let notes = false;
+      for (const plan of plans) {
+        spaces[plan.id] = plan.space;
+        if (!plan.mode) continue;
+        nextModes[plan.id] = plan.mode;
+        // A thread that has run gets the quiet line, as any mode change after the first message does.
+        const agent = ctx.get('agents')?.get(plan.id);
+        if (agent && !freshNow(plan.id) && isTopLevel(agent)) {
+          changes[plan.id] = noteModeChange(changes[plan.id], { turn: turnOfPhase(agent.phase), from: plan.current, to: plan.mode, at: Date.now() });
+          notes = true;
+        }
+      }
+      const ops = [{ op: 'set', path: ['sessionSpaces'], value: JSON.stringify(spaces) }];
+      if (plans.some((plan) => plan.mode)) ops.push({ op: 'set', path: ['sessionModes'], value: JSON.stringify(nextModes) });
+      if (notes) ops.push({ op: 'set', path: ['sessionModeChanges'], value: JSON.stringify(changes) });
+      await settings.mutate('modes', ops);
+      // Fix round (6a review): the move replaces any space still waiting to be written (an earlier failed write), so the
+      // stale one neither wins over it nor is written back by a retry.
+      for (const plan of plans) {
+        spaceOverlay.delete(plan.id);
+        const pin = pinQueue.get(plan.id);
+        if (pin) {
+          pin.space = plan.space;
+          pin.spaceForce = true;
+        }
+      }
+    });
+    pinChain = writing.catch(() => {});
+    await writing;
+    // The seam reads the new spaces (I29).
+    bump();
+    for (const plan of plans) {
+      const live = ctx.get('agents')?.get(plan.id);
+      if (live && !plan.mode) reconcile(live);
+      if (!plan.mode) continue;
+      overlay.delete(plan.id);
+      const agent = ctx.get('agents')?.get(plan.id);
+      if (agent) reconcile(agent);
+    }
+    return { moved: plans.length, changed: plans.filter((plan) => plan.mode).length };
+  }
+  // ---- Item 4A, stage 5: Settings → Spaces and the ticks on Settings → Modes ---------------------------------------
+  /** `written`: a map just saved, read from here (the stored settings may not show it yet). */
+  function settingsPage(lang, written = {}) {
+    const all = Object.values(readModes(config)).map((mode) => ({ ...mode, label: modeName(mode, lang) }));
+    const raw = rawModes();
+    const modeSpaces = written.modeSpaces ?? readObject(config.modeSpaces);
+    const descriptions = written.modeDescriptions ?? readObject(config.modeDescriptions);
+    const spaceSettings = written.spaceSettings ?? readObject(config.spaceSettings);
+    const spaces = modes.spaces.list(spaceSettings);
+    const ready = guardReady();
+    return {
+      live: spacesLive(),
+      cards: spaceCards({ spaces, spaceSettings, modes: all, modeSpaces, lang, ready }),
+      modes: modeRowsForPage(all.map((mode) => ({ ...mode, description: raw[mode.id]?.description })), { modeSpaces, descriptions, lang, ready, lost: lostFor }),
+      // Item 4A, stage 6a: Settings → Modes → Spaces.
+      rules: {
+        ready,
+        // Fix round (6a review): why each guarded space is not ready now, in the page's language (none when all are).
+        notReady: GUARDED_SPACES.map((space) => ({ space, text: guardedReason(space, ready, lang) })).filter((row) => row.text),
+        sealedExtra: readList(config.sealedExtra).filter((name) => SEALED_EXTRA_CHOICES.includes(name)),
+        sealedExtraChoices: [...SEALED_EXTRA_CHOICES],
+        gridInGuarded: plain(config.gridInGuarded) !== false,
+      },
+    };
+  }
+  /** One write to the Modes settings, in the same line as the other writes of these maps. */
+  async function writeModes(ops, lang) {
+    const settings = ctx.get('settings');
+    if (!settings) throw new Error('Settings cannot be saved right now. Try again in a moment.');
+    const writing = pinChain.catch(() => {}).then(() => settings.mutate('modes', ops));
+    pinChain = writing.catch(() => {});
+    await writing;
+  }
+  /**
+   * Item 4A, stage 6a: what a mode loses in Devices or Workshop (lib/spacerules.js lostIn): in Workshop by Creator Plus's
+   * allow-list when it can say (`creatorPlus.allowed()`), else by the guest rule.
+   */
+  function lostFor(mode, space) {
+    const full = readModes(config)[mode?.id] ?? mode;
+    return lostIn(full, space, { known: globalToolNames(), workshopAllowed: workshopAllowed() });
+  }
+  async function writeTick(modeId, spaceId, on, lang) {
+    const all = Object.values(readModes(config));
+    // Fix round (6a review): the mode by its name in the page's language.
+    const found = all.find((mode) => mode.id === modeId);
+    const plan = nextModeSpaces({ modeSpaces: readObject(config.modeSpaces), modeId, modeLabel: found ? modeName(found, lang) : undefined, space: spaceId, on, modes: all, lang, ready: guardReady(), lost: lostFor });
+    if (plan.refusal) throw new Error(plan.refusal);
+    await writeModes([{ op: 'set', path: ['modeSpaces'], value: JSON.stringify(plan.next) }], lang);
+    // The row itself shows its warning or note (tick.warn, tick.note): not said a second time above the list.
+    return settingsPage(lang, { modeSpaces: plan.next });
+  }
+  /** Item 4A, stage 6a: Settings → Modes → Spaces: `sealedExtra` (only the Library tools) and `gridInGuarded`. */
+  async function writeRules(patch, lang) {
+    const ops = [];
+    if (Object.hasOwn(patch, 'sealedExtra')) {
+      const list = Array.isArray(patch.sealedExtra) ? patch.sealedExtra : [];
+      const bad = list.find((name) => !SEALED_EXTRA_CHOICES.includes(name));
+      if (bad !== undefined) throw new Error(`"${String(bad).slice(0, 60)}" cannot be kept in Recon. Only these can: ${SEALED_EXTRA_CHOICES.join(', ')}.`);
+      ops.push({ op: 'set', path: ['sealedExtra'], value: JSON.stringify([...new Set(list)]) });
+    }
+    if (Object.hasOwn(patch, 'gridInGuarded')) ops.push({ op: 'set', path: ['gridInGuarded'], value: patch.gridInGuarded !== false });
+    if (ops.length > 0) await writeModes(ops, lang);
+    bump();
+    for (const agent of ctx.get('agents')?.list?.() ?? []) reconcile(agent);
+    return settingsPage(lang);
+  }
+  async function writeSpace(spaceId, patch, lang) {
+    const all = Object.values(readModes(config));
+    const want = {};
+    if (Object.hasOwn(patch, 'shown')) want.shown = patch.shown === true;
+    if (Object.hasOwn(patch, 'startMode')) want.startMode = String(patch.startMode ?? '').slice(0, 64);
+    const offered = isSpace(spaceId) ? offeredIn(spaceId, lang) : [];
+    const startFound = all.find((mode) => mode.id === want.startMode);
+    const plan = nextSpaceSettings({ spaceSettings: readObject(config.spaceSettings), space: spaceId, patch: want, offered, modeLabel: startFound ? modeName(startFound, lang) : undefined, lang });
+    if (plan.refusal) throw new Error(plan.refusal);
+    await writeModes([{ op: 'set', path: ['spaceSettings'], value: JSON.stringify(plan.next) }], lang);
+    return settingsPage(lang, { spaceSettings: plan.next });
+  }
+  async function writeDescription(modeId, text, lang) {
+    if (!readModes(config)[modeId]) throw new Error(`There is no mode "${modeId.slice(0, 60)}". Reload the page and try again.`);
+    const plan = nextDescriptions(readObject(config.modeDescriptions), modeId, text, lang);
+    if (plan.refusal) throw new Error(plan.refusal);
+    await writeModes([{ op: 'set', path: ['modeDescriptions'], value: JSON.stringify(plan.next) }], lang);
+    return settingsPage(lang, { modeDescriptions: plan.next });
+  }
+
+  /**
+   * Claim a new draft with the start mode of the space it is shown in. Fix round: a draft whose mode you picked is
+   * claimed again when it shows in another space (the app reuses one blank draft per folder): the pick comes back where
+   * that space offers it, else the space's start mode; `reset` (a New click) forgets the pick. The space the window
+   * names is checked against the folder: Recon's room is Recon only, and Recon takes only a draft in its room. A `tab`
+   * is only a hint without a space (the old tab layout): with a space, Settings → Spaces decides.
+   * @returns {Promise<{claimed: boolean, mode?: string, space?: string, missing?: boolean}>} `missing`: no such thread yet.
+   */
+  async function startDraft(sessionId, where = {}) {
+    // Item 4A, stage 6a (I3): the first turn of this draft waits (at most CLAIM_WAIT_MS) until this claim is done.
+    const top = topOf(sessionId);
+    // Fix round (6a review): a claim already in flight for this draft is waited for, so this one sees what it did.
+    const before = pendingClaims.get(top);
+    const run = (before ? before.catch(() => {}) : Promise.resolve()).then(() => startDraftNow(sessionId, where));
+    pendingClaims.set(top, run);
+    try {
+      return await run;
+    } finally {
+      if (pendingClaims.get(top) === run) pendingClaims.delete(top);
+    }
+  }
+  /** Item 4A, stage 6a: drafts whose claim (startDraft) is in flight -> its promise. */
+  const pendingClaims = new Map();
+  async function startDraftNow(sessionId, { space, tab, reset = false, lang = 'en' } = {}) {
+    const top = topOf(sessionId);
+    const agent = ctx.get('agents')?.get(top);
+    if (!spacesLive()) return { claimed: false };
+    if (!agent) return { claimed: false, missing: true };
+    // Only a new, blank, top-level draft no other add-on has claimed (a Finance brief, a Split Plus pane, an Automation
+    // task). A draft the chat box claimed by itself, or one whose mode you picked, may be claimed again.
+    const ours = autoStarted.has(top) || pickedModes.has(top);
+    const asked = isSpace(space) ? space : spaceOfTab(tab) ?? 'chat';
+    // Fix round (6a review): a guarded window asking for a draft another claim holds in another space (another add-on's
+    // claim, or one still in flight) is told where it is, so it opens a fresh draft instead of showing that one.
+    if (isTopLevel(agent) && freshNow(top) && claimed.has(top) && !ours && isGuarded(asked)) {
+      let now;
+      try {
+        now = draftSpaces.get(top) ?? draftSpaceOf(top);
+      } catch {
+        now = undefined;
+      }
+      if (now !== asked) return { claimed: false, keptIn: isSpace(now) ? now : 'chat' };
+    }
+    if (!isTopLevel(agent) || !freshNow(top) || (claimed.has(top) && !ours) || scheduled.has(top)) return { claimed: false };
+    if (reset) pickedModes.delete(top);
+    // Fix round 2 (upgrade safety): a draft whose space is recorded in another space and that this run did not claim
+    // itself was placed there on purpose: by the one-time fill from a mode another add-on claimed (a Creator Plus saved
+    // run an Automation will send to), or by Move to. A restart forgets who claimed it; the record does not. Left alone.
+    const recorded = recordedSpaceSafe(top);
+    // Item 4A, stage 6a (C6): a draft recorded in a guarded space never leaves it, and a guarded space never takes a draft
+    // recorded elsewhere: the window opens a fresh draft instead.
+    if (isSpace(recorded) && recorded !== asked && (isGuarded(asked) || isGuarded(recorded)) && !inReconRoom(top)) return { claimed: false, keptIn: recorded };
+    if (!ours && isSpace(recorded) && recorded !== asked && !inReconRoom(top) && readObject(config.sessionModes)[top] !== undefined) return { claimed: false };
+    // Item 4A, stage 6a (I9): Recon takes only a draft in its room, when Recon can say where the folder is.
+    // Integration: the sentence in the window's language (the route passes it).
+    if (asked === 'recon' && roomSays(top) === false) throw new Error(spaceText('reconRoomOnly', 'en'));
+    const where = roomRule(top, asked) ?? folderSpace(top);
+    const offered = offeredIn(where);
+    const stored = readObject(config.sessionModes)[top];
+    const picked = pickedModes.get(top);
+    // A mode the draft only got automatically is not kept: after a restart, one equal to the space's built-in start mode
+    // counts as automatic too (stage 5: a changed start mode reaches a reused draft); after a New, none is kept.
+    const tableStart = SPACES.find((one) => one.id === where)?.startMode;
+    const keepStored = !reset && !autoStarted.has(top) && stored !== tableStart;
+    const mode = draftStartMode({ space: where, stored: picked ?? (keepStored ? stored : undefined), tab: isSpace(space) ? undefined : tab, offered, spaceSettings: readObject(config.spaceSettings) });
+    if (!mode) {
+      // Item 4A, stage 6a (I16): a guarded space that offers nothing now (Workshop without Creator Plus): the draft is in
+      // that space and has no tools (never Plain chat).
+      if (isGuarded(where)) {
+        draftSpaces.set(top, where);
+        // Lab re-check fix (6a, problem 6): a reused draft keeps no mode it got elsewhere (Plain chat from an earlier
+        // Chat claim): that mode is not offered here, so nobody picked it for this space. Its claim and stored mode go, so
+        // the first message records it as held, and it follows the space's home mode once the guard add-on is back.
+        const kept = overlay.get(top) ?? stored;
+        if (kept !== undefined && !offered.some((row) => row.id === kept)) {
+          claimed.delete(top);
+          autoStarted.delete(top);
+          pickedModes.delete(top);
+          overlay.delete(top);
+          try {
+            await writeFresh((current) => {
+              const next = readObject(current.sessionModes);
+              if (next[top] === undefined) return [];
+              delete next[top];
+              return [{ op: 'set', path: ['sessionModes'], value: JSON.stringify(next) }];
+            });
+          } catch (error) {
+            report(error);
+          }
+          reconcile(agent);
+        }
+      }
+      return { claimed: false };
+    }
+    // Claimed already, and in the right mode: nothing to do.
+    if (claimed.has(top) && mode === (overlay.get(top) ?? stored) && draftSpaces.get(top) === where) return { claimed: false };
+    const before = draftSpaces.get(top);
+    draftSpaces.set(top, where);
+    try {
+      await modes.set(top, mode, { claim: true });
+    } catch (error) {
+      if (before === undefined) draftSpaces.delete(top);
+      else draftSpaces.set(top, before);
+      throw error;
+    }
+    // Item 4A, stage 6a (I3, LEAK 10): a guarded space is recorded now, not at the first message.
+    if (isGuarded(where)) await recordDraftSpace(top, where).catch(report);
+    if (mode !== picked) autoStarted.add(top);
+    else autoStarted.delete(top);
+    try {
+      await settleDraftAccess(top);
+    } catch (error) {
+      report(error);
+    }
+    return { claimed: true, mode, space: where };
+  }
 
   // Tool access: the grid, permissions, `tools_catalog` and `request_tool_access` (lib/access.js, docs/MODES-AND-SETTINGS.md).
   /** Mission's wait time, in minutes, or undefined when it cannot be read. */
@@ -2639,7 +5780,21 @@ export function apply(ctx, config) {
   access = wireToolAccess(ctx, {
     config,
     plain,
+    // Item 6 (the owner's answer of 21 November 2026): Automations' "Scheduling from Recon" switched off takes the
+    // assistant's schedule tools out of Recon too, whatever Tool access granted. Without Automations nothing changes.
+    reconScheduleOff: () => {
+      try {
+        return ctx.get('settings')?.describe?.().find((entry) => entry.ns === 'automations')?.value?.scheduleFromRecon === false;
+      } catch {
+        return false;
+      }
+    },
     readModes: () => readModes(config),
+    // Item 4A, stage 6a: a mode's copy in a space (catalogue per space), without a thread.
+    copyIn: (modeId, space) => {
+      const mode = readModes(config)[modeId];
+      return mode && isSpace(space) ? spaceCopy(mode, space, { ready: guardReady(), oldGuard: oldGuards(), ranBefore: false, reconNet: readModes(config).recon?.tools ?? [], deviceTools: (Array.isArray(readModes(config).bench?.tools) ? readModes(config).bench.tools : []).filter((name) => typeof name === 'string' && name.startsWith('bench_')), roomKnown: true, extra: readList(config.sealedExtra) }) : undefined;
+    },
     modeOf,
     topOf,
     knownTools,
@@ -2682,16 +5837,10 @@ export function apply(ctx, config) {
         return false;
       }
     },
-    // Nobody is there to answer: an Automation's conversation (also one it re-runs in, and after a restart), or a Mission run that does not wait.
-    unattended: (top) => {
-      if (scheduled.has(top) || scheduledRun.has(top) || lastMessageFromScheduler(top)) return true;
-      try {
-        if (!ctx.get('mission')?.longRun?.(top)) return false;
-        return missionWaitMinutes() === 0;
-      } catch {
-        return false;
-      }
-    },
+    // Nobody is there to answer: an Automation's conversation (also one it re-runs in, and after a restart). A Mission
+    // no longer counts here (Mission stage D): its helpers park their requests in the Mission's card (parkable, park),
+    // and the conversation itself, while a Mission is paused, has the user there.
+    unattended: (top) => scheduled.has(top) || scheduledRun.has(top) || lastMessageFromScheduler(top),
     // A Mission run that waits for the user waits as long as its own wait time says (at most two hours here).
     waitMs: (top) => {
       try {
@@ -2703,7 +5852,51 @@ export function apply(ctx, config) {
       }
     },
   });
-  ctx.on('tools/result', (exec) => access?.markOutside(exec));
+  // Fix round (6a review): a conversation Recon wipes (End and wipe) keeps nothing in Tool access: its permissions, its
+  // note and its log lines go (Recon's `reconWipe` service: its list now, and each new entry).
+  const wipedSeen = new Set();
+  function forgetWiped(ids) {
+    try {
+      const fresh = (Array.isArray(ids) ? ids : [ids]).map((id) => String(id ?? '')).filter((id) => id && !wipedSeen.has(id));
+      if (fresh.length === 0) return;
+      for (const id of fresh) wipedSeen.add(id);
+      if (wipedSeen.size > 2000) wipedSeen.delete(wipedSeen.values().next().value);
+      access?.wiped?.(fresh);
+    } catch (error) {
+      report(error);
+    }
+  }
+  function hookWipe(wipe) {
+    if (!wipe) return undefined;
+    try {
+      forgetWiped(wipe.list?.() ?? []);
+      const off = wipe.onChange?.((id) => forgetWiped([id]));
+      return typeof off === 'function' ? off : undefined;
+    } catch (error) {
+      report(error);
+      return undefined;
+    }
+  }
+  ctx.inject(['reconWipe'], (inner) => {
+    try {
+      inner.effect(() => hookWipe(inner.reconWipe) ?? (() => {}), 'modes: Tool access forgets wiped Recon threads');
+    } catch (error) {
+      report(error);
+    }
+  });
+  // A helper of a running Mission (Mission stage D): its request waits in the Mission's card (mission.parkApproval),
+  // and the other helpers carry on. Mission answers through grantParked / denyParked.
+  access?.service?.useParking?.({
+    parkable: (requester) => {
+      try {
+        return ctx.get('mission')?.canPark?.(requester) === true;
+      } catch {
+        return false;
+      }
+    },
+    park: (request) => ctx.get('mission')?.parkApproval?.(request),
+  });
+  ctx.on('tools/result', (exec, result) => access?.markOutside(exec, result));
 
   /**
    * Which models a conversation and its helpers would use, for the chip in the chat box.
@@ -2829,7 +6022,9 @@ export function apply(ctx, config) {
       known: true,
       mode: mode.label,
       off: toolsOff(sessionId),
-      viaCode: programOnly(ctx.tools, agent),
+      // Not in a tab that refuses programs (Devices, Creator Plus, Recon): there the hint would be wrong.
+      // Item 4A, stage 6a (I22): not in a guarded space either.
+      viaCode: programOnly(ctx.tools, agent) && !refusesProgramsIn(mode, modes.spaces.of(sessionId)) && !FALLBACK_MODE_IDS.includes(mode?.id),
       trimmed: loadsAsNeeded,
       // Whether Tool access is on (the page leaves its section out while it is off).
       access: access ? access.enabled() : false,
@@ -2873,6 +6068,40 @@ export function apply(ctx, config) {
         }),
       'modes: GET tools route',
     );
+    // Preset in this tab (item 7): the (i), the lock and the PTC note of a conversation; each tab's choice for Settings.
+    inner.effect(
+      () =>
+        inner.webServer.register({
+          kind: 'exact',
+          path: PRESET_PATH,
+          handler: async (req, res) => {
+            const refused = inner.connection.requestRejection(req);
+            if (refused !== undefined) {
+              res.statusCode = refused;
+              res.end();
+              return;
+            }
+            if (req.method !== 'GET') {
+              res.statusCode = 405;
+              res.setHeader('allow', 'GET');
+              res.end();
+              return;
+            }
+            res.setHeader('content-type', 'application/json; charset=utf-8');
+            res.setHeader('cache-control', 'no-store');
+            try {
+              const header = req.headers?.['x-dsh-session'];
+              // Plus is English only: a page that sends x-dsh-locale (Chinese included) gets English words.
+              const locale = 'en';
+              res.end(JSON.stringify(await presetView(typeof header === 'string' && /^[\w.:-]{1,120}$/.test(header) ? header : '', locale)));
+            } catch (error) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: String(error?.message ?? error).slice(0, 200) }));
+            }
+          },
+        }),
+      'modes: GET preset route',
+    );
     // Tool access: the page and the choice card reach the service `toolAccess` here (lib/route.js).
     inner.effect(
       () =>
@@ -2882,6 +6111,26 @@ export function apply(ctx, config) {
           handler: toolAccessHandler({ service: () => access?.service, connection: inner.connection, lab: process.env.DSH_TOOL_ACCESS_LAB === '1' }),
         }),
       'modes: tool access route',
+    );
+    // Item 4A, stage 2: the chat box's Mode list reaches Modes here (lib/route.js modeHandler).
+    inner.effect(
+      () =>
+        inner.webServer.register({
+          kind: 'exact',
+          path: MODE_PATH,
+          handler: modeHandler({ spaces: () => modes.spaces, connection: inner.connection }),
+        }),
+      'modes: Mode list route',
+    );
+    // Item 4A, stage 6b (J3): the chat box took the refused message back (lib/route.js engineHeldTakenHandler).
+    inner.effect(
+      () =>
+        inner.webServer.register({
+          kind: 'exact',
+          path: ENGINE_HELD_TAKEN_PATH,
+          handler: engineHeldTakenHandler({ taken: (sessionId, id) => modes.spaces.engineHeldTaken(sessionId, id), connection: inner.connection }),
+        }),
+      'modes: engine put-back route',
     );
     // Settings → Web sources → Other sources: which secrets are kept (never the secrets themselves), keeping
     // and forgetting one, and a test read. The sources themselves are saved as settings by the page.
@@ -2961,12 +6210,156 @@ export function apply(ctx, config) {
     );
   });
 
+  /**
+   * Item 6: a schedule tool call from Recon that would make or move an automation into new chats (target new or
+   * new_once). Those chats would open outside Recon. Undefined when the call keeps to this conversation.
+   * @param {object} exec - the tool call.
+   * @returns {string | undefined} the reason to refuse.
+   */
+  function reconNewChatRefusal(exec) {
+    const name = String(exec?.name ?? '');
+    const target = exec?.arguments?.target;
+    // Stage 6b (J15, Revision 2 L2): from a sealed thread, schedule_edit only for an automation that runs in this thread
+    // (Automations says where each runs); with no Automations to say, never (fail closed).
+    if (name === 'schedule_edit' && !editsOwnTask(exec)) return SEALED_EDIT_OTHER;
+    if (name === 'schedule_create' && target === 'this_session') return undefined;
+    if (name === 'schedule_edit' && (target === undefined || target === null || target === 'this_session')) return undefined;
+    if (name !== 'schedule_create' && name !== 'schedule_edit') return undefined;
+    return 'In Recon an automation runs only in this thread (target this_session). A new thread would open outside Recon and carry the instruction there. Use target this_session, or tell the user.';
+  }
+  const SEALED_EDIT_OTHER = 'From a sealed thread you can change only automations that run in this thread. Nothing was changed. Tell the user they can change it on the Automations page.';
+  /** Stage 6b (L2): whether a schedule_edit names an automation whose target is the calling thread (Automations' answer). */
+  function editsOwnTask(exec) {
+    try {
+      const taskId = String(exec?.arguments?.id ?? exec?.arguments?.task_id ?? '');
+      if (!taskId) return false;
+      const place = ctx.get('automations')?.placeOf?.(taskId);
+      return Boolean(place) && typeof place.sessionId === 'string' && place.sessionId !== '' && place.sessionId === topOf(exec.agent.id);
+    } catch {
+      return false;
+    }
+  }
+  /** Stage 6b (J10): a schedule tool call that makes or moves an automation into new threads (target new or new_once). */
+  const newTarget = (exec) => {
+    const name = String(exec?.name ?? '');
+    const target = exec?.arguments?.target;
+    return (name === 'schedule_create' || name === 'schedule_edit') && (target === 'new' || target === 'new_once');
+  };
+  /** Stage 6b: the guarded space a thread is a guest of ('devices', 'workshop'), '' for none; 'unknown' when it cannot be read. */
+  function guestSpaceOf(top) {
+    try {
+      const space = String(modeOf(top)?.guardedBy ?? '');
+      return space === 'devices' || space === 'workshop' ? space : space ? 'unknown' : '';
+    } catch {
+      return 'unknown';
+    }
+  }
+  /**
+   * Stage 6b (review finding): whether a guest's schedule_edit names an automation delivered to this thread, or one made
+   * in the guest's space that runs there now (Automations' answer). An unknown guest, no Automations, an unknown task or
+   * an answer that cannot be read: false.
+   */
+  function guestEditsOwnSpace(exec, top, guest) {
+    if (guest !== 'devices' && guest !== 'workshop') return false;
+    try {
+      const taskId = String(exec?.arguments?.id ?? exec?.arguments?.task_id ?? '');
+      if (!taskId) return false;
+      const place = ctx.get('automations')?.placeOf?.(taskId);
+      if (!place || typeof place !== 'object') return false;
+      if (typeof place.sessionId === 'string' && place.sessionId !== '' && place.sessionId === top) return true;
+      return place.space === guest && place.createdSpace === guest;
+    } catch {
+      return false;
+    }
+  }
+  /** Stage 6b (J10): whether Automations places a guest's new threads in its space (on, and new enough). */
+  function automationsPlaceGuestRuns() {
+    try {
+      const service = ctx.get('automations');
+      return Number(service?.apiVersion) >= 1 && service?.placesGuestRuns?.() === true;
+    } catch {
+      return false;
+    }
+  }
+  // Item 6: "Scheduling from Recon" off (Automations' setting) also stops a schedule tool Recon was given earlier,
+  // in a turn already under way (the mask follows at the next turn).
+  ctx.on('tools/pre-execute', async (exec, next) => {
+    const decision = await next();
+    if (decision?.kind && decision.kind !== 'allow') return decision;
+    try {
+      if (!String(exec?.name ?? '').startsWith('schedule_') || !exec?.agent?.id || !isIsolated(topOf(exec.agent.id))) return decision;
+      if (ctx.get('settings')?.describe?.().find((entry) => entry.ns === 'automations')?.value?.scheduleFromRecon === false) {
+        return { kind: 'deny', reason: 'Scheduling from Recon is switched off by the user (Settings → Alerts → Scheduling from Recon). Do not schedule anything from here; tell the user if it matters.' };
+      }
+      // Whatever the setting: from Recon an automation runs only in this conversation. A new chat would be made outside
+      // Recon, in the scheduled tab, with this chat's folder and the instruction written here (review finding, item 6).
+      const reason = reconNewChatRefusal(exec);
+      if (reason) ledgerNote(exec, 'recon-new-chat');
+      return reason ? { kind: 'deny', reason } : decision;
+    } catch (error) {
+      report(error);
+      return decision;
+    }
+  });
+  // Item 4A, stage 6b (J10): a guest in Devices or Workshop may schedule (point 27); a new thread from there must stay in
+  // that space, which only Automations can arrange: without it (off, gone, or too old) such a call is refused.
+  ctx.on('tools/pre-execute', async (exec, next) => {
+    const decision = await next();
+    if (decision?.kind && decision.kind !== 'allow') return decision;
+    try {
+      if (!exec?.agent?.id) return decision;
+      // Review finding (fail closed, as L2 for sealed threads): a guest's schedule_edit only for an automation delivered
+      // to this thread, or made in this space and running there now (Automations says which); with no Automations to
+      // say, never. Otherwise a guest could rewrite a Chat or Code automation (its runs get the Terminal), or pull a Recon
+      // automation's instruction into this thread with target this_session.
+      if (exec.name === 'schedule_edit') {
+        const top = topOf(exec.agent.id) || exec.agent.id;
+        const guest = guestSpaceOf(top);
+        if (guest && !guestEditsOwnSpace(exec, top, guest)) {
+          ledgerNote(exec, 'guest-edit-other');
+          const name = SPACE_NAMES.en[guest] ?? 'this space';
+          return { kind: 'deny', reason: `From ${name} you can change only automations made in ${name} that still run there, or ones delivered to this thread. Nothing was changed. Tell the user they can change it on the Automations page.` };
+        }
+      }
+      if (!newTarget(exec)) return decision;
+      const top = topOf(exec.agent.id) || exec.agent.id;
+      const guest = guestSpaceOf(top);
+      if (!guest) return decision;
+      if (guest === 'unknown' || !automationsPlaceGuestRuns()) {
+        ledgerNote(exec, 'guest-new-thread');
+        const name = SPACE_NAMES.en[guest] ?? 'this space';
+        return { kind: 'deny', reason: `New threads from ${name} need the Automations add-on to keep them in ${name}, and it is off or out of date. Use target this_session, or tell the user to switch on Automations.` };
+      }
+      return decision;
+    } catch (error) {
+      report(error);
+      return { kind: 'deny', reason: 'The schedule tool could not be checked just now, so nothing was made. Try again in a moment.' };
+    }
+  });
+  // Stage 6b (Revision 2 L4): a guest's automation that opens new threads is remembered with its space, so its runs are
+  // held if nobody places them there (also when Automations is off or gone later).
+  ctx.on('tools/post-execute', async (exec, result, next) => {
+    const decision = await next();
+    try {
+      if (!exec?.agent?.id || !newTarget(exec) || result?.isError === true) return decision;
+      const top = topOf(exec.agent.id) || exec.agent.id;
+      const guest = guestSpaceOf(top);
+      if (guest !== 'devices' && guest !== 'workshop') return decision;
+      const taskId = String(result?.value?.id ?? (exec.name === 'schedule_edit' ? exec.arguments?.id ?? '' : ''));
+      if (taskId && !result?.value?.code) noteGuestRun(taskId, guest, modeOf(top)?.id);
+    } catch (error) {
+      report(error);
+    }
+    return decision;
+  });
+
   // A skill switched off in this tab is not loaded by the model (it may still know its name from an older list).
   ctx.on('tools/pre-execute', async (exec, next) => {
     const decision = await next();
     if (decision?.kind && decision.kind !== 'allow') return decision;
     try {
       const reason = skillOffReason(exec);
+      if (reason) ledgerNote(exec, 'skill-off');
       return reason ? { kind: 'deny', reason } : decision;
     } catch (error) {
       report(error);
@@ -2989,7 +6382,8 @@ export function apply(ctx, config) {
       if (modes.helperModels(exec.agent.id) !== 'same') return decision;
       const own = exec.agent.model?.current?.();
       if (own && (!wantModel || wantModel === own.model) && (!wantProvider || wantProvider === own.provider)) return decision;
-      return { kind: 'deny', reason: `This conversation is set to one model for everything${own?.model ? ` (${own.model})` : ''}, so a helper may not be started on another model. Call the tool again without "provider" and "model": the helper then runs on this conversation's model. The user can allow different models with the models chip in the chat box.` };
+      ledgerNote(exec, 'one-model');
+      return { kind: 'deny', reason: `This thread is set to one model for everything${own?.model ? ` (${own.model})` : ''}, so a helper may not be started on another model. Call the tool again without "provider" and "model": the helper then runs on this thread's model. The user can allow different models with the models chip in the chat box.` };
     } catch (error) {
       report(error);
       return decision;
@@ -3003,10 +6397,35 @@ export function apply(ctx, config) {
         () =>
           inner.commands.register({
             name: commandName,
-            description: 'Show or switch the mode of this session',
+            description: 'Show or switch the mode of this thread',
             input: { hint: '[mode]' },
             handler: async ({ agent, rawInput }) => {
               const wanted = String(rawInput ?? '').trim().toLowerCase();
+              // Item 4A, stage 2: with spaces live, /mode works like the Mode list: the modes of this thread's space, before
+              // the first message too (the pick is then a claim), with the same sentences when a pick is refused.
+              if (spacesLive() && tabsDecide()) {
+                // Fix round 2: on a draft the app shows no command output, so the chat box shows this reply instead.
+                const said = (answer) => {
+                  const top = topOf(agent.id);
+                  if (freshNow(top)) draftReplies.set(top, { id: randomUUID(), text: answer.text, kind: answer.kind, at: Date.now() });
+                  return answer;
+                };
+                const view = modes.spaces.view(agent.id);
+                const name = (id) => readModes(config)[id]?.label ?? id;
+                if (!wanted) {
+                  const lines = view.modes.map((mode) => `${mode.id === view.current ? '* ' : '  '}${mode.id}: ${mode.label}${mode.greyed ? ` (${mode.reason})` : ''}`);
+                  const answer = { kind: 'success', text: `Mode: ${view.current} (space: ${view.space})\n${lines.join('\n')}\nA mode can be changed at any time; it applies from your next message.` };
+                  if (freshNow(topOf(agent.id))) said({ kind: 'success', text: `Mode: ${name(view.current)}. To change it, type /${commandName} and a mode, or pick one in the Mode list under the chat box.` });
+                  return answer;
+                }
+                const id = readModes(config)[wanted] ? wanted : Object.values(readModes(config)).find((mode) => mode.label.toLowerCase() === wanted)?.id ?? wanted;
+                try {
+                  await modes.spaces.pick(agent.id, id);
+                } catch (error) {
+                  return said({ kind: 'error', text: String(error?.message ?? error) });
+                }
+                return said({ kind: 'success', text: `Mode changed to ${name(id)}. It applies from your ${freshNow(topOf(agent.id)) ? 'first' : 'next'} message.` });
+              }
               const available = modes.list();
               const current = modes.get(agent.id);
               // With the Cowork sidebar on, the selected tab decides the mode of a conversation that has

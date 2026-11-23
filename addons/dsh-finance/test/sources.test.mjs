@@ -182,7 +182,7 @@ test('a conversation opened by a brief is recognised and gets a note of its own'
   const pinned = readSelection({ kind: 'brief', subject: 'NVIDIA', market: 'United States' });
   assert.equal(pinned.kind, 'brief');
   const note = selectionNote(pinned);
-  assert.match(note, /- Subject: "NVIDIA" \(this conversation was opened by a scheduled task; its instruction says what to do\)/);
+  assert.match(note, /- Subject: "NVIDIA" \(this thread was opened by an automation; its instruction says what to do\)/);
   assert.match(note, /- Market: United States only/);
   // The drop-down never offers "brief".
   assert.equal(readSelection({ kind: 'nonsense' }).kind, 'company');
@@ -195,6 +195,6 @@ test('your own scheduled tasks: listed without the briefs, with the Finance mark
     { id: 'c', title: 'Old one', status: 'ended' },
     { id: 7, title: '', status: 'paused' },
   ], ['7', 'gone']);
-  assert.deepEqual(tasks, [{ id: 'b', title: 'Morning markets', status: 'active', finance: false }, { id: '7', title: 'Untitled task', status: 'paused', finance: true }]);
+  assert.deepEqual(tasks, [{ id: 'b', title: 'Morning markets', status: 'active', finance: false }, { id: '7', title: 'Untitled automation', status: 'paused', finance: true }]);
   assert.deepEqual(ownTasksOf(undefined, undefined), []);
 });

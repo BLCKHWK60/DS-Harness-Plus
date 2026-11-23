@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Tool ledger",
+    "description": "Records every tool the assistant used, asked for or was refused. Names and counts only."
+  }
+}

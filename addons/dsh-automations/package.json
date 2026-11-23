@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Shows how every scheduled task run ended (finished, failed, stopped or waiting for you) on one page, and alerts you on this Mac and, when set up, on your phone.",
+  "description": "Shows how every automation run ended (finished, failed, stopped or waiting for you) on one page, and alerts you on this Mac and, when set up, on your phone.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

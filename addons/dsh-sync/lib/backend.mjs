@@ -1,42 +1,42 @@
-// lib/backend.mjs — 传输后端 seam（零依赖）。
+// lib/backend.mjs — the transport backend seam (no dependencies).
 //
-// Backend 契约（三类传输后端共享同一 surface；本次落地 git 与 encrypted，
-// 对象存储 object-storage 为接口占位，配置即 resolveConfig 响亮失败）：
+// The Backend contract (the three kinds of transport backend share one surface; git and encrypted are built,
+// object-storage is an interface placeholder, and configuring it fails loudly in resolveConfig):
 //
-//   kind     : 'git' | 'encrypted' | 'object-storage'   —— 语义后端
-//   mode     : 'plaintext' | 'encrypted'                 —— 实际生效的传输模式
-//   warnings : string[]                                  —— 降级/边界警告（进入
-//                                                          status/push/pull 结果）
+//   kind     : 'git' | 'encrypted' | 'object-storage'   —— the backend asked for
+//   mode     : 'plaintext' | 'encrypted'                 —— the transport mode actually in use
+//   warnings : string[]                                  —— fallback and limit warnings (they go into the
+//                                                          status/push/pull results)
 //   status() -> StatusValue
 //   push(opts) -> PushValue
 //   pull(opts) -> PullValue
 //
-// git（GitBackend + SyncEngine）为明文内置实现；encrypted（lib/encrypted.mjs）
-// 为 age 包装的 git 传输（镜像内容加密后再推、解密后再合并）；object-storage
-// 无实现——只有契约与常量占位。
+// git (GitBackend + SyncEngine) is the built-in plain-text implementation; encrypted (lib/encrypted.mjs)
+// is git transport wrapped in age (the mirror's content is encrypted before a push and decrypted before a merge);
+// object-storage has no implementation — only the contract and placeholder constants.
 
 import { BACKENDS } from './constants.mjs'
 
-/** 传输模式词汇。 */
+/** The transport mode words. */
 export const BACKEND_MODES = Object.freeze({
   PLAINTEXT: 'plaintext',
   ENCRYPTED: 'encrypted',
 })
 
 /**
- * 选择 encrypted 后端实际生效的传输模式（纯函数；探测结果经参数注入，便于测试）。
+ * Choose the transport mode the encrypted backend really uses (pure function; the probe result is passed in, for tests).
  *
- * 降级规则（任一不满足即回退明文 git 并给出显式警告，绝不静默降级）：
- * - backend !== 'encrypted' → 明文（无警告）；
- * - age 二进制不可用 → 明文 + 警告；
- * - ageRecipient 为空 → 明文 + 警告（无法加密）；
- * - ageIdentity 为空 → 明文 + 警告（无法解密）。
+ * Fallback rules (if any one fails, it falls back to plain git with a clear warning; never a silent fallback):
+ * - backend !== 'encrypted' → plain text (no warning);
+ * - the age program is not available → plain text + warning;
+ * - ageRecipient is empty → plain text + warning (cannot encrypt);
+ * - ageIdentity is empty → plain text + warning (cannot decrypt).
  *
- * @param {object} deps - {backend, ageAvailable, ageRecipient, ageIdentity}。
- * @param {string} deps.backend - BACKENDS 之一。
- * @param {boolean} deps.ageAvailable - detectAge 是否探测到 age 二进制。
- * @param {string} deps.ageRecipient - age 收件人（公钥/身份串）。
- * @param {string} deps.ageIdentity - age 身份文件路径（解密私钥）。
+ * @param {object} deps - {backend, ageAvailable, ageRecipient, ageIdentity}.
+ * @param {string} deps.backend - one of BACKENDS.
+ * @param {boolean} deps.ageAvailable - whether detectAge found the age program.
+ * @param {string} deps.ageRecipient - the age recipient (public key or identity string).
+ * @param {string} deps.ageIdentity - the age identity file path (the private key for decrypting).
  * @returns {{mode: 'plaintext'|'encrypted', warnings: string[]}}
  */
 export function selectEncryptionMode({ backend, ageAvailable, ageRecipient, ageIdentity }) {

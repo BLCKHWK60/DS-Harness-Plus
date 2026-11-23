@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { createMeter, describe, openRecord, readLimits } from '../lib/meter.js';
+import { checkRaise, createMeter, describe, missionWords, openRecord, readLimits } from '../lib/meter.js';
 
 function guard(raw, start = Date.UTC(2026, 10, 12, 9)) {
   let clock = start;
@@ -109,8 +109,8 @@ test('finished tasks are remembered for "your biggest task", and saved', () => {
 });
 
 test('a stop reads as one plain sentence', () => {
-  assert.equal(describe({ limit: 'steps', used: 300, max: 300 }), 'This task reached its limit of 300 steps.');
-  assert.equal(describe({ limit: 'tokens', used: 5000000, max: 5000000 }), 'This task reached its limit of 5,000,000 tokens.');
+  assert.equal(describe({ limit: 'steps', used: 300, max: 300 }), 'This run reached its limit of 300 steps.');
+  assert.equal(describe({ limit: 'tokens', used: 5000000, max: 5000000 }), 'This run reached its limit of 5,000,000 tokens.');
   assert.equal(describe({ limit: 'day', used: 9, max: 9 }), "Today's limit of 9 tokens is used up.");
 });
 
@@ -176,14 +176,17 @@ test('a Long run has its own allowance (when the limits are the built-in ones), 
   assert.equal(meter.check('n', 'run-2').max, 5000);
 });
 
-test('the allowance NEVER exceeds a limit the user saved: a lower saved step or token limit wins during a Long run', () => {
+test('a Long run\'s steps have their own allowance whatever step limit is saved; a lower saved token limit still wins', () => {
   // The user saved 100 steps and 5 million tokens (built-in: 300 and 20 million).
   const low = guard({ maxSteps: 100, maxHelperSteps: 1500, maxTokens: 5000000, maxLongSteps: 5000, maxLongTokens: 60000000 }).meter;
   low.startTask('a');
-  for (let i = 0; i < 99; i += 1) low.step('a', true, 'r');
-  assert.equal(low.check('a', 'r'), null);
+  for (let i = 0; i < 4999; i += 1) low.step('a', i % 2 === 0, 'r');
+  assert.equal(low.check('a', 'r'), null, 'the saved 100 per task does not cap a whole Long run');
   low.step('a', false, 'r');
-  assert.deepEqual(low.check('a', 'r'), { limit: 'steps', used: 100, max: 100, first: true }, 'all requests together stop at the saved 100, helpers included');
+  assert.deepEqual(low.check('a', 'r'), { limit: 'steps', used: 5000, max: 5000, first: true }, 'all requests together stop at the Long run\'s own 5,000, helpers included');
+  assert.equal(low.check('a', '').limit, 'steps', 'an ordinary task still stops at the saved 100');
+  assert.deepEqual(low.longAllowance(), { enabled: true, steps: 5000, tokens: 5000000, dayTokens: 0 });
+  assert.match(describe({ limit: 'steps', max: 5000 }, true), /^This Mission reached its own limit of 5,000 steps\.$/);
   low.startTask('b');
   low.usage('b', 5000000, 'r2');
   assert.equal(low.check('b', 'r2').limit, 'tokens');
@@ -298,4 +301,49 @@ test('the installer\'s starting token limit gets the Long run allowance; the sam
 test('saving the token limit on the Budget page clears the installer\'s mark', async () => {
   const { readFileSync } = await import('node:fs');
   assert.match(readFileSync(new URL('../client.js', import.meta.url), 'utf8'), /'maxTokens' in values\) values = \{ \.\.\.values, startingTokens: false \}/);
+});
+
+test('stage C: endRun gives back the whole-run count, and restoreRun puts it back (adding steps counted since)', () => {
+  const { meter } = guard({ maxSteps: 50, maxHelperSteps: 1500, maxTokens: 20000000, maxLongSteps: 100, maxLongTokens: 60000000 });
+  meter.startTask('m');
+  for (let i = 0; i < 70; i += 1) meter.step('m', i % 2 === 0, 'run-1');
+  meter.usage('m', 1000, 'run-1');
+  const kept = meter.endRun('m');
+  assert.deepEqual(kept, { key: 'run-1', steps: 35, helperSteps: 35, tokens: 1000 });
+  assert.equal(meter.endRun('m'), null, 'nothing is left after the end');
+  meter.startTask('m');
+  for (let i = 0; i < 20; i += 1) meter.step('m', false, 'run-1');
+  meter.restoreRun('m', kept);
+  assert.equal(meter.check('m', 'run-1'), null, '90 of 100');
+  for (let i = 0; i < 10; i += 1) meter.step('m', false, 'run-1');
+  assert.equal(meter.check('m', 'run-1').limit, 'steps', '100 of 100 over the run, across the continue');
+  meter.restoreRun('m', null);
+  meter.restoreRun('x', kept);
+  assert.equal(meter.endRun('x').steps, 35, 'a run with no count yet gets the kept one');
+});
+
+test('stage E: stop texts saved as "Long run" are shown with the name Mission', () => {
+  assert.equal(missionWords('This Long run reached its own limit of 5,000 steps.'), 'This Mission reached its own limit of 5,000 steps.');
+  assert.equal(missionWords('This run reached its limit of 300 steps.'), 'This run reached its limit of 300 steps.');
+  assert.equal(missionWords(undefined), '');
+});
+
+test('stage E: a Mission allowance is raised only upwards, and only up to 50,000 steps or 500,000,000 tokens', () => {
+  const now = { steps: 5000, tokens: 60000000 };
+  assert.deepEqual(checkRaise({ limit: 'steps', to: 7500 }, now), { ok: true, key: 'maxLongSteps', from: 5000, to: 7500 });
+  assert.deepEqual(checkRaise({ limit: 'tokens', to: 90000000 }, now), { ok: true, key: 'maxLongTokens', from: 60000000, to: 90000000 });
+  assert.equal(checkRaise({ limit: 'steps', to: 5000 }, now).ok, false, 'not higher');
+  assert.equal(checkRaise({ limit: 'steps', to: 50001 }, now).ok, false, 'past the most');
+  assert.equal(checkRaise({ limit: 'tokens', to: 500000001 }, now).ok, false, 'past the most');
+  assert.equal(checkRaise({ limit: 'minutes', to: 10 }, now).ok, false, 'only steps or tokens');
+  assert.equal(checkRaise({ limit: 'steps', to: 'lots' }, now).ok, false);
+  assert.equal(checkRaise({ limit: 'steps', to: 6000 }, { steps: 0, tokens: 0 }).ok, false, 'no limit: nothing to raise');
+});
+
+test('stage E: under a stop by a Mission\'s allowance, the card says to allow or raise it and press Resume, not to send a message', async () => {
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  assert.match(source, /const BUDGET_TURN_HINT = 'The Mission is paused\. Allow the higher limit in the Mission\\'s card above the chat box, or raise "Steps in a Mission" in Settings → Budget guard, then press Resume\.'/);
+  assert.match(source, /stop\?\.mission === true \|\| \/\^This \(Mission\|Long run\) reached\//);
+  assert.match(source, /isMissionStop\(stop\)\s*\?\s*BUDGET_TURN_HINT/);
 });

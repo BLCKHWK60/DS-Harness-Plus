@@ -1,16 +1,16 @@
-// lib/render.mjs — 结果文本渲染（纯函数，零依赖；输入全部 JSON 安全）。
+// lib/render.mjs — rendering result text (pure functions, no dependencies; every input is JSON-safe).
 
 import { MERGE_KINDS } from './constants.mjs'
 
-/** 时间戳 → 本地可读时间（缺省 '-'）。 */
+/** A timestamp → a readable local time ('-' when missing). */
 function timeOf(value) {
   if (typeof value !== 'number' || value <= 0) return '-'
   return new Date(value).toISOString()
 }
 
 /**
- * /sync 状态文本（sync_status 工具共用同一渲染）。
- * @param {object} status - collectStatus 产物。
+ * The /sync status text (the sync_status tool uses the same rendering).
+ * @param {object} status - the output of collectStatus.
  * @returns {string}
  */
 export function renderStatus(status) {
@@ -42,8 +42,8 @@ export function renderStatus(status) {
 }
 
 /**
- * /sync diff 文本：本地未提交变更 + HEAD..远端统计（只读）。
- * @param {object} status - collectStatus 产物。
+ * The /sync diff text: local uncommitted changes + HEAD..remote counts (read-only).
+ * @param {object} status - the output of collectStatus.
  * @returns {string}
  */
 export function renderDiff(status) {
@@ -61,8 +61,8 @@ export function renderDiff(status) {
 }
 
 /**
- * pull 结果文本。
- * @param {{ok: boolean, pulled?: boolean, merged?: boolean, adopted?: number, appended?: number, diverged?: number, forks?: string[], head?: string, error?: string, warnings?: string[]}} result - pull 产物。
+ * The pull result text.
+ * @param {{ok: boolean, pulled?: boolean, merged?: boolean, adopted?: number, appended?: number, diverged?: number, forks?: string[], head?: string, error?: string, warnings?: string[]}} result - the pull output.
  * @returns {string}
  */
 export function renderPull(result) {
@@ -91,14 +91,14 @@ export function renderPull(result) {
  */
 function isolatedLines(result) {
   const lines = []
-  if ((result.isolatedLeftOut ?? 0) > 0) lines.push(`  left out ${result.isolatedLeftOut} file(s) of isolated (Recon) and Scratch conversations: they are never synced`)
-  if ((result.isolatedRemoved ?? 0) > 0) lines.push(`  took ${result.isolatedRemoved} file(s) of isolated (Recon) and Scratch conversations out of the sync repository (its git history still holds them)`)
+  if ((result.isolatedLeftOut ?? 0) > 0) lines.push(`  left out ${result.isolatedLeftOut} file(s) of sealed (Recon) and Scratch threads: they are never synced`)
+  if ((result.isolatedRemoved ?? 0) > 0) lines.push(`  took ${result.isolatedRemoved} file(s) of sealed (Recon) and Scratch threads out of the sync repository (its git history still holds them)`)
   return lines
 }
 
 /**
- * push 结果文本。
- * @param {{ok: boolean, pushed?: boolean, head?: string, mirrored?: number, deleted?: number, remote?: string, error?: string, warnings?: string[]}} result - push 产物。
+ * The push result text.
+ * @param {{ok: boolean, pushed?: boolean, head?: string, mirrored?: number, deleted?: number, remote?: string, error?: string, warnings?: string[]}} result - the push output.
  * @returns {string}
  */
 export function renderPush(result) {
@@ -115,8 +115,8 @@ export function renderPush(result) {
 }
 
 /**
- * 工具规范结果里的错误块（pull/push/status 共用）。
- * @param {string} message - 已脱敏的错误消息。
+ * The error block in a tool's standard result (shared by pull/push/status).
+ * @param {string} message - the error message, with secrets already removed.
  * @returns {{ok: boolean, error: string}}
  */
 export function errorValue(message) {

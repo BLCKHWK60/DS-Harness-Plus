@@ -1,6 +1,6 @@
 # Tests: @local/dsh-model-tiers
 
-28 tests in 1 file: test/tiers.test.mjs.
+49 tests in 2 files: test/tiers.test.mjs (31) and test/ptc.test.mjs (18, the three helper tools called from inside a program under PTC).
 
 Run with the app's own Node (stand-ins only; never against the real app data):
 

@@ -87,6 +87,9 @@ export function scaffoldFiles({ folder, title, description, kind, tool = '', mod
       if (!enabled() && has) {
         const { [MODE_ID]: _gone, ...rest } = table;
         ops.push({ op: 'set', path: ['extraModes'], value: JSON.stringify(rest) });
+        // Without the Cowork sidebar (and in the lab with spaces off) defaultMode still picks a new thread's mode, so it
+        // must not name a mode that is gone. With spaces, Modes already skips a start mode whose add-on is off and keeps
+        // the owner's choice: this add-on never writes spaceSettings.
         if (row.value.defaultMode === MODE_ID) ops.push({ op: 'set', path: ['defaultMode'], value: 'cowork' });
       }
       if (ops.length > 0) await settings.mutate('modes', ops);
@@ -108,7 +111,7 @@ import z from '@deepseek-ai/schemastery';
 export const name = ${sq(folder)};
 ${kind === 'mode' ? `export const MODE_ID = ${sq(modeId || short)};
 /** The tab as the Modes add-on stores it. Its method stays under 4,000 characters. */
-export const MODE = { label: ${sq(oneLine(title, 40))}, tools: ['read', 'glob', 'grep', 'web_search', 'web_fetch', 'todo_write', 'ask_user_question'], sandbox: 'read-only', prompt: ${q(method || `You are in the ${oneLine(title, 40)} tab. ${desc}`)} };
+export const MODE = { label: ${sq(oneLine(title, 40))}, tools: ['read', 'glob', 'grep', 'web_search', 'web_fetch', 'todo_write', 'ask_user_question'], sandbox: 'read-only', prompt: ${q(method || `You are in the ${oneLine(title, 40)} mode. ${desc}`)} };
 ` : ''}
 export const Config = z.object({
   /** Off until switched on. */

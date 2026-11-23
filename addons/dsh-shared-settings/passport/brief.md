@@ -2,7 +2,7 @@
 
 What it is for: Keeps the settings you change in the app's pages in one settings.json in a folder you choose (for example iCloud Drive), so two Macs share one setup. Holds no secrets.
 
-This brief was written by Creator Plus from the plugin's own files. Its README below is the full description, complete enough to rebuild the plugin from; improve this brief by hand, with the user's yes.
+This brief was written by Creator Plus from the add-on's own files. Its README below is the full description, complete enough to rebuild the add-on from; improve this brief by hand, with the user's yes.
 
 ## What it must keep doing
 
@@ -11,7 +11,7 @@ This brief was written by Creator Plus from the plugin's own files. Its README b
 
 # Shared settings
 
-Host plugin `@local/dsh-shared-settings` (dsh 0.2.2-rc.1). It keeps the settings you change in the app's own pages in one file, `settings.json`, in a folder you choose. With the folder in iCloud Drive, two Macs share one setup.
+Host add-on `@local/dsh-shared-settings` (dsh 0.2.2-rc.1). It keeps the settings you change in the app's own pages in one file, `settings.json`, in a folder you choose. With the folder in iCloud Drive, two Macs share one setup.
 
 ## What is shared
 
@@ -36,9 +36,9 @@ The `include` setting adds other entries, for example the app's own `ui-theme`. 
 **Never in the file:**
 - Fields the app's schema marks as secret.
 - Any field whose name looks like a key, token, secret, password, passphrase or credential, at any depth.
-- The fields in `skipFields`. By default these are the per-conversation choices:
+- The fields in `skipFields`. By default these are the per-thread choices:
   - `modes.sessionModes`, `sessionWeb` and `sessionResearch`;
-  - `modes.sessionIsolated`, `sessionSearchDepth`, `sessionDepth` (each conversation's Depth), `sessionLens` (each conversation's Lens), `depthMoved` (whether this Mac's old Web levels were moved into Depth), `sessionTools`, `sessionHelpers`, `sessionToolSets`, `sessionSandboxBase` (each conversation's earlier access level) and `extraModes` (the tabs this Mac's add-ons add); and the Skill architect's `skill-architect.nolearn` (the conversations you marked "never learn from this");
+  - `modes.sessionIsolated`, `sessionSearchDepth`, `sessionDepth` (each thread's Depth), `sessionLens` (each thread's Lens), `depthMoved` (whether this Mac's old Web levels were moved into Depth), `sessionTools`, `sessionHelpers`, `sessionToolSets`, `sessionSandboxBase` (each thread's earlier access level) and `extraModes` (the tabs this Mac's add-ons add); and the Skill architect's `skill-architect.nolearn` (the threads you marked "never learn from this");
   - `model-tiers.activeTiers`, `sessionProfiles` and `modelProfilesMigrated`.
 
   The ten `modes` fields on the second line stay on each Mac even when you set your own `skipFields`.
@@ -88,7 +88,7 @@ Rounds never overlap.
     folder: ''            # absolute path or ~/...; '' = the folder the installer recorded, or off
     include: []           # extra entry ids to share (e.g. ui-theme)
     exclude: []           # entry ids never to share
-    skipFields: [...]     # '<entry id>.<field>'; default: the per-conversation fields above
+    skipFields: [...]     # '<entry id>.<field>'; default: the per-thread fields above
     pollSeconds: 30
     commandName: shared-settings
 ```
@@ -108,7 +108,7 @@ Either way, the installer writes it to `<dsh home>/shared-settings/folder.txt`. 
 
 - 13 unit tests, with a stand-in for the app's settings service and two simulated Macs on one folder. They cover:
   - the first Mac writing the file;
-  - a second Mac adopting it, keeping its secrets and per-conversation fields, with a backup;
+  - a second Mac adopting it, keeping its secrets and per-thread fields, with a backup;
   - edits both ways, including a reset to default;
   - a quiet round that changes nothing;
   - simultaneous edits to different fields and to the same field;
@@ -121,8 +121,8 @@ Either way, the installer writes it to `<dsh home>/shared-settings/folder.txt`. 
   - folders with spaces;
   - secret scrubbing.
 - In the app's web version, in a throwaway setup:
-  - the first round wrote the five sections, with no secrets and no per-conversation fields;
-  - a hand edit of `defaultMode` in the file reached the profile within seconds, with a backup, and the per-conversation fields were left alone;
+  - the first round wrote the five sections, with no secrets and no per-thread fields;
+  - a hand edit of `defaultMode` in the file reached the profile within seconds, with a backup, and the per-thread fields were left alone;
   - choosing the Forest colour scheme in Settings reached the file within seconds;
   - `/shared-settings` answered.
 

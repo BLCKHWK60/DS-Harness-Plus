@@ -250,7 +250,7 @@ export function apply(ctx, config) {
     scratchPlace,
     // Isolated conversations (Recon) are never pushed or pulled; the Modes add-on says which they are.
     // Scratch conversations (the Cowork sidebar's hidden place, <app home>/scratch) are never synced either.
-    isolation: () => readIsolation({ settings: ctx.get('settings'), modes: ctx.get('modes'), agents: ctx.get('agents'), sessionPersistence: ctx.get('sessionPersistence'), scratchPlace: scratchPlace(), reconMoved: ctx.get('reconMoved') }),
+    isolation: () => readIsolation({ settings: ctx.get('settings'), modes: ctx.get('modes'), agents: ctx.get('agents'), sessionPersistence: ctx.get('sessionPersistence'), scratchPlace: scratchPlace(), reconMoved: ctx.get('reconMoved'), recon: ctx.get('recon') }),
     logger,
   })
 
@@ -315,7 +315,7 @@ export function apply(ctx, config) {
       () =>
         inner.commands.register({
           name: settings.commandName,
-          description: 'Sync sessions with a git remote: `status`, `pull`, `push`, `projects [apply]`',
+          description: 'Sync threads with a git remote: `status`, `pull`, `push`, `projects [apply]`',
           input: { hint: 'status | pull | push | projects [apply]' },
           handler: async ({ rawInput, signal }) => {
             const [verb = 'status', arg] = String(rawInput ?? '').trim().split(/\s+/)
@@ -327,8 +327,8 @@ export function apply(ctx, config) {
               if (verb === 'pull') {
                 const result = await service.pull(options)
                 const lines = [renderPull(result)]
-                if (result.ok && (result.restored ?? 0) > 0) lines.push(`  copied ${result.restored} session file(s) into this machine's session store`)
-                if (result.restoredSkipped?.length) lines.push(`  left ${result.restoredSkipped.length} live session file(s) alone because they are open in the app or changed during the pull; pull again when those conversations are closed`)
+                if (result.ok && (result.restored ?? 0) > 0) lines.push(`  copied ${result.restored} thread file(s) into this machine's threads`)
+                if (result.restoredSkipped?.length) lines.push(`  left ${result.restoredSkipped.length} live thread file(s) alone because they are open in the app or changed during the pull; pull again when those threads are closed`)
                 if (result.projectPlan?.some((item) => item.state === 'create')) lines.push(`  ${result.projectPlan.filter((item) => item.state === 'create').length} project(s) from other devices can be added: /${settings.commandName} projects`)
                 return { kind: result.ok ? 'success' : 'error', text: withWarnings(lines.join('\n'), result) }
               }

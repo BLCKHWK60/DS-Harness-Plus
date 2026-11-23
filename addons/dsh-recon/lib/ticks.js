@@ -10,7 +10,7 @@ export const PAGE_KINDS = ['verified', 'academic', 'news', 'sites', 'forums', 's
 /** Boards that are social media and channels rather than forums. */
 const SOCIAL_BOARDS = ['telegram', 'mastodon'];
 /** How a refusal begins (lib/tools.js counts such an answer as one that did not run). */
-export const UNTICKED = 'Not among this conversation\'s Recon sources';
+export const UNTICKED = 'Not among this thread\'s Recon sources';
 
 const NAMES = { verified: 'verified sources', academic: 'academic papers', news: 'news', sites: 'ordinary sites', forums: 'forums and boards', social: 'social media and channels', archives: 'archives', other: 'the user\'s own other sources', tor: '.onion sites through Tor', usenet: 'Usenet', unknown: 'pages that cannot be told apart' };
 

@@ -163,8 +163,11 @@ window.__ModuleLoader__.load({
     // routes on its own timer, even in a hidden window. This gives all of them ONE shared Settings copy (read once, renewed when
     // Settings changes or after 30 seconds at the most) and one kind of polling loop that stops while the window is hidden.
     // The first copy of this block to run puts the shared state on `window.__dshPoll`; later copies reuse it, so 30 add-ons share one.
+    // A newer copy (higher API) replaces an older shared object instead of reusing it, so an older page file that runs first (an
+    // add-on edited in creator mode, a partly updated install) cannot keep the whole page on an older helper. Raise API with every
+    // change to how the shared state behaves.
     const dshPoll = (() => {
-      const API = 1;
+      const API = 2;
       const root = typeof window !== 'undefined' ? window : globalThis;
       if (root.__dshPoll && root.__dshPoll.api >= API) return root.__dshPoll;
 
@@ -173,7 +176,7 @@ window.__ModuleLoader__.load({
       /** Without the change event (an older app) the copy is only trusted for a moment. */
       const SETTINGS_TTL_NO_EVENTS = 2000;
       const WRITES = ['mutate', 'update', 'replace'];
-      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0 };
+      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0, changes: 0, repeats: 0, watchers: 0 };
       const cache = { value: undefined, at: 0, inflight: null, gen: 0, events: false };
       const changeListeners = new Set();
       const watched = new WeakSet();
@@ -193,38 +196,72 @@ window.__ModuleLoader__.load({
         cache.gen += 1;
       }
 
-      /** Listen once per page connection for "Settings changed" (the app sends it after every write, from any window). */
+      /** Changes already handled, `ns + revision` -> when: the same change reaches the page once per add-on that listens. */
+      const heard = new Map();
+      /** How long a change counts as "the same one" when it arrives again through another add-on's connection. */
+      const HEARD_MS = 2000;
+      /** The app's own marker for a wrapped service: `ctx.remote` hands out a NEW wrapper object at every read. */
+      const ORIGINAL = typeof Symbol === 'function' ? Symbol.for('cordis.original') : '__original';
+      /** Marks our own write wrapper, so it is never wrapped a second time. */
+      const OURS = '__dshPollWrite';
+
+      /**
+       * One "Settings changed" event from the app. Every add-on that listens hears the same event; it is acted on once.
+       * Bug of 21 November 2026 (a new chat made the page read Settings 12-17 times a second, the app ran at 100% and the
+       * tab crashed): `ctx.remote` is a new object at every read, so the old `watched.has(remote)` never matched and every
+       * read added one more listener; one change then woke every listener and each one started its own read.
+       */
+      function changed(ns, revision) {
+        if (typeof revision === 'number' || typeof revision === 'string') {
+          const now = Date.now();
+          for (const [key, at] of heard) if (now - at > HEARD_MS) heard.delete(key);
+          const key = `${String(ns)}\u0000${String(revision)}`;
+          if (heard.has(key)) { stats.repeats += 1; return; }
+          heard.set(key, now);
+        }
+        stats.changes += 1;
+        invalidate();
+        for (const listener of [...changeListeners]) {
+          try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
+        }
+      }
+
+      /** Listen once per add-on for "Settings changed" (the app sends it after every write, from any window). */
       function watch(ctx) {
         const remote = ctx && ctx.remote;
-        if (!remote || watched.has(remote)) return;
-        watched.add(remote);
+        if (!remote) return;
+        // Keyed on the add-on's own context, which stays the same object (its `remote` does not).
+        const key = ctx !== null && (typeof ctx === 'object' || typeof ctx === 'function') ? ctx : (remote[ORIGINAL] || remote);
+        if (watched.has(key)) return;
+        watched.add(key);
         try {
           if (typeof remote.$on === 'function') {
-            remote.$on('settings/document-updated', (ns) => {
-              invalidate();
-              for (const listener of [...changeListeners]) {
-                try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
-              }
-            });
+            remote.$on('settings/document-updated', changed);
+            stats.watchers += 1;
             cache.events = true;
           }
         } catch { /* no change event here: the short copy time covers it */ }
         try {
-          if (typeof ctx.on === 'function') ctx.on('connection/reset', invalidate);
+          if (typeof ctx.on === 'function') ctx.on('connection/reset', () => { heard.clear(); invalidate(); });
         } catch { /* optional */ }
         // This page's own writes drop the copy before their answer comes back, so a read that follows a write is never behind it.
         const settings = remote.settings;
-        if (settings && !wrapped.has(settings)) {
-          wrapped.add(settings);
+        const target = settings && (settings[ORIGINAL] || settings);
+        if (settings && !wrapped.has(target)) {
+          wrapped.add(target);
           for (const name of WRITES) {
             const original = settings[name];
-            if (typeof original !== 'function') continue;
+            // Already ours (put there through another add-on's wrapper object): wrapping it again would stack wrappers.
+            // An older copy's wrapper (marked `true`) is wrapped once more: it drops only the older copy's own cache.
+            if (typeof original !== 'function' || original[OURS] === API) continue;
             try {
-              settings[name] = function (...args) {
+              const write = function (...args) {
                 invalidate();
                 const done = original.apply(this, args);
                 return done && typeof done.then === 'function' ? done.then((out) => { invalidate(); return out; }, (error) => { invalidate(); throw error; }) : done;
               };
+              write[OURS] = API;
+              settings[name] = write;
             } catch { /* a frozen object keeps the plain call */ }
           }
         }
@@ -378,7 +415,9 @@ window.__ModuleLoader__.load({
     const { ask: askInPage } = dshKit;
 
     const NS = 'finance';
-    const DICT = { en: { 'section.title': 'Finance' }, zh: { 'section.title': '财经' } };
+    const DICT = {
+      en: { 'section.title': 'Finance', 'offer.group': 'The mode', 'offer.title': 'Offer the Finance mode', 'offer.desc': 'On adds the mode to the Mode list under the chat box, with its drop-downs, its instructions and its skills. Off takes all of them away; your watchlist is kept.', 'offer.on': 'Switched on. Finance appears in the Mode list in a moment.', 'offer.off': 'Switched off. The Finance mode is taken away in a moment.' },
+    };
 
     const CSS = `
 .dsh-fn-page { display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); }
@@ -591,7 +630,7 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
 
     /** What the subject box in the chat box shows while it is empty. */
     const SUBJECT_SHORT = { company: 'Company', sector: 'Sector', economy: 'Economy', market: 'Anything to add', brief: 'Subject' };
-    const CHAT_NOTE = 'For this conversation only, from the assistant\'s next step. The drop-downs on the start page set where new conversations start.';
+    const CHAT_NOTE = 'For this thread only, from the assistant\'s next step. The drop-downs on the start page set where new threads start.';
 
     /** One field of the chat box's selection: its value, and a list of the choices when pressed. */
     function ChatDrop({ label, items, value, busy, field, onPick }) {
@@ -749,7 +788,7 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
         if (!Area) return null;
         const select = (label, value, items, key) => h('select', { className: 'dsh-opt-pick', 'aria-label': label, title: `${label}. ${CHAT_NOTE}`, value, disabled: busy, 'data-field': key, onChange: (event) => void pick({ [key]: event.target.value }) },
           items.map((item) => h('option', { key: item.id, value: item.id }, item.label)));
-        return h(Area, { mode: 'finance', place: 'chat', label: 'What this Finance conversation is about' },
+        return h(Area, { mode: 'finance', place: 'chat', label: 'What this Finance thread is about' },
           select('Kind of subject', selection.kind, kinds, 'kind'),
           h('input', {
             className: 'dsh-opt-pick', list: listId, value: subject, placeholder: SUBJECT_SHORT[selection.kind] ?? 'Subject', disabled: busy,
@@ -764,13 +803,13 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
           select('Market', selection.market, markets, 'market'),
           select('Focus', selection.focus, view.focuses ?? [], 'focus'),
           select('Period', selection.period, view.periods ?? [], 'period'),
-          h('div', { className: 'dsh-opt-hint', 'data-error': String(Boolean(failed)) }, failed || 'For this conversation: a change counts from the next answer. The start page sets where new conversations start.'),
+          h('div', { className: 'dsh-opt-hint', 'data-error': String(Boolean(failed)) }, failed || 'For this thread: a change counts from the next answer. The start page sets where new threads start.'),
           // The adviser is asked to end every answer with this line, but the app gives no way to add text to an answer, so the label is always here too.
           view.adviser === true ? h('div', { className: 'dsh-opt-hint', 'data-dsh-adviser-label': 'true' }, 'Adviser on. AI output, not regulated advice.') : null);
       }
       return h('span', { className: 'dsh-fn-chat' },
         h('style', null, CSS),
-        h('span', { className: 'dsh-fn-ctls', role: 'group', 'aria-label': 'What this Finance conversation is about', 'data-error': String(Boolean(failed)) },
+        h('span', { className: 'dsh-fn-ctls', role: 'group', 'aria-label': 'What this Finance thread is about', 'data-error': String(Boolean(failed)) },
           field('Kind of subject', kinds, selection.kind, 'kind'),
           h('input', {
             className: 'dsh-fn-seg', list: listId, value: subject, placeholder: SUBJECT_SHORT[selection.kind] ?? 'Subject', disabled: busy,
@@ -922,6 +961,7 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
     ];
 
     function FinancePage({ appCtx }) {
+      const tw = appCtx.locale.bind(NS);
       const { data, setData, error, alive, load } = useData();
       const [note, setNote] = useState({ text: '', error: false });
       const [busy, setBusy] = useState(false);
@@ -1019,20 +1059,20 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
       return h('div', { className: 'dsh-fn-page' },
         h('style', null, CSS),
         h('h2', { className: 'dsh-fn-title' }, 'Finance'),
-        h('p', { className: 'dsh-fn-desc' }, `A fourth tab, beside Chat, Cowork and Code, for researching companies, markets and economies. The assistant puts the reported figures next to what the news says and what people are saying, looks ahead, and gives both sides. ${data.adviser === true ? 'The adviser is on: it ends with a recommendation.' : 'It is research, not advice.'}`),
+        h('p', { className: 'dsh-fn-desc' }, `A mode, in Chat's Mode list under the chat box, for researching companies, markets and economies. The assistant puts the reported figures next to what the news says and what people are saying, looks ahead, and gives both sides. ${data.adviser === true ? 'The adviser is on: it ends with a recommendation.' : 'It is research, not advice.'}`),
         note.text ? h(PlainNote, { text: note.text, details: note.details, kind: note.error ? 'error' : 'info' }) : null,
         data.problem ? h('p', { className: 'dsh-fn-desc', 'data-error': 'true' }, data.problem) : null,
 
-        h('div', { className: 'dsh-fn-group' }, 'The tab'),
+        h('div', { className: 'dsh-fn-group' }, tw('offer.group')),
         h('div', { className: 'dsh-fn-row' },
           h('div', { className: 'dsh-fn-rowtext' },
-            h('div', { className: 'dsh-fn-rowtitle' }, 'Show the Finance tab'),
-            h('div', { className: 'dsh-fn-rowdesc' }, 'On adds the tab, its drop-downs, its instructions and its skills. Off takes all of them away; your watchlist is kept.')),
-          h(Switch, { on: data.enabled === true, label: 'Show the Finance tab', onChange: (on) => save({ enabled: on }, on ? 'Switched on. The Finance tab appears in the sidebar in a moment.' : 'Switched off. The Finance tab is taken away in a moment.') })),
+            h('div', { className: 'dsh-fn-rowtitle' }, tw('offer.title')),
+            h('div', { className: 'dsh-fn-rowdesc' }, 'On adds the mode to the Mode list under the chat box, with its drop-downs, its instructions and its skills. Off takes all of them away; your watchlist is kept.')),
+          h(Switch, { on: data.enabled === true, label: tw('offer.title'), onChange: (on) => save({ enabled: on }, on ? tw('offer.on') : tw('offer.off')) })),
         h('div', { className: 'dsh-fn-row' },
           h('div', { className: 'dsh-fn-rowtext' },
             h('div', { className: 'dsh-fn-rowtitle' }, 'Selection in the chat box'),
-            h('div', { className: 'dsh-fn-rowdesc' }, 'Once a Finance conversation has started, its chat box shows what it is about: kind, subject, market, focus and period. Change them there for that conversation only; it applies from the assistant\'s next step, even in a reply that is still running. The drop-downs on the start page set where new conversations start.'))),
+            h('div', { className: 'dsh-fn-rowdesc' }, 'Once a Finance thread has started, its chat box shows what it is about: kind, subject, market, focus and period. Change them there for that thread only; it applies from the assistant\'s next step, even in a reply that is still running. The drop-downs on the start page set where new threads start.'))),
 
         h('div', { className: 'dsh-fn-group' }, 'Adviser'),
         h('div', { className: 'dsh-fn-row' },
@@ -1047,7 +1087,7 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
                 setWarn(false);
                 void save({ adviser: false }, 'Adviser off. Finance is research only again.');
               } else if (data.adviserAccepted === true) {
-                void save({ adviser: true }, 'Adviser on. It applies from your next message in a Finance conversation.');
+                void save({ adviser: true }, 'Adviser on. It applies from your next message in a Finance thread.');
               } else {
                 // First time: nothing is switched on until the warning has been accepted by typing.
                 setTyped('');
@@ -1061,14 +1101,14 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
             h('div', { className: 'dsh-fn-rowdesc' }, ADVISER_WARNING.map((line) => h('p', { key: line, className: 'dsh-fn-desc' }, line))),
             h('div', { className: 'dsh-fn-add' },
               h('input', { className: 'dsh-fn-field', value: typed, placeholder: `Type: ${ADVISER_PHRASE}`, 'aria-label': `Type "${ADVISER_PHRASE}" to accept`, spellCheck: false, autoComplete: 'off', onChange: (event) => setTyped(event.target.value) }),
-              h('button', { type: 'button', className: 'dsh-fn-btn', disabled: busy || typed.trim().toLowerCase() !== ADVISER_PHRASE.toLowerCase(), onClick: () => { setWarn(false); void save({ adviserAccepted: true, adviser: true }, 'Adviser on. It applies from your next message in a Finance conversation.'); } }, 'Accept and switch on'),
+              h('button', { type: 'button', className: 'dsh-fn-btn', disabled: busy || typed.trim().toLowerCase() !== ADVISER_PHRASE.toLowerCase(), onClick: () => { setWarn(false); void save({ adviserAccepted: true, adviser: true }, 'Adviser on. It applies from your next message in a Finance thread.'); } }, 'Accept and switch on'),
               h('button', { type: 'button', className: 'dsh-fn-btn', disabled: busy, onClick: () => setWarn(false) }, 'Cancel')))) : null,
         data.adviser === true ? h('div', null,
-          h('p', { className: 'dsh-fn-desc' }, 'Your profile: what an adviser needs to know about you. It is read in every Finance conversation. You can write it here, and the assistant adds a dated line when you tell it something lasting. It is kept in one file on this Mac and is sent to your model with each Finance message. Leave out account numbers.'),
+          h('p', { className: 'dsh-fn-desc' }, 'Your profile: what an adviser needs to know about you. It is read in every Finance thread. You can write it here, and the assistant adds a dated line when you tell it something lasting. It is kept in one file on this Mac and is sent to your model with each Finance message. Leave out account numbers.'),
           h(Profile, { text: typeof data.profile === 'string' ? data.profile : '', busy, onSave: (text) => act({ action: 'profile', text }, 'Profile saved.') })) : null,
 
         h('div', { className: 'dsh-fn-group' }, 'Watchlist'),
-        h('p', { className: 'dsh-fn-desc' }, 'Companies, sectors or economies you follow. They are offered when you type in the subject box on the Finance tab.'),
+        h('p', { className: 'dsh-fn-desc' }, 'Companies, sectors or economies you follow. They are offered when you type in the subject box on the start page of a Finance thread.'),
         h(NameList, { items: data.watchlist ?? [], placeholder: 'A name, for example NVIDIA', label: 'Add to the watchlist', empty: 'Nothing on the watchlist yet.', busy, onChange: (watchlist) => save({ watchlist }) }),
 
         h('div', { className: 'dsh-fn-group' }, 'Your own markets'),
@@ -1088,18 +1128,18 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
         h(AddSource, { presets: data.presets ?? [], taken: sources.map((source) => source.id), busy, onAdd: addSource }),
 
         h('div', { className: 'dsh-fn-group' }, 'Scheduled briefs'),
-        h('p', { className: 'dsh-fn-desc' }, 'A short update on something you follow, written by itself on a schedule: what changed, what to watch next, with sources. It runs as a task in the app\'s own scheduler, in a new conversation each time. The conversation appears under the Finance tab, and the run shows on the Automation runs page.'),
+        h('p', { className: 'dsh-fn-desc' }, 'A short update on something you follow, written by itself on a schedule: what changed, what to watch next, with sources. It runs as an automation in the app\'s own scheduler, in a new thread each time. The thread runs in Chat · Finance, and the run shows on the Automations page.'),
         briefs.length === 0 ? h('p', { className: 'dsh-fn-desc' }, 'No brief is scheduled.') : null,
         briefs.map((brief) => h('div', { key: brief.id, className: 'dsh-fn-row' },
           h('div', { className: 'dsh-fn-rowtext' },
             h('div', { className: 'dsh-fn-rowtitle' }, brief.subject),
-            h('div', { className: 'dsh-fn-rowdesc' }, brief.status === 'paused' ? 'Paused in Automation tasks' : brief.nextAt ? `Next: ${new Date(brief.nextAt).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '')),
+            h('div', { className: 'dsh-fn-rowdesc' }, brief.status === 'paused' ? 'Paused on the Automations page' : brief.nextAt ? `Next: ${new Date(brief.nextAt).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '')),
           h('button', { type: 'button', className: 'dsh-fn-btn', disabled: busy, onClick: () => { void askInPage({ text: `Stop the brief on "${brief.subject}"?`, ok: 'Stop the brief', danger: true }).then((yes) => { if (yes) void act({ action: 'unbrief', id: brief.id }, 'Brief removed.'); }); } }, 'Remove'))),
-        h(AddBrief, { watchlist: data.watchlist ?? [], rhythms: data.rhythms ?? [], busy, onAdd: (subject, rhythm, hour) => act({ action: 'brief', subject, rhythm, hour }, 'Scheduled. You can change or pause it on the Automation tasks page.').then(Boolean) }),
+        h(AddBrief, { watchlist: data.watchlist ?? [], rhythms: data.rhythms ?? [], busy, onAdd: (subject, rhythm, hour) => act({ action: 'brief', subject, rhythm, hour }, 'Scheduled. You can change or pause it on the Automations page.').then(Boolean) }),
 
-        h('div', { className: 'dsh-fn-group' }, 'Your own scheduled tasks'),
-        h('p', { className: 'dsh-fn-desc' }, 'Tasks you made yourself on the Automation tasks page start in Cowork. Switch one on here and its conversations open in Finance instead: they appear under the Finance tab and the assistant follows the Finance method.'),
-        ownTasks.length === 0 ? h('p', { className: 'dsh-fn-desc' }, 'You have no scheduled tasks of your own.') : null,
+        h('div', { className: 'dsh-fn-group' }, 'Your own automations'),
+        h('p', { className: 'dsh-fn-desc' }, 'Automations you made yourself on the Automations page run in Cowork mode. Switch one on here and its threads run in Finance mode instead (Chat · Finance), and the assistant follows the Finance method.'),
+        ownTasks.length === 0 ? h('p', { className: 'dsh-fn-desc' }, 'You have no automations of your own.') : null,
         ownTasks.map((task) => h('div', { key: task.id, className: 'dsh-fn-row' },
           h('div', { className: 'dsh-fn-rowtext' },
             h('div', { className: 'dsh-fn-rowtitle' }, task.title),
@@ -1109,7 +1149,7 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
         h('div', { className: 'dsh-fn-group' }, 'What the assistant is given'),
         h('ul', { className: 'dsh-fn-list' },
           h('li', null, `A method: figures only from sources it fetched, each with its date; facts, claims, opinions and its own reading kept apart; always a look ahead; always both sides; what it could not find; ${data.adviser === true ? 'then a clear recommendation, ending with a note that it is AI output, not regulated advice' : 'no buy or sell advice'}.`),
-          h('li', null, 'Your selection from the drop-downs, as it was when the conversation started, or as you changed it since in that conversation\'s chat box.'),
+          h('li', null, 'Your selection from the drop-downs, as it was when the thread started, or as you changed it since in that thread\'s chat box.'),
           h('li', null, 'Six data tools that need no key or account: a company\'s reported figures and its filings, from the US securities regulator (US-listed companies and many foreign ones); yearly readings for economies from the World Bank; share prices from Yahoo Finance; news from GDELT; and posts from Hacker News, Mastodon and Lemmy.'),
           h('li', null, `${(data.skills ?? []).length} skills, one for each common task: ${(data.skills ?? []).map((skill) => skill.name.replace(/^finance-/, '').replace(/-/g, ' ')).join(', ')}.`)),
 
@@ -1120,11 +1160,11 @@ input.dsh-fn-seg:focus { outline: none; background: color-mix(in srgb, var(--dsw
             : 'It is research, not advice. The assistant is not a licensed financial adviser, and it is told not to say buy, sell or hold. Decisions are yours. The Adviser switch above changes this.'),
           h('li', null, 'Its own data covers reported company figures, yearly economy readings, daily share prices, news and social posts. It has no estimates and no forecasts: those, and the figures of companies that do not file in the United States, come from what the assistant finds with web search and Deep research, which can be delayed or misread. Each figure should come with its source and date so you can check it.'),
           h('li', null, 'When the assistant uses the data tools, what it looks up is sent to that tool\'s public service: the company or country to the US regulator or the World Bank, share symbols to Yahoo Finance, news search words to GDELT, and social search words or a hashtag to Hacker News (through Algolia), mastodon.social and lemmy.world. No account, no key and nothing about you is sent.'),
-          h('li', null, 'With Tools off in a conversation (the Tools button in the chat box), the assistant has no data tools and cannot check a figure. It may still give figures from memory, but it is told to mark each one as from memory and possibly out of date, to say which period it is for when it knows, and never to give it a source or an "as of" date.'),
+          h('li', null, 'With Tools off in a thread (the Tools button in the chat box), the assistant has no data tools and cannot check a figure. It may still give figures from memory, but it is told to mark each one as from memory and possibly out of date, to say which period it is for when it knows, and never to give it a source or an "as of" date.'),
           h('li', null, 'What people say online is a signal, not a fact, and can be manipulated.'),
           h('li', null, 'Charts come from the Diagram builder, and your own reports can be searched if they are in the Library.'),
           h('li', null, 'A key you paste is kept in the app\'s own secret store on this Mac, not in a settings file. It is sent only to that service, and it is removed from anything the assistant is shown.'),
-          h('li', null, 'A scheduled brief runs only while the app is running. It uses your models and counts against the Budget guard like any task.')));
+          h('li', null, 'A scheduled brief runs only while the app is running. It uses your models and counts against the Budget guard like any run.')));
     }
 
     return {

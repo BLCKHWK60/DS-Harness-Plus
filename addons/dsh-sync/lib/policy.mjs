@@ -10,7 +10,7 @@ import { applyProjects, planProjects, readManifests, renderPlan, writeManifest }
 import { isScratch } from './scratch.mjs'
 
 export const PLAINTEXT_WARNING =
-  'PLAINTEXT: session text is stored unencrypted in the sync repository and on its remote. Use backend "encrypted" with age, or set encryption: required.'
+  'PLAINTEXT: thread text is stored unencrypted in the sync repository and on its remote. Use backend "encrypted" with age, or set encryption: required.'
 
 /**
  * Build the sync service.
@@ -110,8 +110,8 @@ export function createSyncService(deps) {
       const status = await service.status()
       const lines = [renderStatus(status)]
       lines.push(`      transport: ${status.mode === 'encrypted' ? 'encrypted (age)' : 'PLAINTEXT'} · encryption policy: ${encryption}`)
-      lines.push(status.isolated === undefined ? `      isolated conversations (Recon): unknown, so push and pull wait: ${status.isolatedWhy}` : `      isolated conversations (Recon): ${status.isolated}, never synced`)
-      if (status.isolated !== undefined) lines.push(`      Scratch conversations: ${status.scratch ?? 0}, never synced`)
+      lines.push(status.isolated === undefined ? `      sealed threads (Recon): unknown, so push and pull wait: ${status.isolatedWhy}` : `      sealed threads (Recon): ${status.isolated}, never synced`)
+      if (status.isolated !== undefined) lines.push(`      Scratch threads: ${status.scratch ?? 0}, never synced`)
       lines.push(`      last pull ${status.lastPullAt ? new Date(status.lastPullAt).toISOString() : '-'} · last push ${status.lastPushAt ? new Date(status.lastPushAt).toISOString() : '-'}`)
       return lines.join('\n')
     },

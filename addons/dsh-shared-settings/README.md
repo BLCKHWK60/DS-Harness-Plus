@@ -2,7 +2,7 @@
 
 > **Experimental: tried only on one Mac so far.** It is off until you choose a folder, and nothing turns it on for you. Try it with a copy of your settings in mind: before it replaces anything on a Mac, that Mac's own values are saved in `<dsh home>/shared-settings/backups`.
 
-Host plugin `@local/dsh-shared-settings` (dsh 0.2.2-rc.1). It keeps the settings you change in the app's own pages in one file, `settings.json`, in a folder you choose. With the folder in iCloud Drive, two Macs share one setup.
+Host add-on `@local/dsh-shared-settings` (dsh 0.2.2-rc.1). It keeps the settings you change in the app's own pages in one file, `settings.json`, in a folder you choose. With the folder in iCloud Drive, two Macs share one setup.
 
 ## What is shared
 
@@ -28,14 +28,14 @@ The `include` setting adds other entries, for example the app's own `ui-theme`. 
 **Never in the file:**
 - Fields the app's schema marks as secret.
 - Any field whose name looks like a key, token, secret, password, passphrase or credential, at any depth.
-- Anything about this Mac rather than your setup, whatever `skipFields` says and at any depth: on/off switches (`enabled`), folders and program paths (names ending in Folder, Dir or Path), servers, hosts and ports, notification topics, permission and "danger" switches (names starting with `danger` or `allow`, and `trusted`, `anywhere`), and anything per conversation (names starting with `session`).
+- Anything about this Mac rather than your setup, whatever `skipFields` says and at any depth: on/off switches (`enabled`), folders and program paths (names ending in Folder, Dir or Path), servers, hosts and ports, notification topics, permission and "danger" switches (names starting with `danger` or `allow`, and `trusted`, `anywhere`), and anything per thread (names starting with `session`).
 - Recon and Notify are not shared at all: Recon's private setup (search engine, news accounts, VPN names, folders) and the alert addresses stay on each Mac.
-- The fields in `skipFields`. By default these are the per-conversation choices:
+- The fields in `skipFields`. By default these are the per-thread choices:
   - `modes.sessionModes`, `sessionWeb` and `sessionResearch`;
-  - `modes.sessionIsolated`, `sessionSearchDepth`, `sessionDepth` (each conversation's Depth), `sessionLens` (each conversation's Lens), `depthMoved` (whether this Mac's old Web levels were moved into Depth), `sessionTools`, `sessionHelpers`, `sessionToolSets`, `sessionSandboxBase` (each conversation's earlier access level), `toolAccess` and `toolAccessOn` (which tools each tab may use, and whether Tool access is on) and `extraModes` (the tabs this Mac's add-ons add); and the Skill architect's `skill-architect.nolearn` (the conversations you marked "never learn from this"); and Settings Plus's `settings-plus.view` (Simple or Advanced) and `settings-plus.setupPending` (this Mac's first-run card), so each Mac keeps its own;
+  - `modes.sessionIsolated`, `sessionSearchDepth`, `sessionDepth` (each thread's Depth), `sessionMission` (whether each thread's Depth is on Mission), `sessionLens` (each thread's Lens), `depthMoved` (whether this Mac's old Web levels were moved into Depth), `sessionTools`, `sessionHelpers`, `sessionToolSets`, `sessionSandboxBase` (each thread's earlier access level), `sessionSpaces` (each thread's space), `spacesFilled` (whether this Mac's threads were given their space), `spacesRefreshed` (whether this Mac placed its threads once more when the space buttons went live), `plainAdded`, `plainCarried` and `plainCarriedIn` (whether this Mac gave Plain chat the Cowork mode's choices once, and from which other add-ons), `plainFence` ("Keep Plain chat inside its folder", a permission switch) and `sessionModeChanges` (the mode changes recorded in each thread), `guestRunSpaces` (the automations made from a guest thread in Devices or Workshop whose runs must stay there; this Mac's scheduler), `guestRunModes` (the mode each of those runs in), `toolAccess` and `toolAccessOn` (which tools each tab may use, and whether Tool access is on) and `extraModes` (the tabs this Mac's add-ons add); and the Skill architect's `skill-architect.nolearn` (the threads you marked "never learn from this"); and Settings Plus's `settings-plus.view` (Simple or Advanced) and `settings-plus.setupPending` (this Mac's first-run card), so each Mac keeps its own;
   - `model-tiers.activeTiers`, `sessionProfiles` and `modelProfilesMigrated`.
 
-  The twelve `modes` fields on the second line stay on each Mac even when you set your own `skipFields`.
+  The twenty-three `modes` fields on the second line stay on each Mac even when you set your own `skipFields`.
 
 All of these stay on each Mac and are kept as they are when the file is applied.
 
@@ -82,7 +82,7 @@ Rounds never overlap.
     folder: ''            # absolute path or ~/...; '' = the folder the installer recorded, or off
     include: []           # extra entry ids to share (e.g. ui-theme)
     exclude: []           # entry ids never to share
-    skipFields: [...]     # '<entry id>.<field>'; default: the per-conversation fields above
+    skipFields: [...]     # '<entry id>.<field>'; default: the per-thread fields above
     pollSeconds: 30
     commandName: shared-settings
 ```
@@ -102,7 +102,7 @@ Either way, the installer writes it to `<dsh home>/shared-settings/folder.txt`. 
 
 - 13 unit tests, with a stand-in for the app's settings service and two simulated Macs on one folder. They cover:
   - the first Mac writing the file;
-  - a second Mac adopting it, keeping its secrets and per-conversation fields, with a backup;
+  - a second Mac adopting it, keeping its secrets and per-thread fields, with a backup;
   - edits both ways, including a reset to default;
   - a quiet round that changes nothing;
   - simultaneous edits to different fields and to the same field;
@@ -115,8 +115,8 @@ Either way, the installer writes it to `<dsh home>/shared-settings/folder.txt`. 
   - folders with spaces;
   - secret scrubbing.
 - In the app's web version, in a throwaway setup:
-  - the first round wrote the five sections, with no secrets and no per-conversation fields;
-  - a hand edit of `defaultMode` in the file reached the profile within seconds, with a backup, and the per-conversation fields were left alone;
+  - the first round wrote the five sections, with no secrets and no per-thread fields;
+  - a hand edit of `defaultMode` in the file reached the profile within seconds, with a backup, and the per-thread fields were left alone;
   - choosing the Forest colour scheme in Settings reached the file within seconds;
   - `/shared-settings` answered.
 

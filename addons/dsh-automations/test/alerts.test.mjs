@@ -16,11 +16,11 @@ function record() {
 test('the line has a name and what happened, nothing else', () => {
   assert.equal(alertText({ event: 'failed', scheduled: true, name: 'Morning brief' }), 'Morning brief failed');
   assert.equal(alertText({ event: 'failed', scheduled: true, name: 'Morning brief', state: 'stopped' }), 'Morning brief was stopped before it finished');
-  assert.equal(alertText({ event: 'finished', scheduled: true, name: '' }), 'A scheduled task finished');
+  assert.equal(alertText({ event: 'finished', scheduled: true, name: '' }), 'An automation finished');
   assert.equal(alertText({ event: 'needs', scheduled: true, name: 'Tidy', waiting: 'approval' }), 'Tidy needs your approval');
   assert.equal(alertText({ event: 'needs', scheduled: true, name: 'Tidy', waiting: 'question' }), 'Tidy has a question for you');
-  assert.equal(alertText({ event: 'needs', scheduled: false, name: 'my-site', waiting: 'plan-review' }), 'A task in my-site wants its plan reviewed');
-  assert.equal(alertText({ event: 'finished', scheduled: false }), 'A task finished');
+  assert.equal(alertText({ event: 'needs', scheduled: false, name: 'my-site', waiting: 'plan-review' }), 'A thread in my-site wants its plan reviewed');
+  assert.equal(alertText({ event: 'finished', scheduled: false }), 'A thread finished');
   assert.equal(cleanName(`  Line one\nline\ttwo ${'x'.repeat(200)}`).length, 80);
   assert.equal(cleanName('a\u0000b'), 'a b');
 });
@@ -72,7 +72,7 @@ test('conversations you start alert only when asked for, and only after the set 
   raw = { alertOthers: true, othersMinutes: 5 };
   assert.equal(alerter.notify({ event: 'failed', scheduled: false, name: 'my-site', minutes: 4.9 }), undefined);
   assert.deepEqual(await alerter.notify({ event: 'failed', scheduled: false, name: 'my-site', minutes: 5 }), { mac: 'ok' });
-  assert.deepEqual(sent.mac, [{ title: 'DeepSeek Harness', text: 'A task in my-site failed' }]);
+  assert.deepEqual(sent.mac, [{ title: 'DeepSeek Harness', text: 'A thread in my-site failed' }]);
 });
 
 test('a place that fails is reported and does not stop the other', async () => {
@@ -129,9 +129,18 @@ test('the phone alert is one JSON post to the server root', async () => {
 });
 
 test('run alerts: their own switch, never the goal\'s text, and not held back by the switches for your own conversations', async () => {
-  assert.equal(alertText({ event: 'finished', run: 'long', name: 'my-app' }), 'A long run in my-app finished');
-  assert.equal(alertText({ event: 'needs', run: 'mission', name: 'my-app' }), 'A mission run in my-app needs your yes');
-  assert.equal(alertText({ event: 'failed', run: 'long', name: '' }), 'A long run stopped by itself (the model did not answer)');
+  // Mission and Long run are one (stage B, 19 November 2026): both kinds read "A Mission".
+  assert.equal(alertText({ event: 'finished', run: 'long', name: 'my-app' }), 'A Mission in my-app finished');
+  assert.equal(alertText({ event: 'needs', run: 'mission', name: 'my-app' }), 'A Mission in my-app needs your yes');
+  // Mission stage D: what it waits for.
+  assert.equal(alertText({ event: 'needs', run: 'long', name: 'my-app', waiting: 'question' }), 'A Mission in my-app has a question for you');
+  assert.equal(alertText({ event: 'needs', run: 'long', name: 'my-app', waiting: 'approval' }), 'A Mission in my-app needs your yes');
+  assert.equal(alertText({ event: 'needs', run: 'long', name: 'my-app', waiting: 'you' }), 'A Mission in my-app is waiting for you');
+  // The plugin passes Mission's `waiting` on to the alert.
+  const plugin = (await import('node:fs')).readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  assert.match(plugin, /event\.type === 'needs-you'\) void alerter\.notify\(\{ \.\.\.base, event: 'needs', \.\.\.\(typeof event\.waiting === 'string' \? \{ waiting: event\.waiting \} : \{\}\), \.\.\.\(Number\.isFinite\(event\.until\) \? \{ until: event\.until \} : \{\}\) \}\);/);
+  assert.match(plugin, /event\.type === 'finished'\) void alerter\.notify\(\{ \.\.\.base, event: 'finished', \.\.\.\(Number\.isFinite\(event\.left\) \? \{ left: event\.left \} : \{\}\), \.\.\.\(typeof event\.canContinue === 'boolean' \? \{ canContinue: event\.canContinue \} : \{\}\)(, \.\.\.\(typeof event\.endKind === 'string' \? \{ endKind: event\.endKind \} : \{\}\))? \}\);/);
+  assert.equal(alertText({ event: 'failed', run: 'long', name: '' }), 'A Mission stopped by itself (the model did not answer)');
   assert.match(alertText({ event: 'failed', run: 'long', name: 'x', state: 'restart' }), /interrupted when the app closed/);
   const sent = [];
   hooks.mac = async (_title, text) => { sent.push(text); };
@@ -139,7 +148,36 @@ test('run alerts: their own switch, never the goal\'s text, and not held back by
   let raw = { alertOthers: false, alertFinished: false };
   const alerter = createAlerter({ settings: () => readAlertSettings(raw) });
   assert.ok(await alerter.notify({ event: 'finished', run: 'long', name: 'my-app' }), 'on by default, whatever the others say');
-  assert.deepEqual(sent, ['A long run in my-app finished']);
+  assert.deepEqual(sent, ['A Mission in my-app finished']);
   raw = { ...raw, alertRuns: false };
   assert.equal(alerter.notify({ event: 'finished', run: 'long', name: 'my-app' }), undefined, 'off with its own switch');
+});
+
+test('Mission point 17: a wait says when it ends, and a finish with something left points to Finish it', () => {
+  const at = new Date(2026, 10, 20, 14, 5).getTime();
+  assert.equal(alertText({ event: 'needs', run: 'long', name: 'my-app', waiting: 'you', until: at }), 'A Mission in my-app is waiting for you (with no answer it ends at 14:05)');
+  assert.equal(alertText({ event: 'needs', run: 'long', name: 'my-app', waiting: 'you', until: 0 }), 'A Mission in my-app is waiting for you (until you answer)');
+  // Older events (no until) and nonsense values read as before.
+  assert.equal(alertText({ event: 'needs', run: 'long', name: 'my-app', waiting: 'you' }), 'A Mission in my-app is waiting for you');
+  assert.equal(alertText({ event: 'needs', run: 'long', name: 'my-app', waiting: 'you', until: '14:05' }), 'A Mission in my-app is waiting for you');
+  assert.equal(alertText({ event: 'needs', run: 'long', name: 'my-app', waiting: 'question', until: 0 }), 'A Mission in my-app has a question for you');
+  assert.equal(alertText({ event: 'finished', run: 'long', name: 'my-app', left: 3, canContinue: true }), 'A Mission in my-app finished; some things are left for you (Finish it, above the chat box)');
+  assert.equal(alertText({ event: 'finished', run: 'long', name: 'my-app', left: 0, canContinue: false }), 'A Mission in my-app finished');
+  assert.equal(alertText({ event: 'finished', run: 'long', name: 'my-app', left: 2, canContinue: false }), 'A Mission in my-app finished');
+  assert.equal(alertText({ event: 'finished', run: 'long', name: 'my-app' }), 'A Mission in my-app finished');
+  // A task (not a Mission) never takes these words.
+  assert.equal(alertText({ event: 'finished', scheduled: true, name: 'Tidy', left: 3 }), 'Tidy finished');
+});
+
+test('Mission stage E: a Mission waiting for its model server, and one that ended because it did not answer for 2 hours', async () => {
+  assert.equal(alertText({ event: 'failed', run: 'long', name: 'my-app', state: 'down' }), 'A Mission in my-app is waiting for your model server (it tries again by itself for up to 2 hours)');
+  assert.equal(alertText({ event: 'finished', run: 'long', name: 'my-app', endKind: 'down', left: 2 }), 'A Mission in my-app ended: your model server did not answer for 2 hours');
+  // The restart words and an ordinary end are unchanged.
+  assert.match(alertText({ event: 'failed', run: 'long', name: 'x', state: 'restart' }), /interrupted when the app closed/);
+  assert.equal(alertText({ event: 'finished', run: 'long', name: 'x', endKind: 'time' }), 'A Mission in x finished');
+  // The plugin passes Mission's 'down' and endKind on.
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  assert.match(source, /event\.why === 'down' \? 'down' : 'failed'/);
+  assert.match(source, /typeof event\.endKind === 'string' \? \{ endKind: event\.endKind \} : \{\}/);
 });

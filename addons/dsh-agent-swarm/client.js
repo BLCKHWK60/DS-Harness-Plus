@@ -2,8 +2,9 @@
  * Browser half of Agent swarm: a read-only "Swarm" page in Settings with two cards.
  *
  *  - Runs: the model's recent `run_swarm` calls (newest first). Pick one to see every member's
- *    state (waiting, running, done, failed, skipped, cancelled), its route, its round (debate),
- *    its tokens and time, and the swarm's spend against its budget. It refreshes every 2 seconds
+ *    state (waiting, running, done, cut short, failed, skipped, cancelled), its route, its round
+ *    (debate), its tokens and time, and the swarm's spend against its budget. A run started inside
+ *    a program (PTC) that had to be shortened says so, and how to get a full run. It refreshes every 2 seconds
  *    while a run is going and every 10 seconds otherwise.
  *  - Swarms: the swarms configured in the plugin entry, with their members and caps.
  *
@@ -170,7 +171,7 @@ window.__ModuleLoader__.load({
     const DICT = {
       en: {
         'section.title': 'Swarm',
-        'head.hint': 'Named swarms of child agents, started by the model through the run_swarm tool. This page shows the recent runs (who is working, who is done, what it cost) and the swarms you configured. It is read-only; the answers themselves appear in the conversation.',
+        'head.hint': 'Named swarms of child agents, started by the model through the run_swarm tool. This page shows the recent runs (who is working, who is done, what it cost) and the swarms you configured. It is read-only; the answers themselves appear in the thread.',
         'refresh': 'Refresh',
         'updated': 'Updated {time}',
         'runs.title': 'Recent runs',
@@ -181,12 +182,14 @@ window.__ModuleLoader__.load({
         'status.done': 'done',
         'status.stopped': 'stopped',
         'status.cancelled': 'cancelled',
+        'status.shortened': 'shortened (PTC)',
         'state.waiting': 'waiting',
         'state.running': 'running',
         'state.done': 'done',
         'state.failed': 'failed',
         'state.skipped': 'skipped',
         'state.cancelled': 'not answered',
+        'state.partial': 'cut short',
         'strategy.fanout': 'fan-out',
         'strategy.pipeline': 'pipeline',
         'strategy.debate': 'debate',
@@ -194,6 +197,8 @@ window.__ModuleLoader__.load({
         'run.summary.debate': '{strategy} · round {round} of {rounds} · up to {seen} at once (cap {cap})',
         'run.stopped': 'Stopped early: {reason}.',
         'run.cancelled': 'Cancelled or out of time.',
+        'run.ptc.cut': 'Shortened to fit PTC: this run was called inside a program, and a program stops when its time limit runs out ({limit}; 10 minutes at most). It had {budget}, so it stopped early. Every answer it had is kept in the thread. For a full run, use the Standard preset, or ask for a higher program time (timeoutMs).',
+        'run.ptc.fit': 'Ran inside a program (PTC). Its time was cut to {budget} to fit the program\'s limit ({limit}), and it finished in time.',
         'budget.tokens': 'Tokens',
         'budget.usd': 'Dollars',
         'budget.none': 'no cap',
@@ -216,61 +221,9 @@ window.__ModuleLoader__.load({
         'tier': 'tier {tier}',
         'route.parent': "the parent's model",
         'down': 'When a model is down: {policy}.',
-        'failed': 'Could not read the swarm state. Is the Agent swarm add-on switched on?',
+        'failed': 'Could not read the swarm state. Check that the Agent swarm add-on is switched on on the Plugins page, then click Refresh.',
         'loading': 'Loading swarm…',
         'gone': 'This run is no longer kept.',
-      },
-      zh: {
-        'section.title': '集群',
-        'head.hint': '由模型通过 run_swarm 工具启动的具名子智能体集群。本页显示最近的运行（谁在工作、谁已完成、花了多少）以及你配置的集群。本页只读；回答内容会显示在对话中。',
-        'refresh': '刷新',
-        'updated': '更新于 {time}',
-        'runs.title': '最近的运行',
-        'runs.empty': '还没有运行。模型调用 {tool} 后，运行会出现在这里。运行记录保存在内存中（最近 20 次），主机重启后清空。',
-        'swarms.title': '已配置的集群',
-        'swarms.empty': '尚未配置任何集群，因此该工具未注册。请在配置中的 agent-swarm 条目里添加集群（见插件 README）。',
-        'status.running': '进行中',
-        'status.done': '已完成',
-        'status.stopped': '已停止',
-        'status.cancelled': '已取消',
-        'state.waiting': '等待中',
-        'state.running': '进行中',
-        'state.done': '已完成',
-        'state.failed': '失败',
-        'state.skipped': '已跳过',
-        'state.cancelled': '未作答',
-        'strategy.fanout': '并行',
-        'strategy.pipeline': '流水线',
-        'strategy.debate': '辩论',
-        'run.summary': '{strategy} · {done} / {total} 个成员已作答 · 最多同时 {seen} 个（上限 {cap}）',
-        'run.summary.debate': '{strategy} · 第 {round} / {rounds} 轮 · 最多同时 {seen} 个（上限 {cap}）',
-        'run.stopped': '提前停止：{reason}。',
-        'run.cancelled': '已取消或已超时。',
-        'budget.tokens': 'Token',
-        'budget.usd': '美元',
-        'budget.none': '无上限',
-        'budget.pricing': '美元金额按你的 pricing 表计算；表中没有的模型按 0 计。',
-        'col.member': '成员',
-        'col.route': '线路',
-        'col.state': '状态',
-        'col.round': '轮次',
-        'col.tokens': 'Token',
-        'col.time': '用时',
-        'rebound': '备注',
-        'tokens': '{n} 个 token',
-        'usd': '${n}',
-        'ago': '{time}',
-        'cap': '最多同时 {n} 个',
-        'minutes': '时限 {n} 分钟',
-        'rounds': '{n} 轮',
-        'members': '{n} 个成员',
-        'role': '角色 {role}',
-        'tier': '档位 {tier}',
-        'route.parent': '父会话的线路',
-        'down': '线路健康：线路不可用时 {policy}。',
-        'failed': '无法读取集群状态。此配置是否加载了 Agent swarm 插件？',
-        'loading': '正在加载集群…',
-        'gone': '这次运行已不再保留。',
       },
     };
 
@@ -337,7 +290,7 @@ window.__ModuleLoader__.load({
       return response.json();
     };
     const fill = (text, values) => Object.entries(values).reduce((out, [key, value]) => out.split('{' + key + '}').join(String(value)), text);
-    const nf = (n) => Number(n).toLocaleString();
+    const nf = (n) => Number(n).toLocaleString('en-US');
     const money = (n) => (n >= 1 ? n.toFixed(2) : n.toFixed(4));
     const span = (ms) => {
       if (!(ms >= 0)) return '';
@@ -347,6 +300,12 @@ window.__ModuleLoader__.load({
       return m + 'm ' + String(s % 60).padStart(2, '0') + 's';
     };
     const chipKind = (state) => (state === 'failed' || state === 'stopped' ? 'failed' : state === 'running' ? 'running' : state === 'done' ? 'done' : 'plain');
+    /** A time span in whole minutes, or seconds below 2 minutes, for the PTC note. */
+    const roughly = (ms) => {
+      const s = Math.max(0, Math.round(Number(ms) / 1000));
+      if (s < 120) return s + ' s';
+      return Math.round(s / 60) + ' min';
+    };
 
     function Meter({ label, used, cap, text, none }) {
       const ratio = cap > 0 ? Math.min(1, used / cap) : 0;
@@ -376,6 +335,10 @@ window.__ModuleLoader__.load({
             : fill(t('run.summary'), { strategy: t('strategy.' + run.strategy), done: answered, total: counted, seen: run.maxObservedActive, cap: run.maxActive }),
         ),
         run.stopped ? h('p', { className: 'dsh-sw-note', 'data-bad': 'true' }, fill(t('run.stopped'), { reason: run.stopped })) : run.status === 'cancelled' ? h('p', { className: 'dsh-sw-note' }, t('run.cancelled')) : null,
+        // Inside a program (PTC): why the run had less time, and what to do for a full run.
+        run.ptc && run.ptc.shortened && run.status !== 'running'
+          ? h('p', { className: 'dsh-sw-note', 'data-ptc': run.ptc.cut ? 'cut' : 'fit' }, fill(t(run.ptc.cut ? 'run.ptc.cut' : 'run.ptc.fit'), { limit: roughly(run.ptc.limitMs), budget: roughly(run.ptc.budgetMs) }))
+          : null,
         h(
           'div',
           { className: 'dsh-sw-meters' },
@@ -513,7 +476,7 @@ window.__ModuleLoader__.load({
                         h('span', { className: 't' }, item.swarm),
                         h('span', { className: 'dsh-sw-chip', 'data-k': chipKind(item.status) }, t('status.' + item.status)),
                         h('span', { className: 'd' }, fill(t('tokens'), { n: nf(item.tokens) })),
-                        h('span', { className: 'd' }, new Date(item.startedAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })),
+                        h('span', { className: 'd' }, new Date(item.startedAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })),
                       ),
                     ),
                   ),
@@ -533,7 +496,7 @@ window.__ModuleLoader__.load({
           'div',
           { className: 'dsh-sw-bar' },
           h('span', { className: 'dsh-sw-spacer' }),
-          state.at ? h('span', { className: 'dsh-sw-stamp' }, fill(t('updated'), { time: new Date(state.at).toLocaleTimeString() })) : null,
+          state.at ? h('span', { className: 'dsh-sw-stamp' }, fill(t('updated'), { time: new Date(state.at).toLocaleTimeString('en-GB') })) : null,
           h('button', { type: 'button', className: 'dsh-sw-btn', onClick: () => void load() }, t('refresh')),
         ),
         body,

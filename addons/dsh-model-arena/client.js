@@ -172,7 +172,7 @@ window.__ModuleLoader__.load({
 
     const EN = {
       'section.title': 'Arena',
-      'panel.title': 'Model Arena',
+      'panel.title': 'Model arena',
       'head.hint': 'Send one question to several models at once and read the answers side by side. The answers are only labelled A, B, C, D, so you judge the text, not the name. When you are ready, Reveal shows which model wrote what.',
       'setup.title': 'Setup',
       'setup.need': 'Pick at least two models to compare.',
@@ -193,7 +193,7 @@ window.__ModuleLoader__.load({
       'opt.max.title': 'Answers per round',
       'opt.max.desc': 'With more models than this, each round draws this many at random.',
       'opt.blind.title': 'Hide the names until I reveal',
-      'opt.blind.desc': 'Off shows who wrote what straight away when you ask with /arena in a chat.',
+      'opt.blind.desc': 'Off shows who wrote what straight away when you ask with /arena in a thread.',
       'opt.redact.title': 'Remove model names from answers',
       'opt.redact.desc': 'If a model says its own name, the name is replaced by [model].',
       'opt.twice.title': 'Judge twice',
@@ -247,38 +247,12 @@ window.__ModuleLoader__.load({
       'score': 'score {n}',
       'ms': '{n} ms',
       'tokens': '{a} in / {b} out',
-      'failed': 'Could not read the arena. Is the Model arena add-on switched on?',
+      'failed': 'Could not read the arena. Check that the Model arena add-on is switched on on the Plugins page, then open this page again.',
       'loading': 'Loading arena…',
       'gone': 'This round is no longer available.',
     };
     const DICT = {
       en: EN,
-      // Strings without a translation yet fall back to English.
-      zh: {
-        ...EN,
-        'section.title': '竞技场',
-        'panel.title': '模型竞技场',
-        'rounds.title': '各轮',
-        'chip.judged': '已评审',
-        'chip.picked': '已选择',
-        'chip.revealed': '已揭晓',
-        'chip.blind': '盲评',
-        'chip.running': '进行中',
-        'running': '已收到 {done} / {total} 个回答。具体是哪几个会保持隐藏，以保证盲评。',
-        'refresh': '刷新',
-        'prompt': '提示词',
-        'answer': '回答 {label}',
-        'no.answer': '无回答：{reason}',
-        'judge.tie': '评审：平局。',
-        'pick.yours': '你的选择',
-        'pick.judge': '评审的选择',
-        'agree': '你和评审意见一致。',
-        'disagree': '你和评审意见不一致。',
-        'score': '得分 {n}',
-        'tokens': '输入 {a} / 输出 {b}',
-        'loading': '正在加载竞技场…',
-        'gone': '这一轮已不可用。',
-      },
     };
 
     // Looks follow docs/UI-STYLE.md: colours only from the app's variables, sizes from its table.
@@ -814,7 +788,7 @@ textarea.dsh-ar-field { height: auto; min-height: 76px; padding: 10px 14px; line
                           row.judged ? h('span', { className: 'dsh-ar-chip', 'data-k': 'you' }, t('chip.judged')) : null,
                           row.picked ? h('span', { className: 'dsh-ar-chip', 'data-k': 'you' }, t('chip.picked')) : null,
                           row.revealed ? h('span', { className: 'dsh-ar-chip', 'data-k': 'good' }, t('chip.revealed')) : null,
-                          h('span', { className: 'd' }, new Date(row.createdAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })),
+                          h('span', { className: 'd' }, new Date(row.createdAt).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })),
                         ),
                       ),
                     ),

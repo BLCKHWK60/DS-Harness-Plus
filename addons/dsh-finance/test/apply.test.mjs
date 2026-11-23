@@ -88,7 +88,7 @@ test('a brief is moved to Finance at once, before its first turn can start', asy
     app.emit('session/event', { id: 's1', header: {} }, reminder('task-a', briefPrompt('NVIDIA', 'United States', 'weekly')));
     // Nothing is awaited before the move: it is asked for while the event is still being handled.
     assert.deepEqual(app.moves, [['s1', MODE_ID, { claim: true }]]);
-    assert.match(note(), /Subject: "NVIDIA" \(this conversation was opened by a scheduled task/);
+    assert.match(note(), /Subject: "NVIDIA" \(this thread was opened by an automation/);
     assert.match(note(), /Market: United States only/);
     // A task that is neither a brief nor marked for Finance stays where it is.
     app.agent('s2');
@@ -176,7 +176,7 @@ test('with Tools off, a Finance conversation is told it has no data tools and th
     assert.ok(!/Tools are off/.test(on), on);
     const note = app.agent('s7');
     const text = note();
-    assert.match(text, /Tools are off in this Finance conversation, so you have no data tools now/);
+    assert.match(text, /Tools are off in this Finance thread, so you have no data tools now/);
     assert.match(text, /\(from memory, may be out of date\)/);
     assert.match(text, /Say which period a remembered figure is for/);
     assert.match(text, /never give it a source or an "as of" date you did not check/);
@@ -200,7 +200,7 @@ test('with Tools off and the adviser on, the adviser keeps its voice but saves n
   try {
     const text = app.agent('s9')();
     assert.match(text, /You are the user's financial adviser/);
-    assert.match(text, /Tools are off in this Finance conversation/);
+    assert.match(text, /Tools are off in this Finance thread/);
     assert.match(text, /every figure is from memory and is marked as such/);
     assert.ok(!/Figures still come only from sources you fetched/.test(text), text);
     assert.ok(!/finance_profile_save/.test(text), text);
@@ -358,7 +358,7 @@ test('the chat box cannot change a conversation that is not a started Finance on
     assert.equal((await chatOf(app, 's26')).session.pinned, false);
     const other = await app.call('POST', '/dsh-finance/data', { action: 'pin', sessionId: 's27', values: { subject: 'ASML' } });
     assert.equal(other.status, 400);
-    assert.match(other.data.error, /not a Finance conversation/);
+    assert.match(other.data.error, /not a Finance thread/);
     const nobody = await app.call('POST', '/dsh-finance/data', { action: 'pin', values: { subject: 'ASML' } });
     assert.equal(nobody.status, 400);
   } finally {

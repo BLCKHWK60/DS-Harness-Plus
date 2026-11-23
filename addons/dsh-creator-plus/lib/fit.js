@@ -11,7 +11,7 @@ import { patchRows } from './scan.js';
 
 /** Safety rules of other modes a plan may never touch. `plan.loosens` names them; a change of these files does too. */
 export const SAFETY = [
-  { id: 'recon-sealed', plain: 'Recon is sealed: no plugin hands a Recon conversation a tool, reads it, or carries its text out (only the owner\'s Export door does)' },
+  { id: 'recon-sealed', plain: 'Recon is sealed: no plugin hands a Recon thread a tool, reads it, or carries its text out (only the owner\'s Export door does)' },
   { id: 'bench-write-gates', plain: 'Devices writes to a device only behind its gates (levels, the four conditions, the owner\'s yes)' },
   { id: 'content-owner-words', plain: 'Content counts a decision only from the owner\'s own words' },
   { id: 'web-off', plain: 'Web Off and the Web levels hold for every tool, command and program' },
@@ -72,7 +72,7 @@ export function fitCheck(plan, map) {
   twice('settings', plan.settings, 'settings name');
   twice('rows', plan.rows, 'setup row');
   twice('storage', plan.storage, 'storage folder', 'decision');
-  twice('modes', plan.modes?.filter((mode) => plan.newModes?.includes(mode)), 'tab');
+  twice('modes', plan.modes?.filter((mode) => plan.newModes?.includes(mode)), 'mode');
   // A tool name the app already has (a built-in one).
   for (const tool of plan.tools ?? []) if ((map?.tools ?? []).includes(tool) && !others(index.tools?.[tool]).length && !(index.tools?.[tool] ?? []).includes(self)) block(`The tool name "${tool}" is already one of the app's own tools.`);
   // The chat box keeps its three controls.
@@ -85,8 +85,8 @@ export function fitCheck(plan, map) {
   if (chars > MODE_TEXT_BUDGET) block(`Its method is ${chars} characters, over the ${MODE_TEXT_BUDGET} a mode may have.`);
   // Safety rules of other modes: blocked, never asked.
   const isolated = new Set((map?.modes ?? []).filter((mode) => mode.isolated).map((mode) => mode.id));
-  for (const mode of plan.modes ?? []) if (isolated.has(mode)) block(`It would appear in "${mode}", a sealed tab: no plugin hands a sealed tab a tool or a control.`);
-  for (const [mode, tools] of Object.entries(plan.givesTools ?? {})) if (isolated.has(mode) && (tools ?? []).length > 0) block(`It would give the sealed tab "${mode}" the tools ${tools.join(', ')}.`);
+  for (const mode of plan.modes ?? []) if (isolated.has(mode)) block(`It would appear in "${mode}", a sealed mode: no plugin hands a sealed mode a tool or a control.`);
+  for (const [mode, tools] of Object.entries(plan.givesTools ?? {})) if (isolated.has(mode) && (tools ?? []).length > 0) block(`It would give the sealed mode "${mode}" the tools ${tools.join(', ')}.`);
   for (const id of plan.loosens ?? []) {
     const rule = SAFETY.find((entry) => entry.id === id);
     block(`It would loosen a safety rule of another mode: ${rule ? rule.plain : id}.`);
@@ -169,16 +169,16 @@ export function codeFindings(dir, map, { kind = '', name = '', own = [] } = {}) 
     if (mine.has(ns) || wrote.has(ns)) continue;
     wrote.add(ns);
     if (ns === 'modes') {
-      if (kind === 'mode') ask('It adds its own tab through the Modes add-on\'s settings (extraModes).');
-      else block('It writes the Modes add-on\'s settings, which hold every tab\'s tools and seals.');
+      if (kind === 'mode') ask('It adds its own mode through the Modes add-on\'s settings (extraModes).');
+      else block('It writes the Modes add-on\'s settings, which hold every mode\'s tools and seals.');
     } else block(`It writes the settings "${ns}"${owners[ns]?.length ? `, which belong to ${owners[ns].join(', ')}` : ', which are not its own'}.`);
   }
-  if (/path\s*:\s*\[\s*['"`](modes|sessionModes|scheduledMode)['"`]/.test(code)) block('It changes the Modes add-on\'s table of tabs or which tab a conversation is in.');
-  if (kind !== 'mode' && /['"`]extraModes['"`]/.test(code)) block('It touches the Modes add-on\'s extra tabs, but it is not a tab.');
+  if (/path\s*:\s*\[\s*['"`](modes|sessionModes|scheduledMode)['"`]/.test(code)) block('It changes the Modes add-on\'s table of modes or which mode a thread is in.');
+  if (kind !== 'mode' && /['"`]extraModes['"`]/.test(code)) block('It touches the Modes add-on\'s extra modes, but it is not a mode.');
   for (const mode of (map?.modes ?? []).filter((entry) => entry.isolated)) {
-    if (new RegExp(`(['"\`])${mode.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\1`).test(code)) block(`It names the sealed tab "${mode.id}": no plugin hands a sealed tab a tool or reads it.`);
+    if (new RegExp(`(['"\`])${mode.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\1`).test(code)) block(`It names the sealed mode "${mode.id}": no plugin hands a sealed mode a tool or reads it.`);
   }
-  if (/['"`]tools\/(pre|post)-execute['"`]/.test(code) || /\btools\??\.guard\??\.?\(/.test(code)) block('It hooks every tool call (tools/pre-execute or a tool guard), which could let through what another tab refuses.');
+  if (/['"`]tools\/(pre|post)-execute['"`]/.test(code) || /\btools\??\.guard\??\.?\(/.test(code)) block('It hooks every tool call (tools/pre-execute or a tool guard), which could let through what another mode refuses.');
   // Package scripts would run the plugin's own code during an install (the trial copy's and the app's).
   try {
     const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));

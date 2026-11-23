@@ -39,12 +39,13 @@ test('Modes follows Long runs: the mask, the shell guard, the note, the service,
   assert.match(source, /if \(long && !mode\?\.isolated\) \{\n      return longRunMask\(/);
   assert.match(source, /const long = longRunOf\(id\);\s+if \(isolatedMayRun\(\{ mode, name: exec\.name, child: topOf\(id\) !== id, off: toolsOff\(id\), webOff: isolatedWebOff\(id\), long, granted: access\?\.grantedFor\(id, exec\.name, exec\) === true, online: onlineImageTools\(\) \}\)\)/);
   assert.match(source, /if \(mode\?\.isolated \|\| \(long \? long\.web : webOn\(id, mode\)\)\) return undefined;/);
-  assert.match(source, /A Long run is on in this conversation\./);
+  assert.match(source, /A Mission is on in this thread\./);
+  assert.doesNotMatch(source, /A Long run is on in this thread/, 'the model is told Mission, the one name (stage B)');
   assert.match(source, /if \(event\?\.kind !== 'long' \|\| \(event\.type !== 'started' && event\.type !== 'finished'\)\) return;/);
   for (const name of ['readOnly(sessionId)', 'longTools(sessionId)', 'refreshTools(sessionId)']) assert.ok(source.includes(`    ${name} {`), name);
   assert.match(source, /longTools: z\.string\(\)\.default\('\{\}'\)\.volatile\(\),/);
   for (const key of ['long.group', 'long.hint', 'long.files', 'long.web', 'long.isolated']) {
-    assert.equal(client.split('\n').filter((text) => text.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+    assert.equal(client.split('\n').filter((text) => text.includes(`'${key}':`)).length, 1, `${key}: once, English only`);
   }
 });
 
@@ -123,11 +124,11 @@ test('a Recon conversation whose Long run has ended: the step tool says the run 
     on.delete('r1');
     // The run has ended: a plain answer instead of "not part of this conversation".
     assert.equal(call('r1'), RUN_OVER_TEXT);
-    assert.match(RUN_OVER_TEXT, /has ended[\s\S]*do not call mission_step again[\s\S]*then stop/);
+    assert.match(RUN_OVER_TEXT, /^The Mission in this thread has ended[\s\S]*do not call mission_step again[\s\S]*then stop/);
     assert.equal((await nextStep(r1)).kind, 'enter', 'once is fine: the model may still answer');
     // Another tool in between starts the count afresh.
     call('r1');
-    assert.match(call('r1', 'bash'), /is not part of this isolated conversation/);
+    assert.match(call('r1', 'bash'), /not part of this sealed|not one of this Recon thread|through Recon's routes|Nothing was remembered|Deep research does not run/);
     for (let n = 1; n < RUN_OVER_LIMIT; n += 1) call('r1');
     assert.equal((await nextStep(r1)).kind, 'enter');
     call('r1');

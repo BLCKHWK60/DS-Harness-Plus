@@ -65,13 +65,13 @@ test('switched off, refused by the filter, or told to slow down: nothing is read
   // After the hold the request goes out again; a second refusal switches it off for this conversation.
   clock += 15 * 60_000;
   answer = { ok: true, status: 403, text: 'blocked' };
-  assert.match(await web.archiveRead('c', 'example.com', '2020'), /Reading Internet Archive copies is now off for the rest of this conversation/);
+  assert.match(await web.archiveRead('c', 'example.com', '2020'), /Reading Internet Archive copies is now off for the rest of this thread/);
   clock += 60 * 60_000;
   const count = sent.length;
   answer = { ok: true, status: 200, title: 'A page', text: 'Some text' };
-  assert.match(await web.archiveRead('c', 'example.com', '2020'), /now off for the rest of this conversation/);
+  assert.match(await web.archiveRead('c', 'example.com', '2020'), /now off for the rest of this thread/);
   assert.equal(sent.length, count, 'off means off, however long the model waits');
-  assert.match(await web.archiveRead('other', 'example.com', '2020'), /\[S1\] http:\/\/example.com\/, as captured/, 'another conversation may still read');
+  assert.match(await web.archiveRead('other', 'example.com', '2020'), /\[S1\] http:\/\/example.com\/, as captured/, 'another thread may still read');
   // A good answer clears the hold.
   slept.length = 0;
   answer = { ok: true, status: 200, json: { articles: [] } };
@@ -81,7 +81,7 @@ test('switched off, refused by the filter, or told to slow down: nothing is read
   assert.deepEqual(slept, [6000], 'the second request waits the five seconds GDELT asks for, and a bit');
   // A failure counts too: the first was the 429 above, so this one switches news search off.
   answer = { ok: false, why: 'the request took too long' };
-  assert.match(await web.news('c', 'acme breach'), /GDELT news search is now off for the rest of this conversation/);
+  assert.match(await web.news('c', 'acme breach'), /GDELT news search is now off for the rest of this thread/);
   assert.ok(sent.every((url) => url.startsWith(`https://${ARCHIVE}/`) || url.startsWith(`https://${NEWS}/`)), 'only the two services are ever asked');
   const waiting = createWeb({ port: async () => ({ wait: 'Tor is still connecting (40%).' }), run: async () => { throw new Error('not reached'); }, sources, on: () => state });
   assert.match(await waiting.news('c', 'acme breach'), /still connecting/);

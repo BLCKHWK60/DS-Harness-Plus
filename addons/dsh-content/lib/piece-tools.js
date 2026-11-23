@@ -197,14 +197,14 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
   // ---- Research reports -------------------------------------------------------------------------
   tools.push({
     name: 'content_reports',
-    description: 'Research reports the Research tab saved. action "list": the newest, with their titles. action "bring": copy one, as it is, into the subject\'s research/reports, and take its numbered sources into the ledger (with their grades). When the Research tab wrote a packet beside it (claims, contradictions, timeline, leads), the packet is copied too and its claims are recorded in the ledger with proposed standings; otherwise read the report and record its claims with content_ledger.',
+    description: 'Research reports that Research mode saved. action "list": the newest, with their titles. action "bring": copy one, as it is, into the subject\'s research/reports, and take its numbered sources into the ledger (with their grades). When the Research tab wrote a packet beside it (claims, contradictions, timeline, leads), the packet is copied too and its claims are recorded in the ledger with proposed standings; otherwise read the report and record its claims with content_ledger.',
     parameters: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'bring'] }, name: { type: 'string', maxLength: 300, description: 'The report\'s file name, from the list.' } }, required: ['action'], additionalProperties: false },
     ...common,
     execute: safely(async (args, exec) => {
       const folder = reportsFolder();
       const reports = listReports(folder);
       if (args.action === 'list') {
-        if (reports.length === 0) return folder ? `No saved Research report in ${folder}.` : 'The Research tab has no report folder here.';
+        if (reports.length === 0) return folder ? `No saved Research report in ${folder}.` : 'Research mode has no report folder here.';
         return ['Saved Research reports, newest first:', ...reports.map((report) => `- ${report.name}: ${report.title}`)].join('\n');
       }
       const name = basename(str(args.name, 300));
@@ -274,9 +274,9 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
       about: { type: 'array', items: { type: 'string' }, description: 'Named people or organisations it is about.' },
       accuses: { type: 'boolean', description: 'It accuses a named person or organisation of something.' },
       disputed: { type: 'boolean', description: 'Sources contradict each other on it.' },
-      origin: { type: 'string', enum: ['research', 'recon', 'content', 'owner'], description: 'research: from a Research report; content: you found it in this conversation; owner: the user\'s own experience or view.' },
+      origin: { type: 'string', enum: ['research', 'recon', 'content', 'owner'], description: 'research: from a Research report; content: you found it in this thread; owner: the user\'s own experience or view.' },
       kind: { type: 'string', enum: ['experience', 'view'], description: 'For origin owner.' },
-      fromOwner: { type: 'string', description: 'For origin owner: the user\'s own words it comes from, as they wrote them in the conversation or in notes/.' },
+      fromOwner: { type: 'string', description: 'For origin owner: the user\'s own words it comes from, as they wrote them in the thread or in notes/.' },
     },
     required: ['text'],
   };
@@ -395,7 +395,7 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
           const claimWords = plainWords(text).split(' ').filter((word) => word.length >= 4);
           const covered = claimWords.length === 0 ? 0 : claimWords.filter((word) => ` ${plain} `.includes(` ${word} `)).length / claimWords.length;
           if (!words || (!inNotes && !ownerSaid(ownerMessages(exec), words, 40))) {
-            refused.push(`"${text.slice(0, 80)}": the user's own experience or view needs their own words (fromOwner, at least four words), as they wrote them in the conversation or in a notes file of theirs. Ask them.`);
+            refused.push(`"${text.slice(0, 80)}": the user's own experience or view needs their own words (fromOwner, at least four words), as they wrote them in the thread or in a notes file of theirs. Ask them.`);
             continue;
           }
           if (covered < 0.5) {
@@ -904,7 +904,7 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
     name: 'content_library',
     description: [
       `The ${LIBRARY_NAME}: the owner's approved pieces (added when a piece is made final), the writer's drafts beside his versions, his own words, pinned facts, approved sources, approved wording, his voice rules per format, and feedback. Nothing enters by itself.`,
-      'action "show": what is on the shelves. "own_words": keep the owner\'s own text (his words from the conversation as "text", or a notes file of his as "file"); voice "spoken" for a transcript of him talking; with "piece" (a talking outline) a transcript is compared with that outline: what he skipped, moved or expanded, which later outlines follow.',
+      'action "show": what is on the shelves. "own_words": keep the owner\'s own text (his words from the thread as "text", or a notes file of his as "file"); voice "spoken" for a transcript of him talking; with "piece" (a talking outline) a transcript is compared with that outline: what he skipped, moved or expanded, which later outlines follow.',
       '"pin" a fact or a ruled claim, "source" (trusted or distrusted, with a note), "wording" (a passage to reuse word for word, from his messages or an approved piece), "rule" (a voice rule you proposed, for a format and voice), "drop_rule": each only with the owner\'s own words as "quote".',
       '"signal": feedback he gave ("too formal", or which of two versions he chose), in his own words as "text".',
     ].join(' '),
@@ -961,7 +961,7 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
           title ||= name.replace(/\.(md|txt)$/i, '');
         } else {
           body = str(args.text, 200_000);
-          if (!body || !ownerSaid(ownerMessages(exec), body, 40)) throw new Error('Only the owner\'s own words go on this shelf: pass them exactly as he wrote them in the conversation (at least four words), or a notes file of his.');
+          if (!body || !ownerSaid(ownerMessages(exec), body, 40)) throw new Error('Only the owner\'s own words go on this shelf: pass them exactly as he wrote them in the thread (at least four words), or a notes file of his.');
         }
         const entry = library.addOwnWords({ text: body, title, voice, format: str(args.format, 60), at: now() });
         let compared = '';
@@ -1029,7 +1029,7 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
   // ---- more research ----------------------------------------------------------------------------
   tools.push({
     name: 'content_continue',
-    description: 'A starting text for a new Research or Recon conversation about a subject that needs more, or one claim: the question, the claim and what is known. The user starts that conversation and pastes it. What Recon finds comes back only through Recon\'s own way out.',
+    description: 'A starting text for a new Research or Recon thread about a subject that needs more, or one claim: the question, the claim and what is known. The user starts that thread and pastes it. What Recon finds comes back only through Recon\'s own way out.',
     parameters: { type: 'object', properties: { to: { type: 'string', enum: ['research', 'recon'] }, question: { type: 'string' }, claim: { type: 'string' } }, required: ['to', 'question'], additionalProperties: false },
     ...common,
     isConcurrencySafe: () => true,
@@ -1050,7 +1050,7 @@ export function buildPieceTools({ enabled, rootOf, ownerMessages, helper, format
       } catch {
         /* the starting text below is what matters */
       }
-      return `Starting text for a new ${args.to === 'recon' ? 'Recon' : 'Research'} conversation (the user opens it in that tab and pastes this):\n\n${text}`;
+      return `Starting text for a new ${args.to === 'recon' ? 'Recon' : 'Research'} thread (the user starts a new thread in that mode, Recon in the Recon space, and pastes this):\n\n${text}`;
     }),
   });
 

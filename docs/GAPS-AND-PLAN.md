@@ -40,7 +40,7 @@ These are the "one add-on does 48%, another 50%" cases.
 
 | # | Gap | Found | Proposed fix | Size |
 |---|---|---|---|---|
-| C1 | **Fourteen settings pages are English only; eleven are translated.** Finance, Data, Mission, Model Tiers, Automations, Mac, Budget guard, Library, Memory, Activity, Diagrams, Self-improvement, Learning and PDF reader have their texts written into the page. | Checked by count of fixed texts against translated ones. | Decide once: English only (then drop the half-done Chinese texts) or both (then move the fixed texts into the translation tables). Proposal: both, done by script, one add-on per pass. | M |
+| C1 | **Fourteen settings pages are English only; eleven are translated.** Finance, Data, Mission, Model Tiers, Automations, Mac, Budget guard, Library, Memory, Activity, Diagrams, Self-improvement, Learning and PDF reader have their texts written into the page. | Checked by count of fixed texts against translated ones. | Decide once: English only (then drop the half-done Chinese texts) or both (then move the fixed texts into the translation tables). Proposal: both, done by script, one add-on per pass. **Decided 23 November 2026: English only.** The Chinese texts were removed in stage 7 of item 4A. | M |
 | C2 | **Two families of page styling.** Each page carries its own copy of the same rows, switches and buttons under its own prefix. | Checked: the same switch is defined in at least eight files. | A small shared style and three shared pieces (row, switch, button) that pages import. Do it when a page is touched anyway, not as a project of its own. | M, spread out |
 | C3 | **"Off by default" means different things.** Finance and Data are off until switched on; the adviser and hiding the thumbs are single switches; Learning is on in the download and off in the owner's app; Privacy looks off to a reader of its file but is on. | Checked. | The overview page (B3) shows the real state of each; the guide's reference now states it per add-on. | with B3 |
 | C4 | **Slash commands are uneven.** Fifteen add-ons have one, twenty do not; Finance, Data and the project features have none. | Checked. | No new commands for their own sake. Add `/project` (open this conversation's project page) and `/models` (the chip's choice, for when the row is narrow). | S |
@@ -80,7 +80,7 @@ Each step is small enough to build, test in the lab, and try in one sitting.
 ## Questions for the review
 
 1. A7: should the Learning add-on stay a separate thing, or become the engine behind the Learn type?
-2. C1: English only, or English and Chinese throughout?
+2. C1: English only, or English and Chinese throughout? (Decided: English only.)
 3. A6: should what you tell the Finance adviser about yourself be available to other tabs, or stay in Finance?
 4. B1: is a run card above the chat box the right home for a run's progress, or would you rather have it in the right-hand panel?
 5. E1: may ADD-ONS.md be replaced by the guide?

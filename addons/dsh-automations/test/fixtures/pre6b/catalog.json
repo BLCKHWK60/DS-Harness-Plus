@@ -1,0 +1,7 @@
+[
+  { "id": "p-research", "kind": "every", "everySeconds": 3600, "title": "Morning research", "prompt": "Look up the news.", "status": "active", "target": { "kind": "new", "create": { "cwd": "/w/proj", "agentPreset": "standard" } }, "involvedSessionIds": ["code-r1"], "updatedAt": "u0" },
+  { "id": "p-finance", "kind": "daily", "time": "08:00:00.000", "timeZone": "UTC", "title": "Finance brief: Markets", "prompt": "Brief me.", "status": "active", "target": { "kind": "new", "create": {} }, "involvedSessionIds": [], "updatedAt": "u0" },
+  { "id": "p-assistant", "kind": "every", "everySeconds": 3600, "title": "Assistant made", "prompt": "Check the build.", "status": "active", "target": { "kind": "new_once", "sessionId": "reserved-a", "create": { "cwd": "/w/proj" } }, "involvedSessionIds": ["chat-1", "reserved-a"], "updatedAt": "u0" },
+  { "id": "p-recon", "kind": "every", "everySeconds": 3600, "title": "Forum watch", "prompt": "Look again.", "status": "active", "target": { "kind": "session", "sessionId": "recon-1" }, "involvedSessionIds": ["recon-1"], "updatedAt": "u0" },
+  { "id": "p-bench", "kind": "every", "everySeconds": 3600, "title": "Device check", "prompt": "List the boards.", "status": "active", "target": { "kind": "new", "create": { "cwd": "/w/dev" } }, "involvedSessionIds": [], "updatedAt": "u0" }
+]

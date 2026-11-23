@@ -192,7 +192,7 @@ export function createSessions({ store, settings, now = Date.now, keep }) {
 
     /** The tutor's plan: store it and start with its first idea. */
     plan(sessionId, raw) {
-      if (sessions.has(sessionId)) return { error: 'A study session is already running in this conversation. Finish it, or call learn_end first.' };
+      if (sessions.has(sessionId)) return { error: 'A study session is already running in this thread. Finish it, or call learn_end first.' };
       const read = readPlan(raw);
       if (read.error) return { error: read.error };
       const topic = store.add(read.topic);
@@ -202,7 +202,7 @@ export function createSessions({ store, settings, now = Date.now, keep }) {
 
     /** Start a review of the ideas that are due. */
     review(sessionId) {
-      if (sessions.has(sessionId)) return { error: 'A study session is already running in this conversation. Finish it, or call learn_end first.' };
+      if (sessions.has(sessionId)) return { error: 'A study session is already running in this thread. Finish it, or call learn_end first.' };
       const due = dueIdeas(store.topics(), now()).slice(0, settings().reviewSize);
       if (due.length === 0) {
         pending.delete(sessionId);
@@ -215,7 +215,7 @@ export function createSessions({ store, settings, now = Date.now, keep }) {
     /** Something happened in the session, reported by the tutor. */
     mark(sessionId, event) {
       const session = sessions.get(sessionId);
-      if (!session) return { text: 'No study session is running in this conversation. Call learn_plan to start one, or learn_review to review what is due.' };
+      if (!session) return { text: 'No study session is running in this thread. Call learn_plan to start one, or learn_review to review what is due.' };
       if (!EVENTS.includes(event)) return { text: `Unknown event "${event}". Use one of: ${EVENTS.join(', ')}.` };
       const allowed = can(session, event);
       if (!allowed.ok) return { text: `Not allowed: ${allowed.why}\n\n${tell(session)}` };
@@ -310,7 +310,7 @@ export function apply(ctx, config) {
   const store = openStore(dataDir);
   const sessionFile = dataDir ? join(dataDir, 'sessions.json') : '';
   const keep = {
-    load: () => readJsonStore(sessionFile, () => ({}), { label: 'what Learn kept for each conversation', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) }),
+    load: () => readJsonStore(sessionFile, () => ({}), { label: 'what Learn kept for each thread', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) }),
     save: (value) => {
       if (!sessionFile) return;
       mkdirSync(dataDir, { recursive: true });
@@ -417,7 +417,7 @@ export function apply(ctx, config) {
     tool({ name: 'learn_status', description: 'Where the study session stands and what to do next; and what is due for review.', parameters: { type: 'object', properties: {} } }, (_args, id) => {
       const due = dueIdeas(store.topics(), Date.now());
       const text = sessions.instructions(id);
-      return `${text || 'No study session is running in this conversation.'}\n\nDue for review: ${due.length}${due.length > 0 ? ` (${due.slice(0, 5).map((item) => item.title).join('; ')}${due.length > 5 ? '; …' : ''})` : ''}.`;
+      return `${text || 'No study session is running in this thread.'}\n\nDue for review: ${due.length}${due.length > 0 ? ` (${due.slice(0, 5).map((item) => item.title).join('; ')}${due.length > 5 ? '; …' : ''})` : ''}.`;
     }),
     tool({ name: 'learn_end', description: 'End the study session because the learner asked to stop. What was finished stays saved.', parameters: { type: 'object', properties: {} } }, (_args, id) => sessions.choose(id, 'end').text),
   ];
@@ -522,7 +522,7 @@ export function apply(ctx, config) {
                 return store.remove(String(body.id ?? '')) ? res.end(JSON.stringify(overview())) : fail(404, 'There is no such topic.');
               }
               const id = sessionOf(req);
-              if (!id) return fail(400, 'No conversation was named.');
+              if (!id) return fail(400, 'No thread was named.');
               const outcome = sessions.choose(id, body.action, body.value);
               if (!outcome.ok) return fail(409, outcome.text);
               res.end(JSON.stringify({ text: outcome.text, ...sessions.view(id) }));

@@ -194,6 +194,9 @@ test('results: runs picked by name, date and outcome; the final answer is the la
   assert.deepEqual(pickRuns(runs, { automation: 'morning', since: '2026-08-01' }, now).map((r) => r.id), ['3', '1']);
   assert.deepEqual(pickRuns(runs, { state: 'failed' }, now).map((r) => r.id), ['2']);
   assert.deepEqual(pickRuns(runs, { automation: 't2' }, now).map((r) => r.id), ['2']);
+  // Stage 7 review: a held run (stored as stopped, nothing ran) is never listed as failed.
+  const withHeld = [...runs, { id: '4', tasks: [{ id: 't3', title: 'Device check' }], startedAt: Date.parse('2026-11-16T08:00:00Z'), state: 'stopped', held: true }];
+  assert.deepEqual(pickRuns(withHeld, { state: 'failed' }, now).map((r) => r.id), ['2']);
   assert.equal(pickRuns(runs, { limit: 1 }, now).length, 1);
   assert.equal(finalAnswer([
     { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'first' }] } } },
@@ -217,4 +220,50 @@ test('a run you went on with is marked, and a deleted automation waits for the t
   assert.deepEqual(notes.held().map((r) => r.title), ['A2']);
   notes.release('a');
   assert.deepEqual(notes.held(), []);
+});
+
+test('stage 6b notes: run space, created space and thread, place note, pause reason; space pauses told apart from modes', () => {
+  const notes = openNotes('');
+  notes.setRunSpace('a', 'code');
+  notes.setRunSpace('b', 'recon');
+  notes.setRunSpace('c', 'nowhere');
+  assert.equal(notes.get('a').runSpace, 'code');
+  assert.equal(notes.get('b').runSpace, undefined, 'never Recon (this thread only)');
+  assert.equal(notes.get('c').runSpace, undefined);
+  notes.setRunSpace('a', '');
+  assert.equal(notes.get('a').runSpace, undefined);
+  notes.setCreatedSpace('a', 'recon');
+  assert.equal(notes.get('a').createdSpace, 'recon', 'any of the five');
+  notes.setCreatedBy('a', 'thread-1');
+  notes.setCreatedBy('b', 'no spaces allowed');
+  assert.equal(notes.get('a').createdBy, 'thread-1');
+  assert.equal(notes.get('b').createdBy, undefined);
+  notes.setPlaceNote('a', 'unticked');
+  assert.equal(notes.get('a').placeNote, 'unticked');
+  notes.setPlaceNote('a', 'other');
+  assert.equal(notes.get('a').placeNote, undefined);
+  notes.setPauseReason('a', 'devicesOff');
+  notes.setPauseReason('b', 'whatever');
+  assert.equal(notes.get('a').pauseReason, 'devicesOff');
+  assert.equal(notes.get('b').pauseReason, undefined);
+  notes.setMade('a', 'tool');
+  assert.equal(notes.get('a').made, 'tool');
+  notes.setPausedFor('a', 'space:devices');
+  notes.setPausedBack('b', 'space:workshop');
+  notes.setPausedFor('c', 'space:kitchen');
+  assert.equal(notes.get('a').pausedFor, 'space:devices');
+  assert.equal(notes.get('b').pausedBack, 'space:workshop');
+  assert.equal(notes.get('c').pausedFor, undefined);
+  notes.setPausedFor('d', 'research');
+  assert.equal(notes.get('d').pausedFor, 'research', 'a mode id as before');
+});
+
+test('take (6b): a new automation records its mode, space and thread; a string answer as before; existing notes untouched', () => {
+  const notes = openNotes('');
+  notes.setCreatedIn('old', 'research');
+  const catalog = [{ id: 'new', title: 'n', prompt: 'p', status: 'active', target: { kind: 'new' } }, { id: 'old', title: 'o', prompt: 'p', status: 'active', target: { kind: 'new' } }, { id: 'str', title: 's', prompt: 'p', status: 'active', target: { kind: 'new' } }];
+  notes.take(catalog, (entry) => (entry.id === 'str' ? 'chat' : { createdIn: 'research', createdSpace: 'code', createdBy: 'th-1' }));
+  assert.deepEqual(notes.get('new'), { createdIn: 'research', createdSpace: 'code', createdBy: 'th-1' });
+  assert.deepEqual(notes.get('old'), { createdIn: 'research' });
+  assert.deepEqual(notes.get('str'), { createdIn: 'chat' });
 });

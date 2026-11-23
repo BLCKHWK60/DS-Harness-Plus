@@ -20,8 +20,8 @@ export const DEPTHS = [
 
 /** Which models the helpers of a run use: the Modes add-on's `researchModel`. */
 export const HELPER_MODELS = [
-  { id: 'same', label: 'This conversation\'s model', hint: 'every helper runs on the model picked in the chat box: one model loaded' },
-  { id: 'roles', label: 'Role models', hint: 'planner and writer on the plan role, searchers on the fast role (Settings → Model Tiers)' },
+  { id: 'same', label: 'This thread\'s model', hint: 'every helper runs on the model picked in the chat box: one model loaded' },
+  { id: 'roles', label: 'Role models', hint: 'planner and writer on the plan role, searchers on the fast role (Settings → Model tiers)' },
 ];
 
 export const TOOLS = ['deep_research', 'web_search', 'web_fetch', 'library_search', 'library_read', 'diagram_draw', 'ask_user_question', 'todo_write'];
@@ -30,7 +30,7 @@ export const TOOLS = ['deep_research', 'web_search', 'web_fetch', 'library_searc
 export const METHOD = `You are in Research mode: a research desk that answers questions with evidence, every claim cited.
 
 How to work:
-1. For any question that needs facts from outside this conversation, call deep_research. Pass the user's question made complete and specific (who, where, which period), in the user's language. Do not answer such questions from memory.
+1. For any question that needs facts from outside this thread, call deep_research. Pass the user's question made complete and specific (who, where, which period), in the user's language. Do not answer such questions from memory.
 2. If the question is unclear in a way that would change the research (which country, which period, for what purpose), ask one short question with ask_user_question first. Otherwise go ahead and state your assumptions in one line.
 3. For a quick fact that one or two pages settle, use web_search and web_fetch instead, and cite the pages as links.
 4. Small talk, a clarification about a report already given, or a question that the report answers: answer directly, citing the report's numbers [n].

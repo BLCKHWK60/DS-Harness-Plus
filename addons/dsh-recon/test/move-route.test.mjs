@@ -19,7 +19,7 @@ const LOCAL = { provider: 'localp', model: 'small' };
  * Recon on stand-ins. `childModel` is the new conversation's model BEFORE the tab claims it; `afterClaim` is what the
  * claim gives it (the tab's own model), so the order of claim and cloud check can be seen.
  */
-function start({ cloudModels = 'never', childModel = LOCAL, afterClaim, prepare } = {}) {
+function start({ cloudModels = 'never', childModel = LOCAL, afterClaim, prepare, spaces } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'recon-move-home-'));
   const out = mkdtempSync(join(tmpdir(), 'recon-move-out-'));
   prepare?.(home);
@@ -37,8 +37,10 @@ function start({ cloudModels = 'never', childModel = LOCAL, afterClaim, prepare 
     modes: {
       get: (id) => modeOf[id]?.mode,
       isolated: (id) => modeOf[id]?.isolated === true,
-      list: () => [{ id: 'cowork', label: 'Cowork' }, { id: 'recon', label: 'Recon' }],
+      list: () => [{ id: 'cowork', label: 'Cowork' }, { id: 'recon', label: 'Recon' }, ...(spaces ? [{ id: 'chat', label: 'Chat' }, { id: 'bench', label: 'Devices' }] : [])],
       set: async (id, mode, options) => { calls.push(['claim', id, mode, options]); modeOf[id] = { mode, isolated: false }; if (afterClaim) current = afterClaim; },
+      // Item 4A fix round: Modes with spaces live claims through startDraft (a test passes `spaces`).
+      ...(spaces ? { spaces: { live: () => true, ofMode: (id) => ({ bench: 'devices', 'creator-plus': 'workshop', code: 'code', recon: 'recon' })[id] ?? 'chat', startDraft: async (id, where) => { calls.push(['start', id, where]); return spaces(id, where); } } } : {}),
     },
     tools: { register: () => () => {}, guard: () => () => {} },
     commands: { register: () => () => {} },
@@ -76,7 +78,7 @@ test('the move needs the preview first: without the user\'s yes nothing is claim
     const refused = await app.move({ consent: false });
     assert.equal(refused.status, 400);
     assert.match(refused.json.error, /needs the preview window first/);
-    assert.deepEqual(app.calls, [], 'the new conversation was not even claimed');
+    assert.deepEqual(app.calls, [], 'the new thread was not even claimed');
     assert.deepEqual(readdirSync(app.out), [], 'no folder was made');
     assert.equal(existsSync(join(app.home, 'recon', 'door.json')), false, 'nothing recorded');
     assert.equal((await app.route('POST', {}, { action: 'move', session: 'r1', tab: 'cowork', sessionId: 'n1', folder: app.out, title: 'x' })).status, 400, 'consent missing altogether');
@@ -186,7 +188,7 @@ test('a damaged door.json is kept aside, never overwritten, nothing is moved, an
     assert.equal(readFileSync(join(app.home, 'recon', copies[0]), 'utf8'), damaged);
     assert.deepEqual(readdirSync(app.out), [], 'nothing was written');
     assert.equal(app.provided.reconMoved.damaged(), true, 'Sync is told it cannot know');
-    assert.equal(app.provided.reconExports.has('any-conversation'), true, 'every conversation counts as holding an export');
+    assert.equal(app.provided.reconExports.has('any-conversation'), true, 'every thread counts as holding an export');
     // The user is told in plain words on the Recon page.
     const state = await app.route('GET', { session: 'r1' }, undefined, STATE_PATH);
     assert.match(state.json.problem, /door\.json\) is damaged/);
@@ -241,9 +243,9 @@ test('wipe.json: a damaged list keeps a copy, keeps the ids still plainly there,
     const text = '["session-aaa111","session-bbb222","session-cc';
     writeFileSync(file, text);
     const list = openWipeList(file);
-    assert.deepEqual(list.list(), ['session-aaa111', 'session-bbb222'], 'the ended conversations still go');
+    assert.deepEqual(list.list(), ['session-aaa111', 'session-bbb222'], 'the ended threads still go');
     assert.match(list.problem(), /wipe\.json\) was damaged\. A copy was kept as .*wipe\.json\.damaged-/);
-    assert.match(list.problem(), /2 ended conversations were recovered/);
+    assert.match(list.problem(), /2 ended threads were recovered/);
     const copies = readdirSync(dir).filter((name) => name.startsWith('wipe.json.damaged-'));
     assert.equal(copies.length, 1);
     assert.equal(readFileSync(join(dir, copies[0]), 'utf8'), text, 'the original text is safe before anything is saved');
@@ -253,7 +255,7 @@ test('wipe.json: a damaged list keeps a copy, keeps the ids still plainly there,
     writeFileSync(file, '{"oops": true}');
     const none = openWipeList(file);
     assert.deepEqual(none.list(), []);
-    assert.match(none.problem(), /0 ended conversations were recovered/);
+    assert.match(none.problem(), /0 ended threads were recovered/);
     assert.equal(readdirSync(dir).filter((name) => name.startsWith('wipe.json.damaged-')).length, 2);
     // A good file: no problem.
     writeFileSync(file, '["session-eee555"]');
@@ -278,5 +280,42 @@ test('wipe.json that cannot be copied aside is not written over', { skip: proces
   } finally {
     chmodSync(dir, 0o700);
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('item 4A fix round: with spaces, the moved thread is claimed with its space\'s start mode, never the tab id as a mode', async () => {
+  let misses = 1;
+  const app = start({ cloudModels: 'always', spaces: () => (misses-- > 0 ? { claimed: false, missing: true } : { claimed: true, mode: 'plain', space: 'chat' }) });
+  try {
+    const done = await app.move({ tab: 'chat' });
+    assert.equal(done.status, 200, JSON.stringify(done.json));
+    assert.deepEqual(app.calls.filter((call) => call[0] === 'start'), [['start', 'n1', { space: 'chat' }], ['start', 'n1', { space: 'chat' }]], 'asked again while the new thread was not there yet');
+    assert.equal(app.calls.some((call) => call[0] === 'claim'), false, "Chat's tab id is the old answer-only Chat mode: never set");
+  } finally {
+    app.close();
+  }
+  const devices = start({ cloudModels: 'always', spaces: () => ({ claimed: true, mode: 'bench', space: 'devices' }) });
+  try {
+    await devices.move({ tab: 'bench' });
+    assert.deepEqual(devices.calls.find((call) => call[0] === 'start'), ['start', 'n1', { space: 'devices' }]);
+  } finally {
+    devices.close();
+  }
+});
+
+test('item 4A fix round: Recon tells Modes which folder is its room (inside it too); anything else is not', () => {
+  const app = start();
+  try {
+    const { isRoom } = app.provided.recon;
+    assert.equal(typeof isRoom, 'function');
+    mkdirSync(join(ROOM, 'run-x'), { recursive: true });
+    assert.equal(isRoom(ROOM), true);
+    assert.equal(isRoom(join(ROOM, 'run-x')), true);
+    assert.equal(isRoom(app.out), false);
+    assert.equal(isRoom(''), false);
+    assert.equal(isRoom(join(ROOM, 'not-there')), false, 'a folder that cannot be read is not the room');
+  } finally {
+    try { rmSync(join(ROOM, 'run-x'), { recursive: true, force: true }); } catch { /* the room is emptied at start */ }
+    app.close();
   }
 });

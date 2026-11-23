@@ -1,7 +1,7 @@
 /**
  * The record of scheduled runs: what the app's scheduler started, and how each one ended.
  *
- * The app only records that a task's instruction reached a conversation. This follows the turn that
+ * The app only records that a task's instruction reached a thread. This follows the turn that
  * instruction started, to its end. Kept apart from the plugin so it can be tested without the app.
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -137,7 +137,7 @@ export function openRuns(file) {
     if (Array.isArray(read?.runs)) runs = read.runs.filter((run) => run && typeof run.id === 'string' && typeof run.sessionId === 'string');
   }
   let dirty = false;
-  /** Conversation id -> its run in progress. */
+  /** Thread id -> its run in progress. */
   const active = new Map();
 
   const save = () => {
@@ -170,7 +170,7 @@ export function openRuns(file) {
      * A scheduled message started a turn.
      * @param {object} what - the run.
      * @param {string} what.id - the message's id.
-     * @param {string} what.sessionId - the conversation.
+     * @param {string} what.sessionId - the thread.
      * @param {{id: string, title: string}[]} what.tasks - the tasks it is a run of.
      * @param {number} [what.at] - when.
      * @param {number} [what.steps] - steps of its turn already begun (the instruction is read inside the first step).
@@ -179,13 +179,13 @@ export function openRuns(file) {
     start({ id, sessionId, tasks, at = Date.now(), steps = 0, dueAt, whenOpened = false, target }) {
       const run = { id: String(id), sessionId: String(sessionId), tasks, startedAt: at, state: 'running', steps: Math.max(0, Number(steps) || 0), tokens: 0, text: '', detail: '' };
       // Late (step A2): due earlier than it started, by more than LATE_MS. 'whenOpened' only when the
-      // app's own record shows it was closed at the due time (a busy conversation also delays a run).
+      // app's own record shows it was closed at the due time (a busy thread also delays a run).
       if (Number.isFinite(dueAt) && at - dueAt > LATE_MS) {
         run.dueAt = dueAt;
         run.late = true;
         if (whenOpened) run.whenOpened = true;
       }
-      // Where it ran: its own new conversation ('new'), or one shared with other runs (step A11).
+      // Where it ran: its own new thread ('new'), or one shared with other runs (step A11).
       if (target === 'new') run.own = true;
       active.set(run.sessionId, run);
       runs = [run, ...runs.filter((other) => other.id !== run.id)].slice(0, RUNS_MAX);
@@ -194,7 +194,7 @@ export function openRuns(file) {
       return run;
     },
 
-    /** The run in progress in a conversation, if any. */
+    /** The run in progress in a thread, if any. */
     active: (sessionId) => active.get(String(sessionId)),
 
     /** Name a run's tasks once their titles are known. */
@@ -215,7 +215,7 @@ export function openRuns(file) {
       if (run) run.tokens += Math.max(0, Number(tokens) || 0);
     },
 
-    /** The assistant's latest words in the run's own conversation. */
+    /** The assistant's latest words in the run's own thread. */
     text(sessionId, text) {
       const run = active.get(String(sessionId));
       const clean = tail(text);
@@ -224,7 +224,7 @@ export function openRuns(file) {
 
     /**
      * The run now waits for you.
-     * @param {string} sessionId - the conversation.
+     * @param {string} sessionId - the thread.
      * @param {string} kind - one of `WAITS`.
      * @param {string} [key] - what will end the wait (an approval id or a tool call id).
      * @returns {object | undefined} the run when it just started waiting.
@@ -255,7 +255,7 @@ export function openRuns(file) {
 
     /**
      * The run's turn ended.
-     * @param {string} sessionId - the conversation.
+     * @param {string} sessionId - the thread.
      * @param {unknown} reason - the turn's end reason.
      * @param {number} [at] - when.
      * @returns {object | undefined} the finished run.
@@ -275,7 +275,26 @@ export function openRuns(file) {
       return run;
     },
 
-    /** You wrote in a conversation after its run ended: that run's conversation is never trashed by age. */
+    /**
+     * Item 4A, stage 6b (J11): a run whose thread its guarded space held: nothing ran. Marks the thread's run in
+     * progress, else its latest, as stopped with the sentence.
+     * @param {string} sessionId - the thread.
+     * @param {string} detail - why (plain words).
+     * @returns {object | undefined} the run.
+     */
+    held(sessionId, detail) {
+      const id = String(sessionId);
+      const run = active.get(id) ?? runs.find((one) => one.sessionId === id);
+      if (!run) return undefined;
+      run.held = true;
+      run.detail = String(detail ?? '').slice(0, 300);
+      if (run.state !== 'running' && run.state !== 'waiting') run.state = 'stopped';
+      dirty = true;
+      save();
+      return run;
+    },
+
+    /** You wrote in a thread after its run ended: that run's thread is never trashed by age. */
     touch(sessionId) {
       const id = String(sessionId);
       if (active.has(id)) return;
@@ -300,7 +319,7 @@ export function openRuns(file) {
      * while any of them keeps it.
      * @param {(taskId: string) => {days: number, count: number}} keepFor - each task's keep rule.
      * @param {number} [now] - the current time.
-     * @returns {object[]} the runs dropped (their conversations may go to the trash).
+     * @returns {object[]} the runs dropped (their threads may go to the trash).
      */
     prune(keepFor, now = Date.now()) {
       const seen = new Map();

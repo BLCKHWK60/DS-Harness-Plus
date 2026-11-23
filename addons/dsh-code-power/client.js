@@ -231,7 +231,7 @@ window.__ModuleLoader__.load({
         'best.n': 'Attempts',
         'best.n.hint': 'How many independent approaches to try. 2 to 5.',
         'best.role': 'Judge model role',
-        'best.role.hint': 'Which model the judge uses: the name of a role in Model Tiers, such as review. When helper models are set to "same", the conversation\'s own model is used.',
+        'best.role.hint': 'Which model the judge uses: the name of a role in Model tiers, such as review. When helper models are set to "same", the thread\'s own model is used.',
         'best.criteria': 'Judging criteria',
         'best.criteria.hint': 'What the judge scores, separated by commas.',
         'best.check': 'Judge twice, in reversed order',

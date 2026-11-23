@@ -1,4 +1,4 @@
-# Creator Plus handbook: how a plugin is built well here
+# Creator Plus handbook: how an add-on is built well here
 
 17 November 2026. Written from `docs/HANDOFF.md`, the add-ons' READMEs, the commit history and the working sessions of 10–17 November. Creator Plus's recipes (`addons/dsh-creator-plus/recipes/`) follow this handbook; when the two disagree, this handbook is the reason and the recipe is fixed. Marked **(unsure)** where it rests on one observation.
 
@@ -34,23 +34,23 @@
 
 **Fail safe when another add-on is off.** Read services with optional chaining inside `try`; an answer of `undefined` means "behave as before". Never crash because Modes, Mission or Recon is switched off.
 
-**A new tab** goes through the Modes add-on's `extraModes` (as Finance, Data, Research, Scout, Recon, Content and Bench do): `{label, tools, sandbox, prompt, startFamilies, isolated?}`; switching off removes the entry and moves `defaultMode` back to `cowork` if it pointed at the tab. The mode's method stays **under 4,000 characters** (Modes' limit; small models pay for every line). Add the tab's icon to `dsh-cowork-shell` (`glyphFor`, `PATHS`) and `dsh-settings-plus` (`GROUPS`, `ICONS`).
+**A new mode** goes through the Modes add-on's `extraModes` (as Finance, Data, Research, Scout, Recon, Content and Bench do): `{label, tools, sandbox, prompt, startFamilies, isolated?}`; switching off removes the entry and moves `defaultMode` back to `cowork` if it pointed at the mode (since stage 6b a space's start mode keeps your choice and falls back by itself). The mode's method stays **under 4,000 characters** (Modes' limit; small models pay for every line). Add the mode's icon to `dsh-cowork-shell` (`glyphFor`, `PATHS`) and `dsh-settings-plus` (`GROUPS`, `ICONS`).
 
-**Tools** are registered with `when: ({agent}) => enabled() && inMyTab(agent)` so other tabs' tool lists do not change. Each returns `{text}` through a `safely` wrapper that turns an error into a plain sentence, has a `timeoutMs`, and says when it is not concurrency-safe.
+**Tools** are registered with `when: ({agent}) => enabled() && inMyTab(agent)` so other modes' tool lists do not change. Each returns `{text}` through a `safely` wrapper that turns an error into a plain sentence, has a `timeoutMs`, and says when it is not concurrency-safe.
 
 **Rules that must hold are code, not words.** A `tools/pre-execute` listener decides **before** calling `next()` (so no approval card shows for a refused call), and the same rule runs again as a final `ctx.tools.guard` (monotonic: nothing after it can allow the call). A guard needs `export const inject = ['tools']`. Prefer an **allow-list** to a block-list: a tool nobody knew about is closed. When a check throws on a safety path, refuse.
 
 **The user's yes** is the app's approval card (`ctx.get('approval').request({agent, toolName, callId, reason, displayReason: {en}, signal})`) or a page button (a route behind `connection.requestRejection`). A helper cannot ask; refuse instead. A decision from the user's words is read from his **newest own message** (never the model's, never a tool result, never an imported text): at least two words or a plain agreement, the whole phrase (not "board 1" inside "board 10"), and not after "not", "don't", "never", "no", "without".
 
-**Text from outside is material, never instructions:** pages, devices, logs, other plugins' code, imported conversations, exports. Put it between markers with a random nonce per call, and strip look-alike markers until none are left.
+**Text from outside is material, never instructions:** pages, devices, logs, other add-ons' code, imported threads, exports. Put it between markers with a random nonce per call, and strip look-alike markers until none are left.
 
 **Files:** new files with `wx`; replacements through a temp file and `rename`; appends with `O_NOFOLLOW`; every path checked by its real path (`realpathSync.native`), case-insensitively on macOS; never through a link; never into Recon's rooms; never read or write the owner's default workspace (`~/Documents/deepseek-harness/default-workspace`); never call `uiWorkspace.pickDirectory()` from code or tests.
 
-**Code a model wrote runs only in a sandbox.** A plugin's tests, its `index.js` and the trial copy loading it are code a model wrote: run them with macOS's `sandbox-exec`, denying by default what matters: no network, no `mach-lookup` (launchd, LaunchServices), no program but the ones it needs (`process-exec` allowed only for the app's Node and the shell), writing only in the folder being checked and the trial copy, nothing of the home folder read but those, signals only to its own processes, and an environment of a few named variables (never the app's, which holds keys). Start the program in a folder it may read. Mask its output and fence it as material. Where there is no sandbox, do not run the code. Creator Plus does this in `lib/sandbox.js`; a Long run's checks go through Mission, which runs them in its `offlineFence` for a Creator Plus conversation.
+**Code a model wrote runs only in a sandbox.** An add-on's tests, its `index.js` and the trial copy loading it are code a model wrote: run them with macOS's `sandbox-exec`, denying by default what matters: no network, no `mach-lookup` (launchd, LaunchServices), no program but the ones it needs (`process-exec` allowed only for the app's Node and the shell), writing only in the folder being checked and the trial copy, nothing of the home folder read but those, signals only to its own processes, and an environment of a few named variables (never the app's, which holds keys). Start the program in a folder it may read. Mask its output and fence it as material. Where there is no sandbox, do not run the code. Creator Plus does this in `lib/sandbox.js`; in a Creator Plus thread, Mission runs a Mission's checks in its `offlineFence`.
 
 **What is applied is what was reviewed.** Keep the reviewed copy where neither the file tools nor the sandbox can write, hash every file at review time, refuse on mismatch, and show the change to the owner on the card. Tie each Undo to the backup its own Apply took.
 
-**Check the code, not the plan.** A plan says what a model intends; the fit check also reads the built code (settings it writes, sealed tabs it names, hooks on every tool call, a setup file that does more than insert its own row) and blocks a name already on the map.
+**Check the code, not the plan.** A plan says what a model intends; the fit check also reads the built code (settings it writes, sealed modes it names, hooks on every tool call, a setup file that does more than insert its own row) and blocks a name already on the map.
 
 **Secrets** never go into a file, a log, a card, an argument list or a model's text. Passwords live in the macOS Keychain and reach a program through stdin or an askpass helper. Mask before storing (`password: x`, `"password": "x"`, `WIFI_PASS=x`, key blocks, long key-like runs outside web addresses).
 
@@ -70,7 +70,7 @@
 
 ## 5. Installing, committing, processes
 
-- Install only when the owner asks: compare the installed copy with `.installed-files` (the owner edits installed add-ons with Creator mode; keep his edits first), check that no conversation changed in the last minutes, then `env -u DSH_HOME bash scripts/install.sh --yes`. Never force the app to quit.
+- Install only when the owner asks: compare the installed copy with `.installed-files` (the owner edits installed add-ons with Creator mode; keep his edits first), check that no thread changed in the last minutes, then `env -u DSH_HOME bash scripts/install.sh --yes`. Never force the app to quit.
 - Commit only when asked; scan the change for private details first (no personal names, home paths, server names, real addresses; reserved example addresses `203.0.113.x` in tests); messages end with the Co-Authored-By line.
 - Stop a process only by its exact PID (a loose `pgrep -f` pattern also matches the shell running it).
 
@@ -89,10 +89,10 @@
 | "board 1" matched "board 10" | Substring match | Whole phrase, word boundaries, negation check |
 | A Web level was bypassed by `curl`, archive links, odd argument names | Only `url` arguments of web tools were judged | Judge every whole web address in any argument, addresses in commands and programs, the page an archive copy shows |
 | A level applied while the button said Off | Stored level read without the switch | Apply only while the switch is on |
-| A Recon export lost its protection in a fork | Guard keyed on the conversation id | Recognise the export by its marker in the text |
-| The Export button hid after a restart | The conversation was not loaded | Read the saved history through `sessionQuery` |
+| A Recon export lost its protection in a fork | Guard keyed on the thread id | Recognise the export by its marker in the text |
+| The Export button hid after a restart | The thread was not loaded | Read the saved history through `sessionQuery` |
 | A writer helper was not recognised | The app puts a time note before the task | Match the marker at the start of any line |
-| A Long run called its step tool 340 times after it ended | The step tool vanished and the model kept trying | A plain "the run has ended" answer and the turn ended after three calls |
+| A Mission called its step tool 340 times after it ended | The step tool vanished and the model kept trying | A plain "the run has ended" answer and the turn ended after three calls |
 | Code work was treated as an open question | Default classification | Default to code; only the app's own checks may reopen a passed item |
 | "Read-only" helpers could write | Only write tools were refused, only for direct children | Refuse commands, programs, sub-agents and writes up the helper chain |
 | A run could freeze | A JSON-block parser looped on `{` without an end | Bounded parsing, a test that would hang |
@@ -101,17 +101,17 @@
 | Tests created files in the owner's data | `dsh --help` without `DSH_HOME` | `DSH_HOME` for every call |
 | The installer would have wiped the owner's edits | He edits installed add-ons in place | Compare with `.installed-files` before every install |
 | A test used a real public address | Copied from a real case | Reserved example addresses |
-| A model's builder could run any code it wrote | "No commands" was enforced, but the checks ran the plugin's own tests and code | Run that code in macOS's sandbox; no sandbox, no run |
+| A model's builder could run any code it wrote | "No commands" was enforced, but the checks ran the add-on's own tests and code | Run that code in macOS's sandbox; no sandbox, no run |
 | The trial copy's `dsh plugin add` failed in the sandbox | The program started in a folder the sandbox closes (`uv_cwd` EPERM) | Start every sandboxed program in the folder it checks or the trial copy |
 | A link inside the build folder counted as the build folder | The path was checked as named | Check the real path for "inside", and both spellings for "never there" |
-| Part of a sealed conversation's error text reached a finding | "Structure only" kept the first words of the error | The kind of an error from a fixed list, never a part of its text |
+| Part of a sealed thread's error text reached a finding | "Structure only" kept the first words of the error | The kind of an error from a fixed list, never a part of its text |
 | `LIB/Gate.js` would have slipped past a guarded-file check | macOS ignores capitals | Compare guarded names case-insensitively; every file of Recon is guarded |
-| A Long run in Creator Plus ran its planner's check commands for real | Mission's own shell runs checks; the add-on's guard never sees them | Mission asks the add-on (`longRunRules`) and runs the checks in its offline fence without keys |
+| A Mission in Creator Plus ran its planner's check commands for real | Mission's own shell runs checks; the add-on's guard never sees them | Mission asks the add-on (`longRunRules`) and runs the checks in its offline fence without keys |
 | The sandbox let a program start launchd tools, write under /Applications and see API keys | It allowed by default and blocked only the home folder | Deny network, mach-lookup, exec and writes; allow only what is needed; pass a short environment |
 | A pending change could be rewritten before Apply | The prepared copy lived where sandboxed code could write | Keep it out of reach, hash it, verify on Apply |
-| A new plugin named like an existing one passed the fit check | Collisions with its own name were skipped | Block any name on the map; index every row, built-in too |
-| A setup file could switch off another plugin | The scan matched only "- id:" lines | Read new plugins' setup files strictly; refuse what it does not know |
-| Undo restored another card's backup | It took the newest backup of that plugin | Store the backup on the card |
+| A new add-on named like an existing one passed the fit check | Collisions with its own name were skipped | Block any name on the map; index every row, built-in too |
+| A setup file could switch off another add-on | The scan matched only "- id:" lines | Read new add-ons' setup files strictly; refuse what it does not know |
+| Undo restored another card's backup | It took the newest backup of that add-on | Store the backup on the card |
 
 ## 7. Writing for a small model, open to a large one
 

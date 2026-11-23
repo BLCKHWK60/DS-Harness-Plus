@@ -5,6 +5,7 @@
     "agents",
     "modelTiers",
     "modes",
+    "ptcRuntime",
     "routeHealth",
     "subagents",
     "tools"
@@ -15,7 +16,9 @@
   "events": [
     "session/event",
     "agent/disposed",
-    "agent/created"
+    "agent/created",
+    "tools/pre-execute",
+    "tools/result"
   ],
   "places": [
     "settings.section"

@@ -157,8 +157,11 @@ window.__ModuleLoader__.load({
     // routes on its own timer, even in a hidden window. This gives all of them ONE shared Settings copy (read once, renewed when
     // Settings changes or after 30 seconds at the most) and one kind of polling loop that stops while the window is hidden.
     // The first copy of this block to run puts the shared state on `window.__dshPoll`; later copies reuse it, so 30 add-ons share one.
+    // A newer copy (higher API) replaces an older shared object instead of reusing it, so an older page file that runs first (an
+    // add-on edited in creator mode, a partly updated install) cannot keep the whole page on an older helper. Raise API with every
+    // change to how the shared state behaves.
     const dshPoll = (() => {
-      const API = 1;
+      const API = 2;
       const root = typeof window !== 'undefined' ? window : globalThis;
       if (root.__dshPoll && root.__dshPoll.api >= API) return root.__dshPoll;
 
@@ -167,7 +170,7 @@ window.__ModuleLoader__.load({
       /** Without the change event (an older app) the copy is only trusted for a moment. */
       const SETTINGS_TTL_NO_EVENTS = 2000;
       const WRITES = ['mutate', 'update', 'replace'];
-      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0 };
+      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0, changes: 0, repeats: 0, watchers: 0 };
       const cache = { value: undefined, at: 0, inflight: null, gen: 0, events: false };
       const changeListeners = new Set();
       const watched = new WeakSet();
@@ -187,38 +190,72 @@ window.__ModuleLoader__.load({
         cache.gen += 1;
       }
 
-      /** Listen once per page connection for "Settings changed" (the app sends it after every write, from any window). */
+      /** Changes already handled, `ns + revision` -> when: the same change reaches the page once per add-on that listens. */
+      const heard = new Map();
+      /** How long a change counts as "the same one" when it arrives again through another add-on's connection. */
+      const HEARD_MS = 2000;
+      /** The app's own marker for a wrapped service: `ctx.remote` hands out a NEW wrapper object at every read. */
+      const ORIGINAL = typeof Symbol === 'function' ? Symbol.for('cordis.original') : '__original';
+      /** Marks our own write wrapper, so it is never wrapped a second time. */
+      const OURS = '__dshPollWrite';
+
+      /**
+       * One "Settings changed" event from the app. Every add-on that listens hears the same event; it is acted on once.
+       * Bug of 21 November 2026 (a new chat made the page read Settings 12-17 times a second, the app ran at 100% and the
+       * tab crashed): `ctx.remote` is a new object at every read, so the old `watched.has(remote)` never matched and every
+       * read added one more listener; one change then woke every listener and each one started its own read.
+       */
+      function changed(ns, revision) {
+        if (typeof revision === 'number' || typeof revision === 'string') {
+          const now = Date.now();
+          for (const [key, at] of heard) if (now - at > HEARD_MS) heard.delete(key);
+          const key = `${String(ns)}\u0000${String(revision)}`;
+          if (heard.has(key)) { stats.repeats += 1; return; }
+          heard.set(key, now);
+        }
+        stats.changes += 1;
+        invalidate();
+        for (const listener of [...changeListeners]) {
+          try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
+        }
+      }
+
+      /** Listen once per add-on for "Settings changed" (the app sends it after every write, from any window). */
       function watch(ctx) {
         const remote = ctx && ctx.remote;
-        if (!remote || watched.has(remote)) return;
-        watched.add(remote);
+        if (!remote) return;
+        // Keyed on the add-on's own context, which stays the same object (its `remote` does not).
+        const key = ctx !== null && (typeof ctx === 'object' || typeof ctx === 'function') ? ctx : (remote[ORIGINAL] || remote);
+        if (watched.has(key)) return;
+        watched.add(key);
         try {
           if (typeof remote.$on === 'function') {
-            remote.$on('settings/document-updated', (ns) => {
-              invalidate();
-              for (const listener of [...changeListeners]) {
-                try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
-              }
-            });
+            remote.$on('settings/document-updated', changed);
+            stats.watchers += 1;
             cache.events = true;
           }
         } catch { /* no change event here: the short copy time covers it */ }
         try {
-          if (typeof ctx.on === 'function') ctx.on('connection/reset', invalidate);
+          if (typeof ctx.on === 'function') ctx.on('connection/reset', () => { heard.clear(); invalidate(); });
         } catch { /* optional */ }
         // This page's own writes drop the copy before their answer comes back, so a read that follows a write is never behind it.
         const settings = remote.settings;
-        if (settings && !wrapped.has(settings)) {
-          wrapped.add(settings);
+        const target = settings && (settings[ORIGINAL] || settings);
+        if (settings && !wrapped.has(target)) {
+          wrapped.add(target);
           for (const name of WRITES) {
             const original = settings[name];
-            if (typeof original !== 'function') continue;
+            // Already ours (put there through another add-on's wrapper object): wrapping it again would stack wrappers.
+            // An older copy's wrapper (marked `true`) is wrapped once more: it drops only the older copy's own cache.
+            if (typeof original !== 'function' || original[OURS] === API) continue;
             try {
-              settings[name] = function (...args) {
+              const write = function (...args) {
                 invalidate();
                 const done = original.apply(this, args);
                 return done && typeof done.then === 'function' ? done.then((out) => { invalidate(); return out; }, (error) => { invalidate(); throw error; }) : done;
               };
+              write[OURS] = API;
+              settings[name] = write;
             } catch { /* a frozen object keeps the plain call */ }
           }
         }
@@ -368,10 +405,11 @@ window.__ModuleLoader__.load({
       return shared;
     })();
     // ---- dsh-poll:end ----
-    // ---- dsh-ui:begin ---- shared page parts (switch, button, row, heading, empty state, chips); the same block in every page file that uses it.
+    // ---- dsh-ui:begin ---- shared page parts (switch, button, row, heading, empty state, chips, (i) pop-up, state line, error note); the same block in every page file that uses it.
     // The master copy is docs/shared/dsh-ui.js. Change it there, then run `node scripts/sync-kit.mjs`; `bash scripts/check.sh` fails when a copy has drifted.
     // All classes start with "dshu-" and belong to this block only: no add-on defines or restyles them. The look follows docs/UI-STYLE.md.
     // React is passed in: `const ui = dshUi.makeParts(React);` then `h(ui.Switch, { on, label, onChange })`, `h(ui.Row, { title, desc }, control)` and so on.
+    // Pass ReactDOM too (`dshUi.makeParts(React, ReactDOM)`) where an (i) needs `portal: true` (its pop-up then goes to the page body).
     const dshUi = (() => {
       const STYLE_ID = 'dsh-ui-style';
       const CSS = `
@@ -411,6 +449,31 @@ window.__ModuleLoader__.load({
     .dshu-link { padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; text-decoration: underline; cursor: pointer; }
     .dshu-wait { margin: 16px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
     .dshu-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .dshu-infowrap { display: inline-flex; vertical-align: middle; margin-left: 4px; }
+    .dshu-info { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+    .dshu-info:hover, .dshu-info[aria-expanded="true"] { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+    .dshu-info svg { display: block; width: 12px; height: 12px; }
+    .dshu-info:focus-visible, .dshu-pop:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+    .dshu-pop { position: fixed; z-index: 2147482000; box-sizing: border-box; width: max-content; max-width: min(320px, calc(100vw - 16px)); overflow: auto; padding: 10px 12px; border-radius: 12px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base)); color: var(--dsw-alias-label-primary); box-shadow: 0 14px 36px color-mix(in srgb, #000 28%, transparent); font-size: 12px; line-height: 18px; font-weight: 400; text-align: left; text-transform: none; white-space: normal; overflow-wrap: anywhere; cursor: auto; }
+    .dshu-pop:focus:not(:focus-visible) { outline: none; }
+    .dshu-pop-title { margin: 0 0 4px; font-size: 13px; line-height: 20px; font-weight: 600; }
+    .dshu-pop-line { margin: 6px 0 0; }
+    .dshu-pop-title + .dshu-pop-line { margin-top: 0; }
+    .dshu-pop-head { display: block; font-weight: 600; color: var(--dsw-alias-label-secondary); }
+    .dshu-state { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; margin: 4px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
+    .dshu-state-dot { flex: none; align-self: center; width: 8px; height: 8px; border-radius: 50%; background: var(--dsw-alias-label-secondary); }
+    .dshu-state[data-state="ok"] .dshu-state-dot { background: var(--dsw-alias-state-success-primary); }
+    .dshu-state[data-state="busy"] .dshu-state-dot { background: var(--dsw-alias-brand-primary); }
+    .dshu-state[data-state="warn"] .dshu-state-dot { background: var(--dsw-alias-state-warn-primary); }
+    .dshu-state[data-state="error"] .dshu-state-dot { background: var(--dsw-alias-state-error-primary); }
+    .dshu-state[data-state="off"] .dshu-state-dot { background: transparent; box-shadow: inset 0 0 0 1px var(--dsw-alias-label-secondary); }
+    .dshu-state-next { color: var(--dsw-alias-label-secondary); }
+    .dshu-errnote { margin: 8px 0 0; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+    .dshu-errnote-what { margin: 0; color: var(--dsw-alias-state-error-primary); }
+    .dshu-errnote-fix { margin: 2px 0 0; color: var(--dsw-alias-label-primary); }
+    .dshu-errnote-act { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+    .dshu-errnote-act .dshu-link { font-size: 12px; }
+    .dshu-errnote-details { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); color: var(--dsw-alias-label-secondary); font: 11px/16px ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; user-select: text; }
     `;
       const ensureStyle = () => {
         if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
@@ -438,8 +501,86 @@ window.__ModuleLoader__.load({
         } catch { return false; }
       };
 
-      const makeParts = (React) => {
+      /** The three fixed heads of an (i) pop-up, in this order. `changes` is accepted as another name for `change`. */
+      const INFO_HEADS = [['what', 'What it does'], ['when', 'When to use it'], ['change', 'If you change it']];
+      /** The same heads, and the button's "About". Plus is English only: every page gets these words. */
+      const INFO_WORDS = {
+        en: { what: 'What it does', when: 'When to use it', change: 'If you change it', about: (name) => (name ? `About ${name}` : 'About this') },
+      };
+      /** @returns {object} the (i)'s fixed words. `lang` is still accepted (older callers pass it) but every language gets English. */
+      const infoWords = () => INFO_WORDS.en;
+      /** What an (i) pop-up shows: the title and only the lines that were given. `lang` is accepted and ignored (English only). */
+      const infoLines = ({ title, label, what, when, change, changes } = {}) => {
+        const given = { what, when, change: change ?? changes };
+        const words = infoWords();
+        const blank = (v) => v == null || v === false || (typeof v === 'string' && v.trim() === '');
+        return {
+          title: blank(title) ? (blank(label) ? '' : label) : title,
+          lines: INFO_HEADS.filter(([key]) => !blank(given[key])).map(([key]) => ({ key, head: words[key], text: given[key] })),
+        };
+      };
+
+      /**
+       * Where a pop-up goes: below its button, or above when there is more room there; its left edge follows the button
+       * and is pulled in so the whole panel stays on screen. Sizes in pixels; returns { top, left, side, maxHeight }.
+       */
+      const placePop = ({ anchor, pop, view, gap = 6, margin = 8 }) => {
+        const below = view.height - anchor.bottom - gap - margin;
+        const above = anchor.top - gap - margin;
+        const side = pop.height <= below || below >= above ? 'below' : 'above';
+        const maxHeight = Math.max(80, Math.floor(side === 'below' ? below : above));
+        const height = Math.min(pop.height, maxHeight);
+        const top = side === 'below' ? anchor.bottom + gap : Math.max(margin, anchor.top - gap - height);
+        const left = Math.max(margin, Math.min(anchor.left, view.width - margin - pop.width));
+        return { top: Math.round(top), left: Math.round(left), side, maxHeight };
+      };
+
+      /**
+       * A failed call as { text, details }: the plain sentence and the raw text. Uses the error helper's wording
+       * (dshKit.plain) when the page also carries the dsh-kit block, so the two never say different things.
+       */
+      const explainError = (raw) => {
+        try {
+          // eslint-disable-next-line no-undef
+          if (typeof dshKit !== 'undefined' && dshKit && typeof dshKit.plain === 'function') return dshKit.plain(raw);
+        } catch { /* no error helper on this page */ }
+        const message = typeof raw === 'string' ? raw : String(raw?.message ?? raw?.error ?? '');
+        const details = raw && typeof raw === 'object' && typeof raw.details === 'string' ? raw.details : message;
+        // A message that reads as a sentence is said as it is (as the error helper does); a bare code is not.
+        const said = message.trim();
+        if (/\s/.test(said) && !/^[a-z][\w-]*(?:\/[\w.-]+)+:/i.test(said)) return { text: said, details: details === message ? '' : details };
+        return { text: 'Something went wrong. Try again; the Details say what the app reported.', details };
+      };
+
+      /** Raw details as text to show behind Details. */
+      const detailText = (details) => {
+        if (details == null || details === '') return '';
+        if (typeof details === 'string') return details;
+        if (details instanceof Error) return details.stack || String(details.message);
+        try { return JSON.stringify(details, null, 2); } catch { return String(details); }
+      };
+
+      let infoCount = 0;
+
+      /**
+       * The words of a row title for its (i): the text itself, or the text written directly inside a simple element
+       * title (`h('span', null, 'Keep awake', badge)` gives "Keep awake"; the badge is left out). Anything else gives
+       * undefined: then pass `info.label`, or the (i) is only "About this".
+       */
+      const plainTitle = (title) => {
+        if (typeof title === 'string') return title;
+        if (typeof title === 'number') return String(title);
+        if (!title || typeof title !== 'object') return undefined;
+        const kids = [].concat(title.props?.children ?? title.children ?? []);
+        const text = kids.filter((kid) => typeof kid === 'string' || typeof kid === 'number').join(' ').replace(/\s+/g, ' ').trim();
+        return text || undefined;
+      };
+
+      const makeParts = (React, ReactDOM) => {
         ensureStyle();
+        // The pop-up of an (i) with `portal: true` is drawn in the page body, out of a box that clips it or moves fixed
+        // children (a header with container-type, say). Without ReactDOM it stays where it is, as before.
+        const portalTo = (node) => (ReactDOM && typeof ReactDOM.createPortal === 'function' && typeof document !== 'undefined' && document.body ? ReactDOM.createPortal(node, document.body) : node);
         const h = React.createElement;
         /** The page frame: a title, one sentence under it, then the page. */
         const Page = ({ title, desc, children }) => h('div', { className: 'dshu-page' },
@@ -449,9 +590,11 @@ window.__ModuleLoader__.load({
         const Group = ({ children }) => h('div', { className: 'dshu-group' }, children);
         /** A short line in the page's description style; `error` draws it in the error colour. */
         const Desc = ({ error, children, role }) => h('p', { className: 'dshu-desc', 'data-error': String(error === true), role: role ?? (error ? 'alert' : undefined) }, children);
-        /** One setting: text on the left, the control(s) on the right. */
-        const Row = ({ title, desc, children }) => h('div', { className: 'dshu-row' },
-          h('div', { className: 'dshu-rowtext' }, h('div', { className: 'dshu-rowtitle' }, title), desc ? h('div', { className: 'dshu-rowdesc' }, desc) : null),
+        /** One setting: text on the left, the control(s) on the right. `info` ({ what, when, change }) adds an (i) after the title. */
+        const Row = ({ title, desc, info, children }) => h('div', { className: 'dshu-row' },
+          h('div', { className: 'dshu-rowtext' },
+            h('div', { className: 'dshu-rowtitle' }, title, info ? h(Info, { title: plainTitle(title), ...info }) : null),
+            desc ? h('div', { className: 'dshu-rowdesc' }, desc) : null),
           children);
         const Side = ({ children }) => h('div', { className: 'dshu-side' }, children);
         /** `danger`: when it is on, the switch is drawn in the error colour (a safety rule that has been turned off). */
@@ -479,9 +622,140 @@ window.__ModuleLoader__.load({
           chips && chips.length > 0 ? h(Chips, { items: chips, onPick: onPick ?? (() => {}) }) : null,
           children);
         const Wait = ({ children }) => h('p', { className: 'dshu-wait', role: 'status' }, children ?? 'Loading…');
-        return { Page, Group, Desc, Row, Side, Switch, Button, Field, CopyButton, Chips, Empty, Wait };
+
+        const useLayout = React.useLayoutEffect ?? React.useEffect;
+        // The (i) drawn as a ring with an "i" in the text colour, like the app's own info icon.
+        const infoIcon = () => h('svg', { viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false', fill: 'none', stroke: 'currentColor', strokeWidth: 1.3, strokeLinecap: 'round' },
+          h('circle', { cx: 8, cy: 8, r: 6.6 }),
+          h('path', { d: 'M8 7.3v4' }),
+          h('circle', { cx: 8, cy: 4.9, r: 0.45, fill: 'currentColor' }));
+        /**
+         * A small (i) button that opens a pop-up saying what a control does, when to use it and what changes if you change it.
+         * `title` is the bold first line, `label` names the control for screen readers ("About <label>"; defaults to the title).
+         * Opens on click, Enter or Space; Esc, a click outside or Tab away closes it; Esc puts the focus back on the (i).
+         * `more` is one last line, or a list of lines. `portal: true` draws the pop-up in the page body (needs ReactDOM in makeParts).
+         * `lang` is accepted and ignored: the heads and button name are always English.
+         */
+        const Info = (props) => {
+          const { label, more, side, portal } = props;
+          const extra = (Array.isArray(more) ? more : [more]).filter((line) => line != null && line !== false && line !== '');
+          const { title, lines } = infoLines(props);
+          const [open, setOpen] = React.useState(false);
+          const [place, setPlace] = React.useState(null);
+          const wrap = React.useRef(null);
+          const button = React.useRef(null);
+          const pop = React.useRef(null);
+          const autoId = React.useId ? React.useId() : null;
+          const fallbackId = React.useRef(null);
+          if (!autoId && fallbackId.current == null) { infoCount += 1; fallbackId.current = `dshu-info-${infoCount}`; }
+          const id = `dshu-pop-${String(autoId ?? fallbackId.current).replace(/[^\w-]/g, '')}`;
+          const name = label ?? (typeof title === 'string' ? title : '');
+          const about = infoWords().about;
+          const measure = () => {
+            const b = button.current; const p = pop.current;
+            if (!b || !p || typeof window === 'undefined') return;
+            const r = b.getBoundingClientRect();
+            const found = placePop({ anchor: r, pop: { width: p.offsetWidth, height: p.scrollHeight }, view: { width: window.innerWidth, height: window.innerHeight } });
+            // `side: 'above'` asks for the top first; it still flips when it does not fit.
+            setPlace(side === 'above' && r.top - 6 - 8 >= p.scrollHeight ? { ...found, side: 'above', top: Math.round(r.top - 6 - p.scrollHeight) } : found);
+          };
+          useLayout(() => {
+            if (!open) { setPlace(null); return undefined; }
+            measure();
+            try { pop.current?.focus({ preventScroll: true }); } catch { /* the panel is gone */ }
+            return undefined;
+          }, [open]);
+          React.useEffect(() => {
+            if (!open || typeof document === 'undefined') return undefined;
+            // The pop-up may sit in the page body (portal): a click in it is not outside.
+            const inPop = (node) => Boolean(pop.current) && typeof pop.current.contains === 'function' && pop.current.contains(node);
+            const inside = (node) => Boolean(node) && ((wrap.current && wrap.current.contains(node)) || inPop(node));
+            const onDown = (event) => { if (wrap.current && !inside(event.target)) setOpen(false); };
+            const onKey = (event) => {
+              if (event.key !== 'Escape') return;
+              // Only while the focus is in the (i) or its pop-up; then only the pop-up closes, not the dialog or menu
+              // around it. On the window, first in the capture phase, so it runs before the panels' own Esc listeners
+              // on the document; stopImmediatePropagation keeps every later listener from seeing it.
+              const focused = typeof document !== 'undefined' ? document.activeElement : null;
+              if (!wrap.current || !focused || !inside(focused)) return;
+              event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation?.();
+              setOpen(false);
+              try { button.current?.focus(); } catch { /* the button is gone */ }
+            };
+            const onMove = () => measure();
+            document.addEventListener('pointerdown', onDown, true);
+            window.addEventListener('keydown', onKey, true);
+            window.addEventListener('resize', onMove);
+            window.addEventListener('scroll', onMove, true);
+            return () => {
+              document.removeEventListener('pointerdown', onDown, true);
+              window.removeEventListener('keydown', onKey, true);
+              window.removeEventListener('resize', onMove);
+              window.removeEventListener('scroll', onMove, true);
+            };
+          }, [open]);
+          // Clicks inside never reach a row or menu item the (i) sits in; nor do the keys such a row or menu acts on.
+          const stop = (event) => { event.stopPropagation(); };
+          const stopKeys = (event) => { if (['Enter', ' ', 'Spacebar', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) event.stopPropagation(); };
+          return h('span', {
+            ref: wrap, className: 'dshu-infowrap', onClick: stop, onPointerDown: stop, onMouseDown: stop, onKeyDown: stopKeys,
+            onBlur: (event) => { if (open && wrap.current && event.relatedTarget && !wrap.current.contains(event.relatedTarget) && !(pop.current && typeof pop.current.contains === 'function' && pop.current.contains(event.relatedTarget))) setOpen(false); },
+          },
+          h('button', {
+            ref: button, type: 'button', className: 'dshu-info', 'aria-label': about(name), 'aria-expanded': open,
+            'aria-haspopup': 'dialog', 'aria-controls': open ? id : undefined, onClick: () => setOpen(!open),
+          }, infoIcon()),
+          open ? (portal ? portalTo : (node) => node)(h('div', {
+            ref: pop, id, className: 'dshu-pop', role: 'dialog', tabIndex: -1, 'data-side': place?.side,
+            'aria-label': title ? undefined : about(name), 'aria-labelledby': title ? `${id}-t` : undefined,
+            style: place ? { top: place.top, left: place.left, maxHeight: place.maxHeight } : { top: 0, left: 0, visibility: 'hidden' },
+          },
+          title ? h('p', { id: `${id}-t`, className: 'dshu-pop-title' }, title) : null,
+          lines.map((line) => h('p', { key: line.key, className: 'dshu-pop-line' }, h('span', { className: 'dshu-pop-head' }, line.head), line.text)),
+          extra.map((line, index) => h('p', { key: `more-${index}`, className: 'dshu-pop-line' }, line)))) : null);
+        };
+
+        const STATES = ['ok', 'busy', 'idle', 'off', 'warn', 'error'];
+        /**
+         * One line that says in words what is happening and what to do next: a coloured dot, `words`, then `next`
+         * (text or a button). `state` is ok, busy, idle, off, warn or error; anything else counts as idle.
+         * `live: false` keeps the line out of screen readers' announcements (for words that change every few
+         * seconds, such as a step count); then announce only the changes that matter somewhere else.
+         */
+        const StateLine = ({ state, words, next, live = true, children }) => {
+          const shown = STATES.includes(state) ? state : 'idle';
+          return h('p', { className: 'dshu-state', 'data-state': shown, role: live === false ? undefined : shown === 'error' ? 'alert' : 'status' },
+            h('span', { className: 'dshu-state-dot', 'aria-hidden': 'true' }),
+            words ? h('span', { className: 'dshu-state-words' }, words) : null,
+            next ? h('span', { className: 'dshu-state-next' }, next) : null,
+            children);
+        };
+
+        /**
+         * An error in plain words: what went wrong (`what`), what to do or click (`fix`, and any buttons as children),
+         * and the raw text only behind a Details toggle. Give `error` instead of `what` to word a failed call the way
+         * the error helper does; `details` (text or an object) wins over the raw text it keeps.
+         */
+        const ErrorNote = ({ what, fix, details, error, children }) => {
+          const [open, setOpen] = React.useState(false);
+          const hasError = error !== undefined && error !== null && error !== '';
+          const fromError = hasError ? explainError(error) : { text: '', details: '' };
+          // With your own `what`, the raw error itself goes behind Details.
+          const rawError = hasError ? (fromError.details || (typeof error === 'string' ? error : error.details || error.message || error)) : '';
+          const text = what || fromError.text;
+          const raw = detailText(details ?? (what ? rawError : fromError.details));
+          if (!text && !fix && !raw) return null;
+          return h('div', { className: 'dshu-errnote', role: 'alert' },
+            h('p', { className: 'dshu-errnote-what' }, text || 'Something went wrong.'),
+            fix ? h('p', { className: 'dshu-errnote-fix' }, fix) : null,
+            children || raw ? h('div', { className: 'dshu-errnote-act' },
+              children,
+              raw ? h('button', { type: 'button', className: 'dshu-link', 'aria-expanded': open, onClick: () => setOpen(!open) }, open ? 'Hide details' : 'Details') : null) : null,
+            open && raw ? h('pre', { className: 'dshu-errnote-details' }, raw) : null);
+        };
+        return { Page, Group, Desc, Row, Side, Switch, Button, Field, CopyButton, Chips, Empty, Wait, Info, StateLine, ErrorNote };
       };
-      return { makeParts, ensureStyle, copyText };
+      return { makeParts, ensureStyle, copyText, infoLines, placePop, explainError };
     })();
     // ---- dsh-ui:end ----
 
@@ -498,29 +772,62 @@ window.__ModuleLoader__.load({
       en: {
         'composer.mode': 'Mode',
         'composer.failed': 'Could not switch mode',
+        'mlist.open': 'Mode: {0}. Click to change.',
+        'mflash.room': 'This folder is Recon\'s room, so this thread is a Recon thread.',
+        'mflash.room.title': 'Recon\'s room',
+        'mflash.room.what': 'Recon keeps its files in this folder. A thread here is always a sealed Recon thread, so the window switched to Recon, where it is listed.',
+        'mflash.room.when': 'To work on other files, start a new thread in Chat or Code and pick another folder.',
+        'mflash.room.change': 'This cannot be changed for this folder: Recon\'s room is never used by other threads.',
+        'mflash.close': 'Hide this note',
+        'mlist.what': 'A mode is a set of instructions and tools. You can change it at any time; it applies from your next message.',
+        'mlist.guarded': 'In {0} every mode follows the space\'s safety rules: the line under a mode says what it loses here.',
+        'mlist.when': 'Research to look things up, Finance for money questions, Plain chat for nothing extra. The list shows only the modes ticked for this space.',
+        'mlist.change': 'The thread stays in its space and keeps its preset. Web, Depth and Lens stay as you set them. A quiet line in the thread records the change.',
+        'mlist.in': 'Modes in {0}',
+        'mlist.none': 'No mode is ticked for this space. Tick one on Settings → Modes.',
+        'mlist.needs': 'Switch on {0} to use {1} threads.',
+        'mlist.needs.open': 'Open {0} settings',
+        'mlist.notoffered': 'Current mode, not offered in {0}. It stays until you pick another.',
+        'mlist.foot': 'Applies from your next message',
+        'mlist.foot.new': 'This thread starts in it',
+        'mlist.manage': 'Manage modes…',
+        'mlist.changed': 'Mode changed to {0}',
+        'mspace.chat': 'Chat',
+        'mspace.code': 'Code',
+        'mspace.devices': 'Devices',
+        'mspace.recon': 'Recon',
+        'mspace.workshop': 'Workshop',
+        'eh.putback': 'Put back',
+        'eh.putback.title': 'Put your earlier message back into the chat box',
+        'eh.putback.what': 'Puts the message that could not run (this thread\'s model was an engine) back into the chat box, so you do not type it again.',
+        'eh.putback.when': 'After you pick one of your own models for this thread. Then press Send.',
+        'eh.putback.change': 'If the chat box already has text, you are asked before it is replaced. The message is kept for 10 minutes.',
+        'eh.replace': 'Replace what is in the chat box with your earlier message?',
+        'eh.replace.ok': 'Replace',
+        'eh.copied': 'Copied: paste it into the chat box (⌘V), pick one of your models, then press Send.',
         'toggle.search': 'Web',
-        'toggle.search.on': 'Web search is on for this conversation. Click to switch it off.',
-        'toggle.search.off': 'Web search is off for this conversation. Click to switch it on.',
+        'toggle.search.on': 'Web search is on for this thread. Click to switch it off.',
+        'toggle.search.off': 'Web search is off for this thread. Click to switch it on.',
         'toggle.research': 'Deep research',
         'toggle.research.on': 'Deep research is on: questions get a researched, cited report. Click to switch it off.',
         'toggle.research.off': 'Switch on deep research: questions get a researched, cited report.',
         'toggle.tools.on': 'Tools on',
         'toggle.tools.off': 'Tools off',
-        'toggle.tools.title': 'What the model can call in this conversation',
-        'tools.switch': 'Tools for this conversation',
+        'toggle.tools.title': 'What the model can call in this thread',
+        'tools.switch': 'Tools for this thread',
         'tools.switch.hint': 'Off: the model is offered no tool at all, so it cannot try to call one. The web is off too.',
         'tools.chat': 'In Chat, tools means searching and reading the web. For files and commands, use Cowork or Code.',
-        'tools.viaCode': 'This conversation is in PTC mode: the model reaches these tools from inside small programs it writes. The app stops such a program after a few minutes, so long jobs like Deep research suit Standard mode better.',
+        'tools.viaCode': 'This thread runs on the PTC preset: the model reaches these tools from inside small programs it writes. The app stops such a program after a few minutes, so long jobs like Deep research suit the Standard preset better.',
         'tools.can': 'Can use now',
         'tools.can.off': 'Can call',
         'tools.cannot': 'Cannot call',
         'tools.later': 'Loaded when needed',
-        'tools.later.hint': 'The model adds these itself when a task needs them, and naming them in your message adds them too. Settings → Modes.',
-        'tools.notReady': 'Not set up for this conversation\'s model, so not offered: {names}.',
+        'tools.later.hint': 'The model adds these itself when the work needs them, and naming them in your message adds them too. Settings → Modes.',
+        'tools.notReady': 'Not set up for this thread\'s model, so not offered: {names}.',
         'tools.none': 'Nothing',
         'tools.next': 'A change applies from your next message.',
-        'tools.unknown': 'The list appears once this conversation has started.',
-        'tools.blocked': 'Tools are off for this conversation.',
+        'tools.unknown': 'The list appears once this thread has started.',
+        'tools.blocked': 'Tools are off for this thread.',
         'depth.quick': 'Quick',
         'depth.standard': 'Standard',
         'depth.thorough': 'Thorough',
@@ -534,38 +841,38 @@ window.__ModuleLoader__.load({
         'depth.research.quick': '1 round of searching, up to 4 helpers at once. At most about 10 minutes.',
         'depth.research.standard': '2 rounds, up to 6 helpers at once. After the first round the findings are reviewed, and the second round searches for what is missing with sharper queries. At most about 25 minutes.',
         'depth.research.thorough': '3 rounds, up to 8 helpers at once. Each round is reviewed and the next digs deeper. At most about 45 minutes, and the most tokens.',
-        'depth.research.cap': 'Helpers at once are also held to the sub-agent limit in Settings → Model Tiers.',
+        'depth.research.cap': 'Helpers at once are also held to the sub-agent limit in Settings → Model tiers.',
         'helpers.one': 'One model',
         'helpers.many': '{n} models',
-        'helpers.title.same': 'Helpers use this conversation\'s model. Only one model is loaded.',
+        'helpers.title.same': 'Helpers use this thread\'s model. Only one model is loaded.',
         'helpers.title.roles': 'Helpers may use other models: up to {n} models at once.',
         'helpers.head': 'Models for helper agents',
         'helpers.same': 'One model for everything',
         'helpers.roles': 'Different models',
-        'helpers.same.hint': 'Every helper agent runs on the model this conversation is on{model}. Nothing else has to be loaded, so this needs the least memory. This covers a /mission run, Deep research, Agent swarm, the Tier tools and Code power.',
+        'helpers.same.hint': 'Every helper agent runs on the model this thread is on{model}. Nothing else has to be loaded, so this needs the least memory. This covers a /mission run, Deep research, Agent swarm, the Tier tools and Code power.',
         'helpers.roles.hint': 'Helpers run on the models set for their roles. Each different model may be loaded at the same time as the others.',
-        'helpers.list': 'Models this conversation may use:',
-        'helpers.list.own': 'this conversation',
-        'helpers.list.none': 'No other model is set for any role, so everything still runs on this conversation\'s model. Set role models in Settings → Model Tiers, or for runs in Settings → Mission.',
-        'helpers.from.tiers': 'Model Tiers, {role}',
+        'helpers.list': 'Models this thread may use:',
+        'helpers.list.own': 'this thread',
+        'helpers.list.none': 'No other model is set for any role, so everything still runs on this thread\'s model. Set role models in Settings → Model tiers, or for runs in Settings → Mission.',
+        'helpers.from.tiers': 'Model tiers, {role}',
         'helpers.from.mission': 'Mission, {role}',
         'helpers.from.project': 'Mission, this project, {role}',
         'helpers.role.plan': 'planner',
         'helpers.role.implement': 'workers',
         'helpers.role.review': 'reviewer',
         'helpers.role.fast': 'fast helpers',
-        'helpers.scope': 'This choice is for this conversation.',
-        'helpers.usual': 'New conversations start with: {name}.',
-        'helpers.usual.set': 'Use this for new conversations too',
+        'helpers.scope': 'This choice is for this thread.',
+        'helpers.usual': 'New threads start with: {name}.',
+        'helpers.usual.set': 'Use this for new threads too',
         'helpers.next': 'It applies to helpers started from now on.',
         'research.model.title': 'Model for the helpers',
-        'research.model.same': 'Same as this conversation',
+        'research.model.same': 'Same as this thread',
         'research.model.roles': 'Role models',
-        'research.model.same.hint': 'Every helper runs on the model the conversation is on when the research starts.',
-        'research.model.roles.hint': 'Helpers run on the role models set in Settings → Model Tiers → Role models: the planner, the reviewer and the writer on "Plan", the searchers on "Fast". A role without a model uses the conversation\'s model.',
+        'research.model.same.hint': 'Every helper runs on the model the thread is on when the research starts.',
+        'research.model.roles.hint': 'Helpers run on the role models set in Settings → Model tiers → Role models: the planner, the reviewer and the writer on "Plan", the searchers on "Fast". A role without a model uses the thread\'s model.',
         'section.title': 'Modes',
-        'head.hint': 'A mode narrows the tools the model sees, can set the file sandbox, can move the conversation to a tier and adds a short prompt. A new conversation takes the mode of the selected sidebar tab (without the sidebar: the mode list in the chat box); /mode switches a conversation\'s mode (with the sidebar on: only after its first message). Changes apply from the next message.',
-        'default.label': 'Mode for conversations that have not chosen one',
+        'head.hint': 'A mode is how a thread works: it narrows the tools the model sees, can set the file sandbox, can move the thread to a tier and adds a short prompt. A new thread starts in its space\'s start mode (Settings → Spaces); the Mode list under the chat box, or /mode, switches a thread\'s mode at any time. Changes apply from the next message.',
+        'default.label': 'Mode for threads that have not chosen one',
         'default.extra': '{label} (add-on)',
         'add': 'Add mode',
         'remove': 'Remove',
@@ -585,24 +892,34 @@ window.__ModuleLoader__.load({
         'f.sandbox.inherit': 'Leave as it is',
         'f.sandbox.read-only': 'Read only',
         'f.sandbox.workspace-write': 'Write in the workspace',
-        'f.tier': 'Tier for this mode (optional): new conversations in it and switches to it use it',
+        'f.tier': 'Tier for this mode (optional): new threads in it and switches to it use it',
         'f.prompt': 'Prompt added while this mode is active',
         'f.prompt.cowork': 'Empty: Plus uses its own working method for Cowork (understand the task, a step list, care with your files, check the result, report plainly). Write here to use your own instead.',
-        'new.group': 'New conversations',
-        'new.depth': 'Depth for new conversations (and those that never picked one)',
-        'new.depth.hint': 'Where the Depth button starts in a new conversation, in every tab. A conversation that never had a Depth picked in the chat box follows it too. Picking a Depth in the chat box sets this too.',
-        'new.scheduled': 'Mode for scheduled tasks',
-        'new.scheduled.hint': 'A conversation that an Automation task opens starts in this mode, whatever tab is selected. A mode without tools cannot do the task\'s work.',
+        'new.group': 'New threads',
+        'new.depth': 'Depth for new threads (and those that never picked one)',
+        'new.depth.hint': 'Where the Depth button starts in a new thread, in every space. A thread that never had a Depth picked in the chat box follows it too. Picking a Depth in the chat box sets this too.',
+        'new.scheduled': 'Mode for automations',
+        'new.scheduled.hint': 'A thread that an automation opens starts in this mode, whatever space the window shows. A mode without tools cannot do the automation\'s work. Automations made with the clock button or New open their threads in their own mode instead, while Settings → Alerts → "New threads use the automation\'s mode" is on.',
         'new.scheduled.gone': '{id} (not found: the first mode with all tools is used)',
-        'tabs.group': 'Sidebar',
-        'tabs.count': 'Tabs in the sidebar',
+        'tabs.group': 'Left panel',
+        'tabs.count': 'Tabs in the left panel',
         'tabs.count.hint': 'How many of the modes below get a tab, in their order. A mode an add-on adds always gets one.',
-        'tabs.none': 'No sidebar tab (only the first {n} modes get one), so this mode can only be reached with /mode.',
+        'tabs.none': 'No tab in the left panel (only the first {n} modes get one), so this mode can only be reached with /mode.',
         'method.group': 'Built-in working methods',
         'method.code': 'Code: Plus\'s working method',
         'method.code.hint': 'Used while the Code mode\'s prompt below is empty: read first, make small changes, run the tests, report plainly.',
         'method.cowork': 'Cowork: Plus\'s working method',
         'method.cowork.hint': 'Used while the Cowork mode\'s prompt below is empty: understand the task, keep a step list, ask before changing your files, check the result, report plainly.',
+        'fence.group': 'Plain chat\'s folder',
+        'fence.title': 'Keep Plain chat inside its folder',
+        'fence.hint': 'On: a standalone Plain chat thread reads, changes and runs commands only in its own folder; a project thread only in its project folder.',
+        'fence.what': 'Refuses any file, search or command of a Plain chat thread that reaches outside its own folder (standalone) or its project folder (project). The AI is told which folder is its own.',
+        'fence.when': 'Keep it on. Switch it off only if Plain chat threads must read or change files elsewhere on this Mac.',
+        'fence.change': 'Off: only the app\'s own file sandbox applies. A standalone thread can then read files anywhere and change other threads\' Scratch folders.',
+        'fence.off': 'Off: Plain chat threads can read files anywhere and change other threads\' Scratch folders. Switch it on again to keep each thread in its folder.',
+        'fence.ask.title': 'Let Plain chat leave its folder?',
+        'fence.ask.text': 'Plain chat threads could then read files anywhere on this Mac and change the Scratch folders of other threads. Other modes are not affected.',
+        'fence.ask.ok': 'Switch off',
         'rerun': 'Rerun with the selected model',
         'rerun.busy': 'Starting the rerun…',
         'rerun.none': 'This answer cannot be rerun: its question was not found.',
@@ -610,7 +927,7 @@ window.__ModuleLoader__.load({
         'rerun.files': 'Rerun started. Pictures and files attached to the question were not sent again; add them if they are needed.',
         'box.group': 'Chat box',
         'box.uniform': 'Same chat box in every mode',
-        'box.uniform.hint': 'The buttons read the same in every mode: how much of their words show (Web · On, Depth, One model, Tools on) depends on the window\'s width alone, and the access button keeps one width. The other controls (the route badge, the Scratch mark and the buttons a mode adds: Creator Plus, Devices rules, Export, Focus, the Finance pill) go on a second line, under the same core buttons, when the row is full. The model button and Run have one width in every mode, Depth stays (greyed) when Tools are off, and Run stays (greyed) where a Long run cannot start. Off: each mode shrinks its own row as before.',
+        'box.uniform.hint': 'The buttons read the same in every mode: how much of their words show (Web · On, Depth, One model, Tools on) depends on the window\'s width alone, and the access button keeps one width. The other controls (the route badge, the Scratch mark and the buttons a mode adds: Creator Plus, Devices rules, Export, Focus, the Finance pill) go on a second line, under the same core buttons, when the row is full. The model button and Start Mission have one width in every mode, Depth stays (greyed) when Tools are off, and Start Mission stays (greyed) where a Mission cannot start. Off: each mode shrinks its own row as before.',
         'answer.group': 'Buttons under an answer',
         'web.label': 'Web',
         'depth.label': 'Depth',
@@ -619,9 +936,18 @@ window.__ModuleLoader__.load({
         'depth.open.lens': 'Depth: {0}, Lens: {1}. Click to change.',
         'lens.title': 'Lens: how the answer is worded',
         'depth.long.title': 'Beyond Thorough',
-        'depth.long': 'Long run settings…',
-        'depth.long.hint': 'Time, laps and tools for a Long run in this chat, saved. Long run (next to Send) starts one with what you typed, after one question; Send stays at the depth above.',
-        'depth.long.short': 'For the Long run button',
+        'depth.mission': 'Mission',
+        'depth.mission.short': 'Works by itself · Start Mission starts it',
+        'depth.mission.chosen': 'Chosen · press Start Mission',
+        'depth.mission.hint': 'Chooses Mission for this thread. Nothing starts here: type what it should do, then press Start Mission beside Send. Send keeps talking to the assistant at {0}.',
+        'depth.mission.when': 'When the next step should be a Mission. Talk the work through first; Start Mission starts it.',
+        'depth.mission.change': 'Nothing starts and nothing is asked here. Start Mission beside Send becomes the main button; it asks one question, then a strip above the chat box shows how it stands. Pick Quick, Standard or Thorough to go back.',
+        'depth.mission.on': 'A Mission is on in this thread.',
+        'depth.mission.send': 'Send talks at {0}.',
+        'depth.mission.cannot': 'Cannot start in this thread',
+        'depth.long': 'Mission settings…',
+        'depth.long.hint': 'Time limit, laps, steps, helpers at once, tools, what it does when it needs you and how long it waits for you, for a Mission in this thread, saved. Start Mission (beside Send) and a typed /mission use them.',
+        'depth.long.short': 'Time limit, laps, helpers',
         'depth.quick.short': 'Fast, light checks',
         'depth.standard.short': 'As usual',
         'depth.thorough.short': 'Plan, 10+ searches, review',
@@ -647,12 +973,12 @@ window.__ModuleLoader__.load({
         'lens.data-only.hint': 'Figures you will judge yourself',
         'lens.skeptic.hint': 'Testing a plan, a claim or a source',
         'lens.encouraging.hint': 'When you want momentum',
-        'lens.note': 'For this conversation only. A Lens changes how the answer is worded, never which facts are gathered; the tab\'s own rules come first.',
+        'lens.note': 'For this thread only. A Lens changes how the answer is worded, never which facts are gathered; the mode\'s own rules come first. A Lens is not a mode: it keeps the mode\'s instructions and tools and only changes the wording.',
         'lens.web.off': 'Web is Off here: this Lens labels anything it could not check as an inference or a guess. Switch Web on to check facts.',
         'lens.own.hint': 'Your own Lens (Settings → Modes)',
         'own.group': 'Your own Lenses',
-        'start.group': 'Starting values for new conversations',
-        'start.hint': 'What the Web, Depth, Models and Tools buttons read when a conversation begins in each mode. "Usual" leaves what the mode does now (and the settings above). A button you press in a conversation replaces its starting value. Only that conversation changes, and nothing here widens what a mode may use: its tools, sandbox and blocks stay as set on its card.',
+        'start.group': 'Starting values for new threads',
+        'start.hint': 'What the Web, Depth, Models and Tools buttons read when a thread begins in each mode. "Usual" leaves what the mode does now (and the settings above). A button you press in a thread replaces its starting value. Only that thread changes, and nothing here widens what a mode may use: its tools, sandbox and blocks stay as set on its card.',
         'start.web': 'Web',
         'start.depth': 'Depth',
         'start.helpers': 'Models',
@@ -667,15 +993,33 @@ window.__ModuleLoader__.load({
         'start.helpers.roles': 'Different models',
         'start.tools.off': 'Off',
         'start.isolated': 'Keeps its own web rules: only Off applies here.',
-        'long.group': 'Long run tools',
-        'skillsoff.group': 'Skills switched off per tab',
-        'skillsoff.hint': 'In these tabs the model does not see these skills and cannot load them; typing /name still works. Tuner Plus proposes them from what each tab never uses.',
+        'plock.group': 'Preset for each mode',
+        'plock.hint': 'Which of the app\'s presets (Standard, PTC, Creator) a new thread in each mode starts in. Any leaves the preset menu free. Standard only or Creator only starts new threads on that preset and greys the menu. Started threads keep their preset. Saves at once.',
+        'plock.any': 'Any',
+        'plock.standard': 'Standard only',
+        'plock.creator': 'Creator only',
+        'plock.default': '{label} (default)',
+        'plock.what': 'Which preset a new thread in {tab} starts in. Any: the preset menu next to the folder name is free. Standard only or Creator only: new threads start on that preset and the menu is greyed.',
+        'plock.when': 'Lock a mode whose tools do not work in PTC, or that should always start the same way.',
+        'plock.change': 'Only new threads change; started threads keep their preset. Saves at once. Default here: {default}.',
+        'plock.loading': 'Reading each mode\'s preset choice…',
+        'plock.failed': 'Could not read each mode\'s preset choice. The choices below show the defaults; reopen this page to try again.',
+        'plock.ask.title': 'Allow PTC in {tab}?',
+        'plock.ask.title.unsafe': 'Allow PTC in {tab}? This is unsafe.',
+        'plock.any.unsafe': 'Any (unsafe)',
+        'plock.ask.ok': 'Allow any preset',
+        'plock.loose': 'Changed from the safe default. {warn}',
+        'plock.missing': 'The Creator preset is not in the app\'s preset list right now, so new threads here start on your usual preset until it is back.',
+        'plock.saved': 'Saved. New threads in {tab} follow it.',
+        'long.group': 'Mission tools',
+        'skillsoff.group': 'Skills switched off per mode',
+        'skillsoff.hint': 'In these modes the model does not see these skills and cannot load them; typing /name still works. Tuner Plus proposes them from what each mode never uses.',
         'skillsoff.on': 'Switch back on',
-        'long.hint': 'What a Long run may use in each tab, from the start. A run stays in its tab and keeps its way of working; Depth → Long run settings can change these for one chat.',
+        'long.hint': 'What a Mission may use in each mode, from the start. A Mission stays in its mode and keeps its way of working; Depth → Mission settings can change these for one thread.',
         'long.files': 'Files and commands',
         'long.web': 'Web',
         'long.isolated': 'Only inside its own room; no commands; its own search tools only',
-        'own.hint': 'Lenses you write yourself appear in the chat box\'s Depth list after the six that come with Plus. At most 40, names up to 40 characters, texts up to 4,000. Each gets the same closing lines as every Lens: the tab\'s own rules, labels and order come first, and a required warning is not softening. Kept in Modes\' settings, so Shared settings carries them to your other Mac. A conversation whose Lens you remove goes back to Default.',
+        'own.hint': 'Lenses you write yourself appear in the chat box\'s Depth list after the six that come with Plus. At most 40, names up to 40 characters, texts up to 4,000. Each gets the same closing lines as every Lens: the mode\'s own rules, labels and order come first, and a required warning is not softening. Kept in Modes\' settings, so Shared settings carries them to your other Mac. A thread whose Lens you remove goes back to Default.',
         'own.name': 'Name',
         'own.text': 'What the model is told',
         'own.add': 'Add a Lens',
@@ -688,12 +1032,12 @@ window.__ModuleLoader__.load({
         'depth.quick.hint': 'One short pass with quick checks; usually one web search. Helpers only when the tier asks for them.',
         'depth.standard.hint': 'As the working method says; the model decides how much to search. Adds nothing.',
         'depth.thorough.hint': 'A short plan first, 10+ searches with facts checked in two sources, its own work checked before finishing, and one review by a helper when helpers are allowed. Slower.',
-        'depth.note': 'For this conversation, and where new conversations start in every tab. Depth sets how much work it gets: how much it searches when Web is on, helpers, planning, checks and reviews. A deep research run follows it too (about 10, 25 or 45 minutes; sooner where tools run through programs, the app\'s PTC preset). It adds to the working method and never replaces it. How hard the model thinks is the effort on the model button.',
-        'depth.note.isolated': 'For this conversation, and where new conversations start in every tab. Here Depth sets how much it searches with its own tools, planning and checks; its own rules stay as they are. How hard the model thinks is the effort on the model button.',
+        'depth.note': 'For this thread, and where new threads start in every space. Depth sets how much work it gets: how much it searches when Web is on, helpers, planning, checks and reviews. A deep research run follows it too (about 10, 25 or 45 minutes; sooner where tools run through programs, the app\'s PTC preset). It adds to the working method and never replaces it. How hard the model thinks is the effort on the model button.',
+        'depth.note.isolated': 'For this thread, and where new threads start in every space. Here Depth sets how much it searches with its own tools, planning and checks; its own rules stay as they are. How hard the model thinks is the effort on the model button.',
         'depth.quick.hint.isolated': 'One short pass with quick checks; one or two searches with its own tools.',
         'depth.standard.hint.isolated': 'As its own rules say. Adds nothing.',
         'depth.thorough.hint.isolated': 'A short plan first, ten or more searches, ten sources read, every key fact checked in two sources, its own work checked before finishing. Slower.',
-        'depth.note.research': 'For this conversation, and where new conversations start in every tab. Here Depth also sets how long a research run takes and how many helpers work at once (sooner where tools run through programs, the app\'s PTC preset: a run then stops before the app\'s program time limit). It adds to the method and never replaces it. How hard the model thinks is the effort on the model button.',
+        'depth.note.research': 'For this thread, and where new threads start in every space. Here Depth also sets how long a research run takes and how many helpers work at once (sooner where tools run through programs, the app\'s PTC preset: a run then stops before the app\'s program time limit). It adds to the method and never replaces it. How hard the model thinks is the effort on the model button.',
         'depth.quick.hint.research': 'Short work; a research run takes about 10 minutes, with up to 4 helpers.',
         'depth.standard.hint.research': 'As the method says; a research run takes about 25 minutes, with up to 6 helpers.',
         'depth.thorough.hint.research': 'A short plan and a check before finishing; a research run takes about 45 minutes, with up to 8 helpers. Slower.',
@@ -701,9 +1045,9 @@ window.__ModuleLoader__.load({
         'ws.open': 'Web: {0}. Click to change.',
         'ws.off': 'Off',
         'ws.all': 'All',
-        'ws.off.hint': 'No web for this conversation: no search, no pages, and no other tools or programs that go online. Connectors stay on.',
+        'ws.off.hint': 'No web for this thread: no search, no pages, and no other tools or programs that go online. Connectors stay on.',
         'ws.all.hint': 'Every kind of source, as before.',
-        'ws.off.research': 'This tab needs the web: searching is its work. Switch Tools off to stop it.',
+        'ws.off.research': 'This mode needs the web: searching is its work. Switch Tools off to stop it.',
         'ws.kinds': 'Sources (tick any mix)',
         'ws.nets': 'Recon\'s networks',
         'ws.k.verified': 'Verified sources',
@@ -734,16 +1078,16 @@ window.__ModuleLoader__.load({
         'ws.saveAs': 'Save as…',
         'ws.name': 'Name',
         'ws.save': 'Save',
-        'ws.saved.done': 'Saved. It is in this list in every tab.',
-        'ws.start': 'Use for new {0} conversations',
-        'ws.started': 'New {0} conversations start with these.',
+        'ws.saved.done': 'Saved. It is in this list in every thread.',
+        'ws.start': 'Use for new {0} threads',
+        'ws.started': 'New {0} threads start with these.',
         'ws.edit': 'Edit sources…',
-        'ws.note': 'For this conversation only. Results of unticked kinds are left out and their pages are not opened. Connectors stay on. How much it searches is set by Depth.',
-        'ws.note.recon': 'For this conversation only. Recon\'s tools for unticked sources refuse. Recon keeps all its rules.',
+        'ws.note': 'For this thread only. Results of unticked kinds are left out and their pages are not opened. Connectors stay on. How much it searches is set by Depth.',
+        'ws.note.recon': 'For this thread only. Recon\'s tools for unticked sources refuse. Recon keeps all its rules.',
         'wsp.moved': 'Web levels are now the Web selector\'s source ticks. Their lists, your saved selections and your own other sources are on Settings → Web sources.',
         'wsp.open': 'Open Web sources',
         'wsp.loading': 'Loading…',
-        'wsp.head': 'What the Web button\'s ticks mean, in every tab. A conversation picks its ticks on the Web button; nothing here changes a conversation until you tick.',
+        'wsp.head': 'What the Web button\'s ticks mean, in every thread. A thread picks its ticks on the Web button; nothing here changes a thread until you tick.',
         'wsp.lists': 'Lists',
         'wsp.lists.hint': 'One site or address ending per line (".gov" covers every site ending so). A site can be on more than one list. Forums, social media and the Reddit archives are known by name; anything on no list is an ordinary site.',
         'wsp.saveList': 'Save list',
@@ -753,13 +1097,13 @@ window.__ModuleLoader__.load({
         'wsp.saveSelections': 'Save selections',
         'wsp.saved.bad': 'Each selection needs its own name and at least one tick.',
         'wsp.saved.saved': 'Selections saved.',
-        'wsp.starts': 'Starting ticks per tab',
-        'wsp.starts.hint': 'Set from the Web button with "Use for new … conversations". A tab without one starts with All.',
-        'wsp.starts.none': 'Every tab starts with All.',
+        'wsp.starts': 'Starting ticks per mode',
+        'wsp.starts.hint': 'Set from the Web button with "Use for new … threads". A mode without one starts with All.',
+        'wsp.starts.none': 'Every mode starts with All.',
         'wsp.starts.clear': 'Back to All',
-        'wsp.starts.cleared': 'That tab starts with All again.',
+        'wsp.starts.cleared': 'That mode starts with All again.',
         'wsp.other': 'Other sources',
-        'wsp.other.hint': 'Your own sources that others may not have: a site with a login, a key or a private address. Every tab can use them while Other is ticked. The model only ever sees a source\'s name: logins, keys, cookies and private addresses are kept in the app\'s secret store (as Finance\'s keys are) or in the macOS Keychain, your choice per source, and taken out of everything the model reads. Sites that sign in through their own web form are not supported; copy the sign-in cookie from your browser instead.',
+        'wsp.other.hint': 'Your own sources that others may not have: a site with a login, a key or a private address. Every thread can use them while Other is ticked. The model only ever sees a source\'s name: logins, keys, cookies and private addresses are kept in the app\'s secret store (as Finance\'s keys are) or in the macOS Keychain, your choice per source, and taken out of everything the model reads. Sites that sign in through their own web form are not supported; copy the sign-in cookie from your browser instead.',
         'wsp.o.name': 'Name',
         'wsp.o.login': 'Login',
         'wsp.o.store': 'Secrets kept in',
@@ -799,14 +1143,165 @@ window.__ModuleLoader__.load({
         'wsp.o.saved': 'Sources saved.',
         'wsp.recon': 'Recon\'s own networks (Tor, Usenet; I2P not set up yet) are set up on Settings → Recon → Hidden networks, and only Recon uses them.',
         'trim.group': 'Load tools as needed',
-        'trim.hint': 'A mode switched on below starts each conversation with the core tools only (files, shell, step list, questions, skills, web) and a tool that adds the others when needed: PDF, data, finance, diagrams, scheduling, helpers and more. Your message adds them too when it names them ("read this PDF"). Requests are far smaller, so local models answer sooner. Added tools stay for the rest of the conversation.',
+        'trim.hint': 'A mode switched on below starts each thread with the core tools only (files, shell, step list, questions, skills, web) and a tool that adds the others when needed: PDF, data, finance, diagrams, scheduling, helpers and more. Your message adds them too when it names them ("read this PDF"). Requests are far smaller, so local models answer sooner. Added tools stay for the rest of the thread.',
         'trim.mode': '{mode}: load tools as needed',
         'trim.none': 'No mode has all tools; modes with their own tool list keep that list.',
         'trim.extra': '{mode} (add-on): load tools as needed',
         'answer.rerun': 'Rerun button',
-        'answer.rerun.hint': 'Asks the same question again in a fresh copy of the conversation, with the model selected in the chat box. The new model does not see the old answer. The old answer stays in the original conversation.',
+        'answer.rerun.hint': 'Asks the same question again in a fresh copy of the thread, with the model selected in the chat box. The new model does not see the old answer. The old answer stays in the original thread.',
         'answer.thumbs': 'Hide thumbs up and thumbs down',
         'answer.thumbs.hint': 'Takes the two feedback buttons away. Feedback in the chat box menu still works.',
+        // Item 4A, stage 5: Settings → Spaces and the ticks on Settings → Modes.
+        'sp.title': 'Spaces',
+        'sp.hint': 'A space is where a thread lives: Chat, Code, Devices, Recon or Workshop. A thread stays in its space unless you move it. Which instructions it follows is its mode (Settings → Modes).',
+        'sp.labOff': 'Spaces are switched off in this copy (a lab setting), so the left panel shows tabs. These settings are kept and apply once spaces are on.',
+        'sp.all': 'All spaces',
+        'sp.window': 'Each window keeps its own space',
+        'sp.window.hint': 'Two windows can show two spaces at once. A new window opens in the space you used last.',
+        'sp.window.what': 'Each window remembers the space it shows. Switching space in one window does not move the others.',
+        'sp.window.when': 'Keep Recon in one window and Chat in another, say.',
+        'sp.window.change': 'Nothing to set: this is how spaces work. Pick a space with the buttons at the top of the left panel.',
+        'sp.order': 'Order in the left panel',
+        'sp.order.hint': 'The order of the space buttons at the top of the left panel. You can also drag them there.',
+        'sp.order.what': 'Sets the order of the space buttons at the top of the left panel.',
+        'sp.order.when': 'When the space you use most should come first.',
+        'sp.order.change': 'The buttons move at once. Reset order goes back to the order your former tabs had.',
+        'sp.up': 'Move {space} up',
+        'sp.down': 'Move {space} down',
+        'sp.reset': 'Reset order',
+        'sp.colours.what': 'Red for Recon and violet for Devices: the space button, the window frame and the New button.',
+        'sp.colours.when': 'Leave it on to see at a glance where you are, above all in Recon, which is sealed.',
+        'sp.colours.change': 'Off: every space looks the same. Nothing else changes; switching it on again brings the colours back.',
+        'sp.colours.hint': 'Red for Recon, violet for Devices: button, frame and New button. One switch for both.',
+        'sp.spaces': 'Spaces',
+        'sp.always': 'Always shown',
+        'sp.shown': 'Shown',
+        'sp.hidden': 'Hidden',
+        'sp.show.label': 'Show {space}',
+        'sp.shown.what': 'Whether {space} has a button at the top of the left panel.',
+        'sp.shown.when': 'Hide a space you never use, to keep the left panel short.',
+        'sp.shown.change': 'Hidden: its threads are kept and stay reachable through Show all and ⌘K search. Shown again, they are listed as before.',
+        'sp.chat.what': 'Chat always has a button: something has to be there.',
+        'sp.start': 'New threads start in',
+        'sp.start.hint': 'The mode a new thread in this space begins with.',
+        'sp.start.what': 'The mode a new thread in {space} begins with. You can still change it in the Mode list under the chat box, before or after the first message.',
+        'sp.start.when': 'When you mostly start {space} threads in the same mode, for example Research.',
+        'sp.start.change': 'Only new threads start in it; threads you already have keep their mode. The list shows the modes ticked for {space} on Settings → Modes.',
+        'sp.start.gone': '{mode} is not offered in {space} now, so new threads start in {now}. Tick {space} for it on Settings → Modes, or pick another mode here.',
+        'sp.start.goneNone': '{mode} is not offered in {space} now, and no other mode is, so new threads there have no tools. Tick {space} for a mode on Settings → Modes.',
+        'sp.start.goneOff': '{mode} is switched off, so new threads in {space} start in {now} for now. Your choice is kept: switch "Offer the {mode} mode" back on (Settings, {mode}\'s page) and it is used again.',
+        'sp.start.goneOption': '{mode} (switched off)',
+        'sp.start.goneOption.notHere': '{mode} (not offered now)',
+        'sp.start.usual': '{mode} (usual)',
+        'sp.place': 'Where new threads start',
+        'sp.place.hint': 'Its own folder, or a project folder.',
+        'sp.place.chat.scratch': 'Standalone (Cowork off)',
+        'sp.place.chat.folder': 'In a project (Cowork on)',
+        'sp.place.scratch': 'Its own folder',
+        'sp.place.folder': 'A project folder',
+        'sp.place.room': 'Recon\'s room (always)',
+        'sp.place.what': 'Where a new thread of {space} keeps its files: a folder of its own, which goes to the trash with it, or a project folder.',
+        'sp.place.when': 'Its own folder for quick questions you will not keep; a project folder when the work belongs to a project.',
+        'sp.place.change': 'Only new threads start there. In Chat it is where the Cowork switch under the chat box starts, and you can flip it on each new thread. The same setting as Settings → Start places.',
+        'sp.place.recon': 'Recon threads always start in Recon\'s room: that is part of keeping Recon sealed.',
+        'sp.place.noshell': 'Set with the Left panel add-on, which is off.',
+        'sp.preset': 'Preset in this space',
+        'sp.preset.hint': 'Which preset a new thread starts in.',
+        'sp.preset.what': 'Which of the app\'s presets (Standard, PTC, Creator) a new thread of {space} starts in: Any, Standard only or Creator only.',
+        'sp.preset.when': 'Keep the defaults: Recon and Devices Standard only, Workshop Creator only, Chat and Code Any.',
+        'sp.preset.change': 'A locked space greys the preset menu on a new thread; a thread keeps the preset it started with. Loosening a default asks first. This is the former "Preset for each mode" for Chat and Code, with the same values.',
+        'sp.modelocks': 'Preset for one mode',
+        'sp.modelocks.hint': 'A mode can keep its own lock in whatever space it is used. When a space and a mode lock to different presets, the space wins and the chat box says so in one line.',
+        'sp.modelock.what': 'Which preset a new thread in the {space} mode starts in, whatever its space.',
+        'sp.modelock.when': 'Keep Automations on Standard only: an automation made from a PTC thread would run in PTC every time.',
+        'sp.modelock.change': 'A space\'s own lock wins over this one when the two differ. Loosening a default asks first.',
+        'sp.modes': 'Which modes each space offers in its Mode list is set on Settings → Modes.',
+        'sp.modes.open': 'Open Modes',
+        'sp.modes.i.what': 'Opens Settings → Modes, where each mode has five ticks: the spaces whose Mode list offers it.',
+        'sp.modes.i.when': 'To offer a mode in another space (Research in Code, say), or to take one out of a space\'s list.',
+        'sp.modes.i.change': 'Ticks save at once and apply to the next pick in the Mode list. Threads keep the mode they already have.',
+        'sp.failed': 'Could not load the spaces settings.',
+        'sp.failed.fix': 'Close Settings and open it again. If it keeps failing, restart the app.',
+        'sp.save.failed': 'Could not save this change.',
+        'sp.save.fix': 'Nothing was changed. Try again; if it keeps failing, the Details say what the app reported.',
+        'sp.saved': 'Saved',
+        'sp.save.noshell': 'The Left panel add-on is switched off, so this cannot be saved. Switch it on on the Plugins page.',
+        'sp.save.nomodes': 'The Modes settings are not there right now. Reload Settings.',
+        'sp.save.conflict': 'The settings changed meanwhile. Try again.',
+        'sp.retry': 'Try again',
+        'sp.needs': 'Needs: {what}',
+        'mt.group': 'Modes and their spaces',
+        'mt.what': 'Each tick offers the mode in that space\'s Mode list under the chat box.',
+        'mt.when': 'Tick Research into Code, say, to pick it in a Code thread.',
+        'mt.change': 'Saves at once. Threads that already use a mode keep it; only the list changes.',
+        'mt.col': 'Ticked modes are offered in {space}\'s Mode list under the chat box.',
+        'mt.col.guarded': 'Other modes can be ticked for {space}; a mode used there runs under the rules of {space}. A tick is greyed while what {space} needs is off or too old: the line above the list says what to switch on.',
+        'mt.mode': 'Mode',
+        'mt.kind.builtin': 'Built in',
+        'mt.kind.addon': 'Add-on',
+        'mt.kind.own': 'Yours',
+        'mt.tick': 'Offer {mode} in {space}',
+        'mt.edit': 'Change the description of {mode}',
+        'mt.desc': 'Description',
+        'mt.desc.hint': 'One line, shown under the name in the chat box\'s Mode list. Empty: the usual line.',
+        'mt.desc.addon': 'Its instructions and tools come from its add-on and stay as they are; you can change its description and its spaces.',
+        'mt.desc.builtin': 'Built into Plus. Its instructions are set in its card further down this page (Plain chat has none).',
+        'mt.desc.own': 'Your own mode. Its instructions, tools and file access are in its card further down this page.',
+        'mt.save': 'Save',
+        'mt.cancel': 'Cancel',
+        'mt.view': 'See what {mode} brings and change its description',
+        'mt.ro.title': 'From the add-on',
+        'mt.ro.i.what': 'What this add-on mode brings: its instructions in short, its tools, its file access and its model tier. They come from its add-on, so they are shown here and cannot be changed.',
+        'mt.ro.i.change': 'To change them, use the add-on\'s own Settings page. Its description (below) and its spaces (the ticks) can be changed here.',
+        'mt.ro.instructions': 'Instructions',
+        'mt.ro.instructions.none': 'No instructions of its own.',
+        'mt.ro.tools': 'Tools',
+        'mt.ro.tools.all': 'The tools the space allows',
+        'mt.ro.tools.none': 'No tools',
+        'mt.ro.tools.list': 'Its own list ({n} tools)',
+        'mt.ro.tools.show': 'Show the list',
+        'mt.ro.tools.hide': 'Hide the list',
+        'mt.ro.access': 'File access',
+        'mt.ro.access.inherit': 'The thread\'s own access level',
+        'mt.ro.access.read-only': 'Read only',
+        'mt.ro.access.workspace-write': 'Can change files in its folder',
+        'mt.ro.access.danger-full-access': 'Full access',
+        'mt.ro.tier': 'Model tier',
+        'mt.ro.tier.none': 'Usual',
+        'mt.ro.spaces': 'Spaces',
+        'mt.ro.spaces.none': 'None now',
+        'mt.none': 'Offered in no space now. Threads that use it keep it.',
+        'mt.rules': 'Spaces\' rules',
+        'mt.rules.i.what': 'A mode used in Devices, Recon or Workshop runs under that space\'s rules. In Recon it is sealed: it goes online only through Recon\'s routes and keeps its files in the thread\'s room folder. In Devices and Workshop it runs no Terminal, programs, background jobs, connectors, Mac app tools, Office files or schedules.',
+        'mt.rules.i.change': 'Change the two choices below. A space\'s rules themselves cannot be switched off.',
+        'mt.rules.extra': 'Extra tools a mode keeps in Recon.',
+        'mt.rules.extra.desc': 'None by default. Only your Library can be added.',
+        'mt.rules.extra.i.what': 'A mode used in Recon keeps only a few safe tools of its own. Here you can let it keep reading your Library too.',
+        'mt.rules.extra.i.change': 'Switch a tool on or off. It applies from each thread\'s next message.',
+        'mt.rules.extra.warn': 'Warning: what these tools read can end up in Recon\'s web searches.',
+        'mt.rules.extra.library_search': 'Search your Library',
+        'mt.rules.extra.library_read': 'Read from your Library',
+        'mt.rules.grid': 'Tool access Off also applies in Devices and Workshop.',
+        'mt.rules.grid.desc': 'On by default: your Off choices are kept there too.',
+        'mt.rules.grid.i.what': 'A mode used in Devices or Workshop ignores what Tool access switches on. With this on, what you switch Off for a mode stays off there too.',
+        'mt.rules.grid.i.change': 'Switch it off to let the space\'s own rules alone decide there.',
+        'mt.failed': 'Could not load the modes and their spaces.',
+        'mt.start': 'New threads start in',
+        'mt.start.hint': 'Set per space on Settings → Spaces.',
+        'mt.start.open': 'Open Spaces',
+        'mt.start.i.what': 'The mode a new thread starts in is set per space, on each space\'s card on Settings → Spaces.',
+        'mt.start.i.when': 'To start new Chat threads in Research, say, or new Code threads in Plain chat.',
+        'mt.start.i.change': 'It applies to threads started afterwards. A thread can still change its mode in the Mode list at any time.',
+        'mt.moved': 'Preset in this space, the Automations mode\'s own lock, and Recon and Devices colours are on Settings → Spaces.',
+        'head.hint.spaces': 'A mode is a set of instructions and tools a thread follows. Tick the spaces where each mode is offered in the chat box\'s Mode list. A thread can change its mode at any time; it applies from the next message.',
+        'f.desc': 'Description',
+        'f.desc.i.what': 'One line shown under the mode\'s name in the Mode list under the chat box.',
+        'f.desc.i.when': 'To say in a few words what the mode is for, so it is easy to pick.',
+        'f.desc.i.change': 'Saved with the card. Empty uses the built-in line. It changes nothing about how the mode works.',
+        'f.desc.hint': 'One line for the Mode list. Empty: "Your own mode."',
+        'space.group': 'Colours',
+        'space.colours': 'Recon and Devices colours',
+        'space.colours.hint': 'Shows a red frame and space button in Recon and a violet one in Devices, so you can see where you are. Off: every space looks the same.',
         'f.prompt.code': 'Empty: Plus uses its own working method for code (read first, small changes, run the tests, report plainly). Write here to use your own instead.',
         'f.count': '{n} of 4000',
         'e.id': 'Ids use lower-case letters, digits and dashes, and must be unique.',
@@ -817,329 +1312,6 @@ window.__ModuleLoader__.load({
         'failed': 'Could not read the Modes settings. Is the Modes add-on switched on?',
         'loading': 'Loading modes…',
         'save.failed': 'Could not save',
-      },
-      zh: {
-        'composer.mode': '模式',
-        'composer.failed': '无法切换模式',
-        'toggle.search': '联网',
-        'toggle.search.on': '此对话已开启网页搜索。点击关闭。',
-        'toggle.search.off': '此对话已关闭网页搜索。点击开启。',
-        'toggle.research': '深度研究',
-        'toggle.research.on': '深度研究已开启：问题会得到经过研究、带引用的报告。点击关闭。',
-        'toggle.research.off': '开启深度研究：问题会得到经过研究、带引用的报告。',
-        'toggle.tools.on': '工具已开',
-        'toggle.tools.off': '工具已关',
-        'toggle.tools.title': '模型在此对话中可以调用什么',
-        'tools.switch': '此对话的工具',
-        'tools.switch.hint': '关闭后，模型得不到任何工具，也就不会尝试调用。搜索和深度研究也会关闭。',
-        'tools.chat': '在聊天中，工具指搜索和阅读网页。处理文件和命令请使用 Cowork 或 Code。',
-        'tools.viaCode': '此对话处于 PTC 模式：模型在它编写的小程序中调用这些工具。应用会在几分钟后停止这样的程序，因此深度研究等耗时任务更适合标准模式。',
-        'tools.can': '现在可用',
-        'tools.can.off': '可以调用',
-        'tools.cannot': '不能调用',
-        'tools.later': '按需加载',
-        'tools.later.hint': '任务需要时模型会自行添加这些工具，消息中提到它们也会添加。设置 → 模式。',
-        'tools.notReady': '此对话的模型未配置，因此不提供：{names}。',
-        'tools.none': '无',
-        'tools.next': '更改从你的下一条消息开始生效。',
-        'tools.unknown': '此对话开始后会显示列表。',
-        'tools.blocked': '此对话的工具已关闭。',
-        'depth.quick': '快速',
-        'depth.standard': '标准',
-        'depth.thorough': '深入',
-        'depth.search.title': '搜索深度',
-        'depth.search.open': '搜索深度：{0}。点击更改。',
-        'depth.search.quick': '搜索一次，简短回答。最快。',
-        'depth.search.standard': '由模型决定搜索多少，与以前相同。',
-        'depth.search.thorough': '多次搜索，至少阅读五个页面，并在来源之间核对事实。较慢。',
-        'depth.research.title': '深度研究的深度',
-        'depth.research.open': '深度研究的深度：{0}。点击更改。',
-        'depth.research.quick': '搜索 1 轮，最多 4 个助手同时工作。最多约 10 分钟。',
-        'depth.research.standard': '2 轮，最多 6 个助手同时工作。第一轮后审阅结果，第二轮用更准确的查询补充缺失内容。最多约 25 分钟。',
-        'depth.research.thorough': '3 轮，最多 8 个助手同时工作。每轮都会审阅，下一轮更深入。最多约 45 分钟，消耗最多。',
-        'depth.research.cap': '同时工作的助手数量还受“设置 → 模型档位”中子代理上限的限制。',
-        'helpers.one': '单一模型',
-        'helpers.many': '{n} 个模型',
-        'helpers.title.same': '助手使用此对话的模型。只需加载一个模型。',
-        'helpers.title.roles': '助手可能使用其他模型：最多同时 {n} 个模型。',
-        'helpers.head': '助手代理所用模型',
-        'helpers.same': '全部使用同一模型',
-        'helpers.roles': '使用不同模型',
-        'helpers.same.hint': '每个助手代理都在此对话所用的模型上运行{model}。无需加载其他模型，占用内存最少。适用于 /mission 运行、深度研究、代理群、层级工具和代码增强。',
-        'helpers.roles.hint': '助手在为其角色设置的模型上运行。每个不同的模型都可能与其他模型同时加载。',
-        'helpers.list': '此对话可能使用的模型：',
-        'helpers.list.own': '此对话',
-        'helpers.list.none': '没有为任何角色设置其他模型，因此一切仍在此对话的模型上运行。可在 设置 → 模型层级 中设置角色模型，或在 设置 → Mission 中为运行设置。',
-        'helpers.from.tiers': '模型层级，{role}',
-        'helpers.from.mission': 'Mission，{role}',
-        'helpers.from.project': 'Mission，此项目，{role}',
-        'helpers.role.plan': '规划者',
-        'helpers.role.implement': '执行者',
-        'helpers.role.review': '审阅者',
-        'helpers.role.fast': '快速助手',
-        'helpers.scope': '此选择仅用于此对话。',
-        'helpers.usual': '新对话默认：{name}。',
-        'helpers.usual.set': '新对话也使用此设置',
-        'helpers.next': '对此后启动的助手生效。',
-        'research.model.title': '助手使用的模型',
-        'research.model.same': '与此对话相同',
-        'research.model.roles': '角色模型',
-        'research.model.same.hint': '每个助手都使用研究开始时此对话所用的模型。',
-        'research.model.roles.hint': '助手使用“设置 → 模型档位 → 角色模型”中设置的模型：规划、审阅和撰写使用“规划”，搜索使用“快速”。未设置模型的角色使用对话的模型。',
-        'section.title': '模式',
-        'head.hint': '模式会限制模型可见的工具，可设置文件沙箱、切换档位并附加一小段提示词。新会话使用侧边栏所选标签页的模式（没有侧边栏时：输入框中的模式列表）；/mode 切换会话的模式（开启侧边栏时：仅在第一条消息之后）。修改在下一轮开始时生效。',
-        'default.label': '尚未选择模式的会话使用',
-        'default.extra': '{label}（插件）',
-        'add': '添加模式',
-        'remove': '删除',
-        'save': '保存',
-        'discard': '放弃更改',
-        'builtin': '恢复内置模式',
-        'saved': '已保存。',
-        'dirty': '有未保存的更改',
-        'f.id': '标识',
-        'f.label': '名称',
-        'f.tools': '工具',
-        'f.tools.all': '全部工具',
-        'f.tools.none': '无工具',
-        'f.tools.some': '仅这些',
-        'f.toolNames': '工具名称，每行一个（不存在的名称会被忽略）',
-        'f.sandbox': '文件沙箱',
-        'f.sandbox.inherit': '保持不变',
-        'f.sandbox.read-only': '只读',
-        'f.sandbox.workspace-write': '可写工作区',
-        'f.tier': '此模式的档位（可选）：此模式中的新会话和切换到此模式时使用',
-        'f.prompt': '此模式启用时附加的提示词',
-        'f.prompt.cowork': '留空：Plus 使用自带的 Cowork 工作方法（先理解任务、步骤列表、谨慎对待你的文件、检查结果、如实报告）。在此填写则使用你自己的。',
-        'new.group': '新会话',
-        'new.depth': '新会话（及从未选过的会话）的细致度',
-        'new.depth.hint': '每个标签中新会话细致度按钮的起始值。从未在输入框中选过细致度的会话也跟随它。在输入框中选择细致度也会设置它。',
-        'new.scheduled': '定时任务的模式',
-        'new.scheduled.hint': '自动化任务打开的会话以此模式开始，与所选标签页无关。没有工具的模式无法完成任务。',
-        'new.scheduled.gone': '{id}（未找到：使用第一个拥有全部工具的模式）',
-        'tabs.group': '侧边栏',
-        'tabs.count': '侧边栏中的标签页',
-        'tabs.count.hint': '下方模式中按顺序有多少个获得标签页。插件添加的模式总会有标签页。',
-        'tabs.none': '没有侧边栏标签页（只有前 {n} 个模式有），因此只能用 /mode 进入此模式。',
-        'method.group': '内置工作方法',
-        'method.code': 'Code：Plus 的工作方法',
-        'method.code.hint': '在下方 Code 模式的提示词为空时使用：先阅读、小步修改、运行测试、如实报告。',
-        'method.cowork': 'Cowork：Plus 的工作方法',
-        'method.cowork.hint': '在下方 Cowork 模式的提示词为空时使用：先理解任务、使用步骤列表、修改你的文件前先询问、检查结果、如实报告。',
-        'rerun': '用当前所选模型重新运行',
-        'rerun.busy': '正在开始重新运行…',
-        'rerun.none': '无法重新运行此回答：找不到对应的问题。',
-        'rerun.failed': '无法开始重新运行',
-        'rerun.files': '已开始重新运行。问题中附带的图片和文件未再次发送，如有需要请重新添加。',
-        'box.group': '聊天框',
-        'box.uniform': '所有模式使用相同的聊天框',
-        'box.uniform.hint': '各模式中的按钮显示得一样：按钮文字显示多少（Web · On、Depth、One model、Tools on）只取决于窗口宽度，权限按钮保持固定宽度。模式自己添加的按钮（Creator Plus、Devices rules、Export、Focus、Finance 标签）在一行放不下时，会排到第二行，位于相同的核心按钮之后。模型按钮和 Run 在每个模式中宽度相同；工具关闭时 Depth 仍在原处（变灰）；无法开始长时间运行时 Run 也仍在原处（变灰）。关闭：每个模式像以前一样各自收缩。',
-        'answer.group': '回答下方的按钮',
-        'web.label': '联网',
-        'depth.label': '细致度',
-        'depth.title': '细致度',
-        'depth.open': '细致度：{0}。点击更改。',
-        'depth.open.lens': '细致度：{0}，视角：{1}。点击更改。',
-        'lens.title': '视角：回答的措辞方式',
-        'depth.long.title': '比深入更进一步',
-        'depth.long': '长时运行设置…',
-        'depth.long.hint': '本对话长时运行的时间、圈数和工具，会被保存。“运行”按钮（在“发送”旁）用你输入的内容开始一次长时运行；“发送”仍按上面的深度。',
-        'depth.long.short': '供“运行”按钮使用',
-        'depth.quick.short': '快速，轻量检查',
-        'depth.standard.short': '照常',
-        'depth.thorough.short': '计划、10+ 次搜索、复核',
-        'depth.quick.short.isolated': '快速，搜索 1–2 次',
-        'depth.standard.short.isolated': '照常',
-        'depth.thorough.short.isolated': '10+ 次搜索，核实',
-        'depth.quick.short.research': '约 10 分钟，4 个助手',
-        'depth.standard.short.research': '约 25 分钟，6 个助手',
-        'depth.thorough.short.research': '约 45 分钟，8 个助手',
-        'lens.short': '视角',
-        'lens.web.short': '联网关闭：未核实的会标出',
-        'lens.default': '默认',
-        'lens.blunt': '直言',
-        'lens.scientific': '科学',
-        'lens.journalistic': '新闻',
-        'lens.data-only': '只给数据',
-        'lens.skeptic': '质疑',
-        'lens.encouraging': '鼓励',
-        'lens.default.hint': '日常使用。不额外添加内容。',
-        'lens.blunt.hint': '直截了当，不加缓冲',
-        'lens.scientific.hint': '健康、技术，任何涉及研究的话题',
-        'lens.journalistic.hint': '事件、人物、机构',
-        'lens.data-only.hint': '只给数据，由你自己判断',
-        'lens.skeptic.hint': '检验计划、说法或来源',
-        'lens.encouraging.hint': '想要动力的时候',
-        'lens.note': '仅对本对话生效。视角只改变回答的措辞，从不改变收集哪些事实；标签页自己的规则优先。',
-        'lens.web.off': '此处联网已关闭：此视角会把无法核实的内容标为推断或猜测。开启联网以核实事实。',
-        'lens.own.hint': '你自己的视角（设置 → 模式）',
-        'own.group': '你自己的视角',
-        'start.group': '新对话的起始值',
-        'start.hint': '每个模式中的对话开始时，Web、Depth、Models 和 Tools 按钮显示什么。“通常”保持模式现在的做法（以及上面的设置）。你在对话中按下按钮会替换它的起始值，只影响那个对话；这里的设置不会扩大模式可以使用的范围：工具、沙箱和限制仍按它的卡片设置。',
-        'start.web': 'Web',
-        'start.depth': 'Depth',
-        'start.helpers': 'Models',
-        'start.tools': 'Tools',
-        'start.usual': '通常',
-        'start.web.off': '关',
-        'start.web.on': '开',
-        'start.web.verified': '已验证',
-        'start.web.open': '开放网络',
-        'start.web.everything': '全部',
-        'start.helpers.same': '一个模型',
-        'start.helpers.roles': '不同的模型',
-        'start.tools.off': '关',
-        'start.isolated': '保持自己的网络规则：这里只有“关”有效。',
-        'long.group': '长时运行的工具',
-        'skillsoff.group': '各标签中关闭的技能',
-        'skillsoff.hint': '在这些标签中，模型看不到这些技能，也无法加载它们；输入 /名称 仍然可用。Tuner Plus 会根据各标签从未使用的技能提出建议。',
-        'skillsoff.on': '重新打开',
-        'long.hint': '每个标签中长时运行一开始可以使用什么。运行留在它的标签里，保持它的工作方式；深度 → 长时运行设置可以为某个对话更改这些。',
-        'long.files': '文件和命令',
-        'long.web': '联网',
-        'long.isolated': '只在它自己的房间里；不能运行命令；只用它自己的搜索工具',
-        'own.hint': '你自己写的视角会出现在输入框细致度列表中，排在 Plus 自带的六个之后。最多 40 个，名称最多 40 个字符，文字最多 4,000 个字符。每个都会加上与所有视角相同的结尾：标签页自己的规则、标签和顺序优先，必要的警告不算软化。保存在模式的设置中，因此共享设置会把它们带到你的另一台 Mac。删除某个视角后，使用它的对话会回到默认。',
-        'own.name': '名称',
-        'own.text': '告诉模型的内容',
-        'own.add': '添加视角',
-        'own.remove': '删除',
-        'own.save': '保存你的视角',
-        'own.saved': '已保存。',
-        'own.full': '你已有 40 个自己的视角，已达上限。',
-        'own.empty': '还没有。',
-        'own.problem': '视角 {n} {problem}。',
-        'depth.quick.hint': '简短一遍，只做快速检查；通常只搜索一次。仅在层级要求时才使用助手。',
-        'depth.standard.hint': '按工作方法进行，由模型决定搜索多少。不额外添加内容。',
-        'depth.thorough.hint': '先做简短计划，10 次以上搜索并以两个来源核实事实，完成前检查自己的工作；允许使用助手时，由一个助手复核一次。较慢。',
-        'depth.note': '对本对话生效，也是每个标签中新会话的起始值。细致度决定投入多少工作：联网时搜索多少、助手、计划、检查和复核。深度研究的运行也跟随它（约 10、25 或 45 分钟；在通过程序运行工具的对话中（应用的 PTC 预设）会更早结束）。它是对工作方法的补充，从不取代它。模型思考的深浅由模型按钮上的推理强度决定。',
-        'depth.note.isolated': '对本对话生效，也是每个标签中新会话的起始值。在这里，细致度决定用它自己的工具搜索多少、计划和检查；它自己的规则保持不变。模型思考的深浅由模型按钮上的推理强度决定。',
-        'depth.quick.hint.isolated': '简短一遍，只做快速检查；用它自己的工具搜索一两次。',
-        'depth.standard.hint.isolated': '按它自己的规则进行。不额外添加内容。',
-        'depth.thorough.hint.isolated': '先做简短计划，十次以上搜索，阅读十个来源，每个关键事实以两个来源核实，完成前检查自己的工作。较慢。',
-        'depth.note.research': '对本对话生效，也是每个标签中新会话的起始值。在这里，细致度还决定一次研究运行的时长和同时工作的助手数量（在通过程序运行工具的对话中（应用的 PTC 预设），运行会在应用的程序时间限制之前更早结束）。它是对方法的补充，从不取代它。模型思考的深浅由模型按钮上的推理强度决定。',
-        'depth.quick.hint.research': '简短的工作；一次研究运行约 10 分钟，最多 4 个助手。',
-        'depth.standard.hint.research': '按方法进行；一次研究运行约 25 分钟，最多 6 个助手。',
-        'depth.thorough.hint.research': '先做简短计划，完成前检查；一次研究运行约 45 分钟，最多 8 个助手。较慢。',
-        'ws.title': '联网来源',
-        'ws.open': '联网：{0}。点击更改。',
-        'ws.off': '关闭',
-        'ws.all': '全部',
-        'ws.off.hint': '本对话不联网：不搜索、不打开网页，也不运行其他联网的工具或程序。连接器保持开启。',
-        'ws.all.hint': '所有类型的来源，与以前相同。',
-        'ws.off.research': '此标签页需要联网：搜索就是它的工作。关闭"工具"即可停止。',
-        'ws.kinds': '来源（可任意组合）',
-        'ws.nets': '侦察的网络',
-        'ws.k.verified': '已核实来源',
-        'ws.k.academic': '学术论文',
-        'ws.k.news': '新闻',
-        'ws.k.sites': '普通网站',
-        'ws.k.forums': '论坛',
-        'ws.k.social': '社交媒体和频道',
-        'ws.k.archives': '存档',
-        'ws.k.other': '其他',
-        'ws.k.tor': 'Tor（.onion）',
-        'ws.k.usenet': 'Usenet',
-        'ws.k.i2p': 'I2P',
-        'ws.h.verified': '官方机构、法院、登记处、统计、通讯社、公共广播。',
-        'ws.h.academic': '期刊、预印本、PubMed、大学。',
-        'ws.h.news': '新闻机构和通讯社，带日期。',
-        'ws.h.sites': '其他一切：公司、博客、商店、文档。',
-        'ws.h.forums': 'Reddit、Stack Exchange、Hacker News 等论坛。',
-        'ws.h.social': 'X、YouTube、Telegram、Mastodon、Facebook 等。',
-        'ws.h.archives': '已删除的 Reddit 帖子（pullpush、arctic-shift）。',
-        'ws.h.other': '你自己的来源：需要登录、密钥或私密地址的网站。',
-        'ws.h.tor': '通过 Tor 搜索和阅读 .onion 网站。',
-        'ws.h.usenet': '文本新闻组，使用你的新闻服务器账户。',
-        'ws.h.i2p': '尚未设置。',
-        'ws.other.none': '尚未设置：设置 → 联网来源。',
-        'ws.other.none.recon': '尚无允许在侦察中使用的来源：设置 → 联网来源。',
-        'ws.saved': '已保存的组合',
-        'ws.saveAs': '另存为…',
-        'ws.name': '名称',
-        'ws.save': '保存',
-        'ws.saved.done': '已保存。它出现在每个标签页的列表中。',
-        'ws.start': '用于新的{0}对话',
-        'ws.started': '新的{0}对话将以这些来源开始。',
-        'ws.edit': '编辑来源…',
-        'ws.note': '仅对本对话生效。未勾选类型的结果会被略去，其页面不会被打开。连接器保持开启。搜索多少由细致度决定。',
-        'ws.note.recon': '仅对本对话生效。未勾选来源的侦察工具会拒绝。侦察保留其所有规则。',
-        'wsp.moved': '联网级别现在是联网选择器中的来源勾选。其列表、你保存的组合和你自己的其他来源在 设置 → 联网来源。',
-        'wsp.open': '打开联网来源',
-        'wsp.loading': '加载中…',
-        'wsp.head': '联网按钮上各个勾选在每个标签页中的含义。对话在联网按钮上选择勾选；在你勾选之前，这里不会改变任何对话。',
-        'wsp.lists': '列表',
-        'wsp.lists.hint': '每行一个网站或地址结尾（".gov" 涵盖所有以此结尾的网站）。一个网站可以出现在多个列表中。论坛、社交媒体和 Reddit 存档按名称识别；不在任何列表中的是普通网站。',
-        'wsp.saveList': '保存列表',
-        'wsp.listSaved': '列表已保存。',
-        'wsp.saved.hint': '你从联网按钮保存的组合，在那里一键使用。可在此重命名、修改或删除。侦察的网络只在侦察中有效。',
-        'wsp.add': '添加组合',
-        'wsp.saveSelections': '保存组合',
-        'wsp.saved.bad': '每个组合需要自己的名称和至少一个勾选。',
-        'wsp.saved.saved': '组合已保存。',
-        'wsp.starts': '各标签页的初始勾选',
-        'wsp.starts.hint': '在联网按钮上用"用于新的…对话"设置。没有设置的标签页以"全部"开始。',
-        'wsp.starts.none': '每个标签页都以"全部"开始。',
-        'wsp.starts.clear': '恢复为全部',
-        'wsp.starts.cleared': '该标签页重新以"全部"开始。',
-        'wsp.other': '其他来源',
-        'wsp.other.hint': '别人可能没有的你自己的来源：需要登录、密钥或私密地址的网站。勾选"其他"时，每个标签页都可以使用。模型只看到来源的名称：登录信息、密钥、Cookie 和私密地址保存在应用的密钥存储（与财务的密钥相同）或 macOS 钥匙串中，每个来源由你选择，并从模型读取的所有内容中删除。不支持通过自身网页表单登录的网站；请改为从浏览器复制登录 Cookie。',
-        'wsp.o.name': '名称',
-        'wsp.o.login': '登录方式',
-        'wsp.o.store': '密钥保存在',
-        'wsp.login.none': '无',
-        'wsp.login.basic': '用户名和密码',
-        'wsp.login.header': '请求头中的密钥',
-        'wsp.login.cookie': '浏览器 Cookie',
-        'wsp.login.secret-address': '地址本身是秘密',
-        'wsp.store.app': '应用的密钥存储',
-        'wsp.store.keychain': 'macOS 钥匙串',
-        'wsp.o.secretAddress': '地址作为秘密保存在下方。在搜索词的位置放 {query}，起始页则不放。',
-        'wsp.o.search': '搜索地址（含 {query}）',
-        'wsp.o.start': '起始地址',
-        'wsp.o.header': '请求头名称',
-        'wsp.o.recon': '可在侦察中使用（只通过侦察自己的 WireGuard 线路）',
-        'wsp.o.keptApp': '保存在应用的密钥存储中。只输入一次，不再显示。',
-        'wsp.o.keptKeychain': '保存在 macOS 钥匙串中。只输入一次，不再显示。',
-        'wsp.o.saveFirst': '先保存来源，然后在这里输入其登录信息。',
-        'wsp.part.user': '用户名',
-        'wsp.part.basic': '密码',
-        'wsp.part.header': '密钥',
-        'wsp.part.cookie': 'Cookie',
-        'wsp.part.secret-address': '私密地址',
-        'wsp.o.kept': '已保存',
-        'wsp.o.keep': '保存',
-        'wsp.o.isKept': '已保存。',
-        'wsp.o.notKept': '尚未保存。',
-        'wsp.o.test': '测试',
-        'wsp.o.remove': '删除',
-        'wsp.o.tested': '它有回应（状态 {0}）：{1}',
-        'wsp.o.failed': '没有成功：{0}',
-        'wsp.o.removed': '来源已删除，为它保存的内容也已清除。',
-        'wsp.o.keptNow': '已保存。',
-        'wsp.o.unnamed': '一个来源',
-        'wsp.o.add': '添加来源',
-        'wsp.o.save': '保存来源',
-        'wsp.o.saved': '来源已保存。',
-        'wsp.recon': '侦察自己的网络（Tor、Usenet；I2P 尚未设置）在 设置 → 侦察 → 隐藏网络 中设置，只有侦察使用它们。',
-        'trim.group': '按需加载工具',
-        'trim.hint': '在下方开启的模式在每次对话开始时只加载核心工具（文件、终端、步骤列表、提问、技能、网页），并提供一个按需添加其他工具的工具：PDF、数据、财经、图表、日程、助手等。消息中提到时也会自动添加。请求小得多，本地模型响应更快。添加的工具在对话剩余部分保留。',
-        'trim.mode': '{mode}：按需加载工具',
-        'trim.none': '没有拥有全部工具的模式；有自己工具列表的模式保留其列表。',
-        'trim.extra': '{mode}（插件）：按需加载工具',
-        'answer.rerun': '重新运行按钮',
-        'answer.rerun.hint': '在对话的新副本中用聊天框所选的模型再问一次同样的问题。新模型看不到旧回答，旧回答保留在原对话中。',
-        'answer.thumbs': '隐藏点赞和点踩',
-        'answer.thumbs.hint': '移除这两个反馈按钮。聊天框菜单中的反馈仍可使用。',
-        'f.prompt.code': '留空：Plus 使用自带的编码工作方法（先阅读、小步修改、运行测试、如实报告）。在此填写则使用你自己的。',
-        'f.count': '{n} / 4000',
-        'e.id': '标识只能用小写字母、数字和连字符，且不能重复。',
-        'e.none': '至少保留一个模式。',
-        'e.default': '默认模式必须是已有模式之一。',
-        'e.broken': '已存储的模式列表不是有效的 JSON。保存会用此处显示的内容替换它（编辑前为内置的三个）。',
-        'e.tools': '请至少填写一个工具名称，或选择“全部”或“无”。',
-        'failed': '无法读取模式设置。此配置是否加载了模式插件？',
-        'loading': '正在加载模式…',
-        'save.failed': '无法保存',
       },
     };
 
@@ -1201,6 +1373,14 @@ window.__ModuleLoader__.load({
 .dsh-me-title code { font-size: 12px; color: var(--dsw-alias-label-secondary); }
 .dsh-me-toggle > .dsh-me-sel { flex: 0 1 220px; }
 .dsh-me-note[data-warn="true"] { color: var(--dsw-alias-state-warn-primary); }
+.dsh-me-plock { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
+.dsh-me-plock-text { flex: 1; min-width: 0; }
+.dsh-me-plock-title { font-size: 14px; line-height: 22px; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
+.dsh-me-plock-warn { margin: 4px 0 0; padding: 6px 10px; border-radius: 8px; font-size: 12px; line-height: 18px; font-weight: 500; color: var(--dsw-alias-state-error-primary); background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); overflow-wrap: anywhere; }
+.dsh-me-plock-note { margin: 2px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.dsh-me-plock-note[data-warn="true"] { color: var(--dsw-alias-state-warn-primary); }
+.dsh-me-plock > .dsh-me-sel { flex: 0 1 220px; }
+.dsh-me-plock[data-loose="true"] > .dsh-me-sel { outline: 1px solid var(--dsw-alias-state-error-primary); }
 `;
 
     /**
@@ -1225,7 +1405,14 @@ window.__ModuleLoader__.load({
      * @param {string} sessionId - session id.
      * @returns {{modes: Array<{id: string, label: string}>, current: string}} view model.
      */
-    function describeModes(view, sessionId) {
+    /** Item 4A, stage 4: built-in modes added later (Modes' index.js ADDED_MODES): in every list, never a tab. */
+    const ADDED_MODES = { plain: { label: 'Plain chat', tools: 'all', sandbox: 'inherit', defaultTier: '', prompt: '' } };
+    /**
+     * Item 4A, stage 6b (J21): with spaces live (`spaces.live`), a thread with no recorded mode shows the mode its space
+     * gives it (the Mode list's `current`, `spaces.start`) or Plain chat, never the stored `defaultMode` (which may still
+     * name Recon or an add-on that is off). Without spaces, as before.
+     */
+    function describeModes(view, sessionId, spaces) {
       const defined = Object.entries(readObject(view?.modes)).map(([id, value]) => ({
         id,
         label: value && typeof value.label === 'string' && value.label.trim() ? value.label.trim() : id,
@@ -1235,10 +1422,239 @@ window.__ModuleLoader__.load({
       for (const [id, value] of Object.entries(readObject(view?.extraModes))) {
         if (!modes.some((mode) => mode.id === id)) modes.push({ id, label: value && typeof value.label === 'string' && value.label.trim() ? value.label.trim() : id });
       }
+      for (const [id, value] of Object.entries(ADDED_MODES)) if (!modes.some((mode) => mode.id === id)) modes.push({ id, label: value.label });
       const chosen = readObject(view?.sessionModes)[sessionId];
-      const fallback = view?.defaultMode;
-      const current = [chosen, fallback].find((id) => modes.some((mode) => mode.id === id)) ?? modes[0].id;
+      const live = spaces?.live === true;
+      const fallback = live ? (typeof spaces?.start === 'string' && spaces.start ? spaces.start : 'plain') : view?.defaultMode;
+      const current = [chosen, fallback].find((id) => modes.some((mode) => mode.id === id)) ?? (live ? 'plain' : modes[0].id);
       return { modes, current };
+    }
+
+    // ---- Recon and Devices colours (owner point 20, 20 November 2026) ----------------------------------------
+    // Recon: a red frame, a red New button, a red selected tab and a faint red tint behind the conversation; errors
+    // inside Recon get a solid red box with a warning sign. Devices (the Bench mode): violet, the app's "done"
+    // colour, for its frame, New button and selected tab; no tint. Colours come only from the app's variables.
+
+    /** The modes that have their own colours, and the space each one shows. */
+    const SPACE_OF_MODE = { recon: 'recon', bench: 'devices' };
+
+    /**
+     * @param {unknown} modeId - a mode (tab) id.
+     * @returns {'recon' | 'devices' | ''} the space whose colours it shows ('' for none).
+     */
+    function spaceOfMode(modeId) {
+      return typeof modeId === 'string' && Object.prototype.hasOwnProperty.call(SPACE_OF_MODE, modeId) ? SPACE_OF_MODE[modeId] : '';
+    }
+
+    /** @returns {'recon' | 'devices' | ''} the colours a space (item 4A) shows: Recon red, Devices violet, the others none. */
+    function colourOfSpace(space) {
+      return space === 'recon' || space === 'devices' ? space : '';
+    }
+
+    /**
+     * Which space a conversation is in. With the space buttons (item 4A, stage 3a: `live`), its recorded space first
+     * (a thread never changes space, whatever its mode), then its recorded mode's, then the window's space
+     * (html[data-cws-space], where a new one is being started). Without them, as before: its recorded mode first; a
+     * conversation with none yet (a new one) follows the sidebar's selected tab when there is one (it is the tab it is
+     * being started in), else the mode Modes gives it.
+     * @param {object | null} view - the Modes settings view (may be null while loading).
+     * @param {string | undefined} sessionId - the conversation.
+     * @param {string} shownTab - the sidebar's selected tab (html[data-cws-tab]), '' when unknown or not wanted.
+     * @param {{live?: boolean, space?: string}} [spaces] - spaces are live; the window's space ('' for a Split pane).
+     * @returns {'recon' | 'devices' | ''} the space.
+     */
+    function spaceFor(view, sessionId, shownTab, spaces) {
+      if (spaces?.live) {
+        const placed = sessionId ? readObject(view?.sessionSpaces)[sessionId] : undefined;
+        if (typeof placed === 'string' && placed !== '') return colourOfSpace(placed);
+        const mode = sessionId ? readObject(view?.sessionModes)[sessionId] : undefined;
+        if (typeof mode === 'string' && mode !== '') return spaceOfMode(mode);
+        return colourOfSpace(spaces?.space);
+      }
+      const recorded = sessionId ? readObject(view?.sessionModes)[sessionId] : undefined;
+      if (typeof recorded === 'string' && recorded !== '') return spaceOfMode(recorded);
+      if (shownTab) return spaceOfMode(shownTab);
+      if (!view || !sessionId) return '';
+      return spaceOfMode(describeModes(view, sessionId).current);
+    }
+
+    /** The last Modes view any chat box read: a chat box that is just mounted colours at once with it. */
+    const spaceCache = { view: null };
+
+    /** The window's own conversations' spaces, one entry per chat box (two may be on screen for a moment). */
+    const windowSpaces = new Map();
+    let spaceToken = 0;
+    /** The colours switch as last read (on until the settings say off) and the style and frame it turns on and off. */
+    const spaceColours = { on: true, style: null, frame: null };
+
+    function setSpaceMark(node, space) {
+      if (space) node.setAttribute('data-dsh-space', space);
+      else node.removeAttribute('data-dsh-space');
+    }
+
+    /** html[data-dsh-space]: Recon wins over Devices, so a Recon conversation on screen is never shown uncoloured. */
+    function paintWindowSpace(doc) {
+      const all = [...windowSpaces.values()];
+      setSpaceMark(doc.documentElement, all.includes('recon') ? 'recon' : all.includes('devices') ? 'devices' : '');
+    }
+
+    /**
+     * Where a chat box's space is marked: its Split Plus pane (each pane is a conversation of its own), else the
+     * window (html). A conversation the app embeds elsewhere (a helper's chat in its sidebar) marks nothing.
+     * @param {Element | null} el - an element inside the chat box, or null before it is drawn.
+     * @param {Document} doc - the page.
+     * @param {string | undefined} sessionId - the conversation (found by the app's data-conversation-session when el is null).
+     * @returns {Element | null} the element to mark, or null for none.
+     */
+    function spaceTarget(el, doc, sessionId) {
+      let node = el;
+      if (!node && sessionId) {
+        const found = [...doc.querySelectorAll('[data-conversation-content][data-conversation-session]')].filter((one) => one.getAttribute('data-conversation-session') === sessionId);
+        node = found.find((one) => !one.closest('[data-split-pane]')) ?? found[0] ?? null;
+        if (!node) return null;
+      }
+      if (!node) return doc.documentElement;
+      const pane = node.closest('[data-split-pane]');
+      if (pane) return pane;
+      const body = node.closest('[data-conversation-content]');
+      if (body && /(^|\s)\S*_embeddedBody\b/.test(String(body.className ?? ''))) return null;
+      return doc.documentElement;
+    }
+
+    /**
+     * Mark a chat box's space (data-dsh-space) on its pane or the window.
+     * @param {Element | null} el - an element inside the chat box.
+     * @param {Document} doc - the page.
+     * @param {string | undefined} sessionId - the conversation.
+     * @param {{window: string, pane: string}} spaces - the space for the window (a new conversation follows the
+     *   selected tab) and for a pane (its own recorded mode only).
+     * @returns {() => void} takes the mark off again.
+     */
+    function markSpace(el, doc, sessionId, spaces) {
+      if (!doc?.documentElement) return () => {};
+      const target = spaceTarget(el, doc, sessionId);
+      if (!target) return () => {};
+      if (target === doc.documentElement) {
+        spaceToken += 1;
+        const token = spaceToken;
+        windowSpaces.set(token, spaces.window);
+        paintWindowSpace(doc);
+        return () => { windowSpaces.delete(token); paintWindowSpace(doc); };
+      }
+      setSpaceMark(target, spaces.pane);
+      return () => { if (target.getAttribute('data-dsh-space') === spaces.pane) target.removeAttribute('data-dsh-space'); };
+    }
+
+    /**
+     * An attribute the Cowork sidebar sets on <html>, kept up to date: its selected tab (data-cws-tab; with the space
+     * buttons, the open thread's mode) or, since item 4A stage 3a, the window's space (data-cws-space).
+     */
+    function useCwsAttr(name) {
+      const read = () => (typeof document === 'undefined' ? '' : document.documentElement.getAttribute(name) ?? '');
+      const [value, setValue] = useState(read);
+      useEffect(() => {
+        if (typeof MutationObserver === 'undefined') return undefined;
+        const watch = new MutationObserver(() => setValue(read()));
+        watch.observe(document.documentElement, { attributes: true, attributeFilter: [name] });
+        setValue(read());
+        return () => watch.disconnect();
+      }, []);
+      return value;
+    }
+    /** The sidebar's selected tab (html[data-cws-tab], set by the Cowork sidebar), kept up to date. */
+    function useCwsTab() {
+      return useCwsAttr('data-cws-tab');
+    }
+
+    // The warning sign (a triangle with "!") used as a mask, so it takes the text colour.
+    const SPACE_WARN_ICON = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 2.5L1.5 21h21z M11 9h2v6h-2z M11 16.5h2v2h-2z'/%3E%3C/svg%3E")`;
+    // Inside Recon: the window's own conversation (not a Split pane in it), or a Split pane that is Recon.
+    const IN_RECON = ['html[data-dsh-space="recon"] [data-conversation-content]:not([data-split-pane] *)', '[data-split-pane][data-dsh-space="recon"]'];
+    /*
+     * The app's turn row is also used for things that are not failures: the "reply hit the output limit" notice (an
+     * amber dot) and "Task stopped" when the app closed a turn (a red dot, no code). Only a row with the red error dot
+     * and an error code is a real failure. "Task stopped" after signing out also shows a code, so it is boxed too.
+     */
+    const RECON_ERROR_ROW = "[class*='_turnErrorRow']:has([class*='_turnErrorDot'][data-state=\"error\"]):has([class*='_turnErrorCode'])";
+    const RECON_ERRORS = `:is(${RECON_ERROR_ROW},[class*='_openError'],[role="alert"])`;
+    const RECON_ERRORS_INSIDE = RECON_ERRORS + ' *';
+    const inRecon = (tail) => IN_RECON.map((scope) => `${scope} ${tail}`).join(',');
+    /*
+     * The selected button and the New button (item 4A, stage 3a): with the space buttons the space ids `recon` and
+     * `devices` and the window's space (html[data-cws-space]) decide; with the old tabs, the tab ids `recon` and `bench`
+     * and the selected tab (html[data-cws-tab]), so both layouts keep their colours.
+     */
+    const SPACE_TAB_RECON = '.cws-tab[data-tab-id="recon"]';
+    const SPACE_TAB_DEVICES = ':is(.cws-tab[data-tab-id="bench"],.cws-tab[data-tab-id="devices"])';
+    const NEW_IN_RECON = ':is(html[data-cws-space="recon"],html:not([data-cws-space])[data-cws-tab="recon"])';
+    const NEW_IN_DEVICES = ':is(html[data-cws-space="devices"],html:not([data-cws-space])[data-cws-tab="bench"])';
+    /*
+     * The frame is a layer fixed over the window that lets every click through and is drawn only along the edges, so
+     * nothing moves; it sits under the app's menus, dialogs and Settings (z-index 100 and up) and over its layout
+     * (up to 71). A Split pane gets an outline drawn just inside its own edge instead, clear of the pane's border, so Split
+     * Plus's focus border still shows; a focused coloured pane also gets a brand ring outside its edge (in the grid's gap).
+     * The ink colours are the space colour mixed with the text colour: darker in light mode, lighter in dark mode, so words on the tinted fills stay readable.
+     */
+    const SPACE_CSS = `
+body{--dsh-me-recon-ink:color-mix(in srgb,var(--dsw-alias-state-error-primary) 75%,var(--dsw-alias-label-primary));--dsh-me-devices-ink:color-mix(in srgb,var(--dsw-alias-state-done-primary) 75%,var(--dsw-alias-label-primary));--dsh-me-alarm:color-mix(in srgb,var(--dsw-alias-state-error-primary) 85%,var(--dsw-alias-label-primary));--dsh-me-on-alarm:var(--dsw-alias-bg-base);--dsh-me-warn-icon:${SPACE_WARN_ICON}}
+.dsh-me-frame{display:none;position:fixed;inset:0;z-index:80;pointer-events:none}
+html[data-dsh-space="recon"] .dsh-me-frame{display:block;box-shadow:inset 0 0 0 3px var(--dsw-alias-state-error-primary)}
+html[data-dsh-space="devices"] .dsh-me-frame{display:block;box-shadow:inset 0 0 0 3px var(--dsw-alias-state-done-primary)}
+[data-split-pane][data-dsh-space="recon"]{outline:2px solid var(--dsw-alias-state-error-primary);outline-offset:-4px}
+[data-split-pane][data-dsh-space="devices"]{outline:2px solid var(--dsw-alias-state-done-primary);outline-offset:-4px}
+[data-split-pane][data-dsh-space][data-focused="true"]{box-shadow:0 0 0 2px var(--dsw-alias-brand-primary)}
+${inRecon('[data-conversation-scroll]')}{box-shadow:inset 0 0 0 100vmax color-mix(in srgb,var(--dsw-alias-state-error-primary) 5%,transparent)}
+${inRecon(RECON_ERRORS)}{background:var(--dsh-me-alarm) !important;color:var(--dsh-me-on-alarm) !important;border-radius:8px;padding:6px 10px !important}
+${inRecon(RECON_ERRORS_INSIDE)}{color:inherit !important}
+${inRecon(RECON_ERROR_ROW)}{grid-template-columns:14px minmax(0,1fr) auto}
+${inRecon(RECON_ERROR_ROW + " [class*='_turnErrorDot']")}{width:14px;height:14px;margin-top:3px;border:0;border-radius:0;box-shadow:none;background:currentColor;-webkit-mask:var(--dsh-me-warn-icon) center/contain no-repeat;mask:var(--dsh-me-warn-icon) center/contain no-repeat}
+${inRecon(RECON_ERROR_ROW + " [class*='_turnErrorDot'] > *")}{visibility:hidden}
+${inRecon(":is([class*='_openError'],[role=\"alert\"])::before")}{content:'';float:left;width:14px;height:14px;margin:2px 6px 0 0;background:currentColor;-webkit-mask:var(--dsh-me-warn-icon) center/contain no-repeat;mask:var(--dsh-me-warn-icon) center/contain no-repeat}
+${SPACE_TAB_RECON}[aria-selected="true"]{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 16%,transparent);color:var(--dsh-me-recon-ink);box-shadow:inset 0 0 0 1px var(--dsw-alias-state-error-primary)}
+${SPACE_TAB_DEVICES}[aria-selected="true"]{background:color-mix(in srgb,var(--dsw-alias-state-done-primary) 16%,transparent);color:var(--dsh-me-devices-ink);box-shadow:inset 0 0 0 1px var(--dsw-alias-state-done-primary)}
+${NEW_IN_RECON} .cws-new{border-color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 12%,transparent);color:var(--dsh-me-recon-ink)}
+${NEW_IN_DEVICES} .cws-new{border-color:var(--dsw-alias-state-done-primary);background:color-mix(in srgb,var(--dsw-alias-state-done-primary) 12%,transparent);color:var(--dsh-me-devices-ink)}
+${NEW_IN_RECON} .cws-new .cws-kbd{border-color:color-mix(in srgb,var(--dsw-alias-state-error-primary) 40%,transparent)}
+${NEW_IN_DEVICES} .cws-new .cws-kbd{border-color:color-mix(in srgb,var(--dsw-alias-state-done-primary) 40%,transparent)}
+@media (hover:hover){${NEW_IN_RECON} .cws-new:hover{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 20%,transparent)}${NEW_IN_DEVICES} .cws-new:hover{background:color-mix(in srgb,var(--dsw-alias-state-done-primary) 20%,transparent)}}
+`;
+
+    /**
+     * Put the colours' style and the window frame layer on the page once (Modes' apply).
+     * @param {Document} doc - the page.
+     * @returns {() => void} takes them and the window's mark off again.
+     */
+    function showSpaceColours(doc) {
+      if (!doc?.head || !doc.body) return () => {};
+      const style = doc.createElement('style');
+      style.id = 'dsh-modes-space';
+      doc.head.appendChild(style);
+      const frame = doc.createElement('div');
+      frame.className = 'dsh-me-frame';
+      frame.setAttribute('aria-hidden', 'true');
+      doc.body.appendChild(frame);
+      spaceColours.style = style;
+      spaceColours.frame = frame;
+      setSpaceColours(spaceColours.on);
+      return () => {
+        style.remove();
+        frame.remove();
+        if (spaceColours.style === style) { spaceColours.style = null; spaceColours.frame = null; }
+        windowSpaces.clear();
+        doc.documentElement.removeAttribute('data-dsh-space');
+      };
+    }
+
+    /**
+     * The colours switch (spaceColours, Settings → Modes): off empties the colours' style and hides the frame layer,
+     * so nothing is coloured anywhere (frame, tabs, New button, tint, error boxes, Split outlines); on puts them back.
+     * The marks (data-dsh-space) stay, so switching back on is instant. Live: no restart.
+     * @param {boolean} on - show the colours.
+     */
+    function setSpaceColours(on) {
+      spaceColours.on = on !== false;
+      if (spaceColours.style) spaceColours.style.textContent = spaceColours.on ? SPACE_CSS : '';
+      if (spaceColours.frame) spaceColours.frame.hidden = !spaceColours.on;
     }
 
     // `fresh`: a read that a save follows asks the app itself (never the page's shared copy), so the revision it sends is current.
@@ -1276,6 +1692,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
         const rerun = value?.rerunButton !== false;
         const thumbs = value?.hideFeedback === true;
         document.documentElement.setAttribute('data-dsh-nothumbs', String(thumbs));
+        setSpaceColours(value?.spaceColours !== false);
         if (rerun === answerFlags.rerun && thumbs === answerFlags.thumbs) return;
         answerFlags.rerun = rerun;
         answerFlags.thumbs = thumbs;
@@ -1346,7 +1763,7 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
       // A copy that carries earlier turns of an isolated conversation (Recon) is isolated for good
       // too: it holds what that conversation read. A copy of the first question carries none.
       // A copy with earlier turns also has their access level, so it keeps the level to go back to.
-      const CARRIED = ['sessionModes', 'sessionWeb', 'sessionWebLevel', 'sessionSearchDepth', 'sessionDepth', 'sessionLens', 'sessionTools', 'sessionHelpers', 'sessionToolSets', ...(plan.cut !== undefined ? ['sessionIsolated', 'sessionSandboxBase'] : [])];
+      const CARRIED = ['sessionModes', 'sessionSpaces', 'sessionWeb', 'sessionWebLevel', 'sessionSearchDepth', 'sessionDepth', 'sessionLens', 'sessionTools', 'sessionHelpers', 'sessionToolSets', 'sessionMission', ...(plan.cut !== undefined ? ['sessionIsolated', 'sessionSandboxBase'] : [])];
       const fresh = await load(appCtx, true);
       const carried = CARRIED.filter((field) => (field === 'sessionIsolated' ? readObject(fresh.value[field])[sessionId] === true : readObject(fresh.value[field])[sessionId] !== undefined));
       if (carried.length > 0) {
@@ -1478,6 +1895,9 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
     }
 
     const TOGGLE_CSS = `
+.dsh-me-held { font-size: 12px; line-height: 16px; color: var(--dsw-alias-label-secondary); flex: 0 1 auto; min-width: 200px; max-width: 420px; white-space: normal; overflow-wrap: anywhere; }
+.dsh-me-putback { font: inherit; font-size: 12px; padding: 1px 8px; margin-left: 4px; border-radius: 6px; border: 1px solid var(--dsw-alias-separator-primary, currentColor); background: transparent; color: var(--dsw-alias-label-primary); cursor: pointer; }
+.dsh-me-putback:focus-visible { outline: 2px solid var(--dsw-alias-accent-primary, currentColor); outline-offset: 1px; }
 .dsh-me-tools{display:inline-flex;gap:6px;align-items:center}
 /* Same chat box in every mode (uniformBox): the access button keeps one width, and the other controls of the seat (route badge, Scratch mark, add-on buttons) move to a second line when the row is full. */
 [data-dsh-pin] [data-slot="conversation.input.permission"] > *{min-width:156px;display:inline-flex;justify-content:flex-start}
@@ -1487,25 +1907,30 @@ html[data-dsh-nothumbs="true"] [data-slot="conversation.chat.assistant-actions"]
 [data-dsh-wrap]{flex-wrap:wrap !important;row-gap:6px}
 [data-dsh-below] [data-slot="conversation.input.left"] > :not(.dsh-me-tools):not(style),[data-dsh-wrap] [data-slot="conversation.input.left"] > :not(.dsh-me-tools):not(style){order:5}
 /* The same row in every mode (18 November): the model button (its name differs per mode; cut with "…", in full on hover) and
-   Run ("Run" or "Running") have one width in every mode, so Run, Export and the gear sit in the same place everywhere. While
+   Start Mission (or, while a Mission is on, its main button: Add note, Answer and continue, Resume) have one width in every mode, so Run, Export and the gear sit in the same place everywhere. While
    the step is chosen (data-dsh-measure, set for a moment only) the other parts whose width changes from one conversation to
    the next count at one fixed width each: the Web and Depth values ("· Off", "· Always on", "· Thorough"), "One model" / "2 models", "Tools on" / "off". So the step follows the
    box's width alone, and the real parts are never wider than counted (the caps), so the row always fits. */
 html[data-dsh-uniform="true"] .dsh-mc-trigger{width:140px;max-width:140px;box-sizing:border-box}
 html[data-dsh-uniform="true"] .dsh-mc-trigger .dsh-mc-chevron{margin-left:auto}
 html[data-dsh-uniform="true"] .dsh-ms-runbtn{min-width:92px;box-sizing:border-box;justify-content:center}
+html[data-dsh-uniform="true"] .dsh-ms-main{min-width:92px;max-width:148px;box-sizing:border-box;justify-content:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 [data-dsh-narrow] .dsh-ac-inline{display:none !important}
 [data-dsh-tiny] .dsh-mc-trigger{width:96px !important;max-width:96px !important}
 [data-dsh-tiny] .dsh-ms-runbtn{min-width:0 !important;padding:0 8px !important;gap:0 !important;font-size:0 !important}
+[data-dsh-tiny] .dsh-ms-main{min-width:0 !important;max-width:none !important;padding:0 10px !important}
+[data-dsh-tiny] .dsh-ms-main[data-short]{font-size:0 !important}
+[data-dsh-tiny] .dsh-ms-main[data-short]::after{content:attr(data-short);font-size:12px}
+[data-dsh-measure] .dsh-ms-runbtn-wrap{display:inline-flex !important;box-sizing:border-box;min-width:170px}
 [data-dsh-measure] .dsh-me-tools:not([data-f1]) .lvl{display:inline-block !important;width:6.5em !important}
 [data-dsh-measure] .dsh-me-tools:not([data-f1]) button[data-helpers] .lbl{display:inline-block;min-width:5em}
 [data-dsh-measure] .dsh-me-tools:not([data-f2]) button[data-tools] .lbl{display:inline-block;min-width:4.3em}
 html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden;text-overflow:ellipsis}
-.dsh-me-tools button{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:13px;white-space:nowrap}
-.dsh-me-tools button[aria-pressed='true']{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary);background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent)}
-.dsh-me-tools button:disabled{opacity:.5;cursor:default}
-@media (hover:hover){.dsh-me-tools button:hover:not([aria-pressed='true']):not([aria-disabled='true']){background:var(--dsw-alias-interactive-bg-hover)}.dsh-me-tools .pair[data-fixed] button[aria-pressed='false']{opacity:.5}}
-@media (max-width:760px){.dsh-me-tools button{padding:0 8px}.dsh-me-tools button .lbl{display:none}}
+.dsh-me-tools button:where(:not(.dsh-me-seat *)){display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:13px;white-space:nowrap}
+.dsh-me-tools button:where(:not(.dsh-me-seat *))[aria-pressed='true']{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary);background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent)}
+.dsh-me-tools button:where(:not(.dsh-me-seat *)):disabled{opacity:.5;cursor:default}
+@media (hover:hover){.dsh-me-tools button:where(:not(.dsh-me-seat *)):hover:not([aria-pressed='true']):not([aria-disabled='true']){background:var(--dsw-alias-interactive-bg-hover)}.dsh-me-tools .pair[data-fixed] button[aria-pressed='false']{opacity:.5}}
+@media (max-width:760px){.dsh-me-tools button:where(:not(.dsh-me-seat *)){padding:0 8px}.dsh-me-tools button:where(:not(.dsh-me-seat *)) .lbl{display:none}}
 .dsh-me-tools svg{flex:none}
 .dsh-me-tools .pair{display:inline-flex;align-items:center}
 .dsh-me-tools .pair > button:first-child{border-top-right-radius:0;border-bottom-right-radius:0}
@@ -1514,24 +1939,29 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
 .dsh-me-tools{flex:none;white-space:nowrap}
 .dsh-me-tools[data-f1]{gap:4px}
 .dsh-me-tools[data-f1] .lvl{display:none}
-.dsh-me-tools[data-f1] button:not(.more){padding:0 8px}
+.dsh-me-tools[data-f1] button:where(:not(.dsh-me-seat *)):not(.more){padding:0 8px}
 .dsh-me-tools[data-f1] .pair > button.more{width:18px}
-.dsh-me-tools[data-f1] button[data-helpers] .lbl{display:none}
-.dsh-me-tools button[data-helpers='many']{border-color:var(--dsw-alias-state-warning-primary,#d98a00);color:var(--dsw-alias-state-warning-primary,#d98a00)}
-.dsh-me-tools[data-f2] button[data-tools] .lbl{display:none}
+.dsh-me-tools[data-f1] button:where(:not(.dsh-me-seat *))[data-helpers] .lbl{display:none}
+.dsh-me-tools button:where(:not(.dsh-me-seat *))[data-helpers='many']{border-color:var(--dsw-alias-state-warning-primary,#d98a00);color:var(--dsw-alias-state-warning-primary,#d98a00)}
+.dsh-me-tools[data-f2] button:where(:not(.dsh-me-seat *))[data-tools] .lbl{display:none}
 .dsh-me-tools[data-f3] .pair[data-kind='research'] .lbl{display:none}
-.dsh-me-tools[data-f3] .pair[data-kind='depth'] .lbl{display:none}
 .dsh-me-tools[data-f4] .pair[data-kind='search'] .lbl{display:none}
-.dsh-me-tools[data-f5] button:not(.more){padding:0 6px}
+.dsh-me-tools[data-f5] button:where(:not(.dsh-me-seat *)):not(.more){padding:0 6px}
 .dsh-me-tools[data-f5] .pair > button.more{width:16px}
+/* Round 2: Depth's name, the Cowork switch's and the mode's are the last labels to go (step 5), so at 1280 px with the
+   sidebar open the row keeps them readable; Web, Tools, helpers and Deep research go to icons first. */
+.dsh-me-tools[data-f5] .pair[data-kind='depth'] .lbl{display:none}
 .dsh-me-tools .pair .lvl{opacity:.8}
 .dsh-me-pop .title{font-size:14px;line-height:22px;font-weight:500}
 .dsh-me-pop .opts{display:flex;flex-direction:column;gap:2px;margin:8px -6px 0}
-.dsh-me-pop .opts button{display:block;width:100%;text-align:left;border:0;border-radius:10px;padding:7px 10px;background:transparent;font:inherit;cursor:pointer;color:var(--dsw-alias-label-primary)}
-.dsh-me-pop .opts button:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dsh-me-pop .opts button[aria-current='true']{background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 14%, transparent)}
+.dsh-me-pop .opts > button,.dsh-me-pop .dsh-me-mrow > button{display:block;width:100%;text-align:left;border:0;border-radius:10px;padding:7px 10px;background:transparent;font:inherit;cursor:pointer;color:var(--dsw-alias-label-primary)}
+.dsh-me-pop .opts > button:hover,.dsh-me-pop .dsh-me-mrow > button:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dsh-me-pop .opts > button[aria-current='true'],.dsh-me-pop .dsh-me-mrow > button[aria-current='true']{background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 14%, transparent)}
 .dsh-me-pop .opts b{display:block;font-size:13px;line-height:18px;font-weight:600}
 .dsh-me-pop .opts small{display:block;font-size:12px;line-height:17px;color:var(--dsw-alias-label-secondary)}
+.dsh-me-pop .dsh-me-mrow{display:flex;align-items:center;gap:2px;padding-right:6px}
+.dsh-me-pop .dsh-me-mrow > button{flex:1;min-width:0}
+.dsh-me-pop .dsh-me-mrow > button:disabled,.dsh-me-pop .opts > button[data-mission]:disabled{opacity:.6;cursor:default}
 .dsh-me-pop input[type=range]{display:block;width:100%;margin:12px 0 2px;accent-color:var(--dsw-alias-brand-primary);cursor:pointer}
 .dsh-me-pop .steps{display:flex;justify-content:space-between}
 .dsh-me-pop .steps button{border:0;padding:2px 0;background:transparent;font:inherit;font-size:12px;cursor:pointer;color:var(--dsw-alias-label-secondary)}
@@ -1539,7 +1969,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
 .dsh-me-pop .seg{display:flex;gap:6px;margin-top:6px}
 .dsh-me-pop .seg button{flex:1;height:28px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:transparent;font:inherit;font-size:12px;cursor:pointer;color:var(--dsw-alias-label-secondary);white-space:nowrap}
 .dsh-me-pop .seg button[aria-pressed='true']{border-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-state-business-primary);background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent)}
-.dsh-me-tools button[data-tools='off']{border-color:var(--dsw-alias-state-warn-primary);color:var(--dsw-alias-state-warn-primary)}
+.dsh-me-tools button:where(:not(.dsh-me-seat *))[data-tools='off']{border-color:var(--dsw-alias-state-warn-primary);color:var(--dsw-alias-state-warn-primary)}
 .dsh-me-pop{position:fixed;z-index:1000;box-sizing:border-box;width:320px;max-width:calc(100vw - 24px);overflow:auto;padding:14px 16px;border-radius:16px;border:0.5px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-base));color:var(--dsw-alias-label-primary);font-size:12px;line-height:18px;box-shadow:0 8px 28px rgba(0,0,0,.28)}
 .dsh-me-pop .row{display:flex;align-items:center;gap:12px}
 .dsh-me-pop .row > span:first-child{flex:1;font-size:14px;line-height:22px}
@@ -1547,7 +1977,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
 .dsh-me-pop[data-slim]{width:272px;padding:12px 14px}
 .dsh-me-pop[data-slim] .title{font-size:13px;line-height:20px}
 .dsh-me-pop[data-slim] .opts{margin-top:4px}
-.dsh-me-pop[data-slim] .opts button{display:flex;align-items:baseline;gap:8px;padding:6px 10px}
+.dsh-me-pop[data-slim] .opts > button,.dsh-me-pop[data-slim] .dsh-me-mrow > button{display:flex;align-items:baseline;gap:8px;padding:6px 10px}
 .dsh-me-pop[data-slim] .opts b{flex:none}
 .dsh-me-pop[data-slim] .opts small{flex:1;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dsh-me-pop[data-slim] .title + .chips, .dsh-me-pop[data-slim] .sep{margin-top:10px}
@@ -1561,6 +1991,24 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
 .dsh-me-pop .sw[aria-checked='true']{background:var(--dsw-alias-brand-primary)}
 .dsh-me-pop .sw::after{content:'';display:block;width:16px;height:16px;border-radius:50%;background:var(--dsw-alias-switch-thumb, var(--dsw-alias-label-primary));transition:transform .12s ease}
 .dsh-me-pop .sw[aria-checked='true']::after{transform:translateX(16px);background:var(--dsw-alias-bg-base)}
+/* Item 4A, stage 2: the Mode list (first in the row). Its name is capped like Depth's value, so the row keeps one width. */
+.dsh-me-tools .pair[data-kind='mode'] .mname{max-width:6.5em;overflow:hidden;text-overflow:ellipsis}
+/* Fix round: the mode's name is the last label to go (step 5 since round 2), so the current mode shows on a narrow start page. */
+[data-dsh-measure] .dsh-me-tools:not([data-f5]) .pair[data-kind='mode'] .mname{display:inline-block !important;width:6.5em !important}
+.dsh-me-tools[data-f5] .pair[data-kind='mode'] .mname{display:none}
+.dsh-me-pop[data-mode-pop] .row .title{flex:1}
+.dsh-me-pop[data-mode-pop] .opts > button:disabled{opacity:.55;cursor:default}
+.dsh-me-pop[data-mode-pop] .opts > button[aria-disabled='true'] small{font-style:italic}
+.dsh-me-mfoot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;padding-top:8px;border-top:0.5px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}
+.dsh-me-mfoot button{border:0;padding:2px 0;background:transparent;font:inherit;font-size:12px;cursor:pointer;color:var(--dsw-alias-label-primary);white-space:nowrap}
+.dsh-me-mfoot button:hover{text-decoration:underline}
+.dsh-me-pop .dsh-me-linkbtn{border:0;padding:0;background:transparent;font:inherit;cursor:pointer;color:var(--dsw-alias-label-primary);text-decoration:underline}
+.dsh-me-seat{display:inline-flex;align-items:center;gap:2px}
+.dsh-me-flash{display:inline-flex;align-items:center;gap:4px;max-width:420px;padding:2px 4px 2px 8px;border-radius:8px;font-size:12px;line-height:16px;color:var(--dsw-alias-label-secondary);background:color-mix(in srgb,var(--dsw-alias-label-primary) 6%,transparent)}
+.dsh-me-flash .txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-me-flash[data-kind="error"]{color:var(--dsw-alias-state-error-primary)}
+.dsh-me-flash .x{border:0;background:transparent;color:inherit;cursor:pointer;padding:0 4px;font:inherit}
+.dsh-me-seat:empty{display:none}
 `;
     const ICON = {
       search: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3.5 12h17M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z',
@@ -1571,18 +2019,406 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
       // One chip (a model); two stacked chips (several models).
       one: 'M7 7h10v10H7zM10 4v3M14 4v3M10 17v3M14 17v3M4 10h3M4 14h3M17 10h3M17 14h3',
       many: 'M9 9h10v10H9zM5 15V5h10M12 19v2M16 19v2M19 12h2M19 16h2',
+      // Three stacked layers: a mode is a set of instructions and tools laid over the thread.
+      mode: 'M12 3 3 7.5l9 4.5 9-4.5L12 3zM3 12l9 4.5 9-4.5M3 16.5 12 21l9-4.5',
     };
     const icon = (name) => h('svg', { width: 15, height: 15, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }, h('path', { d: ICON[name] }));
+
+    // ---- Item 4A, stage 2: the Mode list in the chat box ------------------------------------------------------------
+    // With spaces live (Modes' one switch, lib/spaces.js spacesLive) the Mode list sits first under the chat box: the
+    // modes ticked for the thread's space, Plain chat first, each with one line. A pick goes through Modes itself (the
+    // route dsh-modes/mode, which calls modes.set), so a refusal comes back as a sentence. A new draft is claimed with its
+    // space's start mode as soon as it opens, so the mode picked before the first message stands.
+    const MODE_ROUTE = 'dsh-modes/mode';
+    /** @returns {string} the window's space: html[data-cws-space] (stage 3a sets it), else '' (the route maps the tab). */
+    const windowSpaceAttr = () => (typeof document === 'undefined' ? '' : document.documentElement.getAttribute('data-cws-space') ?? '');
+    /**
+     * One call to the Mode list route.
+     * @returns {Promise<object>} the answer's value; throws the route's sentence (dshKit.fail keeps any raw text for Details).
+     */
+    async function modeRoute(appCtx, sessionId, body) {
+      let response;
+      try {
+        response = await fetch(new URL(MODE_ROUTE, document.baseURI), body
+          ? { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { ...presetHeaders(appCtx), 'content-type': 'application/json' }, body: JSON.stringify({ sessionId, ...body }) }
+          : { cache: 'no-store', credentials: 'same-origin', headers: { ...presetHeaders(appCtx, sessionId), 'x-dsh-space': windowSpaceAttr() } });
+      } catch (error) {
+        throw dshKit.fail(error);
+      }
+      let data = null;
+      try { data = await response.json(); } catch { data = null; }
+      if (!response.ok && !data) throw dshKit.fail(`error ${response.status}`);
+      if (!data || data.ok === false) throw dshKit.fail(data?.error ?? `error ${response.status}`);
+      return data.value;
+    }
+
+    // ---- Item 4A, stage 6b (J3): a message refused because the thread's model is an engine comes back ---------------
+    /** The route the chat box tells that it took the refused message back (Modes then deletes the text). */
+    const ENGINE_HELD_TAKEN_ROUTE = 'dsh-modes/engine-held-taken';
+    /** A stand-in for `useInput` when the app gives none: the box's text is unknown (so it is never overwritten). */
+    const noInput = () => undefined;
+    /**
+     * What the chat box does with `view.engineHeldDraft` ({id, text}, offered only to this thread's own chat box):
+     * - the box is empty and the app gives `setDraft`: the text goes back at once, Modes is told, the line says so
+     *   (`view.engineHeld`);
+     * - else the line `view.engineHeldKept` with a Put back button: it asks before replacing text in the box; without
+     *   `setDraft` it copies the text and says where to paste it.
+     * The text is never logged. Each kept text (by id) is put back at most once.
+     * @returns {{held: {id: string, text: string} | null, putBack: () => void, copied: boolean}}
+     */
+    function useEnginePutBack({ appCtx, sessionId, view, inputActions, useInput, poke }) {
+      const useBox = typeof useInput === 'function' ? useInput : noInput;
+      const draft = useBox((state) => (typeof state?.draft === 'string' ? state.draft : undefined));
+      const phase = useBox((state) => (typeof state?.phase === 'string' ? state.phase : ''));
+      const [taken, setTaken] = useState(() => new Set());
+      const [copied, setCopied] = useState(false);
+      const offered = view?.engineHeldDraft && typeof view.engineHeldDraft === 'object' && typeof view.engineHeldDraft.id === 'string' && typeof view.engineHeldDraft.text === 'string' ? view.engineHeldDraft : null;
+      const held = offered && !taken.has(offered.id) ? offered : null;
+      const tell = useCallback((id) => {
+        setTaken((before) => new Set(before).add(id));
+        fetch(new URL(ENGINE_HELD_TAKEN_ROUTE, document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId, id }) })
+          .catch(() => { /* the text expires by itself after 10 minutes */ })
+          .finally(() => poke?.());
+      }, [sessionId, poke]);
+      const canSet = typeof inputActions?.setDraft === 'function';
+      const boxEmpty = typeof draft === 'string' && draft.trim() === '';
+      // The box is empty: put it back at once.
+      useEffect(() => {
+        if (!held || !canSet || !boxEmpty) return;
+        try {
+          inputActions.setDraft(held.text);
+        } catch {
+          return;
+        }
+        tell(held.id);
+      }, [held?.id, canSet, boxEmpty]);
+      // Stage 7 (6b lab leftover): the engine refusal line goes at once when a message goes out; a newer refusal (a later
+      // `engineHeldAt`) shows it again.
+      const [lineSentAt, setLineSentAt] = useState(-1);
+      const lineAt = Number(view?.engineHeldAt) || 0;
+      // Review: another thread in the same chat box starts with nothing sent.
+      useEffect(() => { setLineSentAt(-1); }, [sessionId]);
+      // A message just went out: Modes may refuse its first step, so the Mode list is read again soon (not only every 30 s).
+      const lastPhase = useRef(phase);
+      useEffect(() => {
+        const before = lastPhase.current;
+        lastPhase.current = phase;
+        if (phase === 'sending' && before !== 'sending') setLineSentAt(lineAt);
+        if (before !== 'sending' || phase === 'sending' || typeof poke !== 'function') return undefined;
+        const timers = [setTimeout(() => poke(), 1500), setTimeout(() => poke(), 5000)];
+        return () => timers.forEach(clearTimeout);
+      }, [phase]);
+      const putBack = async () => {
+        if (!held) return;
+        if (canSet) {
+          // Asked with dshKit.ask: the desktop app shows no native confirm box, so the button would do nothing.
+          const t = appCtx.locale.bind('modes');
+          if (!boxEmpty && !(await dshKit.ask({ title: t('eh.replace'), ok: t('eh.replace.ok'), cancel: t('mt.cancel') }))) return;
+          try {
+            inputActions.setDraft(held.text);
+          } catch {
+            return;
+          }
+          tell(held.id);
+          return;
+        }
+        // No setDraft from the app: copy it, and say where to paste it.
+        void navigator.clipboard?.writeText?.(held.text)?.then(() => {
+          setCopied(true);
+          tell(held.id);
+        }).catch(() => {});
+      };
+      return { held, putBack, copied, lineHidden: lineSentAt >= 0 && lineAt <= lineSentAt };
+    }
+    /** Puts the new thread's mode on the page for the start page's chips ('' takes it away). */
+    function publishDraftMode(modeId) {
+      if (typeof document === 'undefined') return;
+      const root = document.documentElement;
+      if (modeId) root.setAttribute('data-dsh-draft-mode', modeId);
+      else root.removeAttribute('data-dsh-draft-mode');
+    }
+    /**
+     * The thread's Mode list, read again when Modes' settings change (a /mode switch, another window) and every 30 s.
+     * A new draft that no one has claimed is claimed once with its space's start mode.
+     * @returns {{view: object | null, setView: (view: object) => void}}
+     */
+    function useModeView(appCtx, sessionId) {
+      const [view, setView] = useState(null);
+      // Fix round 2: a one-line note beside the Mode button (Recon's room, a /mode reply on a draft); it hides by itself.
+      const [flash, setFlash] = useState(null);
+      const started = useRef(new Set());
+      const shownNotes = useRef(new Set());
+      // Stage 6b: a read now (after a message went out), for the engine put-back.
+      const pokeRef = useRef(null);
+      const poke = useCallback(() => pokeRef.current?.(), []);
+      useEffect(() => {
+        if (!sessionId) { setView(null); return undefined; }
+        let alive = true;
+        let quick = null;
+        setView(null);
+        setFlash(null);
+        /** What a fresh answer asks of the window: follow a Recon-room thread to Recon, show a /mode reply once. */
+        const notice = (value) => {
+          if (!value?.shown) return;
+          const space = windowSpaceAttr();
+          if (value.room && space && space !== 'recon' && !shownNotes.current.has(`room ${sessionId}`)) {
+            shownNotes.current.add(`room ${sessionId}`);
+            try { window.dispatchEvent(new CustomEvent('dsh-cowork-shell:show-space', { cancelable: true, detail: { space: 'recon' } })); } catch { /* no sidebar */ }
+            setFlash({ key: `room ${sessionId}`, kind: 'room' });
+          }
+          const reply = value.reply;
+          if (reply && typeof reply.id === 'string' && !shownNotes.current.has(reply.id)) {
+            shownNotes.current.add(reply.id);
+            setFlash({ key: reply.id, kind: reply.kind === 'error' ? 'error' : 'reply', text: String(reply.text ?? '').slice(0, 400) });
+          }
+        };
+        const read = async () => {
+          try {
+            let value = await modeRoute(appCtx, sessionId);
+            if (!alive) return;
+            // Lab re-check fix (6a, open item 25): a reused draft claimed in another space (Plain chat from Chat, shown
+            // again in Devices) is claimed again for the window's space at once, not only when the Mode list is opened.
+            const windowSpace = windowSpaceAttr();
+            const elsewhere = Boolean(windowSpace) && typeof value?.space === 'string' && value.space !== '' && value.space !== windowSpace;
+            const startKey = `${sessionId}\u0000${windowSpace}`;
+            if (value?.shown && value.fresh && (!value.claimed || elsewhere) && !started.current.has(startKey)) {
+              started.current.add(startKey);
+              // With spaces the window's space alone decides (Settings → Spaces' start mode); the tab is a hint only in the
+              // old tab layout, where data-cws-space is not set.
+              const space = windowSpace;
+              const tab = space || typeof document === 'undefined' ? '' : document.documentElement.getAttribute('data-cws-tab') ?? '';
+              value = await modeRoute(appCtx, sessionId, space ? { action: 'start', space } : { action: 'start', space, tab }).catch(() => value);
+              if (!alive) return;
+            }
+            setView(value);
+            notice(value);
+            // A draft is read again every few seconds while it shows: /mode there changes nothing the app tells us about.
+            clearTimeout(quick);
+            if (value?.shown && value.fresh) quick = setTimeout(() => { if (alive && document.visibilityState !== 'hidden') watcher.poke(); }, 4000);
+          } catch {
+            // An older Modes without the route, or the app is busy: the list stays as it was (none at first).
+          }
+        };
+        const watcher = dshPoll.loop(() => read(), { every: 30000 });
+        const off = dshPoll.onChange(appCtx, (ns) => { if (ns === NS) watcher.poke(); });
+        pokeRef.current = () => { if (alive) watcher.poke(); };
+        return () => { alive = false; pokeRef.current = null; clearTimeout(quick); watcher.stop(); off(); };
+      }, [appCtx, sessionId]);
+      // Round 2 (UI): the start page's starter chips follow the mode picked for the new thread (plan 2.5). The Cowork
+      // sidebar draws them, so the draft's mode is put on the page (html[data-dsh-draft-mode]) while a new thread shows.
+      const draftMode = view?.shown && view.fresh && typeof view.current === 'string' ? view.current : '';
+      useEffect(() => {
+        publishDraftMode(draftMode);
+        return () => publishDraftMode('');
+      }, [draftMode]);
+      return { view, setView, flash, clearFlash: () => setFlash(null), poke };
+    }
+
+    /**
+     * Fix round 2: one line beside the Mode button that hides by itself after a while: a thread whose folder is Recon's
+     * room (the window followed it to Recon), or the reply to /mode on a new thread (the app shows none there).
+     */
+    function ModeFlash({ t, appCtx, flash, onDone }) {
+      useEffect(() => {
+        const timer = setTimeout(onDone, flash.kind === 'room' ? 15000 : 10000);
+        return () => clearTimeout(timer);
+      }, [flash.key]);
+      const room = flash.kind === 'room';
+      return h('span', { className: 'dsh-me-flash', role: flash.kind === 'error' ? 'alert' : 'status', 'data-kind': flash.kind, 'data-mode-flash': '' },
+        h('span', { className: 'txt' }, room ? t('mflash.room') : flash.text),
+        room ? h(tgUi().Info, { title: t('mflash.room.title'), what: t('mflash.room.what'), when: t('mflash.room.when'), change: t('mflash.room.change'), lang: presetLang(appCtx) }) : null,
+        h('button', { type: 'button', className: 'x', 'aria-label': t('mflash.close'), title: t('mflash.close'), onClick: onDone }, '×'));
+    }
+
+    /** The Mode button and its list (Depth's look: a pill in the row, a list above it). */
+    function ModeButton({ t, appCtx, sessionId, view, onView }) {
+      const [open, setOpen] = useState(false);
+      const [busy, setBusy] = useState(false);
+      const [problem, setProblem] = useState(null);
+      const [place, setPlace] = useState({ left: 12, bottom: 80, maxHeight: 520 });
+      const button = useRef(null);
+      const panel = useRef(null);
+      useLayoutEffect(() => {
+        if (!open) return undefined;
+        const rect = button.current?.getBoundingClientRect();
+        if (rect) setPlace({ left: Math.max(12, Math.min(rect.left - 8, window.innerWidth - 332)), bottom: window.innerHeight - rect.top + 8, maxHeight: Math.max(200, rect.top - 24) });
+        const away = (event) => {
+          if (panel.current?.contains(event.target) || button.current?.contains(event.target)) return;
+          setOpen(false);
+        };
+        const key = (event) => event.key === 'Escape' && setOpen(false);
+        document.addEventListener('pointerdown', away, true);
+        document.addEventListener('keydown', key, true);
+        return () => {
+          document.removeEventListener('pointerdown', away, true);
+          document.removeEventListener('keydown', key, true);
+        };
+      }, [open]);
+      const list = Array.isArray(view?.modes) ? view.modes : [];
+      const current = list.find((mode) => mode.id === view?.current);
+      // Fix round: Modes names the current mode (also one its space no longer offers), never its inner id.
+      const name = current?.label ?? (view?.currentLabel || view?.current || '');
+      const notOffered = Boolean(view?.current) && !current && view?.currentOffered === false;
+      const spaceName = t(`mspace.${view?.space}`) === `mspace.${view?.space}` ? String(view?.space ?? '') : t(`mspace.${view?.space}`);
+      const guardedSpace = ['devices', 'recon', 'workshop'].includes(String(view?.space ?? ''));
+      const pick = async (modeId) => {
+        if (busy) return;
+        if (modeId === view?.current) { setOpen(false); return; }
+        setBusy(true);
+        setProblem(null);
+        try {
+          const next = await modeRoute(appCtx, sessionId, { action: 'pick', modeId });
+          onView(next);
+          setOpen(false);
+        } catch (error) {
+          // Kept open: the sentence says what went wrong and what to do (a raw reply only behind Details).
+          setProblem(error);
+        } finally {
+          setBusy(false);
+        }
+      };
+      const opened = t('mlist.open').replace('{0}', name);
+      return h('span', { className: 'pair', 'data-kind': 'mode' },
+        h('button', {
+          ref: button, type: 'button', 'aria-expanded': open, 'aria-haspopup': 'dialog', disabled: busy, 'data-mode': view?.current ?? '',
+          title: opened, 'aria-label': opened, onClick: () => { setOpen(!open); setProblem(null); },
+        }, icon('mode'), h('span', { className: 'lbl mname' }, name)),
+        open
+          ? ReactDOM.createPortal(
+              h('div', { ref: panel, className: 'dsh-me-pop', 'data-mode-pop': '', role: 'dialog', 'aria-label': t('composer.mode'), style: { left: place.left, bottom: place.bottom, maxHeight: place.maxHeight } },
+                h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
+                h('div', { className: 'row' },
+                  h('span', { className: 'title' }, t('composer.mode')),
+                  h(tgUi().Info, { title: t('composer.mode'), what: guardedSpace ? `${t('mlist.what')} ${t('mlist.guarded').replace('{0}', spaceName)}` : t('mlist.what'), when: t('mlist.when'), change: t('mlist.change'), lang: presetLang(appCtx) })),
+                h('p', { className: 'hint' }, t('mlist.in').replace('{0}', spaceName)),
+                // The thread's own mode when its space no longer offers it: shown first, marked, not a choice.
+                notOffered
+                  ? h('div', { className: 'opts', 'data-mode-current': '' },
+                      h('button', { type: 'button', 'aria-current': 'true', 'aria-disabled': 'true', disabled: true, 'data-mode-id': view.current },
+                        h('b', null, name), h('small', null, t('mlist.notoffered').replace('{0}', spaceName))))
+                  : null,
+                list.length === 0
+                  ? (view?.needs
+                      // A guarded space whose own mode is switched off: which add-on to switch on, and a link to it.
+                      ? h('p', { className: 'hint', role: 'status' }, t('mlist.needs').replace('{0}', view.needs.addon).replace('{1}', spaceName), ' ',
+                          h('button', { type: 'button', className: 'dsh-me-linkbtn', onClick: () => { setOpen(false); openModesPage(appCtx, view.needs.section); } }, t('mlist.needs.open').replace('{0}', view.needs.addon)))
+                      : h('p', { className: 'hint', role: 'status' }, t('mlist.none')))
+                  : h('div', { className: 'opts', role: 'listbox', 'aria-label': t('composer.mode') },
+                      list.map((mode) => h('button', {
+                        key: mode.id, type: 'button', role: 'option', 'data-mode-id': mode.id, 'aria-selected': mode.id === view?.current, 'aria-current': String(mode.id === view?.current),
+                        'aria-disabled': mode.greyed ? 'true' : undefined, disabled: busy || mode.greyed, title: mode.greyed ? mode.reason : undefined,
+                        onClick: () => void pick(mode.id),
+                      }, h('b', null, mode.label), h('small', null, mode.greyed ? mode.reason : mode.desc),
+                        // Fix round (6a review): what the mode loses under this space's rules (Devices, Workshop), or that it is sealed (Recon).
+                        !mode.greyed && mode.loses ? h('small', { 'data-warn': 'true', 'data-mode-loses': mode.id }, mode.loses) : null))),
+                problem ? h(tgNote(), { error: problem }) : null,
+                h('div', { className: 'dsh-me-mfoot' },
+                  h('span', null, view?.fresh ? t('mlist.foot.new') : t('mlist.foot')),
+                  h('button', { type: 'button', onClick: () => { setOpen(false); openModesPage(appCtx); } }, t('mlist.manage')))),
+              document.body,
+            )
+          : null);
+    }
+    /** Opens Settings → Modes (nothing happens where the Settings window cannot be reached from here). */
+    function openModesPage(appCtx, section = 'modes') {
+      try {
+        const store = appCtx.slots.entries('sidebar.settings').find((item) => item.store)?.store?.create?.();
+        const actions = store?.actions;
+        if (typeof actions?.openSection === 'function') return void actions.openSection(section);
+        if (typeof actions?.open === 'function') actions.open();
+        if (typeof actions?.select === 'function') actions.select(section);
+      } catch {
+        /* the Settings window cannot be opened from here: the button's words name the page */
+      }
+    }
+
+    /**
+     * The quiet line in a thread after a turn where the mode was changed ("Mode changed to Research"), from Modes'
+     * `sessionModeChanges`. One shared read for every line on screen.
+     */
+    const changeLines = { view: null, users: 0, stop: null, listeners: new Set() };
+    async function readChangeLines(appCtx) {
+      try {
+        const { value } = await load(appCtx);
+        changeLines.view = value;
+        for (const listener of changeLines.listeners) listener();
+      } catch {
+        /* read again at the next change */
+      }
+    }
+    function ModeChangeLine({ appCtx, sessionId, turn }) {
+      const t = appCtx.locale.bind('modes');
+      const [, bump] = useState(0);
+      useEffect(() => {
+        const listener = () => bump((n) => n + 1);
+        changeLines.listeners.add(listener);
+        changeLines.users += 1;
+        if (changeLines.users === 1) {
+          void readChangeLines(appCtx);
+          const watcher = dshPoll.loop(() => readChangeLines(appCtx), { every: 30000, immediate: false });
+          const off = dshPoll.onChange(appCtx, (ns) => { if (ns === NS) watcher.poke(); });
+          changeLines.stop = () => { watcher.stop(); off(); };
+        }
+        return () => {
+          changeLines.listeners.delete(listener);
+          changeLines.users -= 1;
+          if (changeLines.users === 0) changeLines.stop?.();
+        };
+      }, [appCtx]);
+      const number = Number(turn?.turn);
+      const view = changeLines.view;
+      if (!view || !sessionId || !Number.isInteger(number)) return null;
+      const line = modeChangeAt(readObject(view.sessionModeChanges)[sessionId], number);
+      if (!line) return null;
+      const { modes } = describeModes(view, sessionId);
+      const label = modeNameIn(modes.find((mode) => mode.id === line.to) ?? { id: line.to, label: line.to }, presetLang(appCtx));
+      return h(React.Fragment, null,
+        h('style', { dangerouslySetInnerHTML: { __html: MODE_LINE_CSS } }),
+        h('div', { className: 'dsh-me-modeline', role: 'note', 'data-mode-change': line.to }, h('span', null, t('mlist.changed').replace('{0}', label))));
+    }
+    /** @returns {{to: string} | undefined} the change recorded after this turn (the last one, as lib/spaces.js keeps one per turn). */
+    function modeChangeAt(list, turn) {
+      if (!Array.isArray(list)) return undefined;
+      return list.filter((row) => row && row.turn === turn && typeof row.to === 'string' && row.to !== '').at(-1);
+    }
+    const MODE_LINE_CSS = `
+/* Fix round: the line sits below the turn's copy / retry / usage row, so it never reads as part of the answer. The app's
+   turn tail is a column; the slot's box is opened up only where the line is. */
+[data-turn-tail] > [data-slot='conversation.chat.turnTail']:has(> .dsh-me-modeline){display:contents}
+[data-turn-tail] > [data-slot='conversation.chat.turnTail'] > .dsh-me-modeline{order:1}
+.dsh-me-modeline{display:flex;align-items:center;gap:10px;margin:10px 0 2px;color:var(--dsw-alias-label-caption, var(--dsw-alias-label-tertiary));font-size:12px;line-height:18px}
+.dsh-me-modeline::before,.dsh-me-modeline::after{content:'';flex:1;border-top:0.5px solid var(--dsw-alias-border-l2)}
+.dsh-me-modeline > span{flex:none;max-width:80%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+`;
 
     /**
      * Search and Deep research switches for the open conversation. They are stored per Session in
      * the Modes settings (`sessionWeb`, `sessionResearch`); the host applies them at the next turn boundary.
      */
-    function ToggleControl({ appCtx, sessionId }) {
+    function ToggleControl({ appCtx, sessionId, inputActions, useInput }) {
       const t = appCtx.locale.bind('modes');
       const [state, setState] = useState({ status: 'loading', view: null, busy: false });
-      // Whether Mission's Long run card can be opened (step 61); a hook, so before any early return.
+      // Item 4A, stage 2: the Mode list of this thread's space (shown only while spaces are live, with the Cowork sidebar).
+      const modeList = useModeView(appCtx, sessionId);
+      // Item 4A, stage 6b (J3): the slot's input props (the app's chat box), for putting a refused message back.
+      const engineBack = useEnginePutBack({ appCtx, sessionId, view: modeList.view, inputActions, useInput, poke: modeList.poke });
+      const modeShown = modeList.view?.shown === true;
+      // Whether Mission is there to start and set (step 61); hooks, so before any early return.
       const missionHere = useMissionLong();
+      // Whether a Mission is on in this conversation (stage B, 19 November): Depth then reads "· Mission".
+      const missionOn = useMissionOn(sessionId);
+      // Why no Mission can start in this conversation ('' when one can): Mission says so; Depth then greys its option.
+      const missionCannot = useMissionCannot(sessionId);
+      // Mission chosen in Depth for this conversation (Mission stage D): only a choice, kept per conversation.
+      const missionChosen = state.view ? readObject(state.view.sessionMission)[sessionId] === true : false;
+      // The Depth button that was used for the last Mission pick (said once with the event, then forgotten).
+      const picked = useRef(null);
+      useEffect(() => {
+        if (!sessionId || !state.view) return;
+        const now = picked.current?.sessionId === sessionId ? picked.current : null;
+        if (now && missionChosen) picked.current = null;
+        announceDepthMission(sessionId, missionChosen, now && missionChosen ? now : null);
+      }, [sessionId, missionChosen, state.view !== null]);
       const refresh = useCallback(async () => {
         try {
           const loaded = await load(appCtx);
@@ -1602,10 +2438,20 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
       // window's width, because the row also holds the app's own buttons and the model's name.
       const root = useRef(null);
       const shown = state.status === 'ready' && Boolean(sessionId) && state.view?.sessionWeb !== undefined;
-      const marks = shown ? `${state.view.searchDepth}|${state.view.sessionSearchDepth}|${state.view.sessionDepth}|${state.view.sessionLens}|${state.view.sessionWeb}|${state.view.sessionTools}` : '';
+      const marks = shown ? `${state.view.searchDepth}|${state.view.sessionSearchDepth}|${state.view.sessionDepth}|${state.view.sessionLens}|${state.view.sessionWeb}|${state.view.sessionTools}|${modeShown ? modeList.view.current : ''}` : '';
       const uniform = state.view?.uniformBox !== false;
       // The Cowork sidebar's place chip reads this (its order and the folder name only with the switch on).
       useEffect(() => { document.documentElement.setAttribute('data-dsh-uniform', String(uniform)); }, [uniform]);
+      // Recon and Devices colours (owner point 20): this conversation's space, marked on the window or on its
+      // Split pane before the screen is drawn, so a switch never shows the last conversation's colour.
+      const shownTab = useCwsTab();
+      // Item 4A, stage 3a: with the space buttons the colours follow the thread's space, not its mode.
+      const shownSpace = useCwsAttr('data-cws-space');
+      if (state.view) spaceCache.view = state.view;
+      const spaceView = state.view ?? spaceCache.view;
+      const windowSpace = spaceFor(spaceView, sessionId, shownTab, { live: Boolean(shownSpace), space: shownSpace });
+      const paneSpace = spaceFor(spaceView, sessionId, '', { live: Boolean(shownSpace), space: '' });
+      useLayoutEffect(() => markSpace(root.current, document, sessionId, { window: windowSpace, pane: paneSpace }), [windowSpace, paneSpace, sessionId, shown]);
       useLayoutEffect(() => {
         const el = root.current;
         if (!el) return undefined;
@@ -1630,6 +2476,13 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
           const style = getComputedStyle(item);
           return style.minWidth === '0px' && Number(style.flexShrink) > 0 && item.scrollWidth > item.clientWidth + 1;
         };
+        // Round 2: every shown item of a group on the same line, and nothing running past its edge.
+        const oneLine = (group) => {
+          const items = itemsOf(group).filter((item) => item.getBoundingClientRect().width > 0);
+          if (items.length === 0) return true;
+          const top = items[0].getBoundingClientRect().top;
+          return items.every((item) => Math.abs(item.getBoundingClientRect().top - top) <= 8) && group.scrollWidth <= group.clientWidth + 1;
+        };
         // The first line overflows, or a button on it is squeezed.
         const crowded = (first) => first.scrollWidth > first.clientWidth + 1 || itemsOf(first).some(squeezed);
         const wrapped = () => {
@@ -1640,7 +2493,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
           return crowded(first);
         };
         // Steps: 1 tighter and no step name, 2 "Tools" as an icon, 3 "Deep research" as an icon,
-        // 4 "Search" as an icon, 5 tightest.
+        // 4 "Search" as an icon, 5 tightest, and Depth, the mode and the Cowork switch as icons (round 2: they go last).
         const LEVELS = 5;
         const set = (level) => {
           for (let step = 1; step <= LEVELS; step += 1) el.toggleAttribute(`data-f${step}`, step <= level);
@@ -1711,6 +2564,15 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
             if (compact) row.setAttribute('data-model-compact', '');
             if (row.getBoundingClientRect().width < 560) row.removeAttribute('data-dsh-pin');
             level = firstFit();
+            // Round 2: the right-hand group is on a line of its own anyway, so the core buttons have the whole first line:
+            // the first step at which they share one line (the app's access button may be squeezed there; that is the
+            // app's own measuring), so the mode's name, Depth and the Cowork switch keep their words at 1280 px.
+            if (level < 0) {
+              for (let step = 0; step <= LEVELS; step += 1) {
+                set(step);
+                if (oneLine(left)) { level = step; break; }
+              }
+            }
             if (level < 0) {
               for (let step = 0; step <= LEVELS; step += 1) {
                 set(step);
@@ -1743,7 +2605,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         };
         // Narrow window (1.0 review H7): the right-hand group is wider than the row and pushed Send off the screen at 375 px.
         // Below 560 px the activity rings go (the Activity line still shows what is running); below 400 px the model button
-        // and Long run shrink too. Send never moves.
+        // and Start Mission (or the Mission's main button) shrink too. Send never moves.
         const markNarrow = () => {
           const width = row.getBoundingClientRect().width;
           if (width <= 0) return;
@@ -1773,8 +2635,13 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
 
       // Older host halves have no switches; show nothing then.
       if (state.status !== 'ready' || !sessionId || !state.view || state.view.sessionWeb === undefined) return null;
-      const { current } = describeModes(state.view, sessionId);
-      const modeDef = readObject(state.view.modes)[current] ?? readObject(state.view.extraModes)[current] ?? BUILTIN[current] ?? {};
+      const { current } = describeModes(state.view, sessionId, { live: modeList.view?.live === true, start: typeof modeList.view?.current === 'string' ? modeList.view.current : '' });
+      // Item 4A, stage 6a (REGRESSION 19): the mode as it applies in the thread's space (the Mode list's view, from the
+      // host's modeView): sealed in Recon (Recon's Web ticks), guarded in Devices and Workshop, or held without tools.
+      const effective = modeList.view?.effective && typeof modeList.view.effective === 'object' ? modeList.view.effective : null;
+      const ownDef = readObject(state.view.modes)[current] ?? readObject(state.view.extraModes)[current] ?? BUILTIN[current] ?? ADDED_MODES[current] ?? {};
+      const modeDef = effective ? { ...ownDef, isolated: effective.isolated === true, tools: effective.tools ?? ownDef.tools, sandbox: effective.sandbox ?? ownDef.sandbox } : ownDef;
+      const heldLine = effective?.held?.text ? String(effective.held.text) : '';
       const tools = modeDef.tools ?? 'all';
       const chosenWeb = readObject(state.view.sessionWeb)[sessionId];
       const web = typeof chosenWeb === 'boolean'
@@ -1833,9 +2700,22 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
       };
       // Research and Scout always have the web: their Web selector cannot pick Off.
       // A conversation once isolated (Recon) and now in a tab that is not is locked by the host (heldMode): no tools.
-      const lockedHere = readObject(state.view.sessionIsolated)[sessionId] === true && modeDef.isolated !== true;
+      const lockedHere = effective
+        ? Boolean(effective.held) || ['isolated-locked', 'isolated-late'].includes(String(modeList.view?.current ?? ''))
+        : readObject(state.view.sessionIsolated)[sessionId] === true && modeDef.isolated !== true;
       const researchTab = Array.isArray(tools) && tools.includes('deep_research');
       const sessionDepthNow = depthNow(state.view, sessionId);
+      /** Choosing Mission in Depth (Mission stage D): it only selects it; Start Mission then starts it. */
+      const chooseMission = (from) => {
+        picked.current = { sessionId, from };
+        // Already chosen: nothing to write; say it again so Start Mission shows its tip and the chat box gets the focus.
+        if (missionChosen) {
+          announceDepthMission(sessionId, true, picked.current);
+          picked.current = null;
+          return;
+        }
+        void pickSetting('mission', true);
+      };
       /** A pick of the Web or Depth button (what it writes: settingOps). */
       const pickSetting = async (kind, picked) => {
         if (state.busy) return;
@@ -1859,6 +2739,31 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
       return h(React.Fragment, null,
         h('style', { dangerouslySetInnerHTML: { __html: TOGGLE_CSS } }),
         h('span', { className: 'dsh-me-tools', ref: root },
+          // Item 4A, stage 2: the Mode list first (only while spaces are live).
+          modeShown ? h(ModeButton, { t, appCtx, sessionId, view: modeList.view, onView: modeList.setView }) : null,
+          modeShown && modeList.flash ? h(ModeFlash, { t, appCtx, flash: modeList.flash, onDone: modeList.clearFlash }) : null,
+          // Item 4A, stage 6a: a thread held without tools by its space (its guard off or too old) says what to switch on.
+          heldLine ? h('span', { className: 'dsh-me-held', role: 'note', 'data-held': effective?.held?.reason ?? '', title: heldLine }, heldLine) : null,
+          // Fix round (6a review, 2.7 SPACE_WAIT): the first message went on before the thread's space was known.
+          modeList.view?.spaceWait ? h('span', { className: 'dsh-me-held', role: 'note', 'data-space-wait': '', title: String(modeList.view.spaceWait) }, String(modeList.view.spaceWait)) : null,
+          // Stage 6b (J11, RUN_HELD): an automation's run its guarded space could not take now; nothing ran.
+          modeList.view?.runHeld ? h('span', { className: 'dsh-me-held', role: 'note', 'data-run-held': '', title: String(modeList.view.runHeld) }, String(modeList.view.runHeld)) : null,
+          // Stage 6a leftovers: a step on an engine model was refused (Recon, Devices, Workshop keep their own rules).
+          // Stage 6b (J3): its text went back into the chat box (the line says so), or waits for Put back.
+          engineBack.held && modeList.view?.engineHeldKept
+            ? h('span', { className: 'dsh-me-held', role: 'note', 'data-engine-held': 'kept', title: String(modeList.view.engineHeldKept) },
+              String(modeList.view.engineHeldKept), ' ',
+              h('button', { type: 'button', className: 'dsh-me-putback', 'data-engine-putback': '', 'aria-label': t('eh.putback'), 'aria-description': t('eh.putback.title'), title: t('eh.putback.title'), onClick: engineBack.putBack }, t('eh.putback')),
+              // Review finding: short label + (i).
+              // Stage 6b lab fix: the pop-up goes to the page body (`portal`), so the chat box's own box cannot push it
+              // off the window or move the box.
+              ' ', h(tgUi().Info, { title: t('eh.putback'), what: t('eh.putback.what'), when: t('eh.putback.when'), change: t('eh.putback.change'), lang: presetLang(appCtx), portal: true, side: 'above' }))
+            : engineBack.copied
+              ? h('span', { className: 'dsh-me-held', role: 'status', 'data-engine-held': 'copied' }, t('eh.copied'))
+              : modeList.view?.engineHeld && !engineBack.lineHidden ? h('span', { className: 'dsh-me-held', role: 'note', 'data-engine-held': '', title: String(modeList.view.engineHeld) }, String(modeList.view.engineHeld)) : null,
+          // Item 4A, stage 4: a seat right after the Mode list for the Cowork sidebar's Cowork switch (a new Chat thread) or
+          // its place label (a started one). The sidebar draws into it; the row's own button style stays out of it.
+          modeShown ? h('span', { className: 'dsh-me-seat', 'data-dsh-seat': 'place', 'data-session': sessionId }) : null,
           // The Web selector: the same in every tab (Research and Scout cannot pick Off: searching is their work).
           // A Recon conversation moved into another tab is locked by the host with no tools at all: Off, greyed.
           h(WebSources, {
@@ -1871,13 +2776,16 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
           // owner's rule); only its list texts fit the tab. While all tools are off nothing is sent: with the same
           // chat box in every mode it stays in its place, greyed out (like Web); without, it goes, as before.
           off && !uniform ? null : h(DepthButton, {
-            t, depth: sessionDepthNow, kind: depthKind(modeDef), busy: state.busy, disabled: off,
+            t, depth: sessionDepthNow, kind: depthKind(modeDef), busy: state.busy, disabled: off, missionOn, chosen: missionChosen, missionCannot,
             lens: lensNow(state.view, sessionId), own: ownLensesOf(state.view.ownLenses), webOff: !researchTab && !web,
             onPick: (picked) => void pickSetting('depth', picked),
             onPickLens: (picked) => void pickSetting('lens', picked),
-            // The last stop opens Mission's Long run card (Long run part, step 61): every tab but Recon (also a Recon
-            // conversation moved elsewhere), and only while Mission is on.
-            // Recon too (16 November): Mission keeps its run inside Recon's rules.
+            // Mission (the fourth option) and Mission settings… (Mission's settings form for this chat). Only while the
+            // Mission add-on is on, and never in a Recon conversation moved elsewhere. Recon too (16 November).
+            // Mission stage D (20 November, the owner's point 16): choosing Mission only SELECTS it (sessionMission);
+            // nothing starts and nothing asks. Start Mission beside Send is the only start. `from` is the Depth button in
+            // this chat box, so Mission's own button in the same box (Split pane) shows its tip and focuses that chat box.
+            onChooseMission: !lockedHere && missionHere ? (from) => chooseMission(from) : undefined,
             onLongRun: !lockedHere && missionHere ? () => window.dispatchEvent(new CustomEvent('dsh-mission:long', { detail: { sessionId } })) : undefined,
           }),
           h(HelpersButton, {
@@ -1993,8 +2901,38 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         else lenses[sessionId] = picked;
         return [{ op: 'set', path: ['sessionLens'], value: JSON.stringify(lenses) }];
       }
+      if (kind === 'mission') {
+        // Mission stage D: Mission chosen in Depth for this conversation only. The conversation's Depth (sessionDepth)
+        // and where new conversations start (searchDepth) stay as they are: Send keeps talking at that Depth.
+        const chosen = { ...readObject(current.sessionMission), [sessionId]: true };
+        return [{ op: 'set', path: ['sessionMission'], value: JSON.stringify(chosen) }];
+      }
       const depths = { ...readObject(current.sessionDepth), [sessionId]: picked };
-      return [{ op: 'set', path: ['sessionDepth'], value: JSON.stringify(depths) }, { op: 'set', path: ['searchDepth'], value: picked }];
+      const ops = [{ op: 'set', path: ['sessionDepth'], value: JSON.stringify(depths) }, { op: 'set', path: ['searchDepth'], value: picked }];
+      // Quick, Standard or Thorough clears a Mission choice.
+      const chosen = readObject(current.sessionMission);
+      if (Object.hasOwn(chosen, sessionId)) {
+        const next = { ...chosen };
+        delete next[sessionId];
+        ops.push({ op: 'set', path: ['sessionMission'], value: JSON.stringify(next) });
+      }
+      return ops;
+    }
+    /**
+     * Mission chosen in Depth, said to Mission's client (Mission stage D): window.__dshDepthMission[sessionId] and the
+     * event 'dsh-modes:depth-mission' {sessionId, on, from?, picked?}. `from` (the Depth button used) and `picked` come
+     * only right after a pick: Start Mission in that chat box then shows its tip and focuses the chat box.
+     */
+    function announceDepthMission(sessionId, on, pick) {
+      try {
+        const all = window.__dshDepthMission && typeof window.__dshDepthMission === 'object' ? window.__dshDepthMission : {};
+        all[sessionId] = on === true;
+        window.__dshDepthMission = all;
+        const detail = { sessionId, on: on === true, ...(pick ? { from: pick.from, picked: true } : {}) };
+        window.dispatchEvent(new CustomEvent('dsh-modes:depth-mission', { detail }));
+      } catch {
+        // an older page without CustomEvent: nothing to say
+      }
     }
     /** The Web selector's ticks (Modes' lib/sources.js has the same lists; a test keeps them the same). */
     const WS_KINDS = ['verified', 'academic', 'news', 'sites', 'forums', 'social', 'archives', 'other'];
@@ -2322,7 +3260,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         h('textarea', { className: 'dsh-me-ta', rows: 6, spellCheck: false, value: lists[key] ?? '', onChange: (event) => setLists((prev) => ({ ...prev, [key]: event.target.value })) }),
         h('div', { className: 'dsh-me-row' }, h('button', { type: 'button', className: 'dsh-me-btn', 'data-main': 'true', disabled: busy || (lists[key] ?? '') === (view[key] ?? ''), onClick: () => void save(key, lists[key] ?? '', t('wsp.listSaved')) }, t('wsp.saveList'))));
       const starts = Object.entries(readObject(view.modeStart)).filter(([, entry]) => Array.isArray(entry?.sources));
-      const modeName = (id) => readObject(view.modes)[id]?.label ?? readObject(view.extraModes)[id]?.label ?? BUILTIN[id]?.label ?? id;
+      const modeName = (id) => readObject(view.modes)[id]?.label ?? readObject(view.extraModes)[id]?.label ?? BUILTIN[id]?.label ?? ADDED_MODES[id]?.label ?? id;
       return h('div', { className: 'dsh-me-page', 'data-web-sources-page': '' },
         h('style', { dangerouslySetInnerHTML: { __html: CSS } }),
         h('div', { className: 'dsh-me-head' }, h('h2', null, t('ws.title')), h('p', null, t('wsp.head'))),
@@ -2432,7 +3370,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
      * The Depth button in the chat box, and its list: Quick, Standard, Thorough. How much care the
      * conversation wants: Standard adds nothing; Quick and Thorough add a short note to the instructions.
      */
-    /** @returns {boolean} whether Mission's Long run card is there to open (it says so on window). */
+    /** @returns {boolean} whether Mission's buttons and settings form are there (it says so on window). */
     function useMissionLong() {
       const [here, setHere] = useState(() => window.__dshMissionLong === true);
       useEffect(() => {
@@ -2442,6 +3380,43 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         return () => window.removeEventListener('dsh-mission:ready', update);
       }, []);
       return here;
+    }
+
+    /** The states in which a Mission is on in a conversation (Mission's strip: not 'none', not 'finished'). 'down' (stage E): waiting for its model server. */
+    const MISSION_ON = ['starting', 'running', 'waiting', 'down', 'paused', 'problem'];
+
+    /**
+     * @returns {boolean} whether a Mission is on in this conversation. Mission keeps the latest state of each
+     * conversation in window.__dshMissionState and says when it changes (dsh-mission:state).
+     */
+    function useMissionOn(sessionId) {
+      const read = () => MISSION_ON.includes(window.__dshMissionState?.[sessionId]);
+      const [on, setOn] = useState(read);
+      useEffect(() => {
+        const update = () => setOn(read());
+        window.addEventListener('dsh-mission:state', update);
+        update();
+        return () => window.removeEventListener('dsh-mission:state', update);
+      }, [sessionId]);
+      return on;
+    }
+
+    /**
+     * @returns {string} why no Mission can start in this conversation ('' when one can or Mission does not say): Mission
+     * keeps it in window.__dshMissionCannot and says when it changes (dsh-mission:cannot).
+     */
+    function useMissionCannot(sessionId) {
+      const read = () => {
+        try { return String(window.__dshMissionCannot?.[sessionId] ?? ''); } catch { return ''; }
+      };
+      const [why, setWhy] = useState(read);
+      useEffect(() => {
+        const update = () => setWhy(read());
+        window.addEventListener('dsh-mission:cannot', update);
+        update();
+        return () => window.removeEventListener('dsh-mission:cannot', update);
+      }, [sessionId]);
+      return why;
     }
 
     /** How long the pointer rests on an item of the Depth list before its longer text shows (the owner asked for 3+ seconds). */
@@ -2482,7 +3457,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
       return { tipFor, tip: node, clear };
     }
 
-    function DepthButton({ t, depth, kind, lens = 'default', own = [], webOff = false, busy, disabled = false, onPick, onPickLens, onLongRun }) {
+    function DepthButton({ t, depth, kind, lens = 'default', own = [], webOff = false, busy, disabled = false, missionOn = false, chosen = false, missionCannot = '', onPick, onPickLens, onChooseMission, onLongRun }) {
       const [open, setOpen] = useState(false);
       const [place, setPlace] = useState({ left: 12, bottom: 80, maxHeight: 520 });
       const button = useRef(null);
@@ -2509,11 +3484,20 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
           document.removeEventListener('keydown', key, true);
         };
       }, [open]);
-      const name = t(`depth.${depth}`);
+      // Depth reads "· Mission" while Mission is chosen here, or while a Mission is on (Quick, Standard, Thorough, Mission).
+      // Choosing Mission only selects it (Mission stage D, 20 November): Send keeps talking at the conversation's own Depth.
+      const mission = (chosen || missionOn) && Boolean(onChooseMission);
+      // No Mission can start in this conversation (Mission says why): its option is greyed with the reason.
+      const cannot = Boolean(missionCannot) && !missionOn;
+      const ownName = t(`depth.${depth}`);
+      const name = mission ? t('depth.mission') : ownName;
       const mine = own.find((entry) => entry.id === lens);
       const lensName = mine ? mine.name : t(`lens.${lens}`);
       // "Depth · Thorough · Blunt"; with Default it reads as before. The names go first when the row is narrow.
-      const open_ = lens === 'default' ? t('depth.open').replace('{0}', name) : t('depth.open.lens').replace('{0}', name).replace('{1}', lensName);
+      const opened = lens === 'default' ? t('depth.open').replace('{0}', name) : t('depth.open.lens').replace('{0}', name).replace('{1}', lensName);
+      // Mission chosen and none on yet: the title also says at which Depth Send talks meanwhile.
+      const open_ = mission && !missionOn ? `${opened} ${t('depth.mission.send').replace('{0}', ownName)}` : opened;
+      const missionHint = t('depth.mission.hint').replace('{0}', ownName);
       const suffix = kind ? `.${kind}` : '';
       // Short words in the list; the full explanations are the slow tooltips (step: "less text in the Depth list").
       return h('span', { className: 'pair', 'data-kind': 'depth' },
@@ -2530,12 +3514,24 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
                   // The note on what Depth is (Recon, Research and Scout have their own) is the title's tooltip.
                   h('div', { className: 'title', ...tipFor(t(kind ? `depth.note.${kind}` : 'depth.note')) }, t('depth.title')),
                   h('div', { className: 'opts', role: 'listbox', 'aria-label': t('depth.title') },
-                    DEPTHS.map((id) => h('button', { key: id, type: 'button', role: 'option', 'aria-selected': id === depth, 'aria-current': String(id === depth), disabled: busy, ...tipFor(t(`depth.${id}.hint${suffix}`)), onClick: () => { setOpen(false); onPick(id); } },
-                      h('b', null, t(`depth.${id}`)), h('small', null, t(`depth.${id}.short${suffix}`))))),
-                  // The last stop: Mission's Long run card, in every tab but Recon (the owner's choice, 16 November).
-                  onLongRun ? h('div', { className: 'opts' },
-                    h('button', { type: 'button', 'data-long-run': '', ...tipFor(t('depth.long.hint')), onClick: () => { setOpen(false); onLongRun(); } },
-                      h('b', null, t('depth.long')), h('small', null, t('depth.long.short')))) : null,
+                    DEPTHS.map((id) => h('button', { key: id, type: 'button', role: 'option', 'aria-selected': id === depth && !mission, 'aria-current': String(id === depth && !mission), disabled: busy, ...tipFor(t(`depth.${id}.hint${suffix}`)), onClick: () => { setOpen(false); onPick(id); } },
+                      h('b', null, t(`depth.${id}`)), h('small', null, t(`depth.${id}.short${suffix}`)))),
+                    // The fourth option (Mission stage D, 20 November, the owner's point 16): Mission only SELECTS a Mission,
+                    // like Quick, Standard and Thorough. Nothing starts and nothing asks here: Start Mission beside Send
+                    // starts it. Greyed (and selected) while a Mission is on in this conversation; greyed with Mission's
+                    // reason where no Mission can start here. Only options sit in the list: its (i) is in the row below.
+                    onChooseMission ? h('button', {
+                      type: 'button', role: 'option', 'data-mission': '', 'aria-selected': mission, 'aria-current': String(mission), disabled: busy || missionOn || (cannot && !mission),
+                      title: missionOn ? t('depth.mission.on') : cannot ? missionCannot : undefined,
+                      ...tipFor(missionOn ? t('depth.mission.on') : cannot ? missionCannot : missionHint),
+                      onClick: () => { setOpen(false); onChooseMission(button.current); },
+                    }, h('b', null, t('depth.mission')), h('small', null, missionOn ? t('depth.mission.on') : cannot ? t('depth.mission.cannot') : chosen ? t('depth.mission.chosen') : t('depth.mission.short'))) : null),
+                  // Mission settings… opens this chat's Mission settings (Mission's own form); it starts nothing. Mission's
+                  // (i) sits beside it, outside the list, so it can be reached with the keyboard.
+                  onLongRun || onChooseMission ? h('div', { className: 'opts dsh-me-mrow' },
+                    onLongRun ? h('button', { type: 'button', 'data-long-run': '', ...tipFor(t('depth.long.hint')), onClick: () => { setOpen(false); onLongRun(); } },
+                      h('b', null, t('depth.long')), h('small', null, t('depth.long.short'))) : null,
+                    onChooseMission ? h(tgUi().Info, { title: t('depth.mission'), what: cannot ? `${missionHint} ${missionCannot}` : missionHint, when: t('depth.mission.when'), change: t('depth.mission.change') }) : null) : null,
                   // The Lens (step 28): how the answer is worded, for this conversation only.
                   h('div', { className: 'title sep', ...tipFor(`${t('lens.title')}. ${t('lens.note')}`) }, t('lens.short')),
                   // Seven small chips; each one's use is its slow tooltip.
@@ -2717,7 +3713,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         sandbox: 'read-only',
         defaultTier: '',
         prompt:
-          'You are in Chat mode: answer directly in one reply. You cannot read or change files or run commands. If a task needs those, say so and suggest switching to Cowork or Code mode.',
+          'You are in Chat mode: answer directly in one reply. You cannot read or change files or run commands. If a task needs those, say so and suggest picking a mode that can, from the Mode list under the chat box.',
       },
       cowork: { label: 'Cowork', tools: 'all', sandbox: 'inherit', defaultTier: '', prompt: '' },
       code: { label: 'Code', tools: 'all', sandbox: 'workspace-write', defaultTier: '', prompt: '' },
@@ -2787,6 +3783,25 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
     }
 
     /**
+     * Item 4A, stage 5: the descriptions saved with the mode cards. Only the cards' own lines change (one line, at most
+     * 160 characters; an empty one is taken away); every other mode's line (an add-on's, Plain chat's), as stored now, stays.
+     * @param {Record<string, unknown>} stored - `modeDescriptions` as stored now.
+     * @param {Record<string, unknown>} descs - the page's lines by mode id.
+     * @param {string[]} ids - the cards' mode ids.
+     * @returns {string} the JSON to save.
+     */
+    function nextDescs(stored, descs, ids) {
+      const out = { ...(stored ?? {}) };
+      for (const id of ids) {
+        const text = descs?.[id];
+        const line = typeof text === 'string' ? text.replace(/\s+/g, ' ').trim().slice(0, 160) : '';
+        if (line) out[id] = line;
+        else delete out[id];
+      }
+      return JSON.stringify(out);
+    }
+
+    /**
      * The modes other add-ons add (Finance, Research, Scout...). They are not edited here, but a
      * sidebar tab of theirs can be the default mode, and those with all tools can load them as needed.
      * @param {object} view - settings namespace value.
@@ -2844,6 +3859,8 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         ...rows.map((row) => ({ id: row.id, label: row.label.trim() || row.id, extra: false })),
         // The Automations tab manages automations; its conversations are no place for one to run (step A5).
         ...extras.filter((extra) => !extra.isolated && extra.id !== 'automations').map((extra) => ({ id: extra.id, label: extra.label, extra: true })),
+        // Fix round: Plain chat (built in, never stored) is a choice too.
+        ...Object.entries(ADDED_MODES).filter(([id]) => !rows.some((row) => row.id === id) && !extras.some((extra) => extra.id === id)).map(([id, value]) => ({ id, label: value.label, extra: false })),
       ];
     }
 
@@ -2868,6 +3885,15 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
       // The Cowork sidebar's own settings, while it is on: its tab count is set on this page too.
       const shellEntry = result.value.namespaces.find((item) => item.ns === SHELL_NS);
       const shell = shellEntry ? { revision: shellEntry.revision, maxTabs: Number.isInteger(shellEntry.value?.maxTabs) ? shellEntry.value.maxTabs : 3 } : null;
+      // Item 4A, stage 3b: with the space buttons there are no mode tabs, so the tab count is not shown (shown or hidden
+      // per space replaces it, stage 5). Asked of Modes' route; without an answer, as before.
+      if (shell) {
+        try {
+          shell.spaces = (await modeRoute(ctx, ''))?.shown === true;
+        } catch {
+          shell.spaces = false;
+        }
+      }
       return { value: entry.value, revision: entry.revision, tiers: tierIdsOf(result.value.namespaces), shell };
     }
 
@@ -2913,6 +3939,733 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         note ? h('div', { className: 'dsh-me-note', 'data-bad': String(note.bad) }, note.text) : null);
     }
 
+    // ---- Preset in this tab (item 7) -------------------------------------------------------------------------
+    // Settings → Modes: one row per tab with Any, Standard only or Creator only (the setting `presetLock`). The words
+    // of the warnings come from the add-on's route (lib/presetlock.js), so the page and the (i) never say two things.
+
+    /** The three choices, in order. */
+    const PRESET_LOCK_CHOICES = ['any', 'standard', 'creator'];
+    /** The shared parts, made once (a part made again on each draw would be a new component, and an open (i) would close). With ReactDOM: the (i) can portal. */
+    let presetParts = null;
+    const presetUi = () => (presetParts ??= dshUi.makeParts(React, ReactDOM));
+    /** The route the preset (i), the lock and Settings read. */
+    const PRESET_ROUTE = 'dsh-modes/preset';
+    /** A mode's shown name: its label as it is (Plus is English only; `lang` is accepted and ignored). */
+    function modeNameIn(mode, lang) {
+      return String(mode?.label ?? mode?.id ?? '');
+    }
+    /** The page's language for the route's words: always English (Plus is English only, even in a Chinese app). */
+    const presetLang = () => 'en';
+    /** @returns {Record<string, string>} the route's request headers (the conversation, when there is one, and the language). */
+    const presetHeaders = (appCtx, sessionId) => ({ accept: 'application/json', 'x-dsh-locale': presetLang(appCtx), ...(sessionId ? { 'x-dsh-session': sessionId } : {}) });
+
+    /**
+     * @param {unknown} text - the stored `presetLock`.
+     * @returns {Record<string, string>} each tab's own choice (only valid ones).
+     */
+    function presetLocksOf(text) {
+      let raw = {};
+      try {
+        raw = typeof text === 'string' && text.trim() ? JSON.parse(text) : {};
+      } catch {
+        raw = {};
+      }
+      const out = {};
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+      for (const [id, choice] of Object.entries(raw)) if (PRESET_LOCK_CHOICES.includes(choice)) out[id] = choice;
+      return out;
+    }
+
+    /**
+     * A tab's row: the choice in force, and what the row says under it.
+     * @param {{id: string, label: string, defaultLock: string, warn: string, swap: object}} tab - from the route.
+     * @param {Record<string, string>} locks - presetLocksOf(general.presetLock).
+     * @param {{creator?: boolean | null}} presets - which presets the app has (false: missing).
+     * @returns {{choice: string, loose: boolean, warn: string, note: string}} `loose`: a default lock loosened to Any (red).
+     */
+    function presetRowState(tab, locks, presets) {
+      const own = locks?.[tab.id];
+      const choice = PRESET_LOCK_CHOICES.includes(own) ? own : (PRESET_LOCK_CHOICES.includes(tab.defaultLock) ? tab.defaultLock : 'any');
+      const loose = choice === 'any' && tab.defaultLock !== 'any' && Boolean(tab.warn);
+      let note = '';
+      if (choice === 'creator' && presets?.creator === false) note = 'missing';
+      else if (choice !== 'any' && choice !== tab.defaultLock) note = tab.swap?.[choice] ?? '';
+      return { choice, loose, warn: loose ? tab.warn : '', note };
+    }
+
+    /**
+     * The next stored table for a pick: the tab's default is stored as no entry, so a later change of the default
+     * still reaches it.
+     * @returns {string} the JSON to save.
+     */
+    function nextPresetLocks(locks, tab, choice) {
+      const next = { ...locks };
+      if (choice === tab.defaultLock) delete next[tab.id];
+      else next[tab.id] = choice;
+      return JSON.stringify(next);
+    }
+
+    /** The question asked before a default lock is loosened to Any: its warning, in plain words; starts on Cancel. */
+    function presetLoosenQuestion(t, tab) {
+      return { title: t(tab.caution ? 'plock.ask.title.unsafe' : 'plock.ask.title', { tab: tab.label }), text: tab.warn, ok: t('plock.ask.ok'), danger: true };
+    }
+
+    /** The tabs' rows (Settings → Modes → Preset in this tab). */
+    function PresetLockRows({ t, saved, onSave, appCtx }) {
+      const ui = presetUi();
+      const [view, setView] = useState({ status: 'loading' });
+      const [said, setSaid] = useState('');
+      useEffect(() => {
+        let alive = true;
+        fetch(new URL(PRESET_ROUTE, document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: presetHeaders(appCtx) })
+          .then((response) => (response.ok ? response.json() : Promise.reject(new Error(`error ${response.status}`))))
+          .then((value) => alive && setView({ status: 'ready', tabs: Array.isArray(value?.tabs) ? value.tabs : [], presets: value?.presets ?? {} }), (error) => alive && setView({ status: 'error', error }));
+        return () => { alive = false; };
+      }, []);
+      if (view.status === 'loading') return h('div', { className: 'dsh-me-note', role: 'status' }, t('plock.loading'));
+      if (view.status === 'error') return h(ui.ErrorNote, { what: t('plock.failed'), error: view.error });
+      const locks = presetLocksOf(saved);
+      // Where Any is unsafe (Recon), the option says so.
+      const label = (choice, tab) => {
+        const name = choice === 'any' && tab.caution ? t('plock.any.unsafe') : t(`plock.${choice}`);
+        return choice === tab.defaultLock ? t('plock.default', { label: name }) : name;
+      };
+      const pick = async (tab, choice) => {
+        setSaid('');
+        if (tab.warn && choice === 'any' && tab.defaultLock !== 'any' && !(await dshKit.ask(presetLoosenQuestion(t, tab)))) return;
+        if (await onSave(nextPresetLocks(locks, tab, choice))) setSaid(t('plock.saved', { tab: tab.label }));
+      };
+      return h('div', null,
+        view.tabs.map((tab) => {
+          const row = presetRowState(tab, locks, view.presets);
+          return h('div', { key: `plock-${tab.id}`, className: 'dsh-me-plock', 'data-preset-lock': tab.id, 'data-loose': row.loose ? 'true' : undefined },
+            h('div', { className: 'dsh-me-plock-text' },
+              h('div', { className: 'dsh-me-plock-title' }, tab.label, h(ui.Info, {
+                title: `${t('plock.group')}: ${tab.label}`,
+                label: `${t('plock.group')}, ${tab.label}`,
+                what: t('plock.what', { tab: tab.label }),
+                when: t('plock.when'),
+                change: t('plock.change', { default: t(`plock.${tab.defaultLock}`) }),
+                more: tab.warn ? `${t('plock.any')}: ${tab.warn}` : '',
+                lang: presetLang(appCtx),
+              })),
+              row.loose ? h('div', { className: 'dsh-me-plock-warn', role: 'alert' }, '⚠ ', t('plock.loose', { warn: row.warn })) : null,
+              // Recon's row always says plainly that Any is unsafe, also at its default.
+              !row.loose && tab.caution ? h('div', { className: 'dsh-me-plock-note', 'data-warn': 'true', 'data-preset-caution': tab.id }, '⚠ ', tab.caution) : null,
+              row.note === 'missing' ? h('div', { className: 'dsh-me-plock-note', 'data-warn': 'true' }, t('plock.missing')) : row.note ? h('div', { className: 'dsh-me-plock-note' }, row.note) : null),
+            h('select', { className: 'dsh-me-sel', value: row.choice, 'aria-label': `${t('plock.group')}: ${tab.label}`, onChange: (event) => void pick(tab, event.target.value) },
+              PRESET_LOCK_CHOICES.map((choice) => h('option', { key: choice, value: choice }, label(choice, tab)))));
+        }),
+        said ? h('div', { className: 'dsh-me-note', role: 'status' }, said) : null);
+    }
+
+    // ---- Item 4A, stage 5: Settings → Spaces, and the space ticks on Settings → Modes ------------------------------
+    // The page reads and writes through Modes' route (dsh-modes/mode, x-dsh-page: settings), so every refusal comes back as
+    // a sentence; the order of the buttons and where new threads start are the Cowork sidebar's own settings (`spaceOrder`,
+    // `startPlaces`), the colours switch and the preset locks are Modes' (`spaceColours`, `presetLock`): each value is kept
+    // in one place only, so two pages can never disagree.
+    // ---- sp-logic:begin ----
+    /** The five spaces, in their first order (lib/spaces.js SPACE_IDS). */
+    const SP_IDS = ['chat', 'code', 'devices', 'recon', 'workshop'];
+    /** The tab id each space stands for where the Cowork sidebar stores tab ids (lib/spaces.js SPACE_TAB). */
+    const SP_TAB = { chat: 'chat', code: 'code', devices: 'bench', recon: 'recon', workshop: 'creator-plus' };
+    /** The space of a stored tab id (lib/spaces.js MODE_SPACE): every other mode lives in Chat. */
+    const SP_OF_TAB = { plain: 'chat', chat: 'chat', cowork: 'chat', research: 'chat', scout: 'chat', finance: 'chat', data: 'chat', content: 'chat', automations: 'chat', code: 'code', bench: 'devices', recon: 'recon', 'creator-plus': 'workshop' };
+    /** Where each space's new threads start by default (the Cowork sidebar's DEFAULT_START_PLACES, by its tab id). */
+    const SP_PLACE_DEFAULT = { chat: 'scratch', code: 'folder', devices: 'folder', recon: 'room', workshop: 'folder' };
+    /**
+     * The order of the space buttons: the saved `spaceOrder`, else the first appearance of each space in today's `tabOrder`;
+     * every space not named follows in its first order.
+     * @returns {string[]}
+     */
+    function spOrder(spaceOrder, tabOrder) {
+      const out = [];
+      const own = (Array.isArray(spaceOrder) ? spaceOrder : []).filter((id) => SP_IDS.includes(id));
+      const list = own.length > 0 ? own : (Array.isArray(tabOrder) ? tabOrder : []).map((tab) => (typeof tab === 'string' && tab ? SP_OF_TAB[tab] ?? 'chat' : '')).filter(Boolean);
+      for (const id of list) if (!out.includes(id)) out.push(id);
+      for (const id of SP_IDS) if (!out.includes(id)) out.push(id);
+      return out;
+    }
+    /** @returns {string[]} the order with one space moved one step (`by` -1 up, +1 down). */
+    function spMove(order, id, by) {
+      const next = [...order];
+      const at = next.indexOf(id);
+      const to = at + by;
+      if (at < 0 || to < 0 || to >= next.length) return next;
+      [next[at], next[to]] = [next[to], next[at]];
+      return next;
+    }
+    /** @returns {'scratch'|'folder'|'room'} where a space's new threads start, from the Cowork sidebar's `startPlaces`. */
+    function spPlace(startPlaces, space) {
+      if (space === 'recon') return 'room';
+      let saved = {};
+      try { saved = typeof startPlaces === 'string' && startPlaces ? JSON.parse(startPlaces) : {}; } catch { saved = {}; }
+      const own = saved && typeof saved === 'object' ? saved[SP_TAB[space]] : undefined;
+      return own === 'scratch' || own === 'folder' ? own : SP_PLACE_DEFAULT[space] ?? 'folder';
+    }
+    /** @returns {string} the new `startPlaces` with one space's place set (only that space's tab key changes). */
+    function spNextPlaces(startPlaces, space, place) {
+      let saved = {};
+      try { saved = typeof startPlaces === 'string' && startPlaces ? JSON.parse(startPlaces) : {}; } catch { saved = {}; }
+      if (!saved || typeof saved !== 'object' || Array.isArray(saved)) saved = {};
+      return JSON.stringify({ ...saved, [SP_TAB[space]]: place });
+    }
+    // ---- sp-logic:end ----
+
+    /** One call to Modes' route for the settings pages: GET reads the page, a body changes one thing. */
+    async function spRoute(appCtx, body) {
+      let response;
+      try {
+        response = await fetch(new URL(MODE_ROUTE, document.baseURI), body
+          ? { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { ...presetHeaders(appCtx), 'content-type': 'application/json' }, body: JSON.stringify(body) }
+          : { cache: 'no-store', credentials: 'same-origin', headers: { ...presetHeaders(appCtx), 'x-dsh-page': 'settings' } });
+      } catch (error) {
+        throw dshKit.fail(error);
+      }
+      let data = null;
+      try { data = await response.json(); } catch { data = null; }
+      if (!data || data.ok === false) throw dshKit.fail(data?.error ?? `error ${response.status}`);
+      return data.value;
+    }
+    /** One setting of an add-on's own settings saved at once (asked again once when another change came first). */
+    async function spSave(appCtx, ns, key, value) {
+      const ops = [{ op: 'set', path: [key], value }];
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const read = await dshPoll.settings(appCtx, { fresh: true });
+        if (!read.ok) throw dshKit.fail(read.error);
+        const entry = read.value.namespaces.find((item) => item.ns === ns);
+        // Fix round: the page's own words.
+        const t = appCtx.locale.bind(NS);
+        if (!entry) throw dshKit.fail(ns === SHELL_NS ? t('sp.save.noshell') : t('sp.save.nomodes'));
+        const result = await appCtx.remote.settings.mutate(ns, ops, entry.revision);
+        if (result.ok) return true;
+        if (result.error?.code !== 'settings/conflict') throw dshKit.fail(result.error);
+      }
+      throw dshKit.fail(appCtx.locale.bind(NS)('sp.save.conflict'));
+    }
+    /** Opens a Settings page by its id (the window's own Settings store; nothing happens where it cannot be reached). */
+    function spOpenSection(appCtx, id) {
+      try {
+        const store = appCtx.slots.entries('sidebar.settings').find((item) => item.store)?.store?.create?.();
+        const actions = store?.actions;
+        if (typeof actions?.openSection === 'function') return void actions.openSection(id);
+        if (typeof actions?.select === 'function') actions.select(id);
+      } catch {
+        /* the hints name the page */
+      }
+    }
+    /** The shared parts with ReactDOM, made once (presetUi). */
+    const spUi = () => presetUi();
+
+    /**
+     * One preset-lock choice as a select, with its red warning, Recon's caution and the swap note under it; loosening a
+     * default lock asks first (the same rules and words as the former "Preset in this tab" rows). A plain function (no hooks).
+     * @returns {{control: object, notes: object[]}}
+     */
+    function spPresetParts({ t, row, locks, presets, onSave, label }) {
+      const state = presetRowState(row, locks, presets);
+      const name = (choice) => {
+        const word = choice === 'any' && row.caution ? t('plock.any.unsafe') : t(`plock.${choice}`);
+        return choice === row.defaultLock ? t('plock.default', { label: word }) : word;
+      };
+      const pick = async (choice) => {
+        if (row.warn && choice === 'any' && row.defaultLock !== 'any' && !(await dshKit.ask(presetLoosenQuestion(t, row)))) return;
+        await onSave(nextPresetLocks(locks, row, choice));
+      };
+      return {
+        control: h('select', { className: 'dshu-field dsh-me-spsel', value: state.choice, 'aria-label': label, 'data-preset-lock': row.id, onChange: (event) => void pick(event.target.value) },
+          PRESET_LOCK_CHOICES.map((choice) => h('option', { key: choice, value: choice }, name(choice)))),
+        notes: [
+          state.loose ? h('div', { key: 'loose', className: 'dsh-me-plock-warn', role: 'alert' }, '⚠ ', t('plock.loose', { warn: state.warn })) : null,
+          !state.loose && row.caution ? h('div', { key: 'caution', className: 'dsh-me-plock-note', 'data-warn': 'true' }, '⚠ ', row.caution) : null,
+          state.note === 'missing' ? h('div', { key: 'missing', className: 'dsh-me-plock-note', 'data-warn': 'true' }, t('plock.missing')) : state.note ? h('div', { key: 'note', className: 'dsh-me-plock-note' }, state.note) : null,
+        ].filter(Boolean),
+      };
+    }
+
+    /** A settings row whose notes sit under it (the shared row with an (i), and lines below). */
+    function SpRow({ title, desc, info, notes, children }) {
+      const ui = spUi();
+      return h('div', { className: 'dsh-me-sprow' },
+        h(ui.Row, { title, desc, info }, children),
+        notes && notes.length > 0 ? h('div', { className: 'dsh-me-spnotes' }, notes) : null);
+    }
+
+    /** Settings → Spaces (item 4A, stage 5). */
+    function SpacesPage({ appCtx }) {
+      const ui = spUi();
+      const t = appCtx.locale.bind('modes');
+      const lang = presetLang(appCtx);
+      const [page, setPage] = useState(null);
+      const [locks, setLocks] = useState(null);
+      const [stored, setStored] = useState(null);
+      const [problem, setProblem] = useState(null);
+      const [said, setSaid] = useState('');
+      const load = useCallback(async () => {
+        try {
+          const [value, lockView, read] = await Promise.all([
+            spRoute(appCtx),
+            fetch(new URL(PRESET_ROUTE, document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: presetHeaders(appCtx) }).then((response) => (response.ok ? response.json() : Promise.reject(dshKit.fail(`error ${response.status}`)))),
+            dshPoll.settings(appCtx, { fresh: true }),
+          ]);
+          if (!read.ok) throw dshKit.fail(read.error);
+          const modesNs = read.value.namespaces.find((item) => item.ns === NS)?.value ?? {};
+          const shellNs = read.value.namespaces.find((item) => item.ns === SHELL_NS)?.value;
+          setPage(value);
+          setLocks(lockView);
+          setStored({ colours: modesNs.spaceColours !== false, presetLock: typeof modesNs.presetLock === 'string' ? modesNs.presetLock : '{}', shell: shellNs ? { spaceOrder: shellNs.spaceOrder, tabOrder: shellNs.tabOrder, startPlaces: typeof shellNs.startPlaces === 'string' ? shellNs.startPlaces : '' } : null });
+          setProblem((old) => (old?.load ? null : old));
+        } catch (error) {
+          setProblem({ load: true, error });
+        }
+      }, [appCtx]);
+      useEffect(() => { void load(); }, [load]);
+      useEffect(() => (appCtx ? dshPoll.onChange(appCtx, (ns) => { if (ns === NS || ns === SHELL_NS) void load(); }) : () => {}), [appCtx, load]);
+      // Every change: saved at once, the page read again, "Saved" said quietly; a refusal says what to do, raw text behind Details.
+      // Fix round: the note shows where the change was made (`at`: 'all', a space's card, or 'modelocks').
+      const run = async (work, at = 'all') => {
+        setSaid('');
+        setProblem(null);
+        try {
+          const next = await work();
+          if (next && Array.isArray(next.cards)) setPage(next);
+          setSaid({ text: t('sp.saved'), at });
+          await load();
+        } catch (error) {
+          setProblem({ error, at });
+        }
+      };
+      const noteAt = (at) => h(React.Fragment, { key: `note-${at}` },
+        said && !problem && said.at === at ? h('div', { className: 'dsh-me-spsaid', role: 'status' }, said.text) : null,
+        problem && !problem.load && (problem.at ?? 'all') === at ? h(ui.ErrorNote, { error: problem.error, fix: t('sp.save.fix') }) : null);
+      const head = h(React.Fragment, null, h('style', { dangerouslySetInnerHTML: { __html: CSS + SP_CSS } }));
+      if (!page || !locks || !stored) {
+        return h(ui.Page, { title: t('sp.title'), desc: t('sp.hint') }, head,
+          problem?.load ? h(ui.ErrorNote, { what: t('sp.failed'), fix: t('sp.failed.fix'), error: problem.error }, h(ui.Button, { onClick: () => void load() }, t('sp.retry'))) : h(ui.Wait, null));
+      }
+      const lockTable = presetLocksOf(stored.presetLock);
+      const saveLocks = (value, at = 'modelocks') => run(async () => { await spSave(appCtx, NS, 'presetLock', value); }, at);
+      const order = spOrder(stored.shell?.spaceOrder, stored.shell?.tabOrder);
+      const byId = new Map(page.cards.map((card) => [card.id, card]));
+      const nameOf = (id) => byId.get(id)?.label ?? id;
+      const info = (key, values) => ({ what: t(`${key}.what`, values), when: t(`${key}.when`, values), change: t(`${key}.change`, values), lang });
+      const card = (one) => {
+        const space = { space: one.label };
+        const lockRow = (locks.spaces ?? []).find((row) => row.space === one.id);
+        const lockParts = lockRow ? spPresetParts({ t, row: lockRow, locks: lockTable, presets: locks.presets ?? {}, onSave: (value) => saveLocks(value, one.id), label: `${t('sp.preset')}: ${one.label}` }) : null;
+        const place = spPlace(stored.shell?.startPlaces, one.id);
+        const startLabel = (mode) => (mode.id === one.tableStart ? t('sp.start.usual', { mode: mode.label }) : mode.label);
+        // Lab re-check fix (6a, problem 7): the gone mode by its name (also while its add-on is off), and a sentence that
+        // is right when nothing is offered there now: the add-on's own reason ("Needs Creator Plus: …"), or "no mode".
+        const goneLabel = one.startModeGoneLabel || page.modes.find((mode) => mode.id === one.startModeGone)?.label || one.startModeGone;
+        const nowLabel = one.offered.find((mode) => mode.id === one.startMode)?.label ?? one.startMode;
+        // Stage 6b lab fix: an add-on mode switched off says to switch the add-on on (ticking cannot help).
+        const goneText = one.startModeGoneReason ? one.startModeGoneReason
+          : nowLabel && one.startModeGoneOff ? t('sp.start.goneOff', { mode: goneLabel, space: one.label, now: nowLabel })
+          : nowLabel ? t('sp.start.gone', { mode: goneLabel, space: one.label, now: nowLabel })
+            : t('sp.start.goneNone', { mode: goneLabel, space: one.label });
+        return h('section', { key: one.id, className: 'dsh-me-spc', 'data-space-card': one.id, 'data-hidden': one.shown ? undefined : 'true' },
+          h('div', { className: 'dsh-me-spc-head' },
+            h('div', { className: 'dsh-me-spc-name' },
+              h('b', null, one.label),
+              one.requires ? h('span', { className: 'dsh-me-spc-tag' }, one.requires) : null),
+            h('div', { className: 'dshu-side' },
+              h('span', null, one.canHide ? t(one.shown ? 'sp.shown' : 'sp.hidden') : t('sp.always')),
+              h(ui.Info, one.canHide ? { title: t('sp.show.label', space), ...info('sp.shown', space) } : { title: t('sp.always'), what: t('sp.chat.what'), lang }),
+              h(ui.Switch, { on: one.shown, disabled: !one.canHide, label: t('sp.show.label', space), onChange: (on) => void run(() => spRoute(appCtx, { action: 'space', space: one.id, shown: on }), one.id) }))),
+          one.off ? h(ui.StateLine, { state: 'off', words: one.off }) : null,
+          h(SpRow, {
+            title: t('sp.start'), desc: t('sp.start.hint'), info: { title: `${t('sp.start')}: ${one.label}`, ...info('sp.start', space) },
+            notes: one.startModeGone ? [h('div', { key: 'gone', className: 'dsh-me-plock-note', 'data-warn': 'true' }, goneText)] : [],
+          },
+          // Stage 6b lab fix: while the chosen start mode is gone, the list shows it (greyed) as the choice, not the mode
+          // used meanwhile, so it does not look as if Plain chat had been picked.
+          h('select', { className: 'dshu-field dsh-me-spsel', value: one.startModeGone || one.startMode, 'aria-label': `${t('sp.start')}: ${one.label}`, 'data-start-mode': one.id, disabled: one.offered.length === 0, onChange: (event) => void run(() => spRoute(appCtx, { action: 'space', space: one.id, startMode: event.target.value }), one.id) },
+            one.startModeGone ? h('option', { key: '__gone', value: one.startModeGone, disabled: true }, t(one.startModeGoneOff ? 'sp.start.goneOption' : 'sp.start.goneOption.notHere', { mode: goneLabel })) : null,
+            one.offered.map((mode) => h('option', { key: mode.id, value: mode.id }, startLabel(mode))))),
+          h(SpRow, { title: t('sp.place'), desc: one.id === 'recon' ? t('sp.place.recon') : stored.shell ? t('sp.place.hint') : t('sp.place.noshell'), info: { title: `${t('sp.place')}: ${one.label}`, ...info('sp.place', space) } },
+            one.id === 'recon'
+              ? h('span', { className: 'dshu-side' }, t('sp.place.room'))
+              : h('select', { className: 'dshu-field dsh-me-spsel', value: place, disabled: !stored.shell, 'aria-label': `${t('sp.place')}: ${one.label}`, 'data-start-place': one.id, onChange: (event) => void run(() => spSave(appCtx, SHELL_NS, 'startPlaces', spNextPlaces(stored.shell?.startPlaces, one.id, event.target.value)), one.id) },
+                ['scratch', 'folder'].map((value) => h('option', { key: value, value }, t(one.id === 'chat' ? `sp.place.chat.${value}` : `sp.place.${value}`))))),
+          lockParts ? h(SpRow, { title: t('sp.preset'), desc: t('sp.preset.hint'), info: { title: `${t('sp.preset')}: ${one.label}`, ...info('sp.preset', space) }, notes: lockParts.notes }, lockParts.control) : null,
+          noteAt(one.id));
+      };
+      const modeLocks = locks.modeLocks ?? [];
+      return h(ui.Page, { title: t('sp.title'), desc: t('sp.hint') }, head,
+        page.live === false ? h(ui.StateLine, { state: 'off', words: t('sp.labOff') }) : null,
+        h(ui.Group, null, t('sp.all')),
+        stored.shell
+          ? h(SpRow, { title: t('sp.order'), desc: t('sp.order.hint'), info: info('sp.order', {}),
+              notes: [h('ol', { key: 'order', className: 'dsh-me-sporder', 'aria-label': t('sp.order') }, order.map((id, index) => h('li', { key: id, 'data-space-order': id },
+                h('span', { className: 'dsh-me-sporder-n' }, String(index + 1)),
+                h('span', { className: 'dsh-me-sporder-name' }, nameOf(id)),
+                h('button', { type: 'button', className: 'dsh-me-spicon', disabled: index === 0, 'aria-label': t('sp.up', { space: nameOf(id) }), onClick: () => void run(() => spSave(appCtx, SHELL_NS, 'spaceOrder', spMove(order, id, -1))) }, '↑'),
+                h('button', { type: 'button', className: 'dsh-me-spicon', disabled: index === order.length - 1, 'aria-label': t('sp.down', { space: nameOf(id) }), onClick: () => void run(() => spSave(appCtx, SHELL_NS, 'spaceOrder', spMove(order, id, 1))) }, '↓'))))] },
+            h(ui.Button, { disabled: !(Array.isArray(stored.shell.spaceOrder) && stored.shell.spaceOrder.length > 0), onClick: () => void run(() => spSave(appCtx, SHELL_NS, 'spaceOrder', [])) }, t('sp.reset')))
+          : null,
+        h(ui.Row, { title: t('space.colours'), desc: t('sp.colours.hint'), info: info('sp.colours', {}) },
+          h(ui.Switch, { on: stored.colours, label: t('space.colours'), onChange: (on) => void run(async () => { await spSave(appCtx, NS, 'spaceColours', on); void refreshAnswerFlags(appCtx); }) })),
+        // Round 2 (mock-up e): an info row, nothing to set.
+        h(ui.Row, { title: t('sp.window'), desc: t('sp.window.hint'), info: info('sp.window', {}) }, h('span', { 'data-space-window': '' })),
+        noteAt('all'),
+        h(ui.Group, null, t('sp.spaces')),
+        order.map((id) => byId.get(id)).filter(Boolean).map(card),
+        modeLocks.length > 0 ? h(React.Fragment, null,
+          h(ui.Group, null, t('sp.modelocks')),
+          h(ui.Desc, null, t('sp.modelocks.hint')),
+          modeLocks.map((row) => {
+            const named = modeNameIn(row, presetLang(appCtx));
+            const parts = spPresetParts({ t, row, locks: lockTable, presets: locks.presets ?? {}, onSave: saveLocks, label: `${t('sp.modelocks')}: ${named}` });
+            return h(SpRow, { key: row.id, title: named, info: { title: `${t('sp.modelocks')}: ${named}`, ...info('sp.modelock', { space: named }) }, notes: parts.notes }, parts.control);
+          }),
+          noteAt('modelocks')) : null,
+        h(ui.Row, { title: t('sp.modes'), info: { title: t('sp.modes.open'), what: t('sp.modes.i.what'), when: t('sp.modes.i.when'), change: t('sp.modes.i.change'), lang } }, h(ui.Button, { onClick: () => spOpenSection(appCtx, 'modes') }, t('sp.modes.open'))));
+    }
+
+    /** Settings → Modes, "Modes and their spaces": every mode with five ticks and its description (item 4A, stage 5). */
+    function ModeTicks({ appCtx, t }) {
+      const ui = spUi();
+      const lang = presetLang(appCtx);
+      const [page, setPage] = useState(null);
+      const [problem, setProblem] = useState(null);
+      const [editing, setEditing] = useState(null);
+      const [busy, setBusy] = useState(false);
+      const load = useCallback(async () => {
+        try {
+          setPage(await spRoute(appCtx));
+          setProblem((old) => (old?.load ? null : old));
+        } catch (error) {
+          setProblem({ load: true, error });
+        }
+      }, [appCtx]);
+      useEffect(() => { void load(); }, [load]);
+      useEffect(() => (appCtx ? dshPoll.onChange(appCtx, (ns) => { if (ns === NS) void load(); }) : () => {}), [appCtx, load]);
+      const run = async (body) => {
+        if (busy) return false;
+        setBusy(true);
+        setProblem(null);
+        try {
+          setPage(await spRoute(appCtx, body));
+          return true;
+        } catch (error) {
+          setProblem({ error });
+          return false;
+        } finally {
+          setBusy(false);
+        }
+      };
+      if (!page) return problem?.load ? h(ui.ErrorNote, { what: t('mt.failed'), fix: t('sp.failed.fix'), error: problem.error }, h(ui.Button, { onClick: () => void load() }, t('sp.retry'))) : h(ui.Wait, null);
+      const names = new Map(page.cards.map((card) => [card.id, card.label]));
+      const guarded = new Set(['devices', 'recon', 'workshop']);
+      // Item 4A, stage 6a: why a guarded space takes no other mode now (its guard off or too old), once per space. Fix
+      // round (6a review): the server says it (`rules.notReady`); a home mode's own greyed ticks are never read as it.
+      const notReady = (Array.isArray(page.rules?.notReady) ? page.rules.notReady : [])
+        .filter((row) => row && guarded.has(row.space) && row.text)
+        .map((row) => ({ space: row.space, reason: row.text }));
+      return h('div', { className: 'dsh-me-mt', 'data-mode-ticks': '' },
+        notReady.map((row) => h('div', { key: row.space, className: 'dsh-me-plock-note', 'data-warn': 'true', 'data-not-ready': row.space }, `${names.get(row.space) ?? row.space}: ${row.reason}`)),
+        page.warning || page.note ? h('div', { className: 'dsh-me-plock-note', 'data-warn': page.warning ? 'true' : undefined, 'data-tick-said': '' }, page.warning || page.note) : null,
+        h('div', { className: 'dsh-me-mt-row dsh-me-mt-headrow' },
+          h('span', { className: 'dsh-me-mt-name' }, t('mt.mode')),
+          SP_IDS.map((space) => h('span', { key: space, className: 'dsh-me-mt-col' }, names.get(space) ?? space,
+            h(ui.Info, { title: names.get(space) ?? space, what: t(guarded.has(space) ? 'mt.col.guarded' : 'mt.col', { space: names.get(space) ?? space }), lang }))),
+          h('span', { className: 'dsh-me-mt-edit' })),
+        page.modes.map((mode) => {
+          const open = editing?.id === mode.id;
+          const empty = mode.ticks.every((tick) => !tick.on || tick.greyed && !tick.fixed);
+          return h('div', { key: mode.id, className: 'dsh-me-mt-item', 'data-mode-row': mode.id },
+            h('div', { className: 'dsh-me-mt-row' },
+              h('div', { className: 'dsh-me-mt-name' },
+                h('div', { className: 'dsh-me-mt-title' }, h('span', null, mode.label), h('span', { className: 'dsh-me-spc-tag' }, t(`mt.kind.${mode.kind}`))),
+                h('div', { className: 'dsh-me-mt-desc' }, mode.desc),
+                empty ? h('div', { className: 'dsh-me-plock-note', 'data-warn': 'true' }, t('mt.none')) : null,
+                // Item 4A, stage 6a: what the mode loses in a ticked Devices or Workshop, and that it is sealed in Recon.
+                mode.ticks.filter((tick) => tick.on && (tick.warn || tick.note)).map((tick) => h('div', { key: `w-${tick.space}`, className: 'dsh-me-plock-note', 'data-warn': tick.warn ? 'true' : undefined, 'data-tick-line': `${mode.id}:${tick.space}` }, tick.warn || tick.note))),
+              mode.ticks.map((tick) => h('span', { key: tick.space, className: 'dsh-me-mt-col' },
+                h('input', {
+                  type: 'checkbox', className: 'dsh-me-mt-box', checked: tick.on, disabled: tick.greyed || busy,
+                  title: tick.greyed ? tick.reason : undefined, 'data-tick': `${mode.id}:${tick.space}`,
+                  'aria-label': `${t('mt.tick', { mode: mode.label, space: names.get(tick.space) ?? tick.space })}${tick.greyed && tick.reason ? `. ${tick.reason}` : ''}`,
+                  onChange: (event) => void run({ action: 'tick', modeId: mode.id, space: tick.space, on: event.target.checked }),
+                }))),
+              h('span', { className: 'dsh-me-mt-edit' },
+                h('button', { type: 'button', className: 'dsh-me-spicon', 'aria-label': t(mode.about ? 'mt.view' : 'mt.edit', { mode: mode.label }), title: t(mode.about ? 'mt.view' : 'mt.edit', { mode: mode.label }), 'aria-expanded': open, onClick: () => setEditing(open ? null : { id: mode.id, text: mode.ownDesc }) }, '✎'))),
+            open ? h('div', { className: 'dsh-me-mt-editor' },
+              h(ui.Desc, null, t(`mt.desc.${mode.kind}`)),
+              mode.about ? h(ModeAbout, { t, ui, lang, mode, names }) : null,
+              h('label', { className: 'dsh-me-mt-field' }, h('span', null, t('mt.desc')),
+                h(ui.Field, { value: editing.text, maxLength: 160, placeholder: mode.usualDesc, 'aria-label': `${t('mt.desc')}: ${mode.label}`, onChange: (event) => setEditing({ ...editing, text: event.target.value }) })),
+              h(ui.Desc, null, t('mt.desc.hint')),
+              h('div', { className: 'dsh-me-mt-actions' },
+                h(ui.Button, { onClick: () => setEditing(null) }, t('mt.cancel')),
+                h(ui.Button, { main: true, disabled: busy, onClick: async () => { if (await run({ action: 'describe', modeId: mode.id, text: editing.text })) setEditing(null); } }, t('mt.save')))) : null);
+        }),
+        page.rules ? h(SpaceRules, { t, ui, lang, rules: page.rules, busy, onSet: (patch) => void run({ action: 'rules', ...patch }) }) : null,
+        problem && !problem.load ? h(ui.ErrorNote, { error: problem.error, fix: t('sp.save.fix') }) : null);
+    }
+
+    /**
+     * Item 4A, stage 6a: Settings → Modes → Spaces' rules: the extra tools a mode keeps in Recon (the Library tools only,
+     * default none, with the warning line) and "Tool access Off also applies in Devices and Workshop" (default on).
+     */
+    function SpaceRules({ t, ui, lang, rules, busy, onSet }) {
+      const extra = Array.isArray(rules.sealedExtra) ? rules.sealedExtra : [];
+      const choices = Array.isArray(rules.sealedExtraChoices) ? rules.sealedExtraChoices : [];
+      return h('div', { className: 'dsh-me-sprules', 'data-space-rules': '' },
+        h('div', { className: 'dsh-me-group' }, t('mt.rules'), h(ui.Info, { title: t('mt.rules'), what: t('mt.rules.i.what'), change: t('mt.rules.i.change'), lang })),
+        h(SpRow, { title: t('mt.rules.extra'), desc: t('mt.rules.extra.desc'), info: { title: t('mt.rules.extra'), what: t('mt.rules.extra.i.what'), change: t('mt.rules.extra.i.change'), lang },
+          notes: extra.length > 0 ? [h('div', { key: 'warn', className: 'dsh-me-plock-note', 'data-warn': 'true' }, t('mt.rules.extra.warn'))] : [] },
+        // Lab fix (6a): each switch shows its short name beside it (not only in its aria-label).
+        h('span', { className: 'dsh-me-sprules-choices' }, choices.map((name) => h('span', { key: name, className: 'dsh-me-sprules-choice', 'data-extra-choice': name },
+          h(ui.Switch, {
+            on: extra.includes(name), disabled: busy, label: t(`mt.rules.extra.${name}`),
+            onChange: (on) => onSet({ sealedExtra: on ? [...new Set([...extra, name])] : extra.filter((one) => one !== name) }),
+          }),
+          h('span', { className: 'dsh-me-sprules-name' }, t(`mt.rules.extra.${name}`)))))),
+        h(SpRow, { title: t('mt.rules.grid'), desc: t('mt.rules.grid.desc'), info: { title: t('mt.rules.grid'), what: t('mt.rules.grid.i.what'), change: t('mt.rules.grid.i.change'), lang } },
+          h(ui.Switch, { on: rules.gridInGuarded !== false, disabled: busy, label: t('mt.rules.grid'), onChange: (on) => onSet({ gridInGuarded: on }) })));
+    }
+
+    /**
+     * Round 2 (mock-up f, part 2): an add-on mode read-only, inside its editor on Settings → Modes: its instructions in
+     * short, its tools, its file access, its model tier and the spaces it is ticked for. Only its description and its
+     * ticks can be changed (above and below); the rest comes from its add-on.
+     */
+    function ModeAbout({ t, ui, lang, mode, names }) {
+      const [listed, setListed] = useState(false);
+      const about = mode.about;
+      const tools = about.tools === 'list' ? t('mt.ro.tools.list', { n: about.toolCount }) : t(about.tools === 'none' ? 'mt.ro.tools.none' : 'mt.ro.tools.all');
+      const spaces = mode.ticks.filter((tick) => tick.on).map((tick) => names.get(tick.space) ?? tick.space);
+      const line = (key, value, extra) => h('div', { className: 'dsh-me-ro-line', 'data-about': key },
+        h('span', { className: 'dsh-me-ro-key' }, t(`mt.ro.${key}`)),
+        h('span', { className: 'dsh-me-ro-val' }, value, extra ?? null));
+      return h('div', { className: 'dsh-me-ro', 'data-mode-about': mode.id },
+        h('div', { className: 'dsh-me-ro-head' }, h('span', null, t('mt.ro.title')),
+          h(ui.Info, { title: `${t('mt.ro.title')}: ${mode.label}`, what: t('mt.ro.i.what'), change: t('mt.ro.i.change'), lang })),
+        line('instructions', about.instructions || t('mt.ro.instructions.none')),
+        line('tools', tools, about.tools === 'list' && about.toolCount > 0
+          ? h(React.Fragment, null, ' ', h('button', { type: 'button', className: 'dsh-me-linkbtn', 'aria-expanded': listed, onClick: () => setListed(!listed) }, t(listed ? 'mt.ro.tools.hide' : 'mt.ro.tools.show')),
+            listed ? h('span', { className: 'dsh-me-ro-tools' }, about.toolNames.map((name) => h('code', { key: name }, name))) : null)
+          : null),
+        line('access', t(`mt.ro.access.${about.access}`)),
+        line('tier', about.tier || t('mt.ro.tier.none')),
+        line('spaces', spaces.length > 0 ? spaces.join(', ') : t('mt.ro.spaces.none')));
+    }
+
+    /** The look of Settings → Spaces and of the ticks: cards and fields from docs/UI-STYLE.md, app variables only. */
+    const SP_CSS = `
+.dsh-me-sprules-choices { display: inline-flex; flex-wrap: wrap; gap: 12px; }
+.dsh-me-sprules-choice { display: inline-flex; align-items: center; gap: 6px; }
+.dsh-me-sprules-name { font-size: 13px; color: var(--dsw-alias-label-primary); }
+.dsh-me-spc { margin: 0 0 12px; padding: 4px 16px; border-radius: 20px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-1)); }
+.dsh-me-spc[data-hidden="true"] .dsh-me-spc-name b { color: var(--dsw-alias-label-secondary); }
+.dsh-me-spc-head { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
+.dsh-me-spc-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 14px; line-height: 22px; }
+.dsh-me-spc-name b { font-weight: 500; }
+.dsh-me-spc-tag { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 10px; border: 0.5px solid var(--dsw-alias-border-l2); font-size: 11px; color: var(--dsw-alias-label-secondary); white-space: nowrap; }
+.dsh-me-spc { overflow: hidden; }
+.dsh-me-spc > .dsh-me-sprow:last-child { margin-bottom: -1px; }
+.dsh-me-spnotes { margin: -8px 0 12px; display: flex; flex-direction: column; gap: 4px; }
+.dsh-me-spsel { flex: none; width: 220px; max-width: 46%; appearance: auto; }
+.dsh-me-sporder { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.dsh-me-sporder li { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px 0 10px; border-radius: 8px; border: 0.5px solid var(--dsw-alias-border-l2); font-size: 12px; }
+.dsh-me-sporder-n { color: var(--dsw-alias-label-secondary); }
+.dsh-me-spicon { width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 13px; cursor: pointer; }
+.dsh-me-spicon:hover:not(:disabled) { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+.dsh-me-spicon:disabled { opacity: .35; cursor: default; }
+.dsh-me-spicon:focus-visible, .dsh-me-mt-box:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.dsh-me-spsaid { margin: 8px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.dsh-me-mt { margin: 4px 0 8px; }
+.dsh-me-mt-row { display: grid; grid-template-columns: minmax(160px, 1fr) repeat(5, 72px) 32px; align-items: center; gap: 4px; padding: 10px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
+.dsh-me-mt-headrow { padding: 6px 0; font-size: 11px; line-height: 16px; font-weight: 600; text-transform: uppercase; color: var(--dsw-alias-label-secondary); }
+.dsh-me-mt-item:last-child .dsh-me-mt-row { border-bottom: 0; }
+.dsh-me-mt-col { display: inline-flex; align-items: center; justify-content: center; }
+.dsh-me-mt-name { min-width: 0; }
+.dsh-me-mt-title { display: flex; align-items: center; gap: 8px; font-size: 14px; line-height: 22px; }
+.dsh-me-mt-desc { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.dsh-me-mt-box { width: 16px; height: 16px; margin: 0; accent-color: var(--dsw-alias-brand-primary); cursor: pointer; }
+.dsh-me-mt-box:disabled { opacity: .35; cursor: not-allowed; }
+.dsh-me-mt-edit { display: inline-flex; justify-content: center; }
+.dsh-me-mt-editor { margin: 0 0 12px; padding: 12px 16px; border-radius: 20px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-1)); }
+.dsh-me-mt-field { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.dsh-me-mt-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.dsh-me-ro { margin: 8px 0 4px; padding: 4px 0; border-top: 0.5px solid var(--dsw-alias-border-l1); border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
+.dsh-me-ro-head { display: flex; align-items: center; gap: 6px; margin: 6px 0 2px; font-size: 11px; line-height: 16px; font-weight: 600; text-transform: uppercase; color: var(--dsw-alias-label-secondary); }
+.dsh-me-ro-line { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 6px 0; font-size: 12px; line-height: 18px; }
+.dsh-me-ro-key { color: var(--dsw-alias-label-secondary); }
+.dsh-me-ro-val { color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
+.dsh-me-ro .dsh-me-linkbtn { border: 0; padding: 0; background: transparent; font: inherit; cursor: pointer; color: var(--dsw-alias-label-primary); text-decoration: underline; }
+.dsh-me-ro-tools { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.dsh-me-ro-tools code { padding: 0 6px; border-radius: 6px; font-size: 11px; line-height: 18px; background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); }
+@media (max-width: 620px) { .dsh-me-mt-row { grid-template-columns: minmax(120px, 1fr) repeat(5, 44px) 28px; } .dsh-me-mt-headrow { font-size: 10px; } .dsh-me-spsel { width: 100%; max-width: none; } }
+`;
+
+    // ---- the preset menu: its (i), the lock and the PTC note (item 7) ----------------------------------------------
+
+    /** The app's preset menu on the new-chat page sits in this slot (its wrapper has display: contents). */
+    const PRESET_CHIP_SLOT = "[data-slot='conversation.hero.agentPreset']";
+
+    /**
+     * The app's own menu button inside the chip slot (not our (i), whose button opens a dialog).
+     * @param {Element | null} slot - the slot wrapper.
+     * @returns {Element | null} the button.
+     */
+    function presetChipButton(slot) {
+      return slot?.querySelector?.('button[aria-haspopup="menu"]') ?? null;
+    }
+
+    /**
+     * Grey the app's preset menu and take it out of the keyboard order, or give it back. The app does not manage
+     * these two attributes, so they stay until removed here; a renamed slot leaves the menu as it is.
+     * @param {Element | null} slot - the slot wrapper.
+     * @param {boolean} locked - whether the tab is locked to a preset.
+     * @returns {boolean} whether a menu button was found.
+     */
+    function applyChipLock(slot, locked) {
+      const button = presetChipButton(slot);
+      if (!button) return false;
+      if (locked) {
+        if (button.getAttribute('aria-disabled') !== 'true') button.setAttribute('aria-disabled', 'true');
+        if (button.getAttribute('tabindex') !== '-1') button.setAttribute('tabindex', '-1');
+        if (button.getAttribute('data-dsh-preset-lock') !== 'true') button.setAttribute('data-dsh-preset-lock', 'true');
+      } else if (button.getAttribute('data-dsh-preset-lock') === 'true') {
+        button.removeAttribute('aria-disabled');
+        button.removeAttribute('tabindex');
+        button.removeAttribute('data-dsh-preset-lock');
+      }
+      return true;
+    }
+
+    /**
+     * Whether a click or key on the chip slot must be stopped: only while locked, only on the app's menu button (never
+     * our (i)), and only the keys that open the menu.
+     */
+    function chipEventBlocked(event, locked) {
+      if (!locked) return false;
+      const target = event?.target;
+      if (target?.closest?.('.dshu-infowrap')) return false;
+      if (!target?.closest?.('button[aria-haspopup="menu"]')) return false;
+      if (event.type === 'keydown') return ['Enter', ' ', 'Spacebar', 'ArrowDown', 'ArrowUp'].includes(event.key);
+      return true;
+    }
+
+    /** The chip slot that belongs to the same new-chat row as a node of ours (Split Plus may show two). */
+    function presetSlotNear(node) {
+      let here = node?.parentElement ?? null;
+      for (let step = 0; here && step < 4; step += 1) {
+        const slot = here.querySelector?.(PRESET_CHIP_SLOT);
+        if (slot) return slot;
+        here = here.parentElement;
+      }
+      return null;
+    }
+
+    /** One conversation's preset view, read again every few seconds while shown. */
+    function usePresetView(appCtx, sessionId, every = 2500) {
+      const [view, setView] = useState(null);
+      useEffect(() => {
+        if (!sessionId) { setView(null); return undefined; }
+        let alive = true;
+        // Answers can cross: only the newest request may set the view.
+        let asked = 0;
+        const load = () => {
+          const mine = ++asked;
+          return fetch(new URL(PRESET_ROUTE, document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: presetHeaders(appCtx, sessionId) })
+            .then((response) => (response.ok ? response.json() : null), () => null)
+            .then((value) => { if (alive && value && mine === asked) setView(value); });
+        };
+        const timer = dshPoll.loop(() => load(), { every });
+        // The selected tab (defaultMode) and each tab's lock live in the Modes settings: a change there is read at once,
+        // so the greying and the (i) never keep the previous tab's lock until the next look.
+        // A second read soon after: the server switches a blank draft to a locked tab's preset (or gives an Any tab's
+        // back) only once two reads show it stayed in the same tab, so a read made during a tab switch changes nothing.
+        let again = null;
+        const soon = () => { clearTimeout(again); again = setTimeout(() => { if (alive) void load(); }, 1700); };
+        soon();
+        const off = appCtx ? dshPoll.onChange(appCtx, (ns) => { if (ns === NS) { timer.poke(); soon(); } }) : () => {};
+        return () => { alive = false; clearTimeout(again); timer.stop(); off(); };
+      }, [appCtx, sessionId, every]);
+      return view;
+    }
+
+    /**
+     * Beside the app's preset menu on the new-chat page: the (i) (portalled into the menu's own slot, so it sits right
+     * after the menu), the lock in a locked tab (greyed, not reachable by keyboard) and, while PTC is picked in a tab
+     * where a program reaches more than the tab allows, one short line under the row. Nothing is blocked outside a lock.
+     */
+    function PresetHeroInfo({ appCtx, sessionId }) {
+      const ui = presetUi();
+      const view = usePresetView(appCtx, sessionId);
+      const anchor = useRef(null);
+      const [slot, setSlot] = useState(null);
+      const [noteBox, setNoteBox] = useState(null);
+      const locked = Boolean(view?.known && view.greyed && view.blank);
+      const lockedRef = useRef(false);
+      lockedRef.current = locked;
+      // Find the menu's slot in our row (it can appear a moment later than we do).
+      useEffect(() => {
+        if (typeof document === 'undefined') return undefined;
+        let stop = false;
+        const look = () => { if (stop) return; const found = presetSlotNear(anchor.current); setSlot((old) => (old === found ? old : found)); };
+        const timer = dshPoll.loop(look, { every: 1500 });
+        return () => { stop = true; timer.stop(); };
+      }, []);
+      // The lock: attributes on the app's button, kept through its re-renders, and its clicks and keys stopped.
+      useEffect(() => {
+        if (!slot) return undefined;
+        applyChipLock(slot, locked);
+        const observer = typeof MutationObserver === 'function' ? new MutationObserver(() => applyChipLock(slot, lockedRef.current)) : null;
+        observer?.observe(slot, { childList: true, subtree: true, attributes: true, attributeFilter: ['tabindex', 'aria-disabled'] });
+        const block = (event) => { if (chipEventBlocked(event, lockedRef.current)) { event.preventDefault(); event.stopPropagation(); } };
+        slot.addEventListener('click', block, true);
+        slot.addEventListener('pointerdown', block, true);
+        slot.addEventListener('keydown', block, true);
+        return () => {
+          observer?.disconnect();
+          slot.removeEventListener('click', block, true);
+          slot.removeEventListener('pointerdown', block, true);
+          slot.removeEventListener('keydown', block, true);
+          applyChipLock(slot, false);
+        };
+      }, [slot, locked]);
+      // The note's own line, right under the row.
+      const note = view?.known ? String(view.note ?? '') : '';
+      useEffect(() => {
+        const row = slot?.parentElement;
+        if (!note || !row || typeof document === 'undefined') { setNoteBox(null); return undefined; }
+        const box = document.createElement('div');
+        box.className = 'dsh-mpl-note';
+        box.setAttribute('role', 'status');
+        row.insertAdjacentElement('afterend', box);
+        setNoteBox(box);
+        return () => { box.remove(); };
+      }, [slot, Boolean(note)]);
+      const info = view?.known ? view.info : null;
+      return h('span', { ref: anchor, className: 'dsh-mpl-anchor', 'data-preset-locked': locked ? 'true' : undefined },
+        h('style', { dangerouslySetInnerHTML: { __html: PRESET_CSS } }),
+        info && slot ? ReactDOM.createPortal(h('span', { className: 'dsh-mpl-info' }, h(ui.Info, { ...info, label: info.title, portal: true })), slot) : null,
+        noteBox && note ? ReactDOM.createPortal(note, noteBox) : null);
+    }
+
+    /** Beside the read-only preset label of a started chat (the header's actions, right after the label): the same (i). */
+    function PresetHeaderInfo({ appCtx, sessionId }) {
+      const ui = presetUi();
+      const view = usePresetView(appCtx, sessionId, 6000);
+      if (!view?.known || !view.info) return null;
+      // The header's title row moves fixed children (container-type): the pop-up goes to the page body.
+      return h('span', { className: 'dsh-mpl-head' }, h('style', { dangerouslySetInnerHTML: { __html: PRESET_CSS } }), h(ui.Info, { ...view.info, label: view.info.title, portal: true }));
+    }
+
+    /** The lock's look: the app's menu greyed while locked; the note line under the row. App variables only. */
+    const PRESET_CSS = `
+button[data-dsh-preset-lock="true"] { opacity: .5; cursor: not-allowed; }
+.dsh-mpl-anchor { display: none; }
+.dsh-mpl-info { display: inline-flex; align-items: center; }
+.dsh-mpl-head { display: inline-flex; align-items: center; }
+.dsh-mpl-note { margin: 2px 0 0; padding: 0 16px 0 20px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+`;
+
     function ModesPage({ appCtx }) {
       const t = appCtx.locale.bind('modes');
       const [loaded, setLoaded] = useState({ status: 'loading' });
@@ -2922,9 +4675,11 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
       const [dirty, setDirty] = useState(false);
       const [busy, setBusy] = useState(false);
       const [message, setMessage] = useState(null);
-      const [answer, setAnswer] = useState({ rerun: true, thumbs: false, uniform: true });
-      const [trim, setTrim] = useState(['cowork', 'code', 'data']);
+      const [answer, setAnswer] = useState({ rerun: true, thumbs: false, uniform: true, colours: true });
+      const [trim, setTrim] = useState(['cowork', 'code', 'data', 'plain']);
       const [extraModes, setExtraModes] = useState([]);
+      // Item 4A, stage 5: your own one-line descriptions (`modeDescriptions`), saved with the mode cards.
+      const [descs, setDescs] = useState({});
       // Settings that save at once: where new conversations start, and the built-in working methods.
       const [general, setGeneral] = useState({ searchDepth: 'standard', scheduledMode: 'cowork', codeMethod: true, coworkMethod: true });
       // The Cowork sidebar's tab count, while the sidebar is on (null: it is off).
@@ -2938,21 +4693,24 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         setRows(toRows(base));
         setBroken(invalid);
         setDefaultMode(typeof view.defaultMode === 'string' ? view.defaultMode : 'cowork');
-        setAnswer({ rerun: view.rerunButton !== false, thumbs: view.hideFeedback === true, uniform: view.uniformBox !== false });
-        setTrim(Array.isArray(view.trimModes) ? view.trimModes : ['cowork', 'code', 'data']);
+        setAnswer({ rerun: view.rerunButton !== false, thumbs: view.hideFeedback === true, uniform: view.uniformBox !== false, colours: view.spaceColours !== false });
+        setTrim(Array.isArray(view.trimModes) ? view.trimModes : ['cowork', 'code', 'data', 'plain']);
         setExtraModes(extraModesOf(view));
+        setDescs(readObject(view.modeDescriptions));
         setGeneral({
           // The Depth start (the former Web Deep is Thorough).
           searchDepth: startDepthOf(view.searchDepth),
           scheduledMode: typeof view.scheduledMode === 'string' && view.scheduledMode ? view.scheduledMode : 'cowork',
           codeMethod: view.codeMethod !== false,
           coworkMethod: view.coworkMethod !== false,
+          plainFence: view.plainFence !== false,
           ownLenses: ownLensesOf(view.ownLenses).map(({ name, text }) => ({ name, text })),
           longTools: typeof view.longTools === 'string' ? view.longTools : '{}',
           modeStart: typeof view.modeStart === 'string' ? view.modeStart : '{}',
           verifiedSources: typeof view.verifiedSources === 'string' ? view.verifiedSources : '',
           webMixes: typeof view.webMixes === 'string' ? view.webMixes : '{}',
           skillsOff: typeof view.skillsOff === 'string' ? view.skillsOff : '{}',
+          presetLock: typeof view.presetLock === 'string' ? view.presetLock : '{}',
         });
         setDirty(false);
       }, []);
@@ -3011,14 +4769,16 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         setBusy(true);
         setMessage(null);
         try {
-          const ops = [
+          const opsFor = (value) => [
             { op: 'set', path: ['modes'], value: fromRows(rows) },
             { op: 'set', path: ['defaultMode'], value: defaultMode },
+            { op: 'set', path: ['modeDescriptions'], value: nextDescs(readObject(value?.modeDescriptions), descs, rows.map((row) => row.id)) },
           ];
-          let result = await appCtx.remote.settings.mutate(NS, ops, loaded.revision);
+          let fresh = await loadEditor(appCtx);
+          let result = await appCtx.remote.settings.mutate(NS, opsFor(fresh.value), loaded.revision);
           if (!result.ok && result.error.code === 'settings/conflict') {
-            const fresh = await loadEditor(appCtx);
-            result = await appCtx.remote.settings.mutate(NS, ops, fresh.revision);
+            fresh = await loadEditor(appCtx);
+            result = await appCtx.remote.settings.mutate(NS, opsFor(fresh.value), fresh.revision);
           }
           if (!result.ok) throw dshKit.fail(result.error);
           setLoaded((prev) => ({ ...prev, revision: result.value.revision }));
@@ -3124,11 +4884,11 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         try {
           const ops = [{ op: 'set', path: ['maxTabs'], value: count }];
           let fresh = await loadEditor(appCtx);
-          if (!fresh.shell) throw new Error('the Cowork sidebar is switched off');
+          if (!fresh.shell) throw new Error('the Left panel add-on is switched off');
           let result = await appCtx.remote.settings.mutate(SHELL_NS, ops, fresh.shell.revision);
           if (!result.ok && result.error.code === 'settings/conflict') {
             fresh = await loadEditor(appCtx);
-            if (!fresh.shell) throw new Error('the Cowork sidebar is switched off');
+            if (!fresh.shell) throw new Error('the Left panel add-on is switched off');
             result = await appCtx.remote.settings.mutate(SHELL_NS, ops, fresh.shell.revision);
           }
           if (!result.ok) throw dshKit.fail(result.error);
@@ -3154,19 +4914,25 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
 
       const tierList = h('datalist', { id: 'dsh-me-tiers' }, (loaded.tiers ?? []).map((id) => h('option', { key: id, value: id })));
       const choices = scheduledChoices(rows, extras);
+      // Item 4A: spaces are live and the Cowork sidebar shows the space buttons (Modes' route says so).
+      const spacesOn = Boolean(shell?.spaces);
       // Mode cards beyond the sidebar's tab count have no tab (only while the sidebar is on).
-      const tabless = shell ? withoutTab(rows, shell.maxTabs) : new Set();
+      const tabless = shell && !shell.spaces ? withoutTab(rows, shell.maxTabs) : new Set();
       const Field = (label, control, wide) =>
         h('label', { className: 'dsh-me-field' + (wide ? ' wide' : '') }, h('span', null, label), control);
 
       return h(
         'div',
         { className: 'dsh-me-page' },
-        h('style', { dangerouslySetInnerHTML: { __html: CSS } }),
+        h('style', { dangerouslySetInnerHTML: { __html: CSS + SP_CSS } }),
         tierList,
-        h('div', { className: 'dsh-me-head' }, h('h2', null, t('section.title')), h('p', null, t('head.hint'))),
+        h('div', { className: 'dsh-me-head' }, h('h2', null, t('section.title')), h('p', null, t(spacesOn ? 'head.hint.spaces' : 'head.hint'))),
         broken ? h('div', { className: 'dsh-me-note', 'data-bad': 'true' }, t('e.broken')) : null,
-        Field(
+        // Item 4A, stage 5: with spaces, each space has its own start mode (Settings → Spaces) and every mode its space ticks.
+        spacesOn ? h(SpRow, { title: t('mt.start'), desc: t('mt.start.hint'), info: { title: t('mt.start'), what: t('mt.start.i.what'), when: t('mt.start.i.when'), change: t('mt.start.i.change'), lang: presetLang(appCtx) } }, h(spUi().Button, { onClick: () => spOpenSection(appCtx, 'spaces') }, t('mt.start.open'))) : null,
+        spacesOn ? h('div', { className: 'dsh-me-group' }, t('mt.group'), h(spUi().Info, { title: t('mt.group'), what: t('mt.what'), when: t('mt.when'), change: t('mt.change'), lang: presetLang(appCtx) })) : null,
+        spacesOn ? h(ModeTicks, { appCtx, t }) : null,
+        spacesOn ? null : Field(
           t('default.label'),
           h(
             'select',
@@ -3198,7 +4964,9 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         h('div', { className: 'dsh-me-group' }, t('start.group')),
         h('div', { className: 'dsh-me-note' }, t('start.hint')),
         h('div', null,
-          [...rows.map((row) => ({ id: row.id, label: row.label.trim() || row.id, isolated: false })), ...extras.map((extra) => ({ id: extra.id, label: extra.label, isolated: extra.isolated }))]
+          [...rows.map((row) => ({ id: row.id, label: row.label.trim() || row.id, isolated: false })), ...extras.map((extra) => ({ id: extra.id, label: extra.label, isolated: extra.isolated })),
+            // Fix round: Plain chat (built in, never stored) has starting values too.
+            ...Object.entries(ADDED_MODES).filter(([id]) => !rows.some((row) => row.id === id) && !extras.some((extra) => extra.id === id)).map(([id, value]) => ({ id, label: value.label, isolated: false }))]
             .filter((tab) => tab.id)
             .map((tab) => {
               let saved = {};
@@ -3231,9 +4999,16 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
                   pick('helpers', ['same', 'roles'], (value) => t(`start.helpers.${value}`)),
                   pick('tools', ['off'], (value) => t(`start.tools.${value}`))));
             })),
+        // Preset in this tab (item 7): Any, Standard only or Creator only, per tab; loosening a default lock asks first.
+        // With spaces it is "Preset in this space" on Settings → Spaces (stage 5), with the same stored values.
+        h('div', { className: 'dsh-me-group' }, spacesOn ? t('sp.preset') : t('plock.group')),
+        h('div', { className: 'dsh-me-note' }, spacesOn ? t('mt.moved') : t('plock.hint')),
+        spacesOn
+          ? h('div', { className: 'dsh-me-row' }, h('button', { type: 'button', className: 'dsh-me-btn', onClick: () => spOpenSection(appCtx, 'spaces') }, t('mt.start.open')))
+          : h(PresetLockRows, { t, appCtx, saved: general.presetLock ?? '{}', onSave: (value) => saveNow('presetLock', value) }),
         // The tab count is the Cowork sidebar's: shown only while the sidebar is on.
-        shell ? h('div', { className: 'dsh-me-group' }, t('tabs.group')) : null,
-        shell
+        shell && !shell.spaces ? h('div', { className: 'dsh-me-group' }, t('tabs.group')) : null,
+        shell && !shell.spaces
           ? h('div', null,
               Choice(t('tabs.count'), t('tabs.count.hint'), String(shell.maxTabs),
                 [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n) })),
@@ -3243,12 +5018,30 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         h('div', null,
           Toggle(t('method.code'), t('method.code.hint'), general.codeMethod, (on) => void saveNow('codeMethod', on)),
           Toggle(t('method.cowork'), t('method.cowork.hint'), general.coworkMethod, (on) => void saveNow('coworkMethod', on))),
-        // Each tab's starting choice of tools for a Long run (the run's card can change it for one run).
+        // Item 4A, fix round 2: Plain chat's folder fence, a setting with a default (on); switching it off asks first and
+        // the row then says what is open.
+        h('div', { className: 'dsh-me-group' }, t('fence.group')),
+        h('div', { 'data-fence': '' },
+          h('div', { className: 'dsh-me-toggle' },
+            h('div', null,
+              // Final fix round: the (i) is kept beside the label's last word.
+              h('b', null, t('fence.title'), '\u00a0', h('span', { style: { whiteSpace: 'nowrap', display: 'inline-block' } }, h(tgUi().Info, { title: t('fence.title'), what: t('fence.what'), when: t('fence.when'), change: t('fence.change'), lang: presetLang(appCtx) }))),
+              h('span', null, t('fence.hint'))),
+            h('button', {
+              type: 'button', role: 'switch', className: 'dsh-me-sw', 'aria-checked': general.plainFence !== false, 'aria-label': t('fence.title'),
+              onClick: async () => {
+                const on = general.plainFence === false;
+                if (!on && !(await dshKit.ask({ title: t('fence.ask.title'), text: t('fence.ask.text'), ok: t('fence.ask.ok'), cancel: t('mt.cancel'), danger: true }))) return;
+                void saveNow('plainFence', on);
+              },
+            })),
+          general.plainFence === false ? h('div', { className: 'dsh-me-note', 'data-bad': 'true', role: 'status' }, t('fence.off')) : null),
+        // Each tab's starting choice of tools for a Mission (its settings form can change it for one chat).
         h('div', { className: 'dsh-me-group' }, t('long.group')),
         h('div', { className: 'dsh-me-note' }, t('long.hint')),
         h('div', null,
           [...rows.map((row) => ({ id: row.id, label: row.label.trim() || row.id, isolated: false })), ...extras.map((extra) => ({ id: extra.id, label: extra.label, isolated: extra.isolated }))]
-            // Not in an isolated tab (Recon): a Long run cannot start there yet.
+            // Not in an isolated tab (Recon): a Mission keeps to Recon's own tools.
             .filter((tab) => tab.id && !tab.isolated)
             .map((tab) => {
               let saved = {};
@@ -3301,6 +5094,10 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         h('div', null,
           Toggle(t('answer.rerun'), t('answer.rerun.hint'), answer.rerun, (on) => void flipAnswer('rerunButton', 'rerun', on)),
           Toggle(t('answer.thumbs'), t('answer.thumbs.hint'), answer.thumbs, (on) => void flipAnswer('hideFeedback', 'thumbs', on))),
+        // With spaces the colours switch is on Settings → Spaces (the same setting; the note above says so).
+        spacesOn ? null : h('div', { className: 'dsh-me-group' }, t('space.group')),
+        spacesOn ? null : h('div', null,
+          Toggle(t('space.colours'), t('space.colours.hint'), answer.colours, (on) => void flipAnswer('spaceColours', 'colours', on))),
         h('div', { className: 'dsh-me-group' }, t('trim.group')),
         h('div', { className: 'dsh-me-note' }, t('trim.hint')),
         h('div', null,
@@ -3346,6 +5143,12 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
               ),
             ),
             bad === 'e.id' ? h('div', { className: 'dsh-me-note', 'data-bad': 'true' }, t('e.id')) : null,
+            // Item 4A, stage 5: one line for the chat box's Mode list (`modeDescriptions`, saved with the cards).
+            // Not a <label>: its (i) is a button of its own.
+            h('div', { className: 'dsh-me-field wide' },
+              h('span', { className: 'dsh-me-desc-label' }, t('f.desc'), ' ', h(spUi().Info, { title: t('f.desc'), what: t('f.desc.i.what'), when: t('f.desc.i.when'), change: t('f.desc.i.change'), lang: presetLang(appCtx) })),
+              h('input', { className: 'dsh-me-in', 'aria-label': t('f.desc'), value: descs[row.id] ?? '', maxLength: 160, placeholder: t('f.desc.hint'), 'data-mode-desc': row.id, onChange: (event) => { setDescs((prev) => ({ ...prev, [row.id]: event.target.value })); setDirty(true); setMessage(null); } }),
+            ),
             h(
               'div',
               { className: 'dsh-me-field wide' },
@@ -3447,7 +5250,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
           if (fix && wrongTimes >= 2) {
             wrongTimes = 0;
             await manager.setPluginEnabled(stock.entryId, fix === 'stock-on');
-            log?.(fix === 'stock-on' ? 'The app\'s own sidebar was switched on again: the Cowork sidebar is off.' : 'The app\'s own sidebar was switched off: the Cowork sidebar is on.');
+            log?.(fix === 'stock-on' ? 'The app\'s own sidebar was switched on again: the Left panel add-on is off.' : 'The app\'s own sidebar was switched off: the Cowork sidebar is on.');
           }
         } catch { /* the plugin manager is busy or not there: the next look tries again */ } finally { busy = false; }
       };
@@ -3572,10 +5375,10 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
     function tgConvoLabel(sessionId, titles, when) {
       const title = String(titles?.[sessionId] ?? '').trim();
       if (title) return title.length > 60 ? `${title.slice(0, 59)}…` : title;
-      return when ? `An earlier conversation (${tgWhen(when)})` : 'An earlier conversation';
+      return when ? `An earlier thread (${tgWhen(when)})` : 'An earlier thread';
     }
     /** A tab by the label on its button; one that is gone by a plain "a tab that is gone". */
-    const tgTabLabel = (modeId, labels) => (modeId ? labels?.[modeId] ?? 'A tab that is gone' : '');
+    const tgTabLabel = (modeId, labels) => (modeId ? labels?.[modeId] ?? 'A mode that is gone' : '');
     const tgPlural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
     /**
@@ -3584,7 +5387,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
      */
     function tgCellChange(grid, modeId, groupId, state) {
       const mode = (grid?.modes ?? []).find((one) => one.id === modeId);
-      if (!mode) return { ok: false, why: 'That tab is not there any more. Reload the page.' };
+      if (!mode) return { ok: false, why: 'That mode is not there any more. Reload the page.' };
       if (!TG_STATES.includes(state)) return { ok: false, why: 'Choose On, Ask or Off.' };
       const cell = grid.cells?.[modeId]?.[groupId];
       if (!cell) return { ok: false, why: 'That group is not there any more. Reload the page.' };
@@ -3598,7 +5401,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
       const row = (rows ?? []).find((one) => one.name === tool);
       if (!row) return { ok: false, why: 'That tool is not in the list any more. Reload the page.' };
       if (!TG_STATES.includes(state)) return { ok: false, why: 'Choose On, Ask or Off.' };
-      if (row.state === 'locked') return { ok: false, why: 'This tab has its own safety rules, so its tools are fixed. They cannot be changed here.' };
+      if (row.state === 'locked') return { ok: false, why: 'This mode has its own safety rules, so its tools are fixed. They cannot be changed here.' };
       // A highest-risk tool can only be switched Off here, never On or Ask (only the owner can switch it on, in the app's own settings).
       if (tgSettingsOnly(row) && state !== 'off') return { ok: false, why: TG_SETTINGS_WHY };
       return { ok: true, rows: rows.map((one) => (one.name === tool ? { ...one, state } : one)) };
@@ -3639,7 +5442,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
       const out = [];
       for (const row of rows ?? []) {
         if (row.state === 'off') continue;
-        const status = row.state === 'on' ? 'available now' : row.state === 'locked' ? 'fixed by this tab' : (row.tier ?? 0) >= 4 ? 'only you can switch this on' : 'can be requested';
+        const status = row.state === 'on' ? 'available now' : row.state === 'locked' ? 'fixed by this mode' : (row.tier ?? 0) >= 4 ? 'only you can switch this on' : 'can be requested';
         out.push({ name: row.name, plain: row.plain, purpose: row.purpose, group: row.group, groupLabel: row.groupLabel, risk: row.risk, status });
       }
       return out;
@@ -3653,7 +5456,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
       if (seconds < 3600) return `${tgPlural(Math.round(seconds / 60), 'minute', 'minutes')} ago`;
       if (seconds < 86400) return `${tgPlural(Math.round(seconds / 3600), 'hour', 'hours')} ago`;
       if (seconds < 172800) return 'yesterday';
-      return new Date(time).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+      return new Date(time).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     }
 
     const tgRiskWord = (row) => (tgSettingsOnly(row) ? (row.state === 'on' ? 'Highest' : 'Settings only') : row?.risk ?? '—');
@@ -3665,12 +5468,12 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
       const grants = Array.isArray(data?.grants) ? data.grants : [];
       const line = (grant, where) => ({
         id: grant.id, tool: grant.tool, plain: plainOf(grant.tool), where,
-        until: grant.expiresAt ? `until ${new Date(grant.expiresAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}` : '',
+        until: grant.expiresAt ? `until ${new Date(grant.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : '',
         given: tgWhen(grant.createdAt, now),
       });
       const sections = [
-        { id: 'conversation', label: 'This conversation', empty: 'Nothing is allowed for a single conversation right now.', items: grants.filter((g) => g.scope === 'conversation' || g.scope === 'once').map((g) => line(g, `${convoLabel(g.sessionId)}${g.scope === 'once' ? ' (next use only)' : ''}`)) },
-        { id: 'mode', label: 'This tab', empty: 'Nothing is allowed for a whole tab right now.', items: grants.filter((g) => g.scope === 'mode').map((g) => line(g, `In ${modeLabel(g.modeId)}`)) },
+        { id: 'conversation', label: 'This thread', empty: 'Nothing is allowed for a single thread right now.', items: grants.filter((g) => g.scope === 'conversation' || g.scope === 'once').map((g) => line(g, `${convoLabel(g.sessionId)}${g.scope === 'once' ? ' (next use only)' : ''}`)) },
+        { id: 'mode', label: 'This mode', empty: 'Nothing is allowed for a whole mode right now.', items: grants.filter((g) => g.scope === 'mode').map((g) => line(g, `In ${modeLabel(g.modeId)}`)) },
         { id: 'always', label: 'Always', empty: 'Nothing is allowed for always right now.', items: grants.filter((g) => g.scope === 'always').map((g) => line(g, 'Everywhere')) },
         { id: 'never', label: 'Don’t ask again', empty: 'You have not told the AI to stop asking for anything.', items: (Array.isArray(data?.blocks) ? data.blocks : []).map((b) => ({ id: b.id, tool: b.tool, plain: plainOf(b.tool), where: b.modeId ? `In ${modeLabel(b.modeId)}` : 'Everywhere', until: '', given: tgWhen(b.createdAt, now), block: true })) },
       ];
@@ -3680,7 +5483,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
     const TG_EVENTS = {
       asked: 'Asked', allowed: 'Allowed', denied: 'Denied', refused: 'Refused', waiting: 'Not answered', revoked: 'Revoked', 'revoked-all': 'Everything revoked', expired: 'Ran out', 'waiting-cleared': 'Dismissed',
     };
-    const TG_CHOICE = { once: 'once', conversation: 'for the conversation', mode: 'for the tab', always: 'always', deny: 'denied', never: 'don’t ask again', timeout: 'no answer in time', unavailable: 'no way to ask' };
+    const TG_CHOICE = { once: 'once', conversation: 'for the thread', mode: 'for the mode', always: 'always', deny: 'denied', never: 'don’t ask again', timeout: 'no answer in time', unavailable: 'no way to ask' };
 
     /** One record line in plain words. */
     function tgEventText(event, plainOf = (name) => name) {
@@ -3731,7 +5534,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
       return {
         now: list.filter((row) => row.status === 'available now'),
         ask: list.filter((row) => String(row.status ?? '').startsWith('can be requested')),
-        allowed: here.map((g) => ({ id: g.id, tool: g.tool, plain: list.find((row) => row.name === g.tool)?.plain ?? g.tool, scope: g.scope === 'always' ? 'always' : g.scope === 'mode' ? 'in this tab' : g.scope === 'once' ? 'next use only' : 'this conversation' })),
+        allowed: here.map((g) => ({ id: g.id, tool: g.tool, plain: list.find((row) => row.name === g.tool)?.plain ?? g.tool, scope: g.scope === 'always' ? 'always' : g.scope === 'mode' ? 'in this mode' : g.scope === 'once' ? 'next use only' : 'this thread' })),
       };
     }
 
@@ -3765,7 +5568,8 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
     /** The shared page parts and the error note, made once (new ones on every draw would remount the page and lose the cursor in a field). */
     let tgParts;
     let tgNoteFn;
-    const tgUi = () => (tgParts ??= dshUi.makeParts(React));
+    // ReactDOM too: an (i) with `portal: true` (the chat box's Put back) draws its pop-up in the page body (stage 6b lab fix).
+    const tgUi = () => (tgParts ??= dshUi.makeParts(React, ReactDOM));
     const tgNote = () => (tgNoteFn ??= dshKit.makeNote(React));
 
     /** Calls the service through its web route. A failure is thrown as a plain sentence. */
@@ -3820,6 +5624,8 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
 .dsh-tg-seg button:disabled { opacity: .45; cursor: default; }
 .dsh-tg-seg button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
 .dsh-tg-wrap { margin: 12px 0 0; overflow-x: auto; border-radius: 20px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-1)); }
+.dsh-tg-wrap::-webkit-scrollbar { height: 8px; }
+.dsh-tg-wrap::-webkit-scrollbar-thumb { border-radius: 4px; background: color-mix(in srgb, var(--dsw-alias-label-primary) 22%, transparent); }
 .dsh-tg-grid { display: grid; min-width: min-content; font-size: 12px; line-height: 18px; }
 .dsh-tg-grid > div { padding: 8px 6px; border-bottom: 0.5px solid var(--dsw-alias-border-l1); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; min-width: 0; }
 .dsh-tg-grid > .dsh-tg-corner, .dsh-tg-grid > .dsh-tg-gname { position: sticky; left: 0; z-index: 1; align-items: flex-start; text-align: left; padding-left: 14px; background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-1)); }
@@ -3903,7 +5709,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
       useEffect(() => { if (body.current) body.current.inert = off; }, [off, tab]);
       useEffect(() => () => clearTimeout(timer.current), []);
       const said = (text, error, undo) => { setSaved(error ? { error } : { text, undo }); clearTimeout(timer.current); if (!error) timer.current = setTimeout(() => setSaved(null), undo ? 12000 : 2500); };
-      const tabs = [['tabs', 'Tabs'], ['given', 'Permissions given'], ['history', 'History']];
+      const tabs = [['tabs', 'Modes'], ['given', 'Permissions given'], ['history', 'History']];
       const onKey = (event) => {
         const at = tabs.findIndex(([id]) => id === tab);
         const to = event.key === 'ArrowRight' ? at + 1 : event.key === 'ArrowLeft' ? at - 1 : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1;
@@ -3924,9 +5730,9 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
           setTimeout(reloadState, 800);
         } catch (error) { said('', error); } finally { setFlipping(false); }
       };
-      return h('div', { 'data-dsh-tool-access': '', 'data-off': String(off) }, h(ui.Page, { title: 'Tool access', desc: 'Decide, tab by tab, which tools the AI may use, which it may only ask you for, and which it never gets. Every change is saved the moment you make it.' },
+      return h('div', { 'data-dsh-tool-access': '', 'data-off': String(off) }, h(ui.Page, { title: 'Tool access', desc: 'Decide, mode by mode, which tools the AI may use, which it may only ask you for, and which it never gets. Every change is saved the moment you make it.' },
         // The switch is always here, On or Off, so it can always be found and undone.
-        h(ui.Row, { title: 'Tool access', desc: off ? 'Off. Every tab has exactly its own tools, the AI cannot ask for more, and no question is shown. Everything you set below, every permission you gave and the history are kept; they apply again when you switch it on.' : 'On. The AI gets a tool list and can ask you for one more tool, and what you set below applies. Switching it off keeps your choices, permissions and history.' },
+        h(ui.Row, { title: 'Tool access', desc: off ? 'Off. Every mode has exactly its own tools, the AI cannot ask for more, and no question is shown. Everything you set below, every permission you gave and the history are kept; they apply again when you switch it on.' : 'On. The AI gets a tool list and can ask you for one more tool, and what you set below applies. Switching it off keeps your choices, permissions and history.' },
           h(ui.Switch, { on: state.value === true, label: 'Tool access', disabled: flipping || (state.value === undefined && !state.error), onChange: () => void flip(off) })),
         h('div', { className: 'dsh-tg-tabs', role: 'tablist', 'aria-label': 'Tool access', onKeyDown: onKey },
           tabs.map(([id, label], index) => h('button', { key: id, ref: (node) => { tabRefs.current[index] = node; }, type: 'button', role: 'tab', className: 'dsh-tg-tab', 'aria-selected': tab === id, tabIndex: tab === id ? 0 : -1, onClick: () => setTab(id) }, label))),
@@ -3941,9 +5747,9 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         h('p', null, h('b', null, 'Ask'), ' means the AI can see the tool exists and can ask you for it. You get a question each time, and you choose how long the answer lasts.'),
         h('p', null, h('b', null, 'Off'), ' means the AI never gets the tool and is never told about it.'),
         h('p', null, h('b', null, 'Switching on'), ' always asks you first, with the tools it would switch on named. The question starts on Cancel, so pressing Enter by mistake changes nothing.'),
-        h('p', null, h('b', null, 'Mixed'), ' means you set some tools of a group one by one, so they differ. Clicking the group sets every tool in it to the same choice (you can undo it). ', h('b', null, 'Default'), ' means nothing there is your choice: the tab simply starts with some tools On and the rest on Ask. Clicking it asks first and names what changes.'),
-        h('p', null, 'The highest-risk tools (for example Git push) can only be switched on in the app\u2019s own settings. If one is already On in a tab, it shows as On here and you can switch it Off.'),
-        h('p', null, 'A padlock means that tab has its own safety rules (for example Recon, Devices, Creator Plus). Its tools are fixed and cannot be changed here. A permission you give can add a tool but never lifts those rules.'));
+        h('p', null, h('b', null, 'Mixed'), ' means you set some tools of a group one by one, so they differ. Clicking the group sets every tool in it to the same choice (you can undo it). ', h('b', null, 'Default'), ' means nothing there is your choice: the mode simply starts with some tools On and the rest on Ask. Clicking it asks first and names what changes.'),
+        h('p', null, 'The highest-risk tools (for example Git push) can only be switched on in the app\u2019s own settings. If one is already On in a mode, it shows as On here and you can switch it Off.'),
+        h('p', null, 'A padlock means that mode has its own safety rules (for example Recon, Devices, Creator Plus). Its tools are fixed and cannot be changed here. A permission you give can add a tool but never lifts those rules.'));
     }
 
     function TgTabsTab({ said }) {
@@ -3982,7 +5788,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         const wasMixed = plan.wipes;
         // Undo is only offered when what to put back is known (the list of tools was read).
         const canUndo = wasMixed && rows.length > 0;
-        await change(modeId, groupId, plan.to, wasMixed ? `Saved. ${group?.label ?? 'The group'} is now ${TG_WORD[plan.to]} for every tool in ${mode?.label ?? 'this tab'}; the tool-by-tool choices there were replaced.` : undefined, canUndo ? async () => {
+        await change(modeId, groupId, plan.to, wasMixed ? `Saved. ${group?.label ?? 'The group'} is now ${TG_WORD[plan.to]} for every tool in ${mode?.label ?? 'this mode'}; the tool-by-tool choices there were replaced.` : undefined, canUndo ? async () => {
           try {
             await tgCall('setCell', { modeId, groupId, state: before.cell });
             for (const one of before.tools) await tgCall('setTool', { modeId, tool: one.tool, state: one.state });
@@ -3998,7 +5804,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         } : undefined);
       };
       const reset = async (mode) => {
-        if (!(await dshKit.ask({ title: `Reset ${mode.label} to defaults?`, text: `${mode.label} goes back to the tools it has by default. Your own On, Ask and Off choices for this tab are removed. Permissions you gave stay (see Permissions given).`, ok: 'Reset' }))) return;
+        if (!(await dshKit.ask({ title: `Reset ${mode.label} to defaults?`, text: `${mode.label} goes back to the tools it has by default. Your own On, Ask and Off choices for this mode are removed. Permissions you gave stay (see Permissions given).`, ok: 'Reset' }))) return;
         try { await tgCall('resetMode', { modeId: mode.id }); said('Saved.'); reloadGrid(); } catch (error) { said('', error); }
       };
       if (gridState.error && !grid) return h(PlainNote, { error: gridState.error });
@@ -4009,15 +5815,15 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         h('div', { className: 'dsh-tg-bar' },
           h('div', { className: 'dsh-tg-seg', role: 'group', 'aria-label': 'How to show the tools' },
             [['groups', 'By group'], ['tools', 'Tool by tool']].map(([id, label]) => h('button', { key: id, type: 'button', 'aria-pressed': view === id, onClick: () => setView(id) }, label))),
-          view === 'groups' ? h('select', { className: 'dshu-field', style: { flex: 'none', width: 'auto' }, 'aria-label': 'Which tabs to show', value: only, onChange: (event) => setOnly(event.target.value) },
-            h('option', { value: '' }, 'All tabs'), grid.modes.map((mode) => h('option', { key: mode.id, value: mode.id }, mode.label))) : null),
-        view === 'groups' && modes.length > 5 ? h('p', { className: 'dshu-desc' }, 'There are many tabs: scroll the grid sideways, or choose one tab in the list.') : null,
+          view === 'groups' ? h('select', { className: 'dshu-field', style: { flex: 'none', width: 'auto' }, 'aria-label': 'Which modes to show', value: only, onChange: (event) => setOnly(event.target.value) },
+            h('option', { value: '' }, 'All modes'), grid.modes.map((mode) => h('option', { key: mode.id, value: mode.id }, mode.label))) : null),
+        view === 'groups' && modes.length > 5 ? h('p', { className: 'dshu-desc' }, 'There are many modes: scroll the grid sideways, or choose one mode in the list.') : null,
         view === 'groups' ? h(TgGrid, { grid, modes, onClick: click, onReset: reset }) : h(TgTools, { grid, said }));
     }
 
     function TgGrid({ grid, modes, onClick, onReset }) {
       const cols = `minmax(170px, 1.5fr) repeat(${modes.length}, minmax(84px, 1fr))`;
-      return h('div', { className: 'dsh-tg-wrap' }, h('div', { className: 'dsh-tg-grid', role: 'table', 'aria-label': 'Which tools each tab may use', style: { gridTemplateColumns: cols } },
+      return h('div', { className: 'dsh-tg-wrap' }, h('div', { className: 'dsh-tg-grid', role: 'table', 'aria-label': 'Which tools each mode may use', style: { gridTemplateColumns: cols } },
         h('div', { className: 'dsh-tg-corner', role: 'columnheader' }, h('span', { className: 'dsh-tg-sum' }, 'Tool group')),
         modes.map((mode) => h('div', { key: mode.id, role: 'columnheader', className: 'dsh-tg-mhead' }, mode.label, mode.locked ? h('span', { 'aria-hidden': true }, ' ', tgLock()) : null)),
         grid.groups.map((group) => {
@@ -4079,18 +5885,18 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
       const seeText = !seen ? 'Loading…' : seen.error ? 'The list could not be loaded.' : tgCatalogueText(seen.rows);
       return h(React.Fragment, null,
         h('div', { className: 'dsh-tg-bar' },
-          h('select', { className: 'dshu-field', style: { flex: 'none', width: 'auto' }, 'aria-label': 'Tab', value: modeId, onChange: (event) => setModeId(event.target.value) }, grid.modes.map((one) => h('option', { key: one.id, value: one.id }, one.label))),
+          h('select', { className: 'dshu-field', style: { flex: 'none', width: 'auto' }, 'aria-label': 'Mode', value: modeId, onChange: (event) => setModeId(event.target.value) }, grid.modes.map((one) => h('option', { key: one.id, value: one.id }, one.label))),
           h(ui.Field, { className: 'dshu-field dsh-tg-search', type: 'search', placeholder: 'Search tools', 'aria-label': 'Search tools', value: search, onChange: (event) => setSearch(event.target.value) }),
           h(ui.Button, { onClick: () => setPreview(!preview), disabled: !rows, 'aria-expanded': preview }, preview ? 'Hide what the AI sees' : 'Show what the AI sees')),
         mode?.locked ? h('div', { className: 'dsh-tg-card' }, h('p', null, `${mode.label} has its own safety rules, so its tools are fixed. You can see them here but not change them.`)) : null,
         preview ? h('div', { className: 'dsh-tg-card' },
-          h('p', null, `This is the list the AI is given in ${mode?.label ?? 'this tab'} when it asks what tools exist (never tools that are Off, never secrets). It is built again for each conversation.`),
-          h('div', { className: 'dsh-tg-pre', tabIndex: 0, 'aria-label': `What the AI sees in ${mode?.label ?? 'this tab'}` }, seeText)) : null,
-        rowsState.error && !rows ? h(PlainNote, { error: rowsState.error }) : !rows ? h(ui.Wait, null) : sections.length === 0 ? h(ui.Empty, { title: 'No tools match', text: search ? 'Try another word.' : 'This tab has no tools yet.' }) : sections.map((section) => h(React.Fragment, { key: section.group },
+          h('p', null, `This is the list the AI is given in ${mode?.label ?? 'this mode'} when it asks what tools exist (never tools that are Off, never secrets). It is built again for each thread.`),
+          h('div', { className: 'dsh-tg-pre', tabIndex: 0, 'aria-label': `What the AI sees in ${mode?.label ?? 'this mode'}` }, seeText)) : null,
+        rowsState.error && !rows ? h(PlainNote, { error: rowsState.error }) : !rows ? h(ui.Wait, null) : sections.length === 0 ? h(ui.Empty, { title: 'No tools match', text: search ? 'Try another word.' : 'This mode has no tools yet.' }) : sections.map((section) => h(React.Fragment, { key: section.group },
           h('div', { className: 'dsh-tg-head' }, section.label, h('small', null, section.group === 'unsorted' ? 'New tools start on Ask until you sort them.' : tgPlural(section.rows.length, 'tool', 'tools'))),
-          h('div', { className: 'dsh-tg-list' }, section.rows.map((row) => h(ui.Row, { key: row.name, title: h(React.Fragment, null, row.plain, row.plain === row.name ? null : h('span', { className: 'dsh-tg-raw' }, row.name)), desc: h(React.Fragment, null, row.purpose, h('br'), `From ${row.addon ? row.addon.replace(/^dsh-/, '') : 'the app'} · `, h('span', { className: 'dsh-tg-risk', 'data-tier': row.tier }, `Risk: ${tgRiskWord(row)}`), ` · Last allowed: ${lastAllowed.has(row.name) ? tgWhen(lastAllowed.get(row.name)) : 'never'}${row.addonOff ? ' · its add-on is off' : ''}${tgSettingsOnly(row) && row.state === 'on' ? ' · It is On in this tab now. Only you can switch it on, in the app\u2019s own settings; here you can switch it Off.' : ''}`) },
+          h('div', { className: 'dsh-tg-list' }, section.rows.map((row) => h(ui.Row, { key: row.name, title: h(React.Fragment, null, row.plain, row.plain === row.name ? null : h('span', { className: 'dsh-tg-raw' }, row.name)), desc: h(React.Fragment, null, row.purpose, h('br'), `From ${row.addon ? row.addon.replace(/^dsh-/, '') : 'the app'} · `, h('span', { className: 'dsh-tg-risk', 'data-tier': row.tier }, `Risk: ${tgRiskWord(row)}`), ` · Last allowed: ${lastAllowed.has(row.name) ? tgWhen(lastAllowed.get(row.name)) : 'never'}${row.addonOff ? ' · its add-on is off' : ''}${tgSettingsOnly(row) && row.state === 'on' ? ' · It is On in this mode now. Only you can switch it on, in the app\u2019s own settings; here you can switch it Off.' : ''}`) },
             h('div', { className: 'dsh-tg-seg', role: 'group', 'aria-label': `${row.plain}: ${TG_WORD[row.state] ?? row.state}` },
-              row.state === 'locked' ? h('button', { type: 'button', 'aria-pressed': true, disabled: true, title: 'Fixed by this tab’s own safety rules' }, tgLock(), ' Locked')
+              row.state === 'locked' ? h('button', { type: 'button', 'aria-pressed': true, disabled: true, title: 'Fixed by this mode’s own safety rules' }, tgLock(), ' Locked')
                 : tgSettingsOnly(row) ? h(React.Fragment, null,
                   // A highest-risk tool that is already On shows its true state and can be switched Off; it can never be switched On here.
                   row.state === 'on' ? h('button', { type: 'button', 'aria-pressed': true, disabled: true, title: 'This tool is On. Only you can switch it on, in the app\u2019s own settings.' }, 'On') : null,
@@ -4118,9 +5924,9 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
         try { await tgCall('revokeAll', {}); said('Saved. Every permission is revoked.'); reload(); } catch (error) { said('', error); }
       };
       return h(React.Fragment, null,
-        h('div', { className: 'dsh-tg-bar' }, h('span', { className: 'dshu-desc', style: { margin: 0, flex: 1 } }, 'What you have allowed the AI to use without asking again. A permission only ever adds a tool; it never lifts a tab’s safety rules.'),
+        h('div', { className: 'dsh-tg-bar' }, h('span', { className: 'dshu-desc', style: { margin: 0, flex: 1 } }, 'What you have allowed the AI to use without asking again. A permission only ever adds a tool; it never lifts a mode’s safety rules.'),
           h(ui.Button, { danger: true, disabled: total === 0, onClick: revokeAll }, 'Revoke everything')),
-        total === 0 ? h(ui.Empty, { title: 'Nothing is allowed yet', text: 'When the AI asks for a tool and you allow it for a conversation, a tab or always, it is listed here with a Revoke button.' }) : null,
+        total === 0 ? h(ui.Empty, { title: 'Nothing is allowed yet', text: 'When the AI asks for a tool and you allow it for a thread, a mode or always, it is listed here with a Revoke button.' }) : null,
         sections.map((section) => section.items.length === 0 && total === 0 ? null : h(React.Fragment, { key: section.id },
           h('div', { className: 'dsh-tg-head' }, section.label, h('small', null, tgPlural(section.items.length, 'item', 'items'))),
           section.items.length === 0 ? h('p', { className: 'dshu-desc' }, section.empty) : h('div', { className: 'dsh-tg-list' }, section.items.map((item) => h(ui.Row, { key: item.id, title: item.plain, desc: `${item.where}${item.until ? ` · ${item.until}` : ''}${item.given ? ` · given ${item.given}` : ''} · ${item.tool}` },
@@ -4160,8 +5966,8 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
           h(ui.Field, { className: 'dshu-field dsh-tg-search', type: 'search', placeholder: 'Search the history', 'aria-label': 'Search the history', value: search, onChange: (event) => setSearch(event.target.value) }),
           convo ? h(ui.Button, { onClick: () => setConvo('') }, `Showing: ${tgConvoLabel(convo, titles, records.find((one) => one.sessionId === convo)?.last)}. Show all`) : null),
         list.length === 0 ? h(ui.Empty, { title: events.value.length === 0 ? 'Nothing asked yet' : 'No entries match', text: events.value.length === 0 ? 'When the AI asks for a tool, it is recorded here.' : 'Try a different filter.' }) : h('div', { className: 'dsh-tg-list' }, list.slice(0, 200).map((event, index) => h(ui.Row, { key: `${event.t}-${index}`, title: tgEventText(event, plainOf), desc: `${tgWhen(event.t)}${event.modeId ? ` · ${tgTabLabel(event.modeId, labels)}` : ''}${event.sessionId ? ` · ${convoName(event)}` : ''}${event.reason ? ` · the AI said: “${event.reason}” (not checked)` : ''}` }))),
-        h('div', { className: 'dsh-tg-head' }, 'Record per conversation', h('small', null, 'How often each conversation asked')),
-        records.length === 0 ? h('p', { className: 'dshu-desc' }, 'No conversation has asked yet.') : h('div', { className: 'dsh-tg-rec' }, records.slice(0, 12).map((one) => h('span', { key: one.sessionId }, h('button', { type: 'button', onClick: () => { setConvo(one.sessionId); setKind('all'); }, title: 'Show only this conversation' }, tgConvoLabel(one.sessionId, titles, one.last)), `: asked ${one.asked}, allowed ${one.allowed}, denied ${one.denied}`))));
+        h('div', { className: 'dsh-tg-head' }, 'Record per thread', h('small', null, 'How often each thread asked')),
+        records.length === 0 ? h('p', { className: 'dshu-desc' }, 'No thread has asked yet.') : h('div', { className: 'dsh-tg-rec' }, records.slice(0, 12).map((one) => h('span', { key: one.sessionId }, h('button', { type: 'button', onClick: () => { setConvo(one.sessionId); setKind('all'); }, title: 'Show only this thread' }, tgConvoLabel(one.sessionId, titles, one.last)), `: asked ${one.asked}, allowed ${one.allowed}, denied ${one.denied}`))));
     }
 
     /** The chat box's Tools panel, second half: what the AI can ask for, what is allowed here (with Revoke), and the way to the page. */
@@ -4194,7 +6000,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
               h('p', { className: 'hint', style: { margin: '0 0 4px' } }, 'The AI can see these exist and may ask you for one. You decide each time.'),
               h('div', { className: 'names' }, tgAskGroups(parts.ask).map((one) => h('span', { key: one.group, 'data-tg-ask': '', title: one.names.join(', ') }, `${one.label} (${one.count})`)))),
         h('div', { className: 'head' }, `Allowed here (${parts.allowed.length})`),
-        parts.allowed.length === 0 ? h('div', { className: 'hint', style: { margin: 0 } }, 'You have not allowed anything extra for this conversation.')
+        parts.allowed.length === 0 ? h('div', { className: 'hint', style: { margin: 0 } }, 'You have not allowed anything extra for this thread.')
           : parts.allowed.map((item) => h('div', { key: item.id, className: 'row2' }, h('span', null, item.plain, ' ', h('small', null, `· ${item.scope}`)), h('button', { type: 'button', onClick: () => void revoke(item), 'aria-label': `Revoke ${item.plain}` }, 'Revoke'))),
         problem ? h('div', { className: 'hint', role: 'alert' }, problem) : null,
         h('div', { className: 'hint' }, h('button', { type: 'button', className: 'dshu-link', style: { fontSize: 12 }, onClick: openPage }, 'Open Tool access settings')));
@@ -4204,7 +6010,7 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
     function TgSimpleRow({ appCtx }) {
       const ui = tgUi();
       const [problem, setProblem] = useState('');
-      return h(ui.Row, { title: 'Tool permissions', desc: problem || 'Which tools each tab may use, which the AI may only ask you for, and what you have allowed so far.' },
+      return h(ui.Row, { title: 'Tool permissions', desc: problem || 'Which tools each mode may use, which the AI may only ask you for, and what you have allowed so far.' },
         h(ui.Button, { onClick: () => setProblem(tgOpenPage(appCtx, 'tool-access') ? '' : TG_NO_OPEN), 'data-tg-open': '' }, 'Open Tool access'));
     }
 
@@ -4222,6 +6028,15 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
             ctx.slots.register(
               { name: 'settings.section', id: 'modes', order: 100, label: () => t('section.title') },
               (props) => h(ModesPage, { ...props, appCtx: ctx }),
+            ),
+          ),
+        );
+        // Settings → Spaces (item 4A, stage 5): the order of the space buttons, the colours, and one card per space.
+        ctx.effect(() =>
+          ctx.slots.inject('settings.section', () =>
+            ctx.slots.register(
+              { name: 'settings.section', id: 'spaces', order: 99, label: () => t('sp.title') },
+              () => h(SpacesPage, { appCtx: ctx }),
             ),
           ),
         );
@@ -4278,6 +6093,34 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
             ),
           ),
         );
+        // Preset in this tab (item 7): the (i) beside the app's preset menu on the new-chat page (first in the row's
+        // options, portalled into the menu's own slot), with the lock and the PTC note; and beside the read-only
+        // preset label of a started chat (the label is at order -10).
+        ctx.effect(() =>
+          ctx.slots.inject('conversation.hero.options', () =>
+            ctx.slots.register(
+              { name: 'conversation.hero.options', id: 'modes-preset-info', order: 1 },
+              (props) => h(PresetHeroInfo, { appCtx: ctx, sessionId: props?.sessionId }),
+            ),
+          ),
+        );
+        ctx.effect(() =>
+          ctx.slots.inject('conversation.session.header.actions', () =>
+            ctx.slots.register(
+              { name: 'conversation.session.header.actions', id: 'modes-preset-info', order: -9 },
+              (props) => h(PresetHeaderInfo, { appCtx: ctx, sessionId: props?.sessionId }),
+            ),
+          ),
+        );
+        // Item 4A, stage 2: the quiet line after a turn where the mode was changed ("Mode changed to Research").
+        ctx.effect(() =>
+          ctx.slots.inject('conversation.chat.turnTail', () =>
+            ctx.slots.register(
+              { name: 'conversation.chat.turnTail', id: 'dsh-modes-change', order: -50 },
+              (props) => h(ModeChangeLine, { appCtx: ctx, sessionId: props?.sessionId, turn: props?.turn }),
+            ),
+          ),
+        );
         // After the app's own feedback pair (order 10), before Branch.
         ctx.effect(() =>
           ctx.slots.inject('conversation.chat.assistant-actions', () =>
@@ -4288,6 +6131,23 @@ html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:6.5em;overflow:hidden
           ),
         );
         void refreshAnswerFlags(ctx);
+        // Recon and Devices colours: the style and the window frame layer; the chat boxes mark where you are.
+        ctx.effect(() => (typeof document === 'undefined' ? () => {} : showSpaceColours(document)), 'modes: space colours');
+        // The colours switch is read again whenever Modes' settings change, also with no answer on screen.
+        // One read at a time: changes that arrive while it runs are covered by one more read after it (never one per change).
+        let flagsRun = null;
+        let flagsAgain = false;
+        const refreshFlagsOnce = () => {
+          if (flagsRun) { flagsAgain = true; return; }
+          flagsRun = (async () => {
+            try {
+              do { flagsAgain = false; await refreshAnswerFlags(ctx); } while (flagsAgain);
+            } finally {
+              flagsRun = null;
+            }
+          })();
+        };
+        ctx.effect(() => dshPoll.onChange(ctx, (ns) => { if (ns === NS) refreshFlagsOnce(); }), 'modes: colours switch');
       },
     };
   },

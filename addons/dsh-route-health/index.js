@@ -435,8 +435,8 @@ export function apply(ctx, config) {
     const why = plainReason(entry.error);
     throw new Error(
       moved
-        ? `Cannot reach ${label}. ${why.text} Your conversation now uses ${moved.to.provider}/${moved.to.model}; send your message again. (Details: ${why.details || 'none'})`
-        : `Cannot reach ${label}. ${why.text} No other model is set up to take over this conversation. (Details: ${why.details || 'none'}; last checked ${since})`,
+        ? `Cannot reach ${label}. ${why.text} Your thread now uses ${moved.to.provider}/${moved.to.model}; send your message again. (Details: ${why.details || 'none'})`
+        : `Cannot reach ${label}. ${why.text} No other model is set up to take over this thread. (Details: ${why.details || 'none'}; last checked ${since})`,
     );
   });
 

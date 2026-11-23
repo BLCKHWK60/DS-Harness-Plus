@@ -12,7 +12,7 @@
 #   - attachments larger than --max-attachment-mb (default 25)
 #   - profile config files (profiles/*/cordis.patch.yml, cordis.yml, package.json), because they can
 #     hold plaintext keys or tokens; --include-profile-config copies them and prints a warning
-# Session logs are copied as they are: they hold whatever was said in your conversations.
+# Thread logs (sessions/) are copied as they are: they hold whatever was said in your threads.
 set -eu
 
 src=${DSH_HOME:-$HOME/.dsh}

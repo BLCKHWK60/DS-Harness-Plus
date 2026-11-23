@@ -7,7 +7,7 @@
  * programs raise no event: those skills show as Not sorted or Changed, and the owner is asked.
  *
  * Paths are read exactly as the app's file tools read them (an independent review, 17 November): `~` is
- * the home folder, a relative path is in the conversation's own working folder, `..` goes through links
+ * the home folder, a relative path is in the thread's own working folder, `..` goes through links
  * the way the disk does, and apply_patch headers are trimmed of any white space, as the app's parser does.
  */
 import { realpathSync } from 'node:fs';
@@ -32,7 +32,7 @@ export function trimWhite(value) {
 /** `~` and `~/…` are the home folder, as the app's file tools take them. */
 export const expandHome = (path) => (path === '~' || path.startsWith('~/') ? `${homedir()}${path.slice(1)}` : path);
 
-/** A path made absolute the way the app does it: relative to the conversation's folder, `..` kept for the disk. */
+/** A path made absolute the way the app does it: relative to the thread's folder, `..` kept for the disk. */
 export function absoluteRaw(path, cwd) {
   const value = expandHome(String(path ?? ''));
   return isAbsolute(value) ? value : `${String(cwd ?? '') || '/'}/${value}`;
@@ -79,7 +79,7 @@ export function inReconRoom(path) {
  * The files a call of the app's file tools would write, as absolute paths (`..` left for the disk).
  * @param {string} name - the tool.
  * @param {object} args - its arguments.
- * @param {string} cwd - the conversation's own working folder.
+ * @param {string} cwd - the thread's own working folder.
  * @returns {string[]} the paths ([] for other tools).
  */
 export function writeTargets(name, args, cwd) {
@@ -146,9 +146,9 @@ export function writeDecision({ name, args, cwd, closed = [], dshHome, known = [
   const skills = targets.map((path) => ({ path, ...skillOf(path, { dshHome, known }) })).filter((one) => one.root);
   if (skills.length === 0) return { skills };
   const names = [...new Set(skills.map((one) => one.folder))];
-  if (helper) return { refuse: 'A helper may not write a skill. The conversation itself can, with your yes.', skills };
+  if (helper) return { refuse: 'A helper may not write a skill. The thread itself can, with your yes.', skills };
   return {
-    ask: `A model wants to write a skill: ${names.join(', ')}. A skill there loads in every conversation that reads that folder. Allow it this once?`,
+    ask: `A model wants to write a skill: ${names.join(', ')}. A skill there loads in every thread that reads that folder. Allow it this once?`,
     skills,
   };
 }

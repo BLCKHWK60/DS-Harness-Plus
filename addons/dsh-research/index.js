@@ -17,20 +17,21 @@ import { DEPTHS, FOCUSES, HELPER_MODELS, MODE_ID, listReports, saveReport, selec
 import { PACKET_SUFFIX, writePacket } from './lib/packet.js';
 import { openOwned, removeOwned } from './lib/owned.js';
 import { readJsonStore } from './lib/json-store.js';
+import { makeGuardOf } from './lib/space-guard.js';
 
 export const name = 'dsh-research';
 export const DATA_PATH = '/dsh-research/data';
 const MODES_NS = 'modes';
 
 export const Config = z.object({
-  /** The Research mode and tab. Off leaves nothing of it in the app. */
+  /** The Research mode. Off leaves nothing of it in the app. */
   enabled: z.boolean().default(false).volatile(),
   /**
    * Where a run looked first before the one Web selector (18 November 2026): web, news or academic. Read once to
    * carry it over into the Web selector's ticks (`focusMoved`); the chat box no longer sets it.
    */
   focus: z.string().default('web').volatile(),
-  /** Each conversation's Focus and this starting Focus have been carried over into the Web selector's ticks (once). */
+  /** Each thread's Focus and this starting Focus have been carried over into the Web selector's ticks (once). */
   focusMoved: z.boolean().default(false).volatile(),
   /** Where reports are saved. Empty: `research/reports` in the app's home. */
   folder: z.string().default('').volatile(),
@@ -67,6 +68,11 @@ export function focusFromTicks(ticks) {
 export function apply(ctx, config) {
   const warn = (text) => ctx.logger?.warn?.(`research: ${text}`);
   const enabled = () => plain(config?.enabled) === true;
+  // Item 4A, stage 6a: a sealed thread (Recon, any mode; a Modes read error counts) gets no saved report, no packet,
+  // no pin and no selection note. Research reports come only from deep_research, which is left out in Recon, so this
+  // is a belt. No Modes service: as before.
+  const guardOf = makeGuardOf(() => ctx.get('modes'));
+  const sealed = (id) => guardOf(String(id ?? '')).sealed === true;
   const home = ctx.get('dshHomePath');
   const researchHome = typeof home === 'function' ? home('research') : '';
   const folder = () => String(plain(config?.folder) ?? '').trim() || (researchHome ? join(researchHome, 'reports') : '');
@@ -115,7 +121,7 @@ export function apply(ctx, config) {
   // ---- which focus each conversation started with -------------------------------------------
   const pinFile = researchHome ? join(researchHome, 'conversations.json') : '';
   let pins = {};
-  if (pinFile) pins = readJsonStore(pinFile, () => ({}), { label: 'the focus Research kept for each conversation', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
+  if (pinFile) pins = readJsonStore(pinFile, () => ({}), { label: 'the focus Research kept for each thread', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
   const pin = (id, focus) => {
     pins[id] = focus;
     const ids = Object.keys(pins);
@@ -150,7 +156,7 @@ export function apply(ctx, config) {
       const service = ctx.get('settings');
       const row = service?.describe?.().find((entry) => entry.ns === MODES_NS);
       if (!row) {
-        problem = 'The Modes add-on is not running, so there is no Research tab.';
+        problem = 'The Modes add-on is not running, so the Research mode cannot be offered. Switch Modes on on the Plugins page.';
         return;
       }
       if (row.value?.extraModes === undefined) {
@@ -160,11 +166,14 @@ export function apply(ctx, config) {
       const ops = [];
       const next = withResearch(row.value.extraModes, enabled());
       if (next !== undefined) ops.push({ op: 'set', path: ['extraModes'], value: next });
+      // Item 4A, stage 6b (D14): without the Cowork sidebar (and in the lab with spaces off) `defaultMode` still picks a new
+      // thread's mode, so it must not name a mode that is gone. With spaces, Modes already skips a start mode whose
+      // add-on is off and keeps the owner's choice (lib/spaces.js draftStartMode, startModeGone).
       if (!enabled() && row.value.defaultMode === MODE_ID) ops.push({ op: 'set', path: ['defaultMode'], value: 'cowork' });
       if (ops.length > 0) await service.mutate(MODES_NS, ops);
       problem = engineProblem();
     } catch (error) {
-      problem = `The Research tab could not be ${enabled() ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
+      problem = `The Research mode could not be ${enabled() ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
       warn(problem);
     } finally {
       syncing = false;
@@ -246,7 +255,7 @@ export function apply(ctx, config) {
       if (event?.type !== 'turn/start' || session?.header?.origin === 'subagent') return;
       const id = session?.id;
       // After the carry-over a conversation's focus is its Web sources: nothing to pin.
-      if (!id || !enabled() || pins[id] || !inResearch(id) || plain(config?.focusMoved) === true) return;
+      if (!id || !enabled() || pins[id] || !inResearch(id) || plain(config?.focusMoved) === true || sealed(id)) return;
       pin(id, focusOf(plain(config?.focus)));
     } catch (error) {
       warn(`could not remember a conversation's focus: ${String(error?.message ?? error)}`);
@@ -264,7 +273,7 @@ export function apply(ctx, config) {
           interpolate: false,
           text: () => {
             try {
-              if (!enabled() || rootOf(agent) !== agent.id || !inResearch(agent.id)) return '';
+              if (!enabled() || rootOf(agent) !== agent.id || !inResearch(agent.id) || sealed(agent.id)) return '';
               return selectionNote({ focus: focusFor(agent.id), depth: depthFor(agent.id) });
             } catch {
               return '';
@@ -295,11 +304,13 @@ export function apply(ctx, config) {
         if (!enabled() || !inResearch(id)) return {};
         // Follow-up questions are for you to click in your own conversation; a helper's (one a Long run
         // started) has nobody to ask them, and clicking one would write to a helper that has finished.
-        return { focus: focusFor(id), followups: !isHelper(id), save: Boolean(folder()) };
+        // Item 4A, stage 6a: never saved from a sealed thread.
+        return { focus: focusFor(id), followups: !isHelper(id), save: Boolean(folder()) && !sealed(id) };
       },
       /** Save a finished report; returns the file. One made in a Scratch conversation is remembered with it. */
       saveReport(sessionId, report) {
-        if (!enabled() || !folder()) return '';
+        // Item 4A, stage 6a: nothing from a sealed thread lands in the shared Research folder.
+        if (!enabled() || !folder() || sealed(sessionId)) return '';
         const file = saveReport(folder(), report);
         // The packet beside it (step C2): its tables for the Content tab. A packet that cannot be written
         // never costs the report.

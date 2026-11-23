@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Experimental: A Split page: two to four conversations side by side in one window, each in any mode with its own controls and permission mode, sharing one folder. Off until you switch it on.",
+  "description": "Experimental: A Split page: two to four threads side by side in one window, each in any mode with its own controls and access level, sharing one folder. Off until you switch it on.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

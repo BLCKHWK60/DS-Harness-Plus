@@ -53,7 +53,7 @@ export function checkChange({ plugin, files }) {
     const rel = safeRelative(path);
     if (!rel) return { ok: false, why: `"${String(path).slice(0, 80)}" is not a file inside the plugin.`, files: {} };
     // Capitals ignored, as macOS does: LIB/Tools.js is lib/tools.js.
-    if (guardedFile(plugin.folder, rel)) return { ok: false, why: `${plugin.folder}/${rel} holds a safety rule of its tab; a change to it is blocked, not asked (fixed rule 3).`, files: {} };
+    if (guardedFile(plugin.folder, rel)) return { ok: false, why: `${plugin.folder}/${rel} holds a safety rule of its mode; a change to it is blocked, not asked (fixed rule 3).`, files: {} };
     out[rel] = String(text ?? '');
   }
   if (Object.keys(out).length === 0) return { ok: false, why: 'Name at least one file and its new text.', files: {} };

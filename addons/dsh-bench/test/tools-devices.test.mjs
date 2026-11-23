@@ -155,7 +155,7 @@ test('watching a port: only one bench_usb listed; the user is asked once per dev
   try {
     await settle();
     await app.call('bench_card', { name: 'ESP32 board 1', chip: 'ESP32' });
-    assert.match(await app.call('bench_serial_watch', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', minutes: 0.1 }), /not listed by bench_usb in this conversation in the last hour/);
+    assert.match(await app.call('bench_serial_watch', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', minutes: 0.1 }), /not listed by bench_usb in this thread in the last hour/);
     await app.call('bench_usb', {});
     assert.match(await app.call('bench_serial_watch', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', minutes: 0.1 }, { helper: true }), /a helper of a run cannot ask/, 'the first open needs the user, there');
     const first = await app.call('bench_serial_watch', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', baud: 115200, minutes: 0.1 });
@@ -334,7 +334,7 @@ test('Android: phones listed, details read; a setting changed only as the card a
   try {
     await settle();
     await app.call('bench_card', { name: 'Pixel 7' });
-    assert.match(await app.call('bench_android', { action: 'info', name: 'Pixel 7', serial: 'R58N123ABC' }), /listed in this conversation in the last hour/);
+    assert.match(await app.call('bench_android', { action: 'info', name: 'Pixel 7', serial: 'R58N123ABC' }), /listed in this thread in the last hour/);
     assert.match(await app.call('bench_android', { action: 'devices' }), /R58N123ABC: device, model Pixel 7/);
     assert.match(await app.call('bench_android', { action: 'info', name: 'Pixel 7', serial: 'R58N123ABC' }), /ro\.product\.model: Pixel 7[\s\S]*battery level: 81[\s\S]*bootloader is locked; Devices does not unlock it/);
     const logs = await app.call('bench_android', { action: 'logs', name: 'Pixel 7', serial: 'R58N123ABC', lines: 50 });
@@ -449,9 +449,9 @@ test('ports and phones are used only by the conversation that listed them', asyn
     await app.call('bench_card', { name: 'ESP32 board 1' });
     await app.call('bench_usb', {}, { conversation: 'b2' });
     await app.call('bench_android', { action: 'devices' }, { conversation: 'b2' });
-    assert.match(await app.call('bench_serial_watch', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', minutes: 0.1 }), /not listed by bench_usb in this conversation/);
+    assert.match(await app.call('bench_serial_watch', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', minutes: 0.1 }), /not listed by bench_usb in this thread/);
     await app.call('bench_card', { name: 'Pixel 7' });
-    assert.match(await app.call('bench_android', { action: 'info', name: 'Pixel 7', serial: 'R58N123ABC' }), /listed in this conversation/);
+    assert.match(await app.call('bench_android', { action: 'info', name: 'Pixel 7', serial: 'R58N123ABC' }), /listed in this thread/);
     assert.equal(app.state.watched.length, 0);
   } finally {
     app.close();
@@ -756,7 +756,7 @@ test('Ultra Code on: a checker with no tools reads the write plan first, and its
     assert.equal(app.state.checked.length, 1);
     assert.match(app.state.checked[0], /^BENCH_CHECKER\nYou check a plan[\s\S]*<plan>\nWrite app\.bin/);
     assert.doesNotMatch(app.state.checked[0], /flash\.bin[\s\S]*\x00/, 'only the plan\'s text');
-    assert.match(app.state.asked.at(-1), /A checker \(the conversation's own model, with no tools\) read this plan first: CONCERN: 0x10000 is fine/);
+    assert.match(app.state.asked.at(-1), /A checker \(the thread's own model, with no tools\) read this plan first: CONCERN: 0x10000 is fine/);
     app.state.approve = 'allowed-once';
     assert.match(await app.call('bench_esp32', args), /Written and read back/, 'the user decides');
   } finally {

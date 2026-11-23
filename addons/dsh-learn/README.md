@@ -17,7 +17,7 @@ Sources: Bastani et al., PNAS 2025; Kestin et al., Scientific Reports 2025; Sinh
 
 ## How to use it
 
-- In any conversation type `/learn` and what you want to learn:
+- In any thread type `/learn` and what you want to learn:
   - a topic: `/learn how compound interest works`
   - a file: `/learn chapter3.pdf` (uses the PDF reader, and gives pages)
   - code: `/learn the functions in parser.py`

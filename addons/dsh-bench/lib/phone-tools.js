@@ -83,7 +83,7 @@ export function buildPhoneTools(options) {
 
   const tool = {
     name: 'bench_phone',
-    description: 'An Android phone\'s bootloader and factory image (Write), for a phone whose card is linked to it (bench_android info) and listed in this conversation. action "backup": its shared storage (/sdcard: photos, downloads, documents) copied into its backups folder and counted; apps and their data, messages, accounts and eSIMs are NOT in it. "bootloader": restart it into its bootloader (after the user\'s yes) and read whether the maker allows unlocking and whether it is unlocked. "unlock": unlock the bootloader, which ERASES the phone: only when the maker allows it, with a checked backup, the user\'s own message "unlock <device name>" and their yes; the phone then asks on its own screen. "flash": the system image of the maker\'s factory image from the device\'s firmware folder (fastboot update), from a listed source with its published SHA-256, on an unlocked phone, behind the four conditions. Devices never writes the bootloader or the radio, never erases and never relocks. dryRun shows what would be sent.',
+    description: 'An Android phone\'s bootloader and factory image (Write), for a phone whose card is linked to it (bench_android info) and listed in this thread. action "backup": its shared storage (/sdcard: photos, downloads, documents) copied into its backups folder and counted; apps and their data, messages, accounts and eSIMs are NOT in it. "bootloader": restart it into its bootloader (after the user\'s yes) and read whether the maker allows unlocking and whether it is unlocked. "unlock": unlock the bootloader, which ERASES the phone: only when the maker allows it, with a checked backup, the user\'s own message "unlock <device name>" and their yes; the phone then asks on its own screen. "flash": the system image of the maker\'s factory image from the device\'s firmware folder (fastboot update), from a listed source with its published SHA-256, on an unlocked phone, behind the four conditions. Devices never writes the bootloader or the radio, never erases and never relocks. dryRun shows what would be sent.',
     parameters: {
       type: 'object',
       properties: {
@@ -106,7 +106,7 @@ export function buildPhoneTools(options) {
       const serial = phoneOf(exec, card, args.serial);
       if (action === 'backup') {
         allowed(card, 'read');
-        if (!seen(exec).serial(serial)) throw new Error('The phone is not listed in this conversation: bench_android action "devices" first.');
+        if (!seen(exec).serial(serial)) throw new Error('The phone is not listed in this thread: bench_android action "devices" first.');
         const adb = await program('adb');
         const count = Number(/(\d+)/.exec(String((await run(adb, ['-s', serial, 'shell', 'find /sdcard/ -type f 2>/dev/null | wc -l'], { timeoutMs: 120_000 })).stdout))?.[1] ?? NaN);
         if (!Number.isFinite(count)) throw new Error('The phone did not say how many files its storage holds.');
@@ -147,7 +147,7 @@ export function buildPhoneTools(options) {
       if (action === 'bootloader') {
         allowed(card, 'read');
         if (!(await inBootloader(fastboot, serial))) {
-          if (!seen(exec).serial(serial)) throw new Error('The phone is neither in its bootloader nor listed in this conversation: bench_android action "devices" first.');
+          if (!seen(exec).serial(serial)) throw new Error('The phone is neither in its bootloader nor listed in this thread: bench_android action "devices" first.');
           await yes(exec, `Restart "${card.name}" into its bootloader to read whether its maker allows unlocking? The phone restarts; nothing on it changes. To leave the bootloader, choose "Start" on its screen.`, `restarting ${card.name} into its bootloader`);
           await run(await program('adb'), ['-s', serial, 'reboot', 'bootloader'], { timeoutMs: 30_000 });
           for (let attempt = 0; attempt < 12 && !(await inBootloader(fastboot, serial)); attempt += 1) await sleep(5000);

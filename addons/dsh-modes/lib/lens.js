@@ -37,7 +37,7 @@ export const LENS_FOR = {
 };
 
 /** Every Lens: it wins on wording, never over the tab's rules (owner's answers: "Lens wins on wording", "Tab rules first"). */
-export const LENS_GUARD = "This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.";
+export const LENS_GUARD = "This Lens decides how the answer is worded, over general style preferences. The mode's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.";
 
 /** The fact-heavy Lenses: the web is never switched on for them (owner's answer: "Never change Web"). */
 export const LENS_UNCHECKED = 'Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact.';
@@ -48,7 +48,7 @@ export const LENS_PROMPTS = {
   blunt: [
     'Lens: Blunt. The most direct Lens. Answer first, at whatever length the question needs. No softening, euphemism, praise, reassurance or moral commentary, and no concern for whose feelings a fact hurts. Give the most likely explanation, not the most charitable one.',
     // Owner's answer on labels: the tab's own labels where it has them.
-    "Mark each key claim as fact, inference or guess; where this tab already labels claims its own way, use its labels instead.",
+    "Mark each key claim as fact, inference or guess; where this mode already labels claims its own way, use its labels instead.",
     LENS_UNCHECKED,
     LENS_GUARD,
   ].join(' '),

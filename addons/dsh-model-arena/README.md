@@ -1,8 +1,8 @@
 # Model arena
 
-Host plugin `@local/dsh-model-arena` (dsh 0.2.2-rc.1). Ask **one prompt to several models at once**, read the answers under **shuffled labels** (A, B, C, D) with no model name anywhere, let a **blind judge** and **you** pick, then **reveal** who wrote what, with latency and token counts. **Nothing is configured by default**: until you pick at least two models (Settings > Arena, or `candidates` in the config) the arena only shows its setup page.
+Host add-on `@local/dsh-model-arena` (dsh 0.2.2-rc.1). Ask **one prompt to several models at once**, read the answers under **shuffled labels** (A, B, C, D) with no model name anywhere, let a **blind judge** and **you** pick, then **reveal** who wrote what, with latency and token counts. **Nothing is configured by default**: until you pick at least two models (Settings > Arena, or `candidates` in the config) the arena only shows its setup page.
 
-Everything can be done on the page: **Settings > Arena** (or **Model Arena** in the sidebar) has the setup form, an Ask box, and Judge, Pick and Reveal buttons. The `/arena` commands and the `modelArena` service work as before. Live streaming columns are deliberately not built.
+Everything can be done on the page: **Settings > Arena** (or **Model arena** in the left panel) has the setup form, an Ask box, and Judge, Pick and Reveal buttons. The `/arena` commands and the `modelArena` service work as before. Live streaming columns are deliberately not built.
 
 ## Configuration
 
@@ -50,7 +50,7 @@ The judge is the **same one as in Code power** (`candidateJudge` service: shuffl
 
 ## Settings page
 
-The same page also opens as a full page from the sidebar (**Model Arena**). The Cowork sidebar lists it under the Chat tab.
+The same page also opens as a full page from the left panel (**Model arena**). The left panel lists it in the Chat and Workshop spaces.
 
 **Setup** (saved as you change it, applied at once, no restart):
 
@@ -61,7 +61,7 @@ The same page also opens as a full page from the sidebar (**Model Arena**). The 
 | Judge twice | `consistencyCheck` | A second reading in reverse order; a different result is a tie |
 | What the judge looks at | `criteria` | Words separated by commas; empty uses accuracy, completeness, clarity, relevance |
 | Answers per round | `maxContestants` | 2 to 4; with more models, each round draws that many at random |
-| Hide the names until I reveal | `blindByDefault` | Off shows names at once for `/arena ask` in a chat. Rounds asked on the page are always blind until you press Reveal |
+| Hide the names until I reveal | `blindByDefault` | Off shows names at once for `/arena ask` in a thread. Rounds asked on the page are always blind until you press Reveal |
 | Remove model names from answers | `redactNames` | Replaces a model's own name by `[model]` |
 | Time limit per answer, Longest answer | `limits` | Seconds (stored as `timeoutMs`), and max output tokens (0 = no limit) |
 | Keep rounds for | `storeDays` | Days |
@@ -94,7 +94,7 @@ A route that Route health reports as down is skipped (shown as `route unavailabl
 
 - **Unit tests:** 31 (7 new): settings read live, unusable entries dropped, the write route's refusals (no login, wrong method, unknown action, bad or missing id, unknown round, broken JSON, oversize body, empty prompt, fewer than two models), ask / pick / reveal / delete through the route with no name in any answer, the judge through the route with a stand-in judge service.
 - **Live, starting from an empty config:** picked two models and a judge on the page; asked a round; picked an answer; revealed; the settings landed in the profile's `cordis.patch.yml` in the shape documented above and were still there after a restart. Every option (effort, answers per round, both switches, criteria, time limit, longest answer, days) was changed on the page and checked in the file.
-- **`/arena list`** in a chat and the sidebar **Model Arena** page still work.
+- **`/arena list`** in a thread and the left panel's **Model arena** page still work.
 - **Look:** checked in the stock scheme (dark) and Forest (dark and light), and at a 900 px wide window; no sideways scrolling.
 
-**Not checked:** a judge verdict with a real model (the mock model does not answer the judge's question in the needed form, so the page showed the plain "could not give a verdict" message; the success path is covered by a unit test with a stand-in judge); a long-running round on the page (the mock answers at once); the Chinese strings (new texts fall back to English); the Mac desktop app.
+**Not checked:** a judge verdict with a real model (the mock model does not answer the judge's question in the needed form, so the page showed the plain "could not give a verdict" message; the success path is covered by a unit test with a stand-in judge); a long-running round on the page (the mock answers at once); the Mac desktop app.

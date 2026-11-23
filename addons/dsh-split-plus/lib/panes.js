@@ -68,8 +68,8 @@ export function placeOfNewPane({ from, choice, folder = '', sealedMode, room = '
   const sealedRooms = [room, ...(Array.isArray(rooms) ? rooms : [])].map((one) => String(one ?? '')).filter(Boolean);
   const inARoom = (path) => reconNamed(path) || sealedRooms.some((one) => sameFolder(path, one) || String(path).replace(/^\/private(?=\/(tmp|var)\/)/, '').startsWith(`${one.replace(/^\/private(?=\/(tmp|var)\/)/, '').replace(/\/+$/, '')}/`));
   if (sealedMode) {
-    if (!room) return { kind: 'refused', why: 'Recon\'s own room is not known (is the Recon add-on on?), and a sealed tab never works in a shared folder.' };
-    if (!reconNamed(room)) return { kind: 'refused', why: 'That is not Recon\'s room: a sealed tab works only in its own room.' };
+    if (!room) return { kind: 'refused', why: 'Recon\'s own room is not known (is the Recon add-on on?), and a sealed mode never works in a shared folder.' };
+    if (!reconNamed(room)) return { kind: 'refused', why: 'That is not Recon\'s room: a sealed mode works only in its own room.' };
     return { kind: 'cwd', cwd: room };
   }
   if (choice === 'scratch') return { kind: 'scratch' };

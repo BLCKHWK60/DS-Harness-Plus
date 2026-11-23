@@ -121,19 +121,19 @@ check('it can be switched off', plain(Config({ archiveDirect: false }).archiveDi
   const app = start(Config({ enabled: true, archiveOn: true, newsOn: true }), extra);
   const plainState = await stateOf(app.route);
   check('the page is told the Archive\'s route', plainState.more.archive === true && plainState.more.archiveDirect === true, JSON.stringify(plainState.more));
-  check('without a conversation named, the page gets none', plainState.conversation === undefined);
+  check('without a thread named, the page gets none', plainState.conversation === undefined);
   const local = (await stateOf(app.route, `${STATE_PATH}?session=r1`)).conversation;
-  check('the status bar is told the conversation\'s model and that it may receive findings', local?.known === true && local.model === 'small' && local.provider === 'Mine' && local.where === 'local' && local.may === true && local.agreed === false && local.inRoom === true && local.recon === true, JSON.stringify(local));
+  check('the status bar is told the thread\'s model and that it may receive findings', local?.known === true && local.model === 'small' && local.provider === 'Mine' && local.where === 'local' && local.may === true && local.agreed === false && local.inRoom === true && local.recon === true, JSON.stringify(local));
   const cloud = (await stateOf(app.route, `${STATE_PATH}?session=r2`)).conversation;
   check('a cloud model is shown as held back until the user agrees', cloud?.where === 'cloud' && cloud.may === false, JSON.stringify(cloud));
   await app.say(agents.r2, 'cloud');
   const agreed = (await stateOf(app.route, `${STATE_PATH}?session=r2`)).conversation;
   check('after /recon cloud it may receive findings, as agreed', agreed?.may === true && agreed.agreed === true, JSON.stringify(agreed));
-  check('a conversation outside Recon\'s folder is shown as such', (await stateOf(app.route, `${STATE_PATH}?session=r3`)).conversation?.inRoom === false);
-  check('an unknown conversation is said to be unknown', (await stateOf(app.route, `${STATE_PATH}?session=nobody`)).conversation?.known === false);
+  check('a thread outside Recon\'s folder is shown as such', (await stateOf(app.route, `${STATE_PATH}?session=r3`)).conversation?.inRoom === false);
+  check('an unknown thread is said to be unknown', (await stateOf(app.route, `${STATE_PATH}?session=nobody`)).conversation?.known === false);
   const said = (await app.say(agents.r1, '')).text;
   // Since WireGuard (16 November): not through Tor, but through the tunnel, or blocked without one.
-  check('/recon shows the Archive read outside Tor, and how', said.includes('Internet Archive on, not through Tor but blocked: no WireGuard is set up, and direct connections are not allowed in this conversation (/recon direct); GDELT news on, through Tor.'), said);
+  check('/recon shows the Archive read outside Tor, and how', said.includes('Internet Archive on, not through Tor but blocked: no WireGuard is set up, and direct connections are not allowed in this thread (/recon direct); GDELT news on, through Tor.'), said);
   app.dispose();
   const viaTor = start(Config({ enabled: true, archiveOn: true, archiveDirect: false }), extra);
   const saidTor = (await viaTor.say(agents.r1, 'status')).text;

@@ -7,7 +7,7 @@
 import { execFile, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 export const CHECK_MS = 10 * 60_000;
 export const OUTPUT_MAX = 6000;
@@ -145,6 +145,92 @@ export function offlineFence(root, home = homedir(), own = { programs: [process.
   ].join('\n');
 }
 
+/** Regex text for a literal path in a sandbox rule. */
+const literalRegex = (path) => String(path).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Item 4A, stage 6a: the sandbox rules for a check of a Mission in the Devices space, whatever the mode. Devices keeps
+ * its rules for any mode (no programs beyond Devices' own tools, no backups shown to a model, no hidden files), so its
+ * checks run like Recon's and Creator Plus's (offlineFence: no internet, no Mac services, only the usual check
+ * programs, nothing of the home folder or other disks read, device ports closed) and also:
+ * - never write a hidden file or folder (a name starting with a dot) under the run's folder, Git hooks included; only
+ *   Mission's own temporary folder (.dsh-mission/tmp) stays writable;
+ * - never read the app's data folder (`dshHome`, which holds the Devices folder and its backups), also when it is
+ *   outside the home folder.
+ * @param {string} root - the run's folder.
+ * @param {string} [home] - the user's home folder.
+ * @param {{programs?: string[], folders?: string[]}} [own] - the user's node and python3 (ownPrograms).
+ * @param {{dshHome?: string}} [more] - the app's data folder.
+ * @returns {string} the profile.
+ */
+export function devicesFence(root, home = homedir(), own = { programs: [process.execPath], folders: [] }, { dshHome = '' } = {}) {
+  const q = (path) => JSON.stringify(String(path));
+  let real = root;
+  try {
+    real = realpathSync(root);
+  } catch {
+    real = root;
+  }
+  const spellings = [...new Set([root, real])];
+  const dataSpellings = [];
+  if (dshHome) {
+    dataSpellings.push(dshHome);
+    try {
+      dataSpellings.push(realpathSync(dshHome));
+    } catch {
+      /* not there yet */
+    }
+  }
+  return [
+    offlineFence(root, home, own),
+    ...(dataSpellings.length > 0 ? [`(deny file-read* file-write* ${[...new Set(dataSpellings)].map((one) => `(subpath ${q(one)})`).join(' ')})`, `(allow file-read* ${spellings.map((one) => `(subpath ${q(one)})`).join(' ')})`] : []),
+    `(deny file-write* ${spellings.map((one) => `(regex #"^${literalRegex(one)}/(.*/)?\\.")`).join(' ')})`,
+    `(allow file-write* ${spellings.map((one) => `(subpath ${q(join(one, '.dsh-mission', 'tmp'))})`).join(' ')})`,
+    DEVICE_PORTS,
+  ].join('\n');
+}
+
+/**
+ * Item 4A, stage 6a: whether a Devices Mission may not work in this folder (the same kinds of folder Devices refuses to
+ * a guest's file tools): '' when it may, else a short reason. The whole disk, the home folder or a folder holding it,
+ * the Library, the app's data folder (its Scratch folders excepted) or a folder holding it, the app itself, and a name
+ * a sandbox rule cannot hold.
+ * @param {string} root - the run's folder.
+ * @param {{home?: string, dshHome?: string, appBundle?: string}} [where] - the places to keep out.
+ * @returns {string} the reason, or ''.
+ */
+export function devicesRootRefusal(root, { home = homedir(), dshHome = '', appBundle = '' } = {}) {
+  if (!root || !String(root).startsWith('/')) return 'no folder';
+  if (/["\n\r\\]/.test(String(root))) return 'odd folder name';
+  // The real path of the nearest folder that is there, with the rest added (a folder still to be made counts too).
+  const real = (path) => {
+    let at = String(path);
+    let rest = '';
+    for (;;) {
+      try {
+        return join(realpathSync(at), rest);
+      } catch {
+        const up = dirname(at);
+        if (up === at) return String(path);
+        rest = join(basename(at), rest);
+        at = up;
+      }
+    }
+  };
+  const within = (path, folder) => path === folder || path.startsWith(`${folder.endsWith('/') ? folder : `${folder}/`}`);
+  const at = real(root);
+  const own = real(home);
+  if (at === '/' || within(own, at)) return 'home folder';
+  if (within(at, join(own, 'Library'))) return 'Library';
+  if (dshHome) {
+    const data = real(dshHome);
+    if (within(data, at)) return 'holds the app data';
+    if (within(at, data) && !within(at, join(data, 'scratch'))) return 'inside the app data';
+  }
+  if (appBundle && within(at, real(appBundle))) return 'the app';
+  return '';
+}
+
 let pathOnce;
 /**
  * The PATH of the user's own shell, so commands such as npm are found. An app started from the
@@ -174,13 +260,20 @@ export function userPath() {
  * @param {boolean} [job.closePorts] - close the device ports (a Bench Long run); without the sandbox the command is not run.
  * @param {boolean} [job.offline] - a Recon Long run's check: no internet, the run's folder only (offlineFence); without the sandbox it is not run.
  * @param {boolean} [job.cleanEnv] - a Creator Plus Long run's check: a short environment of its own, never the app's (which holds keys).
+ * @param {boolean} [job.devices] - item 4A, stage 6a: a guest's Devices Mission check (devicesFence: offline, no
+ *   hidden files written, the app's data never read, a clean environment); without the sandbox it is not run.
+ * @param {string} [job.dshHome] - the app's data folder, kept closed to a Devices check (default: DSH_HOME).
  * @returns {Promise<{ok: boolean, code: number | null, output: string, timedOut: boolean, seconds: number}>} how it ended and the end of what it printed.
  */
-export async function runCommand({ command, root, timeoutMs = CHECK_MS, signal, closePorts = false, offline = false, cleanEnv = false, sandbox = SANDBOX }) {
+export async function runCommand({ command, root, timeoutMs = CHECK_MS, signal, closePorts = false, offline: offlineAsked = false, cleanEnv: cleanAsked = false, devices = false, dshHome = process.env.DSH_HOME ?? '', sandbox = SANDBOX }) {
+  // A Devices check is always offline, in a clean environment, with the ports closed.
+  const offline = offlineAsked || devices;
+  const cleanEnv = cleanAsked || devices;
   const path = await userPath();
   const started = Date.now();
   const confined = existsSync(sandbox);
   // Ports and the internet can be closed only by the sandbox: without it, such a check is not run at all.
+  if (devices && !confined) return { ok: false, code: null, output: "The Mac's sandbox is not available, so this check was not run: in Devices, checks must run without the internet and away from the Devices folder.", timedOut: false, seconds: 0 };
   if (offline && !confined) return { ok: false, code: null, output: "The Mac's sandbox is not available, so this check was not run: in Recon, checks must run without the internet.", timedOut: false, seconds: 0 };
   if (closePorts && !confined) return { ok: false, code: null, output: "The Mac's sandbox is not available, so this check was not run: in Devices, device ports must stay closed to checks.", timedOut: false, seconds: 0 };
   // An offline check keeps its temporary files in the run's own folder, the only place it may write.
@@ -189,7 +282,7 @@ export async function runCommand({ command, root, timeoutMs = CHECK_MS, signal, 
     temp = join(root, '.dsh-mission', 'tmp');
     mkdirSync(temp, { recursive: true, mode: 0o700 });
   }
-  const profile = offline ? offlineFence(root, homedir(), ownPrograms(path)) : fence(root, { closePorts });
+  const profile = devices ? devicesFence(root, homedir(), ownPrograms(path), { dshHome }) : offline ? offlineFence(root, homedir(), ownPrograms(path)) : fence(root, { closePorts });
   const args = confined ? ['-p', profile, '/bin/bash', '-c', command] : ['-c', command];
   return new Promise((resolve) => {
     let child;

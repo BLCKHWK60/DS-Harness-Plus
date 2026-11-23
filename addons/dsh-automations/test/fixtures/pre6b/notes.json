@@ -1,0 +1,11 @@
+{
+  "tasks": {
+    "p-research": { "createdIn": "research", "made": "button", "runTab": "research" },
+    "p-finance": { "createdIn": "finance" },
+    "p-assistant": { "createdIn": "chat" },
+    "p-recon": { "createdIn": "recon", "made": "button" },
+    "p-bench": { "createdIn": "bench", "made": "new", "runTab": "bench" }
+  },
+  "known": {},
+  "held": []
+}

@@ -24,7 +24,7 @@ function whole(value) {
 /**
  * The built-in values of the limits that have allowances (index.js's Config uses the same). A value that differs from these
  * was saved by the user and is never overridden by an allowance; a value that equals them is "not chosen", so the allowance
- * of a Long run (or of helpers) may replace it.
+ * of a Mission (or of helpers) may replace it.
  */
 export const DEFAULTS = { maxSteps: 300, maxHelperSteps: 1500, maxLongSteps: 5000, maxLongTokens: 60000000, maxTokens: 20000000 };
 
@@ -34,8 +34,8 @@ export const DEFAULTS = { maxSteps: 300, maxHelperSteps: 1500, maxLongSteps: 500
  * `maxSteps` counts the conversation's own requests. Helpers (Deep research, Mission and other helper
  * agents) have their own count, `maxHelperSteps`; 0 there means "no separate allowance": helpers share
  * `maxSteps`, as before 0.63. With `maxSteps` at 0 (no step limit) helpers are not limited either.
- * While a Mission Long run is on in the conversation (`long` in `check`), `maxLongSteps` (all requests,
- * helpers included) and `maxLongTokens` replace the step and token limits: a Long run is meant to work
+ * While a Mission is on in the conversation (`long` in `check`), `maxLongSteps` (all requests,
+ * helpers included) and `maxLongTokens` replace the step and token limits: a Mission is meant to work
  * for hours, and Mission has its own limits (time, laps, steps, an optional token allowance). 0 there
  * means "use the ordinary limit"; the ordinary limit at 0 (none) stays none.
  * @returns {{enabled: boolean, maxSteps: number, maxHelperSteps: number, maxLongSteps: number, maxLongTokens: number, maxTokens: number, maxMinutes: number, maxRepeats: number, dayTokens: number}} checked limits.
@@ -48,7 +48,7 @@ export function readLimits(raw = {}) {
     maxLongSteps: whole(raw.maxLongSteps),
     maxLongTokens: whole(raw.maxLongTokens),
     maxTokens: whole(raw.maxTokens),
-    /** The token limit is the installer's starting value, never saved by the user: a Long run's allowance may replace it. */
+    /** The token limit is the installer's starting value, never saved by the user: a Mission's allowance may replace it. */
     startingTokens: raw.startingTokens === true,
     maxMinutes: whole(raw.maxMinutes),
     maxRepeats: whole(raw.maxRepeats),
@@ -151,15 +151,25 @@ export function createMeter({ limits, record, now = Date.now }) {
   const stepRule = (max, long) => {
     if (!max.maxSteps) return { max: 0, all: true };
     if (long) {
-      // A Long run: all requests together. The user's own Long run value wins; else the allowance, but never above a step limit they saved.
-      if (max.maxLongSteps && max.maxLongSteps !== DEFAULTS.maxLongSteps) return { max: Math.max(max.maxLongSteps, max.maxSteps), all: true };
-      const saved = max.maxSteps !== DEFAULTS.maxSteps;
-      return { max: saved || !max.maxLongSteps ? max.maxSteps : Math.max(max.maxLongSteps, max.maxSteps), all: true };
+      // A Mission: all requests together, with its own allowance whatever step limit is saved for ordinary
+      // tasks (the owner's decision of 19 November 2026: a saved 538 per task had capped whole runs). Never
+      // below the ordinary limit; 0 for the allowance means the ordinary limit.
+      return { max: max.maxLongSteps ? Math.max(max.maxLongSteps, max.maxSteps) : max.maxSteps, all: true };
     }
     return { max: max.maxSteps, all: false };
   };
 
-  /** What a task has reached, if anything. `run` is the Long run's whole-run count (`{steps, helperSteps, tokens}`) while a Long run works, else null. */
+  /** A Mission's token limit: its own allowance replaces the starting value, never a token limit the user saved. */
+  const longTokens = (max) => {
+    let tokens = max.maxTokens;
+    if (max.maxTokens) {
+      if (max.maxLongTokens && max.maxLongTokens !== DEFAULTS.maxLongTokens) tokens = Math.max(max.maxLongTokens, max.maxTokens);
+      else if (max.maxLongTokens && (max.maxTokens === DEFAULTS.maxTokens || max.startingTokens)) tokens = Math.max(max.maxLongTokens, max.maxTokens);
+    }
+    return tokens;
+  };
+
+  /** What a task has reached, if anything. `run` is the Mission's whole-run count (`{steps, helperSteps, tokens}`) while a Mission works, else null. */
   const reached = (t, long = false, run = null) => {
     const max = limits();
     if (!max.enabled) return null;
@@ -169,11 +179,7 @@ export function createMeter({ limits, record, now = Date.now }) {
       const rule = stepRule(max, true);
       const all = counts.steps + counts.helperSteps;
       if (rule.max && all >= rule.max) return { limit: 'steps', used: all, max: rule.max };
-      let tokens = max.maxTokens;
-      if (max.maxTokens) {
-        if (max.maxLongTokens && max.maxLongTokens !== DEFAULTS.maxLongTokens) tokens = Math.max(max.maxLongTokens, max.maxTokens);
-        else if (max.maxLongTokens && (max.maxTokens === DEFAULTS.maxTokens || max.startingTokens)) tokens = Math.max(max.maxLongTokens, max.maxTokens);
-      }
+      const tokens = longTokens(max);
       if (tokens && counts.tokens >= tokens) return { limit: 'tokens', used: counts.tokens, max: tokens };
       const minutes = Math.floor((now() - t.startedAt) / 60000);
       if (max.maxMinutes && minutes >= max.maxMinutes) return { limit: 'minutes', used: minutes, max: max.maxMinutes };
@@ -200,7 +206,7 @@ export function createMeter({ limits, record, now = Date.now }) {
     return null;
   };
 
-  /** Conversation id -> the whole Long run's counts (across its rounds). */
+  /** Conversation id -> the whole Mission's counts (across its rounds). */
   const runs = new Map();
   const runOf = (id, key, create) => {
     if (!key) return null;
@@ -263,7 +269,7 @@ export function createMeter({ limits, record, now = Date.now }) {
     /**
      * Whether the task may take another step.
      * @param {string} id - the conversation.
-     * @param {boolean | string} [long] - the id of the Mission Long run working in it right now (it has its own allowance, counted across all its rounds); `true` counts the task only. Empty or false for anything else (no run, a paused one, an ordinary /mission run).
+     * @param {boolean | string} [long] - the id of the Mission working in it right now (it has its own allowance, counted across all its rounds); `true` counts the task only. Empty or false for anything else (no run, a paused one, an ordinary /mission run).
      * @returns {{limit: string, used: number, max: number, first: boolean} | null} the limit reached; `first` only the first time.
      */
     check(id, long = false) {
@@ -274,10 +280,42 @@ export function createMeter({ limits, record, now = Date.now }) {
       t.stopped = hit;
       return { ...hit, first };
     },
-    /** The task ended: remember its size. */
-    /** A Long run ended (or none is working): forget its whole-run count. */
+    /**
+     * A Mission ended, or was resumed (a fresh allowance): forget its whole-run count.
+     * @returns {{key: string, steps: number, helperSteps: number, tokens: number} | null} the count it had, so a
+     *   continue of the same run (Mission stage C) can put it back.
+     */
     endRun(id) {
+      const had = runs.get(id);
       runs.delete(id);
+      return had ? { ...had } : null;
+    },
+    /**
+     * A Mission that ended was continued (Mission stage C): its whole-run count comes back. Steps counted
+     * since the continue, under the same run, are added rather than lost.
+     * @param {string} id - the conversation.
+     * @param {{key: string, steps?: number, helperSteps?: number, tokens?: number} | null} entry - what endRun returned.
+     */
+    restoreRun(id, entry) {
+      if (!entry?.key) return;
+      const kept = { key: String(entry.key), steps: whole(entry.steps), helperSteps: whole(entry.helperSteps), tokens: whole(entry.tokens) };
+      const have = runs.get(id);
+      if (have && have.key === kept.key) {
+        have.steps += kept.steps;
+        have.helperSteps += kept.helperSteps;
+        have.tokens += kept.tokens;
+      } else {
+        runs.set(id, kept);
+      }
+    },
+    /**
+     * What a Mission gets, as the limits stand now: its steps and tokens over the whole run (0 = no limit),
+     * and the daily limit, which still holds. For Mission's pre-flight line.
+     * @returns {{enabled: boolean, steps: number, tokens: number, dayTokens: number}}
+     */
+    longAllowance() {
+      const max = limits();
+      return { enabled: max.enabled, steps: stepRule(max, true).max, tokens: longTokens(max), dayTokens: max.dayTokens };
     },
     endTask(id) {
       const t = tasks.get(id);
@@ -296,17 +334,50 @@ export function createMeter({ limits, record, now = Date.now }) {
 /**
  * A stop in plain words.
  * @param {{limit: string, used: number, max: number, tool?: string}} hit - from `check`.
+ * @param {boolean} [long] - whether it stopped a Mission (its own allowance).
  * @returns {string} one sentence.
  */
-export function describe(hit) {
+export function describe(hit, long = false) {
   const n = (v) => Number(v).toLocaleString('en-US');
   switch (LIMITS.includes(hit?.limit) ? hit.limit : '') {
-    case 'steps': return `This task reached its limit of ${n(hit.max)} ${hit.max === 1 ? 'step' : 'steps'}.`;
-    case 'helperSteps': return `This task's helpers reached their limit of ${n(hit.max)} steps.`;
-    case 'tokens': return `This task reached its limit of ${n(hit.max)} tokens.`;
-    case 'minutes': return `This task reached its limit of ${n(hit.max)} ${hit.max === 1 ? 'minute' : 'minutes'}.`;
+    case 'steps': return long ? `This Mission reached its own limit of ${n(hit.max)} ${hit.max === 1 ? 'step' : 'steps'}.` : `This run reached its limit of ${n(hit.max)} ${hit.max === 1 ? 'step' : 'steps'}.`;
+    case 'helperSteps': return `This run's helpers reached their limit of ${n(hit.max)} steps.`;
+    case 'tokens': return long ? `This Mission reached its own limit of ${n(hit.max)} tokens.` : `This run reached its limit of ${n(hit.max)} tokens.`;
+    case 'minutes': return `This run reached its limit of ${n(hit.max)} ${hit.max === 1 ? 'minute' : 'minutes'}.`;
     case 'repeats': return `The assistant made the same ${hit.tool ?? 'tool'} call ${n(hit.used)} times in a row, which looks like a loop.`;
     case 'day': return `Today's limit of ${n(hit.max)} tokens is used up.`;
-    default: return 'This task reached a limit.';
+    default: return 'This run reached a limit.';
   }
+}
+
+/**
+ * Stop texts saved before Mission's stage B said "Long run" (Mission was called Long run until 19 November 2026).
+ * They are kept as stored and shown with today's name.
+ * @param {unknown} text - a stored stop text.
+ * @returns {string} the text with "Long run" read as "Mission".
+ */
+export function missionWords(text) {
+  return String(text ?? '').replace(/\bLong runs\b/g, 'Missions').replace(/\bLong run\b/g, 'Mission').replace(/\blong run\b/g, 'Mission');
+}
+
+/** The highest Mission allowance `raiseMission` may set, so a fix can never lift the guard without bound. */
+export const RAISE_MAX = { steps: 50000, tokens: 500000000 };
+
+/**
+ * Whether a Mission allowance may be raised to `to`, from what it is now.
+ * @param {{limit: string, to: unknown}} request - which limit, and the new value.
+ * @param {{steps: number, tokens: number}} now - the allowance as it stands (0 = no limit).
+ * @returns {{ok: true, key: string, from: number, to: number} | {ok: false, text: string}}
+ */
+export function checkRaise(request, now) {
+  const limit = request?.limit === 'tokens' ? 'tokens' : request?.limit === 'steps' ? 'steps' : '';
+  if (!limit) return { ok: false, text: 'Only the steps or tokens of a Mission can be raised here.' };
+  const to = Math.floor(Number(request?.to));
+  const from = whole(now?.[limit]);
+  const unit = limit === 'tokens' ? 'tokens' : 'steps';
+  if (!Number.isFinite(to) || to <= 0) return { ok: false, text: `The new limit is not a whole number of ${unit}.` };
+  if (from === 0) return { ok: false, text: `A Mission has no ${unit} limit now, so there is nothing to raise.` };
+  if (to <= from) return { ok: false, text: `The new limit (${to.toLocaleString('en-US')} ${unit}) is not higher than the one now (${from.toLocaleString('en-US')}).` };
+  if (to > RAISE_MAX[limit]) return { ok: false, text: `A Mission's ${unit} can be raised here up to ${RAISE_MAX[limit].toLocaleString('en-US')}; for more, change it in Settings → Budget guard.` };
+  return { ok: true, key: limit === 'tokens' ? 'maxLongTokens' : 'maxLongSteps', from, to };
 }

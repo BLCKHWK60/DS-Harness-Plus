@@ -91,7 +91,7 @@ export function markOf(skill, facts = {}) {
   if (provider === LEARNED_PROVIDER) {
     const mark = learnedMark(learned);
     if (mark === 'mine') return { mark, why: learned?.by === 'learned' ? 'learned, then edited by you on the Learned skills page' : 'added by hand on the Learned skills page' };
-    if (mark === 'ai') return { mark, why: 'learned from your conversations by Learned skills\' reading model' };
+    if (mark === 'ai') return { mark, why: 'learned from your threads by Learned skills\' reading model' };
     return { mark: 'unsorted', why: 'Learned skills has no record of it' };
   }
   if (provider === RUNTIME_PROVIDER) {

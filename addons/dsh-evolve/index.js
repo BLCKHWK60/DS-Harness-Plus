@@ -44,10 +44,10 @@ const AGENT_RUN_MS = 5 * 60_000;
 const TEST_FOLDER = '.dsh-evolve-test';
 
 export const Config = z.object({
-  /** Master switch: off stops jobs and adds nothing to any conversation. */
+  /** Master switch: off stops jobs and adds nothing to any thread. */
   enabled: z.boolean().default(true).volatile(),
   /**
-   * What is being improved: the id of a saved model version (from Model Tiers), or empty
+   * What is being improved: the id of a saved model version (from Model tiers), or empty
    * for a plain model. Each version has its own tasks, lessons and versions.
    */
   target: z.string().default('').volatile(),
@@ -68,7 +68,7 @@ export const Config = z.object({
   tokenBudget: z.number().min(0).max(50_000_000).default(400_000).volatile(),
   /** How much longer answers may get before a change is refused (1.5 = 50% more tokens). */
   costCeiling: z.number().min(1).max(10).default(1.5).volatile(),
-  /** Use the approved instructions in real conversations too (not only in tests). */
+  /** Use the approved instructions in real threads too (not only in tests). */
   applyLive: z.boolean().default(true).volatile(),
   /** Where tasks, versions and results are kept; default is a folder in the dsh home. */
   dataDir: z.string(),
@@ -384,11 +384,11 @@ export function apply(ctx, config) {
     // A task that uses tools runs as a fresh helper agent in its own empty folder.
     const subagents = ctx.get('subagents');
     const parent = pickParent(context.parent);
-    if (!subagents || !parent) throw new Error('Tasks that use tools run as helper agents of an open conversation. Open one, then run again.');
+    if (!subagents || !parent) throw new Error('Tasks that use tools run as helper agents of an open thread. Open one, then run again.');
     // A helper may only write inside its conversation's own folder (the app's sandbox), so the
     // test folder is a temporary one in there; it is removed when the run ends.
     const parentFolder = (parent.header ?? parent.session?.header)?.cwd;
-    if (typeof parentFolder !== 'string' || !parentFolder) throw new Error('The open conversation has no folder to run a test in.');
+    if (typeof parentFolder !== 'string' || !parentFolder) throw new Error('The open thread has no folder to run a test in.');
     const base = join(parentFolder, TEST_FOLDER, context.id);
     context.cleanup.add(join(parentFolder, TEST_FOLDER));
     context.runs = (context.runs ?? 0) + 1;

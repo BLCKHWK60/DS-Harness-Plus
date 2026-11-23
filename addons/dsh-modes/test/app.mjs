@@ -79,6 +79,13 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
   const settings = {
     describe: () => [{ ns: 'modes', value: config }, ...settingsExtra, ...(tabs ? [{ ns: 'cowork-shell', value: { maxTabs } }] : []), ...(chat ? [{ ns: 'ui-chat', value: chat }] : [])],
     mutate: async (ns, ops) => {
+      // Another add-on's settings a test gives (settingsExtra): written there, as the app would.
+      const other = ns === 'modes' ? undefined : settingsExtra.find((row) => row.ns === ns);
+      if (other) {
+        if (failWrite?.(ops, ns)) throw new Error('settings write failed');
+        for (const op of ops) if (op.op === 'set') other.value[op.path[0]] = op.value;
+        return;
+      }
       if (ns !== 'modes') throw new Error(`unexpected namespace ${ns}`);
       if (writeDelay > 0) await new Promise((resolve) => setTimeout(resolve, writeDelay));
       if (failWrite?.(ops)) throw new Error('settings write failed');
@@ -119,6 +126,11 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
     ...(credentials ? { credentials } : {}),
     // The app's approval card (a test gives `request`).
     ...(approval ? { approval } : {}),
+    // Lab fix (6a): the guard add-ons' services as an add-on of before stage 6a gives them (running, not guarding guests),
+    // so a test whose world lists their modes sees them running. A test gives its own, or `null` for "not running".
+    recon: { apiVersion: 2 },
+    bench: {},
+    creatorPlus: {},
     // Any other service a test wants the add-on to find (Recon's, Mission's).
     ...more,
     // The Cowork sidebar's Scratch service: the folder a Scratch conversation is kept to.
@@ -141,8 +153,10 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
   let service;
   /** Services other than `modes` that Modes provides (e.g. `toolAccess`). */
   const provided = new Map();
+  /** Everything Modes logged (stage 6b: a refused message's text is never logged). */
+  const logs = [];
   const ctx = {
-    logger: { warn: () => {}, info: () => {}, error: () => {} },
+    logger: { warn: (...args) => { logs.push(args.join(' ')); }, info: (...args) => { logs.push(args.join(' ')); }, error: (...args) => { logs.push(args.join(' ')); } },
     get: (name) => (name === 'modes' ? service : provided.has(name) ? provided.get(name) : services[name]),
     on: (name, handler, options) => {
       // As the app: `prepend` puts a listener outermost.
@@ -162,6 +176,10 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
     inject: (names, callback) => {
       if (names.includes('tools')) callback({ tools: ctx.tools, effect: (start) => start() });
       if (names.includes('commands')) callback({ commands: { register: (spec) => { command = spec; return () => {}; } }, effect: (start) => start() });
+      // The web server, when a test gives one (services.webServer and services.connection): the routes Modes registers.
+      if (names.includes('webServer') && more.webServer && more.connection) callback({ webServer: more.webServer, connection: more.connection, effect: (start) => start() });
+      // Recon's wipe list, when a test gives one (services.reconWipe).
+      if (names.includes('reconWipe') && more.reconWipe) callback({ reconWipe: more.reconWipe, effect: (start) => start() });
     },
     tools: {
       definitions: () => known.map((name) => ({ name })),
@@ -180,13 +198,14 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
     },
   };
   /** A live conversation on its stored log; `masks` records the tool masks put on it. */
-  const agentOf = (id, { lastTurn = 0, header = {} } = {}) => {
+  // `phase: null`: the app has not said yet whether it ran (a draft reloaded from an earlier run).
+  const agentOf = (id, { lastTurn = 0, header = {}, phase } = {}) => {
     const masks = [];
     const session = sessionOf(world, id, header);
     const agent = {
       id,
       status: 'idle',
-      phase: { kind: 'idle', lastTurn },
+      phase: phase === null ? undefined : { kind: 'idle', lastTurn },
       header,
       session,
       ctx: {
@@ -220,6 +239,7 @@ export function boot(world, { tabs = false, maxTabs, tiers = [], baseTier = 'eve
   };
   return {
     config,
+    logs,
     tierCalls,
     tierSelected,
     waterfall,

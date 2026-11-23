@@ -9,7 +9,9 @@
     "dshHomePath",
     "skills",
     "tools",
-    "workingDirectory"
+    "workingDirectory",
+    "modes",
+    "recon"
   ],
   "events": [],
   "tools": [

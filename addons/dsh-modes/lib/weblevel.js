@@ -176,7 +176,7 @@ export function levelAllows({ level, lanes, verified, address }) {
   const name = level === 'custom' ? 'your Custom mix' : LEVEL_NAMES[level];
   return {
     ok: false,
-    why: `The conversation's Web is at ${name}, which does not open ${LANE_NAMES[lane]}: ${host} was not opened. Name it to the user as a lead: they can open it by picking a wider level on the Web button${lane === 'sites' ? ' (Open web or Everything)' : lane === 'verified' ? '' : ' (Everything)'} or by adding the site to the verified list on Settings → Modes. Do not try to reach it another way (a command, a program, another tool).`,
+    why: `The thread's Web is at ${name}, which does not open ${LANE_NAMES[lane]}: ${host} was not opened. Name it to the user as a lead: they can open it by picking a wider level on the Web button${lane === 'sites' ? ' (Open web or Everything)' : lane === 'verified' ? '' : ' (Everything)'} or by adding the site to the verified list on Settings → Modes. Do not try to reach it another way (a command, a program, another tool).`,
   };
 }
 

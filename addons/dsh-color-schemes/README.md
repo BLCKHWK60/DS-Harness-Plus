@@ -1,6 +1,6 @@
 # Colour schemes
 
-Plugin `@local/dsh-color-schemes` (dsh 0.2.2-rc.1). Choose the colours of the whole app in **Settings → Colours**.
+Add-on `@local/dsh-color-schemes` (dsh 0.2.2-rc.1). Choose the colours of the whole app in **Settings → Colours**.
 
 | Scheme | Look |
 | --- | --- |
@@ -10,11 +10,11 @@ Plugin `@local/dsh-color-schemes` (dsh 0.2.2-rc.1). Choose the colours of the wh
 | **Forest** | Deep green with mint accents. |
 | **Custom** | Your own colours (see below). |
 
-Every scheme has a light and a dark version, and follows **Settings → General → Appearance** (light, dark or system). It works with or without the Cowork sidebar.
+Every scheme has a light and a dark version, and follows **Settings → General → Appearance** (light, dark or system). It works with or without the Left panel add-on.
 
-## Solid sidebar on the Mac
+## Solid left panel on the Mac
 
-The Mac desktop app normally draws the sidebar half see-through, so the desktop behind it shows. With a scheme other than DeepSeek Harness, **Solid sidebar on the Mac** (on by default) paints it in the scheme's colour, the way Harbor looks. The stock scheme never changes it.
+The Mac desktop app normally draws the left panel half see-through, so the desktop behind it shows. With a scheme other than DeepSeek Harness, **Solid left panel on the Mac** (on by default) paints it in the scheme's colour, the way Harbor looks. The stock scheme never changes it.
 
 ## Custom scheme
 
@@ -35,7 +35,7 @@ Keys are the app's colour names. The useful ones are:
 | Name | What it colours |
 | --- | --- |
 | `--dsw-alias-bg-base` | main background |
-| `--dsw-specific-sidebar-fill` | sidebar |
+| `--dsw-specific-sidebar-fill` | left panel |
 | `--dsw-alias-bg-layer-1` … `layer-3` | raised surfaces |
 | `--dsw-specific-input-major` | chat box |
 | `--dsw-specific-bubble` | your message bubbles |
@@ -61,7 +61,7 @@ The browser half lays the scheme's colours over the app's light or dark palette 
 
 In the throwaway web profile, through the app's browser view:
 
-- **Each scheme in dark:** Harbor, Graphite and Forest each recoloured the background, sidebar, chat box, message bubble, borders and accent (send button, selected view tab).
+- **Each scheme in dark:** Harbor, Graphite and Forest each recoloured the background, left panel, chat box, message bubble, borders and accent (send button, selected view tab).
 - **Harbor in light:** light background with a teal accent and a teal-tinted bubble.
 - **Back to DeepSeek Harness:** removed every override (0 left), so it is exactly the app as shipped.
 - **Restart:** the choice survived it.
@@ -69,7 +69,7 @@ In the throwaway web profile, through the app's browser view:
 
 **Not checked:**
 
-- the Mac desktop app, including the solid-sidebar rule, which depends on the app's internal class name `…_sidebarCol`
+- the Mac desktop app, including the solid left panel rule, which depends on the app's internal class name `…_sidebarCol`
 - every screen of the app; some rarely seen surfaces may keep stock colours. Tell me which and they can be added.
 
 ## Tests

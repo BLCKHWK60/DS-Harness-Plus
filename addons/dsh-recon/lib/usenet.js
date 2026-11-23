@@ -30,7 +30,7 @@ export function createUsenet({ run, route, accounts, defaultAccount, login, forw
     if (!validHost(account.host)) throw new Error(`The news server of the Usenet account "${nameOf(account)}" is not set yet. The user enters it in Settings → Recon → Usenet. Nothing was sent.`);
     const who = await login(serviceOf(account.id));
     if (!who) throw new Error(`No login is stored in the Keychain for the Usenet account "${nameOf(account)}". Settings → Recon → Usenet shows the user how to store it. Nothing was sent.`);
-    if (sources.count(id) > MAX_VISITS) throw new Error(`This conversation has made ${MAX_VISITS} requests, which is its limit. Start a new Recon conversation to go on.`);
+    if (sources.count(id) > MAX_VISITS) throw new Error(`This thread has made ${MAX_VISITS} requests, which is its limit. Start a new Recon thread to go on.`);
     const way2 = await forward(account.host, account.port, id);
     try {
       const got = await run({ op: 'nntp', via: 'forward', port: way2.port, server: account.host, user: who.user, pass: who.pass, ...(ca ? { ca } : {}), ...request }, { proxyPort: way2.port, timeoutMs: 120_000 });

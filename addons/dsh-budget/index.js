@@ -14,7 +14,7 @@
  */
 import z from '@deepseek-ai/schemastery';
 import { join } from 'node:path';
-import { createMeter, describe, openRecord, readLimits } from './lib/meter.js';
+import { checkRaise, createMeter, describe, missionWords, openRecord, readLimits } from './lib/meter.js';
 
 export const name = 'dsh-budget';
 export const inject = ['tools'];
@@ -24,15 +24,15 @@ export const DATA_PATH = '/dsh-budget/data';
 export const Config = z.object({
   /** Master switch. */
   enabled: z.boolean().default(true).volatile(),
-  /** Most requests to a model in one task made by the conversation itself. 0 = no limit (helpers are then not limited either). */
+  /** Most requests to a model in one run made by the thread itself. 0 = no limit (helpers are then not limited either). */
   maxSteps: z.natural().default(300).volatile(),
-  /** Most requests in one task made by helper agents (Deep research, Mission, sub-agents), counted apart so a long run is not cut by the conversation's own limit. 0 = helpers share `maxSteps`, as before. */
+  /** Most requests in one run made by helper agents (Deep research, Mission, sub-agents), counted apart so a long run is not cut by the thread's own limit. 0 = helpers share `maxSteps`, as before. */
   maxHelperSteps: z.natural().default(1500).volatile(),
-  /** While a Mission Long run is on: most requests in one task, all of them (the Long run's own allowance; Mission has its own limits too). 0 = the ordinary limit. */
+  /** While a Mission is on (started with Start Mission or a typed /mission): most requests in one task, all of them (the Mission's own allowance; Mission has its own limits too). 0 = the ordinary limit. */
   maxLongSteps: z.natural().default(5000).volatile(),
-  /** While a Mission Long run is on: most tokens in one task. 0 = the ordinary limit. */
+  /** While a Mission is on: most tokens in one task. 0 = the ordinary limit. */
   maxLongTokens: z.natural().default(60000000).volatile(),
-  /** Set by a first install only: the token limit below is the installer's starting value, not one the person chose, so a Long run's allowance may replace it. Saving the token limit on the Budget page clears it. */
+  /** Set by a first install only: the token limit below is the installer's starting value, not one the person chose, so a Mission's allowance may replace it. Saving the token limit on the Budget page clears it. */
   startingTokens: z.boolean().default(false).volatile(),
   /** Most tokens (sent plus received) in one task, helpers included. 0 = no limit. */
   maxTokens: z.natural().default(20000000).volatile(),
@@ -40,7 +40,7 @@ export const Config = z.object({
   maxMinutes: z.natural().default(0).volatile(),
   /** The same tool call this many times in a row is treated as a loop. 0 = no check. */
   maxRepeats: z.natural().default(8).volatile(),
-  /** Most tokens in one day, over all conversations. 0 = no limit. */
+  /** Most tokens in one day, over all threads. 0 = no limit. */
   dayTokens: z.natural().default(0).volatile(),
 });
 
@@ -75,6 +75,19 @@ export function apply(ctx, config) {
   const home = ctx.get('dshHomePath');
   const record = openRecord(typeof home === 'function' ? join(home('budget'), 'budget.json') : '');
   const meter = createMeter({ limits, record });
+  /** Conversation -> the Mission allowance limit that stopped its run ({limit: 'steps' | 'tokens', max}). */
+  const budgetStops = new Map();
+  /** Whether the limit that stopped a Mission is higher now (or off). */
+  const raisedSince = (stop) => {
+    try {
+      const now = meter.longAllowance();
+      if (!now.enabled) return true;
+      const max = stop.limit === 'tokens' ? now.tokens : now.steps;
+      return !max || max > stop.max;
+    } catch {
+      return false;
+    }
+  };
 
   const flush = () => {
     try {
@@ -105,7 +118,7 @@ export function apply(ctx, config) {
     return String(header.id ?? session?.id ?? '');
   };
   const isHelper = (session) => session?.header?.origin === 'subagent';
-  /** The Long run working in a conversation right now ('' when none, or paused, or an ordinary /mission run): only then its allowance applies. */
+  /** The Mission working in a conversation right now ('' when none, or paused, or an ordinary /mission run): only then its allowance applies. */
   const longKey = (id) => {
     try {
       return id ? String(ctx.get('mission')?.longRunId?.(id) ?? '') : '';
@@ -148,20 +161,107 @@ export function apply(ctx, config) {
   ctx.on('agent/pre-step', (payload, next) => {
     let hit = null;
     let id = '';
+    let key = '';
     try {
       id = rootOf(payload?.agent?.session);
-      hit = id ? meter.check(id, longKey(id)) : null;
+      key = id ? longKey(id) : '';
+      hit = id ? meter.check(id, key) : null;
     } catch (error) {
       ctx.logger?.warn?.(`budget: could not check a step: ${String(error?.message ?? error)}`);
     }
     if (!hit) return next();
     if (hit.first) {
-      record.addStop({ sessionId: id, at: Date.now(), limit: hit.limit, used: hit.used, max: hit.max, text: describe(hit) });
+      const text = describe(hit, Boolean(key));
+      // A Mission stopped by its own allowance: noted, so a Resume after the limit was raised starts afresh.
+      if (key && (hit.limit === 'steps' || hit.limit === 'tokens')) budgetStops.set(id, { limit: hit.limit, max: hit.max });
+      // `mission: true` marks a stop by a Mission's own allowance, so the card under the answer says what to do for a Mission.
+      record.addStop({ sessionId: id, at: Date.now(), limit: hit.limit, used: hit.used, max: hit.max, text, ...(key ? { mission: true } : {}) });
       flush();
-      ctx.logger?.info?.(`budget: stopped ${id}: ${describe(hit)}`);
+      ctx.logger?.info?.(`budget: stopped ${id}: ${text}`);
+      // A Mission run in that conversation pauses and says which limit, rather than sitting there unexplained.
+      // The third argument (stage E) says which limit and its value, so Mission can offer to raise it.
+      try {
+        const mission = ctx.get('mission');
+        if (mission?.isRunning?.(id)) mission.budgetStopped?.(id, text, { limit: hit.limit, max: hit.max });
+      } catch {
+        /* the stop holds anyway */
+      }
     }
     return Promise.resolve({ kind: 'reject' });
   });
+
+  // A Mission that ended starts its next allowance from nothing. A resumed one keeps its count over the whole
+  // run (a pause by you, an idle stall, step errors, a restart), except after a stop by its own allowance whose
+  // limit was raised since: that one starts a fresh allowance. Resumed without raising it, it stops again.
+  // A run that ended and is then continued (Mission stage C: answers to its questions after the end) is the same
+  // run: its count comes back, kept here in memory from its end (so after an app restart a continue starts fresh).
+  /** Conversation -> {runId, counts, stop} of the run that ended there last. */
+  const ended = new Map();
+  ctx.inject(['mission'], (inner) => {
+    try {
+      inner.effect(() => inner.mission.onEvent?.((event) => {
+        const conversation = String(event?.conversation ?? '');
+        if (event?.type === 'finished') {
+          ended.delete(conversation);
+          ended.set(conversation, { runId: String(event?.runId ?? ''), counts: meter.endRun(conversation), stop: budgetStops.get(conversation) });
+          while (ended.size > 200) ended.delete(ended.keys().next().value);
+          budgetStops.delete(conversation);
+        } else if (event?.type === 'resumed' && event?.continued === true) {
+          const kept = ended.get(conversation);
+          ended.delete(conversation);
+          if (kept && kept.runId && kept.runId === String(event?.runId ?? '') && kept.counts && !(kept.stop && raisedSince(kept.stop))) {
+            meter.restoreRun(conversation, kept.counts);
+            if (kept.stop) budgetStops.set(conversation, kept.stop);
+          }
+        } else if (event?.type === 'resumed') {
+          const stop = budgetStops.get(conversation);
+          if (stop && raisedSince(stop)) {
+            budgetStops.delete(conversation);
+            meter.endRun(conversation);
+          }
+        }
+      }) ?? (() => {}), 'budget: Mission allowance');
+    } catch (error) {
+      ctx.logger?.warn?.(`budget: could not follow Mission's runs: ${String(error?.message ?? error)}`);
+    }
+  });
+
+  /**
+   * Raise a Mission's own allowance (Mission stage E): only after the owner's Allow in the Mission's card.
+   * Budget checks the request itself: higher than now, at most 50,000 steps or 500,000,000 tokens, Budget guard on.
+   * It writes `maxLongSteps` or `maxLongTokens` through the app's settings, as the Budget page does, so the owner
+   * sees and can change it back there. A raise is a raise like one on the page: a run stopped by that limit and
+   * then resumed starts a fresh allowance ('resumed' above).
+   * @param {{limit: 'steps' | 'tokens', to: number}} request
+   * @returns {Promise<{ok: true, from: number, to: number} | {ok: false, text: string}>}
+   */
+  const raiseMission = async (request) => {
+    try {
+      const now = meter.longAllowance();
+      if (!now.enabled) return { ok: false, text: 'Budget guard is switched off, so there is no limit to raise.' };
+      const checked = checkRaise(request, now);
+      if (!checked.ok) return checked;
+      const settings = ctx.get('settings');
+      if (typeof settings?.mutate !== 'function') return { ok: false, text: 'The app\'s settings could not be reached.' };
+      await settings.mutate('budget', [{ op: 'set', path: [checked.key], value: checked.to }]);
+      return { ok: true, from: checked.from, to: checked.to };
+    } catch (error) {
+      return { ok: false, text: `The setting could not be saved (${String(error?.message ?? error).slice(0, 200)}).` };
+    }
+  };
+
+  // What a Mission gets now, for Mission's pre-flight line; and the raise above.
+  ctx.effect(() => ctx.provide('budgetGuard', Object.freeze({
+    apiVersion: 1,
+    longAllowance: () => {
+      try {
+        return meter.longAllowance();
+      } catch {
+        return undefined;
+      }
+    },
+    raiseMission,
+  })), 'budget: service');
 
   // The loop check: the same tool call, again and again.
   ctx.effect(() => ctx.tools.guard((exec) => {
@@ -197,7 +297,9 @@ export function apply(ctx, config) {
             res.setHeader('content-type', 'application/json; charset=utf-8');
             res.setHeader('cache-control', 'no-store');
             const now = Date.now();
-            res.end(JSON.stringify({ at: now, limits: limits(), today: record.today(now), biggest: record.biggest(now), stops: record.stops().slice(0, 30) }));
+            // Stops saved before Mission's stage B say "Long run": shown with today's name (kept as stored).
+            const stops = record.stops().slice(0, 30).map((stop) => (stop && typeof stop.text === 'string' ? { ...stop, text: missionWords(stop.text) } : stop));
+            res.end(JSON.stringify({ at: now, limits: limits(), today: record.today(now), biggest: record.biggest(now), stops }));
           },
         }),
       'budget: data route',

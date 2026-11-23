@@ -55,8 +55,11 @@
     "/dsh-cowork-shell/trash",
     "/dsh-cowork-shell/scratch",
     "/dsh-cowork-shell/scratch/keep",
+    "/dsh-cowork-shell/pending-spaces",
     "/dsh-automations/data",
-    "/dsh-search/match"
+    "/dsh-search/match",
+    "/dsh-modes/preset",
+    "/dsh-modes/mode"
   ],
   "slots": [
     {
@@ -78,6 +81,10 @@
     {
       "name": "conversation.input.left",
       "id": "cowork-scratch-mark"
+    },
+    {
+      "name": "conversation.input.left",
+      "id": "cowork-switch"
     }
   ],
   "settings": [
@@ -96,6 +103,8 @@
     "tabs",
     "maxTabs",
     "tabOrder",
+    "spaceOrder",
+    "spaceLayout",
     "hideLogos",
     "dateTitle",
     "wideChat",

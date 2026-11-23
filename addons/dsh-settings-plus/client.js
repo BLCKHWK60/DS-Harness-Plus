@@ -216,10 +216,11 @@ window.__ModuleLoader__.load({
       return { plain, fail, ask, makeNote };
     })();
     // ---- dsh-kit:end ----
-    // ---- dsh-ui:begin ---- shared page parts (switch, button, row, heading, empty state, chips); the same block in every page file that uses it.
+    // ---- dsh-ui:begin ---- shared page parts (switch, button, row, heading, empty state, chips, (i) pop-up, state line, error note); the same block in every page file that uses it.
     // The master copy is docs/shared/dsh-ui.js. Change it there, then run `node scripts/sync-kit.mjs`; `bash scripts/check.sh` fails when a copy has drifted.
     // All classes start with "dshu-" and belong to this block only: no add-on defines or restyles them. The look follows docs/UI-STYLE.md.
     // React is passed in: `const ui = dshUi.makeParts(React);` then `h(ui.Switch, { on, label, onChange })`, `h(ui.Row, { title, desc }, control)` and so on.
+    // Pass ReactDOM too (`dshUi.makeParts(React, ReactDOM)`) where an (i) needs `portal: true` (its pop-up then goes to the page body).
     const dshUi = (() => {
       const STYLE_ID = 'dsh-ui-style';
       const CSS = `
@@ -259,6 +260,31 @@ window.__ModuleLoader__.load({
     .dshu-link { padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; text-decoration: underline; cursor: pointer; }
     .dshu-wait { margin: 16px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
     .dshu-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .dshu-infowrap { display: inline-flex; vertical-align: middle; margin-left: 4px; }
+    .dshu-info { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+    .dshu-info:hover, .dshu-info[aria-expanded="true"] { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+    .dshu-info svg { display: block; width: 12px; height: 12px; }
+    .dshu-info:focus-visible, .dshu-pop:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+    .dshu-pop { position: fixed; z-index: 2147482000; box-sizing: border-box; width: max-content; max-width: min(320px, calc(100vw - 16px)); overflow: auto; padding: 10px 12px; border-radius: 12px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base)); color: var(--dsw-alias-label-primary); box-shadow: 0 14px 36px color-mix(in srgb, #000 28%, transparent); font-size: 12px; line-height: 18px; font-weight: 400; text-align: left; text-transform: none; white-space: normal; overflow-wrap: anywhere; cursor: auto; }
+    .dshu-pop:focus:not(:focus-visible) { outline: none; }
+    .dshu-pop-title { margin: 0 0 4px; font-size: 13px; line-height: 20px; font-weight: 600; }
+    .dshu-pop-line { margin: 6px 0 0; }
+    .dshu-pop-title + .dshu-pop-line { margin-top: 0; }
+    .dshu-pop-head { display: block; font-weight: 600; color: var(--dsw-alias-label-secondary); }
+    .dshu-state { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; margin: 4px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
+    .dshu-state-dot { flex: none; align-self: center; width: 8px; height: 8px; border-radius: 50%; background: var(--dsw-alias-label-secondary); }
+    .dshu-state[data-state="ok"] .dshu-state-dot { background: var(--dsw-alias-state-success-primary); }
+    .dshu-state[data-state="busy"] .dshu-state-dot { background: var(--dsw-alias-brand-primary); }
+    .dshu-state[data-state="warn"] .dshu-state-dot { background: var(--dsw-alias-state-warn-primary); }
+    .dshu-state[data-state="error"] .dshu-state-dot { background: var(--dsw-alias-state-error-primary); }
+    .dshu-state[data-state="off"] .dshu-state-dot { background: transparent; box-shadow: inset 0 0 0 1px var(--dsw-alias-label-secondary); }
+    .dshu-state-next { color: var(--dsw-alias-label-secondary); }
+    .dshu-errnote { margin: 8px 0 0; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+    .dshu-errnote-what { margin: 0; color: var(--dsw-alias-state-error-primary); }
+    .dshu-errnote-fix { margin: 2px 0 0; color: var(--dsw-alias-label-primary); }
+    .dshu-errnote-act { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+    .dshu-errnote-act .dshu-link { font-size: 12px; }
+    .dshu-errnote-details { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); color: var(--dsw-alias-label-secondary); font: 11px/16px ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; user-select: text; }
     `;
       const ensureStyle = () => {
         if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
@@ -286,8 +312,86 @@ window.__ModuleLoader__.load({
         } catch { return false; }
       };
 
-      const makeParts = (React) => {
+      /** The three fixed heads of an (i) pop-up, in this order. `changes` is accepted as another name for `change`. */
+      const INFO_HEADS = [['what', 'What it does'], ['when', 'When to use it'], ['change', 'If you change it']];
+      /** The same heads, and the button's "About". Plus is English only: every page gets these words. */
+      const INFO_WORDS = {
+        en: { what: 'What it does', when: 'When to use it', change: 'If you change it', about: (name) => (name ? `About ${name}` : 'About this') },
+      };
+      /** @returns {object} the (i)'s fixed words. `lang` is still accepted (older callers pass it) but every language gets English. */
+      const infoWords = () => INFO_WORDS.en;
+      /** What an (i) pop-up shows: the title and only the lines that were given. `lang` is accepted and ignored (English only). */
+      const infoLines = ({ title, label, what, when, change, changes } = {}) => {
+        const given = { what, when, change: change ?? changes };
+        const words = infoWords();
+        const blank = (v) => v == null || v === false || (typeof v === 'string' && v.trim() === '');
+        return {
+          title: blank(title) ? (blank(label) ? '' : label) : title,
+          lines: INFO_HEADS.filter(([key]) => !blank(given[key])).map(([key]) => ({ key, head: words[key], text: given[key] })),
+        };
+      };
+
+      /**
+       * Where a pop-up goes: below its button, or above when there is more room there; its left edge follows the button
+       * and is pulled in so the whole panel stays on screen. Sizes in pixels; returns { top, left, side, maxHeight }.
+       */
+      const placePop = ({ anchor, pop, view, gap = 6, margin = 8 }) => {
+        const below = view.height - anchor.bottom - gap - margin;
+        const above = anchor.top - gap - margin;
+        const side = pop.height <= below || below >= above ? 'below' : 'above';
+        const maxHeight = Math.max(80, Math.floor(side === 'below' ? below : above));
+        const height = Math.min(pop.height, maxHeight);
+        const top = side === 'below' ? anchor.bottom + gap : Math.max(margin, anchor.top - gap - height);
+        const left = Math.max(margin, Math.min(anchor.left, view.width - margin - pop.width));
+        return { top: Math.round(top), left: Math.round(left), side, maxHeight };
+      };
+
+      /**
+       * A failed call as { text, details }: the plain sentence and the raw text. Uses the error helper's wording
+       * (dshKit.plain) when the page also carries the dsh-kit block, so the two never say different things.
+       */
+      const explainError = (raw) => {
+        try {
+          // eslint-disable-next-line no-undef
+          if (typeof dshKit !== 'undefined' && dshKit && typeof dshKit.plain === 'function') return dshKit.plain(raw);
+        } catch { /* no error helper on this page */ }
+        const message = typeof raw === 'string' ? raw : String(raw?.message ?? raw?.error ?? '');
+        const details = raw && typeof raw === 'object' && typeof raw.details === 'string' ? raw.details : message;
+        // A message that reads as a sentence is said as it is (as the error helper does); a bare code is not.
+        const said = message.trim();
+        if (/\s/.test(said) && !/^[a-z][\w-]*(?:\/[\w.-]+)+:/i.test(said)) return { text: said, details: details === message ? '' : details };
+        return { text: 'Something went wrong. Try again; the Details say what the app reported.', details };
+      };
+
+      /** Raw details as text to show behind Details. */
+      const detailText = (details) => {
+        if (details == null || details === '') return '';
+        if (typeof details === 'string') return details;
+        if (details instanceof Error) return details.stack || String(details.message);
+        try { return JSON.stringify(details, null, 2); } catch { return String(details); }
+      };
+
+      let infoCount = 0;
+
+      /**
+       * The words of a row title for its (i): the text itself, or the text written directly inside a simple element
+       * title (`h('span', null, 'Keep awake', badge)` gives "Keep awake"; the badge is left out). Anything else gives
+       * undefined: then pass `info.label`, or the (i) is only "About this".
+       */
+      const plainTitle = (title) => {
+        if (typeof title === 'string') return title;
+        if (typeof title === 'number') return String(title);
+        if (!title || typeof title !== 'object') return undefined;
+        const kids = [].concat(title.props?.children ?? title.children ?? []);
+        const text = kids.filter((kid) => typeof kid === 'string' || typeof kid === 'number').join(' ').replace(/\s+/g, ' ').trim();
+        return text || undefined;
+      };
+
+      const makeParts = (React, ReactDOM) => {
         ensureStyle();
+        // The pop-up of an (i) with `portal: true` is drawn in the page body, out of a box that clips it or moves fixed
+        // children (a header with container-type, say). Without ReactDOM it stays where it is, as before.
+        const portalTo = (node) => (ReactDOM && typeof ReactDOM.createPortal === 'function' && typeof document !== 'undefined' && document.body ? ReactDOM.createPortal(node, document.body) : node);
         const h = React.createElement;
         /** The page frame: a title, one sentence under it, then the page. */
         const Page = ({ title, desc, children }) => h('div', { className: 'dshu-page' },
@@ -297,9 +401,11 @@ window.__ModuleLoader__.load({
         const Group = ({ children }) => h('div', { className: 'dshu-group' }, children);
         /** A short line in the page's description style; `error` draws it in the error colour. */
         const Desc = ({ error, children, role }) => h('p', { className: 'dshu-desc', 'data-error': String(error === true), role: role ?? (error ? 'alert' : undefined) }, children);
-        /** One setting: text on the left, the control(s) on the right. */
-        const Row = ({ title, desc, children }) => h('div', { className: 'dshu-row' },
-          h('div', { className: 'dshu-rowtext' }, h('div', { className: 'dshu-rowtitle' }, title), desc ? h('div', { className: 'dshu-rowdesc' }, desc) : null),
+        /** One setting: text on the left, the control(s) on the right. `info` ({ what, when, change }) adds an (i) after the title. */
+        const Row = ({ title, desc, info, children }) => h('div', { className: 'dshu-row' },
+          h('div', { className: 'dshu-rowtext' },
+            h('div', { className: 'dshu-rowtitle' }, title, info ? h(Info, { title: plainTitle(title), ...info }) : null),
+            desc ? h('div', { className: 'dshu-rowdesc' }, desc) : null),
           children);
         const Side = ({ children }) => h('div', { className: 'dshu-side' }, children);
         /** `danger`: when it is on, the switch is drawn in the error colour (a safety rule that has been turned off). */
@@ -327,9 +433,140 @@ window.__ModuleLoader__.load({
           chips && chips.length > 0 ? h(Chips, { items: chips, onPick: onPick ?? (() => {}) }) : null,
           children);
         const Wait = ({ children }) => h('p', { className: 'dshu-wait', role: 'status' }, children ?? 'Loading…');
-        return { Page, Group, Desc, Row, Side, Switch, Button, Field, CopyButton, Chips, Empty, Wait };
+
+        const useLayout = React.useLayoutEffect ?? React.useEffect;
+        // The (i) drawn as a ring with an "i" in the text colour, like the app's own info icon.
+        const infoIcon = () => h('svg', { viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false', fill: 'none', stroke: 'currentColor', strokeWidth: 1.3, strokeLinecap: 'round' },
+          h('circle', { cx: 8, cy: 8, r: 6.6 }),
+          h('path', { d: 'M8 7.3v4' }),
+          h('circle', { cx: 8, cy: 4.9, r: 0.45, fill: 'currentColor' }));
+        /**
+         * A small (i) button that opens a pop-up saying what a control does, when to use it and what changes if you change it.
+         * `title` is the bold first line, `label` names the control for screen readers ("About <label>"; defaults to the title).
+         * Opens on click, Enter or Space; Esc, a click outside or Tab away closes it; Esc puts the focus back on the (i).
+         * `more` is one last line, or a list of lines. `portal: true` draws the pop-up in the page body (needs ReactDOM in makeParts).
+         * `lang` is accepted and ignored: the heads and button name are always English.
+         */
+        const Info = (props) => {
+          const { label, more, side, portal } = props;
+          const extra = (Array.isArray(more) ? more : [more]).filter((line) => line != null && line !== false && line !== '');
+          const { title, lines } = infoLines(props);
+          const [open, setOpen] = React.useState(false);
+          const [place, setPlace] = React.useState(null);
+          const wrap = React.useRef(null);
+          const button = React.useRef(null);
+          const pop = React.useRef(null);
+          const autoId = React.useId ? React.useId() : null;
+          const fallbackId = React.useRef(null);
+          if (!autoId && fallbackId.current == null) { infoCount += 1; fallbackId.current = `dshu-info-${infoCount}`; }
+          const id = `dshu-pop-${String(autoId ?? fallbackId.current).replace(/[^\w-]/g, '')}`;
+          const name = label ?? (typeof title === 'string' ? title : '');
+          const about = infoWords().about;
+          const measure = () => {
+            const b = button.current; const p = pop.current;
+            if (!b || !p || typeof window === 'undefined') return;
+            const r = b.getBoundingClientRect();
+            const found = placePop({ anchor: r, pop: { width: p.offsetWidth, height: p.scrollHeight }, view: { width: window.innerWidth, height: window.innerHeight } });
+            // `side: 'above'` asks for the top first; it still flips when it does not fit.
+            setPlace(side === 'above' && r.top - 6 - 8 >= p.scrollHeight ? { ...found, side: 'above', top: Math.round(r.top - 6 - p.scrollHeight) } : found);
+          };
+          useLayout(() => {
+            if (!open) { setPlace(null); return undefined; }
+            measure();
+            try { pop.current?.focus({ preventScroll: true }); } catch { /* the panel is gone */ }
+            return undefined;
+          }, [open]);
+          React.useEffect(() => {
+            if (!open || typeof document === 'undefined') return undefined;
+            // The pop-up may sit in the page body (portal): a click in it is not outside.
+            const inPop = (node) => Boolean(pop.current) && typeof pop.current.contains === 'function' && pop.current.contains(node);
+            const inside = (node) => Boolean(node) && ((wrap.current && wrap.current.contains(node)) || inPop(node));
+            const onDown = (event) => { if (wrap.current && !inside(event.target)) setOpen(false); };
+            const onKey = (event) => {
+              if (event.key !== 'Escape') return;
+              // Only while the focus is in the (i) or its pop-up; then only the pop-up closes, not the dialog or menu
+              // around it. On the window, first in the capture phase, so it runs before the panels' own Esc listeners
+              // on the document; stopImmediatePropagation keeps every later listener from seeing it.
+              const focused = typeof document !== 'undefined' ? document.activeElement : null;
+              if (!wrap.current || !focused || !inside(focused)) return;
+              event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation?.();
+              setOpen(false);
+              try { button.current?.focus(); } catch { /* the button is gone */ }
+            };
+            const onMove = () => measure();
+            document.addEventListener('pointerdown', onDown, true);
+            window.addEventListener('keydown', onKey, true);
+            window.addEventListener('resize', onMove);
+            window.addEventListener('scroll', onMove, true);
+            return () => {
+              document.removeEventListener('pointerdown', onDown, true);
+              window.removeEventListener('keydown', onKey, true);
+              window.removeEventListener('resize', onMove);
+              window.removeEventListener('scroll', onMove, true);
+            };
+          }, [open]);
+          // Clicks inside never reach a row or menu item the (i) sits in; nor do the keys such a row or menu acts on.
+          const stop = (event) => { event.stopPropagation(); };
+          const stopKeys = (event) => { if (['Enter', ' ', 'Spacebar', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) event.stopPropagation(); };
+          return h('span', {
+            ref: wrap, className: 'dshu-infowrap', onClick: stop, onPointerDown: stop, onMouseDown: stop, onKeyDown: stopKeys,
+            onBlur: (event) => { if (open && wrap.current && event.relatedTarget && !wrap.current.contains(event.relatedTarget) && !(pop.current && typeof pop.current.contains === 'function' && pop.current.contains(event.relatedTarget))) setOpen(false); },
+          },
+          h('button', {
+            ref: button, type: 'button', className: 'dshu-info', 'aria-label': about(name), 'aria-expanded': open,
+            'aria-haspopup': 'dialog', 'aria-controls': open ? id : undefined, onClick: () => setOpen(!open),
+          }, infoIcon()),
+          open ? (portal ? portalTo : (node) => node)(h('div', {
+            ref: pop, id, className: 'dshu-pop', role: 'dialog', tabIndex: -1, 'data-side': place?.side,
+            'aria-label': title ? undefined : about(name), 'aria-labelledby': title ? `${id}-t` : undefined,
+            style: place ? { top: place.top, left: place.left, maxHeight: place.maxHeight } : { top: 0, left: 0, visibility: 'hidden' },
+          },
+          title ? h('p', { id: `${id}-t`, className: 'dshu-pop-title' }, title) : null,
+          lines.map((line) => h('p', { key: line.key, className: 'dshu-pop-line' }, h('span', { className: 'dshu-pop-head' }, line.head), line.text)),
+          extra.map((line, index) => h('p', { key: `more-${index}`, className: 'dshu-pop-line' }, line)))) : null);
+        };
+
+        const STATES = ['ok', 'busy', 'idle', 'off', 'warn', 'error'];
+        /**
+         * One line that says in words what is happening and what to do next: a coloured dot, `words`, then `next`
+         * (text or a button). `state` is ok, busy, idle, off, warn or error; anything else counts as idle.
+         * `live: false` keeps the line out of screen readers' announcements (for words that change every few
+         * seconds, such as a step count); then announce only the changes that matter somewhere else.
+         */
+        const StateLine = ({ state, words, next, live = true, children }) => {
+          const shown = STATES.includes(state) ? state : 'idle';
+          return h('p', { className: 'dshu-state', 'data-state': shown, role: live === false ? undefined : shown === 'error' ? 'alert' : 'status' },
+            h('span', { className: 'dshu-state-dot', 'aria-hidden': 'true' }),
+            words ? h('span', { className: 'dshu-state-words' }, words) : null,
+            next ? h('span', { className: 'dshu-state-next' }, next) : null,
+            children);
+        };
+
+        /**
+         * An error in plain words: what went wrong (`what`), what to do or click (`fix`, and any buttons as children),
+         * and the raw text only behind a Details toggle. Give `error` instead of `what` to word a failed call the way
+         * the error helper does; `details` (text or an object) wins over the raw text it keeps.
+         */
+        const ErrorNote = ({ what, fix, details, error, children }) => {
+          const [open, setOpen] = React.useState(false);
+          const hasError = error !== undefined && error !== null && error !== '';
+          const fromError = hasError ? explainError(error) : { text: '', details: '' };
+          // With your own `what`, the raw error itself goes behind Details.
+          const rawError = hasError ? (fromError.details || (typeof error === 'string' ? error : error.details || error.message || error)) : '';
+          const text = what || fromError.text;
+          const raw = detailText(details ?? (what ? rawError : fromError.details));
+          if (!text && !fix && !raw) return null;
+          return h('div', { className: 'dshu-errnote', role: 'alert' },
+            h('p', { className: 'dshu-errnote-what' }, text || 'Something went wrong.'),
+            fix ? h('p', { className: 'dshu-errnote-fix' }, fix) : null,
+            children || raw ? h('div', { className: 'dshu-errnote-act' },
+              children,
+              raw ? h('button', { type: 'button', className: 'dshu-link', 'aria-expanded': open, onClick: () => setOpen(!open) }, open ? 'Hide details' : 'Details') : null) : null,
+            open && raw ? h('pre', { className: 'dshu-errnote-details' }, raw) : null);
+        };
+        return { Page, Group, Desc, Row, Side, Switch, Button, Field, CopyButton, Chips, Empty, Wait, Info, StateLine, ErrorNote };
       };
-      return { makeParts, ensureStyle, copyText };
+      return { makeParts, ensureStyle, copyText, infoLines, placePop, explainError };
     })();
     // ---- dsh-ui:end ----
     const PlainNote = dshKit.makeNote(React);
@@ -338,18 +575,34 @@ window.__ModuleLoader__.load({
     /** The groups, in order, and their pages in order (the left list shows them under these headings; saved settings are never renamed). */
     const GROUPS = [
       { label: 'Everyday', pages: ['start-here', 'color-schemes', 'activity', 'alerts', 'notify', 'diagram', 'artifacts'] },
-      { label: 'Models and spending', pages: ['model-tiers', 'role-prompts', 'sampling-presets', 'budget', 'usage-ledger', 'model-arena', 'benchmark', 'tuning'] },
-      { label: 'Modes and tabs', pages: ['modes', 'cowork-start', 'finance', 'data', 'scout', 'content', 'bench', 'creator-plus', 'split-plus'] },
+      { label: 'Models and spending', pages: ['model-tiers', 'role-prompts', 'sampling-presets', 'budget', 'usage-ledger', 'model-arena'] },
+      // Item 4A, stage 5: "Modes and tabs" is now "Spaces and modes", with the Spaces page first.
+      { label: 'Spaces and modes', pages: ['spaces', 'modes', 'cowork-start', 'finance', 'data', 'scout', 'content', 'bench', 'split-plus'] },
+      // Round 2 (mock-up e, the owner's yes): the Workshop's pages under their own heading, right after Spaces and modes.
+      { label: 'Workshop', pages: ['creator-plus', 'tuning', 'benchmark'] },
       { label: 'Agents and code', pages: ['mission', 'agent-swarm', 'code-map', 'code-power'] },
       { label: 'Research and sources', pages: ['web-sources', 'research', 'deep-research', 'library', 'pdf'] },
-      { label: 'Privacy and safety', pages: ['tool-access', 'mac', 'recon'] },
+      { label: 'Privacy and safety', pages: ['tool-access', 'tool-ledger', 'mac', 'recon'] },
       { label: 'Learning', pages: ['memory', 'learn', 'evolve', 'skill-architect'] },
       { label: 'Add-ons and updates', pages: ['about-plus'] },
       { label: 'Advanced', pages: ['more-settings'] },
     ];
+    /**
+     * Round 2: the words Settings Plus puts in the Settings list itself (group headings above, its own pages' names).
+     * Stage 7 (owner decision 28): English only, also when the app is set to Chinese.
+     */
+    const NAV_DICT = {
+      en: { 'page.start-here': 'Start here', 'page.about-plus': 'About Plus', 'page.more-settings': 'More settings', ...Object.fromEntries(GROUPS.map((group) => [`group.${group.label}`, group.label])) },
+    };
+    /** @returns {(key: string) => string} the Settings list's words, in English whatever the app's language (the argument is kept for callers). */
+    function navWords(_appCtx) {
+      return (key) => NAV_DICT.en[key] ?? key;
+    }
     /** Line icons, 24x24, drawn with the current colour. */
     const ICONS = {
       modes: 'M4 6h7v5H4zM13 6h7v5h-7zM4 13h7v5H4zM13 13h7v5h-7z',
+      // Five stacked buttons: the space buttons at the top of the sidebar.
+      spaces: 'M4 5h16v4H4zM4 11h7v8H4zM13 11h7v3h-7zM13 16h7v3h-7z',
       // A globe: the Web selector's sources.
       'web-sources': 'M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9M12 3c-2.5 2.6-3.8 5.6-3.8 9s1.3 6.4 3.8 9',
       research: 'M10 4a6 6 0 1 0 0 12a6 6 0 0 0 0-12zM14.5 14.5L20 20M7 10h6M10 7v6',
@@ -369,6 +622,8 @@ window.__ModuleLoader__.load({
       benchmark: 'M4 19h16M7 16V10M12 16V6M17 16v-4',
       budget: 'M12 3v18M16 7.5c0-1.9-1.8-3-4-3s-4 1.1-4 3 1.8 2.6 4 3 4 1.1 4 3-1.8 3-4 3-4-1.1-4-3',
       'usage-ledger': 'M6 3h9l3 3v15H6zM9 9h6M9 13h6M9 17h4',
+      // A list with a magnifier: the record of tool use.
+      'tool-ledger': 'M4 6h10M4 11h10M4 16h6M16 13a3 3 0 1 0 0 6a3 3 0 0 0 0-6zM18.5 18.5L21 21',
       mission: 'M5 21V4h11l-2 4 2 4H5',
       'agent-swarm': 'M12 5a2 2 0 1 0 0 4a2 2 0 0 0 0-4zM6 15a2 2 0 1 0 0 4a2 2 0 0 0 0-4zM18 15a2 2 0 1 0 0 4a2 2 0 0 0 0-4zM11 9l-4 6M13 9l4 6M8 17h8',
       evolve: 'M4 12a8 8 0 0 1 14-5.3M20 4v4h-4M20 12a8 8 0 0 1-14 5.3M4 20v-4h4',
@@ -534,7 +789,7 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
         } catch {
           present = [];
         }
-        if (group.pages.find((page) => present.includes(page)) === id) head = group.label;
+        if (group.pages.find((page) => present.includes(page)) === id) head = navWords(appCtx)(`group.${group.label}`);
       }
       const d = ICONS[id] ?? 'M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8z';
       // The label (Beta, Experimental) of the add-on the page belongs to; Core pages carry none. The left list shows it as a small tag.
@@ -784,6 +1039,8 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
     // ---- the gear beside Send: the current mode's settings in a popup -------------------------------
 
     /** The mode whose settings page is its own; any other mode (Chat, Cowork, Code, yours) uses Modes. */
+    /** The built-in modes, which Modes keeps out of its stored lists (Plain chat since item 4A). */
+    const BUILT_IN_NAMES = Object.freeze({ plain: 'Plain chat', chat: 'Chat', cowork: 'Cowork', code: 'Code' });
     const MODE_PAGES = { data: 'data', recon: 'recon', scout: 'scout', finance: 'finance', content: 'content', bench: 'bench', 'creator-plus': 'creator-plus', research: 'research', automations: 'alerts' };
 
     const readObject = (value) => {
@@ -800,19 +1057,26 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
     /**
      * The mode a conversation is in, from Modes' settings value: the conversation's own choice, else the
      * default (on the start page, the selected tab).
+     * Item 4A, stage 6b (J21): while spaces are live (the Mode route says `live`, or, when it was not asked, Modes' value
+     * has `sessionSpaces`), the fallback is the space's start mode the route gave, else Plain chat; never the stored
+     * `defaultMode`, which spaces no longer use and which may still say Recon. Without spaces, as before.
      * @param {object} view - the Modes settings value.
      * @param {string} [sessionId] - the open conversation, if any.
+     * @param {{live?: boolean, start?: string}} [spaces] - what the Mode route said: spaces live, and the mode it gave.
      * @returns {{id: string, label: string}} the mode.
      */
-    function modeOf(view, sessionId) {
+    function modeOf(view, sessionId, spaces) {
       const labels = {};
       for (const source of [readObject(view?.extraModes), readObject(view?.modes)]) {
         for (const [id, value] of Object.entries(source)) labels[id] = value && typeof value.label === 'string' && value.label.trim() ? value.label.trim() : id;
       }
       const ids = Object.keys(labels);
       const chosen = sessionId ? readObject(view?.sessionModes)[sessionId] : undefined;
-      const id = [chosen, view?.defaultMode].find((one) => typeof one === 'string' && (ids.includes(one) || one in { chat: 1, cowork: 1, code: 1 })) ?? 'cowork';
-      const plain = { chat: 'Chat', cowork: 'Cowork', code: 'Code' };
+      const live = typeof spaces?.live === 'boolean' ? spaces.live : Boolean(view && typeof view === 'object' && Object.hasOwn(view, 'sessionSpaces'));
+      const fallback = live ? (typeof spaces?.start === 'string' && spaces.start ? spaces.start : 'plain') : view?.defaultMode;
+      // Plain chat (item 4A) is built in and never stored, so it is known here too.
+      const id = [chosen, fallback].find((one) => typeof one === 'string' && (ids.includes(one) || one in BUILT_IN_NAMES)) ?? (live ? 'plain' : 'cowork');
+      const plain = BUILT_IN_NAMES;
       return { id, label: labels[id] ?? plain[id] ?? id };
     }
 
@@ -830,7 +1094,7 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
           if (name === label) return { id, label: name };
         }
       }
-      return ['chat', 'cowork', 'code'].map((id) => ({ id, label: { chat: 'Chat', cowork: 'Cowork', code: 'Code' }[id] })).find((one) => one.label === label);
+      return Object.entries(BUILT_IN_NAMES).map(([id, name]) => ({ id, label: name })).find((one) => one.label === label);
     }
 
     /**
@@ -904,7 +1168,7 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
      * given this conversation, so it works the same here as it did in the chat box. Shows nothing when
      * the mode has none.
      */
-    function HostedControls({ appCtx, sessionId, title = 'In this conversation', only, skip = [] }) {
+    function HostedControls({ appCtx, sessionId, title = 'In this thread', only, skip = [] }) {
       let entries = [];
       try {
         entries = appCtx.slots.entriesOfSlot('conversation.input.left').filter((entry) => HOSTED.includes(entry.options?.id) && (!only || only.includes(entry.options?.id)) && !skip.includes(entry.options?.id));
@@ -983,11 +1247,19 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
         try {
           const result = await appCtx.remote.settings.describe();
           const view = result.ok ? result.value.namespaces.find((item) => item.ns === 'modes')?.value : undefined;
-          mode = modeOf(view, sessionId);
-          // The Modes add-on knows best: a conversation with no message yet follows the selected tab, whatever was stored.
+          // The Modes add-on knows best: a thread with no message yet takes its space's start mode (item 4A), whatever
+          // was stored. Its Mode route gives the mode's id and name (Plain chat included); an older Modes, its tools route.
+          // Stage 6b (J21): the route's `live` and `current` also steer the fallback, so a stale `defaultMode` is never shown.
+          const headers = sessionId ? { accept: 'application/json', 'x-dsh-session': sessionId, 'x-dsh-locale': 'en' } : null;
+          const viaMode = headers ? await fetch(new URL('dsh-modes/mode', document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers }).then((response) => (response.ok ? response.json() : null)).catch(() => null) : null;
+          const current = viaMode?.ok ? viaMode.value?.current : undefined;
+          mode = modeOf(view, sessionId, viaMode?.ok ? { live: viaMode.value?.live === true, start: typeof current === 'string' ? current : '' } : undefined);
           if (sessionId) {
-            const said = await fetch(new URL('dsh-modes/tools', document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers: { 'x-dsh-session': sessionId } }).then((response) => (response.ok ? response.json() : null)).catch(() => null);
-            mode = (said?.known === true ? modeNamed(view, said.mode) : undefined) ?? mode;
+            if (typeof current === 'string' && current) mode = { id: current, label: String(viaMode.value.currentLabel || BUILT_IN_NAMES[current] || current) };
+            else {
+              const said = await fetch(new URL('dsh-modes/tools', document.baseURI), { cache: 'no-store', credentials: 'same-origin', headers }).then((response) => (response.ok ? response.json() : null)).catch(() => null);
+              mode = (said?.known === true ? modeNamed(view, said.mode) : undefined) ?? mode;
+            }
           }
         } catch {
           /* Modes is not there: the page list below decides what is shown. */
@@ -1012,9 +1284,9 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
     // ---- the Export button beside the gear: this conversation as a file -------------------------------
 
     const EXPORT_LEVELS = [
-      ['conversation', 'Conversation only', 'Your messages and the assistant\'s replies.'],
-      ['thinking', 'Conversation and thinking', 'The same, with the assistant\'s thinking blocks before each reply.'],
-      ['full', 'Full session log', 'Everything the app stored: the model and its settings, the instructions (system prompt), your messages, thinking, every tool call and its result, other log events, and the raw log as stored (JSON). Nothing is left out or hidden; for finding out what went wrong later.'],
+      ['conversation', 'Messages only', 'Your messages and the assistant\'s replies.'],
+      ['thinking', 'Messages and thinking', 'The same, with the assistant\'s thinking blocks before each reply.'],
+      ['full', 'Full thread log', 'Everything the app stored: the model and its settings, the instructions (system prompt), your messages, thinking, every tool call and its result, other log events, and the raw log as stored (JSON). Nothing is left out or hidden; for finding out what went wrong later.'],
     ];
     const EXPORT_FORMATS = [['md', 'Markdown'], ['txt', 'Plain text'], ['html', 'HTML'], ['json', 'JSON'], ['pdf', 'PDF']];
 
@@ -1046,9 +1318,9 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
         setInfo(null);
         setNote('');
         fetch(exportUrl(sessionId, level, format, `&hide=${hide ? 1 : 0}&info=1`), { cache: 'no-store', credentials: 'same-origin' })
-          .then((response) => response.json().catch(() => ({ ok: false, reason: 'The export could not be prepared.' })))
+          .then((response) => response.json().catch(() => ({ ok: false, reason: 'The export could not be prepared. Close this window and try again.' })))
           .then((data) => { if (alive) setInfo(data); })
-          .catch(() => { if (alive) setInfo({ ok: false, reason: 'The export could not be prepared.' }); });
+          .catch(() => { if (alive) setInfo({ ok: false, reason: 'The export could not be prepared. Close this window and try again.' }); });
         return () => { alive = false; };
       }, [sessionId, level, format, hide]);
       const fetchText = async () => {
@@ -1104,21 +1376,21 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
         document.body.appendChild(link);
         link.click();
         link.remove();
-        setNote('The complete stored log (with its sub-conversations and attachments) is downloading as a ZIP.');
+        setNote('The complete stored log (with its helper threads and attachments) is downloading as a ZIP.');
       };
       const blocked = info && info.ok === false;
       const size = info?.size ? (info.size > 1048576 ? `${(info.size / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(info.size / 1024))} KB`) : '';
       const dialog = h('div', { className: 'dsh-mg-back', onMouseDown: (event) => { if (event.target === event.currentTarget) onClose(); } },
-        h('div', { className: 'dsh-mg-pop dsh-xp-pop', role: 'dialog', 'aria-modal': true, 'aria-label': 'Export this conversation', 'data-dsh-xp': '' },
+        h('div', { className: 'dsh-mg-pop dsh-xp-pop', role: 'dialog', 'aria-modal': true, 'aria-label': 'Export this thread', 'data-dsh-xp': '' },
           h('div', { className: 'dsh-mg-head' },
-            h('b', null, 'Export this conversation'),
+            h('b', null, 'Export this thread'),
             h('span', { className: 'grow' }),
             h('button', { type: 'button', onClick: onClose }, 'Close')),
           h('div', { className: 'dsh-xp-body' },
             info?.isolated
               ? h(React.Fragment, null,
                 h('div', { className: 'dsh-xp-note' }, info.reason),
-                h(HostedControls, { appCtx, sessionId, title: 'This tab\'s own export', only: ['recon-export'] }))
+                h(HostedControls, { appCtx, sessionId, title: 'Its own export', only: ['recon-export'] }))
               : h(React.Fragment, null,
                 h('div', null,
                   h('h4', null, 'How much'),
@@ -1127,7 +1399,7 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
                   h('h4', null, 'File type'),
                   h('div', { className: 'dsh-xp-formats', role: 'radiogroup', 'aria-label': 'File type' }, EXPORT_FORMATS.map(([id, name]) => h('button', { key: id, type: 'button', role: 'radio', 'aria-checked': format === id, 'data-format': id, onClick: () => setFormat(id) }, name))),
                   format === 'pdf' ? h('div', { className: 'dsh-xp-note' }, 'Opens your print window; choose "Save as PDF" there.') : null),
-                level === 'full' ? h('div', { className: 'dsh-xp-note', 'data-xp-warning': '' }, 'Careful: the full session log holds everything the app stored. That can include keys, passwords, tokens, private files you opened and text you pasted. Look at it before you share it.') : null,
+                level === 'full' ? h('div', { className: 'dsh-xp-note', 'data-xp-warning': '' }, 'Careful: the full thread log holds everything the app stored. That can include keys, passwords, tokens, private files you opened and text you pasted. Look at it before you share it.') : null,
                 h('label', { className: 'dsh-xp-note', style: { display: 'flex', gap: 6, alignItems: 'center' } }, h('input', { type: 'checkbox', checked: hide, onChange: (event) => setHide(event.target.checked), 'data-xp-hide': '' }), 'Hide keys and passwords (also e-mail addresses and your home folder\'s name)'),
                 h('div', { className: 'dsh-xp-actions' },
                   format === 'pdf'
@@ -1135,7 +1407,7 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
                     : h('button', { type: 'button', className: 'main', disabled: busy || blocked || !info, onClick: download, 'data-xp-go': 'download' }, 'Download'),
                   format === 'pdf' ? null : h('button', { type: 'button', disabled: busy || blocked || !info, onClick: () => void copy(), 'data-xp-go': 'copy' }, 'Copy to clipboard'),
                   h('span', { className: 'dsh-xp-note' }, blocked ? info.reason : info ? `${info.title}${size ? ` · ${size}` : ''}` : 'Preparing…')),
-                h('div', { className: 'dsh-xp-note' }, 'Also: the app\'s own complete archive. The log exactly as stored, with its sub-conversations and attachments, as a ZIP. Nothing is hidden in the ZIP, so it can hold keys and passwords.',
+                h('div', { className: 'dsh-xp-note' }, 'Also: the app\'s own complete archive. The log exactly as stored, with its helper threads and attachments, as a ZIP. Nothing is hidden in the ZIP, so it can hold keys and passwords.',
                   ' ', h('button', { type: 'button', style: { height: 24, padding: '0 10px', border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 12, background: 'transparent', color: 'inherit', font: 'inherit', fontSize: 12, cursor: 'pointer' }, onClick: raw, 'data-xp-go': 'zip' }, 'Download the ZIP'))),
             note ? h('div', { className: 'dsh-xp-note', role: 'status' }, note) : null)));
       return ReactDOM.createPortal(dialog, document.body);
@@ -1173,7 +1445,7 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
       // notes, where to, folder). Anything else: the shared export window.
       const press = () => setOpen(document.querySelector('[data-slot="conversation.input.left"] .dsh-rc-ctl') ? 'recon' : 'shared');
       return h(React.Fragment, null,
-        h('button', { type: 'button', className: 'dsh-mg-gear', 'data-dsh-export': '', title: 'Export this conversation', 'aria-label': 'Export this conversation', onClick: press },
+        h('button', { type: 'button', className: 'dsh-mg-gear', 'data-dsh-export': '', title: 'Export this thread', 'aria-label': 'Export this thread', onClick: press },
           h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
             h('path', { d: 'M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14' }))),
         open === 'recon' ? h(ReconExportHolder, { sessionId, onClose: close }) : open ? h(ExportDialog, { appCtx, sessionId, onClose: close }) : null);
@@ -1186,10 +1458,10 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
 
     /** Which add-on folder each Plus page belongs to (for the Core / Beta / Experimental label). */
     const PAGE_ADDON = {
-      modes: 'dsh-modes', 'web-sources': 'dsh-modes', 'cowork-start': 'dsh-cowork-shell', research: 'dsh-research', 'deep-research': 'dsh-deep-research', finance: 'dsh-finance', data: 'dsh-data', scout: 'dsh-scout', recon: 'dsh-recon', content: 'dsh-content', bench: 'dsh-bench', 'creator-plus': 'dsh-creator-plus', 'split-plus': 'dsh-split-plus',
+      modes: 'dsh-modes', spaces: 'dsh-modes', 'web-sources': 'dsh-modes', 'cowork-start': 'dsh-cowork-shell', research: 'dsh-research', 'deep-research': 'dsh-deep-research', finance: 'dsh-finance', data: 'dsh-data', scout: 'dsh-scout', recon: 'dsh-recon', content: 'dsh-content', bench: 'dsh-bench', 'creator-plus': 'dsh-creator-plus', 'split-plus': 'dsh-split-plus',
       'model-tiers': 'dsh-model-tiers', 'role-prompts': 'dsh-role-prompts', 'sampling-presets': 'dsh-sampling-presets', 'model-arena': 'dsh-model-arena', benchmark: 'dsh-benchmark', tuning: 'dsh-tuning', budget: 'dsh-budget', 'usage-ledger': 'dsh-usage-ledger',
       mission: 'dsh-mission', 'agent-swarm': 'dsh-agent-swarm', evolve: 'dsh-evolve', 'skill-architect': 'dsh-skill-architect', alerts: 'dsh-automations', notify: 'dsh-notify', memory: 'dsh-memory', library: 'dsh-library', pdf: 'dsh-pdf', 'code-map': 'dsh-code-map', 'code-power': 'dsh-code-power', diagram: 'dsh-diagram', learn: 'dsh-learn', artifacts: 'dsh-artifacts',
-      'color-schemes': 'dsh-color-schemes', activity: 'dsh-activity', mac: 'dsh-mac', 'tool-access': 'dsh-modes', 'about-plus': 'dsh-settings-plus', 'start-here': 'dsh-settings-plus', 'more-settings': 'dsh-settings-plus',
+      'color-schemes': 'dsh-color-schemes', activity: 'dsh-activity', mac: 'dsh-mac', 'tool-access': 'dsh-modes', 'tool-ledger': 'dsh-tool-ledger', 'about-plus': 'dsh-settings-plus', 'start-here': 'dsh-settings-plus', 'more-settings': 'dsh-settings-plus',
     };
 
     const viewState = { value: 'advanced', subs: new Set() };
@@ -1308,6 +1580,8 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
     }
 
     const showValue = (control, value) => (control.t === 'lines' ? (Array.isArray(value) ? value.join('\n') : '') : control.t === 'json' ? (value === undefined ? '' : JSON.stringify(value, null, 1)) : value === undefined || value === null ? '' : String(value));
+    /** Stage 7 (lab): whether a saved text value is shown in a text box (long, several lines, or written as JSON). */
+    const wideText = (text) => text.length > 60 || text.includes('\n') || /^[\[{]/.test(text.trim());
 
     const SAME = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -1457,8 +1731,8 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
 
     /** Step 4's sentence, true for a new install and for an existing one (what Tool access does, and what the setting is now). */
     const toolAccessLine = (on) => (on === false
-      ? 'Tool access is switched off here, so every tab has exactly the tools it has always had and the AI cannot ask for more. You do not have to do anything. If you want it, switch it on at the top of the Tool access page, then decide tab by tab what is On, what the AI may only ask for, and what is Off.'
-      : 'With Tool access on, the AI can see which tools exist and can ask you for one more. A new install starts with accounts and connectors, other Mac apps, and app and plugins on Ask in Cowork and Code, so the AI has to ask you first; every other tool stays as it was. An existing setup keeps the choices it has. You do not have to do anything; the Tool access grid lets you decide tab by tab what is On, Ask or Off.');
+      ? 'Tool access is switched off here, so every mode has exactly the tools it has always had and the AI cannot ask for more. You do not have to do anything. If you want it, switch it on at the top of the Tool access page, then decide mode by mode what is On, what the AI may only ask for, and what is Off.'
+      : 'With Tool access on, the AI can see which tools exist and can ask you for one more. A new install starts with accounts and connectors, other Mac apps, and app and plugins on Ask in Cowork mode and Code mode, so the AI has to ask you first; every other tool stays as it was. An existing setup keeps the choices it has. You do not have to do anything; the Tool access grid lets you decide mode by mode what is On, Ask or Off.');
     /** The three steps. Nothing here asks for or stores a key: models and keys are added on the app's own Models page. */
     function SetupSteps({ appCtx, onClose }) {
       const view = useView();
@@ -1485,7 +1759,7 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
           h('div', { className: 'dsh-sr-num' }, '2'),
           h('div', { className: 'dsh-sr-text' },
             h('b', null, 'Choose a daily spending limit'),
-            h('span', null, 'The most the assistant may use in one day, all conversations together. When it is reached, it stops until tomorrow. A token is a small piece of a word: a million tokens is roughly 750,000 words, sent and received together.'),
+            h('span', null, 'The most the assistant may use in one day, all threads together. When it is reached, it stops until tomorrow. A token is a small piece of a word: a million tokens is roughly 750,000 words, sent and received together.'),
             budget
               ? h('div', { className: 'dsh-sr-act' }, h(SpendChoice, { appCtx, suggested, current: Number(pathGet(budget.value, ['dayTokens']) ?? 0) }))
               : h('span', { className: 'dsh-sh-rowdesc' }, namespaces.length ? 'The Budget add-on is switched off, so there is no limit to set. Switch it on under Plugins to use one.' : 'Loading…'))),
@@ -1601,7 +1875,7 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
       const view = namespaces.find((one) => one.ns === 'budget');
       const [note, show] = useNote();
       return h('div', { className: 'dsh-sh-stack' },
-        h(Switch, { on: runawayOn(view), label: 'Stop a runaway task', disabled: !view, onChange: async (next) => { try { const ops = runawayOps(view, next); if (ops.length) await writeSettings(appCtx, 'budget', ops); show('Saved.'); reload(); } catch (problem) { show(plainProblem(problem), 'error'); } } }),
+        h(Switch, { on: runawayOn(view), label: 'Stop a runaway run', disabled: !view, onChange: async (next) => { try { const ops = runawayOps(view, next); if (ops.length) await writeSettings(appCtx, 'budget', ops); show('Saved.'); reload(); } catch (problem) { show(plainProblem(problem), 'error'); } } }),
         note ? h(NoteLine, { note }) : null);
     }
 
@@ -1638,26 +1912,26 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
           h(Row, { title: 'Set up in 2 minutes', desc: 'Add a model, choose a daily spending limit, decide how much of Settings to show, and see which tools the AI may use. Run it again whenever you like.' }, h(Btn, { onClick: () => setSetupOpen(true), 'data-sh-setup': '' }, 'Run setup again'))),
         h(ui.Group, null, 'The basics'),
         h('div', { className: 'dsh-sh-card' },
-          h(Row, { title: 'Which model answers', desc: 'Add a model and its key, and pick the one new conversations use, on the Models page.' }, h(Btn, { onClick: () => openSettingsOn(appCtx, 'models', 'Models') }, 'Open Models')),
-          h(Row, { title: 'The web in each tab', desc: 'Each tab decides for itself whether the assistant may search the web. Chat, Cowork and Code are set on the Modes page.' }, h(Btn, { onClick: () => openSettingsOn(appCtx, 'modes', 'Modes') }, 'Open Modes')),
-          h(Row, { title: 'What the assistant may change', desc: 'The level new conversations start with. Read only: it can look but not change. Workspace write: it may change files in the project folder. Full access is set on the General page, which asks you first.', note: accessNote, field: 'permission.defaultPreset' },
-            h(Choice, { value: access, label: 'Access level for new conversations', disabled: !ns('permission'), options: accessOptions, onChange: async (value) => { try { await writeSettings(appCtx, 'permission', [{ op: 'set', path: ['defaultPreset'], value }]); showAccess('Saved.'); reload(); } catch (problem) { showAccess(plainProblem(problem), 'error'); } } })),
+          h(Row, { title: 'Which model answers', desc: 'Add a model and its key, and pick the one new threads use, on the Models page.' }, h(Btn, { onClick: () => openSettingsOn(appCtx, 'models', 'Models') }, 'Open Models')),
+          h(Row, { title: 'The web in each mode', desc: 'Each mode decides for itself whether the assistant may search the web. Set it on the Modes page.' }, h(Btn, { onClick: () => openSettingsOn(appCtx, 'modes', 'Modes') }, 'Open Modes')),
+          h(Row, { title: 'What the assistant may change', desc: 'The level new threads start with. Read only: it can look but not change. Workspace write: it may change files in the project folder. Full access is set on the General page, which asks you first.', note: accessNote, field: 'permission.defaultPreset' },
+            h(Choice, { value: access, label: 'Access level for new threads', disabled: !ns('permission'), options: accessOptions, onChange: async (value) => { try { await writeSettings(appCtx, 'permission', [{ op: 'set', path: ['defaultPreset'], value }]); showAccess('Saved.'); reload(); } catch (problem) { showAccess(plainProblem(problem), 'error'); } } })),
           h(Row, { title: 'Daily spending limit', desc: 'The most the assistant may use in one day. When it is reached, it stops until tomorrow. "No limit" is allowed.', field: 'budget.dayTokens' },
             ns('budget') ? h(SpendChoice, { key: `spend-${tick}`, appCtx, suggested, current: Number(get('budget', ['dayTokens'], 0)), onSaved: reload }) : h('span', { className: 'dsh-sh-rowdesc' }, 'Budget is switched off')),
-          h(Row, { title: 'Stop a runaway task', desc: 'Stops a single task that keeps going too long or uses far too much. Recommended on. The daily spending limit above is separate and stays as it is.', field: 'budget.maxSteps' },
+          h(Row, { title: 'Stop a runaway run', desc: 'Stops a single run of the assistant that keeps going too long or uses far too much. Recommended on. The daily spending limit above is separate and stays as it is.', field: 'budget.maxSteps' },
             h(RunawaySwitch, { ...common }))),
         h(ui.Group, null, 'Tell me when'),
         h('div', { className: 'dsh-sh-card' },
-          h(Row, { title: 'A task needs me', desc: 'It is waiting for your yes, your answer or your look at its plan.', field: 'automations.alertNeeds' }, h(SettingSwitch, { ...common, ns: 'automations', path: ['alertNeeds'], fallback: true, label: 'Tell me when a task needs me' })),
-          h(Row, { title: 'A task failed or was stopped', desc: 'So a long task never fails without you knowing.', field: 'automations.alertFailed' }, h(SettingSwitch, { ...common, ns: 'automations', path: ['alertFailed'], fallback: true, label: 'Tell me when a task failed' })),
-          h(Row, { title: 'A task finished', desc: 'A note for every task that ends well. Off at first, because it can be a lot.', field: 'automations.alertFinished' }, h(SettingSwitch, { ...common, ns: 'automations', path: ['alertFinished'], fallback: false, label: 'Tell me when a task finished' })),
+          h(Row, { title: 'An automation needs me', desc: 'An automation\'s thread is waiting for your yes, your answer or your look at its plan.', field: 'automations.alertNeeds' }, h(SettingSwitch, { ...common, ns: 'automations', path: ['alertNeeds'], fallback: true, label: 'Tell me when an automation needs me' })),
+          h(Row, { title: 'An automation failed or was stopped', desc: 'So a long automation never fails without you knowing.', field: 'automations.alertFailed' }, h(SettingSwitch, { ...common, ns: 'automations', path: ['alertFailed'], fallback: true, label: 'Tell me when an automation failed' })),
+          h(Row, { title: 'An automation finished', desc: 'A note for every automation that ends well. Off at first, because it can be a lot.', field: 'automations.alertFinished' }, h(SettingSwitch, { ...common, ns: 'automations', path: ['alertFinished'], fallback: false, label: 'Tell me when an automation finished' })),
           h(Row, { title: 'Show these on this Mac', desc: 'A normal Mac notification. The first time, macOS may ask whether to allow it.', field: 'automations.mac' }, h(SettingSwitch, { ...common, ns: 'automations', path: ['mac'], fallback: true, label: 'Show notifications on this Mac' }))),
         h(ui.Group, null, 'Look and files'),
         h('div', { className: 'dsh-sh-card' },
           h(Row, { title: 'Light or dark', desc: 'Follow your Mac, or always light or dark.', note: lookNote, field: 'ui-theme.preference' },
             h(Choice, { value: get('ui-theme', ['preference'], 'system'), label: 'Light or dark', disabled: !ns('ui-theme'), options: [['system', 'Follow my Mac'], ['light', 'Light'], ['dark', 'Dark']], onChange: async (value) => { try { await writeSettings(appCtx, 'ui-theme', [{ op: 'set', path: ['preference'], value }]); showLook('Saved.'); reload(); } catch (problem) { showLook(plainProblem(problem), 'error'); } } })),
           h(Row, { title: 'Colour scheme', desc: `The colours of the app. In use now: ${schemeLabel(schemeName)}.`, field: 'color-schemes.scheme' }, h(Btn, { onClick: () => openSettingsOn(appCtx, 'color-schemes', 'Colours') }, 'Open Colours')),
-          h(Row, { title: 'Export button', desc: 'A button beside Send that saves the open conversation as a file (Markdown, text, HTML, JSON or PDF).', field: 'settings-plus.exportButton' }, h(SettingSwitch, { ...common, ns: 'settings-plus', path: ['exportButton'], fallback: true, label: 'Show the Export button' }))),
+          h(Row, { title: 'Export button', desc: 'A button beside Send that saves the open thread as a file (Markdown, text, HTML, JSON or PDF).', field: 'settings-plus.exportButton' }, h(SettingSwitch, { ...common, ns: 'settings-plus', path: ['exportButton'], fallback: true, label: 'Show the Export button' }))),
         h(ui.Group, null, 'Add-ons'),
         h('div', { className: 'dsh-sh-card' },
           h(Row, { title: 'Which add-ons are on', desc: 'Switch add-ons on and off in the Plugins panel. About Plus says which are finished (Core), newer (Beta) or early (Experimental).' },
@@ -1697,7 +1971,10 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
       if (control.t === 'boolean') editor = h(Switch, { on: current === true, label: row.label, onChange: (next) => void write([{ op: 'set', path: row.path, value: next }], 'Saved.') });
       else if (control.t === 'choice') editor = h(Choice, { value: current ?? control.options[0], label: row.label, options: control.options.map((one) => [one, String(one)]), onChange: (value) => void write([{ op: 'set', path: row.path, value }], 'Saved.') });
       else if (control.t === 'lines' || control.t === 'json') editor = h('textarea', { className: 'dshu-field dsh-sh-fit dsh-sx-area', rows: Math.min(8, Math.max(2, draft.split('\n').length)), value: draft, 'aria-label': row.label, placeholder: control.t === 'lines' ? 'One per line' : 'Written as JSON', spellCheck: false, onChange: (event) => setDraft(event.target.value), onBlur: commit });
-      else if (control.t === 'text' && (draft.length > 60 || draft.includes('\n') || /^[\[{]/.test(draft.trim()))) editor = h('textarea', { className: 'dshu-field dsh-sh-fit dsh-sx-area', rows: Math.min(8, Math.max(2, Math.ceil(draft.length / 40))), value: draft, 'aria-label': row.label, spellCheck: false, onChange: (event) => setDraft(event.target.value), onBlur: commit });
+      // Stage 7 (lab): the field's shape follows the saved value, never the text being typed: it used to turn into a text
+      // box at the 61st letter, which lost the cursor and asked "Yes, change it" mid-typing. In a one-line text box Enter
+      // saves, as in a short field (Shift+Enter adds a line).
+      else if (control.t === 'text' && (wideText(showValue(control, current)) || draft.includes('\n'))) editor = h('textarea', { className: 'dshu-field dsh-sh-fit dsh-sx-area', rows: Math.min(8, Math.max(2, Math.ceil(draft.length / 40))), value: draft, 'aria-label': row.label, spellCheck: false, onChange: (event) => setDraft(event.target.value), onBlur: commit, onKeyDown: (event) => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && !draft.includes('\n')) { event.preventDefault(); event.target.blur(); } } });
       else editor = h('input', { className: 'dshu-field dsh-sh-fit', value: draft, 'aria-label': row.label, inputMode: control.t === 'number' ? 'decimal' : undefined, onChange: (event) => setDraft(event.target.value), onBlur: commit, onKeyDown: (event) => { if (event.key === 'Enter' && event.target.tagName === 'INPUT') event.target.blur(); } });
       return h(Row, { title: row.label, desc: row.about, warn, field: row.field, note },
         editor,
@@ -1859,8 +2136,8 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
         3: 'It can change or delete files, run programs, reach other models or services.',
         4: 'Only you can switch this on, in Settings.',
       };
-      const RECON_SAYS = 'Recon is sealed. It may only ask for a tool that cannot reach outside Recon\u2019s own routes: the Terminal, connectors, coding engines, helpers and anything online can never be requested from Recon. Your answer here counts for this conversation only.';
-      const LABEL = { once: 'Allow once', conversation: 'Allow in this conversation', mode: 'Allow in this tab', always: 'Always allow', deny: 'Deny', never: "Don't ask again" };
+      const RECON_SAYS = 'Recon is sealed. It may only ask for a tool that cannot reach outside Recon\u2019s own routes: the Terminal, connectors, coding engines, helpers and anything online can never be requested from Recon. Your answer here counts for this thread only.';
+      const LABEL = { once: 'Allow once', conversation: 'Allow in this thread', mode: 'Allow in this mode', always: 'Always allow', deny: 'Deny', never: "Don't ask again" };
       const SCOPES = ['once', 'conversation', 'mode', 'always'];
       const ORDER = [...SCOPES, 'deny', 'never'];
       const REASON_SHOWN = 300;
@@ -1923,7 +2200,7 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
       const scopeWords = (request) => {
         const allowed = choices(request).filter((one) => one.kind === 'allow').map((one) => one.id);
         const widest = allowed.length ? SCOPES.indexOf(allowed[allowed.length - 1]) : -1;
-        return ['for one use only', 'in this conversation', 'in this conversation or the whole tab', 'in this conversation, the whole tab or always'][widest] ?? 'in this conversation';
+        return ['for one use only', 'in this thread', 'in this thread or the whole mode', 'in this thread, the whole mode or always'][widest] ?? 'in this thread';
       };
 
       /** What an answer's reply means. Only `{ok: true}` is a success: a refused answer (the request ran out, was cancelled or was answered already) is said out loud. */
@@ -2184,9 +2461,9 @@ html[data-dsh-sp-view="simple"] [data-shortcut-modal="settings"] nav button:has(
         ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'plus-tool-card', order: -100 }, (props) => h(PermissionCard, props))));
         ctx.effect(() => ctx.slots.inject('conversation.input.right', () => ctx.slots.register({ name: 'conversation.input.right', id: 'plus-export', order: 870 }, (props) => h(ExportButton, { ...props, appCtx: ctx }))));
         ctx.effect(() => ctx.slots.inject('conversation.input.right', () => ctx.slots.register({ name: 'conversation.input.right', id: 'plus-mode-gear', order: 880 }, (props) => h(ModeGear, { ...props, appCtx: ctx }))));
-        ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'about-plus', order: 630, label: () => 'About Plus' }, () => h(AboutPage))));
-        ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'start-here', order: 10, label: () => 'Start here' }, () => h(StartPage, { appCtx: ctx }))));
-        ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'more-settings', order: 640, label: () => 'More settings' }, () => h(MorePage, { appCtx: ctx }))));
+        ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'about-plus', order: 630, label: () => navWords(ctx)('page.about-plus') }, () => h(AboutPage))));
+        ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'start-here', order: 10, label: () => navWords(ctx)('page.start-here') }, () => h(StartPage, { appCtx: ctx }))));
+        ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'more-settings', order: 640, label: () => navWords(ctx)('page.more-settings') }, () => h(MorePage, { appCtx: ctx }))));
         ctx.effect(() => ctx.slots.inject('settings.action', () => ctx.slots.register({ name: 'settings.action', id: 'plus-settings-view', order: -11 }, (props) => h(ViewSwitch, { ...props, appCtx: ctx }))));
         // The saved choice (Simple or Advanced) and, after a first install only, the setup card.
         let leaveFirstRun = () => {};

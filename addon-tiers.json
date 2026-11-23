@@ -38,12 +38,12 @@
     "dsh-artifacts": {
       "tier": "beta",
       "label": "Artifacts",
-      "reason": "Works, but its privacy rules for private conversations were fixed only recently."
+      "reason": "Works, but its privacy rules for private threads were fixed only recently."
     },
     "dsh-automations": {
       "tier": "core",
       "label": "Alerts",
-      "reason": "Finished and tested: shows how scheduled tasks ended."
+      "reason": "Finished and tested: shows how automations ended."
     },
     "dsh-balance": {
       "tier": "core",
@@ -63,7 +63,7 @@
     "dsh-budget": {
       "tier": "core",
       "label": "Budget",
-      "reason": "Finished and tested: limits that stop a runaway task."
+      "reason": "Finished and tested: limits that stop a run that costs too much."
     },
     "dsh-code-map": {
       "tier": "core",
@@ -92,8 +92,8 @@
     },
     "dsh-cowork-shell": {
       "tier": "core",
-      "label": "Cowork sidebar",
-      "reason": "Finished and tested: the Chat, Cowork and Code tabs."
+      "label": "Left panel",
+      "reason": "Finished and tested: the five space buttons (Chat, Code, Devices, Recon, Workshop)."
     },
     "dsh-creator-plus": {
       "tier": "experimental",
@@ -172,7 +172,7 @@
     },
     "dsh-model-tiers": {
       "tier": "core",
-      "label": "Model Tiers",
+      "label": "Model tiers",
       "reason": "Finished and tested: the model button and tiers."
     },
     "dsh-modes": {
@@ -213,7 +213,7 @@
     "dsh-route-health": {
       "tier": "experimental",
       "label": "Route health",
-      "reason": "Moves a conversation to another model by itself when one is down; not proven."
+      "reason": "Moves a thread to another model by itself when one is down; not proven."
     },
     "dsh-sampling-presets": {
       "tier": "core",
@@ -228,7 +228,7 @@
     "dsh-search": {
       "tier": "core",
       "label": "Search",
-      "reason": "Finished and tested: find conversations with Cmd-K."
+      "reason": "Finished and tested: find threads with Cmd-K."
     },
     "dsh-settings-plus": {
       "tier": "core",
@@ -248,12 +248,17 @@
     "dsh-split-plus": {
       "tier": "experimental",
       "label": "Split Plus",
-      "reason": "Several conversations in one window; not yet tried in the desktop app."
+      "reason": "Several threads in one window; not yet tried in the desktop app."
     },
     "dsh-sync": {
       "tier": "core",
       "label": "Sync",
-      "reason": "Finished and tested: conversations between Macs through your own git repository."
+      "reason": "Finished and tested: threads between Macs through your own git repository."
+    },
+    "dsh-tool-ledger": {
+      "tier": "core",
+      "label": "Tool use",
+      "reason": "Finished and tested: notes which tools the assistant used, asked for or was refused (names and counts only), so the record is complete from the first day."
     },
     "dsh-tuning": {
       "tier": "experimental",
@@ -275,7 +280,7 @@
     {
       "folder": "trash",
       "addon": "dsh-cowork-shell",
-      "what": "the conversations you deleted in the Cowork sidebar (kept 30 days): removing this folder deletes them for good; the app cannot show them without Plus"
+      "what": "the threads you deleted in the left panel (kept 30 days): removing this folder deletes them for good; the app cannot show them without Plus"
     },
     {
       "folder": "mission",
@@ -285,7 +290,7 @@
     {
       "folder": "artifacts",
       "addon": "dsh-artifacts",
-      "what": "the list of files your conversations made, their versions and their trash"
+      "what": "the list of files your threads made, their versions and their trash"
     },
     {
       "folder": "library",
@@ -340,7 +345,7 @@
     {
       "folder": "arena",
       "addon": "dsh-model-arena",
-      "what": "Model Arena results"
+      "what": "Model arena results"
     },
     {
       "folder": "benchmarks",
@@ -356,6 +361,11 @@
       "folder": "budget",
       "addon": "dsh-budget",
       "what": "budget counters"
+    },
+    {
+      "folder": "tool-ledger",
+      "addon": "dsh-tool-ledger",
+      "what": "which tools were used, asked for or refused (names and counts, no text)"
     },
     {
       "folder": "usage-ledger",
@@ -400,12 +410,12 @@
     {
       "folder": "scratch",
       "addon": "dsh-cowork-shell",
-      "what": "scratch work folders of conversations without a project"
+      "what": "scratch work folders of threads without a project"
     },
     {
       "folder": "sync",
       "addon": "dsh-sync",
-      "what": "the local copy of your conversation repository (the remote one is untouched)"
+      "what": "the local copy of your thread repository (the remote one is untouched)"
     },
     {
       "folder": "shared-settings",
@@ -422,7 +432,7 @@
     {
       "folder": "sessions",
       "addon": "the app",
-      "what": "your conversations; the app owns them"
+      "what": "your threads; the app owns them"
     },
     {
       "folder": "skill-architect",

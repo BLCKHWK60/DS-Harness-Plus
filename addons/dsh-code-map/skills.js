@@ -28,7 +28,7 @@ Do not open source files yet.
 ## 2. Find how it starts and runs
 - From the manifest: the commands to install, build, test and run; the entry file each one starts.
 - Call \`code_map_file\` on each entry file. Follow its "Uses" list one step with \`code_map_related\`.
-- If the session allows running commands and the user agrees, run the documented test or help command, read-only, to confirm.
+- If the thread allows running commands and the user agrees, run the documented test or help command, read-only, to confirm.
 
 ## 3. Trace the main flows
 Pick the three to five things the software exists to do (a request served, a command run, a job processed, a screen shown). For each:
@@ -70,7 +70,7 @@ ${COMMON_END}`,
 Goal: a rebuild specification. You describe what the site does and how it looks; you do not copy its text, images, code or brand.
 
 ## Before you start
-- Use whatever browser or web tools this conversation has. If it has none, say so and work from pages or files the user provides.
+- Use whatever browser or web tools this thread has. If it has none, say so and work from pages or files the user provides.
 - Stay inside what any visitor may do. Read \`/robots.txt\` and the terms link; do not fetch paths they disallow.
 - No login bypass, no guessing passwords, no hidden or admin paths, no bulk downloading. Sign-in areas only if the user signs in themself and asks you to continue.
 - Do not collect personal data about people shown on the site. Describe the shape of such data, not the values.

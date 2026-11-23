@@ -90,7 +90,7 @@ test('Locked modes cannot be changed; a tier 4 tool cannot be put on Ask', async
   }
 });
 
-test('a request: the card answers "in this conversation"; the tool is offered there and nowhere else', async () => {
+test('a request: the card answers "in this thread"; the tool is offered there and nowhere else', async () => {
   const { app, access } = start();
   try {
     const s1 = await app.open('s1');
@@ -104,7 +104,7 @@ test('a request: the card answers "in this conversation"; the tool is offered th
     });
     const tool = app.tool('request_tool_access').definition;
     const out = await tool.execute({ tool: 'bash', reason: 'Run the tests.' }, { agent: s1.agent });
-    assert.match(out.text, /Allowed: you may call bash in this conversation/);
+    assert.match(out.text, /Allowed: you may call bash in this thread/);
     assert.equal(seen.wording.risk, 'High');
     assert.deepEqual(seen.choices.map((c) => c.id), ['once', 'conversation', 'deny', 'never']);
     assert.ok(maskNow(s1.masks).allow.includes('bash'));
@@ -403,6 +403,30 @@ test('Allow on a waiting request: tiers 0 to 2 become a permission for the mode 
     assert.equal(access().waiting().length, 1);
     assert.deepEqual(access().grants().grants.map((g) => [g.tool, g.scope, g.modeId]), [['write', 'mode', 'safe']]);
     assert.ok(maskNow(a1.masks).allow.includes('write'));
+  } finally {
+    app.stop();
+  }
+});
+
+test('lab fix (6a): a web call that was refused read nothing: no "read a web page" warning on the card', async () => {
+  const { app, access } = start();
+  try {
+    const c1 = await app.open('c1');
+    await app.firstTurn(c1.agent);
+    // The app's result for a call a guard refused: an error, nothing from outside.
+    await app.toolResult(c1.agent, 'web_search', { isError: true, content: [{ type: 'text', text: 'Error: refused' }] });
+    let shown;
+    access().registerCard(async (request) => {
+      shown = request;
+      return { choice: 'deny' };
+    });
+    await app.tool('request_tool_access').definition.execute({ tool: 'write', reason: 'save notes' }, { agent: c1.agent });
+    assert.doesNotMatch(String(shown?.wording?.outsideWarning ?? ''), /read a web page/);
+    // A call that ran and read a page still marks it.
+    shown = undefined;
+    await app.toolResult(c1.agent, 'web_fetch', { content: [{ type: 'text', text: 'a page' }] });
+    await app.tool('request_tool_access').definition.execute({ tool: 'bash', reason: 'run the tests' }, { agent: c1.agent });
+    assert.match(String(shown?.wording?.outsideWarning ?? ''), /read a web page/);
   } finally {
     app.stop();
   }

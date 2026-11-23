@@ -1,6 +1,6 @@
 # Self-improvement
 
-Plugin `@local/dsh-evolve` (dsh 0.2.2-rc.1). It makes a model better at your kind of work by improving the **instructions it is given**, never the model itself.
+Add-on `@local/dsh-evolve` (dsh 0.2.2-rc.1). It makes a model better at your kind of work by improving the **instructions it is given**, never the model itself.
 
 - You supply **test tasks** and how to tell a good result.
 - A **reviewer model** studies what goes wrong and proposes small changes.
@@ -11,13 +11,13 @@ Nothing is preconfigured: it does nothing until you pick a model and add tasks o
 
 ## One set of lessons per model version (0.13)
 
-**What to improve** on the page is either a plain model or a saved **model version** from Model Tiers. Each version has its own tasks, lessons, scores and history (kept in `versions/<id>/` inside the data folder), so "Qwen – Coding" and "Qwen – Writing" improve separately.
+**What to improve** on the page is either a plain model or a saved **model version** from Model tiers. Each version has its own tasks, lessons, scores and history (kept in `versions/<id>/` inside the data folder), so "Qwen – Coding" and "Qwen – Writing" improve separately.
 
 - Test runs use the version's model, its temperature and max tokens, and its own instructions in front of the lessons under test.
-- Approved lessons for a version are used only in conversations that are on that version. The plain model's lessons are used in every conversation, unless the version in use says "Use only these".
+- Approved lessons for a version are used only in threads that are on that version. The plain model's lessons are used in every thread, unless the version in use says "Use only these".
 - This is how the loop tunes a version's instructions for a job: write the starting instructions on the version, add tasks for that job, and let the loop add lessons on top.
 
-Checked live with the mock model: choosing a version gave an empty task list of its own; a cycle ran on the version's model; the approved lesson was stored for that version and arrived in a conversation on it. Not checked: two versions improved side by side.
+Checked live with the mock model: choosing a version gave an empty task list of its own; a cycle ran on the version's model; the approved lesson was stored for that version and arrived in a thread on it. Not checked: two versions improved side by side.
 
 ## How to use it
 
@@ -33,7 +33,7 @@ Checked live with the mock model: choosing a version gave an empty task list of 
 3. **Measure** runs every task several times and shows the score.
 4. **Run a cycle** measures, asks the reviewer, and tests each proposed change. Changes that clear every gate appear under **Changes waiting for you** with the reason and each gate's result. **Approve and use** makes a new version; **Decline** drops it.
 
-`/evolve` in a chat shows the state; `/evolve measure`, `/evolve improve` and `/evolve stop` do the same as the buttons.
+`/evolve` in a thread shows the state; `/evolve measure`, `/evolve improve` and `/evolve stop` do the same as the buttons.
 
 ### Checks
 
@@ -62,19 +62,19 @@ Every check of a task must pass. A check that cannot be decided never counts as 
 | Following exact instructions | 12 | several formatting rules at once | |
 | General knowledge, two steps | 14 | two facts combined into one exact answer | |
 | Writing | 14 | technical writing, blog, web copy, fiction, literary description, e-mail, news, poem | a judge model |
-| Tool use | 10 | create files, run code, leave an exact result in a file | an open Cowork or Code conversation |
-| Agentic coding | 10 | write a program, run it, leave the result and a README | an open Cowork or Code conversation |
+| Tool use | 10 | create files, run code, leave an exact result in a file | an open Cowork or Code thread |
+| Agentic coding | 10 | write a program, run it, leave the result and a README | an open Cowork or Code thread |
 
 Every answer with one right value was worked out by code, and `test/packs.test.mjs` works each one out again. A writing task passes only when the text is inside its length, contains none of a list of machine-sounding phrases and marks (`AI_ISMS` in `lib/packs.js`: "delve", "tapestry", em dashes, bold, headings and so on), and the judge model gives it 4 or 5. Without a judge model, writing tasks are never counted as passed.
 
-Lessons learned on a set are used in every real conversation, like lessons for "general" work.
+Lessons learned on a set are used in every real thread, like lessons for "general" work.
 
 The sets live in `lib/packs.js`. They are meant to be hard for local models; how hard they are for a given model is only known after you press Measure.
 
 ### Two ways a task can run
 
 - **Answer only:** the model answers in one go, without tools. Fast, and enough for most checks.
-- **With tools:** a fresh helper agent does the task with the app's tools. It needs an open Cowork or Code conversation, because helpers belong to a conversation. The app's sandbox only lets a helper write inside that conversation's folder, so each run gets an empty temporary folder there (`.dsh-evolve-test/…`), removed when the run ends. Runs are one at a time, with a five-minute limit each.
+- **With tools:** a fresh helper agent does the task with the app's tools. It needs an open Cowork or Code thread, because helpers belong to a thread. The app's sandbox only lets a helper write inside that thread's folder, so each run gets an empty temporary folder there (`.dsh-evolve-test/…`), removed when the run ends. Runs are one at a time, with a five-minute limit each.
 
 ## What it can and cannot change
 
@@ -96,17 +96,17 @@ A proposed change is tested on the Check and Guard tasks, the same number of run
 4. **Does not make answers much longer.** Typical answer length stays under 150% of before (`costCeiling`).
 5. **You approve it.**
 
-One more gate, only when the Tuning Plus add-on is on and has an exam of your own work (at least 10 rows): a change that cleared the four gates is also tried on that exam with the whole playbook, before and after, and is stopped when it is worse there (more than 2 points). It shows as **Not worse on your own exam (Tuning Plus)** among the gates. Its model calls count in the run's token allowance like every other call; when the allowance runs out during the exam, the run stops and nothing waits for approval. Without Tuning Plus, or without enough exam rows, or when the exam cannot be taken, cycles work exactly as before. The exam never approves anything: you still do.
+One more gate, only when the Tuner Plus add-on is on and has an exam of your own work (at least 10 rows): a change that cleared the four gates is also tried on that exam with the whole playbook, before and after, and is stopped when it is worse there (more than 2 points). It shows as **Not worse on your own exam (Tuning Plus)** among the gates. Its model calls count in the run's token allowance like every other call; when the allowance runs out during the exam, the run stops and nothing waits for approval. Without Tuning Plus, or without enough exam rows, or when the exam cannot be taken, cycles work exactly as before. The exam never approves anything: you still do.
 
 Without at least one Check task and one Guard task, a cycle does not start: an improvement could not be proven.
 
 ## Where the approved instructions are used
 
-With "Use approved instructions in real conversations" on (the default), every conversation gets the lessons for `all` and `general` work, plus those whose kind of work is named like its mode (`chat`, `cowork`, `code`), as one prompt section (`evolve:notes`, order 72). The text is in a fixed order, so it stays the same between requests and a model server can keep it cached. Switch it off to try the loop without changing how the app behaves.
+With "Use approved instructions in real threads" on (the default), every thread gets the lessons for `all` and `general` work, plus those whose kind of work is named like its mode (`chat`, `cowork`, `code`), as one prompt section (`evolve:notes`, order 72). The text is in a fixed order, so it stays the same between requests and a model server can keep it cached. Switch it off to try the loop without changing how the app behaves.
 
 ## What leaves this Mac
 
-Only what the reviewer needs: for up to 12 Learn tasks that do not pass reliably, the prompt, one answer the model gave and why it failed, plus the current policy and the outcome of earlier proposals. API keys, bearer tokens, private keys, e-mail addresses and home-folder paths are replaced before sending. If the reviewer is a cloud model, that text goes to its provider through the app's own model service; this add-on holds no keys. Conversations, Check tasks and Guard tasks are never sent.
+Only what the reviewer needs: for up to 12 Learn tasks that do not pass reliably, the prompt, one answer the model gave and why it failed, plus the current policy and the outcome of earlier proposals. API keys, bearer tokens, private keys, e-mail addresses and home-folder paths are replaced before sending. If the reviewer is a cloud model, that text goes to its provider through the app's own model service; this add-on holds no keys. Threads, Check tasks and Guard tasks are never sent.
 
 ## What changed from the research spec
 
@@ -122,7 +122,7 @@ The spec ("DSH Self-Improvement Loop Plugin — Research & Spec") was checked ag
 | Nightly outer loop, monthly meta loop | You press Run a cycle | Keeps it predictable. A schedule can call `/evolve improve` later |
 | Levels 0–6 | Levels 1 and 2: instruction sections and the playbook | See below |
 
-**Not built, on purpose:** reviewer-written tools, skills and plugins (levels 3–4), the loop improving its own reviewer prompt (level 5), and weight training (level 6). They run or train on model-written output, which needs a real sandbox and, for training, a licence answer. They also only make sense once this measuring loop has proven itself on your tasks. Also not built: mining your real conversations for failures (only test tasks are used), verify-before-stop in live conversations, best-of-N, helpful/harmful counters per lesson, and a Pareto archive.
+**Not built, on purpose:** reviewer-written tools, skills and plugins (levels 3–4), the loop improving its own reviewer prompt (level 5), and weight training (level 6). They run or train on model-written output, which needs a real sandbox and, for training, a licence answer. They also only make sense once this measuring loop has proven itself on your tasks. Also not built: mining your real threads for failures (only test tasks are used), verify-before-stop in live threads, best-of-N, helpful/harmful counters per lesson, and a Pareto archive.
 
 **Its honest limit:** it cannot make a small model reason like a large one on work it has never seen. Gains show on kinds of work you repeat and can check. With few tasks, a lucky run can pass the gates; ten or more tasks per kind of work and three runs each make that unlikely.
 
@@ -142,7 +142,7 @@ The spec ("DSH Self-Improvement Loop Plugin — Research & Spec") was checked ag
     maxEdits: 3                     # changes tried per cycle, 1 to 5
     tokenBudget: 400000             # tokens per run, all models; 0 = no limit. A run that reaches it stops and changes nothing
     costCeiling: 1.5                # how much longer answers may get
-    applyLive: true                 # use approved instructions in real conversations
+    applyLive: true                 # use approved instructions in real threads
     dataDir: <ABSOLUTE_DIR>         # optional; default is `evolve` in the dsh home
     commandName: evolve
 ```
@@ -162,12 +162,12 @@ Data folder (`$DSH_HOME/evolve`): `tasks.json`, `policies/v0001.json …`, `acti
   - Set up entirely on the page: both models picked, example tasks added (0.15: the tick-box list; adding two sets, then removing one, changed the task count as expected).
   - A cycle from a 33% score: the reviewer proposed two lessons; the useful one cleared all four gates and waited; the useless one was stopped by "helps on the check tasks"; nothing changed until Approve.
   - After Approve: version v0002 in use, measured 100%; both versions listed with their scores; going back to v0001 and forward again worked.
-  - The approved lesson was in the request of a normal Code conversation (read from the request the mock received).
-  - A task with tools: the helper agent wrote a file in its temporary folder, the file check passed 3 of 3, and the folder was gone afterwards. The first attempt, with a folder outside the conversation's folder, was refused by the app's sandbox; that is why the folder is where it is.
+  - The approved lesson was in the request of a normal Code thread (read from the request the mock received).
+  - A task with tools: the helper agent wrote a file in its temporary folder, the file check passed 3 of 3, and the folder was gone afterwards. The first attempt, with a folder outside the thread's folder, was refused by the app's sandbox; that is why the folder is where it is.
   - The action route answered 400 without its header, 405 to GET, 400 to an unknown action and to a task id with `../`.
   - No page errors; the page follows `docs/UI-STYLE.md` (seen in the Forest scheme, light and dark).
-  - `/evolve` typed in a chat printed the version in use and the last score.
+  - `/evolve` typed in a thread printed the version in use and the last score.
 
 **Not checked:** a real local model and a real reviewer (the gains shown are from a scripted mock, so they prove the machinery, not an improvement); `judge` checks with a real judge; the token allowance stopping a real run (unit-tested); `/evolve measure` and `/evolve improve` typed in a chat; the page in other colour schemes; the Mac desktop app.
 
-**Recon exports (16 November):** Self-improvement reads no conversations and no run logs, only the test tasks you add, so text exported from Recon cannot reach it. Learned skills (Skill architect) leaves such conversations out.
+**Recon exports (16 November):** Self-improvement reads no threads and no run logs, only the test tasks you add, so text exported from Recon cannot reach it. Learned skills (Skill architect) leaves such threads out.

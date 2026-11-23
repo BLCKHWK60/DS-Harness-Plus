@@ -17,11 +17,11 @@ test('Content, Devices and Creator Plus start pages offer starter chips, in step
   }
 });
 
-test('the chat box line before you type fits the tab; Code keeps the app\'s own line', () => {
+test('the chat box line before you type fits the tab; Code says threads, not sessions', () => {
   const block = source.slice(source.indexOf('const PLACEHOLDERS = {'), source.indexOf('const PLACEHOLDER_CSS'));
   assert.match(block, /chat: 'Ask anything'/);
   assert.match(block, /cowork: '/);
-  assert.doesNotMatch(block, /\bcode: '/, 'Code is not overridden');
+  assert.match(block, /\bcode: '[^']*@ files or threads'/, 'Code has its own line, with threads');
   for (const line of block.matchAll(/: '([^']+)'/g)) assert.doesNotMatch(line[1], /\b(session|composer|plugin|route|adapter)s?\b/i, line[1]);
   // CSS only: no script watches the box.
   assert.match(source, /\[class\*='_grow'\]:has\(\[data-composer-input\]\) > \[class\*='_placeholder'\]/);

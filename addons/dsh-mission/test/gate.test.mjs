@@ -7,10 +7,10 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpath
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { apply } from '../index.js';
+import { DISARM_SETTLE_MS, apply } from '../index.js';
 import { IDLE_ROUNDS } from '../runner.js';
 import { GIT_CANDIDATES } from '../lib/checkpoints.js';
-import { lapNotes } from '../lib/run.js';
+import { lapNotes, userNotes } from '../lib/run.js';
 import { ISOLATED_TEXT, UNDO_WORDS, helpersOffText, whyNot } from '../lib/gate.js';
 
 const fresh = () => realpathSync(mkdtempSync(join(tmpdir(), 'dsh-mission-gate-')));
@@ -26,8 +26,8 @@ test('the gate: isolated refuses all but taking back, and a run needs the tier\'
   assert.equal(whyNot({ isolated: true, helpers: true }), ISOLATED_TEXT);
   const small = { id: 'small', label: 'Small', subagents: false };
   assert.equal(whyNot({ isolated: false, tier: small, helpers: true }), helpersOffText(small));
-  assert.match(helpersOffText(small), /tier, Small, has Sub-agents switched off\. Switch them on for that tier in Settings → Model Tiers/);
-  assert.match(helpersOffText(null), /this conversation's tier has Sub-agents switched off/);
+  assert.match(helpersOffText(small), /tier, Small, has Sub-agents switched off\. Switch them on for that tier in Settings → Model tiers/);
+  assert.match(helpersOffText(null), /this thread's tier has Sub-agents switched off/);
   // Modes and checkpoints do not start helpers; a tier with sub-agents on, or no tier, lets a run go.
   assert.equal(whyNot({ isolated: false, tier: small, helpers: false, word: 'restricted' }), '');
   assert.equal(whyNot({ isolated: false, tier: { ...small, subagents: true }, helpers: true }), '');
@@ -108,7 +108,8 @@ function running(config = {}) {
       connection: { requestRejection: () => undefined },
     }),
   };
-  apply(ctx, config);
+  // No real caffeinate in tests (stage B: a typed /mission keeps the Mac awake too, like every Mission).
+  apply(ctx, { longKeepAwake: false, ...config });
   const folders = [home];
   const open = (id) => {
     const cwd = fresh();
@@ -172,10 +173,10 @@ test('an isolated conversation: /mission and mission_step refuse; off and end st
     }
     // Nothing was switched, taken or started.
     assert.deepEqual(app.presets, []);
-    assert.ok(!existsSync(join(recon.header.cwd, '.dsh-mission')), 'no checkpoint of the conversation\'s folder');
+    assert.ok(!existsSync(join(recon.header.cwd, '.dsh-mission')), 'no checkpoint of the thread\'s folder');
     assert.deepEqual(app.calls, []);
-    assert.deepEqual(await app.mission(recon, 'off'), { kind: 'success', text: 'No Mission mode was on.' });
-    assert.deepEqual(await app.mission(recon, 'end'), { kind: 'success', text: 'No mission run was started in this conversation.' });
+    assert.deepEqual(await app.mission(recon, 'off'), { kind: 'success', text: 'Mission access was not on.' });
+    assert.deepEqual(await app.mission(recon, 'end'), { kind: 'success', text: 'No mission run was started in this thread.' });
     assert.equal((await app.step(recon)).text, ISOLATED_TEXT);
   } finally {
     app.done();
@@ -191,10 +192,10 @@ test('a mode an earlier version switched on in a conversation that is isolated n
     assert.deepEqual(app.presets, ['workspace-write']);
     assert.equal((await app.preExecute({ agent: chat, name: 'write', arguments: { file_path: outside }, callId: 'a' })).kind, 'deny', 'Restricted refuses a write outside');
     app.isolatedIds.add('c2');
-    assert.deepEqual(await app.preExecute({ agent: chat, name: 'write', arguments: { file_path: outside }, callId: 'b' }), { kind: 'allow' }, 'Mission leaves an isolated conversation to Modes');
+    assert.deepEqual(await app.preExecute({ agent: chat, name: 'write', arguments: { file_path: outside }, callId: 'b' }), { kind: 'allow' }, 'Mission leaves an isolated thread to Modes');
     const off = await app.mission(chat, 'off');
     assert.equal(off.kind, 'success');
-    assert.match(off.text, /^Mission mode is off/);
+    assert.match(off.text, /^Mission access is off/);
     assert.deepEqual(app.presets, ['workspace-write', 'danger-full-access'], 'the earlier preset is put back');
   } finally {
     app.done();
@@ -215,7 +216,7 @@ test('a tier with sub-agents off: a run does not start; modes still work', async
     assert.equal((await app.mission(conversation, 'resume')).kind, 'error');
     const mode = await app.mission(conversation, 'restricted');
     assert.equal(mode.kind, 'success');
-    assert.match(mode.text, /^Mission mode: Restricted is on\./);
+    assert.match(mode.text, /^Mission access: Restricted is on\./);
     assert.match((await app.step(conversation)).text, /has Sub-agents switched off/);
     assert.deepEqual(app.calls, [], 'no helper was started');
   } finally {
@@ -230,17 +231,17 @@ test('a run under way pauses when its tier\'s sub-agents are switched off, and c
     app.tiers.c4 = { id: 'big', label: 'Big', subagents: true };
     const started = await app.mission(conversation, 'auto do one small thing here');
     assert.equal(started.kind, 'success', started.text);
-    assert.match(started.text, /^Mission started \(Full Auto\)/);
+    assert.match(started.text, /^Mission started \(Auto\)/);
     assert.deepEqual(app.calls, [['create', 'c4']]);
 
     app.tiers.c4 = { ...app.tiers.c4, subagents: false };
     const held = await app.step(conversation);
-    assert.match(held.text, /^The mission run is paused\. A mission run needs helper models \(sub-agents\), and this conversation's tier, Big, has Sub-agents switched off\./);
-    assert.match(held.text, /the user carries on with \/mission resume/);
+    assert.match(held.text, /^The mission run is paused\. A Mission needs helper models \(sub-agents\), and this thread's tier, Big, has Sub-agents switched off\./);
+    assert.match(held.text, /the user carries on with Resume beside the chat box \(or \/mission resume\)/);
     assert.deepEqual(app.calls.at(-1), ['pause', 'c4']);
     assert.ok(!app.calls.some(([kind]) => kind === 'helper'), 'no helper was started');
     // /mission shows why, and resume waits for the tier.
-    assert.match((await app.mission(conversation, '')).text, /Paused: A mission run needs helper models/);
+    assert.match((await app.mission(conversation, '')).text, /Paused: A Mission needs helper models/);
     assert.equal((await app.mission(conversation, 'resume')).kind, 'error');
 
     app.tiers.c4 = { ...app.tiers.c4, subagents: true };
@@ -299,12 +300,13 @@ test('turns without a step pause a run, a moment after the turn starts', { skip:
 });
 
 
-test('Data and Research run Read Only: /mission refuses there and says why; looking still works', async () => {
+test('Data and Research run Read Only: the /mission modes are refused there and say why; looking still works', async () => {
   const app = running();
   try {
     const agent = app.open('d1');
     app.tabs.d1 = 'data';
-    for (const words of ['restricted', 'make every test pass please', 'on']) {
+    // Stage E (point 12): a typed goal is a Mission there (tested in everywhere.test.mjs); the mode words stay refused.
+    for (const words of ['restricted', 'on', 'auto two']) {
       const said = await app.mission(agent, words);
       assert.equal(said.kind, 'error', words);
       assert.match(said.text, /Data and Research run Read Only/);
@@ -335,8 +337,9 @@ test('the Long run card: pre-flight says why not, a run starts as its own kind, 
     const warning = card.json.preflight.ticks.find((tick) => tick.key === 'tab');
     assert.equal(warning.warn, true);
     assert.equal(warning.required, false);
-    assert.match(warning.text, /Read Only, but a Long run can change files/);
-    assert.deepEqual(card.json.defaults, { minutes: 120, laps: 10, fullTime: false, keepAwake: true, battery: false, retry: true, effort: true });
+    assert.match(warning.text, /Read Only, but a Mission can change files/);
+    // (The test app switches keep-awake off by default, so no real caffeinate starts.)
+    assert.deepEqual(card.json.defaults, { minutes: 120, laps: 10, steps: 0, fullTime: false, keepAwake: false, battery: false, retry: true, effort: true, helpers: 4, needs: 'ask', waitAsk: 30, waitHold: 0, assistant: 'look', carryOn: true }, 'stage D: Helpers at once, 4 unless changed; point 17: Ask, keep working, 30 minutes, until you answer');
     const refused = await app.card('POST', { sessionId: 'l1', action: 'start', goal: 'fix' });
     assert.equal(refused.status, 400, 'a goal of one word is refused');
     app.tabs.l1 = 'code';
@@ -344,7 +347,7 @@ test('the Long run card: pre-flight says why not, a run starts as its own kind, 
     assert.equal(card.json.preflight.ok, true, JSON.stringify(card.json.preflight.ticks.filter((tick) => tick.ok !== true)));
     const started = await app.card('POST', { sessionId: 'l1', action: 'start', goal: 'make the tool better please', mode: 'auto', minutes: 30, laps: 3, keepAwake: false });
     assert.equal(started.status, 200, JSON.stringify(started.json));
-    assert.match(started.json.said, /^Long run started \(Full Auto\)/);
+    assert.match(started.json.said, /^Mission started \(Auto\)/);
     assert.equal(started.json.run.kind, 'long');
     assert.equal(started.json.run.laps, 3);
     assert.equal(started.json.run.minutes, 30);
@@ -372,6 +375,7 @@ test('the watchdog: a Long run the app stopped by itself is noted and tried agai
     const goal = app.goals.get('w1');
     goal.activation = 'disarmed';
     app.emit('goal/activation-changed', { sessionId: 'w1', goal: { id: goal.id, revision: 1, activation: 'disarmed' } });
+    t.mock.timers.tick(DISARM_SETTLE_MS);
     const log = () => app.runOnDisk(agent).log.map((entry) => entry.kind);
     assert.ok(log().includes('stopped-by-itself'));
     assert.match(app.runOnDisk(agent).stalled, /^Stopped by itself/);
@@ -381,6 +385,7 @@ test('the watchdog: a Long run the app stopped by itself is noted and tried agai
     // Stopped by itself again, but this time you paused it before the retry: no retry.
     goal.activation = 'disarmed';
     app.emit('goal/activation-changed', { sessionId: 'w1', goal: { id: goal.id, revision: 1, activation: 'disarmed' } });
+    t.mock.timers.tick(DISARM_SETTLE_MS);
     goal.phase = 'paused';
     t.mock.timers.tick(5 * 60000);
     assert.equal(app.calls.filter((call) => call[0] === 'resume').length, 1, 'your own pause wins');
@@ -529,7 +534,9 @@ test('Run: the chat\'s saved settings, the next message of yours is the goal, an
     const now = app.runOnDisk(agent);
     assert.deepEqual(now.long.asks.map((ask) => ask.text), ['also add a chart of the totals']);
     assert.ok(now.log.some((entry) => entry.kind === 'ask'));
-    assert.match(lapNotes(now), /The user wrote to the run while it worked[^\n]*\n- also add a chart of the totals/);
+    // Stage B: the user's notes have their own block, never cut with the lap notes.
+    assert.match(userNotes(now), /Your notes \(newest last\):\n- also add a chart of the totals/);
+    assert.doesNotMatch(lapNotes(now), /chart of the totals/);
     await app.card('POST', { sessionId: 'u1', action: 'end' });
     await app.tick();
     assert.equal(app.levels.u1, 'read-only');
@@ -568,7 +575,7 @@ test('Run: refused when not ready, forgotten when taken back, and a start that f
     app.goals.set('u2', { id: 'own', revision: 1, phase: 'active', objective: 'my own goal' });
     app.says(agent, 'tidy the data folder please');
     const said = await app.step(agent);
-    assert.match(said.text, /^The Long run did not start: .*goal of its own/);
+    assert.match(said.text, /^The Mission did not start: .*goal of its own/);
     const card = await app.card('GET', { sessionId: 'u2' });
     assert.match(card.json.startError.text, /goal of its own/);
     assert.equal(card.json.armed, false);
@@ -604,7 +611,7 @@ test('Run: a conversation set to Read Only by hand is lifted for the run and put
     assert.equal((await app.card('POST', { sessionId: 'h2', action: 'arm' })).status, 200);
     app.says(other, 'research this and save notes');
     const said = await app.step(other);
-    assert.match(said.text, /^The Long run did not start: This conversation is still Read Only/);
+    assert.match(said.text, /^The Mission did not start: This thread is still Read Only/);
     assert.equal(existsSync(join(other.header.cwd, '.dsh-mission', 'runs')), false);
     assert.equal(app.levels.h2 ?? 'read-only', 'read-only');
     // Files and commands off: a Read Only run is fine.
@@ -627,12 +634,40 @@ test('Run in a Scratch conversation: the run\'s folder is the conversation\'s ow
     assert.equal(card.json.preflight.ok, true);
     assert.equal((await app.card('POST', { sessionId: 's1', action: 'arm' })).status, 200);
     app.says(agent, 'research this and save notes');
-    assert.ok(await app.until(() => existsSync(join(own, '.dsh-mission', 'runs'))), 'the run lives in the conversation\'s own folder');
+    assert.ok(await app.until(() => existsSync(join(own, '.dsh-mission', 'runs'))), 'the run lives in the thread\'s own folder');
     assert.equal(existsSync(join(agent.header.cwd, '.dsh-mission', 'runs')), false);
     const dir = join(own, '.dsh-mission', 'runs');
     const [id] = readdirSync(dir);
     assert.equal(JSON.parse(readFileSync(join(dir, id, 'run.json'), 'utf8')).root, own);
     await app.card('POST', { sessionId: 's1', action: 'end' });
+  } finally {
+    app.done();
+  }
+});
+
+test('a Mission as the first message of a Scratch conversation: its own sub-folder is made, not "its folder is gone" (lab check of stage E)', { skip: !hasGit && 'needs git' }, async () => {
+  const app = running();
+  try {
+    const agent = app.open('s2');
+    app.tabs.s2 = 'cowork';
+    app.levels.s2 = 'workspace-write';
+    const own = join(agent.header.cwd, 'session-s2');
+    app.scratchFolders.s2 = own;
+    assert.equal(existsSync(own), false, 'the app makes it only at the first answer');
+    // Lab check of point 19: the page's check counts the folder Mission will make as there (no "folder is gone" before
+    // the start), and only looking still makes no folder.
+    const looked = (await app.card('GET', { sessionId: 's2' })).json.preflight;
+    assert.equal(looked.ticks.find((tick) => tick.key === 'folder').ok, true, JSON.stringify(looked.ticks));
+    assert.equal(existsSync(own), false, 'only looking makes no folder');
+    assert.equal((await app.card('POST', { sessionId: 's2', action: 'arm' })).status, 200);
+    assert.equal(existsSync(own), true);
+    // Never outside a Scratch place that exists.
+    app.scratchFolders.s3 = join(agent.header.cwd, 'gone', 'session-s3');
+    app.open('s3');
+    app.levels.s3 = 'workspace-write';
+    assert.equal((await app.card('GET', { sessionId: 's3' })).json.preflight.ticks.find((tick) => tick.key === 'folder').ok, false);
+    assert.equal((await app.card('POST', { sessionId: 's3', action: 'arm' })).status, 400);
+    assert.equal(existsSync(join(agent.header.cwd, 'gone')), false);
   } finally {
     app.done();
   }
@@ -724,23 +759,20 @@ test('a Long run in Devices: the card says what is closed, and the run carries D
   }
 });
 
-test('a Long run in Creator Plus: switched off for now, said plainly on the card; Creator Plus off or absent: as always', { skip: !hasGit && 'needs git' }, async () => {
+test('a Mission in Creator Plus (stage E, point 12): allowed inside its rules, said plainly on the card; Creator Plus off or absent: as always', { skip: !hasGit && 'needs git' }, async () => {
   const app = running();
   try {
-    const agent = app.open('cp1');
+    app.open('cp1');
     app.tabs.cp1 = 'creator-plus';
     let on = true;
     app.services.creatorPlus = { longRunRules: (id) => (on && id === 'cp1' ? { offlineChecks: true, cleanEnv: true } : undefined) };
     let card = await app.card('GET', { sessionId: 'cp1' });
     const tick = card.json.preflight.ticks.find((entry) => entry.key === 'creator');
-    assert.equal(tick.ok, false);
-    assert.equal(tick.required, true);
-    assert.equal(tick.text, 'Long runs in Creator Plus are switched off until their checks can run on a throwaway copy; use Thorough for now.');
-    assert.equal((await app.card('POST', { sessionId: 'cp1', action: 'save', mode: 'auto', minutes: 30, laps: 1, keepAwake: false })).status, 200);
-    assert.equal((await app.card('POST', { sessionId: 'cp1', action: 'arm' })).status, 400, 'not armed');
-    app.says(agent, 'build the hello plugin');
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    assert.equal(existsSync(join(agent.header.cwd, '.dsh-mission', 'runs')), false, 'no run started');
+    assert.equal(tick.ok, true);
+    assert.equal(tick.required, false);
+    assert.match(tick.text, /^Creator Plus: the run checks its work with commands that have no internet.*Installing or changing anything in your real setup waits for your yes in the Mission's card\.$/);
+    assert.equal((await app.card('POST', { sessionId: 'cp1', action: 'arm' })).status, 200, 'armed');
+    await app.card('POST', { sessionId: 'cp1', action: 'disarm' });
     on = false;
     card = await app.card('GET', { sessionId: 'cp1' });
     assert.equal(card.json.preflight.ticks.find((entry) => entry.key === 'creator'), undefined, 'Creator Plus off: no line');
@@ -760,15 +792,16 @@ test('Creator Plus: a plain /mission run is refused in its tab; a Long run in a 
     app.tabs.cp2 = 'creator-plus';
     let refuse = '';
     app.services.creatorPlus = { longRunRules: (id) => (id === 'cp2' ? { offlineChecks: true, cleanEnv: true, ...(refuse ? { refuse } : {}) } : undefined) };
+    // Stage E (point 12): a typed /mission is refused only in a folder Creator Plus refuses (with its words).
+    refuse = 'This folder is Recon\'s sealed room; start Creator Plus in another folder or in Scratch.';
     const answer = await app.mission(agent, 'auto make every test pass and add a json option');
     assert.equal(answer.kind, 'error');
-    assert.match(answer.text, /In the Creator Plus tab, \/mission is not available/);
-    refuse = 'This folder is Recon\'s sealed room; start Creator Plus in another folder or in Scratch.';
+    assert.match(answer.text, /In Creator Plus mode, \/mission is not available.*This folder is Recon's sealed room/);
     const card = await app.card('GET', { sessionId: 'cp2' });
     const tick = card.json.preflight.ticks.find((entry) => entry.key === 'creator');
     assert.equal(tick.ok, false);
     assert.equal(tick.required, true);
-    assert.match(tick.text, /switched off until their checks can run on a throwaway copy/);
+    assert.equal(tick.text, refuse);
     assert.equal((await app.card('POST', { sessionId: 'cp2', action: 'arm' })).status, 400, 'not armed');
     // Elsewhere /mission is as always.
     const other = app.open('cw3');
@@ -795,7 +828,7 @@ test('a Long run in Recon, where Recon keeps it in its rules: its own folder, Re
     assert.equal(card.json.runButton, true);
     const tick = card.json.preflight.ticks.find((entry) => entry.key === 'isolated');
     assert.equal(tick.ok, true);
-    assert.match(tick.text, /helpers use this conversation's model and Recon's tools, with files only in the run's own folder/);
+    assert.match(tick.text, /helpers use this thread's model and Recon's tools, with files only in the run's own folder/);
     assert.match(card.json.preflight.ticks.find((entry) => entry.key === 'recon-checks').text, /^Recon: the run runs no commands; the reviewer judges each item by reading\./, 'checks off: the default');
     assert.equal((await app.card('POST', { sessionId: 'rc1', action: 'save', mode: 'auto', minutes: 30, laps: 2, keepAwake: false })).status, 200);
     assert.equal((await app.card('POST', { sessionId: 'rc1', action: 'arm' })).status, 200);
@@ -811,7 +844,7 @@ test('a Long run in Recon, where Recon keeps it in its rules: its own folder, Re
     assert.equal(app.provided.mission.mode('rc1'), 'restricted');
     // mission_step is let through now (it would refuse an isolated conversation before).
     const stepped = await app.step(agent);
-    assert.doesNotMatch(stepped.text, /isolated conversation/);
+    assert.doesNotMatch(stepped.text, /isolated thread/);
     // No record of it outside the room.
     assert.equal(existsSync(join(app.home, 'mission', 'active-runs.json')) && readFileSync(join(app.home, 'mission', 'active-runs.json'), 'utf8').includes('rc1'), false);
     // Its helpers are moved into the run's folder before their turn (they start in the room).
@@ -851,7 +884,8 @@ test('a Long run in Recon, where Recon keeps it in its rules: its own folder, Re
     assert.equal(existsSync(join(app.home, 'mission', 'conversations.json')) && readFileSync(join(app.home, 'mission', 'conversations.json'), 'utf8').includes('rc1'), false);
     assert.equal(existsSync(join(app.home, 'mission', 'runs.jsonl')) && readFileSync(join(app.home, 'mission', 'runs.jsonl'), 'utf8').includes(folder), false, 'no line in runs.jsonl');
     // /mission modes stay refused in Recon.
-    assert.match((await app.mission(agent, 'auto')).text, /isolated conversation/);
+    // Item 4A, stage 6a: the sentence names Recon (sealed), for any mode there.
+    assert.match((await app.mission(agent, 'auto')).text, /this thread is in Recon \(sealed\)/);
     rmSync(room, { recursive: true, force: true });
   } finally {
     app.done();

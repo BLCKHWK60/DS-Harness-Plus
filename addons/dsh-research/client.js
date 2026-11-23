@@ -1,6 +1,6 @@
 /**
- * Research, browser half: the Focus dropdown in a Research conversation's chat box (Depth is the
- * Modes add-on's Depth button, the same in every tab), a
+ * Research, browser half: the Focus dropdown in a Research thread's chat box (Depth is the
+ * Modes add-on's Depth button, the same in every mode and space), a
  * start-page line that shows problems only, the Settings >
  * Research page, and the live progress of a Deep research run above the message box, with its
  * follow-up questions as buttons once it is done.
@@ -164,8 +164,11 @@ window.__ModuleLoader__.load({
     // routes on its own timer, even in a hidden window. This gives all of them ONE shared Settings copy (read once, renewed when
     // Settings changes or after 30 seconds at the most) and one kind of polling loop that stops while the window is hidden.
     // The first copy of this block to run puts the shared state on `window.__dshPoll`; later copies reuse it, so 30 add-ons share one.
+    // A newer copy (higher API) replaces an older shared object instead of reusing it, so an older page file that runs first (an
+    // add-on edited in creator mode, a partly updated install) cannot keep the whole page on an older helper. Raise API with every
+    // change to how the shared state behaves.
     const dshPoll = (() => {
-      const API = 1;
+      const API = 2;
       const root = typeof window !== 'undefined' ? window : globalThis;
       if (root.__dshPoll && root.__dshPoll.api >= API) return root.__dshPoll;
 
@@ -174,7 +177,7 @@ window.__ModuleLoader__.load({
       /** Without the change event (an older app) the copy is only trusted for a moment. */
       const SETTINGS_TTL_NO_EVENTS = 2000;
       const WRITES = ['mutate', 'update', 'replace'];
-      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0 };
+      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0, changes: 0, repeats: 0, watchers: 0 };
       const cache = { value: undefined, at: 0, inflight: null, gen: 0, events: false };
       const changeListeners = new Set();
       const watched = new WeakSet();
@@ -194,38 +197,72 @@ window.__ModuleLoader__.load({
         cache.gen += 1;
       }
 
-      /** Listen once per page connection for "Settings changed" (the app sends it after every write, from any window). */
+      /** Changes already handled, `ns + revision` -> when: the same change reaches the page once per add-on that listens. */
+      const heard = new Map();
+      /** How long a change counts as "the same one" when it arrives again through another add-on's connection. */
+      const HEARD_MS = 2000;
+      /** The app's own marker for a wrapped service: `ctx.remote` hands out a NEW wrapper object at every read. */
+      const ORIGINAL = typeof Symbol === 'function' ? Symbol.for('cordis.original') : '__original';
+      /** Marks our own write wrapper, so it is never wrapped a second time. */
+      const OURS = '__dshPollWrite';
+
+      /**
+       * One "Settings changed" event from the app. Every add-on that listens hears the same event; it is acted on once.
+       * Bug of 21 November 2026 (a new chat made the page read Settings 12-17 times a second, the app ran at 100% and the
+       * tab crashed): `ctx.remote` is a new object at every read, so the old `watched.has(remote)` never matched and every
+       * read added one more listener; one change then woke every listener and each one started its own read.
+       */
+      function changed(ns, revision) {
+        if (typeof revision === 'number' || typeof revision === 'string') {
+          const now = Date.now();
+          for (const [key, at] of heard) if (now - at > HEARD_MS) heard.delete(key);
+          const key = `${String(ns)}\u0000${String(revision)}`;
+          if (heard.has(key)) { stats.repeats += 1; return; }
+          heard.set(key, now);
+        }
+        stats.changes += 1;
+        invalidate();
+        for (const listener of [...changeListeners]) {
+          try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
+        }
+      }
+
+      /** Listen once per add-on for "Settings changed" (the app sends it after every write, from any window). */
       function watch(ctx) {
         const remote = ctx && ctx.remote;
-        if (!remote || watched.has(remote)) return;
-        watched.add(remote);
+        if (!remote) return;
+        // Keyed on the add-on's own context, which stays the same object (its `remote` does not).
+        const key = ctx !== null && (typeof ctx === 'object' || typeof ctx === 'function') ? ctx : (remote[ORIGINAL] || remote);
+        if (watched.has(key)) return;
+        watched.add(key);
         try {
           if (typeof remote.$on === 'function') {
-            remote.$on('settings/document-updated', (ns) => {
-              invalidate();
-              for (const listener of [...changeListeners]) {
-                try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
-              }
-            });
+            remote.$on('settings/document-updated', changed);
+            stats.watchers += 1;
             cache.events = true;
           }
         } catch { /* no change event here: the short copy time covers it */ }
         try {
-          if (typeof ctx.on === 'function') ctx.on('connection/reset', invalidate);
+          if (typeof ctx.on === 'function') ctx.on('connection/reset', () => { heard.clear(); invalidate(); });
         } catch { /* optional */ }
         // This page's own writes drop the copy before their answer comes back, so a read that follows a write is never behind it.
         const settings = remote.settings;
-        if (settings && !wrapped.has(settings)) {
-          wrapped.add(settings);
+        const target = settings && (settings[ORIGINAL] || settings);
+        if (settings && !wrapped.has(target)) {
+          wrapped.add(target);
           for (const name of WRITES) {
             const original = settings[name];
-            if (typeof original !== 'function') continue;
+            // Already ours (put there through another add-on's wrapper object): wrapping it again would stack wrappers.
+            // An older copy's wrapper (marked `true`) is wrapped once more: it drops only the older copy's own cache.
+            if (typeof original !== 'function' || original[OURS] === API) continue;
             try {
-              settings[name] = function (...args) {
+              const write = function (...args) {
                 invalidate();
                 const done = original.apply(this, args);
                 return done && typeof done.then === 'function' ? done.then((out) => { invalidate(); return out; }, (error) => { invalidate(); throw error; }) : done;
               };
+              write[OURS] = API;
+              settings[name] = write;
             } catch { /* a frozen object keeps the plain call */ }
           }
         }
@@ -433,7 +470,9 @@ window.__ModuleLoader__.load({
 
 
     const NS = 'research';
-    const DICT = { en: { 'section.title': 'Research' }, zh: { 'section.title': '研究' } };
+    const DICT = {
+      en: { 'section.title': 'Research', 'offer.group': 'The mode', 'offer.title': 'Offer the Research mode', 'offer.desc': 'Needs the Deep research add-on. On offers Research in the Mode list under the chat box (in the Chat and Code spaces). Off takes the mode away; saved reports are kept.', 'offer.on': 'Switched on. Research appears in the Mode list in a moment.', 'offer.off': 'Switched off. The Research mode is taken away in a moment.' },
+    };
 
     const CSS = `
 .dsh-rs-page { display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); }
@@ -503,7 +542,7 @@ html[data-cws-wide] .dsh-rs-dock { max-width: calc(100% - 2 * var(--dsh-composer
 `;
 
     /** What Depth cannot change: a run started from a program stops at the app's program time limit. */
-    const programNote = (minutes) => (minutes ? `In conversations that run tools through programs (the app's PTC preset), searching stops after about ${minutes} minute${minutes === 1 ? '' : 's'} and the report is written in the time left before the app\'s program limit, so a longer depth may do fewer rounds there.` : '');
+    const programNote = (minutes) => (minutes ? `In threads that run tools through programs (the app's PTC preset), searching stops after about ${minutes} minute${minutes === 1 ? '' : 's'} and the report is written in the time left before the app\'s program limit, so a longer depth may do fewer rounds there.` : '');
 
     // ---- "Continue in Content" (step C2): a new Content conversation that brings the report in -------
 
@@ -526,11 +565,11 @@ html[data-cws-wide] .dsh-rs-dock { max-width: calc(100% - 2 * var(--dsh-composer
       const sessions = appCtx.get('sessions');
       const remote = appCtx.get('remote.session');
       const workspace = appCtx.get('uiWorkspace');
-      if (!sessions?.create || !remote?.prompt || !workspace?.openSession) throw new Error('this version of the app cannot open a conversation from here');
-      if (!(await contentOn())) throw new Error('the Content tab is off: switch it on in Settings → Content');
+      if (!sessions?.create || !remote?.prompt || !workspace?.openSession) throw new Error('this version of the app cannot open a thread from here');
+      if (!(await contentOn())) throw new Error('the Content mode is off. Switch it on in Settings → Content, then try again.');
       const scratch = await fetch(new URL('dsh-cowork-shell/scratch', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' } });
       const place = scratch.ok ? String((await scratch.json()).place ?? '') : '';
-      if (!place) throw new Error('Scratch is not available here (it needs the Cowork sidebar)');
+      if (!place) throw new Error('Scratch is not available here. It needs the Left panel add-on: switch it on on the Plugins page, then try again.');
       const child = await sessions.create({ cwd: place });
       const answer = await fetch(new URL('dsh-content/data', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ action: 'continue', sessionId: child, report }) });
       const data = await answer.json().catch(() => ({}));
@@ -565,7 +604,7 @@ html[data-cws-wide] .dsh-rs-dock { max-width: calc(100% - 2 * var(--dsh-composer
           setBusy(false);
         }
       };
-      return h('button', { type: 'button', className: compact ? 'dsh-rs-btn dsh-rs-btn-small' : 'dsh-rs-btn', disabled: busy, title: 'A new Content conversation with this report as its material, and its packet (claims, contradictions, timeline, leads) when it has one', onClick: () => void go() }, busy ? 'Opening…' : 'Continue in Content');
+      return h('button', { type: 'button', className: compact ? 'dsh-rs-btn dsh-rs-btn-small' : 'dsh-rs-btn', disabled: busy, title: 'A new Content thread with this report as its material, and its packet (claims, contradictions, timeline, leads) when it has one', onClick: () => void go() }, busy ? 'Opening…' : 'Continue in Content');
     }
 
     const STEPS = [['planning', 'Plan'], ['searching', 'Search'], ['reviewing', 'Review'], ['writing', 'Write'], ['done', 'Done']];
@@ -746,6 +785,7 @@ html[data-cws-wide] .dsh-rs-dock { max-width: calc(100% - 2 * var(--dsh-composer
     }
 
     function ResearchPage({ appCtx }) {
+      const tw = appCtx.locale.bind(NS);
       const { data, setData, error, load } = useData();
       const [note, setNote] = useState({ text: '', error: false });
       const contentIsOn = useContentOn(true);
@@ -764,32 +804,32 @@ html[data-cws-wide] .dsh-rs-dock { max-width: calc(100% - 2 * var(--dsh-composer
       return h('div', { className: 'dsh-rs-page' },
         h('style', null, CSS),
         h('h2', { className: 'dsh-rs-title' }, 'Research'),
-        h('p', { className: 'dsh-rs-desc' }, 'A tab for researching a question in depth. The assistant plans sub-questions, searches and reads many sources with helpers working at once, reviews what is missing and searches again, then writes a report that cites its sources by number. Every citation is checked to be in the source list, and each source is marked "read", "seen only in search results, not read" or "not read, and not seen in search results"; claims are not compared with the pages. You see each stage as it happens, and the report ends with follow-up questions you can ask with one click.'),
+        h('p', { className: 'dsh-rs-desc' }, 'A mode, in the Mode list under the chat box (Chat and Code), for researching a question in depth. The assistant plans sub-questions, searches and reads many sources with helpers working at once, reviews what is missing and searches again, then writes a report that cites its sources by number. Every citation is checked to be in the source list, and each source is marked "read", "seen only in search results, not read" or "not read, and not seen in search results"; claims are not compared with the pages. You see each stage as it happens, and the report ends with follow-up questions you can ask with one click.'),
         note.text ? h(PlainNote, { text: note.text, details: note.details, kind: note.error ? 'error' : 'info' }) : null,
         data.problem ? h('p', { className: 'dsh-rs-desc', 'data-error': 'true' }, data.problem) : null,
-        h('div', { className: 'dsh-rs-group' }, 'The tab'),
+        h('div', { className: 'dsh-rs-group' }, 'The mode'),
         h('div', { className: 'dsh-rs-row' },
-          h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Show the Research tab'), h('div', { className: 'dsh-rs-rowdesc' }, 'Needs the Deep research add-on. Off takes the tab away; saved reports are kept.')),
-          h(Switch, { on: data.enabled === true, label: 'Show the Research tab', onChange: (on) => void save(NS, { enabled: on }, on ? 'Switched on. The Research tab appears in the sidebar in a moment.' : 'Switched off.') })),
+          h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, tw('offer.title')), h('div', { className: 'dsh-rs-rowdesc' }, 'Needs the Deep research add-on. On offers Research in the Mode list under the chat box (in the Chat and Code spaces). Off takes the mode away; saved reports are kept.')),
+          h(Switch, { on: data.enabled === true, label: tw('offer.title'), onChange: (on) => void save(NS, { enabled: on }, on ? tw('offer.on') : tw('offer.off')) })),
         h('div', { className: 'dsh-rs-group' }, 'Depth and focus'),
-        h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Depth'), h('div', { className: 'dsh-rs-rowdesc' }, `The same Depth as in every tab: pick it with the Depth button in the chat box; Settings → Modes sets where new conversations start. For a research run it sets how long the run takes and how many helpers work at once: ${(data.depths ?? []).map((item) => `${item.label}, ${item.about.charAt(0).toLowerCase()}${item.about.slice(1)}`).join(' ')}${data.programMinutes ? ` ${programNote(data.programMinutes)}` : ''}`))),
+        h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Depth'), h('div', { className: 'dsh-rs-rowdesc' }, `The same Depth as in every mode and space: pick it with the Depth button in the chat box; Settings → Modes sets where new threads start. For a research run it sets how long the run takes and how many helpers work at once: ${(data.depths ?? []).map((item) => `${item.label}, ${item.about.charAt(0).toLowerCase()}${item.about.slice(1)}`).join(' ')}${data.programMinutes ? ` ${programNote(data.programMinutes)}` : ''}`))),
         // Focus is now the Web selector's ticks (18 November 2026): the same Web button as every tab.
-        h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Sources (formerly Focus)'), h('div', { className: 'dsh-rs-rowdesc' }, 'Pick them with the Web button in the chat box, the same as in every tab: tick Academic papers, News or any mix. Its "Use for new Research conversations" sets where new ones start. A run\'s helpers are told which kinds count, and results of other kinds are left out. Each conversation\'s earlier Focus was carried over: News is now News and verified sources, Academic is Academic papers and verified sources.')),
+        h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Sources (formerly Focus)'), h('div', { className: 'dsh-rs-rowdesc' }, 'Pick them with the Web button in the chat box, the same as in every mode and space: tick Academic papers, News or any mix. Its "Use for new Research threads" sets where new ones start. A run\'s helpers are told which kinds count, and results of other kinds are left out. Each thread\'s earlier Focus was carried over: News is now News and verified sources, Academic is Academic papers and verified sources.')),
           h('button', { type: 'button', className: 'dsh-rs-btn', onClick: () => openWebSources(appCtx) }, 'Web sources…')),
         h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }, h('div', { className: 'dsh-rs-rowtitle' }, 'Model for the helpers'), h('div', { className: 'dsh-rs-rowdesc' }, (data.helperModels ?? []).find((item) => item.id === data.helperModel)?.hint ?? '')),
-          h(Segments, { items: data.helperModels ?? [], value: data.helperModel, label: 'Model for the helpers', onPick: (id) => void save('modes', { researchModel: id }, 'Saved. It also applies to Mission, Agent swarm and the other helper tools, unless a conversation chose otherwise.') })),
+          h(Segments, { items: data.helperModels ?? [], value: data.helperModel, label: 'Model for the helpers', onPick: (id) => void save('modes', { researchModel: id }, 'Saved. It also applies to Mission, Agent swarm and the other helper tools, unless a thread chose otherwise.') })),
         h('div', { className: 'dsh-rs-group' }, 'Saved reports'),
-        h('p', { className: 'dsh-rs-desc' }, `Every report from the Research tab is saved as a Markdown file in ${data.folder}.`),
+        h('p', { className: 'dsh-rs-desc' }, `Every Research report is saved as a Markdown file in ${data.folder}.`),
         (data.reports ?? []).length === 0 ? h('p', { className: 'dsh-rs-desc' }, 'No report saved yet.') : h('ul', { className: 'dsh-rs-list' }, data.reports.map((report) => h('li', { key: report.name }, `${report.name} (${report.date}) `, contentIsOn ? h(ContinueButton, { appCtx, file: report.name, compact: true, onNote: (text) => setNote({ text, error: true }) }) : null))),
-        h('p', { className: 'dsh-rs-desc' }, 'Beside each report Research also writes its packet (a folder of the same name): the claims table with who says each claim, its passage, source, grade and whether it was read, the contradictions, a timeline and the leads still open. It is made from the run\'s own findings, so it costs no time. With the Content tab on, "Continue in Content" opens a new Content conversation that brings the report and its packet in.'),
+        h('p', { className: 'dsh-rs-desc' }, 'Beside each report Research also writes its packet (a folder of the same name): the claims table with who says each claim, its passage, source, grade and whether it was read, the contradictions, a timeline and the leads still open. It is made from the run\'s own findings, so it costs no time. With the Content mode on, "Continue in Content" opens a new Content thread that brings the report and its packet in.'),
         h('div', { className: 'dsh-rs-row' }, h('div', { className: 'dsh-rs-rowtext' }), h('button', { type: 'button', className: 'dsh-rs-btn', onClick: () => void post({ action: 'reveal' }).catch((problem) => setNote({ text: problem.message, details: problem.details ?? '', error: true })) }, 'Show in Finder')),
         h(AdvancedParts, { appCtx }),
         h('div', { className: 'dsh-rs-group' }, 'Good to know'),
         h('ul', { className: 'dsh-rs-list' },
-          h('li', null, 'The helpers search with your web search provider. In other tabs, the Depth button in the chat box sets how much the assistant searches by itself (with Web on); in-depth research with helpers is here.'),
+          h('li', null, 'The helpers search with your web search provider. In other modes, the Depth button in the chat box sets how much the assistant searches by itself (with Web on); in-depth research with helpers is here.'),
           h('li', null, 'A Thorough run can start more than 25 helper runs. With a cloud model that costs tokens; with a local one it takes time.'),
           h('li', null, 'Sources are pages from the web. The report marks which ones a helper read and which were seen only in search results. Claims are not compared with the pages, so check the important ones yourself.'),
-          h('li', null, 'Research conversations run Read Only: the assistant cannot change your files without asking you first. Leaving Research puts back the access level the conversation had before. Reports and diagrams are still saved.')));
+          h('li', null, 'Research threads run Read Only: the assistant cannot change your files without asking you first. Leaving Research puts back the access level the thread had before. Reports and diagrams are still saved.')));
     }
 
     return {

@@ -203,7 +203,7 @@ test('unlocking needs a backup from the last 24 hours, made after the last write
     app.state.approve = 'rejected';
     await unlock();
     assert.equal(app.state.checked.length, 1);
-    assert.match(app.state.asked.at(-1), /^ERASE AND UNLOCK[\s\S]*A checker \(the conversation's own model, with no tools\) read this plan first: CONCERN: it erases the phone/);
+    assert.match(app.state.asked.at(-1), /^ERASE AND UNLOCK[\s\S]*A checker \(the thread's own model, with no tools\) read this plan first: CONCERN: it erases the phone/);
     assert.equal(app.state.unlocked, false);
     app.state.approve = 'allowed-once';
     app.state.unlocked = true;

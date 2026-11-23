@@ -109,7 +109,7 @@ test('H10: hide keys and passwords removes them from every format, the log lines
   assert.ok(Array.isArray(json.events), 'still valid JSON with the events');
   // The page: a warning line on the full log, the tick, on by default there; the route hides unless told not to.
   const page = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
-  assert.match(page, /Careful: the full session log holds everything/);
+  assert.match(page, /Careful: the full thread log holds everything/);
   assert.match(page, /Hide keys and passwords/);
   assert.match(functionBody(page, 'ExportDialog'), /setHide\(level === 'full'\)/, 'the Full level ticks the box inside the Export window');
   assert.match(page, /'Download'\)/, 'the Download button text stays');

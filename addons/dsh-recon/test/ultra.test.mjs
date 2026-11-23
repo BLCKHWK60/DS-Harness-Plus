@@ -125,7 +125,7 @@ test('Ultra Code on: offered to the conversation only; two writers and a judge w
     assert.ok(reading.during.every((answer) => /you have no tools/.test(answer)), 'refused while they work, in the final guard');
     assert.equal(reading.guards.map((guard) => guard({ agent: { id: 'h1', header: { parentSession: 'r1' } }, name: 'write' })).find(Boolean), undefined, 'the mark goes when a helper ends');
     assert.deepEqual(reading.spawned.map((spec) => spec.label), ['Recon: report draft 1 of 2', 'Recon: report draft 2 of 2', 'Recon: report judge']);
-    assert.ok(reading.spawned.every((spec) => spec.request.parent === reading.recon && spec.request.agentOptions?.provider === 'mine'), 'helpers of the conversation, on its own model');
+    assert.ok(reading.spawned.every((spec) => spec.request.parent === reading.recon && spec.request.agentOptions?.provider === 'mine'), 'helpers of the thread, on its own model');
     assert.match(reading.spawned[0].request.prompt[0].text, /^RECON_WRITER[\s\S]*\[S1\] A post[\s\S]*Acme lost four million records/);
   } finally {
     reading.close();
@@ -155,7 +155,7 @@ test('what recon_ultra answered counts as found (a cloud model cannot have it wi
     { role: 'tool', toolCallId: 'c1', content: [{ type: 'text', text }] },
   ];
   assert.equal(holdsFindings(ask('recon_ultra', "Ultra Code's wider search (a fixed recipe). ### Onion sites ...")), true);
-  for (const refusal of ['Ultra Code is off for this conversation', 'This works only in a Recon conversation itself.', 'Nothing was read in this conversation yet', 'No draft was written.', 'The action is search or report.', "Recon's web is off for this conversation"]) assert.equal(holdsFindings(ask('recon_ultra', refusal)), false, refusal);
+  for (const refusal of ['Ultra Code is off for this thread', 'This works only in a Recon thread itself.', 'Nothing was read in this thread yet', 'No draft was written.', 'The action is search or report.', "Recon's web is off for this thread"]) assert.equal(holdsFindings(ask('recon_ultra', refusal)), false, refusal);
 });
 
 test('the wide search stops between calls: stopped, switched off, ended, or out of time', async () => {

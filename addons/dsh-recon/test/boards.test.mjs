@@ -40,7 +40,7 @@ test('4chan: a board\'s live threads searched by their subject and first post, t
   assert.match(found, /https:\/\/boards\.4chan\.org\/int\/thread\/111\n   read with: source 4chan, board int, id 111/);
   assert.doesNotMatch(found, /thread\/222/);
   assert.equal(trail.has('c1', 'https://boards.4chan.org/int/thread/111'), true);
-  assert.match(await boards.read('c1', { source: '4chan', board: 'int', id: '222' }), /was not shown in this conversation/);
+  assert.match(await boards.read('c1', { source: '4chan', board: 'int', id: '222' }), /That forum thread was not shown in this Recon thread/);
   const thread = await boards.read('c1', { source: '4chan', board: 'int', id: '111' });
   assert.match(thread, /^\[S1\] https:\/\/boards\.4chan\.org\/int\/thread\/111\nRetrieved \S+ \(UTC\) through WireGuard\./);
   assert.match(thread, /No\. 112 \| Anonymous \| y\n>>111\na reply naming the old handle/);
@@ -85,7 +85,7 @@ test('Telegram: a public channel read by name, searched inside; no search across
   const { boards, trail } = app({ 'https://t.me/s/somechannel?q=handle': { page: { title: 'Some Channel – Telegram', text: 'Post 1: the handle appears here.', links: [{ url: 'https://example.net/post', text: 'link' }] } } });
   assert.match(await boards.search('c1', { source: 'telegram', query: 'x' }), /no public search across channels/);
   // Only a channel the conversation was shown.
-  assert.match(await boards.read('c1', { source: 'telegram', id: 'somechannel', query: 'handle' }), /was not shown in this conversation/);
+  assert.match(await boards.read('c1', { source: 'telegram', id: 'somechannel', query: 'handle' }), /was not shown in this thread/);
   trail.add('c1', ['https://t.me/somechannel']);
   const read = await boards.read('c1', { source: 'telegram', id: '@somechannel', query: 'handle' });
   assert.match(read, /^\[S1\] https:\/\/t\.me\/s\/somechannel\?q=handle/);
@@ -130,7 +130,7 @@ test('Reddit: a post found through a comment search can be read; an id that was 
     'https://api.pullpush.io/reddit/search/comment/?link_id=xyz99&size=100': { data: [] },
   });
   const before = asked.length;
-  assert.match(await boards.read('c1', { source: 'reddit', id: 'zzz11' }), /was not shown in this conversation/);
+  assert.match(await boards.read('c1', { source: 'reddit', id: 'zzz11' }), /was not shown in this thread/);
   assert.equal(asked.length, before, 'nothing was sent for it');
   assert.match(await boards.search('c1', { source: 'reddit', query: 'old handle', kind: 'comments' }), /read with: source reddit, id xyz99/);
   assert.match(await boards.read('c1', { source: 'reddit', id: 'xyz99' }), /^\[S1\] https:\/\/www\.reddit\.com\/r\/OSINT\/comments\/xyz99\/the_thread\//);

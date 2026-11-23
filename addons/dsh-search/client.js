@@ -155,7 +155,7 @@ window.__ModuleLoader__.load({
     // ---- dsh-kit:end ----
 
     const NS = 'search';
-    const DICT = { en: { title: 'Global Search' }, zh: { title: '全局搜索' } };
+    const DICT = { en: { title: 'Global search' } };
     const CSS = `
 .dsh-gs-back { position: fixed; inset: 0; z-index: 400; display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; background: color-mix(in srgb, #000 42%, transparent); }
 .dsh-gs-box { width: min(680px, calc(100vw - 32px)); max-height: 70vh; display: flex; flex-direction: column; border-radius: 14px; overflow: hidden;
@@ -172,7 +172,16 @@ window.__ModuleLoader__.load({
 .dsh-gs-item mark { color: inherit; font-weight: 600; background: color-mix(in srgb, var(--dsw-alias-brand-primary) 30%, transparent); border-radius: 3px; }
 .dsh-gs-foot { padding: 8px 14px; border-top: 0.5px solid var(--dsw-alias-border-l1); font-size: 11px; color: var(--dsw-alias-label-secondary); display: flex; justify-content: space-between; gap: 12px; }
 .dsh-gs-empty { padding: 22px 14px; font-size: 13px; color: var(--dsw-alias-label-secondary); }
+.dsh-gs-tag { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px; border-radius: 6px; font-size: 11px; line-height: 16px; color: var(--dsw-alias-label-secondary); background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent); }
+.dsh-gs-more { padding: 4px 10px 6px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
 `;
+    /**
+     * Item 4A, stage 7 (decision 28): Plus is English only, so the page always asks the server for English, also when the
+     * app is set to Chinese. The `lang` field stays in the request so an older server half keeps working.
+     */
+    const pageLang = () => 'en';
+    /** Item 4A, stage 6b (7.3, Revision 2 G8): the words of the space grouping. */
+    const SPACE_WORDS = { start: 'Type to search the titles and the text of your threads, in every space, and your projects.', none: 'Nothing found in any space.', more: 'and {n} more: type more of the name' };
 
     const readObject = (text) => {
       try {
@@ -206,7 +215,7 @@ window.__ModuleLoader__.load({
       const time = Number(at) || Date.parse(at) || 0;
       if (!time) return '';
       const days = Math.floor((Date.now() - time) / 86_400_000);
-      return days <= 0 ? new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : days < 7 ? `${days}d` : new Date(time).toLocaleDateString([], { month: 'short', day: 'numeric' });
+      return days <= 0 ? new Date(time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : days < 7 ? `${days}d` : new Date(time).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
     };
 
     /**
@@ -232,11 +241,15 @@ window.__ModuleLoader__.load({
       const byId = listed.byId ?? {};
       let modes = {};
       let tabOrder = [];
+      let spaceOrder = [];
       try {
         const settings = await appCtx.remote.settings.describe();
         modes = settings.ok ? settings.value.namespaces.find((entry) => entry.ns === 'modes')?.value ?? {} : {};
         // The Cowork sidebar's own tab order, so results are grouped in the order the tabs show.
-        tabOrder = settings.ok ? settings.value.namespaces.find((entry) => entry.ns === 'cowork-shell')?.value?.tabOrder ?? [] : [];
+        const shell = settings.ok ? settings.value.namespaces.find((entry) => entry.ns === 'cowork-shell')?.value : undefined;
+        tabOrder = shell?.tabOrder ?? [];
+        // Item 4A, stage 6b: and its space order, so space headings come in the order the space buttons show.
+        spaceOrder = Array.isArray(shell?.spaceOrder) ? shell.spaceOrder : [];
       } catch {
         modes = {};
       }
@@ -245,15 +258,18 @@ window.__ModuleLoader__.load({
       const tabs = orderTabs([...(Object.keys(own).length > 0 ? Object.entries(own) : [['chat', { label: 'Chat' }], ['cowork', { label: 'Cowork' }], ['code', { label: 'Code' }]]), ...Object.entries(readObject(modes.extraModes))]
         .map(([id, mode]) => ({ id, label: String(mode?.label ?? id) })), tabOrder);
       const sessions = (listed.ids ?? Object.keys(byId)).map((id) => byId[id]).filter((session) => session && session.origin !== 'subagent' && !session.blank)
-        .map((session) => ({ id: session.id ?? session.sessionId, title: String(session.displayTitle ?? session.title ?? '').trim() || 'Untitled', updatedAt: session.updatedAt, tab: chosen[session.id ?? session.sessionId] ?? '' }))
+        // Item 4A, stage 6a: the folder goes along, so the server hides a thread in Recon's room (belt).
+        .map((session) => ({ id: session.id ?? session.sessionId, title: String(session.displayTitle ?? session.title ?? '').trim() || 'Untitled', updatedAt: session.updatedAt, tab: chosen[session.id ?? session.sessionId] ?? '', ...(typeof session.cwd === 'string' && session.cwd ? { cwd: session.cwd } : {}) }))
         .filter((session) => session.id);
       const spaces = get('workspaces')?.list?.getSnapshot?.();
       const projects = (Array.isArray(spaces) ? spaces : (spaces?.workspaces ?? spaces?.items ?? [])).filter((ws) => ws && typeof ws.path === 'string')
         .map((ws) => ({ id: ws.workspaceId, title: String(ws.title ?? '').trim() || ws.path.split('/').pop(), path: ws.path }));
-      return { sessions, projects, tabs };
+      return { sessions, projects, tabs, tabOrder: Array.isArray(tabOrder) ? tabOrder : [], spaceOrder, lang: pageLang() };
     }
 
-    function SearchBox({ appCtx, onClose }) {
+    /** How long one read of the thread list serves the box's searches (s7c lab: it was kept for as long as the box was open). */
+    const BASE_FRESH_MS = 3000;
+    function SearchBox({ appCtx, onClose, bySpace = false }) {
       const [query, setQuery] = useState('');
       const [found, setFound] = useState({ groups: [], projects: [], total: 0 });
       const [state, setState] = useState({ busy: false, note: '' });
@@ -261,6 +277,8 @@ window.__ModuleLoader__.load({
       const input = useRef(null);
       const run = useRef(0);
       const base = useRef(null);
+      // s7c lab: the thread list is read again when older than BASE_FRESH_MS, so threads made while the box stays open are found.
+      const baseAt = useRef(0);
       useEffect(() => { input.current?.focus(); }, []);
       const search = useCallback(async (text) => {
         const mine = ++run.current;
@@ -268,7 +286,10 @@ window.__ModuleLoader__.load({
         if (words.length === 0) { setFound({ groups: [], projects: [], total: 0 }); setState({ busy: false, note: '' }); return; }
         setState({ busy: true, note: '' });
         try {
-          base.current = base.current ?? await gather(appCtx);
+          if (!base.current || Date.now() - baseAt.current > BASE_FRESH_MS) {
+            base.current = await gather(appCtx);
+            baseAt.current = Date.now();
+          }
           const query0 = text;
           const post = async (withText) => {
             const response = await fetch(new URL('dsh-search/match', document.baseURI), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: query0, text: withText, ...base.current }) });
@@ -314,32 +335,39 @@ window.__ModuleLoader__.load({
       };
       const words = wordsOf(query);
       let index = -1;
-      const row = (entry, title, sub, right) => {
+      const row = (entry, title, sub, right, tag = '') => {
         index += 1;
         const mine = index;
         return h('button', { key: `${entry.kind}:${entry.item.id}`, type: 'button', className: 'dsh-gs-item', 'data-on': String(mine === at), onMouseEnter: () => setAt(mine), onClick: () => open(entry) },
-          h('div', { className: 'dsh-gs-line' }, h('span', { className: 'dsh-gs-name' }, bold(title, words)), right ? h('span', { className: 'dsh-gs-when' }, right) : null),
+          h('div', { className: 'dsh-gs-line' }, h('span', { className: 'dsh-gs-name' }, bold(title, words)), tag ? h('span', { className: 'dsh-gs-tag' }, tag) : null, right ? h('span', { className: 'dsh-gs-when' }, right) : null),
           sub ? h('div', { className: 'dsh-gs-snip' }, bold(sub, words)) : null);
       };
+      // Item 4A, stage 6b: grouped by space (the server says so), the first line and "nothing found" say "space".
+      const spaced = found.bySpace === true || (found.groups.length === 0 && bySpace);
+      const words6b = SPACE_WORDS;
       return h('div', { className: 'dsh-gs-back', onMouseDown: (event) => { if (event.target === event.currentTarget) onClose(); } },
         h('style', null, CSS),
-        h('div', { className: 'dsh-gs-box', role: 'dialog', 'aria-label': 'Global Search' },
-          h('input', { ref: input, className: 'dsh-gs-input', type: 'text', value: query, placeholder: 'Search every conversation and project…', spellCheck: false, autoComplete: 'off', onChange: (event) => setQuery(event.target.value), onKeyDown: onKey }),
+        h('div', { className: 'dsh-gs-box', role: 'dialog', 'aria-label': DICT.en.title },
+          h('input', { ref: input, className: 'dsh-gs-input', type: 'text', value: query, placeholder: 'Search every thread and project…', spellCheck: false, autoComplete: 'off', onChange: (event) => setQuery(event.target.value), onKeyDown: onKey }),
           h('div', { className: 'dsh-gs-list' },
-            words.length === 0 ? h('div', { className: 'dsh-gs-empty' }, 'Type to search the titles and the text of your conversations, in every tab, and your projects.')
-              : found.total === 0 ? h('div', { className: 'dsh-gs-empty' }, state.busy ? 'Searching…' : 'Nothing found.')
+            words.length === 0 ? h('div', { className: 'dsh-gs-empty' }, spaced ? words6b.start : 'Type to search the titles and the text of your threads, in every mode, and your projects.')
+              : found.total === 0 ? h('div', { className: 'dsh-gs-empty' }, state.busy ? 'Searching…' : spaced ? words6b.none : 'Nothing found.')
                 : [
-                  ...found.groups.map((group) => h(React.Fragment, { key: group.tab }, h('div', { className: 'dsh-gs-head' }, group.label), group.items.map((item) => row({ kind: 'chat', item }, item.title, item.snippet, when(item.updatedAt))))),
-                  found.projects.length > 0 ? h(React.Fragment, { key: '__projects' }, h('div', { className: 'dsh-gs-head' }, 'Projects (starts a new conversation there)'), found.projects.map((item) => row({ kind: 'project', item }, item.title, item.path, ''))) : null,
+                  // Only the rows of `groups` are drawn: the ids in `hitIds` never are (Revision 2 L7).
+                  ...found.groups.map((group) => h(React.Fragment, { key: group.tab }, h('div', { className: 'dsh-gs-head' }, group.label),
+                    group.items.map((item) => row({ kind: 'chat', item }, item.title, item.snippet, when(item.updatedAt), typeof item.tag === 'string' ? item.tag : '')),
+                    Number(group.more) > 0 ? h('div', { className: 'dsh-gs-more' }, words6b.more.replace('{n}', String(group.more))) : null)),
+                  found.projects.length > 0 ? h(React.Fragment, { key: '__projects' }, h('div', { className: 'dsh-gs-head' }, 'Projects (starts a new thread there)'), found.projects.map((item) => row({ kind: 'project', item }, item.title, item.path, ''))) : null,
                 ]),
           h('div', { className: 'dsh-gs-foot' }, h('span', null, state.note || (state.busy ? 'Searching the text of messages…' : words.length > 0 ? `${found.total} found` : '')), h('span', null, '↑ ↓ to move · Enter to open · Esc to close'))));
     }
 
     function Overlay({ appCtx }) {
       const [open, setOpen] = useState(false);
+      const [bySpace, setBySpace] = useState(false);
       const shortcut = useRef(true);
       useEffect(() => {
-        fetch(new URL('dsh-search/match', document.baseURI), { cache: 'no-store', credentials: 'same-origin' }).then((response) => response.json()).then((data) => { shortcut.current = data?.shortcut !== false; window.__dshGlobalSearchKey = shortcut.current; }).catch(() => {});
+        fetch(new URL('dsh-search/match', document.baseURI), { cache: 'no-store', credentials: 'same-origin' }).then((response) => response.json()).then((data) => { shortcut.current = data?.shortcut !== false; window.__dshGlobalSearchKey = shortcut.current; setBySpace(data?.bySpace === true); }).catch(() => {});
         const onKey = (event) => {
           // Plain Cmd-K, where the key reaches the page (the browser version). In the desktop app the
           // app takes the key first and runs its own command, which is pointed here (see `apply`).
@@ -361,7 +389,7 @@ window.__ModuleLoader__.load({
           window.dispatchEvent(new Event('dsh-search:ready'));
         };
       }, []);
-      return open ? h(SearchBox, { appCtx, onClose: () => setOpen(false) }) : null;
+      return open ? h(SearchBox, { appCtx, bySpace, onClose: () => setOpen(false) }) : null;
     }
 
     return {

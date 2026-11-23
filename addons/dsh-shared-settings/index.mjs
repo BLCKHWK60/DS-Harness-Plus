@@ -36,6 +36,8 @@ export const ALWAYS_SKIP = [
   'modes.sessionIsolated',
   'modes.sessionSearchDepth',
   'modes.sessionDepth',
+  // Depth on Mission, per conversation (pruned like sessionDepth).
+  'modes.sessionMission',
   'modes.sessionLens',
   // The one-time move of this Mac's Web levels into Depth: shared, it would stop the other Mac's own move.
   'modes.depthMoved',
@@ -43,6 +45,30 @@ export const ALWAYS_SKIP = [
   'modes.sessionHelpers',
   'modes.sessionToolSets',
   'modes.sessionSandboxBase',
+  // Item 4A: each thread's space (pruned per Mac like the other per-conversation entries), and this Mac's one-time
+  // fill of it: shared, it would stop the other Mac's own fill. The owner's space ticks (`modes.modeSpaces`) and space
+  // settings (`modes.spaceSettings`) are about your setup and are shared like the rest of Modes.
+  'modes.sessionSpaces',
+  'modes.spacesFilled',
+  // Item 4A, stage 5: your own mode descriptions (`modes.modeDescriptions`) are about your setup too, and shared like
+  // `modes.modeSpaces` and `modes.spaceSettings`; so is the Cowork sidebar's `spaceOrder`. Nothing here.
+  // Item 4A, stage 3a: this Mac's one-time switch-over fill (each Mac does its own).
+  'modes.spacesRefreshed',
+  // Item 4A, stage 4: this Mac's one-time copy of Cowork's choices to Plain chat (it writes Tool access, kept per Mac).
+  'modes.plainAdded',
+  // Item 4A, fix round 2: this Mac's one-time copy of Cowork's other per-mode choices to Plain chat (it writes Mission's
+  // and other add-ons' per-mode settings once), and "Keep Plain chat inside its folder", a permission switch kept on each
+  // Mac like Tool access.
+  'modes.plainCarried',
+  // Final fix round: the add-ons already carried, one by one (an add-on installed later is carried once on this Mac).
+  'modes.plainCarriedIn',
+  'modes.plainFence',
+  // Item 4A, stage 2: the mode changes recorded per thread (the quiet line in the thread), pruned per Mac like the rest.
+  'modes.sessionModeChanges',
+  // Item 4A, stage 6b (Revision 2 L4): the guest automations of this Mac's scheduler that must stay in Devices or Workshop.
+  'modes.guestRunSpaces',
+  // Stage 7 (6b lab leftover): the mode each of those guest automations runs in (named on a run Modes holds).
+  'modes.guestRunModes',
   // Tool access: which tools each tab may use, and whether it is on, are permission switches kept on each Mac.
   'modes.toolAccess',
   'modes.toolAccessOn',

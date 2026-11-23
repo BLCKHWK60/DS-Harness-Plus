@@ -4,6 +4,7 @@
  * fences) and gets back: the mask with the grid and grants applied, the service, the prompt line.
  * Kept in its own file so index.js grows by a few lines only.
  */
+import { guestRefuses } from './spacerules.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -19,6 +20,9 @@ export const ACCESS_PROMPT = `If you need a tool you do not have, call ${CATALOG
 /** Tools whose result is text somebody else wrote (a file, a PDF, a document, a command's output). */
 const FILE_READERS = new Set(['read', 'read_image', 'grep', 'pdf_info', 'pdf_read', 'pdf_search', 'pdf_page_image', 'pdf_ocr', 'library_search', 'library_read', 'data_text', 'data_query', 'data_profile', 'code_map_read', 'code_map_file', 'job_output']);
 /** Helpers that bring their own reading back: what they return was read from outside, too. */
+/** Item 6: the app's schedule tools (schedule_create, schedule_edit, schedule_list, schedule_view). */
+export const isScheduleTool = (name) => typeof name === 'string' && name.startsWith('schedule_');
+
 const HELPER_READERS = new Set(['subagent', 'subagent_fork', 'wait_agent', 'run_swarm', 'run_pipeline', 'delegate_role', 'review_lanes', 'judge_candidates', 'engine', 'workflow']);
 /** A command that shows what a file holds: its output is outside material. */
 const SHELL_FILE_READ = /(^|[\s;&|(`])(cat|less|more|head|tail|strings|xxd|hexdump|od|pdftotext|textutil|plutil|jq|sqlite3|sed|awk|grep|rg|open)\s/;
@@ -71,11 +75,16 @@ export function wireToolAccess(ctx, env) {
     }
   }
 
+  /** Item 6: Recon (an isolated tab) while "Scheduling from Recon" is off: its schedule tools are fenced. */
+  const reconScheduleOff = (mode) => (mode?.isolated === true || mode?.id === 'recon') && env.reconScheduleOff?.() === true;
+  const SCHEDULE_FENCE_WHY = 'Scheduling from Recon is switched off (Settings → Alerts → Scheduling from Recon). A permission cannot lift that; the user can switch it on there.';
+
   /** The fences: things a permission must not lift. */
   function fenceList(top, mode) {
     const blocked = new Set();
     const known = env.knownTools(top);
     if (!mode.isolated) for (const name of env.isolatedTools()) blocked.add(name);
+    if (reconScheduleOff(mode)) for (const name of known) if (isScheduleTool(name)) blocked.add(name);
     // Web Off is the user's choice (the chat box's Web button on Off). A mode that merely has no web by default (Chat) may be given it.
     if (env.isolatedWebOff(top)) {
       for (const name of [...env.webTools, env.researchTool, ...env.webReaching(known), ...env.onlineImageTools()]) blocked.add(name);
@@ -83,13 +92,19 @@ export function wireToolAccess(ctx, env) {
     return blocked;
   }
 
-  /** Mode id -> the tools the mode offers by its own rules, before the grid and grants. */
-  function baseOffered(modeId, sessionId) {
-    const mode = env.readModes()[modeId];
+  /**
+   * Mode id -> the tools the mode offers by its own rules, before the grid and grants. Item 4A, stage 6a (REGRESSION 18):
+   * also a mode object (the effective copy of a thread's mode in its space), so sealed Research is not told `web_search`
+   * belongs to it; for a thread, its effective mode is used.
+   */
+  function baseOffered(modeOrId, sessionId) {
+    const given = modeOrId && typeof modeOrId === 'object' ? modeOrId : undefined;
+    const mode = given ?? env.readModes()[modeOrId];
     if (!mode) return [];
-    if (sessionId && env.modeOf(sessionId)?.id === modeId) {
+    const current = sessionId ? env.modeOf(sessionId) : undefined;
+    if (sessionId && (given || current?.id === mode.id)) {
       const known = env.knownTools(sessionId);
-      const mask = env.baseMask(sessionId, mode);
+      const mask = env.baseMask(sessionId, given ?? current ?? mode);
       if (!mask) return known;
       return mask.allow ? mask.allow : known.filter((name) => !mask.deny.includes(name));
     }
@@ -98,7 +113,7 @@ export function wireToolAccess(ctx, env) {
     if (mode.tools === 'none') return [];
     if (Array.isArray(mode.tools)) return mode.tools;
     const fenced = mode.isolated ? [] : env.isolatedTools();
-    return known.filter((name) => !fenced.includes(name));
+    return known.filter((name) => !fenced.includes(name) && !(mode.guardedBy && guestRefuses(name, { space: mode.guardedBy })));
   }
 
   function knownAll() {
@@ -116,6 +131,8 @@ export function wireToolAccess(ctx, env) {
     knownAll,
     modes: () => Object.values(env.readModes()),
     baseOffered,
+    // Item 4A, stage 6a: a mode's copy in a space, for "Show what the AI sees" per space.
+    copyIn: (modeId, space) => env.copyIn?.(modeId, space),
     readAccess,
     writeAccess: async (value) => {
       memo = value;
@@ -135,13 +152,16 @@ export function wireToolAccess(ctx, env) {
     fenceOf: (id, tool) => {
       const top = env.topOf(id);
       const mode = env.modeOf(top);
-      if (!mode.isolated && env.isolatedTools().includes(tool)) return { fenced: true, why: 'That tool belongs to a tab of its own and is never offered in other tabs.' };
-      if (fenceList(top, mode).has(tool)) return { fenced: true, why: 'Web is Off here (or this tab keeps to its own tools). A permission cannot lift that; the user can switch Web on in the chat box.' };
+      if (!mode.isolated && env.isolatedTools().includes(tool)) return { fenced: true, why: 'That tool belongs to a mode of its own and is never offered in other modes.' };
+      if (reconScheduleOff(mode) && isScheduleTool(tool)) return { fenced: true, why: SCHEDULE_FENCE_WHY };
+      if (fenceList(top, mode).has(tool)) return { fenced: true, why: 'Web is Off here (or this mode keeps to its own tools). A permission cannot lift that; the user can switch Web on in the chat box.' };
       return { fenced: false };
     },
     fencedTools: (id) => {
       const top = env.topOf(id);
-      return env.modeOf(top).isolated ? [] : env.isolatedTools();
+      const mode = env.modeOf(top);
+      if (reconScheduleOff(mode)) return [...new Set([...env.knownTools(top), ...listedNames()])].filter(isScheduleTool);
+      return mode.isolated ? [] : env.isolatedTools();
     },
     offeredNow,
     addonOn: (addon) => {
@@ -272,11 +292,13 @@ export function wireToolAccess(ctx, env) {
 
   /** Helpers that read a web page or something from another app: what they may ask for is limited from then on (what they ACTUALLY read). */
   const helperRead = new Set();
-  function markOutside(exec) {
+  function markOutside(exec, result) {
     try {
       const id = exec?.agent?.id;
       // While Tool access is off nothing is written (no outside.json), as before the feature.
       if (!id || !enabled()) return;
+      // Lab fix (6a): a call that was refused (or failed) read nothing from outside: the thread is not marked.
+      if (result?.isError === true) return;
       const kind = outsideKind(exec);
       if (!kind) return;
       const top = env.topOf(id);
@@ -320,6 +342,18 @@ export function wireToolAccess(ctx, env) {
     forget(top) {
       spentOnce.delete(top);
       return store.forgetConversation(top);
+    },
+    /**
+     * Fix round (6a review): conversations Recon wiped (End and wipe): their permissions, their note and their log lines go.
+     * @returns {number} log lines removed.
+     */
+    wiped(ids) {
+      const list = (Array.isArray(ids) ? ids : [ids]).map((id) => String(id ?? '')).filter(Boolean);
+      for (const id of list) {
+        spentOnce.delete(id);
+        store.forgetConversation(id);
+      }
+      return list.length > 0 ? store.dropLog(list) : 0;
     },
     /** @returns {string} the prompt line, or '' when Tool access is off, or this agent was not given the tools. */
     promptLine(agent) {

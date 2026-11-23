@@ -29,6 +29,7 @@ import { buildSourceTool, buildTools } from './lib/tools.js';
 import { buildMarketTools } from './lib/market.js';
 import { SKILLS } from './skills.js';
 import { adviserNote, adviserSkills, buildProfileTool, openProfile } from './lib/adviser.js';
+import { makeGuardOf } from './lib/space-guard.js';
 
 export const name = 'dsh-finance';
 
@@ -36,7 +37,7 @@ export const DATA_PATH = '/dsh-finance/data';
 const MODES_NS = 'modes';
 
 export const Config = z.object({
-  /** The Finance mode and tab. Off leaves nothing of it in the app. */
+  /** The Finance mode. Off leaves nothing of it in the app. */
   enabled: z.boolean().default(false).volatile(),
   /** The drop-downs: what kind of subject (company, sector, economy, market). */
   kind: z.string().default('company').volatile(),
@@ -57,7 +58,7 @@ export const Config = z.object({
    * Keys are never here: each is kept in the app's secret store.
    */
   sources: z.string().default('[]').volatile(),
-  /** Ids of scheduled tasks of your own that run in Finance instead of Cowork. */
+  /** Ids of automations of your own that run in Finance instead of Cowork. */
   financeTasks: z.array(z.string()).default([]).volatile(),
   /** The assistant speaks as the user's financial adviser: it recommends and ends with "AI output, not regulated advice". Works only after `adviserAccepted`. */
   adviser: z.boolean().default(false).volatile(),
@@ -145,7 +146,7 @@ export function apply(ctx, config) {
       const service = ctx.get('settings');
       const row = service?.describe?.().find((entry) => entry.ns === MODES_NS);
       if (!row) {
-        problem = 'The Modes add-on is not running, so there is no Finance tab.';
+        problem = 'The Modes add-on is not running, so there is no Finance mode. Switch Modes on on the Plugins page.';
         return;
       }
       if (row.value?.extraModes === undefined) {
@@ -156,12 +157,14 @@ export function apply(ctx, config) {
       const ops = [];
       const next = withFinance(row.value.extraModes, on, settings().adviser);
       if (next !== undefined) ops.push({ op: 'set', path: ['extraModes'], value: next });
-      // A tab that no longer exists must not stay selected.
+      // Item 4A, stage 6b (D14): without the Cowork sidebar (and in the lab with spaces off) `defaultMode` still picks a new
+      // thread's mode, so it must not name a mode that is gone. With spaces, Modes already skips a start mode whose
+      // add-on is off and keeps the owner's choice (lib/spaces.js draftStartMode, startModeGone).
       if (!on && row.value.defaultMode === MODE_ID) ops.push({ op: 'set', path: ['defaultMode'], value: 'cowork' });
       if (ops.length > 0) await service.mutate(MODES_NS, ops);
       problem = '';
     } catch (error) {
-      problem = `The Finance tab could not be ${settings().enabled ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
+      problem = `The Finance mode could not be ${settings().enabled ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
       warn(problem);
     } finally {
       syncing = false;
@@ -275,7 +278,7 @@ export function apply(ctx, config) {
     const wantProfile = on && settings().adviser;
     if (wantProfile && !profileToolOff) {
       const tools = ctx.get('tools');
-      if (tools?.register) profileToolOff = tools.register(buildProfileTool({ enabled: () => settings().enabled && settings().adviser, profile }));
+      if (tools?.register) profileToolOff = tools.register(buildProfileTool({ enabled: () => settings().enabled && settings().adviser, profile, guardOf: makeGuardOf(() => ctx.get('modes')) }));
     } else if (!wantProfile && profileToolOff) {
       if (typeof profileToolOff === 'function') profileToolOff();
       profileToolOff = undefined;
@@ -453,7 +456,7 @@ export function apply(ctx, config) {
       try {
         const task = (await scheduler().catalog()).find((entry) => found.ids.includes(String(entry.id)) && String(entry.title ?? '').startsWith(BRIEF_PREFIX));
         if (!task || !settings().enabled) return;
-        pins.pin(sessionId, { kind: 'brief', subject: String(task.title).slice(BRIEF_PREFIX.length) || 'Scheduled task', market: found.market || 'Global' });
+        pins.pin(sessionId, { kind: 'brief', subject: String(task.title).slice(BRIEF_PREFIX.length) || 'Automation', market: found.market || 'Global' });
         const modes = ctx.get('modes');
         if (modes?.set) await modes.set(sessionId, MODE_ID, { claim: true });
       } finally {
@@ -474,7 +477,7 @@ export function apply(ctx, config) {
     // A task of the owner's own is named in the scheduler only; its name is looked up afterwards.
     try {
       const task = (await scheduler().catalog()).find((entry) => String(entry.id) === own);
-      pins.pin(sessionId, { kind: 'brief', subject: String(task?.title ?? '') || 'Scheduled task', market });
+      pins.pin(sessionId, { kind: 'brief', subject: String(task?.title ?? '') || 'Automation', market });
     } finally {
       adopting.delete(sessionId);
     }
@@ -531,7 +534,7 @@ export function apply(ctx, config) {
   /** Why the chat box of a conversation shows no selection; '' when it shows one. */
   const notShown = (id) => {
     if (!settings().enabled) return 'Finance is switched off.';
-    if (!id || modeOf(id) !== MODE_ID) return 'This is not a Finance conversation.';
+    if (!id || modeOf(id) !== MODE_ID) return 'This is not a Finance thread.';
     let helper = false;
     try {
       const session = ctx.get('agents')?.get?.(id)?.session;
@@ -539,7 +542,7 @@ export function apply(ctx, config) {
     } catch {
       helper = false;
     }
-    if (helper) return 'A helper follows the selection of its conversation.';
+    if (helper) return 'A helper follows the selection of its thread.';
     // Before the first message, the drop-downs on the start page are the selection.
     if (!pins.get(id) && !started(id)) return 'Before the first message, the drop-downs under the message box set the selection.';
     return '';

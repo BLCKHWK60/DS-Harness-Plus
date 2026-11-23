@@ -230,13 +230,13 @@ test('the dot pattern is only turned on by a custom scheme that asks for "dots"'
   page.stop();
 });
 
-test('Harbor has its name and its description in both languages', async () => {
+test('Harbor has its name and its description in English, and no Chinese twin', async () => {
   const page = await startPage();
   const dict = page.dictionaries.colorSchemes;
   assert.ok(dict, 'the texts are registered');
   const flat = JSON.stringify(dict);
   assert.match(flat, /"scheme\.harbor":"Harbor"/);
   assert.match(flat, /"scheme\.harbor\.d":"Deep navy with teal accents\."/);
-  assert.match(flat, /深海军蓝配青色强调色/);
+  assert.equal(dict.zh, undefined, 'English only: an app set to Chinese falls back to these English texts');
   page.stop();
 });

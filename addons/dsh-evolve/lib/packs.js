@@ -278,7 +278,7 @@ const tools = pack(
   {
     id: 'tools',
     name: 'Tool use',
-    description: 'Short jobs that cannot be done without tools: create files, run a script or a command, and leave the exact result in a file. Each runs as a helper agent in its own temporary folder, so a Cowork or Code conversation must be open when you measure.',
+    description: 'Short jobs that cannot be done without tools: create files, run a script or a command, and leave the exact result in a file. Each runs as a helper agent in its own temporary folder, so a Cowork or Code thread must be open when you measure.',
     kind: 'agent',
   },
   [
@@ -311,7 +311,7 @@ const agentic = pack(
   {
     id: 'agentic',
     name: 'Agentic coding',
-    description: 'Small multi-step jobs: write a program, run it on the given input, check it, and leave the exact result and a short README. Each runs as a helper agent in its own temporary folder, so a Cowork or Code conversation must be open when you measure.',
+    description: 'Small multi-step jobs: write a program, run it on the given input, check it, and leave the exact result and a short README. Each runs as a helper agent in its own temporary folder, so a Cowork or Code thread must be open when you measure.',
     kind: 'agent',
   },
   [

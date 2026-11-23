@@ -32,6 +32,43 @@ export const DEFAULT_TABS = {
     "greeting": "Let's knock something off your list",
     "chips": []
   },
+  "plain": {
+    "newLabel": "New chat",
+    "pages": [],
+    "greeting": "Let's knock something off your list",
+    "chips": [
+      {
+        "label": "Create slides",
+        "icon": "slides",
+        "prompt": "Create a slide deck about: "
+      },
+      {
+        "label": "Build website",
+        "icon": "website",
+        "prompt": "Build a website for: "
+      },
+      {
+        "label": "Spreadsheet",
+        "icon": "spreadsheet",
+        "prompt": "Make a spreadsheet that: "
+      },
+      {
+        "label": "Visualization",
+        "icon": "chart",
+        "prompt": "Make a chart or visual that shows: "
+      },
+      {
+        "label": "Write",
+        "icon": "spark",
+        "prompt": "Help me write: "
+      },
+      {
+        "label": "Explain",
+        "icon": "research",
+        "prompt": "Explain simply: "
+      }
+    ]
+  },
   "cowork": {
     "newLabel": "New task",
     "pages": [
@@ -262,7 +299,7 @@ export const DEFAULT_TABS = {
       {
         "label": "What went wrong?",
         "icon": "chart",
-        "prompt": "Look at my recent conversations and tell me what went wrong most often."
+        "prompt": "Look at my recent threads and tell me what went wrong most often."
       }
     ]
   },
@@ -299,6 +336,23 @@ export const DEFAULT_TABS = {
   }
 };
 
+/**
+ * Item 4A, stage 3b: the rows of each space, by page id, beside the tab layout (DEFAULT_TABS stays for the tabs).
+ * `fixed`: the rows every space shows first (`projects` is this add-on's Projects row; the others are page ids).
+ * `pages`: the page rows that belong to a space (shown there only). `settings`: rows that open a Settings page (by its
+ * section id), shown while that page exists. A page no space lists and that is not fixed (Split, Compare, a plugin's
+ * own row) shows in every space after the space's own rows, as pages no tab listed did. A row whose add-on is not
+ * installed or is off is left out.
+ */
+export const DEFAULT_SPACES = {
+  "fixed": ["projects", "artifacts", "automations", "plugins"],
+  "chat": { "pages": ["model-arena", "connectors", "skills"], "settings": [] },
+  "code": { "pages": ["connectors", "skills"], "settings": [] },
+  "devices": { "pages": [], "settings": [] },
+  "recon": { "pages": [], "settings": [] },
+  "workshop": { "pages": ["model-arena", "benchlab"], "settings": ["tuning", "benchmark"] }
+};
+
 /** Read-only routes the Skills and Connectors pages read. */
 export const SKILLS_PATH = '/dsh-cowork-shell/skills';
 export const PROJECTS_PATH = '/dsh-cowork-shell/projects';
@@ -308,6 +362,31 @@ export const CONNECTOR_WRITE_PATH = '/dsh-cowork-shell/connectors/write';
 export const TRASH_PATH = '/dsh-cowork-shell/trash';
 export const SCRATCH_PATH = '/dsh-cowork-shell/scratch';
 export const KEEP_PATH = '/dsh-cowork-shell/scratch/keep';
+/** Item 4A, stage 6a: GET, the guarded spaces Modes holds but has not written yet (`modes.spaces.pending`), for the list. */
+export const PENDING_SPACES_PATH = '/dsh-cowork-shell/pending-spaces';
+/** Item 4A, stage 6a: the spaces whose rules hold for every mode (a copy of Modes' GUARDED). */
+const GUARDED_SPACE_IDS = ['devices', 'recon', 'workshop'];
+
+/**
+ * Item 4A, stage 6a: Modes' guarded spaces not written to `sessionSpaces` yet, cleaned (ids of at most 200 characters,
+ * guarded values only, at most 2000). An older Modes (no `spaces.pending`), no Modes or a throw: none.
+ * @param {object | undefined} modes - the Modes service.
+ * @returns {Record<string, string>}
+ */
+export function pendingSpacesOf(modes) {
+  let raw;
+  try {
+    raw = typeof modes?.spaces?.pending === 'function' ? modes.spaces.pending() : {};
+  } catch {
+    raw = {};
+  }
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [id, space] of Object.entries(raw).slice(0, 2000)) {
+    if (typeof id === 'string' && id.length > 0 && id.length <= 200 && GUARDED_SPACE_IDS.includes(space)) out[id] = space;
+  }
+  return out;
+}
 /** The most conversations one Empty trash request may name. */
 export const EMPTY_MAX = 2000;
 const MCP_CLIENT = '@deepseek-ai/dsh-mcp-client';
@@ -369,27 +448,40 @@ export const Config = z.object({
    * (for example Plugins) show under every tab.
    */
   tabs: z.string().default(JSON.stringify(DEFAULT_TABS)).volatile(),
-  /** At most this many tabs (the first modes in order). */
+  /**
+   * At most this many tabs (the first modes in order). Not used and not shown while the space buttons show (item 4A:
+   * shown or hidden per space replaces it, stage 5); kept for the tabs.
+   */
   maxTabs: z.natural().min(1).max(5).default(3).volatile(),
+  /**
+   * Item 4A, stage 3b: the rows of each space as JSON, over the built-in layout (DEFAULT_SPACES): `{ fixed: [pageId],
+   * <spaceId>: { pages: [pageId], settings: [sectionId] } }`. Empty: the built-in layout. Fields you leave out keep theirs.
+   */
+  spaceLayout: z.string().default('').volatile(),
   /** Your own tab order (tab ids, set by arranging the tabs). Only the order: which tabs show is unchanged. */
   tabOrder: z.array(z.string()).default([]).volatile(),
-  /** Hide the DeepSeek logo and name at the top of the sidebar and the logo on the start page. */
+  /**
+   * Item 4A, stage 3a: your own order of the space buttons (space ids, set by arranging them). Empty: the order your old tabs
+   * had (each space where its first tab was). Kept apart from `tabOrder`, which stays as it is.
+   */
+  spaceOrder: z.array(z.string()).default([]).volatile(),
+  /** Hide the DeepSeek logo and name at the top of the left panel and the logo on the start page. */
   hideLogos: z.boolean().default(false).volatile(),
   /**
-   * Tab names in the wide sidebar. Off (default): every tab shows its icon and its name; tabs take the width of their
+   * Tab names in the wide left panel. Off (default): every tab shows its icon and its name; tabs take the width of their
    * name and wrap onto more rows. On: tabs sit in rows of three and a name that does not fit shows the icon alone.
    */
   iconOnlyTabs: z.boolean().default(false).volatile(),
-  /** Show today's date as the start page title instead of the tab's greeting. */
+  /** Show today's date as the start page title instead of the usual greeting. */
   dateTitle: z.boolean().default(false).volatile(),
-  /** Let the conversation and the message box use the whole width of the window instead of a centred column. */
+  /** Let the thread and the message box use the whole width of the window instead of a centred column. */
   wideChat: z.boolean().default(false).volatile(),
   /**
-   * Start places (Scratch step 44) as JSON: `{ tabId: 'scratch' | 'folder' }`, over the defaults (every tab but
+   * Start places (Scratch step 44) as JSON: `{ id: 'scratch' | 'folder' }` per space, over the defaults (every space but
    * Code starts in Scratch; Recon always in its room). Set on Settings → Start places.
    */
   startPlaces: z.string().default('').volatile(),
-  /** Cmd-N (the app's New Session) starts in the open tab's start place. Off: the app's own choice. */
+  /** Cmd-N (the app's New Session) starts in the open space's start place. Off: the app's own choice. */
   newKeyFollows: z.boolean().default(true).volatile(),
 });
 
@@ -701,7 +793,7 @@ export function apply(ctx) {
     return noteOf(workspace?.title ?? '', record.instructions, shared);
   };
   /** What a Scratch conversation is told (its own folder is its working directory, so no path is needed). */
-  const SCRATCH_NOTE = 'This is a Scratch conversation: it works in a private folder of its own (the working directory), never in a folder of the user\'s. Keep files you make there. Files the user drops into the chat are also copied there under their own names. Deleting the conversation deletes that folder.';
+  const SCRATCH_NOTE = 'This is a Scratch thread: it works in a private folder of its own (the working directory), never in a folder of the user\'s. Keep files you make there. Files the user drops into the thread are also copied there under their own names. Deleting the thread deletes that folder.';
   const projectSections = new Map();
   const installProjectNote = (agent) => {
     if (!agent?.id || projectSections.has(agent.id) || !agent.ctx?.systemPrompt) return;
@@ -897,7 +989,7 @@ export function apply(ctx) {
       /* relative paths are then read from the thread's own folder */
     }
     if (insideThread(request.path, now, folder)) return next();
-    return Promise.reject(new Error(`This is a Scratch conversation: its working folder stays inside ${folder}. Work there instead.`));
+    return Promise.reject(new Error(`This is a Scratch thread: its working folder stays inside ${folder}. Work there instead.`));
   });
   // Other add-ons ask whether a folder or conversation is Scratch (by place, never by the store's name).
   ctx.effect(() => ctx.provide('coworkScratch', Object.freeze({
@@ -931,6 +1023,25 @@ export function apply(ctx) {
     }), 'cowork-shell scratch route');
   });
 
+  // Item 4A, stage 6a: the sidebar lists a thread Modes holds in a guarded space under that space at once, before
+  // `sessionSpaces` is written (REGRESSION 25). Read only; asked with every list refresh.
+  ctx.inject(['webServer', 'connection'], (inner) => {
+    inner.effect(() => inner.webServer.register({
+      kind: 'exact',
+      path: PENDING_SPACES_PATH,
+      handler: (req, res) => {
+        if (!guard(inner, req, res, ['GET'])) return;
+        let modes;
+        try {
+          modes = ctx.get('modes');
+        } catch {
+          modes = undefined;
+        }
+        res.end(JSON.stringify({ pendingSpaces: pendingSpacesOf(modes) }));
+      },
+    }), 'cowork-shell pending spaces route');
+  });
+
   // Keep in a project (step 38): a Scratch thread's files are copied into a new sub-folder of a project
   // the user picked, named after the thread; nothing there is ever overwritten. The thread stays.
   ctx.inject(['webServer', 'connection', 'sessionPersistence'], (inner) => {
@@ -955,7 +1066,7 @@ export function apply(ctx) {
           const own = stored.find((snap) => snap.header?.id === body?.sessionId);
           const roots = new Map(stored.filter((snap) => snap.header?.origin === 'subagent').map((snap) => [snap.header.id, snap.header.parentSession]));
           const from = own ? threadFolderOf(own.header, scratchPlace, roots) : '';
-          if (!from) throw new Error('This is not a Scratch conversation.');
+          if (!from) throw new Error('This is not a Scratch thread.');
           const kept = keepInProject(from, project.path, typeof body.title === 'string' ? body.title : '', body.sessionId);
           res.end(JSON.stringify({ ok: true, ...kept }));
         } catch (error) {
@@ -1075,7 +1186,7 @@ export function apply(ctx) {
   // name read from a record.
   const trashOwners = new Map();
   let trashHost = null;
-  const NOT_AVAILABLE = 'The trash is not available now (the Cowork sidebar is off, still starting, or has no data folder). Nothing was moved.';
+  const NOT_AVAILABLE = 'The trash is not available now (the Left panel add-on is off, still starting, or has no data folder). Nothing was moved. Switch it on on the Plugins page, or wait a moment and try again.';
   /** A promise that gives up after `ms` (an owner's own work never holds the trash up for long). */
   const withTime = (promise, ms) => new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('it took too long')), ms);
@@ -1167,7 +1278,7 @@ export function apply(ctx) {
         const sid = snap.header?.id;
         if (sid !== id && !under(sid)) continue;
         if (!safeId(sid) || snap.location?.kind !== 'jsonl' || typeof snap.location.path !== 'string') {
-          if (sid === id) throw new Error('this conversation is not stored as files');
+          if (sid === id) throw new Error('this thread is not stored as files');
           continue;
         }
         if (inMemory(sid)) return undefined;
@@ -1175,7 +1286,7 @@ export function apply(ctx) {
         if (sid === id) parts.unshift(part);
         else parts.push(part);
       }
-      if (parts[0]?.id !== id) throw new Error('conversation not found');
+      if (parts[0]?.id !== id) throw new Error('thread not found');
       return parts;
     };
 
@@ -1220,16 +1331,16 @@ export function apply(ctx) {
      * right before anything moves, so one put back or taken out of the archive meanwhile stays put.
      * A waiting run of a group row keeps its group (the trash copies it from the waiting entry).
      */
-    const remove = async (id, title, deletedAt, tab, fallbackTab, stillWaiting) => {
-      if (!inner.workspaceRegistry.archivedSessionIds.includes(id)) throw new Error('archive the conversation first');
+    const remove = async (id, title, deletedAt, tab, fallbackTab, stillWaiting, back) => {
+      if (!inner.workspaceRegistry.archivedSessionIds.includes(id)) throw new Error('archive the thread first');
       const stored = inMemory(id) ? undefined : await inner.sessionPersistence.list();
       const parts = stored === undefined ? undefined : partsFrom(stored, id);
       if (stillWaiting && !stillWaiting()) return 'cancelled';
       if (parts === undefined) {
-        trash.addPending({ id, title, deletedAt, tab, fallbackTab });
+        trash.addPending({ id, title, deletedAt, tab, fallbackTab, back });
         return 'pending';
       }
-      trash.add({ id, title, parts, deletedAt, tab, fallbackTab, folders: scratchFoldersFrom(stored, id, parts) });
+      trash.add({ id, title, parts, deletedAt, tab, fallbackTab, back, folders: scratchFoldersFrom(stored, id, parts) });
       return 'moved';
     };
 
@@ -1375,7 +1486,7 @@ export function apply(ctx) {
       const waiting = parts.waiting.filter((src) => showIds.has(src.id));
       const pieces = parts.pieces.filter((piece) => showPieces.has(piece.item));
       if (records.length + waiting.length + pieces.length === 0) throw new Error('It is no longer in the trash.');
-      if (pieces.some((piece) => piece.kind !== 'data')) throw new Error('This needs a newer version of the Cowork sidebar.');
+      if (pieces.some((piece) => piece.kind !== 'data')) throw new Error('This needs a newer version of the Left panel add-on. Update Plus, then try again.');
       const out = { erased: 0, marked: 0, failed: 0, reasons: [] };
       const erasedIds = [];
       const gone = [];
@@ -1429,7 +1540,7 @@ export function apply(ctx) {
           const { records, waiting, pieces } = trash.groupParts(group);
           const any = records[0] ?? waiting[0] ?? pieces[0];
           if (!any) throw new Error('It is no longer in the trash.');
-          if (pieces.some((piece) => piece.kind !== 'data')) throw new Error('This needs a newer version of the Cowork sidebar.');
+          if (pieces.some((piece) => piece.kind !== 'data')) throw new Error('This needs a newer version of the Left panel add-on. Update Plus, then try again.');
           const owner = any.owner;
           const ownerLabel = any.ownerLabel || owner;
           if (pieces.length > 0 && typeof trashOwners.get(owner)?.spec?.putBack !== 'function') {
@@ -1486,7 +1597,7 @@ export function apply(ctx) {
             for (const failed of data.failed) trash.setPieceError(failed.item, failed.reason);
           });
         }
-        for (const piece of heldBack) data.failed.push({ item: piece.item, reason: 'It goes back with its conversations: put those back first.' });
+        for (const piece of heldBack) data.failed.push({ item: piece.item, reason: 'It goes back with its threads: put those back first.' });
         notify(first.owner, {
           type: 'put-back', row: group, key: group.slice(`group.${first.owner}.`.length),
           conversations: first.back.map((src) => ({ id: src.id, ...(src.ownerData !== undefined ? { ownerData: src.ownerData } : {}) })),
@@ -1509,12 +1620,12 @@ export function apply(ctx) {
       if (request.folders !== undefined) throw new Error('Folders cannot go to the trash yet.');
       const group = groupLabel(spec.owner, request.key);
       if (!group) throw new Error('not a row key');
-      if (!safeTab(request.tab)) throw new Error("Say which tab's Trash list shows it.");
+      if (!safeTab(request.tab)) throw new Error("Say which space's Trash list shows it.");
       const conversations = Array.isArray(request.conversations) ? request.conversations : [];
-      if (conversations.length > 500) throw new Error('Too many conversations at once (at most 500).');
+      if (conversations.length > 500) throw new Error('Too many threads at once (at most 500).');
       if (conversations.length === 0 && request.data === undefined) throw new Error('Nothing to put in the trash.');
       if (request.data !== undefined && jsonSize(request.data?.ownerData ?? null) > 65536) throw new Error('The kept data is too large (at most 64 KB).');
-      if (conversations.some((c) => c?.ownerData !== undefined && jsonSize(c.ownerData) > 4096)) throw new Error('The kept data with a conversation is too large (at most 4 KB).');
+      if (conversations.some((c) => c?.ownerData !== undefined && jsonSize(c.ownerData) > 4096)) throw new Error('The kept data with a thread is too large (at most 4 KB).');
       // Always now: the 30 days count from the moment it enters the trash (an owner's own dates go in ownerData).
       const deletedAt = Date.now();
       const base = {
@@ -1543,21 +1654,21 @@ export function apply(ctx) {
       for (const c of conversations) {
         const id = c?.id;
         if (!safeId(id) || id.startsWith('group.') || id.startsWith('piece-')) {
-          skip(String(id ?? ''), 'bad-id', 'Not a conversation id.');
+          skip(String(id ?? ''), 'bad-id', 'Not a thread id.');
           continue;
         }
         if (seen.has(id)) continue;
         seen.add(id);
-        if (inTrash[id]) { skip(id, 'in-trash', 'This conversation is already in the trash.'); continue; }
-        if (reconWipe()?.has?.(id) === true) { skip(id, 'wiping', 'This Recon conversation was ended with End and wipe: it is being deleted for good, not moved to the trash.'); continue; }
+        if (inTrash[id]) { skip(id, 'in-trash', 'This thread is already in the trash.'); continue; }
+        if (reconWipe()?.has?.(id) === true) { skip(id, 'wiping', 'This Recon thread was ended with End and wipe: it is being deleted for good, not moved to the trash.'); continue; }
         const snap = byId.get(id);
-        if (!snap) { skip(id, 'unknown', 'The app does not have this conversation.'); continue; }
-        if (snap.header?.origin === 'subagent') { skip(id, 'helper', 'A helper conversation goes with its main conversation.'); continue; }
-        if (snap.location?.kind !== 'jsonl') { skip(id, 'not-files', 'This conversation is not stored as files.'); continue; }
+        if (!snap) { skip(id, 'unknown', 'The app does not have this thread.'); continue; }
+        if (snap.header?.origin === 'subagent') { skip(id, 'helper', 'A helper thread goes with its main thread.'); continue; }
+        if (snap.location?.kind !== 'jsonl') { skip(id, 'not-files', 'This thread is not stored as files.'); continue; }
         const archived = () => inner.workspaceRegistry.archivedSessionIds.includes(id);
         let archivedBy;
         if (c.archive === 'already') {
-          if (!archived()) { skip(id, 'not-archived', 'Archive the conversation first.'); continue; }
+          if (!archived()) { skip(id, 'not-archived', 'Archive the thread first.'); continue; }
           archivedBy = 'user';
         } else if (c.archive === 'plus') {
           if ((inner.workspaceRegistry.pinnedSessionIds ?? []).includes(id) && options.allowPinned !== true) { skip(id, 'pinned', 'It is pinned, so it was left alone.'); continue; }
@@ -1581,7 +1692,7 @@ export function apply(ctx) {
               if (error?.name === 'WorkspaceActiveSessionError' || Array.isArray(error?.activity)) {
                 const kinds = (Array.isArray(error?.activity) ? error.activity : []).map((entry) => entry?.kind).filter(Boolean).join(', ');
                 skip(id, 'busy', `It is still working${kinds ? ` (${kinds})` : ''}. Try again later.`);
-              } else if (error?.name === 'WorkspaceUnknownSessionError') skip(id, 'unknown', 'The app does not have this conversation.');
+              } else if (error?.name === 'WorkspaceUnknownSessionError') skip(id, 'unknown', 'The app does not have this thread.');
               else out.failed.push({ id, code: 'failed', reason: String(error?.message ?? error).slice(0, 200) });
               continue;
             }
@@ -1663,7 +1774,7 @@ export function apply(ctx) {
           isArchived: (id) => inner.workspaceRegistry.archivedSessionIds.includes(id),
           inMemory,
           isStored: async (id) => (await inner.sessionPersistence.list()).some((snap) => snap.header?.id === id),
-          move: (item) => remove(item.id, item.title, item.deletedAt, item.tab, item.fallbackTab, () => trash.isWaiting(item.id)),
+          move: (item) => remove(item.id, item.title, item.deletedAt, item.tab, item.fallbackTab, () => trash.isWaiting(item.id), item.back === 'list' ? 'list' : undefined),
           stampOf,
         });
         await forgetMany(done.erased);
@@ -1740,8 +1851,8 @@ export function apply(ctx) {
                   // Empty trash: the conversations and rows the open tab's Trash list showed.
                   const ids = Array.isArray(body.sessionIds) ? body.sessionIds : [];
                   const rows = Array.isArray(body.itemIds) ? body.itemIds : [];
-                  if (!Array.isArray(body.sessionIds) && !Array.isArray(body.itemIds)) throw new Error('not a list of conversation ids');
-                  if (ids.length + rows.length === 0 || ids.length + rows.length > EMPTY_MAX || !ids.every(safeId) || !rows.every(rowId)) throw new Error('not a list of conversation ids');
+                  if (!Array.isArray(body.sessionIds) && !Array.isArray(body.itemIds)) throw new Error('not a list of thread ids');
+                  if (ids.length + rows.length === 0 || ids.length + rows.length > EMPTY_MAX || !ids.every(safeId) || !rows.every(rowId)) throw new Error('not a list of thread ids');
                   const shown = body.shown && typeof body.shown === 'object' ? body.shown : {};
                   extra.emptied = await emptyNow([...new Set(ids)], [...new Set(rows)], shown);
                 } else if (body?.action === 'erase' && body.itemId !== undefined) {
@@ -1752,14 +1863,21 @@ export function apply(ctx) {
                   extra.erased = erased;
                 } else {
                   const id = body?.sessionId;
-                  if (!safeId(id)) throw new Error('not a conversation id');
+                  if (!safeId(id)) throw new Error('not a thread id');
                   if (trash.isPiece(id)) throw new Error('Put back or delete the whole row.');
-                  if (body.action === 'delete') await remove(id, body.title, undefined, safeTab(body.tab) ? body.tab : undefined, safeTab(body.fallbackTab) ? body.fallbackTab : undefined);
+                  if (body.action === 'delete') await remove(id, body.title, undefined, safeTab(body.tab) ? body.tab : undefined, safeTab(body.fallbackTab) ? body.fallbackTab : undefined, undefined, body.back === 'list' ? 'list' : undefined);
                   else if (body.action === 'restore') {
                     // One run of a group row can be put back on its own too; its owner is told.
                     const before = groupOf([id]);
+                    const toList = trash.backToList(id);
                     // Nothing to put back (erased meanwhile, for example by Empty trash): say so, not "done".
                     if (!trash.restore(id)) throw new Error('It is no longer in the trash.');
+                    // Final fix round (lab): a thread Delete archived itself goes back to its list, not to Archived.
+                    if (toList) {
+                      try {
+                        await inner.workspaceRegistry.unarchiveSession?.(id);
+                      } catch { /* it stays in the Archived list, where Restore brings it back */ }
+                    }
                     noticeRows('put-back', '', [...before.values()]);
                   } else if (body.action === 'erase') {
                     // Delete permanently: once its files are gone the app's archived list may forget it too.

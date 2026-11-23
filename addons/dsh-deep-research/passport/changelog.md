@@ -1,5 +1,7 @@
 # Changelog: @local/dsh-deep-research
 
+- 2026-11-23 Item 4A, stage 7 (words only, unit-tested): English only: the Chinese Settings name and the Chinese twin of the Recon refusal are gone. "Conversation" is "thread"; the Research tab is Research mode; Model Tiers is Model tiers; the not-ready reason names the real option "Same as the thread".
+- 2026-11-22 Item 4A, stage 6a (lab only): `deep_research` does not run in a sealed thread (Recon, any mode; a Modes read error counts) and says why (belt: Modes leaves it out of every sealed list). No Modes: runs as before. Test space.test.mjs
 - 2026-11-18 The planner and searchers are told the conversation's Web sources (Modes' one Web selector); nothing new with All
 - 2026-11-17 The rest of the Content and Bench plan: Web levels, Ultra Code and the work loop, the Recon export door, the Voice Library, and Bench's network, server, phone and Bluetooth doors
 - 2026-11-16 Recon: WireGuard, the ordinary web, back channels; the map method; a stalled run fixed

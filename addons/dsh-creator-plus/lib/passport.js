@@ -25,19 +25,22 @@ export const PASSPORT_FILES = ['brief.md', 'touches.json', 'built-against.json',
 export function passportFiles({ scan, origin, appVersion = '', changelog = [], at = Date.now() }) {
   const day = new Date(at).toISOString().slice(0, 10);
   const readme = mask(String(scan.readme ?? '')).trim();
+  // Owner-facing word (point 29): a Plus add-on or one Creator Plus builds is an "add-on"; the app's
+  // built-in plugins and third-party plugins keep the app's own word.
+  const kind = origin === 'built-in' || origin === 'third-party' ? 'plugin' : 'add-on';
   const brief = [
     `# Brief: ${scan.name || scan.folder}`,
     '',
     `What it is for: ${scan.description || 'not described in its package'}`,
     '',
-    'This brief was written by Creator Plus from the plugin\'s own files. Its README below is the full description, complete enough to rebuild the plugin from; improve this brief by hand, with the user\'s yes.',
+    `This brief was written by Creator Plus from the ${kind}'s own files. Its README below is the full description, complete enough to rebuild the ${kind} from; improve this brief by hand, with the user's yes.`,
     '',
     '## What it must keep doing',
     '',
     ...(scan.tools?.length ? [`- Its tools: ${scan.tools.join(', ')}.`] : []),
     ...(scan.commands?.length ? [`- Its commands: ${scan.commands.map((name) => `/${name}`).join(', ')}.`] : []),
-    ...(scan.modes?.length ? [`- Its tabs: ${scan.modes.join(', ')}.`] : []),
-    ...(scan.provides?.length ? [`- The services it gives other plugins: ${scan.provides.join(', ')}.`] : []),
+    ...(scan.modes?.length ? [`- Its modes: ${scan.modes.join(', ')}.`] : []),
+    ...(scan.provides?.length ? [`- The services it gives other ${kind}s: ${scan.provides.join(', ')}.`] : []),
     ...(scan.config?.length ? [`- Its settings: ${scan.config.join(', ')}.`] : []),
     '',
     '## Its README',

@@ -1,12 +1,12 @@
-// lib/mirror.mjs — 会话目录 → git 工作树的字节镜像（node:fs；零 DSH 依赖）。
+// lib/mirror.mjs — a byte mirror of the session folder → the git work tree (node:fs; no DSH dependency).
 //
-// 会话文件一律按不透明字节复制（JSONL/zstd 等物理编码属于宿主，插件不解析）。
-// 安全边界：
-// - 绝不跟随符号链接（源或目标为链接一律跳过并报告，杜绝写出根外）；
-// - 删除仅限工作树内、源已不存在、且非 fork 文件、非宿主私有产物的常规文件；
-// - fork 文件（FORK_NAME_RE）永不复制、永不删除——冲突双方字节的持久载体；
-// - 宿主私有会话产物（HOST_ARTIFACT_NAME_RE：session.lock / 迁移暂存）同样
-//   永不复制、永不删除——运行时状态不属于可同步内容。
+// Session files are always copied as opaque bytes (JSONL, zstd and other physical encodings belong to the host; the plugin does not parse them).
+// Safety limits:
+// - never follow a symbolic link (a link as source or target is skipped and reported, so nothing is written outside the root);
+// - deletes only regular files inside the work tree whose source is gone, that are not fork files and not host-private artifacts;
+// - fork files (FORK_NAME_RE) are never copied and never deleted — they carry the bytes of both sides of a conflict;
+// - host-private session artifacts (HOST_ARTIFACT_NAME_RE: session.lock, migration staging) are likewise
+//   never copied and never deleted — runtime state is not content to sync.
 
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -14,7 +14,7 @@ import { createHash } from 'node:crypto'
 import { FORK_NAME_RE, HOST_ARTIFACT_NAME_RE, RESERVED_DIR } from './constants.mjs'
 import { IsolationUnknownError } from './isolation.mjs'
 
-/** 递归枚举 root 下全部常规文件（POSIX 相对路径；符号链接跳过并回报）。 */
+/** List every regular file under root, recursively (POSIX relative paths; symbolic links are skipped and reported). */
 async function listFiles(root) {
   const files = []
   const skipped = []
@@ -39,7 +39,7 @@ async function listFiles(root) {
   return { files, skipped }
 }
 
-/** 拒绝任何解析后落在 root 之外的写入（含父目录 symlink 逃逸）。 */
+/** Refuse any write that resolves outside root (including an escape through a parent-folder symlink). */
 async function assertWriteInside(root, target) {
   let rootReal
   try { rootReal = await fs.realpath(root) } catch {
@@ -54,8 +54,8 @@ async function assertWriteInside(root, target) {
 
 /**
  * dsh-sync change: the write is atomic (temp file in the same folder, then rename), so a reader of the live
- * session store never sees a half-written file. 内容一致则跳过写（返回 false），否则覆写（返回 true）。
- * root 可选，提供时做真实路径 containment。
+ * session store never sees a half-written file. When the content is the same it skips the write (returns false), otherwise it overwrites (returns true).
+ * root is optional; when given, the real path is checked to be inside it.
  */
 async function writeIfDifferent(target, content, root) {
   if (root !== undefined) await assertWriteInside(root, target)
@@ -69,7 +69,7 @@ async function writeIfDifferent(target, content, root) {
     const existing = await fs.readFile(target)
     if (existing.equals(content)) return false
   } catch {
-    // 目标不存在 → 照写。
+    // The target is not there → write it.
   }
   await fs.mkdir(path.dirname(target), { recursive: true })
   const temp = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.dsh-sync.tmp`)
@@ -83,7 +83,7 @@ async function writeIfDifferent(target, content, root) {
   return true
 }
 
-/** 源快照状态文件：本地、不进提交、不随仓库同步。 */
+/** The source snapshot state file: local, never committed, never synced with the repository. */
 export const SOURCE_SNAPSHOT_FILE = path.join('.git', 'dsh-session-sync-mirror.json')
 
 /** @param {string} repoDir */
@@ -129,16 +129,16 @@ async function writeSourceSnapshot(repoDir, sourcePaths, sizes = new Map()) {
 }
 
 /**
- * 把 sessionRoot 镜像进 <repoDir>/<mirrorDir>/…。
- * 宿主私有会话产物（租约/迁移暂存，HOST_ARTIFACT_NAME_RE）既不复制、也不删除：
- * 它们是运行时状态，同步它们只会把某设备的瞬时状态变成另一侧的删除/噪音。
+ * Mirror sessionRoot into <repoDir>/<mirrorDir>/….
+ * Host-private session artifacts (leases, migration staging, HOST_ARTIFACT_NAME_RE) are neither copied nor deleted:
+ * they are runtime state; syncing them would only turn one device's passing state into deletes or noise on the other side.
  * dsh-sync addition: `exclude(rel)` names the files of isolated conversations (Recon, lib/isolation.mjs). They are
  * never copied in, and whatever the worktree holds of them is removed, fork files included (git history keeps it).
  * `fence()`, when given, is asked which conversations are isolated right after the session store is listed and before
  * anything is copied or removed, and its answer replaces `exclude`: every file copied then belongs to a conversation
  * that already existed when it was asked (a file created later is not in the listing and waits for the next run). When
  * its answer is not known, IsolationUnknownError is thrown before the worktree is touched.
- * @param {object} deps - {sessionRoot, repoDir, mirrorDir, forkNameRe?, exclude?, fence?: () => Promise<{known: boolean, reason?: string, exclude: (rel: string) => boolean}>}。
+ * @param {object} deps - {sessionRoot, repoDir, mirrorDir, forkNameRe?, exclude?, fence?: () => Promise<{known: boolean, reason?: string, exclude: (rel: string) => boolean}>}.
  * @returns {Promise<{mirrored: number, unchanged: number, skippedLinks: string[], deleted: string[], remotePreserved: string[], snapshotUnknown: boolean, forkedPreserved: string[], hostArtifactsSkipped: number, hostArtifactsPreserved: string[], isolatedSkipped: number, isolatedRemoved: string[], exclude: (rel: string) => boolean}>}
  *   `exclude` is the rule that was used, for the rest of the same operation.
  */
@@ -179,7 +179,7 @@ export async function mirrorSessionRoot(deps) {
     else unchanged += 1
   }
 
-  // 删除：目标树中源已不存在、且非 fork 命名、非宿主私有产物的文件。
+  // Delete: files in the target tree whose source is gone, that are not fork-named and not host-private artifacts.
   const deleted = []
   const remotePreserved = []
   const forkedPreserved = []
@@ -200,7 +200,7 @@ export async function mirrorSessionRoot(deps) {
     }
     await walk(mirrorRoot)
   } catch {
-    // 镜像根尚不存在 → 无删除可做。
+    // The mirror root does not exist yet → nothing to delete.
   }
   const isolatedRemoved = []
   for (const absolute of targetFiles) {
@@ -271,7 +271,7 @@ export async function removeExcluded(root, exclude) {
   return removed
 }
 
-/** 恢复状态文件：本地、不进提交、不随仓库同步。 */
+/** The restore state file: local, never committed, never synced with the repository. */
 export const RESTORE_STATE_FILE = path.join('.git', 'dsh-session-sync-restored.json')
 
 /** @param {Buffer|string} content */
@@ -449,11 +449,11 @@ export async function restoreSessionRoot(deps) {
 }
 
 /**
- * 确保设备身份文件内容为 deviceId（不同才写；返回是否写入）。
- * @param {string} repoDir - 同步仓库根。
- * @param {string} deviceFile - 文件名（repoDir 直下）。
- * @param {string} deviceId - 设备 id。
- * @returns {Promise<boolean>} 是否写入。
+ * Make sure the device identity file holds deviceId (writes only when different; returns whether it wrote).
+ * @param {string} repoDir - the sync repository root.
+ * @param {string} deviceFile - the file name (directly under repoDir).
+ * @param {string} deviceId - the device id.
+ * @returns {Promise<boolean>} whether it wrote.
  */
 export async function ensureDeviceFile(repoDir, deviceFile, deviceId) {
   const target = path.join(repoDir, deviceFile)

@@ -55,8 +55,8 @@ test('only a stored conversation can be deleted, and never twice', () => {
     const notOne = join(root, 'documents');
     mkdirSync(notOne);
     writeFileSync(join(notOne, 'thesis.txt'), 'keep');
-    assert.throws(() => trash.add({ id: 'session-x', parts: [{ id: 'session-x', folder: notOne }] }), /not a stored conversation/);
-    assert.throws(() => trash.add({ id: '../x', parts: [{ id: '../x', folder: main.folder }] }), /not a conversation id/);
+    assert.throws(() => trash.add({ id: 'session-x', parts: [{ id: 'session-x', folder: notOne }] }), /not a stored thread/);
+    assert.throws(() => trash.add({ id: '../x', parts: [{ id: '../x', folder: main.folder }] }), /not a thread id/);
     assert.equal(existsSync(join(notOne, 'thesis.txt')), true);
     trash.add({ id: main.id, parts: [main] });
     const again = make('session-main');
@@ -182,7 +182,7 @@ test('delete permanently erases one moved conversation now, only inside the tras
     assert.equal(trash.restore(main.id), false, 'nothing left to put back');
     assert.equal(trash.erase(main.id), 'absent');
     assert.equal(trash.erase('session-never'), 'absent');
-    for (const bad of ['..', '../sessions', 'a/b', '.hidden', '']) assert.throws(() => trash.erase(bad), /not a conversation id/);
+    for (const bad of ['..', '../sessions', 'a/b', '.hidden', '']) assert.throws(() => trash.erase(bad), /not a thread id/);
     assert.equal(existsSync(join(root, 'sessions')), true);
 
     // A link in the trash that points elsewhere: only the link goes, never what it points to.
@@ -383,7 +383,7 @@ test('only a conversation\'s folder can be erased, never the trash\'s own waitin
     const x = make('session-x');
     trash.addPending({ id: x.id, title: 'x', deletedAt: 1 });
     trash.erase(x.id);
-    assert.throws(() => trash.erase('pending.json'), /not a conversation id/);
+    assert.throws(() => trash.erase('pending.json'), /not a thread id/);
     assert.deepEqual(trash.pending().map((item) => [item.id, item.erase]), [[x.id, true]], 'the waiting list and its mark are intact');
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -610,4 +610,35 @@ test('a link or a missing folder is never moved; a folder move cut off half-way 
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+// Item 4A, final fix round (lab: low): Delete archives a thread only to move it; Put back then took it back to Archived,
+// so a second step (Archived → Restore) was needed. The record now says when Delete archived it itself, and Put back
+// takes it out of Archived too; a thread you had archived yourself before deleting goes back to Archived as before.
+test('Put back knows whether Delete archived the thread itself (back to the list) or you had (back to Archived)', () => {
+  const { root, make, trash } = home();
+  try {
+    const mine = make('session-mine');
+    const old = make('session-old');
+    trash.add({ id: mine.id, title: 'x', parts: [mine], back: 'list' });
+    trash.add({ id: old.id, title: 'y', parts: [old] });
+    assert.equal(trash.backToList(mine.id), true);
+    assert.equal(trash.backToList(old.id), false);
+    // One that waited (open in the app) keeps the mark when it moves later.
+    trash.addPending({ id: 'session-wait', title: 'z', back: 'list' });
+    assert.equal(trash.backToList('session-wait'), true);
+    const wait = make('session-wait');
+    trash.add({ id: wait.id, title: 'z', parts: [wait] });
+    assert.equal(trash.backToList(wait.id), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the route and the page carry the mark: the page says "back to the list" only when it archived the thread itself', () => {
+  const host = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  const page = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  assert.match(page, /const where = wasArchived \? tabOf\(id\) : \{ \.\.\.tabOf\(id\), back: 'list' \};/);
+  assert.match(host, /const toList = trash\.backToList\(id\);[\s\S]{0,900}unarchiveSession\?\.\(id\)/);
+  assert.match(host, /body\.back === 'list' \? 'list' : undefined/);
 });

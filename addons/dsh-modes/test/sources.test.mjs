@@ -76,7 +76,7 @@ test('search results of kinds that are not ticked are taken out, with a line say
   assert.match(out.text, /Reddit/);
   assert.doesNotMatch(out.text, /example\.com/);
   assert.doesNotMatch(out.text, /The answer is 42/);
-  assert.match(out.text, /1 result was left out because it is not among this conversation's Web sources: only verified sources and forums and boards/);
+  assert.match(out.text, /1 result was left out because it is not among this thread's Web sources: only verified sources and forums and boards/);
   const none = filterSearchText(text, sources, ['academic'], lists);
   assert.equal(none.left, 3);
   assert.match(none.text, /Sources: none of the ticked kinds/);
@@ -233,7 +233,7 @@ test('on a stand-in app: every tab follows its own ticks (Research too), results
     assert.equal(service.webSources('c2'), undefined);
     assert.equal(service.webAllows('s1', 'https://arxiv.org/abs/1'), true);
     assert.deepEqual(service.webKinds('https://www.reuters.com/'), ['verified', 'news']);
-    assert.match(app.prompt('r1'), /Recon sources for this conversation: only verified sources and \.onion sites through Tor/);
+    assert.match(app.prompt('r1'), /Recon sources for this thread: only verified sources and \.onion sites through Tor/);
     assert.match(app.prompt('s1'), /Web sources: only academic papers/);
     assert.doesNotMatch(app.prompt('c2'), /Web sources/);
     // Search results.

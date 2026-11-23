@@ -38,4 +38,4 @@ Templates compose on dsh 0.2.2-rc.1 in a throwaway home; `check.sh` reports none
 
 ## Not verified
 
-No option was installed or run (review-only permission), so remember/recall across sessions is untested: follow the three-step check in dsh's `mcp-memory.md` after you install one. The fork's `ANTON_MEMORY_MODE=autopilot` has no exact equivalent; the closest are Engram's `ingest: light|eager` (automatic capture) and mnemon's `recallMode` / `writebackMode`.
+No option was installed or run (review-only permission), so remember/recall across threads is untested: follow the three-step check in dsh's `mcp-memory.md` after you install one. The fork's `ANTON_MEMORY_MODE=autopilot` has no exact equivalent; the closest are Engram's `ingest: light|eager` (automatic capture) and mnemon's `recallMode` / `writebackMode`.

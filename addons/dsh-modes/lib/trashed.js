@@ -1,11 +1,11 @@
 /**
- * Which conversations are in the Cowork sidebar's trash. The trash moves a deleted conversation's
+ * Which threads are in the left panel's Trash (dsh-cowork-shell). The trash moves a deleted thread's
  * files out of the app's store for 30 days, so the app no longer lists it, yet it can still be put
  * back. Its choices (tab, Web, Tools, isolation, access level) must therefore be kept until it is
  * erased for good. Read straight from the trash folder, so it works whichever add-on loads first.
  *
- * Layout (see addons/dsh-cowork-shell/lib/trash.js): `<dir>/<id>/info.json` lists the conversation
- * and its helper conversations as `parts`; `<dir>/pending.json` lists conversations whose files
+ * Layout (see addons/dsh-cowork-shell/lib/trash.js): `<dir>/<id>/info.json` lists the thread
+ * and its helper threads as `parts`; `<dir>/pending.json` lists threads whose files
  * could not move yet.
  */
 import { readFileSync, readdirSync } from 'node:fs';
@@ -24,7 +24,7 @@ function readJson(file) {
 }
 
 /**
- * The ids of every conversation in the trash: moved ones with their helper conversations, and
+ * The ids of every thread in the trash: moved ones with their helper threads, and
  * those still waiting to move.
  * @param {string} dir - the trash folder (`<app home>/trash/conversations`), or '' when unknown.
  * @returns {Set<string> | null} the ids; an empty set when there is no trash folder; null when the

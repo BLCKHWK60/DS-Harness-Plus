@@ -70,6 +70,25 @@ export function pathsOf(args, cwd) {
   return [...new Set(found.map((text) => absolute(text, cwd)).filter(Boolean).map(real))];
 }
 
+/**
+ * The files an apply_patch call changes, from its patch text (`input`): the `*** Add File:`, `*** Update File:`,
+ * `*** Delete File:` and `*** Move to:` headers (Mission stage D reads them only to keep helpers apart; the permission
+ * modes still read calls as before).
+ * @param {unknown} args - the call's arguments (`input`, or `patch`).
+ * @param {string} cwd - the conversation's folder.
+ * @returns {string[]} real absolute paths, each once.
+ */
+export function patchPaths(args, cwd) {
+  const text = typeof args?.input === 'string' ? args.input : typeof args?.patch === 'string' ? args.patch : '';
+  if (!text) return [];
+  const found = [];
+  for (const row of text.split('\n').slice(0, 20000)) {
+    const header = /^\*\*\*\s+(?:Add File|Update File|Delete File|Move to)\s*:\s*(.+?)\s*$/.exec(row);
+    if (header) found.push(header[1]);
+  }
+  return [...new Set(found.map((path) => absolute(path, cwd)).filter(Boolean).map(real))].slice(0, 200);
+}
+
 /** Places that belong to the system or to tools, not to the user's own files. */
 const SYSTEM = ['/usr', '/bin', '/sbin', '/opt', '/System', '/Library', '/Applications', '/dev', '/etc', '/private/etc', '/var', '/private/var', '/tmp', '/private/tmp', '/nix', '/proc', '/sys'];
 

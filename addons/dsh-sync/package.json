@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Syncs dsh sessions (and the project list) between machines through a git remote you choose, with optional or required age encryption. A reviewed and changed fork of dsh-session-sync.",
+  "description": "Syncs dsh threads (and the project list) between machines through a git remote you choose, with optional or required age encryption. A reviewed and changed fork of dsh-session-sync.",
   "exports": {
     ".": "./index.mjs",
     "./locale/*.json": "./locale/*.json",

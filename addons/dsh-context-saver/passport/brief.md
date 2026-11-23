@@ -2,29 +2,29 @@
 
 What it is for: Shortens large tool results before the model sees them and keeps the original for retrieval. Off until enabled.
 
-This brief was written by Creator Plus from the plugin's own files. Its README below is the full description, complete enough to rebuild the plugin from; improve this brief by hand, with the user's yes.
+This brief was written by Creator Plus from the add-on's own files. Its README below is the full description, complete enough to rebuild the add-on from; improve this brief by hand, with the user's yes.
 
 ## What it must keep doing
 
-- The services it gives other plugins: contextSaver.
+- The services it gives other add-ons: contextSaver.
 - Its settings: enabled, python, dataDir, minChars, minGainPercent, perTier, skipTools, retrieveToolName, helperTimeoutMs, promptSection, commandName.
 
 ## Its README
 
 # Context Saver
 
-Host plugin `@local/dsh-context-saver` (dsh 0.2.2-rc.1). It shortens large **text** tool results before the model sees them and keeps the original in a local store; the shortened text ends with a marker `[Context Saver: N→M tokens. Full text: context_retrieve("key")]`. The model can fetch the original, or a slice (`start_line`/`end_line`, `grep`), with the `context_retrieve` tool of the `context` MCP server (`plugins/dsh-intel-mcp`).
+Host add-on `@local/dsh-context-saver` (dsh 0.2.2-rc.1). It shortens large **text** tool results before the model sees them and keeps the original in a local store; the shortened text ends with a marker `[Context Saver: N→M tokens. Full text: context_retrieve("key")]`. The model can fetch the original, or a slice (`start_line`/`end_line`, `grep`), with the `context_retrieve` tool of the `context` MCP server (`plugins/dsh-intel-mcp`).
 
 **Off until enabled**: installing changes nothing.
 
 ## How it works
 
 - Hook: `tools/post-execute`. For a successful call whose result has text blocks of at least `minChars`, a long-lived Python helper (`python -m dsh_intel_mcp.context_saver`, your tested transforms) detects JSON, logs, search output, diffs, HTML or code, shortens it deterministically and stores the original (72 h, 1 GB cap). Errors, first/last items and outliers are kept.
-- **Model-visible equals logged**: the shortened text replaces the result content, so it is what the session log records and what every later request contains. The original lives only in the store.
+- **Model-visible equals logged**: the shortened text replaces the result content, so it is what the thread's log records and what every later request contains. The original lives only in the store.
 - Same input gives byte-identical output (memoised), so provider prompt caches stay valid.
 - **Fail open**: if the helper cannot start, crashes or times out, the result is left unchanged and one warning is logged; after 3 failed starts in a minute the helper pauses for 5 minutes.
 - A system-prompt section (`context-saver`, order 75) tells the model what a marker means (`promptSection: false` removes it).
-- Surface follows the Modes plugin (`chat`, `cowork`, `code`); without it, `cowork`.
+- Surface follows the Modes add-on (`chat`, `cowork`, `code`); without it, `cowork`.
 
 ## Configuration
 
@@ -61,8 +61,8 @@ No path or address is defaulted. `skipTools` keeps file reads and edits verbatim
 
 - A `bash` call printing a 1,000-item JSON array (43,389 characters, one error item): off, the model saw 43,389; on, 504 characters (98.8% smaller) with the marker and the `BOOM` error item kept; the second run gave identical output; the savings ledger and store were written.
 - The retrieval server returned the exact original for the key.
-- A dsh-side truncation matters: `bash` output over about 50,000 characters is cut by dsh itself before this plugin sees it, so a cut JSON is no longer valid JSON and compresses less (68% in the 2,000-item case).
-- Bad interpreter path: result unchanged, call succeeded. Missing `python`/`dataDir`: a load error is logged and the plugin stays inactive.
+- A dsh-side truncation matters: `bash` output over about 50,000 characters is cut by dsh itself before this add-on sees it, so a cut JSON is no longer valid JSON and compresses less (68% in the 2,000-item case).
+- Bad interpreter path: result unchanged, call succeeded. Missing `python`/`dataDir`: a load error is logged and the add-on stays inactive.
 - 34 ported Python tests (store, transforms, corpus) pass.
 
 ## Not verified

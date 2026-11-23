@@ -39,7 +39,7 @@ const MODES_NS = 'modes';
 const READERS = [{ tool: 'data_text', addOn: 'Data' }, { tool: 'pdf_read', addOn: 'PDF reader' }];
 
 export const Config = z.object({
-  /** The Content mode and tab. Off leaves nothing of it in the app; files it saved stay where they are. */
+  /** The Content mode. Off leaves nothing of it in the app; files it saved stay where they are. */
   enabled: z.boolean().default(false).volatile(),
   /** The Voice Library's folder. Empty (or not a full path): `content/voice-library` in the app's home. */
   voiceLibrary: z.string().default('').volatile(),
@@ -273,7 +273,7 @@ export function apply(ctx, config) {
       const service = ctx.get('settings');
       const row = service?.describe?.().find((entry) => entry.ns === MODES_NS);
       if (!row) {
-        problem = 'The Modes add-on is not running, so there is no Content tab.';
+        problem = 'The Modes add-on is not running, so there is no Content mode. Switch Modes on on the Plugins page.';
         return;
       }
       if (row.value?.extraModes === undefined) {
@@ -284,12 +284,14 @@ export function apply(ctx, config) {
       const ops = [];
       const next = withContent(row.value.extraModes, on);
       if (next !== undefined) ops.push({ op: 'set', path: ['extraModes'], value: next });
-      // A tab that no longer exists must not stay selected.
+      // Item 4A, stage 6b (D14): without the Cowork sidebar (and in the lab with spaces off) `defaultMode` still picks a new
+      // thread's mode, so it must not name a mode that is gone. With spaces, Modes already skips a start mode whose
+      // add-on is off and keeps the owner's choice (lib/spaces.js draftStartMode, startModeGone).
       if (!on && row.value.defaultMode === MODE_ID) ops.push({ op: 'set', path: ['defaultMode'], value: 'cowork' });
       if (ops.length > 0) await service.mutate(MODES_NS, ops);
       problem = '';
     } catch (error) {
-      problem = `The Content tab could not be ${enabled() ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
+      problem = `The Content mode could not be ${enabled() ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
       warn(problem);
     } finally {
       syncing = false;
@@ -479,10 +481,10 @@ export function apply(ctx, config) {
   const receiveFromResearch = async (sessionId, report) => {
     if (!enabled() || !reportsTool) throw new Error('Content is switched off in Settings → Content.');
     const id = String(sessionId ?? '').slice(0, 200);
-    if (modeOf(id) !== MODE_ID) throw new Error('That conversation is not a Content conversation.');
-    if (ctx.get('modes')?.isolated?.(id) !== false) throw new Error('That conversation is sealed.');
+    if (modeOf(id) !== MODE_ID) throw new Error('That thread is not a Content thread.');
+    if (ctx.get('modes')?.isolated?.(id) !== false) throw new Error('That thread is sealed.');
     const agent = ctx.get('agents')?.get?.(id);
-    if (!agent) throw new Error('That Content conversation is not loaded yet: send a message in it first, then send the report again.');
+    if (!agent) throw new Error('That Content thread is not loaded yet: send a message in it first, then send the report again.');
     const name = String(report ?? '').split('/').pop();
     if (!listReports(reportsFolder(), 400).some((one) => one.name === name)) throw new Error('There is no such saved Research report.');
     const done = await reportsTool.execute({ action: 'bring', name }, { agent, name: 'content_reports', arguments: { action: 'bring', name } });

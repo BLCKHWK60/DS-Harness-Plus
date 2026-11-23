@@ -1,13 +1,13 @@
 /**
- * Tuning Plus: models that learn from your work (the plan of 16 November 2026).
+ * Tuner Plus: models that learn from your work (the plan of 16 November 2026).
  *
  * The harness already produces checked work: tests that pass, claims that map to an opened source, drafts the
- * owner edited and approved, devices that read back. Tuning Plus keeps each checked step as a training row with
+ * owner edited and approved, devices that read back. Tuner Plus keeps each checked step as a training row with
  * its proof (the harvest), sends one row in five to a private exam, builds named data sets over time, and turns
  * them into better instructions, adapters and small tuned models, each one tested on the exam before the owner
  * is asked. It is a ratchet, not infinity: each step holds only if it beats the exam.
  *
- *   - lib/harvest.js, lib/harvest-more.js: rows cut by code from conversations, Mission runs and Content's records;
+ *   - lib/harvest.js, lib/harvest-more.js: rows cut by code from threads, Mission runs and Content's records;
  *   - lib/rows.js: a row, its proof, who made it, and whether it may train (set by code);
  *   - lib/exam.js: marking by each kind's own check, the promotion rule, the weakest spot;
  *   - lib/sets.js: named sets, near repeats, the trainer's format;
@@ -17,8 +17,9 @@
  *   - lib/night.js: the night shift (on power and idle only);
  *   - lib/taste.js, lib/lessons.js, lib/qa.js: the taste test, plugin lessons, question-and-answer rows.
  *
- * Off until switched on, for each mode. Recon is never harvested, nor a conversation that received an export
- * from Recon. Training runs only on this Mac, from a Python and a model folder the owner gives. Nothing is
+ * Off until switched on, for each mode. Recon is never harvested, nor a thread that received an export
+ * from Recon. Item 4A, stage 6a: by space too: any mode in the Recon space is left out like Recon, and no
+ * thread in the Devices space (any mode) is harvested; each row carries its thread's space. Training runs only on this Mac, from a Python and a model folder the owner gives. Nothing is
  * promoted without the exam and the owner's yes. Route: `GET/POST /dsh-tuning/data`.
  */
 import z from '@deepseek-ai/schemastery';
@@ -27,6 +28,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync, rmSync } from 'node:f
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
+import { makeGuardOf } from './lib/space-guard.js';
 import { EXAM_MIN, mark, pct, promotable, promptOf, runExam, weakestSpot } from './lib/exam.js';
 import { QUIET_MS, closedTool, lastTimeOf, rowsFromLedger, rowsFromLibrary, rowsFromRun, rowsFromTurns, signedInTool, turnsOf } from './lib/harvest.js';
 import { rowsFromBench, rowsFromCorrections, rowsFromCreator, rowsFromData, rowsFromPacket } from './lib/harvest-more.js';
@@ -47,7 +49,7 @@ import { CHECKPOINT, ISOLATED, OFFLINE_ENV, answerArgs, emptyFolder, fingerprint
 export const name = 'dsh-tuning';
 export const DATA_PATH = '/dsh-tuning/data';
 const NS = 'tuning';
-/** The modes Tuning Plus harvests, each with its own switch (all off until the owner switches one on). */
+/** The modes Tuner Plus harvests, each with its own switch (all off until the owner switches one on). */
 export const MODES = {
   code: 'Code: tool calls whose tests passed, finished runs, failed calls beside the fix, Mission items whose check passed',
   content: 'Content: your rulings on claims, and your edits beside the writer\'s drafts',
@@ -56,8 +58,8 @@ export const MODES = {
   bench: 'Devices: what a device reports and the recipe that fitted, for devices whose read was checked (never a write command)',
   loop: 'The work loop: each step and the cheapest model that passed it, for the router',
   corrections: 'Any mode: the answer before the owner corrected it beside the answer after',
-  creator: 'Creator Plus: a brief and the plugin that passed its checks; an error, its cause and its fix',
-  other: 'Other tabs (Cowork, Chat, Scout…): tool calls of turns that finished with no failed call and no correction',
+  creator: 'Creator Plus: a brief and the add-on that passed its checks; an error, its cause and its fix',
+  other: 'Other modes (Cowork, Chat, Scout…): tool calls of turns that finished with no failed call and no correction',
 };
 /**
  * What marks an export from Recon in a text: the line a message export starts with, the source lines, and
@@ -67,13 +69,13 @@ export const MODES = {
 export const EXPORT_MARKS = [/^\[Recon export [^\]\n]{1,80}\]/m, /origin: Recon · lane:/, /^#\s*Recon export\b/m, /"origin"\s*:\s*"Recon"/, /Everything below came from Recon/];
 
 export const Config = z.object({
-  /** Tuning Plus as a whole. Off: nothing is harvested and its tools are not offered. */
+  /** Tuner Plus as a whole. Off: nothing is harvested and its tools are not offered. */
   enabled: z.boolean().default(false).volatile(),
   /** Which modes are harvested, as JSON: `{ code: true }`. Every mode starts off. */
   harvest: z.string().default('{}').volatile(),
-  /** Tuning Plus's folder. Empty (or not a full path): `tuning` in the app's data. */
+  /** Tuner Plus's folder. Empty (or not a full path): `tuning` in the app's data. */
   folder: z.string().default('').volatile(),
-  /** The Python in which the owner installed mlx-lm (full path). Tuning Plus installs nothing. */
+  /** The Python in which the owner installed mlx-lm (full path). Tuner Plus installs nothing. */
   python: z.string().default('').volatile(),
   /** Where each base model's MLX files are on this Mac, as JSON: `{ "model name": "/full/path" }`. */
   models: z.string().default('{}').volatile(),
@@ -161,6 +163,10 @@ export function apply(ctx, config, standIns = {}) {
   };
   const store = openStore(folder);
   const now = standIns.now ?? (() => Date.now());
+  /** Item 4A, stage 6a: what Modes says about a thread's space (lib/space-guard.js; no Modes: no space). */
+  const guardOf = makeGuardOf(() => ctx.get('modes'));
+  /** Rows carry their thread's space, so lib/rows.js mayTrain can refuse Recon's and Devices' (Item 4A, stage 6a). */
+  const spaced = (rows, space) => (space ? rows.map((row) => ({ ...row, space })) : rows);
   const harvestOn = (mode) => enabled() && readObject(config?.harvest)[mode] === true;
   const providers = () => readObject(config?.providers);
   const rules = () => ({ providers: providers(), anthropicOpenEnded: plain(config?.anthropicOpenEnded) === true });
@@ -229,7 +235,7 @@ export function apply(ctx, config, standIns = {}) {
     return system ? `${system}\n\n${rest}` : rest;
   };
 
-  // ---- which conversations may be read (the same rules as Learned skills, fail closed) ----------------------
+  // ---- which threads may be read (the same rules as Learned skills, fail closed) ----------------------
 
   const fromRecon = (id) => {
     const exports = ctx.get('reconExports');
@@ -264,16 +270,19 @@ export function apply(ctx, config, standIns = {}) {
     walk(events, 0);
     return found;
   };
-  /** The conversations that may be read, each with its mode (a helper takes its conversation's). */
+  /** The threads that may be read, each with its mode (a helper takes its thread's). */
   const readable = async () => {
     const query = ctx.get('sessionQuery');
-    if (!query?.listSessions) return { known: false, why: 'The app\'s conversation index is not available.', read: [], left: [] };
+    if (!query?.listSessions) return { known: false, why: 'The app\'s thread index is not available.', read: [], left: [] };
     const modes = settingsOf('modes');
-    // Without Modes nobody can say which conversations are Recon's: nothing is read.
-    if (!modes) return { known: false, why: 'The Modes add-on is not running, so it cannot say which conversations are Recon\'s. Nothing is read.', read: [], left: [] };
+    // Without Modes nobody can say which threads are Recon's: nothing is read.
+    if (!modes) return { known: false, why: 'The Modes add-on is not running, so it cannot say which threads are Recon\'s. Nothing is read.', read: [], left: [] };
     const isolatedMarks = readObject(modes.sessionIsolated);
     const modeMap = readObject(modes.sessionModes);
-    // Conversations the owner marked "never learn from this" on Learned skills' page.
+    // Item 4A, stage 6a: each thread's space, as Modes says it (its recorded space when Modes cannot say).
+    const spaceMap = readObject(modes.sessionSpaces);
+    const spaceOf = (id) => String(guardOf(id).space || spaceMap[id] || '');
+    // Threads the owner marked "never learn from this" on Learned skills' page.
     const nolearn = new Set(readObject(settingsOf('skill-architect')?.nolearn, []));
     const evolveHome = typeof home === 'function' ? trimSlash(home('evolve')) : '';
     const trash = ctx.get('coworkTrash');
@@ -290,13 +299,15 @@ export function apply(ctx, config, standIns = {}) {
     };
     const why = (id, header) => {
       const cwd = trimSlash(header.cwd);
-      if (isolatedMarks[id] === true) return 'isolated (Recon)';
+      if (isolatedMarks[id] === true) return 'sealed (Recon)';
       try {
-        if (ctx.get('modes')?.isolated?.(id) === true) return 'isolated (Recon)';
+        if (ctx.get('modes')?.isolated?.(id) === true) return 'sealed (Recon)';
       } catch {
-        return 'isolated (Recon)';
+        return 'sealed (Recon)';
       }
-      if (inReconRoom(cwd)) return 'isolated (Recon)';
+      if (inReconRoom(cwd)) return 'sealed (Recon)';
+      // Item 4A, stage 6a: any mode in the Recon space, and any sealed thread, is Recon's (also on a read error).
+      if (spaceMap[id] === 'recon' || guardOf(id).sealed === true || guardOf(id).space === 'recon') return 'sealed (Recon)';
       const exported = fromRecon(id);
       if (exported) return exported;
       if (nolearn.has(id)) return 'marked "never learn from this"';
@@ -315,7 +326,7 @@ export function apply(ctx, config, standIns = {}) {
       const top = topOf(id);
       const reason = why(id, header) || (top !== id ? why(top, byId.get(top)?.header ?? {}) : '');
       if (reason) left.push({ id, why: reason, cwd: trimSlash(header.cwd), top });
-      else read.push({ id, header, top, mode: String(modeMap[top] ?? ctx.get('modes')?.get?.(top) ?? '') });
+      else read.push({ id, header, top, mode: String(modeMap[top] ?? ctx.get('modes')?.get?.(top) ?? ''), space: spaceOf(top) });
     }
     return { known: true, why: '', read, left };
   };
@@ -329,7 +340,7 @@ export function apply(ctx, config, standIns = {}) {
     return store.addRows(mode, rows);
   };
   /**
-   * Rows a conversation's turns make now, and rows it would have made had no turn been corrected: what was
+   * Rows a thread's turns make now, and rows it would have made had no turn been corrected: what was
    * kept earlier (a newest turn let through after a quiet spell) and corrected since is taken out again.
    */
   const withdraw = (turns, meta, quiet) => {
@@ -338,7 +349,7 @@ export function apply(ctx, config, standIns = {}) {
     const could = [...rowsFromTurns(relaxed, { ...meta, quiet: true }), ...rowsFromCorrections(relaxed, { ...meta, quiet: true })].map((row) => row.id).filter((id) => !now.has(id));
     return could.length > 0 ? store.removeRows(could) : 0;
   };
-  /** A mode's switch for a conversation's tab: code → code; data and finance → data; others → other. */
+  /** A mode's switch for a thread's tab: code → code; data and finance → data; others → other. */
   const switchOf = (tab) => (tab === 'code' ? 'code' : tab === 'data' || tab === 'finance' ? 'data' : tab === 'content' ? 'content' : tab === 'research' ? 'research' : tab === 'bench' ? 'bench' : tab === 'recon' ? '' : 'other');
   const reportsFolder = () => {
     const value = plain(settingsOf('research')?.folder);
@@ -391,6 +402,11 @@ export function apply(ctx, config, standIns = {}) {
           const tab = record.mode;
           const toggle = switchOf(tab);
           if (!toggle || tab === 'bench') continue;
+          // Item 4A, stage 6a: no thread in the Devices space (any mode), nor one whose space Modes cannot read.
+          if (record.space === 'devices' || guardOf(record.top).guardedBy === 'unknown') {
+            summary.left.push({ id: record.id, why: record.space === 'devices' ? 'in the Devices space' : 'its space could not be read' });
+            continue;
+          }
           const wantTurns = harvestOn(toggle) && toggle !== 'research' && toggle !== 'content';
           const wantCorrections = harvestOn('corrections');
           if (!wantTurns && !wantCorrections) continue;
@@ -398,11 +414,11 @@ export function apply(ctx, config, standIns = {}) {
           try {
             log = await query.readSession(record.id);
           } catch (error) {
-            summary.problems.push(`a conversation could not be read: ${String(error?.message ?? error).slice(0, 120)}`);
+            summary.problems.push(`a thread could not be read: ${String(error?.message ?? error).slice(0, 120)}`);
             continue;
           }
           const events = Array.isArray(log?.events) ? log.events : [];
-          // The newest turn counts once a later turn exists, or once the conversation was quiet for hours.
+          // The newest turn counts once a later turn exists, or once the thread was quiet for hours.
           const lastAt = lastTimeOf(events);
           const quiet = lastAt > 0 && now() - lastAt > QUIET_MS;
           const mark_ = `${events.length}${quiet ? 'q' : ''}`;
@@ -415,21 +431,21 @@ export function apply(ctx, config, standIns = {}) {
           summary.conversations += 1;
           const turns = turnsOf(events, log.inheritedEventCount);
           const meta = { mode: tab || 'other', session: record.id };
-          if (wantTurns) add(toggle === 'data' ? 'data' : tab || 'other', toggle === 'data' ? rowsFromData(turns, { mode: 'data', session: record.id, quiet }) : rowsFromTurns(turns, { ...meta, quiet }));
-          if (wantCorrections) add('corrections', rowsFromCorrections(turns, { ...meta, quiet }));
+          if (wantTurns) add(toggle === 'data' ? 'data' : tab || 'other', spaced(toggle === 'data' ? rowsFromData(turns, { mode: 'data', session: record.id, quiet }) : rowsFromTurns(turns, { ...meta, quiet }), record.space));
+          if (wantCorrections) add('corrections', spaced(rowsFromCorrections(turns, { ...meta, quiet }), record.space));
           summary.withdrawn = (summary.withdrawn ?? 0) + withdraw(turns, meta, quiet);
           cursor[record.id] = mark_;
         }
-        // Content's ledgers, in the folders of Content conversations. A folder is read only when no
-        // conversation in it was left out (Recon, an export, marked) and none holds an export from Recon:
-        // a clean conversation on a folder where an export was used never brings that ledger in.
+        // Content's ledgers, in the folders of Content threads. A folder is read only when no
+        // thread in it was left out (Recon, an export, marked) and none holds an export from Recon:
+        // a clean thread on a folder where an export was used never brings that ledger in.
         if (harvestOn('content')) {
-          const folders = new Set(found.read.filter((record) => record.mode === 'content' && record.top === record.id).map((record) => trimSlash(record.header.cwd)).filter((cwd) => cwd && isAbsolute(cwd) && !inReconRoom(cwd)));
+          const folders = new Set(found.read.filter((record) => record.mode === 'content' && record.top === record.id && record.space !== 'devices').map((record) => trimSlash(record.header.cwd)).filter((cwd) => cwd && isAbsolute(cwd) && !inReconRoom(cwd)));
           const within = (cwd, subject) => cwd === subject || cwd.startsWith(`${subject}/`);
           for (const subject of folders) {
             const outLeft = found.left.find((record) => within(String(record.cwd ?? ''), subject));
             if (outLeft) {
-              summary.left.push({ id: `folder ${subject.split('/').pop()}`, why: `a conversation in this folder was left out (${outLeft.why})` });
+              summary.left.push({ id: `folder ${subject.split('/').pop()}`, why: `a thread in this folder was left out (${outLeft.why})` });
               continue;
             }
             let tainted = false;
@@ -443,7 +459,7 @@ export function apply(ctx, config, standIns = {}) {
               if (tainted) break;
             }
             if (tainted) {
-              summary.left.push({ id: `folder ${subject.split('/').pop()}`, why: 'a conversation in this folder holds an export from Recon (or could not be read)' });
+              summary.left.push({ id: `folder ${subject.split('/').pop()}`, why: 'a thread in this folder holds an export from Recon (or could not be read)' });
               continue;
             }
             const state = readJson(join(subject, '.content', 'state.json'), null);
@@ -474,22 +490,28 @@ export function apply(ctx, config, standIns = {}) {
         const runsFile = typeof home === 'function' ? join(home('mission'), 'runs.jsonl') : '';
         const lines = runsFile ? readLines(runsFile).slice(-300) : [];
         const allowed = new Map();
+        const spaces = new Map();
         try {
           const found = await readable();
-          for (const record of found.read) allowed.set(record.id, record.mode);
+          // Item 4A, stage 6a: never a run of a thread in the Devices space.
+          for (const record of found.read) {
+            if (record.space === 'devices') continue;
+            allowed.set(record.id, record.mode);
+            spaces.set(record.id, record.space);
+          }
         } catch { /* nothing allowed */ }
         const done = new Set(store.state().runs ?? []);
         for (const entry of lines) {
           if (!entry?.id || done.has(entry.id)) continue;
           const folderPath = trimSlash(entry.folder);
-          // Only a run of a conversation that may be read (never Recon's, never one with an export).
+          // Only a run of a thread that may be read (never Recon's, never one with an export).
           if (!folderPath || inReconRoom(folderPath) || typeof entry.conversation !== 'string' || !allowed.has(entry.conversation)) continue;
           const runDir = join(folderPath, '.dsh-mission', 'runs', String(entry.id));
           const runJson = readJson(join(runDir, 'run.json'), null);
           if (!runJson) continue;
           const tab = allowed.get(entry.conversation) || 'other';
           const rows = rowsFromRun({ run: runJson, log: readLines(join(runDir, 'log.jsonl')), mode: tab, session: entry.conversation });
-          const want = rows.filter((row) => (row.kind === 'router' ? harvestOn('loop') : harvestOn('code')));
+          const want = spaced(rows.filter((row) => (row.kind === 'router' ? harvestOn('loop') : harvestOn('code'))), spaces.get(entry.conversation));
           add(tab === 'code' ? 'code' : 'loop', want);
           done.add(entry.id);
         }
@@ -643,14 +665,14 @@ export function apply(ctx, config, standIns = {}) {
   };
   /**
    * The exam gate on rungs 1 to 3 (Self-improve's changes, Learned skills' skills): is the changed set of
-   * instructions not worse on the owner's exam than today's? Undefined when Tuning Plus is off, the model
+   * instructions not worse on the owner's exam than today's? Undefined when Tuner Plus is off, the model
    * is not known, or the exam has fewer than EXAM_MIN rows: then the add-on decides as it always did.
    * @param {{route: {provider: string, model: string}, before?: string, after: string, signal?: AbortSignal}} input
    * @returns {Promise<{ok: boolean, before: object, after: object, why: string} | undefined>}
    */
   const examGate = async ({ route, before = '', after, signal, budget }) => {
     if (!enabled() || !route?.provider || !route?.model) return undefined;
-    // A model that does not count as this Mac is examined only on rows written in conversations with that
+    // A model that does not count as this Mac is examined only on rows written in threads with that
     // same provider: rows that never left this Mac are not sent out for an exam.
     const outside = !onThisMac(route.provider);
     const rows = examNow().filter((row) => ['label', 'answer', 'qa', 'pair', 'toolcalls', 'toolfix'].includes(row.kind) && (!outside || row.by?.provider === route.provider)).slice(-examLimit());
@@ -751,13 +773,13 @@ export function apply(ctx, config, standIns = {}) {
       if (input.lookOnly === true || goal === 'find' || GOALS[goal].kind === 'retrieval') {
         active.phase = 'looking';
         const proposal = proposeRung({ failures: [], tried: [], setRows: trainable.length, kind: trainable[0]?.kind ?? '', ...skillHint(setRows) });
-        return addCard({ kind: 'look', title: `Look only: ${GOALS[goal].name}`, text: `${sentence}\nSets: ${sets.map((one) => `${setsNow()[one]?.name ?? one} (${setsNow()[one]?.rows ?? 0} rows, ${setsNow()[one]?.mayTrain ?? 0} may train)`).join('; ') || 'none yet'}. Exam rows that fit: ${exam.length}.\nThe lowest rung that could help: ${proposal.home === 'skill' ? `a skill, between rungs 1 and 2 (${proposal.why}). Make one under Skills on this page, or ask for one in a conversation` : `${proposal.rung}, ${RUNGS[proposal.rung].name} (${proposal.why})`}.${GOALS[goal].kind === 'retrieval' ? '\nKnow a subject: facts are best looked up; build retrieval from the subject\'s reports first.' : ''}`, key: `look-${goal}-${sets.join(',')}` });
+        return addCard({ kind: 'look', title: `Look only: ${GOALS[goal].name}`, text: `${sentence}\nSets: ${sets.map((one) => `${setsNow()[one]?.name ?? one} (${setsNow()[one]?.rows ?? 0} rows, ${setsNow()[one]?.mayTrain ?? 0} may train)`).join('; ') || 'none yet'}. Exam rows that fit: ${exam.length}.\nThe lowest rung that could help: ${proposal.home === 'skill' ? `a skill, between rungs 1 and 2 (${proposal.why}). Make one under Skills on this page, or ask for one in a thread` : `${proposal.rung}, ${RUNGS[proposal.rung].name} (${proposal.why})`}.${GOALS[goal].kind === 'retrieval' ? '\nKnow a subject: facts are best looked up; build retrieval from the subject\'s reports first.' : ''}`, key: `look-${goal}-${sets.join(',')}` });
       }
       const method = String(input.method ?? 'auto');
       const auto = method === 'auto' ? proposeRung({ failures: [], tried: (input.tried ?? []).map(Number), setRows: trainable.length, kind: trainable[0]?.kind ?? '', flat: [1, 2, 3].filter(() => input.flat === true), ...skillHint(setRows) }) : undefined;
       const rung = auto ? auto.rung : Number(method);
       if (auto?.home === 'skill') {
-        return addCard({ kind: 'proposal', title: `${SKILL_HOME.name}: between rungs 1 and 2`, text: `${sentence}\nThe cheapest home is a skill: ${SKILL_HOME.what}. ${auto.why}. Make one under Skills on this page (New skill, or Look for skill ideas), or ask for one in a conversation; it takes its exam before you decide.`, key: `rung-skill-${goal}` });
+        return addCard({ kind: 'proposal', title: `${SKILL_HOME.name}: between rungs 1 and 2`, text: `${sentence}\nThe cheapest home is a skill: ${SKILL_HOME.what}. ${auto.why}. Make one under Skills on this page (New skill, or Look for skill ideas), or ask for one in a thread; it takes its exam before you decide.`, key: `rung-skill-${goal}` });
       }
       if (rung <= 3) {
         return addCard({ kind: 'proposal', title: `Rung ${rung}: ${RUNGS[rung].name}`, text: `${sentence}\nThe lowest rung that could help is ${RUNGS[rung].name}: ${RUNGS[rung].what}. It lives in ${RUNGS[rung].where}${rung === 0 ? '' : ', which Tuner Plus examines with your exam before you approve a change'}.`, key: `rung-${rung}-${goal}` });
@@ -1069,7 +1091,7 @@ export function apply(ctx, config, standIns = {}) {
       const shelf = store.shelf();
       if (markDue(shelf, 'a plugin was added or changed', now()) > 0) {
         store.saveShelf(shelf);
-        addCard({ kind: 'due', title: 'The harness adapter is due for a rebuild', text: 'A plugin was added or changed since it was trained; its lessons join the harness set. Rebuild it from the bar when you like.', key: `due-${key.length}` });
+        addCard({ kind: 'due', title: 'The harness adapter is due for a rebuild', text: 'An add-on was added or changed since it was trained; its lessons join the harness set. Rebuild it from the bar when you like.', key: `due-${key.length}` });
       }
     }
     if (key) store.setState({ toolsKey: key });
@@ -1186,6 +1208,14 @@ export function apply(ctx, config, standIns = {}) {
   const service = Object.freeze({
     apiVersion: 1,
     examGate,
+    /** Item 4A: whether Tuner Plus is switched on (Workshop and its Tuner Plus row show only while it is). */
+    isOn() {
+      try {
+        return enabled();
+      } catch {
+        return false;
+      }
+    },
     /** The model address a team role uses for a shelf entry: only while it is switched on and served. */
     adapterRoute(entryId) {
       try {
@@ -1195,7 +1225,7 @@ export function apply(ctx, config, standIns = {}) {
       }
     },
     /**
-     * Each skill's mark (where it came from), for the Cowork sidebar's Skills page: names, files and marks,
+     * Each skill's mark (where it came from), for the Skills page in the left panel: names, files and marks,
      * never a skill's text. Undefined while the skills part is off (the page then shows no marks).
      */
     async skillMarks() {
@@ -1203,6 +1233,28 @@ export function apply(ctx, config, standIns = {}) {
         return skillsOn() ? ((await skillsPart.marksList()) ?? undefined) : undefined;
       } catch {
         return undefined;
+      }
+    },
+    /**
+     * Mission stage E: the owner pressed Allow in a Mission's card for a run its helper asked for. Starts exactly that
+     * run, as the owner's yes on the app's card after tuning_start would; never in Recon, never while Tuner Plus is off.
+     * @param {{sessionId: string, key?: string, ref: object}} request - the thread and the run Mission kept.
+     * @returns {Promise<{ok: boolean, text: string}>}
+     */
+    async missionAllow(request) {
+      try {
+        if (!enabled()) return { ok: false, text: 'Tuner Plus is switched off in Settings → Tuner Plus.' };
+        const sessionId = String(request?.sessionId ?? '');
+        if (!sessionId || isolatedAgent({ id: sessionId })) return { ok: false, text: 'Tuner Plus never starts a run from Recon.' };
+        const ref = runRefOf(request?.ref);
+        if (!ref) return { ok: false, text: 'The run asked for is not one Tuner Plus can start (its model, goal, sets, way or minutes are not valid).' };
+        if (active) return { ok: false, text: `A run is going: ${active.sentence} Start this one when it is done.` };
+        if (skillsPart.examRunning()) return { ok: false, text: 'A skill exam is running on this Mac; start the run when it is done.' };
+        const sentence = sentenceOf(ref);
+        void startRun({ model: ref.model, goal: ref.goal, sets: ref.sets ?? undefined, method: ref.method, minutes: ref.minutes, by: 'mission' }).catch((error) => addCard({ kind: 'candidate', title: 'The run did not finish', text: String(error?.message ?? error).slice(0, 400) }));
+        return { ok: true, text: `Started: ${sentence} The result comes as a card on Settings → Tuner Plus.` };
+      } catch (error) {
+        return { ok: false, text: String(error?.message ?? error).slice(0, 300) };
       }
     },
     /** The shelf's entries a team may name (switched on, served). */
@@ -1236,6 +1288,43 @@ export function apply(ctx, config, standIns = {}) {
     }
   };
   const isHelper = (exec) => Boolean(exec?.agent?.header?.parentSession ?? exec?.agent?.session?.header?.parentSession);
+  /** Said to a Mission's helper whose run start waits in the Mission's card (stage E). */
+  const TUNING_NOTE = 'Starting this Tuner Plus run needs the user\'s yes: it waits in the Mission\'s card above the chat box. Nothing was started.';
+  /**
+   * The run a tuning_start call asks for, checked, as Mission keeps it in its card (`ref`); undefined when not valid.
+   * @returns {{model: string, goal: string, sets: string[] | null, method: string, minutes: number} | undefined}
+   */
+  const runRefOf = (raw) => {
+    const model = typeof raw?.model === 'string' ? raw.model.trim() : '';
+    if (!model || model.length > 200 || !GOALS[raw?.goal]) return undefined;
+    const sets = raw.sets === undefined || raw.sets === null ? null : Array.isArray(raw.sets) && raw.sets.length <= 10 && raw.sets.every((one) => typeof one === 'string' && one.length <= 60) ? raw.sets : undefined;
+    if (sets === undefined) return undefined;
+    const method = raw.method === undefined ? 'auto' : String(raw.method);
+    if (!['auto', '1', '2', '3', '4', '5'].includes(method)) return undefined;
+    const minutes = raw.minutes === undefined ? 60 : Number(raw.minutes);
+    if (!Number.isInteger(minutes) || minutes < 5 || minutes > 1440) return undefined;
+    return { model, goal: raw.goal, sets, method, minutes };
+  };
+  const sentenceOf = (ref) => runSentence({ model: ref.model, goal: ref.goal, sets: ref.sets ?? GOALS[ref.goal]?.sets ?? [], method: ref.method, minutes: ref.minutes });
+  /** What a Mission's helper asks its Mission for: start this run (an act Mission does only after the owner's Allow). */
+  const missionRunOf = (args) => {
+    const ref = runRefOf(args);
+    if (!ref) return undefined;
+    const sentence = sentenceOf(ref);
+    return { key: `start:${JSON.stringify(ref)}`.slice(0, 300), what: `Start a Tuner Plus run: ${sentence}`.slice(0, 300), reason: `${sentence}\nThis uses this Mac while it runs.`.slice(0, 600), act: true, needed: false, ref };
+  };
+  /** Mission's askYes for a helper of a Mission (undefined: no Mission, not its helper, or anything failed). */
+  const askMission = async (exec, request) => {
+    try {
+      const mission = ctx.get('mission');
+      const sessionId = String(exec?.agent?.id ?? '');
+      if (typeof mission?.askYes !== 'function' || !sessionId) return undefined;
+      const said = await mission.askYes({ sessionId, addon: 'tuning', ...request });
+      return said && typeof said === 'object' ? said : undefined;
+    } catch {
+      return undefined;
+    }
+  };
 
   // ---- the skills part (its own switch; off: nothing of it runs, writes or asks) -----------------------
   const skillsOn = () => enabled() && plain(config?.skills) === true;
@@ -1258,7 +1347,7 @@ export function apply(ctx, config, standIns = {}) {
     // A canary run goes on past errors: once the exam is stopped, the canaries left are not asked.
     canaries: (route, instructions, signal, spend) => runCanaries((row) => (signal?.aborted ? Promise.resolve('') : askModel(route, asText(promptOf(row), instructions), signal, spend, steady))),
     busy: () => (active ? active.sentence : ''),
-    // The harvest's own check for a Recon export in a conversation (the health count reads none of those).
+    // The harvest's own check for a Recon export in a thread (the health count reads none of those).
     exportIn,
   };
   const skillsPart = openSkills({ ctx, store, on: skillsOn, now, warn, addCard, hasCard, readable, exam: examDeps, standIns: standIns.skills ?? {} });
@@ -1335,7 +1424,7 @@ export function apply(ctx, config, standIns = {}) {
       return undefined;
     }
   };
-  /** A tab's skills are proposed for switching off only from at least this many of its conversations. */
+  /** A tab's skills are proposed for switching off only from at least this many of its threads. */
   const TAB_OFF_MIN = 10;
   const tabsView = () => {
     const modes = modesSkills();
@@ -1401,7 +1490,14 @@ export function apply(ctx, config, standIns = {}) {
       description: 'Tuner Plus: start a run the owner asked for in plain words (train a candidate, or propose the lowest rung). The owner is asked on the app\'s own card with the run in one sentence; nothing is promoted without the exam and the owner\'s yes on the Tuner Plus page.',
       parameters: { type: 'object', properties: { model: { type: 'string', maxLength: 200 }, goal: { type: 'string', enum: Object.keys(GOALS) }, sets: { type: 'array', items: { type: 'string', maxLength: 60 }, maxItems: 10 }, method: { type: 'string', enum: ['auto', '1', '2', '3', '4', '5'] }, minutes: { type: 'integer', minimum: 5, maximum: 1440 } }, required: ['model', 'goal'], additionalProperties: false },
       execute: safely(async (args, exec) => {
-        if (isHelper(exec)) throw new Error('Only the conversation itself starts a run, with the owner there.');
+        if (isHelper(exec)) {
+          // Mission stage E: a Mission's helper cannot ask the owner either, but its Mission can, in its card.
+          // Nothing starts here; Allow there starts exactly this run (missionAllow below), as the owner's yes would.
+          const ref = missionRunOf(args);
+          const said = ref ? await askMission(exec, ref) : undefined;
+          if (said && typeof said.text === 'string' && said.text.trim()) return said.said === 'no' ? `${said.text} Nothing was started.` : `${said.text} ${TUNING_NOTE}`;
+          throw new Error('Only the thread itself starts a run, with the owner there.');
+        }
         const sentence = runSentence({ model: args.model, goal: args.goal, sets: args.sets ?? GOALS[args.goal]?.sets ?? [], method: args.method ?? 'auto', minutes: args.minutes ?? 60 });
         const answer = await approve(exec, `${sentence}\nThis uses this Mac while it runs.`);
         if (answer !== 'allowed-once') throw new Error(answer === 'rejected' ? 'The owner said no.' : `The owner could not be asked (${answer}).`);
@@ -1421,39 +1517,39 @@ export function apply(ctx, config, standIns = {}) {
   ];
   /** A skill from plain words (step 8): only while the skills part is on, never in Recon or a helper. */
   /**
-   * Whether a skill may be made from this conversation: the harvest's own reading rules, on everything the
-   * model has seen (this conversation with the turns a fork copied in, and its helpers' conversations).
+   * Whether a skill may be made from this thread: the harvest's own reading rules, on everything the
+   * model has seen (this thread with the turns a fork copied in, and its helpers' threads).
    * @returns {Promise<string>} why not, or ''.
    */
   const conversationRefusal = async (exec) => {
-    if (isHelper(exec)) return 'Only the conversation itself makes a skill, with the owner there.';
+    if (isHelper(exec)) return 'Only the thread itself makes a skill, with the owner there.';
     if (isolatedAgent(exec?.agent)) return 'Never in Recon.';
     const id = String(exec?.agent?.id ?? '');
     const found = await readable();
     if (!found.known) return found.why;
     const left = found.left.find((one) => one.id === id);
-    if (left) return `Tuner Plus does not learn from this conversation (${left.why}), so no skill is made from it.`;
-    if (!found.read.some((one) => one.id === id)) return 'This conversation is not among the ones Tuner Plus may read, so no skill is made from it.';
-    // A helper left out (an export from Recon, marked, trashed) counts against the conversation it reported to.
+    if (left) return `Tuner Plus does not learn from this thread (${left.why}), so no skill is made from it.`;
+    if (!found.read.some((one) => one.id === id)) return 'This thread is not among the ones Tuner Plus may read, so no skill is made from it.';
+    // A helper left out (an export from Recon, marked, trashed) counts against the thread it reported to.
     const leftHelper = found.left.find((one) => one.top === id && one.id !== id);
-    if (leftHelper) return `A helper of this conversation is left out (${leftHelper.why}), so no skill is made from it.`;
+    if (leftHelper) return `A helper of this thread is left out (${leftHelper.why}), so no skill is made from it.`;
     // Every helper is read; with more than can be read, nothing is made (never a check that gives up open).
     const helpers = found.read.filter((one) => one.top === id && one.id !== id).map((one) => one.id);
-    if (helpers.length > 100) return 'This conversation has more helpers than Tuner Plus reads (100), so no skill is made from it.';
+    if (helpers.length > 100) return 'This thread has more helpers than Tuner Plus reads (100), so no skill is made from it.';
     for (const one of [id, ...helpers]) {
       const log = await ctx.get('sessionQuery').readSession(one);
       const events = Array.isArray(log?.events) ? log.events : [];
-      if (exportIn(events)) return 'This conversation holds an export from Recon, so no skill is made from it.';
-      if (turnsOf(events, 0).some((turn) => turn.tools.some((call) => signedInTool(call.name) || closedTool(call.name)))) return `${one === id ? 'This conversation' : 'A helper of this conversation'} used a signed-in source (a connector), or Devices' or Recon's own tools, so no skill is made from it.`;
+      if (exportIn(events)) return 'This thread holds an export from Recon, so no skill is made from it.';
+      if (turnsOf(events, 0).some((turn) => turn.tools.some((call) => signedInTool(call.name) || closedTool(call.name)))) return `${one === id ? 'This thread' : 'A helper of this thread'} used a signed-in source (a connector), or Devices' or Recon's own tools, so no skill is made from it.`;
     }
     return '';
   };
-  /** The conversation's own working folder (for "this project"). */
+  /** The thread's own working folder (for "this project"). */
   const conversationFolder = async (exec) => {
     let cwd = '';
     try {
       cwd = String((await ctx.get('workingDirectory')?.ensure?.(exec.agent, exec.signal)) ?? '');
-    } catch { /* the conversation's folder below */ }
+    } catch { /* the thread's folder below */ }
     return isAbsolute(cwd) ? cwd : String(exec?.agent?.header?.cwd ?? exec?.agent?.session?.header?.cwd ?? '');
   };
   const skillTools = [
@@ -1482,7 +1578,7 @@ export function apply(ctx, config, standIns = {}) {
       parameters: { type: 'object', properties: { type: { type: 'string', enum: ['check', 'gaps', 'new', 'improve', 'merge', 'retire'] }, skills: { type: 'array', items: { type: 'string', maxLength: 64 }, maxItems: 60 }, mark: { type: 'string', enum: ['all', ...MARKS] }, what: { type: 'string', maxLength: WHAT_MAX }, where: { type: 'string', enum: ['project', 'everywhere'] }, lookOnly: { type: 'boolean' } }, required: ['type'], additionalProperties: false },
       execute: safely(async (args, exec) => {
         if (!skillsOn()) throw new Error('The skills part of Tuner Plus is switched off.');
-        if (isHelper(exec)) throw new Error('Only the conversation itself starts a skills run, with the owner there.');
+        if (isHelper(exec)) throw new Error('Only the thread itself starts a skills run, with the owner there.');
         if (isolatedAgent(exec?.agent)) throw new Error('Never in Recon.');
         const running = skillsPart.skillsRunState();
         if (running) throw new Error(`A run is going: ${running.sentence} It reads and changes only the skills it started with; wait for it, or stop it on Settings → Tuner Plus.`);
@@ -1490,7 +1586,7 @@ export function apply(ctx, config, standIns = {}) {
         const where = args.where === 'project' ? 'project' : 'everywhere';
         let project = '';
         if (type === 'new') {
-          // The owner's words come from this conversation: the harvest's reading rules hold.
+          // The owner's words come from this thread: the harvest's reading rules hold.
           const refused = await conversationRefusal(exec);
           if (refused) throw new Error(refused);
           if (where === 'project') project = await conversationFolder(exec);
@@ -1541,7 +1637,7 @@ export function apply(ctx, config, standIns = {}) {
     const seen = new Map();
     try {
       for (const version of ctx.get('modelTiers')?.listVersions?.() ?? []) if (version?.provider && version?.model) seen.set(`${version.provider}/${version.model}`, { provider: version.provider, model: version.model, label: version.name ?? version.model });
-    } catch { /* no Model Tiers */ }
+    } catch { /* no Model tiers */ }
     for (const row of store.rows().slice(-3000)) if (row.by?.provider && row.by?.model && !['owner', 'research', 'bench', 'teacher', 'made-up', 'mlx-local'].includes(row.by.provider)) seen.set(`${row.by.provider}/${row.by.model}`, { provider: row.by.provider, model: row.by.model, label: row.by.model });
     return [...seen.values()].slice(0, 100);
   };
@@ -1594,7 +1690,7 @@ export function apply(ctx, config, standIns = {}) {
     };
   };
   const SETTABLE = { enabled: 'boolean', harvest: 'json', folder: 'string', python: 'string', models: 'json', teacher: 'json', teacherCloud: 'boolean', providers: 'json', anthropicOpenEnded: 'boolean', nightShift: 'boolean', idleMinutes: 'number', nightMinutes: 'number', nightTrain: 'json', nightSkills: 'boolean', examLimit: 'number', ownNetworkLocal: 'boolean', skills: 'boolean', skillExam: 'json' };
-  /** What the page may do while Tuning Plus is off: switch it on, change settings, and stop or switch off. */
+  /** What the page may do while Tuner Plus is off: switch it on, change settings, and stop or switch off. */
   const WHILE_OFF = new Set(['set', 'stop', 'stopServing']);
   const setSetting = async (field, value) => {
     const kind = SETTABLE[field];
@@ -1690,7 +1786,7 @@ export function apply(ctx, config, standIns = {}) {
                 note = `Written to ${result.dir}: ${result.train} training rows, ${result.valid} for checking, ${result.pairs} pairs; ${result.left} left out (may not train).`;
               } else if (action === 'lessons') {
                 const written = buildLessons();
-                note = `Lessons: ${Object.entries(written).map(([plugin, count]) => `${plugin} ${count}`).join(', ') || 'none yet (they come from tool calls that worked, in harvested conversations)'}.`;
+                note = `Lessons: ${Object.entries(written).map(([plugin, count]) => `${plugin} ${count}`).join(', ') || 'none yet (they come from tool calls that worked, in harvested threads)'}.`;
               } else if (action === 'qa') {
                 const result = await buildQa({});
                 note = `Questions from reference material: ${result.rows.length} kept, ${result.dropped} dropped by the check.`;
@@ -1713,7 +1809,7 @@ export function apply(ctx, config, standIns = {}) {
                 note = `Started: ${started.sentence} The result comes as a card below.`;
               } else if (action === 'skillsHealth') {
                 const counted = await skillsPart.refreshHealth({ most: 400 });
-                note = `Uses counted in ${Object.keys(counted.sessions ?? {}).length} conversations Tuner Plus may read.`;
+                note = `Uses counted in ${Object.keys(counted.sessions ?? {}).length} threads Tuner Plus may read.`;
               } else if (action === 'skillRetire') {
                 note = `"${skillsPart.retireKey(String(body.key ?? ''))}" is retired: switched off and kept. Put back is under Skills.`;
               } else if (action === 'skillPutBack') {
@@ -1729,7 +1825,7 @@ export function apply(ctx, config, standIns = {}) {
               } else if (action === 'skillsTabOff' || action === 'skillsTabOn') {
                 // Skills per tab (step 14): the owner's click; Modes keeps the list and does the leaving out.
                 const modes = modesSkills();
-                if (!modes) throw new Error('Choosing skills per tab needs the Modes add-on of this Plus version.');
+                if (!modes) throw new Error('Choosing skills per mode needs the Modes add-on of this Plus version. Update Plus, then try again.');
                 const tab = String(body.tab ?? '');
                 const names = (Array.isArray(body.names) ? body.names : []).map(String).slice(0, 500);
                 const known = action === 'skillsTabOff' ? new Set(((await skillsView()).rows ?? []).map((row) => row.name)) : new Set();
@@ -1745,7 +1841,7 @@ export function apply(ctx, config, standIns = {}) {
                 }
                 const done = await modes.setSkillsOff(tab, next);
                 const label = modes.list().find((one) => one.id === tab)?.label ?? tab;
-                note = done.length > 0 ? `Switched off in ${label}: ${done.join(', ')}. The model there no longer sees them; your /name still works. Open conversations there get the shorter list at their next step.` : `Every skill is back on in ${label}.`;
+                note = done.length > 0 ? `Switched off in ${label}: ${done.join(', ')}. The model there no longer sees them; your /name still works. Open threads there get the shorter list at their next step.` : `Every skill is back on in ${label}.`;
               } else if (action === 'skillsUpdateCheck') {
                 const started = await skillsPart.checkFromCard(String(body.card ?? ''));
                 note = `Started: ${started.sentence} The result comes as a card below.`;
@@ -1753,7 +1849,7 @@ export function apply(ctx, config, standIns = {}) {
                 note = skillsPart.stopSkillsRun() ? 'Stopping the run.' : 'No skills run is going.';
               } else if (action === 'skillIdeas') {
                 const ideas = await skillsPart.findIdeas();
-                note = ideas.length === 0 ? 'No new skill ideas in what was gathered. Ideas come from checked work, corrections, runs a stronger model finished, tools that failed first, and plugins with lessons.' : `${ideas.length} skill idea${ideas.length === 1 ? '' : 's'}: see the cards under Results.`;
+                note = ideas.length === 0 ? 'No new skill ideas in what was gathered. Ideas come from checked work, corrections, runs a stronger model finished, tools that failed first, and add-ons with lessons.' : `${ideas.length} skill idea${ideas.length === 1 ? '' : 's'}: see the cards under Results.`;
               } else if (action === 'skillIdeaDraft') {
                 const made = await skillsPart.draftFromIdea(String(body.card ?? ''));
                 note = `The draft "${made.name}" was written (${made.scope === 'project' ? `for the project ${String(made.project).split('/').pop()}` : 'for everywhere'}). It waits under Skills for its exam.`;

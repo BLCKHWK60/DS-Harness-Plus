@@ -49,7 +49,7 @@ export function nameProblem(name, taken = new Set()) {
 const same = (one, other) => Boolean(one && other) && inFolder(one, other) && inFolder(other, one);
 /**
  * Whether a project is the default workspace or inside it, or is the project the default workspace belongs to
- * (a skill there would load in its conversations).
+ * (a skill there would load in its threads).
  * @param {string} top - a project.
  * @param {string|string[]} folders - the default workspace (one folder or several spellings of it).
  */
@@ -60,7 +60,7 @@ export function inDefault(top, folders) {
 /**
  * Where a new skill goes. The skills folder it ends up in is checked, not only the folder asked for: never
  * a Recon room, never the shared ~/.agents/skills, never the default workspace's project (a skill there
- * would load in its conversations), and "this project" never lands in the "everywhere" folder (a project
+ * would load in its threads), and "this project" never lands in the "everywhere" folder (a project
  * that is the home folder) (the review of step 6).
  * @param {{name: string, scope: string, project?: string, dshHome: string, defaultFolder?: string|string[], agentsHome?: string}} want - `defaultFolder`: the default workspace (one folder or several).
  * @returns {{folder?: string, file?: string, root?: string, git?: boolean, problem?: string}}

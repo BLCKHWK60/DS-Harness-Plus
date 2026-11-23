@@ -19,7 +19,7 @@ import { join } from 'node:path';
 export const KINDS = {
   code: { name: 'a code change', checker: 'commands', says: 'tests, the build and a run of the program: the item\'s command and the overall commands, run for real' },
   research: { name: 'a research question', checker: 'citations', says: 'every source the answer cites must be a page really opened in this run' },
-  writing: { name: 'a piece of writing', checker: 'judge', says: 'a separate reader checks it against the brief; in the Content tab, Content\'s own drift check against its ledger decides' },
+  writing: { name: 'a piece of writing', checker: 'judge', says: 'a separate reader checks it against the brief; in Content mode, Content\'s own drift check against its ledger decides' },
   data: { name: 'a data question', checker: 'commands', says: 'the numbers are run again in code, and totals that must agree are compared' },
   extraction: { name: 'an extraction', checker: 'shape', says: 'the answer must fit a fixed output shape' },
   answer: { name: 'a question with one right answer', checker: 'agreement', says: 'separate tries must agree' },
@@ -165,18 +165,32 @@ export function openRecipes(dir) {
   return { recipes, broken };
 }
 
+/** Words too common to pick a recipe by ("make a list of what to find"): they never count as a hit. */
+export const COMMON_WORDS = new Set(['list', 'when', 'how', 'what', 'make', 'find', 'who', 'why', 'where', 'which', 'get', 'do', 'use', 'new', 'all', 'more', 'some', 'one', 'form', 'post']);
+/** Tabs whose work is research: a tie between recipes goes to the research one there. */
+export const RESEARCH_TABS = ['research', 'scout'];
+/** Hits a recipe needs before it is picked (a recipe that names only one word needs that one). */
+export const RECIPE_HITS = 2;
+
 /**
- * The recipe closest to a goal: the most of its words in the goal. The lead (the planner) is given it;
- * with Ultra Code on it may adapt it to the goal.
- * @returns {object | undefined} the recipe, or undefined when none has a word in common with the goal.
+ * The recipe closest to a goal: the most of its words in the goal, leaving out very common words. A recipe
+ * needs at least two hits (one, if it names only one word). A tie goes to the research recipe in the
+ * Research and Scout tabs; otherwise to the first one.
+ * @param {string} goal - the goal.
+ * @param {object[]} recipes - the recipes.
+ * @param {string} [tab] - the conversation's tab (Modes' mode id).
+ * @returns {object | undefined} the recipe, or undefined when none has enough words in common with the goal.
  */
-export function pickRecipe(goal, recipes) {
+export function pickRecipe(goal, recipes, tab = '') {
   const text = ` ${String(goal ?? '').toLowerCase().replace(/[^a-z0-9äöüß ]+/g, ' ')} `;
+  const research = RESEARCH_TABS.includes(String(tab ?? ''));
   let best;
   let score = 0;
   for (const recipe of recipes ?? []) {
-    const hits = recipe.when.filter((word) => text.includes(` ${word} `) || text.includes(` ${word}s `)).length;
-    if (hits > score) {
+    const words = recipe.when.filter((word) => !COMMON_WORDS.has(word));
+    const hits = words.filter((word) => text.includes(` ${word} `) || text.includes(` ${word}s `)).length;
+    if (hits < Math.min(RECIPE_HITS, Math.max(1, words.length))) continue;
+    if (hits > score || (hits === score && research && recipe.kind === 'research' && best?.kind !== 'research')) {
       best = recipe;
       score = hits;
     }
@@ -211,11 +225,11 @@ export const DEPTH_LOOP = {
  * @param {{ultra?: boolean, tabOn?: boolean, depth?: string, long?: boolean, goal?: string, recipes?: object[]}} input - the conversation's switches and Depth, the goal, the recipes.
  * @returns {object | undefined} the loop.
  */
-export function loopFor({ ultra, tabOn, depth, long = false, goal = '', recipes = [] }) {
+export function loopFor({ ultra, tabOn, depth, long = false, goal = '', recipes = [], tab = '' }) {
   if (ultra !== true && tabOn !== true) return undefined;
   const at = long ? 'long' : DEPTH_LOOP[depth] ? depth : 'standard';
   const values = DEPTH_LOOP[at];
-  const recipe = pickRecipe(goal, recipes);
+  const recipe = pickRecipe(goal, recipes, tab);
   // No recipe fits: a run works in a folder and may run commands, so it is code work (commands check it,
   // one writer, no text-only steps). The open kind comes only from a recipe that names it.
   const kind = recipe?.kind ?? 'code';
@@ -529,7 +543,7 @@ export function loopReaderRefuses(name, writeTools, commandTools) {
 export function loopLine(run) {
   const loop = run?.loop;
   if (!loop) return '';
-  return `Work loop: on (${loop.ultra ? 'Ultra Code' : 'switched on for this tab'}, Depth ${loop.depth}${loop.recipe ? `, recipe "${loop.recipe.name}"` : ''}; ${loop.attempts} attempt${loop.attempts === 1 ? '' : 's'} per text step). Checks by the loop: ${loop.checks.passed} passed, ${loop.checks.failed} failed${loop.escalations > 0 ? `; ${loop.escalations} step${loop.escalations === 1 ? '' : 's'} went up to the strongest model` : ''}.`;
+  return `Work loop: on (${loop.ultra ? 'Ultra Code' : 'switched on for this mode'}, Depth ${loop.depth}${loop.recipe ? `, recipe "${loop.recipe.name}"` : ''}; ${loop.attempts} attempt${loop.attempts === 1 ? '' : 's'} per text step). Checks by the loop: ${loop.checks.passed} passed, ${loop.checks.failed} failed${loop.escalations > 0 ? `; ${loop.escalations} step${loop.escalations === 1 ? '' : 's'} went up to the strongest model` : ''}.`;
 }
 
 export { STARTER_IDS };

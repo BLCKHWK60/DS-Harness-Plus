@@ -11,9 +11,15 @@ window.__ModuleLoader__.load({
     const ReactDOM = require('react-dom');
     const h = React.createElement;
 
-    /** @returns {boolean} the Cowork sidebar shows another tab than this mode's (no sidebar: false, the server decides). */
-    const otherTab = (mode) => {
-      const tab = typeof document?.documentElement?.getAttribute === 'function' ? document.documentElement.getAttribute('data-cws-tab') : null;
+    /**
+     * @returns {boolean} the Cowork sidebar shows another tab than this mode's (no sidebar: false, the server decides).
+     * Item 4A, stage 6a: with spaces on, the window's space decides: the bar shows for any mode in the workshop space.
+     */
+    const otherTab = (mode, space = 'workshop') => {
+      const root = typeof document?.documentElement?.getAttribute === 'function' ? document.documentElement : null;
+      const inSpace = root ? root.getAttribute('data-cws-space') : null;
+      if (inSpace) return inSpace !== space;
+      const tab = root ? root.getAttribute('data-cws-tab') : null;
       return Boolean(tab) && tab !== mode;
     };
     const { useEffect, useLayoutEffect, useRef, useState } = React;
@@ -169,8 +175,11 @@ window.__ModuleLoader__.load({
     // routes on its own timer, even in a hidden window. This gives all of them ONE shared Settings copy (read once, renewed when
     // Settings changes or after 30 seconds at the most) and one kind of polling loop that stops while the window is hidden.
     // The first copy of this block to run puts the shared state on `window.__dshPoll`; later copies reuse it, so 30 add-ons share one.
+    // A newer copy (higher API) replaces an older shared object instead of reusing it, so an older page file that runs first (an
+    // add-on edited in creator mode, a partly updated install) cannot keep the whole page on an older helper. Raise API with every
+    // change to how the shared state behaves.
     const dshPoll = (() => {
-      const API = 1;
+      const API = 2;
       const root = typeof window !== 'undefined' ? window : globalThis;
       if (root.__dshPoll && root.__dshPoll.api >= API) return root.__dshPoll;
 
@@ -179,7 +188,7 @@ window.__ModuleLoader__.load({
       /** Without the change event (an older app) the copy is only trusted for a moment. */
       const SETTINGS_TTL_NO_EVENTS = 2000;
       const WRITES = ['mutate', 'update', 'replace'];
-      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0 };
+      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0, changes: 0, repeats: 0, watchers: 0 };
       const cache = { value: undefined, at: 0, inflight: null, gen: 0, events: false };
       const changeListeners = new Set();
       const watched = new WeakSet();
@@ -199,38 +208,72 @@ window.__ModuleLoader__.load({
         cache.gen += 1;
       }
 
-      /** Listen once per page connection for "Settings changed" (the app sends it after every write, from any window). */
+      /** Changes already handled, `ns + revision` -> when: the same change reaches the page once per add-on that listens. */
+      const heard = new Map();
+      /** How long a change counts as "the same one" when it arrives again through another add-on's connection. */
+      const HEARD_MS = 2000;
+      /** The app's own marker for a wrapped service: `ctx.remote` hands out a NEW wrapper object at every read. */
+      const ORIGINAL = typeof Symbol === 'function' ? Symbol.for('cordis.original') : '__original';
+      /** Marks our own write wrapper, so it is never wrapped a second time. */
+      const OURS = '__dshPollWrite';
+
+      /**
+       * One "Settings changed" event from the app. Every add-on that listens hears the same event; it is acted on once.
+       * Bug of 21 November 2026 (a new chat made the page read Settings 12-17 times a second, the app ran at 100% and the
+       * tab crashed): `ctx.remote` is a new object at every read, so the old `watched.has(remote)` never matched and every
+       * read added one more listener; one change then woke every listener and each one started its own read.
+       */
+      function changed(ns, revision) {
+        if (typeof revision === 'number' || typeof revision === 'string') {
+          const now = Date.now();
+          for (const [key, at] of heard) if (now - at > HEARD_MS) heard.delete(key);
+          const key = `${String(ns)}\u0000${String(revision)}`;
+          if (heard.has(key)) { stats.repeats += 1; return; }
+          heard.set(key, now);
+        }
+        stats.changes += 1;
+        invalidate();
+        for (const listener of [...changeListeners]) {
+          try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
+        }
+      }
+
+      /** Listen once per add-on for "Settings changed" (the app sends it after every write, from any window). */
       function watch(ctx) {
         const remote = ctx && ctx.remote;
-        if (!remote || watched.has(remote)) return;
-        watched.add(remote);
+        if (!remote) return;
+        // Keyed on the add-on's own context, which stays the same object (its `remote` does not).
+        const key = ctx !== null && (typeof ctx === 'object' || typeof ctx === 'function') ? ctx : (remote[ORIGINAL] || remote);
+        if (watched.has(key)) return;
+        watched.add(key);
         try {
           if (typeof remote.$on === 'function') {
-            remote.$on('settings/document-updated', (ns) => {
-              invalidate();
-              for (const listener of [...changeListeners]) {
-                try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
-              }
-            });
+            remote.$on('settings/document-updated', changed);
+            stats.watchers += 1;
             cache.events = true;
           }
         } catch { /* no change event here: the short copy time covers it */ }
         try {
-          if (typeof ctx.on === 'function') ctx.on('connection/reset', invalidate);
+          if (typeof ctx.on === 'function') ctx.on('connection/reset', () => { heard.clear(); invalidate(); });
         } catch { /* optional */ }
         // This page's own writes drop the copy before their answer comes back, so a read that follows a write is never behind it.
         const settings = remote.settings;
-        if (settings && !wrapped.has(settings)) {
-          wrapped.add(settings);
+        const target = settings && (settings[ORIGINAL] || settings);
+        if (settings && !wrapped.has(target)) {
+          wrapped.add(target);
           for (const name of WRITES) {
             const original = settings[name];
-            if (typeof original !== 'function') continue;
+            // Already ours (put there through another add-on's wrapper object): wrapping it again would stack wrappers.
+            // An older copy's wrapper (marked `true`) is wrapped once more: it drops only the older copy's own cache.
+            if (typeof original !== 'function' || original[OURS] === API) continue;
             try {
-              settings[name] = function (...args) {
+              const write = function (...args) {
                 invalidate();
                 const done = original.apply(this, args);
                 return done && typeof done.then === 'function' ? done.then((out) => { invalidate(); return out; }, (error) => { invalidate(); throw error; }) : done;
               };
+              write[OURS] = API;
+              settings[name] = write;
             } catch { /* a frozen object keeps the plain call */ }
           }
         }
@@ -383,8 +426,10 @@ window.__ModuleLoader__.load({
     const PlainNote = dshKit.makeNote(React);
 
     const NS = 'creator-plus';
-    const DICT = { en: { 'section.title': 'Creator Plus' }, zh: { 'section.title': '创作者增强' } };
-    const when = (at) => (at ? new Date(at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+    const DICT = {
+      en: { 'section.title': 'Creator Plus', 'offer.group': 'The mode', 'offer.title': 'Offer the Creator Plus mode', 'offer.desc': 'On adds the mode, the Workshop space and its tools. Off takes them away; its folder (backups, cards, what it learned) stays. New threads in the Workshop space start on the app\'s Creator preset, the only one with its two inspection tools; it does not work in PTC. To change the preset: Settings → Spaces → Workshop → Preset in this space.', 'offer.on': 'Switched on: the mode and the Workshop space appear in a few seconds.', 'offer.off': 'Switched off: the mode, the Workshop space (unless Tuner Plus keeps it), its tools and its saved runs are off (scheduled saved runs are paused; switch them on again on the Automations page). Switch it on to see the results, what it learned, the settings and the backups.' },
+    };
+    const when = (at) => (at ? new Date(at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 
     const CSS = `
 .dsh-cp-page { display: flex; flex-direction: column; color: var(--dsw-alias-label-primary); }
@@ -447,7 +492,7 @@ window.__ModuleLoader__.load({
       const run = runs.find((entry) => entry.id === state.run) ?? runs[0];
       if (!run) return '';
       const short = (name) => name.replace(/^@local\/dsh-/, '');
-      const which = state.all ? 'every plugin' : state.selection.length === 0 ? 'a new plugin' : `${state.selection.slice(0, 4).map(short).join(', ')}${state.selection.length > 4 ? ` and ${state.selection.length - 4} more` : ''}`;
+      const which = state.all ? 'every add-on' : state.selection.length === 0 ? 'a new add-on' : `${state.selection.slice(0, 4).map(short).join(', ')}${state.selection.length > 4 ? ` and ${state.selection.length - 4} more` : ''}`;
       const logs = run.logs ? ` from the logs of ${{ last: 'since the last run', 7: 'the last 7 days', 30: 'the last 30 days', all: 'everything' }[state.logsFrom] ?? 'the last 30 days'}` : '';
       const how = state.lookOnly ? ', looking only (nothing is prepared, not even in the trial copy)' : run.changes ? ', with changes prepared in the trial copy and nothing changed in your setup without your yes' : ', reporting only';
       return `${run.label}: ${which}${logs}${how}.`;
@@ -482,7 +527,8 @@ window.__ModuleLoader__.load({
           // A conversation of another tab asks seldom: it only has to notice when it becomes a Creator Plus one.
           // The Creator Plus tab is open but the answer says otherwise: a new conversation whose mode the server has not
           // caught up with yet (a second or two). Ask again soon, so the options under the box come at once, not in 20 s.
-          const catchingUp = !mine && document.documentElement?.getAttribute?.('data-cws-tab') === 'creator-plus';
+          // Item 4A, stage 6a: the Workshop space counts too (any mode there gets the bar's answer).
+          const catchingUp = !mine && (document.documentElement?.getAttribute?.('data-cws-tab') === 'creator-plus' || document.documentElement?.getAttribute?.('data-cws-space') === 'workshop');
           return mine ? 8000 : catchingUp ? 1500 : 20000;
         };
         // One look at a time; none while the window is hidden (it looks at once when shown again).
@@ -529,7 +575,7 @@ window.__ModuleLoader__.load({
           const data = await call({ action: 'start', sessionId, state }, sessionId);
           await call({ action: 'bar', sessionId, state }, sessionId);
           const remote = appCtx.get('remote.session');
-          if (!remote?.prompt) throw new Error('This version of the app cannot send the run from here: copy the sentence into the chat.');
+          if (!remote?.prompt) throw new Error('This version of the app cannot send the run from here: copy the sentence into the chat box and send it.');
           const sent = await remote.prompt({ requestId: globalThis.crypto?.randomUUID?.() ?? `creator-${Date.now()}`, sessionId, mode: 'queue', content: [{ type: 'text', text: `Run: ${data.note}` }], clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
           if (sent && sent.ok === false) throw new Error(sent.error?.message ?? 'not sent');
           setOpen(false);
@@ -545,13 +591,13 @@ window.__ModuleLoader__.load({
             h('div', { className: 'title' }, 'What to do'),
             h('select', { className: 'dsh-cp-select', value: state.run, 'aria-label': 'Kind of run', onChange: (event) => void save({ ...state, run: event.target.value }) }, runs.map((entry) => h('option', { key: entry.id, value: entry.id }, entry.label))),
             h('div', { className: 'dsh-cp-desc' }, run?.does ?? ''),
-            h('div', { className: 'title', style: { marginTop: 10 } }, 'Which plugins'),
+            h('div', { className: 'title', style: { marginTop: 10 } }, 'Which add-ons'),
             h('label', { style: { display: 'flex', gap: 6, alignItems: 'center', marginTop: 4 } },
               h('input', { type: 'checkbox', checked: state.all === true, onChange: (event) => void save({ ...state, all: event.target.checked, selection: event.target.checked ? plugins.map((plugin) => plugin.name) : [] }) }), 'All (on purpose)'),
             h('div', { className: 'dsh-cp-plugins' }, plugins.map((plugin) => h('label', { key: plugin.name, title: plugin.locked ? 'Locked: read, explained and checked, never edited' : '' },
               h('input', { type: 'checkbox', checked: state.selection.includes(plugin.name), onChange: () => void toggle(plugin.name) }),
               h('span', null, `${plugin.locked ? '🔒 ' : ''}${plugin.name.replace(/^@local\//, '').replace(/^@deepseek-ai\//, '')}${plugin.enabled ? '' : ' (off)'}`)))),
-            reconPicked ? h('div', { className: 'dsh-cp-desc' }, 'Recon: Creator Plus reads only which step failed and why, without the conversation text. Reading the text needs your yes first, names the model that would read it, and is done by a reader with no tools.') : null,
+            reconPicked ? h('div', { className: 'dsh-cp-desc' }, 'Recon: Creator Plus reads only which step failed and why, without the thread\'s text. Reading the text needs your yes first, names the model that would read it, and is done by a reader with no tools.') : null,
             h('label', { style: { display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 } },
               h('button', { type: 'button', role: 'switch', className: 'dsh-cp-switch', 'aria-checked': state.lookOnly === true, 'aria-label': 'Look only', onClick: () => void save({ ...state, lookOnly: !state.lookOnly }) }), 'Look only: read and report; prepare no change, not even in the trial copy'),
             run?.logs ? h('label', { style: { display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 } }, 'Logs from',
@@ -573,15 +619,15 @@ window.__ModuleLoader__.load({
         if (!Area) return null;
         const short = (name) => name.replace(/^@local\//, '').replace(/^@deepseek-ai\//, '');
         const others = plugins.filter((plugin) => !state.selection.includes(plugin.name));
-        return h(Area, { mode: 'creator-plus', place: strip === 'start' ? 'start' : 'chat', label: 'What Creator Plus does in this conversation' },
+        return h(Area, { mode: 'creator-plus', place: strip === 'start' ? 'start' : 'chat', label: 'What Creator Plus does in this thread' },
           h('style', null, CSS),
           h('select', { className: 'dsh-opt-pick', value: state.run, 'aria-label': 'What to do', title: run?.does ?? 'What to do', onChange: (event) => void save({ ...state, run: event.target.value }) }, runs.map((entry) => h('option', { key: entry.id, value: entry.id }, entry.label))),
           state.all === true
-            ? h('span', { className: 'dsh-opt-chip' }, 'All plugins', h('button', { type: 'button', 'aria-label': 'Remove all plugins', title: 'Remove all plugins', onClick: () => void save({ ...state, all: false, selection: [] }) }, '×'))
+            ? h('span', { className: 'dsh-opt-chip' }, 'All add-ons', h('button', { type: 'button', 'aria-label': 'Remove all add-ons', title: 'Remove all add-ons', onClick: () => void save({ ...state, all: false, selection: [] }) }, '×'))
             : state.selection.map((name) => h('span', { key: name, className: 'dsh-opt-chip' }, short(name), h('button', { type: 'button', 'aria-label': `Remove ${short(name)}`, title: `Remove ${short(name)}`, onClick: () => void toggle(name) }, '×'))),
-          state.all === true ? null : h('select', { className: 'dsh-opt-pick', 'aria-label': 'Add a plugin', value: '', onChange: (event) => { const picked = event.target.value; if (picked === '*all') void save({ ...state, all: true, selection: plugins.map((plugin) => plugin.name) }); else if (picked) void toggle(picked); } },
-            h('option', { value: '' }, '+ Plugin'),
-            h('option', { value: '*all' }, 'All plugins (on purpose)'),
+          state.all === true ? null : h('select', { className: 'dsh-opt-pick', 'aria-label': 'Add an add-on', value: '', onChange: (event) => { const picked = event.target.value; if (picked === '*all') void save({ ...state, all: true, selection: plugins.map((plugin) => plugin.name) }); else if (picked) void toggle(picked); } },
+            h('option', { value: '' }, '+ Add-on'),
+            h('option', { value: '*all' }, 'All add-ons (on purpose)'),
             others.map((plugin) => h('option', { key: plugin.name, value: plugin.name }, `${plugin.locked ? '🔒 ' : ''}${short(plugin.name)}${plugin.enabled ? '' : ' (off)'}`))),
           h('button', { type: 'button', className: 'dsh-opt-pick', 'aria-pressed': state.lookOnly === true, title: 'Look only: read and report; prepare no change, not even in the trial copy', onClick: () => void save({ ...state, lookOnly: !state.lookOnly }) }, 'Look only'),
           run?.logs ? h('select', { className: 'dsh-opt-pick', 'aria-label': 'Logs from', title: 'Logs from', value: state.logsFrom, onChange: (event) => void save({ ...state, logsFrom: event.target.value }) },
@@ -646,6 +692,7 @@ window.__ModuleLoader__.load({
     }
 
     function CreatorPage({ appCtx }) {
+      const tw = appCtx.locale.bind(NS);
       const [data, setData] = useState(null);
       const [busy, setBusy] = useState(false);
       const [note, setNote] = useState({ text: '', error: false });
@@ -687,17 +734,17 @@ window.__ModuleLoader__.load({
       const top = [
         h('style', null, CSS),
         h('h2', { className: 'dsh-cp-title' }, 'Creator Plus'),
-        h('p', { className: 'dsh-cp-desc' }, 'A tab that builds and improves plugins so they fit everything you have, tries every change in a trial copy first, and keeps your plugins working after updates. It never changes your real setup by itself: the buttons on this page do, and only you press them.'),
+        h('p', { className: 'dsh-cp-desc' }, 'A mode, run in the Workshop space, that builds and improves add-ons so they fit everything you have, tries every change in a trial copy first, and keeps your add-ons working after updates. It never changes your real setup by itself: the buttons on this page do, and only you press them.'),
         note.text ? h(PlainNote, { text: note.text, details: note.details, kind: note.error ? 'error' : 'info' }) : null,
         data.problem ? h('p', { className: 'dsh-cp-desc', 'data-error': 'true' }, data.problem) : null,
 
-        h('div', { className: 'dsh-cp-group' }, 'The tab'),
+        h('div', { className: 'dsh-cp-group' }, 'The mode'),
         h('div', { className: 'dsh-cp-row' },
-          h('div', { className: 'dsh-cp-rowtext' }, h('div', { className: 'dsh-cp-rowtitle' }, 'Show the Creator Plus tab'), h('div', { className: 'dsh-cp-rowdesc' }, 'On adds the tab and its tools. Off takes them away; its folder (backups, cards, what it learned) stays.')),
-          h('button', { type: 'button', role: 'switch', className: 'dsh-cp-switch', 'aria-checked': data.enabled === true, 'aria-label': 'Show the Creator Plus tab', disabled: busy, onClick: () => void run(() => setEnabled(appCtx, data.enabled !== true), data.enabled ? 'Switched off.' : 'Switched on: the tab appears in a few seconds.') })),
+          h('div', { className: 'dsh-cp-rowtext' }, h('div', { className: 'dsh-cp-rowtitle' }, tw('offer.title')), h('div', { className: 'dsh-cp-rowdesc' }, tw('offer.desc'))),
+          h('button', { type: 'button', role: 'switch', className: 'dsh-cp-switch', 'aria-checked': data.enabled === true, 'aria-label': tw('offer.title'), disabled: busy, onClick: () => void run(() => setEnabled(appCtx, data.enabled !== true), data.enabled ? 'Switched off.' : tw('offer.on')) })),
       ];
       // Switched off, the page shows the switch alone (the server gives nothing else).
-      if (data.enabled !== true) return h('div', { className: 'dsh-cp-page' }, ...top, h('p', { className: 'dsh-cp-desc' }, 'Switched off: the tab, its tools and its saved runs are off (scheduled saved runs are paused; switch them on again on the Automations page). Switch it on to see the results, what it learned, the settings and the backups.'));
+      if (data.enabled !== true) return h('div', { className: 'dsh-cp-page' }, ...top, h('p', { className: 'dsh-cp-desc' }, tw('offer.off')));
       return h('div', { className: 'dsh-cp-page' },
         ...top,
 
@@ -705,7 +752,7 @@ window.__ModuleLoader__.load({
         h('ul', { className: 'dsh-cp-list' }, (data.rules ?? []).map((rule) => h('li', { key: rule.id }, h('b', null, rule.text), ` ${rule.enforced}`))),
 
         h('div', { className: 'dsh-cp-group' }, `Results (${openCards.length})`),
-        openCards.length === 0 ? h('p', { className: 'dsh-cp-desc' }, 'Nothing yet. Findings, prepared changes, questions and ready plugins from Creator Plus conversations appear here.') : null,
+        openCards.length === 0 ? h('p', { className: 'dsh-cp-desc' }, 'Nothing yet. Findings, prepared changes, questions and ready add-ons from Creator Plus threads appear here.') : null,
         openCards.slice(0, 60).map((card) => h(Card, { key: card.id, card, busy, act })),
 
         h('div', { className: 'dsh-cp-group' }, 'What Creator Plus learned'),
@@ -713,7 +760,7 @@ window.__ModuleLoader__.load({
         (data.learning ?? []).filter((item) => item.status !== 'undone').slice(0, 40).map((item) => h('div', { key: item.id, className: 'dsh-cp-row' },
           h('div', { className: 'dsh-cp-rowtext' },
             h('div', { className: 'dsh-cp-rowtitle' }, h('span', { className: 'dsh-cp-tag' }, `${item.kind} · ${item.status}`), item.text),
-            h('div', { className: 'dsh-cp-rowdesc' }, `Why: ${item.reason} · ${when(item.at)}${item.thirdParty ? ' · from a third-party plugin' : ''}`),
+            h('div', { className: 'dsh-cp-rowdesc' }, `Why: ${item.reason} · ${when(item.at)}${item.thirdParty ? ' · from a third-party add-on' : ''}`),
             h('div', { className: 'dsh-cp-btns' },
               item.thirdParty && !item.read ? h('button', { type: 'button', className: 'dsh-cp-btn', disabled: busy, onClick: () => void run(() => call({ action: 'learn', id: item.id, act: 'read' })) }, 'I read it') : null,
               item.status === 'proposed' ? h('button', { type: 'button', className: 'dsh-cp-btn', disabled: busy, onClick: () => void run(() => call({ action: 'learn', id: item.id, act: 'keep' }), 'Kept.') }, 'Keep') : null,
@@ -722,8 +769,8 @@ window.__ModuleLoader__.load({
         h('div', { className: 'dsh-cp-group' }, 'Settings'),
         h('div', { className: 'dsh-cp-row' },
           h('div', { className: 'dsh-cp-rowtext' },
-            h('div', { className: 'dsh-cp-rowtitle' }, 'Who may read your conversation logs'),
-            h('div', { className: 'dsh-cp-rowdesc' }, 'To improve your plugins, Creator Plus reads what went wrong in past conversations (masked; Recon only as which step failed). Choose which models may read them.')),
+            h('div', { className: 'dsh-cp-rowtitle' }, 'Who may read your thread logs'),
+            h('div', { className: 'dsh-cp-rowdesc' }, 'To improve your add-ons, Creator Plus reads what went wrong in past threads (masked; Recon only as which step failed). Choose which models may read them.')),
           h('select', { className: 'dsh-cp-select', value: data.logReaders, disabled: busy, onChange: (event) => void run(() => call({ action: 'settings', logReaders: event.target.value }), 'Saved.') }, (data.logReaderChoices ?? []).map((choice) => h('option', { key: choice.id, value: choice.id }, choice.label)))),
         h('div', { className: 'dsh-cp-row' },
           h('div', { className: 'dsh-cp-rowtext' },
@@ -734,19 +781,19 @@ window.__ModuleLoader__.load({
         h('div', { className: 'dsh-cp-row' },
           h('div', { className: 'dsh-cp-rowtext' },
             h('div', { className: 'dsh-cp-rowtitle' }, 'Plus folder with its tests'),
-            h('div', { className: 'dsh-cp-rowdesc' }, 'An installed copy carries no tests. Give the full path of a Plus folder (the download or a copy of the project) and Creator Plus runs each plugin\'s tests after an update and with a change. Empty: tests are not run.'),
+            h('div', { className: 'dsh-cp-rowdesc' }, 'An installed copy carries no tests. Give the full path of a Plus folder (the download or a copy of the project) and Creator Plus runs each add-on\'s tests after an update and with a change. Empty: tests are not run.'),
             h('input', { className: 'dsh-cp-input', value: draft?.plusFolder ?? '', placeholder: '/Users/you/…/deepseek-harness-plus', onChange: (event) => setDraft({ ...draft, plusFolder: event.target.value }) })),
           h('button', { type: 'button', className: 'dsh-cp-btn', disabled: busy || draft?.plusFolder === data.plusFolder, onClick: () => void run(() => call({ action: 'settings', plusFolder: draft.plusFolder }), 'Saved.') }, 'Save')),
 
         h('div', { className: 'dsh-cp-group' }, 'Saved runs'),
-        (data.savedRuns ?? []).length === 0 ? h('p', { className: 'dsh-cp-desc' }, 'None yet. Save a run from the bar in a Creator Plus conversation; saved runs are also offered on the Automations page, to run on a schedule (a scheduled run changes nothing without your yes).') : null,
+        (data.savedRuns ?? []).length === 0 ? h('p', { className: 'dsh-cp-desc' }, 'None yet. Save a run from the bar in a Creator Plus thread; saved runs are also offered on the Automations page, to run on a schedule (a scheduled run changes nothing without your yes).') : null,
         (data.savedRuns ?? []).map((saved) => h('div', { key: saved.name, className: 'dsh-cp-row' },
           h('div', { className: 'dsh-cp-rowtext' }, h('div', { className: 'dsh-cp-rowtitle' }, saved.name), h('div', { className: 'dsh-cp-rowdesc' }, saved.sentence)),
           h('button', { type: 'button', className: 'dsh-cp-btn', disabled: busy, onClick: () => void run(() => call({ action: 'deleteRun', name: saved.name }), 'Deleted.') }, 'Delete'))),
 
         h('div', { className: 'dsh-cp-group' }, 'Self-test'),
         h('div', { className: 'dsh-cp-row' },
-          h('div', { className: 'dsh-cp-rowtext' }, h('div', { className: 'dsh-cp-rowtitle' }, 'The eight tests'), h('div', { className: 'dsh-cp-rowdesc' }, 'Runs the parts code can check by itself in a throwaway folder: Collision, Change, Update, Long run, Scope and part of Improve. Rebuild, Look and the rest of Improve need a model: in a Creator Plus conversation, ask it to run its self-test (creator_selftest) on the model you want scored.')),
+          h('div', { className: 'dsh-cp-rowtext' }, h('div', { className: 'dsh-cp-rowtitle' }, 'The eight tests'), h('div', { className: 'dsh-cp-rowdesc' }, 'Runs the parts code can check by itself in a throwaway folder: Collision, Change, Update, Mission, Scope and part of Improve. Rebuild, Look and the rest of Improve need a model: in a Creator Plus thread, ask it to run its self-test (creator_selftest) on the model you want scored.')),
           h('button', { type: 'button', className: 'dsh-cp-btn', disabled: busy, onClick: () => void run(() => call({ action: 'selftest' })) }, 'Run')),
 
         h('div', { className: 'dsh-cp-group' }, `Backups (${(data.backups ?? []).length})`),

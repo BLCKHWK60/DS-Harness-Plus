@@ -64,7 +64,7 @@ export function packetOf(input = {}) {
 
 /** The packet's files as text. */
 export function packetFiles(packet, { question = '', at = new Date(), reportSha256 = '' } = {}) {
-  const head = (title) => `# ${title}\n\nFrom the Research report "${cell(question, 200)}", ${at.toISOString().slice(0, 16).replace('T', ' ')} UTC. Made by the Research tab from the run's own findings; sources are untrusted pages.\n\n`;
+  const head = (title) => `# ${title}\n\nFrom the Research report "${cell(question, 200)}", ${at.toISOString().slice(0, 16).replace('T', ' ')} UTC. Made by Research mode from the run's own findings; sources are untrusted pages.\n\n`;
   const claims = packet.claims.length === 0 ? 'No claims were kept.\n' : ['| # | Claim | Who says it | Passage | Source | Grade | Date | Read |', '| --- | --- | --- | --- | --- | --- | --- | --- |', ...packet.claims.map((claim) => `| ${claim.id} | ${claim.claim} | ${claim.who} | ${claim.passage} | [${claim.source}] | ${claim.grade} | ${claim.date} | ${claim.read} |`)].join('\n');
   const contradictions = packet.contradictions.length === 0 ? 'The review found no contradiction.\n' : packet.contradictions.map((item, index) => `${index + 1}. ${item}`).join('\n');
   const timeline = packet.timeline.length === 0 ? 'No finding carried a date.\n' : ['| When | Claim | Source |', '| --- | --- | --- |', ...packet.timeline.map((row) => `| ${row.when} | ${row.claim}: ${cell(row.text, 200)} | [${row.source}] |`)].join('\n');

@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 export const PART = 12_000;
 
 /** How a source reached Recon, for its citation. */
-const ROUTE = { Tor: 'through Tor', Usenet: 'through Usenet', direct: 'directly from the Internet Archive, not through Tor', wireguard: 'through WireGuard', 'web-direct': 'directly, not through Tor or WireGuard (the user allowed it for the conversation)' };
+const ROUTE = { Tor: 'through Tor', Usenet: 'through Usenet', direct: 'directly from the Internet Archive, not through Tor', wireguard: 'through WireGuard', 'web-direct': 'directly, not through Tor or WireGuard (the user allowed it for the thread)' };
 
 /** @returns {object} the record of all Recon conversations. */
 export function openSources() {
@@ -102,13 +102,13 @@ export function openSources() {
         source.date ? `Date as shown: ${source.date}` : '',
         `Retrieved: ${source.retrieved} (UTC), ${route}`,
         `${print}${source.cut ? ' (the page was longer; only its first part was read)' : ''}`,
-        source.restored ? `Rebuilt from the saved conversation after the app restarted${source.partial ? '; not all of its text was in the conversation' : ''}.` : '',
+        source.restored ? `Rebuilt from the saved thread after the app restarted${source.partial ? '; not all of its text was in the thread' : ''}.` : '',
       ].filter(Boolean).join('\n');
     },
     /** @returns {string} the research log: every search and every source, in order. */
     log(id) {
       const entry = of(id);
-      if (entry.log.length === 0) return 'Nothing was searched or read in this conversation yet.';
+      if (entry.log.length === 0) return 'Nothing was searched or read in this thread yet.';
       return [...entry.log.map((line) => `${stamp(line.at)}  ${line.kind}: ${line.detail}`), entry.dropped > 0 ? `Left out by the filters: ${entry.dropped} (not kept, not opened).` : ''].filter(Boolean).join('\n');
     },
     /** Keep something the assistant wrote in this conversation, for the export. */

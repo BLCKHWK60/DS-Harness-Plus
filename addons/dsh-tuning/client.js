@@ -1,5 +1,5 @@
 /**
- * Tuning Plus, browser half: Settings > Tuning Plus, with its bar (Model, Goal, Data sets, Method, Budget,
+ * Tuner Plus, browser half: Settings > Tuner Plus, with its bar (Model, Goal, Data sets, Method, Budget,
  * Look only, the run in one sentence), the result cards, the data sets, the exam, the shelf, the night shift,
  * and the switches. The work is in the server half; every change here is the owner's own action.
  */
@@ -157,8 +157,8 @@ window.__ModuleLoader__.load({
     const PlainNote = dshKit.makeNote(React);
 
     const NS = 'tuning';
-    const DICT = { en: { 'section.title': 'Tuner Plus' }, zh: { 'section.title': '模型调优' } };
-    const when = (at) => (at ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+    const DICT = { en: { 'section.title': 'Tuner Plus' } };
+    const when = (at) => (at ? new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
     const pct = (rate) => `${Math.round((Number(rate) || 0) * 100)}%`;
 
     const CSS = `
@@ -245,8 +245,8 @@ window.__ModuleLoader__.load({
         ? h('div', null,
           h('div', { className: 'dsh-tp-actions' },
             h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: openForm }, 'New skill…'),
-            h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, title: 'From what was gathered: jobs done several times with a checked result, points you corrected more than once, jobs a stronger run finished, tools that failed first, plugins with lessons and no skill. Each comes as a card.', onClick: () => void act({ action: 'skillIdeas' }) }, 'Look for skill ideas')),
-          ladder.length > 0 ? h('p', { className: 'dsh-tp-desc' }, `Where a skill sits among Tuner Plus's homes: ${ladder.map((step) => (typeof step.n === 'number' ? `${step.n} ${step.name}` : step.name)).join(' · ')}. A rule that always applies belongs in instructions; know-how for one kind of job, needed only sometimes, in a skill. You can also ask for a skill in a conversation.`) : null)
+            h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, title: 'From what was gathered: jobs done several times with a checked result, points you corrected more than once, jobs a stronger run finished, tools that failed first, add-ons with lessons and no skill. Each comes as a card.', onClick: () => void act({ action: 'skillIdeas' }) }, 'Look for skill ideas')),
+          ladder.length > 0 ? h('p', { className: 'dsh-tp-desc' }, `Where a skill sits among Tuner Plus's homes: ${ladder.map((step) => (typeof step.n === 'number' ? `${step.n} ${step.name}` : step.name)).join(' · ')}. A rule that always applies belongs in instructions; know-how for one kind of job, needed only sometimes, in a skill. You can also ask for a skill in a thread.`) : null)
         : h('div', { className: 'dsh-tp-card' },
           h('b', null, 'New skill'),
           h('p', { className: 'dsh-tp-desc' }, 'It is kept as a draft in Tuner Plus\'s folder, where the app does not load it, until it goes live. It is marked Mine: you wrote it.'),
@@ -259,7 +259,7 @@ window.__ModuleLoader__.load({
                 projects.map((one) => h('option', { key: one.path, value: one.path }, `This project: ${one.name}`)),
                 h('option', { value: '' }, 'Everywhere (your ~/.dsh/skills)')))),
           chosen?.git ? h('p', { className: 'dsh-tp-desc' }, `${chosen.name} is a git repository: once live, the skill file shows among its changes and could be committed with it.`) : null,
-          form.scope === 'everywhere' ? h('p', { className: 'dsh-tp-desc' }, 'Everywhere: it shows in every conversation of every tab that uses skills, and adds a line to each request there.') : null,
+          form.scope === 'everywhere' ? h('p', { className: 'dsh-tp-desc' }, 'Everywhere: it shows in every thread of every mode that uses skills, and adds a line to each request there.') : null,
           h('div', { className: 'dsh-tp-actions' },
             h('button', { type: 'button', className: 'dsh-tp-btn', 'data-main': 'true', disabled: busy || !form.name || !form.description || !form.text, onClick: saveDraft }, 'Save as a draft'),
             h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => setForm(null) }, 'Cancel')));
@@ -288,17 +288,17 @@ window.__ModuleLoader__.load({
       const examLine = (one) => (one.exam ? (one.exam.passed ? 'It passed its exam.' : `It did not pass its exam. ${one.exam.why ?? ''}`) : 'Not examined yet.');
       const originLine = (one) => [
         one.origin?.kind === 'idea' ? `From a skill idea${one.origin.night ? ', drafted by the night shift' : ''}: ${String(one.origin.title ?? '').replace(/^Skill idea: /, '')}.` : '',
-        one.origin?.kind === 'chat' ? 'Asked for in a conversation.' : '',
+        one.origin?.kind === 'chat' ? 'Asked for in a thread.' : '',
         one.origin?.kind === 'bar' ? `Asked for on the bar: "${one.origin.title ?? ''}".` : '',
         ['improve', 'merge', 'split'].includes(one.origin?.kind) ? `From the bar: ${one.origin.title ?? ''}.` : '',
         one.outside ? `Built from outside material: ${one.outside}. Read it in full before it is used.` : '',
       ].filter(Boolean).join(' ');
       const retired = Array.isArray(skills?.retired) ? skills.retired : [];
-      const day = (at) => (at ? new Date(at).toLocaleDateString() : '');
+      const day = (at) => (at ? new Date(at).toLocaleDateString('en-GB') : '');
       const healthText = (row) => {
         const h1 = row.health;
-        const used = h1.loads > 0 ? `Loaded ${h1.loads} time${h1.loads === 1 ? '' : 's'} (${h1.well} ended well${h1.owner > 0 ? `, ${h1.owner} by your /${row.name}` : ''}), last ${day(h1.last)}.` : 'Not loaded in the conversations counted.';
-        const room = `Takes about ${h1.room.tokens} tokens in every request of every tab that uses skills.`;
+        const used = h1.loads > 0 ? `Loaded ${h1.loads} time${h1.loads === 1 ? '' : 's'} (${h1.well} ended well${h1.owner > 0 ? `, ${h1.owner} by your /${row.name}` : ''}), last ${day(h1.last)}.` : 'Not loaded in the threads counted.';
+        const room = `Takes about ${h1.room.tokens} tokens in every request of every mode that uses skills.`;
         const check = h1.check ? ` Last check ${day(h1.check.at)}: ${String(h1.check.line).replace(/^[^:]*: /, '')}` : '';
         const change = row.change?.how === 'in-place' ? ' Improve changes it where it is (with your yes).' : row.change?.how === 'copy' ? ' Improve makes a copy under the same name (the original is not touched).' : row.change ? ` It cannot be changed here: ${row.change.why}.` : '';
         return `${used} ${room}${check}${change}`;
@@ -306,7 +306,7 @@ window.__ModuleLoader__.load({
       const cost = skills?.cost ?? null;
       const costBlock = !on || !cost ? null : h('div', { className: 'dsh-tp-card' },
         h('b', null, 'What the list costs'),
-        h('p', { className: 'dsh-tp-desc' }, `${cost.skills} skills: about ${cost.tokens} tokens with every request, in every tab that uses skills.${skills.tabs ? ' In a tab you can switch off the skills it never uses: the model there no longer sees them (your /name still works).' : ''} ${skills.healthAt ? `Uses counted ${day(skills.healthAt)} in ${skills.healthCounted} conversations Tuner Plus may read (never Recon).` : 'Uses not counted yet.'}`),
+        h('p', { className: 'dsh-tp-desc' }, `${cost.skills} skills: about ${cost.tokens} tokens with every request, in every mode that uses skills.${skills.tabs ? ' In a mode you can switch off the skills it never uses: the model there no longer sees them (your /name still works).' : ''} ${skills.healthAt ? `Uses counted ${day(skills.healthAt)} in ${skills.healthCounted} threads Tuner Plus may read (never Recon).` : 'Uses not counted yet.'}`),
         ...(cost.perTab ?? []).slice(0, 8).map((one) => {
           const label = skills.tabs?.labels?.[one.tab] ?? one.tab;
           const off = skills.tabs?.off?.[one.tab] ?? [];
@@ -315,7 +315,7 @@ window.__ModuleLoader__.load({
           const may = Boolean(skills.tabs?.labels?.[one.tab]) && never.length > 0;
           if (never.length === 0 && off.length === 0) return null;
           return h('div', { key: one.tab },
-            never.length > 0 ? h('p', { className: 'dsh-tp-desc' }, `Never loaded in ${label} (${counted} conversation${counted === 1 ? '' : 's'} counted): ${never.slice(0, 12).join(', ')}${never.length > 12 ? ` and ${never.length - 12} more` : ''}.${may && counted < (skills.tabs?.min ?? 10) ? ` Too few conversations to propose switching them off (at least ${skills.tabs?.min ?? 10}).` : ''}`) : null,
+            never.length > 0 ? h('p', { className: 'dsh-tp-desc' }, `Never loaded in ${label} (${counted} thread${counted === 1 ? '' : 's'} counted): ${never.slice(0, 12).join(', ')}${never.length > 12 ? ` and ${never.length - 12} more` : ''}.${may && counted < (skills.tabs?.min ?? 10) ? ` Too few threads to propose switching them off (at least ${skills.tabs?.min ?? 10}).` : ''}`) : null,
             off.length > 0 ? h('p', { className: 'dsh-tp-desc' }, `Switched off in ${label}: ${off.join(', ')}.`) : null,
             h('div', { className: 'dsh-tp-actions' },
               may && counted >= (skills.tabs?.min ?? 10) ? h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => void act({ action: 'skillsTabOff', tab: one.tab, names: never }) }, `Switch these off in ${label}`) : null,
@@ -371,7 +371,7 @@ window.__ModuleLoader__.load({
             h('button', { type: 'button', className: 'dsh-tp-btn', disabled: examBlocked, title: exam.problem || 'The skill exam on this skill, look only: a report that changes nothing', onClick: () => void act({ action: 'skillExam', key: row.key }) }, 'Health check'),
             row.change?.how === 'in-place' ? h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, title: 'Switch it off and keep it: Put back brings it back', onClick: () => void act({ action: 'skillRetire', key: row.key }) }, 'Retire') : null))) : null,
         on && retired.length > 0 ? h('div', { className: 'dsh-tp-group' }, `Retired (${retired.length})`) : null,
-        on ? retired.map((one) => h(Row, { key: one.id, title: one.name, desc: `Retired ${new Date(one.at).toLocaleDateString()}: switched off and kept. It was in ${one.from}.` },
+        on ? retired.map((one) => h(Row, { key: one.id, title: one.name, desc: `Retired ${new Date(one.at).toLocaleDateString('en-GB')}: switched off and kept. It was in ${one.from}.` },
           h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => void act({ action: 'skillPutBack', id: one.id }) }, 'Put back'))) : null);
     }
     function Row({ title, desc, children }) {
@@ -520,7 +520,14 @@ window.__ModuleLoader__.load({
           if (alive.current) setBusy(false);
         }
       };
-      const set = (field, value, done) => act({ action: 'set', field, value }, done ?? 'Saved.');
+      const set = async (field, value, done) => {
+        const ok = await act({ action: 'set', field, value }, done ?? 'Saved.');
+        // Item 4A: the Cowork sidebar shows Workshop's Tuner Plus row only while Tuner Plus is on; tell it at once.
+        if (ok && field === 'enabled') {
+          try { window.dispatchEvent(new CustomEvent('dsh-tuning:switched', { detail: { on: value === true } })); } catch { /* no window */ }
+        }
+        return ok;
+      };
       const sets = Object.entries(data.sets ?? {});
       const models = data.models ?? [];
       const route = models.find((one) => `${one.provider}/${one.model}` === bar.model || one.model === bar.model);
@@ -533,18 +540,18 @@ window.__ModuleLoader__.load({
         note.text ? h(PlainNote, { text: note.text, details: note.details, kind: note.error ? 'error' : 'info' }) : null,
         data.problem ? h('p', { className: 'dsh-tp-desc', 'data-error': 'true' }, data.problem) : null,
 
-        h(Row, { title: 'Tuner Plus', desc: data.enabled ? `On. Its folder: ${data.folder}.` : 'Off: nothing is gathered and its tools are not offered in the chat.' },
+        h(Row, { title: 'Tuner Plus', desc: data.enabled ? `On. Its folder: ${data.folder}.` : 'Off: nothing is gathered and its tools are not offered in any thread.' },
           h(Switch, { on: data.enabled, label: 'Tuner Plus', busy, onChange: (on) => void set('enabled', on, on ? 'Tuner Plus is on. Switch on the modes it may learn from below.' : 'Tuner Plus is off.') })),
 
         h('div', { className: 'dsh-tp-group' }, 'What it learns from'),
-        h('p', { className: 'dsh-tp-desc' }, 'Each mode starts off. Only checked steps become rows. Recon is never read, nor a conversation that received an export from Recon, a helper of either, or a conversation you marked "never learn from this" on Learned skills. Your own folders are never read. Passwords and keys are masked before a row is stored.'),
+        h('p', { className: 'dsh-tp-desc' }, 'Each mode starts off. Only checked steps become rows. Recon is never read, nor a thread that received an export from Recon, a helper of either, or a thread you marked "never learn from this" on Learned skills. Your own folders are never read. Passwords and keys are masked before a row is stored.'),
         Object.entries(data.modes ?? {}).map(([mode, about]) => h(Row, { key: mode, title: about.split(':')[0], desc: about.split(':').slice(1).join(':').trim() },
           h(Switch, { on: data.harvest?.[mode], label: about.split(':')[0], busy: busy || !data.enabled, onChange: (on) => void set('harvest', { ...data.harvest, [mode]: on }) }))),
         h('div', { className: 'dsh-tp-actions' },
           h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy || !data.enabled, onClick: () => void act({ action: 'harvest' }) }, 'Gather now'),
-          h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy || !data.enabled, onClick: () => void act({ action: 'lessons' }) }, 'Build plugin lessons'),
+          h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy || !data.enabled, onClick: () => void act({ action: 'lessons' }) }, 'Build add-on lessons'),
           h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy || !data.enabled || !data.teacher, onClick: () => void act({ action: 'qa' }) }, 'Questions from reference material')),
-        data.lastHarvest ? h('p', { className: 'dsh-tp-desc' }, `Last gathered ${when(data.lastHarvest.at)}: ${Object.entries(data.lastHarvest.modes ?? {}).map(([mode, slot]) => `${mode} ${slot.kept} rows, ${slot.exam} to the exam`).join('; ') || 'nothing new'}. ${data.lastHarvest.left?.length ? `${data.lastHarvest.left.length} conversations left out (Recon, exports, helpers, marked).` : ''}`) : null,
+        data.lastHarvest ? h('p', { className: 'dsh-tp-desc' }, `Last gathered ${when(data.lastHarvest.at)}: ${Object.entries(data.lastHarvest.modes ?? {}).map(([mode, slot]) => `${mode} ${slot.kept} rows, ${slot.exam} to the exam`).join('; ') || 'nothing new'}. ${data.lastHarvest.left?.length ? `${data.lastHarvest.left.length} threads left out (Recon, exports, helpers, marked).` : ''}`) : null,
 
         h('div', { className: 'dsh-tp-group' }, 'The bar'),
         bar.goal === 'skill' && data.goals?.skill ? h('div', null,
@@ -605,7 +612,7 @@ window.__ModuleLoader__.load({
         (data.shelf ?? []).length === 0 ? h('p', { className: 'dsh-tp-desc' }, 'Empty. Adapters and tuned prompts that were built come here, with their exam results.') : null,
         (data.shelf ?? []).map((entry) => h('div', { key: entry.id, className: 'dsh-tp-card' },
           h('b', null, `${entry.name} · ${entry.state}${entry.due ? ' · due for a rebuild' : ''}`),
-          h('div', { className: 'dsh-tp-rowdesc' }, `Base model ${entry.base?.model}; built ${when(entry.built)} from ${entry.sets.join(', ')} (${entry.rows} rows). ${entry.exam?.after ? `Exam: ${pct(entry.exam.after.rate)} against ${pct(entry.exam.before?.rate)} before.` : entry.exam?.decision ? entry.exam.decision.why : ''} Private: built for you and your harness. Its shelf id, for a team role in Settings → Model Tiers: ${entry.id}. ${entry.serve?.route ? `Served as ${entry.serve.route.provider}/${entry.serve.route.model}.` : entry.serve?.path ? `Ready to serve: ${entry.serve.path}.` : ''}`),
+          h('div', { className: 'dsh-tp-rowdesc' }, `Base model ${entry.base?.model}; built ${when(entry.built)} from ${entry.sets.join(', ')} (${entry.rows} rows). ${entry.exam?.after ? `Exam: ${pct(entry.exam.after.rate)} against ${pct(entry.exam.before?.rate)} before.` : entry.exam?.decision ? entry.exam.decision.why : ''} Private: built for you and your harness. Its shelf id, for a team role in Settings → Model tiers: ${entry.id}. ${entry.serve?.route ? `Served as ${entry.serve.route.provider}/${entry.serve.route.model}.` : entry.serve?.path ? `Ready to serve: ${entry.serve.path}.` : ''}`),
           h('div', { className: 'dsh-tp-actions' },
             ['promoted', 'on', 'off'].includes(entry.state) ? h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, onClick: () => void act({ action: 'switch', entry: entry.id, on: entry.state !== 'on' }) }, entry.state === 'on' ? 'Switch off' : 'Switch on') : null,
             entry.exam?.decision?.ok ? h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy, title: 'Fold the adapter into a new copy of the base model (the base is never changed); any MLX model server serves it as one more model', onClick: () => void act({ action: 'serve', entry: entry.id, way: 'fused' }) }, 'Make a fused copy') : null,
@@ -613,7 +620,7 @@ window.__ModuleLoader__.load({
           entry.exam?.decision?.ok ? h('div', { className: 'dsh-tp-actions' },
             h('input', { className: 'dsh-tp-input', placeholder: 'provider (as in Settings → Models)', value: draft.routes[entry.id]?.provider ?? '', onChange: (event) => setDraft({ ...draft, routes: { ...draft.routes, [entry.id]: { ...draft.routes[entry.id], provider: event.target.value } } }) }),
             h('input', { className: 'dsh-tp-input', placeholder: 'model name there', value: draft.routes[entry.id]?.model ?? '', onChange: (event) => setDraft({ ...draft, routes: { ...draft.routes, [entry.id]: { ...draft.routes[entry.id], model: event.target.value } } }) }),
-            h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy || !draft.routes[entry.id]?.provider || !draft.routes[entry.id]?.model, onClick: () => void act({ action: 'route', entry: entry.id, ...draft.routes[entry.id] }, 'Saved. A team in Settings → Model Tiers can now name it for a role.') }, 'Save its address')) : null)),
+            h('button', { type: 'button', className: 'dsh-tp-btn', disabled: busy || !draft.routes[entry.id]?.provider || !draft.routes[entry.id]?.model, onClick: () => void act({ action: 'route', entry: entry.id, ...draft.routes[entry.id] }, 'Saved. A team in Settings → Model tiers can now name it for a role.') }, 'Save its address')) : null)),
 
         h(SkillsSection, { skills: data.skills, busy, act, set, enabled: data.enabled }),
 

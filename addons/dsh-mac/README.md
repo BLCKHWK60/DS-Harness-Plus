@@ -1,6 +1,6 @@
 # Mac bridge
 
-Plugin `@local/dsh-mac` (dsh 0.2.2-rc.2). The assistant can find your files and run your Apple Shortcuts. It uses Spotlight and the Shortcuts app that come with macOS and installs nothing.
+Add-on `@local/dsh-mac` (dsh 0.2.2-rc.2). The assistant can find your files and run your Apple Shortcuts. It uses Spotlight and the Shortcuts app that come with macOS and installs nothing.
 
 Nothing is allowed until you allow it. With no folder and no Shortcut switched on, the assistant gets no tool from this add-on at all.
 
@@ -52,7 +52,7 @@ The assistant sees only a Shortcut's name. Name your Shortcuts so the name says 
 
 - File search finds only what Spotlight has indexed. Folders excluded from Spotlight in System Settings stay excluded, and so do temporary folders.
 - Mail, Calendar and Reminders are not part of this add-on, and are not planned.
-- The assistant can use the tools in tabs where tools are on.
+- The assistant can use the tools in modes where tools are on.
 
 ## Code
 

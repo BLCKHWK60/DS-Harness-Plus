@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Named sampling presets (temperature, max output tokens, optional server-side model alias) chosen per task category, per mode or per session. Does nothing until presets are configured.",
+  "description": "Named sampling presets (temperature, max output tokens, optional server-side model alias) chosen per task category, per mode or per thread. Does nothing until presets are configured.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

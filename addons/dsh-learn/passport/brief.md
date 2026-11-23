@@ -2,12 +2,12 @@
 
 What it is for: A tutor that makes you do the thinking: a question before any teaching, hints in small steps, the answer last, an explanation in your own words, and reviews days later. Three levels of strictness.
 
-This brief was written by Creator Plus from the plugin's own files. Its README below is the full description, complete enough to rebuild the plugin from; improve this brief by hand, with the user's yes.
+This brief was written by Creator Plus from the add-on's own files. Its README below is the full description, complete enough to rebuild the add-on from; improve this brief by hand, with the user's yes.
 
 ## What it must keep doing
 
 - Its tools: learn_plan, learn_mark, learn_review, learn_status, learn_end.
-- The services it gives other plugins: learning.
+- The services it gives other add-ons: learning.
 - Its settings: enabled, level, reviewSize, dataDir, skills, commandName.
 
 ## Its README
@@ -31,7 +31,7 @@ Sources: Bastani et al., PNAS 2025; Kestin et al., Scientific Reports 2025; Sinh
 
 ## How to use it
 
-- In any conversation type `/learn` and what you want to learn:
+- In any thread type `/learn` and what you want to learn:
   - a topic: `/learn how compound interest works`
   - a file: `/learn chapter3.pdf` (uses the PDF reader, and gives pages)
   - code: `/learn the functions in parser.py`

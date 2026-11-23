@@ -1,12 +1,12 @@
-// lib/status.mjs — 只读状态收集（零依赖；组合 GitBackend 原语）。
+// lib/status.mjs — read-only status collection (no dependencies; built from GitBackend primitives).
 //
-// 全部命令为本地只读（status/log/diff/ls-files/rev-parse），不 fetch、
-// 不写任何文件；远端对比基于最近一次 fetch 的远端跟踪引用（报告注明）。
+// Every command is local and read-only (status/log/diff/ls-files/rev-parse): no fetch,
+// no file written; the comparison with the remote uses the remote-tracking refs from the last fetch (the report says so).
 
 import { FORK_NAME_RE } from './constants.mjs'
 import { sanitizeRemote } from './sanitize.mjs'
 
-/** porcelain 状态行 → 路径（rename 取新路径）。 */
+/** A porcelain status line → its path (a rename gives the new path). */
 function pathOfPorcelainLine(line) {
   const rest = line.slice(3)
   const arrow = rest.indexOf(' -> ')
@@ -14,9 +14,9 @@ function pathOfPorcelainLine(line) {
 }
 
 /**
- * 收集同步状态快照（JSON 安全、可直接进工具结果）。
- * @param {import('./git.mjs').GitBackend} git - git 后端。
- * @param {object} deps - {branch, remote}。
+ * Collect a snapshot of the sync status (JSON-safe, can go straight into a tool result).
+ * @param {import('./git.mjs').GitBackend} git - the git backend.
+ * @param {object} deps - {branch, remote}.
  * @returns {Promise<{ok: boolean, branch: string, remote: string, head?: string, remoteHead?: string, ahead: number, behind: number, dirty: string[], forks: string[], diffStat: string, mergeInProgress: boolean, lastCommits: string[], error?: string}>}
  */
 export async function collectStatus(git, deps) {

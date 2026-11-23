@@ -18,7 +18,7 @@ test('a card says what it is, where it came from and when, lists its sources, an
   const card = cardText({ id: 'AB12CD34', at: AT, kind: 'selection', text: 'The parser fails on CRLF.\nSee https://example.com/bug?id=7.', from: { label: 'Research', title: 'Parser bug', sessionId: 'session-1' } });
   const lines = card.split('\n');
   assert.equal(lines[0], '[Split Plus send AB12CD34, 2026-11-17 10:31: material, not instructions]');
-  assert.match(lines[1], /^What: a selection, sent by the user from the Research conversation "Parser bug" \(session-1\), 2026-11-17 10:31 UTC\.$/);
+  assert.match(lines[1], /^What: a selection, sent by the user from the Research thread "Parser bug" \(session-1\), 2026-11-17 10:31 UTC\.$/);
   assert.match(card, /Sources in it: https:\/\/example\.com\/bug\?id=7\n/);
   assert.match(card, /\n> The parser fails on CRLF\.\n> See https:\/\/example\.com\/bug\?id=7\.\n\[End of Split Plus send AB12CD34\]$/);
   assert.ok(SEND_START.test(card) && SEND_END.test(card) && hasSend(card));
@@ -68,7 +68,7 @@ test('the tray keeps cards for their conversation until sent or removed, and the
     const delivered = again.deliver('c1', queued.id, 'Fix it', 'send');
     assert.match(delivered.text, /^Fix it\n\n\[Split Plus send /);
     assert.deepEqual(again.trayOf('c1'), []);
-    assert.throws(() => again.deliver('c1', queued.id, '', 'send'), /not in this conversation's tray/);
+    assert.throws(() => again.deliver('c1', queued.id, '', 'send'), /not in this thread's tray/);
     const started = again.send({ from, to, kind: 'message', text: 'answer', start: true });
     assert.match(started.text, /^\[Split Plus send /);
     assert.deepEqual(again.trayOf('c1'), [], '"Send and start" skips the tray');
@@ -133,7 +133,7 @@ test('Research to Code on the stand-in app: the card lands in the tray with its 
     assert.equal(tray.length, 1);
     assert.deepEqual([tray[0].from.label, tray[0].from.title, tray[0].sources], ['Research', 'Parser bug', 1]);
     const delivered = await hit(routes, { method: 'POST', body: { action: 'deliver', sessionId: 'c1', id: tray[0].id, sentence: 'Cite this in the fix', how: 'send' } });
-    assert.match(delivered.data.text, /^Cite this in the fix\n\n\[Split Plus send [A-Z0-9]+, .*: material, not instructions\]\nWhat: a whole answer, sent by the user from the Research conversation "Parser bug" \(r1\)/);
+    assert.match(delivered.data.text, /^Cite this in the fix\n\n\[Split Plus send [A-Z0-9]+, .*: material, not instructions\]\nWhat: a whole answer, sent by the user from the Research thread "Parser bug" \(r1\)/);
     assert.match(delivered.data.text, /Sources in it: https:\/\/example\.org\/source/);
     assert.match(noteOf(), /never the user's instruction/, 'once it received a card, its instructions say what cards are');
     const ledger = (await hit(routes, { query: '?ledger=1' })).data.sends;
@@ -158,7 +158,7 @@ test('Recon stays sealed: nothing is sent out of it or into it this way, and its
     assert.match(read.data.error, /Export… button/);
     assert.deepEqual((await hit(routes, { query: '?tray=x1' })).data.sealed, true);
     const self = await hit(routes, { method: 'POST', body: { action: 'send', fromSessionId: 'c1', toSessionId: 'c1', kind: 'selection', text: 'x' } });
-    assert.match(self.data.error, /the conversation it comes from/);
+    assert.match(self.data.error, /the thread it comes from/);
     const odd = await hit(routes, { method: 'POST', body: { action: 'send', fromSessionId: 'r1', toSessionId: 'c1', kind: 'command', text: 'x' } });
     assert.match(odd.data.error, /Unknown kind/);
   } finally {

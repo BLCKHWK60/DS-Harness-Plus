@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Adds your own instruction sections (for example planning, coding, routing) to the system prompt, optionally per tier. Has a page, shown as a tab of Model Tiers.",
+  "description": "Adds your own instruction sections (for example planning, coding, routing) to the system prompt, optionally per tier. Has a page, shown as a tab of the Model tiers page.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { boot, makeWorld, maskNow, settle } from './app.mjs';
 import { collect } from './off-baseline.mjs';
+import { CHAT_PROMPT, CHAT_PROMPT_BEFORE } from '../lib/prompt.js';
 import { openDoor, movedService } from '../../dsh-recon/lib/door.js';
 import { toolAccessHandler } from '../lib/route.js';
 import { classify } from '../lib/catalog.js';
@@ -66,7 +67,7 @@ test('#1 an "Always" or "this mode" permission given in one tab never reaches th
     for (const id of ['r1', 'r2', 'b1', 'p1']) assert.equal(JSON.stringify(maskNow(opened[id].masks)), before[id], `${id}: the list of the locked tab is unchanged`);
     for (const id of ['r1', 'r2', 'b1', 'p1']) for (const name of ['web_search', 'write']) assert.ok(!allowOf(opened[id]).includes(name), `${id} has no ${name}`);
     // The call path of Recon: Recon's own guard still refuses them.
-    assert.match(app.guard({ name: 'web_search', agent: opened.r1.agent, arguments: {} }) ?? '', /not part of this isolated conversation/);
+    assert.match(app.guard({ name: 'web_search', agent: opened.r1.agent, arguments: {} }) ?? '', /not part of this sealed|not one of this Recon thread|through Recon's routes|Nothing was remembered|Deep research does not run/);
     // What the popup of a locked tab gives is for that one conversation: r1 gets it, r2 does not.
     asked(access, 'conversation');
     await request(app, opened.r1, 'read');
@@ -92,7 +93,7 @@ test('#1 a stored "always" grant (an older one) is also ignored by a locked tab,
     const b1 = await app.open('b1');
     await app.firstTurn(r1.agent);
     await app.firstTurn(b1.agent);
-    assert.deepEqual(allowOf(r1).filter((name) => !OWN.includes(name)), ['grep', 'recon_cite'], 'only the grant given in this conversation counts');
+    assert.deepEqual(allowOf(r1).filter((name) => !OWN.includes(name)), ['grep', 'recon_cite'], 'only the grant given in this thread counts');
     assert.ok(!allowOf(b1).includes('web_search'));
   } finally {
     app.stop();
@@ -235,14 +236,17 @@ test('#4 Chat has only the two Tool access tools: programs are still refused the
 
 // ---- #5 ----
 test('#5 Recon is really open: a tool allowed in one Recon conversation runs there, on the actual call path, and nowhere else', async () => {
-  const { app, access } = start();
+  // Item 4A, stage 6a: a granted file tool runs only inside the thread's room folder (Recon's room path rule).
+  const room = mkdtempSync(path.join(tmpdir(), 'dsh-ta-room-'));
+  const inRoom = { file_path: path.join(room, 'notes.txt') };
+  const { app, access } = start({}, { services: { recon: { roomRunFolder: () => room } } });
   try {
     const r1 = await app.open('r1');
     const r2 = await app.open('r2');
     const helper = await app.open('rh', { header: { parentSession: 'r1' } });
     for (const one of [r1, r2]) await app.firstTurn(one.agent);
     // Before: Recon's guard refuses an unlisted tool; the two Tool access tools work.
-    assert.match(app.guard({ name: 'read', agent: r1.agent, arguments: {} }) ?? '', /not part of this isolated conversation/);
+    assert.match(app.guard({ name: 'read', agent: r1.agent, arguments: {} }) ?? '', /not part of this sealed|not one of this Recon thread|through Recon's routes|Nothing was remembered|Deep research does not run/);
     assert.equal(app.guard({ name: 'tools_catalog', agent: r1.agent, arguments: {} }), undefined);
     assert.equal(app.guard({ name: 'request_tool_access', agent: r1.agent, arguments: {} }), undefined);
     const shown = asked(access, 'conversation');
@@ -251,27 +255,30 @@ test('#5 Recon is really open: a tool allowed in one Recon conversation runs the
     assert.equal(shown[0].wording.risk, 'Highest', 'the highest-risk wording');
     assert.match(shown[0].wording.reconWarning, /sealed on purpose/);
     assert.deepEqual(shown[0].choices.map((choice) => choice.id), ['once', 'conversation', 'deny', 'never'], 'never longer than this conversation');
-    assert.equal(app.guard({ name: 'read', agent: r1.agent, arguments: {} }), undefined, 'now the call runs');
-    assert.match(app.guard({ name: 'read', agent: r2.agent, arguments: {} }) ?? '', /not part of this isolated conversation/, 'another Recon conversation: no');
-    assert.match(app.guard({ name: 'read', agent: helper.agent, arguments: {} }) ?? '', /not part of this isolated conversation/, 'a helper of Recon: no');
+    assert.equal(app.guard({ name: 'read', agent: r1.agent, arguments: inRoom }), undefined, 'now the call runs');
+    assert.match(app.guard({ name: 'read', agent: r1.agent, arguments: { file_path: '/etc/hosts' } }) ?? '', /only in this thread's room folder/, 'outside the room: no');
+    assert.match(app.guard({ name: 'read', agent: r2.agent, arguments: {} }) ?? '', /not part of this sealed|not one of this Recon thread|through Recon's routes|Nothing was remembered|Deep research does not run/, 'another Recon conversation: no');
+    assert.match(app.guard({ name: 'read', agent: helper.agent, arguments: {} }) ?? '', /not part of this sealed|not one of this Recon thread|through Recon's routes|Nothing was remembered|Deep research does not run/, 'a helper of Recon: no');
     // Never the secret store, the Keychain or Recon's route rules; never a tool only Settings may open.
     for (const tool of ['keychain', 'secrets', 'recon_routes', 'git_push']) assert.equal((await access().ask({ sessionId: 'r1', tool, reason: 'x' })).code, 'never', tool);
     // A permission cannot run what Recon's own rules forbid: a tool of the mode it keeps is still fine, an unlisted one is refused until allowed.
-    assert.match(app.guard({ name: 'bash', agent: r1.agent, arguments: {} }) ?? '', /not part of this isolated conversation/);
+    assert.match(app.guard({ name: 'bash', agent: r1.agent, arguments: {} }) ?? '', /not part of this sealed|not one of this Recon thread|through Recon's routes|Nothing was remembered|Deep research does not run/);
   } finally {
     app.stop();
   }
 });
 
 test('#5 in Recon a one-time permission is one call on the real call path', async () => {
-  const { app, access } = start();
+  const room = mkdtempSync(path.join(tmpdir(), 'dsh-ta-room-'));
+  const inRoom = { file_path: path.join(room, 'notes.txt') };
+  const { app, access } = start({}, { services: { recon: { roomRunFolder: () => room } } });
   try {
     const r1 = await app.open('r1');
     await app.firstTurn(r1.agent);
     asked(access, 'once');
     await request(app, r1, 'read');
-    assert.equal(app.guard({ name: 'read', agent: r1.agent, arguments: {} }), undefined, 'first call');
-    assert.match(app.guard({ name: 'read', agent: r1.agent, arguments: {} }) ?? '', /not part of this isolated conversation|already used/, 'second call refused');
+    assert.equal(app.guard({ name: 'read', agent: r1.agent, arguments: inRoom }), undefined, 'first call');
+    assert.match(app.guard({ name: 'read', agent: r1.agent, arguments: inRoom }) ?? '', /not part of this sealed|not one of this Recon thread|through Recon's routes|Nothing was remembered|Deep research does not run|already used/, 'second call refused');
   } finally {
     app.stop();
   }
@@ -286,7 +293,7 @@ test('#5 never with Web Off: a Recon conversation with Web Off cannot be given a
     // With the sealed-tab rule, Recon cannot even ask for a tool that goes online (the older 'fenced' answer is now 'recon-limit').
     assert.equal((await access().ask({ sessionId: 'r2', tool: 'web_fetch', reason: 'x' })).code, 'recon-limit');
     assert.equal((await access().ask({ sessionId: 'r2', tool: 'read', reason: 'x' })).ok, true, 'a tool that stays on this Mac is fine');
-    assert.match(app.guard({ name: 'web_fetch', agent: r2.agent, arguments: {} }) ?? '', /not part of this isolated conversation/);
+    assert.match(app.guard({ name: 'web_fetch', agent: r2.agent, arguments: {} }) ?? '', /not part of this sealed|not one of this Recon thread|through Recon's routes|Nothing was remembered|Deep research does not run/);
   } finally {
     app.stop();
   }
@@ -299,7 +306,7 @@ test('#5 the catalogue in Recon says what is true: ordinary tools can be request
     await app.firstTurn(r1.agent);
     const rows = access().catalogueFor('r1');
     const read = rows.find((row) => row.name === 'read');
-    assert.match(read.status, /^can be requested \(for this one conversation only/);
+    assert.match(read.status, /^can be requested \(for this one thread only/);
     assert.ok(!rows.some((row) => row.name === 'keychain' || row.name === 'recon_routes'), 'never listed');
     assert.equal(rows.find((row) => row.name === 'recon_cite').status, 'available now');
     const text = (await app.tool('tools_catalog').definition.execute({}, { agent: r1.agent })).text;
@@ -307,7 +314,7 @@ test('#5 the catalogue in Recon says what is true: ordinary tools can be request
     // Devices stays fixed.
     const b1 = await app.open('b1');
     await app.firstTurn(b1.agent);
-    assert.equal(access().catalogueFor('b1').find((row) => row.name === 'write').status, 'fixed by this tab');
+    assert.equal(access().catalogueFor('b1').find((row) => row.name === 'write').status, 'fixed by this mode');
   } finally {
     app.stop();
   }
@@ -384,7 +391,10 @@ test('#7 the "App and plugins" state ignores the highest-risk tools that are alw
 // ---- off for existing installs ----
 test('Tool access off (what an installed setup has): masks, instructions and the tool finder are byte-for-byte what they were before Tool access (Cowork, Code, Data, Chat, Recon, Devices, helpers, Web Off)', async () => {
   // off-baseline.json is rebuilt from the add-on as committed before Tool access (test/make-off-baseline.mjs), not from this one.
-  const baseline = JSON.parse(readFileSync(new URL('./off-baseline.json', import.meta.url), 'utf8'));
+  // Item 4A, stage 4 rewords the built-in Chat mode on purpose (it no longer says "switch to Cowork or Code mode"): the
+  // baseline is read with that one sentence changed, so everything else is still compared byte for byte.
+  // Item 4A, stage 7 says "thread" for "conversation" in what the model reads (the word only; the rules are the same).
+  const baseline = JSON.parse(readFileSync(new URL('./off-baseline.json', import.meta.url), 'utf8').split(JSON.stringify(CHAT_PROMPT_BEFORE).slice(1, -1)).join(JSON.stringify(CHAT_PROMPT).slice(1, -1)).replaceAll('this conversation', 'this thread'));
   const world = { boot, makeWorld, maskNow };
   // The app lists the two tools among the tools it knows once Modes registers them, whether or not they are on offer.
   const now = await collect(world, {}, OWN);
@@ -513,8 +523,9 @@ test('an Automation that runs again in a conversation that already exists, and a
   }
 });
 
-test('Mission: a run that does not wait is unattended; one that waits keeps its own wait time', async () => {
-  for (const [minutes, want] of [[0, 'unattended'], [45, 45 * 60_000], [undefined, 10 * 60_000]]) {
+test('Mission: a run is never "unattended" for the conversation (stage D: its helpers park instead); one that waits keeps its own wait time', async () => {
+  // waitMinutes 0 now means "wait until answered" (Mission stage D): the conversation's own request waits the usual 10 minutes.
+  for (const [minutes, want] of [[0, 10 * 60_000], [45, 45 * 60_000], [undefined, 10 * 60_000]]) {
     const { app, access } = start({}, { mission: { longRun: () => ({ files: false, web: false }) }, settingsExtra: minutes === undefined ? [] : [{ ns: 'mission', value: { waitMinutes: minutes } }] });
     try {
       const s1 = await app.open('s1');

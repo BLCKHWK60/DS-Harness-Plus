@@ -282,3 +282,100 @@ test('two backups in the same moment never share a name, and one never replaces 
     rmSync(folder, { recursive: true, force: true });
   }
 });
+
+// ---- Mission stage E: a Mission helper's yes waits in the Mission's card (read level only) ------------------------
+
+test('Mission stage E: a read-level yes of a Mission\'s helper is parked, allowed once, or not asked in Full auto; Devices\' own words otherwise', async () => {
+  const { helperYes } = await import('../lib/kit.js');
+  const exec = { name: 'bench_serial_watch', agent: { id: 'h1', header: { parentSession: 'b1' } } };
+  const asked = [];
+  const answerWith = (answer) => async (_exec, request) => { asked.push(request); return answer; };
+  const reason = 'Open the serial port /dev/cu.X of "ESP32 board 1"? …';
+  const what = 'opening the serial port of ESP32 board 1';
+  // Parked in the Mission's card: the helper is told so, with Mission's words.
+  await assert.rejects(helperYes(answerWith({ id: 'a1', text: 'This needs the user\'s yes (Devices asks). It waits in the Mission\'s card.' }), exec, reason, what, true), /It waits in the Mission's card/);
+  assert.deepEqual(asked[0], { key: 'bench_serial_watch:opening the serial port of ESP32 board 1', what: 'Opening the serial port of ESP32 board 1', reason });
+  // Allowed in the card: the next identical call goes on, once.
+  await helperYes(answerWith({ granted: true, id: 'a1' }), exec, reason, what, true);
+  // Full auto: not asked, Mission's words.
+  await assert.rejects(helperYes(answerWith({ id: 'a2', said: 'no', unasked: true, text: 'Not asked: this Mission runs on Full auto.' }), exec, reason, what, true), /Full auto/);
+  // Not a Mission's helper (Mission says nothing): Devices' own refusal, as before.
+  await assert.rejects(helperYes(answerWith(undefined), exec, reason, what, true), /a helper of a run cannot ask/);
+  // A failing Mission never lets it through.
+  const { missionAsker } = await import('../lib/kit.js');
+  await assert.rejects(helperYes(missionAsker(async () => { throw new Error('boom'); }), exec, reason, what, true), /a helper of a run cannot ask/);
+});
+
+test('review of Mission stage E: a helper\'s yes is kept under exactly what it is about: another port, device or phone is another request', async () => {
+  const { helperYes, yesKey } = await import('../lib/kit.js');
+  const exec = { name: 'bench_serial_watch', agent: { id: 'h1', header: { parentSession: 'b1' } } };
+  const asked = [];
+  const ask = async (_exec, request) => { asked.push(request); return { id: 'a', text: 'It waits in the Mission\'s card.' }; };
+  const what = 'opening the serial port of ESP32 board 1';
+  await assert.rejects(helperYes(ask, exec, 'Open /dev/cu.A?', what, true, '/dev/cu.A|usb-1'));
+  await assert.rejects(helperYes(ask, exec, 'Open /dev/cu.B?', what, true, '/dev/cu.B|usb-2'));
+  await assert.rejects(helperYes(ask, exec, 'Open /dev/cu.A?', what, true, '/dev/cu.A|usb-2'));
+  assert.equal(new Set(asked.map((request) => request.key)).size, 3, 'three different requests');
+  assert.ok(asked.every((request) => request.key.startsWith(`bench_serial_watch:${what}#`) && request.key.length <= 300));
+  assert.equal(yesKey(exec, what, '/dev/cu.A|usb-1'), asked[0].key, 'the same request, the same key');
+  assert.equal(yesKey(exec, 'x'.repeat(400), 'p').length, 300, 'never longer than Mission keeps, and the request part is never cut');
+  assert.equal(yesKey(exec, what), `bench_serial_watch:${what}`, 'without it, as before');
+});
+
+test('Mission stage E: a yes that adjusts, writes or erases stays with the conversation: noted with the Mission as not possible, and refused as before', async () => {
+  const { helperYes } = await import('../lib/kit.js');
+  const exec = { name: 'bench_esp32', agent: { id: 'h1', header: { parentSession: 'b1' } } };
+  const asked = [];
+  // Even a Mission that would grant it: a write is never allowed to a helper.
+  const ask = async (_exec, request) => { asked.push(request); return { granted: true, id: 'x' }; };
+  await assert.rejects(helperYes(ask, exec, 'Write firmware to "ESP32 board 1"?', 'writing firmware to ESP32 board 1'), /a helper of a run cannot ask/);
+  assert.equal(asked[0].cannot, true, 'listed under Not possible in the Mission\'s report');
+});
+
+test('Mission stage E: the kit\'s yes and askAsCard: a helper\'s adjust is noted as not possible and refused; the conversation itself still gets the app\'s card', async () => {
+  const { makeKit } = await import('../lib/kit.js');
+  const asked = [];
+  const cards = [];
+  const kit = makeKit({
+    enabled: () => true,
+    bench: {},
+    find: async () => '',
+    run: async () => ({ code: 0, stdout: '', stderr: '' }),
+    approve: async (_exec, reason) => { cards.push(reason); return 'allowed-once'; },
+    isHelper: (exec) => Boolean(exec?.agent?.header?.parentSession),
+    seen: () => ({}),
+    busy: new Set(),
+    missionYes: async (_exec, request) => { asked.push(request); return { granted: true, id: 'g' }; },
+  });
+  const helper = { name: 'bench_ssh', agent: { id: 'h1', header: { parentSession: 'b1' } } };
+  // Full Auto card (no ask): a helper still may not change a device.
+  await assert.rejects(kit.askAsCard(helper, { ask: false }, 'Change wifi on Router', 'changing wifi on Router'), /Only the thread itself changes a device/);
+  assert.equal(asked.at(-1).cannot, true);
+  // Trusting a key is read level: allowed through the Mission's card.
+  await kit.yes(helper, 'Trust the device at …?', 'trusting Router\'s key', { helperMay: true });
+  assert.equal(asked.at(-1).cannot, undefined);
+  assert.equal(cards.length, 0, 'a helper never gets the app\'s own card');
+  // The conversation itself: the app's card as before, Mission not asked.
+  const before = asked.length;
+  await kit.yes({ name: 'bench_ssh', agent: { id: 'b1' } }, 'Trust the device at …?', 'trusting Router\'s key', { helperMay: true });
+  assert.equal(cards.length, 1);
+  assert.equal(asked.length, before);
+});
+
+test('Mission stage E: only the three read-level yeses may be allowed for a helper (first port open, link to a phone, trust a key)', () => {
+  const devices = readFileSync(new URL('../lib/devices.js', import.meta.url), 'utf8');
+  const net = readFileSync(new URL('../lib/net-tools.js', import.meta.url), 'utf8');
+  const phone = readFileSync(new URL('../lib/phone-tools.js', import.meta.url), 'utf8');
+  const count = (text) => (text.match(/\{ helperMay: true[ ,]/g) ?? []).length;
+  assert.equal(count(devices), 2);
+  // Review of Mission stage E: each names exactly what it is about, so an Allow covers only that request.
+  assert.match(devices, /`opening the serial port of \$\{card\.name\}`, \{ helperMay: true, exact: `\$\{port\}\|\$\{device\.id\}` \}/);
+  assert.match(devices, /`linking \$\{card\.name\} to a phone`, \{ helperMay: true, exact: serialNumber \}/);
+  assert.equal(count(net), 1);
+  assert.match(net, /`trusting \$\{card\.name\}'s key`, \{ helperMay: true, exact: `\$\{where\.net\.address\}:\$\{where\.net\.port\}\|\$\{keys\.fingerprints\.join\(','\)\}` \}/);
+  assert.equal(count(phone), 0);
+  // A helper reading a Bluetooth device, changing a setting or setting back: noted as not possible, then refused.
+  assert.match(devices, /cannotForHelper\(exec, `reading the Bluetooth device[\s\S]{0,300}not a helper of a run/);
+  assert.match(devices, /cannotForHelper\(exec, `changing \$\{key\} on[\s\S]{0,120}not a helper of a run/);
+  assert.match(devices, /cannotForHelper\(exec, `setting back changes on[\s\S]{0,200}not a helper of a run/);
+});

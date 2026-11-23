@@ -12,7 +12,7 @@
 
 export const ORDER = { identify: 0, read: 1, adjust: 2, write: 3 };
 export const LEVEL_LABEL = { identify: 'Identify', read: 'Read', adjust: 'Adjust', write: 'Write' };
-export const ASK_LABEL = { restricted: 'Restricted', 'ask-auto': 'Ask-Auto', 'full-auto': 'Full Auto' };
+export const ASK_LABEL = { restricted: 'Restricted', 'ask-auto': 'Ask', 'full-auto': 'Auto' };
 
 /** Families where safety is at stake: Bench reads them and changes nothing (plan, "Bench: rules that hold everywhere"). */
 export const LOOK_ONLY = [

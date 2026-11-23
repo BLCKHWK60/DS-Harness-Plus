@@ -12,7 +12,8 @@
     "settings",
     "shortcuts",
     "uiWorkspace",
-    "workspaces"
+    "workspaces",
+    "recon"
   ],
   "events": [],
   "tools": [],

@@ -310,7 +310,7 @@ test('the prompt section: what each kind of conversation is told', async () => {
 
   // Chat with Web on: told it may search, and no longer that it has no tools at all.
   const chat = promptText({ mode: CHAT, web: true, depth: 'quick' });
-  assert.match(chat, /Web is on for this conversation: you may use web_search and web_fetch/);
+  assert.match(chat, /Web is on for this thread: you may use web_search and web_fetch/);
   assert.doesNotMatch(chat, /No tools are available/);
   assert.ok(chat.includes(DEPTH_SEARCH_PROMPTS.quick));
   assert.equal(promptText({ mode: CHAT }), CHAT.prompt, 'Chat with Web Off: only its own words');
@@ -337,7 +337,7 @@ test('the prompt section: what each kind of conversation is told', async () => {
 
   // Web Off in a mode with all tools: the model is told what went, the Finance data tools included when there.
   const off = promptText({ mode: { id: 'finance', tools: 'all', prompt: 'Finance method.' }, web: false, offline: ['finance_news'] });
-  assert.match(off, /Web is off for this conversation/);
+  assert.match(off, /Web is off for this thread/);
   assert.match(off, /finance_\* data tools/);
   assert.doesNotMatch(promptText({ mode: COWORK, web: false }), /finance/);
 
@@ -503,7 +503,7 @@ test('the sidebar\'s tabs, and what /mode says before the first message', async 
   assert.equal(tabCount(1), 1);
   assert.equal(tabCount(6), 3);
   assert.equal(tabCount(2.5), 3);
-  assert.equal(beforeFirstMessage({ current: 'Cowork', tabs: ['Chat', 'Cowork'], command: 'mode' }), 'Not switched. Before the first message, the selected sidebar tab decides the mode of a new conversation (now: Cowork). Tabs: Chat, Cowork. Pick a tab, or use /mode after your first message.');
+  assert.equal(beforeFirstMessage({ current: 'Cowork', tabs: ['Chat', 'Cowork'], command: 'mode' }), 'Not switched. Before the first message, the selected tab in the left panel decides the mode of a new thread (now: Cowork). Tabs: Chat, Cowork. Pick a tab, or use /mode after your first message.');
 });
 
 test('Cowork\'s working method: the approved text, short enough for the Modes limit', async () => {
@@ -551,13 +551,16 @@ test('Settings → Modes: cards beyond the tab count have no tab; scheduled task
     assert.ok(start > 0, name);
     return source.slice(start, source.indexOf('\n    }\n', start) + 6);
   };
-  const { withoutTab, scheduledChoices } = new Function(`${grab('withoutTab')}\n${grab('scheduledChoices')}\nreturn { withoutTab, scheduledChoices };`)();
+  const added = source.match(/^\s*const ADDED_MODES = .*;$/m)[0];
+  const { withoutTab, scheduledChoices } = new Function(`${added}\n${grab('withoutTab')}\n${grab('scheduledChoices')}\nreturn { withoutTab, scheduledChoices };`)();
   const rows = ['chat', 'cowork', 'code', 'review'].map((id) => ({ key: `k-${id}`, id, label: id === 'review' ? '' : id.toUpperCase() }));
   assert.deepEqual([...withoutTab(rows, 3)], ['k-review']);
   assert.deepEqual([...withoutTab(rows, 5)], []);
   assert.deepEqual([...withoutTab(rows, 1)], ['k-cowork', 'k-code', 'k-review']);
   const extras = [{ id: 'finance', label: 'Finance', isolated: false }, { id: 'recon', label: 'Recon', isolated: true }, { id: 'automations', label: 'Automations', isolated: false }];
-  assert.deepEqual(scheduledChoices(rows, extras).map((choice) => `${choice.id}:${choice.label}:${choice.extra}`), ['chat:CHAT:false', 'cowork:COWORK:false', 'code:CODE:false', 'review:review:false', 'finance:Finance:true']);
+  assert.deepEqual(scheduledChoices(rows, extras).map((choice) => `${choice.id}:${choice.label}:${choice.extra}`), ['chat:CHAT:false', 'cowork:COWORK:false', 'code:CODE:false', 'review:review:false', 'finance:Finance:true', 'plain:Plain chat:false']);
+  // Fix round (item 4A): Plain chat (built in, never stored) is a choice too, once; the Automations mode stays out on purpose.
+  assert.deepEqual(scheduledChoices([...rows, { key: 'k-plain', id: 'plain', label: 'Mine' }], extras).filter((choice) => choice.id === 'plain').map((choice) => choice.label), ['Mine']);
 });
 
 test('Depth: Quick and Thorough add the approved note after the working method in every tab; Standard adds nothing; never for helpers or with tools off', async () => {
@@ -570,8 +573,8 @@ test('Depth: Quick and Thorough add the approved note after the working method i
   const SCOUT = { id: 'scout', tools: ['scout_search', 'deep_research'], prompt: 'Scout rules.', keepPrompt: true };
   const RECON = { id: 'recon', tools: ['recon_cite'], prompt: 'Recon method.', isolated: true };
   // The owner's words, exactly.
-  assert.equal(DEPTH_PROMPTS.quick, 'How much care this conversation wants: Quick. Keep the work short: one pass and only quick checks. Start helpers only when the tier asks for them. Everything in your working method still applies.');
-  assert.equal(DEPTH_PROMPTS.thorough, "How much care this conversation wants: Thorough. Make a short plan before you act. Before you finish, check your work against the request and your working method's checks. If helpers are allowed, ask one helper to review the result once, and fix what it finds.");
+  assert.equal(DEPTH_PROMPTS.quick, 'How much care this thread wants: Quick. Keep the work short: one pass and only quick checks. Start helpers only when the tier asks for them. Everything in your working method still applies.');
+  assert.equal(DEPTH_PROMPTS.thorough, "How much care this thread wants: Thorough. Make a short plan before you act. Before you finish, check your work against the request and your working method's checks. If helpers are allowed, ask one helper to review the result once, and fix what it finds.");
   for (const text of Object.values(DEPTH_PROMPTS)) {
     assert.doesNotMatch(text, /search depth/i, 'never worded like the Web level');
     assert.doesNotMatch(text, /no self-check|skip (the )?check/i, 'never contradicts a method\'s check');
@@ -581,7 +584,7 @@ test('Depth: Quick and Thorough add the approved note after the working method i
   // sentence (a helper's review) only where the tools can start a helper: all tools, or a list with one.
   const { DEPTH_PROMPTS_NO_HELPERS: NO_HELPERS, helpersOffered } = await import('../lib/prompt.js');
   assert.equal(NO_HELPERS.quick, DEPTH_PROMPTS.quick);
-  assert.equal(NO_HELPERS.thorough, "How much care this conversation wants: Thorough. Make a short plan before you act. Before you finish, check your work against the request and your working method's checks.");
+  assert.equal(NO_HELPERS.thorough, "How much care this thread wants: Thorough. Make a short plan before you act. Before you finish, check your work against the request and your working method's checks.");
   assert.ok(helpersOffered('all') && helpersOffered(['read', 'subagent']) && helpersOffered(['subagent_fork']));
   assert.ok(!helpersOffered('none') && !helpersOffered(['deep_research', 'web_search']) && !helpersOffered(undefined));
   const HELPERS = { id: 'mine', tools: ['read', 'subagent'], prompt: 'Mine.' };
@@ -615,7 +618,7 @@ test('Depth: Quick and Thorough add the approved note after the working method i
   for (const [what, args] of [
     ['a helper', { mode: COWORK, child: true }], ['tools off', { mode: COWORK, off: true }], ['Recon, tools off', { mode: RECON, off: true }],
   ]) {
-    for (const depth of ['quick', 'thorough']) assert.ok(!promptText({ ...args, depth }).includes('How much care this conversation wants'), `${what}: ${depth}`);
+    for (const depth of ['quick', 'thorough']) assert.ok(!promptText({ ...args, depth }).includes('How much care this thread wants'), `${what}: ${depth}`);
   }
 });
 
@@ -637,8 +640,8 @@ test('Depth is kept per conversation like the Web level: cleaned up, carried int
   assert.match(source, /^\s*off && !uniform \? null : h\(DepthButton, \{\s*t, depth: sessionDepthNow, kind: depthKind\(modeDef\), busy: state\.busy, disabled: off,/m, 'nothing but tools off (with the switch off) hides it');
   assert.doesNotMatch(source, /researchTab \|\| off \? null : h\(DepthButton/);
   assert.match(source, /onPick: \(picked\) => void pickSetting\('depth', picked\)/);
-  // A pick is stored (Standard too, against a start that differs) and becomes where new conversations start.
-  assert.match(source, /const depths = \{ \.\.\.readObject\(current\.sessionDepth\), \[sessionId\]: picked \};\s*return \[\{ op: 'set', path: \['sessionDepth'\], value: JSON\.stringify\(depths\) \}, \{ op: 'set', path: \['searchDepth'\], value: picked \}\];/);
+  // A pick is stored (Standard too, against a start that differs) and becomes where new threads start.
+  assert.match(source, /const depths = \{ \.\.\.readObject\(current\.sessionDepth\), \[sessionId\]: picked \};\s*const ops = \[\{ op: 'set', path: \['sessionDepth'\], value: JSON\.stringify\(depths\) \}, \{ op: 'set', path: \['searchDepth'\], value: picked \}\];/);
   // Web keeps Off and All (today's On), with the source ticks beside them (the one Web selector, 18 November 2026).
   assert.match(source, /onWrite: \(picked\) => void pickSetting\('sources', picked\)/);
   // The former Web button's levels and Settings → Modes → Web levels are gone from the client (18 November 2026):
@@ -646,14 +649,12 @@ test('Depth is kept per conversation like the Web level: cleaned up, carried int
   assert.match(source, /return \[\{ op: 'set', path: \['sessionWeb'\], value: JSON\.stringify\(webs\) \}\];/, 'Off writes only the Web switch');
   assert.doesNotMatch(source, /function webLevelOf\(|function mixesOf\(|function WebLevels\(|kind === 'web'|'wl\.[a-zA-Z]+':|'lane\.[a-z]+':|'web\.(?:verified|openweb|everything|custom|levels|always)[a-z.]*':/);
   for (const key of ['depth.label', 'depth.quick', 'depth.standard', 'depth.thorough', 'depth.quick.hint', 'depth.thorough.hint', 'depth.note', 'depth.note.research', 'depth.quick.hint.research', 'depth.standard.hint.research', 'depth.thorough.hint.research', 'depth.note.isolated', 'depth.quick.hint.isolated', 'depth.standard.hint.isolated', 'depth.thorough.hint.isolated', 'depth.standard.hint', 'depth.title', 'depth.open', 'new.depth', 'new.depth.hint']) {
-    assert.equal(source.split('\n').filter((line) => line.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+    assert.equal(source.split('\n').filter((line) => line.includes(`'${key}':`)).length, 1, `${key}: once, English only`);
   }
-  assert.doesNotMatch(source.split('\n').find((line) => line.includes("'depth.label':") && /[一-鿿]/.test(line)), /深度/, 'not the Web level Deep\'s word');
-  // The Settings hint: one Depth start for every tab, no tab left out (the owner's rule).
+  // The Settings hint: one Depth start for every space, none left out (the owner's rule; round 2: spaces, not tabs).
   const hint = source.split('\n').filter((line) => line.includes("'new.depth.hint':"));
-  assert.match(hint[0], /in every tab\./);
-  assert.match(hint[1], /每个标签中/);
-  assert.doesNotMatch(hint.join('\n'), /except|除/);
+  assert.match(hint[0], /in every space\./);
+  assert.doesNotMatch(hint.join('\n'), /except/);
 });
 
 test('since 0.59.0 Depth carries how much the model searches: its searching part with Web on, Recon\'s effort by Depth', async () => {
@@ -693,7 +694,7 @@ test('each conversation\'s former Web level moves into its Depth once; Deep beco
   const { readFileSync } = await import('node:fs');
   const host = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
   assert.match(host, /depthMoved: z\.boolean\(\)\.default\(false\)\.volatile\(\),/);
-  assert.match(host, /void moveWebLevels\(\)\.catch\(report\);\s*void addDataTrim\(\)\.catch\(report\);\s*\}\);/, 'on every opening');
+  assert.match(host, /void moveWebLevels\(\)\.catch\(report\);\s*void addDataTrim\(\)\.catch\(report\);\s*void addPlain\(\)\.then\(\(\) => carryPlain\(\)\)\.catch\(report\);\s*\}\);/, 'on every opening');
   assert.match(host, /setTimeout\(\(\) => \{\s*void moveWebLevels\(\)\.catch\(report\);/, 'and a moment after loading');
   // During a Mission run's rounds the conversation only conducts: no Depth words.
   assert.match(host, /depth: missionRound\(agent\) \? 'standard' : depthOf\(agent\.id\),/);
@@ -743,7 +744,7 @@ test('the chat box: a Web pick writes only On or Off; a Depth pick is kept for t
   assert.match(source, /t\(kind \? `depth\.note\.\$\{kind\}` : 'depth\.note'\)/);
   assert.match(source, /const TIP_MS = 3000;/);
   for (const key of ['depth.long.short', 'lens.short', 'lens.web.short', ...['quick', 'standard', 'thorough'].flatMap((id) => [`depth.${id}.short`, `depth.${id}.short.isolated`, `depth.${id}.short.research`])]) {
-    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 1, `${key}: once, English only`);
   }
   // Long run: every tab but Recon (also a Recon conversation moved elsewhere), only while Mission is on.
   // Recon too since 16 November (Mission keeps the run inside Recon's rules); never a Recon conversation moved elsewhere.
@@ -756,22 +757,19 @@ test('the chat box: a Web pick writes only On or Off; a Depth pick is kept for t
   assert.equal(depthKind({ tools: ['scout_search', 'deep_research'] }), 'research', 'Scout');
   assert.equal(depthKind({ tools: 'all' }), undefined);
   assert.equal(depthKind(undefined), undefined);
-  // The research texts give the run sizes Deep research really uses, in English and Chinese.
+  // The research texts give the run sizes Deep research really uses.
   const { DEPTHS: RUNS } = await import('../../dsh-deep-research/lib/rounds.js');
   const lines = (key) => source.split('\n').filter((text) => text.includes(`'${key}':`));
   for (const id of ['quick', 'standard', 'thorough']) {
-    const [en, zh] = lines(`depth.${id}.hint.research`);
+    const [en] = lines(`depth.${id}.hint.research`);
     assert.match(en, new RegExp(`about ${RUNS[id].minutes} minutes, with up to ${RUNS[id].runners} helpers`), id);
-    assert.match(zh, new RegExp(`约 ${RUNS[id].minutes} 分钟，最多 ${RUNS[id].runners} 个助手`), id);
   }
   const minutes = ['quick', 'standard', 'thorough'].map((id) => RUNS[id].minutes);
   assert.match(lines('depth.note')[0], new RegExp(`about ${minutes[0]}, ${minutes[1]} or ${minutes[2]} minutes; sooner where tools run through programs`));
-  assert.match(lines('depth.note')[1], new RegExp(`约 ${minutes[0]}、${minutes[1]} 或 ${minutes[2]} 分钟`));
   // Every list note says it is one Depth for every tab, and none says Depth does only part of its job.
   for (const key of ['depth.note', 'depth.note.isolated', 'depth.note.research']) {
-    const [en, zh] = lines(key);
-    assert.match(en, /where new conversations start in every tab/, key);
-    assert.match(zh, /每个标签中/, key);
+    const [en] = lines(key);
+    assert.match(en, /where new threads start in every space/, key);
     assert.doesNotMatch(en, /only how hard|sets only/, key);
   }
   assert.match(lines('depth.note.research')[0], /sooner where tools run through programs/);
@@ -847,12 +845,12 @@ test('the one Web selector (18 November 2026): the same chip in every tab; Resea
   assert.match(source, /recon: modeDef\.isolated === true, research: researchTab, webOn: web \|\| researchTab,\s*disabled: off \|\| lockedHere,/);
   assert.match(source, /\{ name: 'settings\.section', id: 'web-sources', order: 101, label: \(\) => t\('ws\.title'\) \}/);
   for (const key of ['ws.title', 'ws.off.research', 'ws.h.i2p', 'wsp.other.hint', 'wsp.o.recon']) {
-    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 1, `${key}: once, English only`);
   }
   // The prompt of Research and Scout is unchanged while their ticks are All (research-1, scout-9).
   const { promptText, DEPTH_SEARCH_PROMPTS } = await import('../lib/prompt.js');
   const text = promptText({ mode: { id: 'research', tools: ['deep_research', 'web_search', 'web_fetch'], prompt: 'Research method.' }, web: true, depth: 'thorough' });
-  assert.doesNotMatch(text, /Web is on for this conversation/);
+  assert.doesNotMatch(text, /Web is on for this thread/);
   assert.ok(!text.includes(DEPTH_SEARCH_PROMPTS.thorough));
   assert.doesNotThrow(() => new Function(source));
 });
@@ -917,7 +915,7 @@ test('the same chat box in every mode (a switch, on by default): the buttons\' w
   assert.match(client, /const fit = \(\) => \(uniform \? fitUniform\(\)/);
   assert.match(client, /const fitClassic = \(\) => \{/, 'the former shrinking stays, for Off and for a window too narrow');
   for (const key of ['box.group', 'box.uniform', 'box.uniform.hint']) {
-    assert.equal(client.split('\n').filter((line) => line.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+    assert.equal(client.split('\n').filter((line) => line.includes(`'${key}':`)).length, 1, `${key}: once, English only`);
   }
   // The step is chosen with the other controls of the seat hidden and the model name in full, then they come back.
   const start = client.indexOf('const fitUniform = () => {');
@@ -934,4 +932,182 @@ test('the same chat box in every mode (a switch, on by default): the buttons\' w
   assert.match(client, /\[data-dsh-below\] \[data-slot="conversation\.input\.left"\] > :not\(\.dsh-me-tools\):not\(style\),\[data-dsh-wrap\] \[data-slot="conversation\.input\.left"\] > :not\(\.dsh-me-tools\):not\(style\)\{order:5\}/);
   assert.match(client, /\[data-dsh-pin\] \[data-slot="conversation\.input\.permission"\] > \*\{min-width:156px/);
   assert.match(client, /\[data-dsh-wrap\]\{flex-wrap:wrap !important;row-gap:6px\}/);
+});
+
+test('Depth → Mission only selects it (Mission stage D, 20 November, the owner\'s point 16): nothing starts and nothing asks', async () => {
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  const server = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  const cut = (name) => {
+    const start = source.indexOf(`function ${name}(`);
+    assert.ok(start >= 0, `client.js has no function ${name}`);
+    let depth = 0;
+    // The body's brace: after the parameter list (DepthButton's parameters are a { … } pattern).
+    for (let i = source.indexOf(') {', start) + 2; i < source.length; i += 1) {
+      if (source[i] === '{') depth += 1;
+      else if (source[i] === '}' && (depth -= 1) === 0) return source.slice(start, i + 1);
+    }
+    throw new Error(`unbalanced braces in ${name}`);
+  };
+  const line = (name) => source.split('\n').find((text) => text.trim().startsWith(`const ${name} =`));
+  // English and Chinese for every word, the two new ones included.
+  for (const key of ['depth.mission', 'depth.mission.short', 'depth.mission.chosen', 'depth.mission.hint', 'depth.mission.when', 'depth.mission.change', 'depth.mission.on', 'depth.mission.send', 'depth.long', 'depth.long.short', 'depth.long.hint', 'long.group', 'long.hint']) {
+    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 1, `${key}: once, English only`);
+  }
+  assert.match(source, /'depth\.mission': 'Mission',/);
+  assert.match(source, /'depth\.long': 'Mission settings…',/);
+  // Point 17 review: the hint names When it needs you and Wait for me.
+  assert.match(source, /'depth\.long\.hint': '[^']*what it does when it needs you and how long it waits for you[^']*',/);
+  assert.doesNotMatch(source, /'[^']*': '[^']*Long run[^']*'/, 'no user-facing "Long run" left in the words');
+  // The hint names the Depth Send keeps talking at.
+  assert.equal(source.split('\n').filter((text) => /'depth\.mission\.(hint|send)':.*\{0\}/.test(text)).length, 2, 'hint and send carry {0}');
+  // No word says that Depth → Mission starts a Mission any more.
+  assert.doesNotMatch(source, /'depth\.[^']*': '[^']*(Starts a Mission now|Depth → Mission and)/);
+  // Modes never fires dsh-mission:start any more (Mission's own listener stays, and never starts anything).
+  assert.doesNotMatch(source, /dispatchEvent\(new CustomEvent\('dsh-mission:start'/, 'no dsh-mission:start dispatch in client.js');
+  assert.match(source, /onChooseMission: !lockedHere && missionHere \? \(from\) => chooseMission\(from\) : undefined,/);
+  // Where no Mission can start, Mission says why (window.__dshMissionCannot): passed to the Depth list.
+  assert.match(source, /missionOn, chosen: missionChosen, missionCannot,/);
+  assert.match(source, /window\.addEventListener\('dsh-mission:cannot', update\);/);
+  assert.match(source, /onLongRun: !lockedHere && missionHere \? \(\) => window\.dispatchEvent\(new CustomEvent\('dsh-mission:long', \{ detail: \{ sessionId \} \}\)\) : undefined,/);
+  // Carried into a re-run conversation, pruned with the others, and a setting of its own.
+  assert.match(line('CARRIED') ?? source.split('\n').find((text) => text.includes('const CARRIED =')), /'sessionMission'/);
+  assert.match(server, /const fields = \[[^\]]*'sessionMission'[^\]]*\];/);
+  assert.match(server, /sessionMission: z\.string\(\)\.default\('\{\}'\)\.volatile\(\),/);
+  // Kept on each Mac like sessionDepth: shared, one Mac's prune would wipe the other's choices.
+  const { ALWAYS_SKIP: perMac } = await import('../../dsh-shared-settings/index.mjs');
+  assert.ok(perMac.includes('modes.sessionMission'), 'never shared between Macs');
+
+  // What a pick writes: Mission writes only sessionMission, never sessionDepth or searchDepth; Quick clears it.
+  const { settingOps } = new Function(`${cut('readObject')}\n${cut('settingOps')}\nreturn { settingOps };`)();
+  const view = { sessionDepth: JSON.stringify({ s: 'thorough' }), searchDepth: 'thorough', sessionMission: JSON.stringify({ other: true }) };
+  const chose = settingOps('mission', true, view, 's');
+  assert.deepEqual(chose, [{ op: 'set', path: ['sessionMission'], value: JSON.stringify({ other: true, s: true }) }]);
+  assert.ok(chose.every((op) => op.path[0] !== 'sessionDepth' && op.path[0] !== 'searchDepth'), 'the Depth Send uses and every new chat\'s start stay as they are');
+  const quick = settingOps('depth', 'quick', { ...view, sessionMission: JSON.stringify({ other: true, s: true }) }, 's');
+  assert.deepEqual(quick.map((op) => op.path[0]), ['sessionDepth', 'searchDepth', 'sessionMission']);
+  assert.equal(quick[2].value, JSON.stringify({ other: true }), 'Quick clears the Mission choice of this conversation only');
+  assert.equal(settingOps('depth', 'standard', view, 's').length, 2, 'nothing to clear: nothing written for it');
+
+  // The window value and the event Mission's Start Mission listens to.
+  const events = [];
+  const win = { dispatchEvent: (event) => events.push(event) };
+  class CustomEvent { constructor(type, init) { this.type = type; this.detail = init?.detail; } }
+  const announce = new Function('window', 'CustomEvent', `${cut('announceDepthMission')}\nreturn announceDepthMission;`)(win, CustomEvent);
+  announce('s', true, { from: 'depth-button' });
+  assert.deepEqual(win.__dshDepthMission, { s: true });
+  assert.equal(events[0].type, 'dsh-modes:depth-mission');
+  assert.deepEqual(events[0].detail, { sessionId: 's', on: true, from: 'depth-button', picked: true });
+  announce('s', false, null);
+  assert.deepEqual(win.__dshDepthMission, { s: false });
+  assert.deepEqual(events[1].detail, { sessionId: 's', on: false }, 'no `from` unless right after a pick');
+
+  // The hook: on in the five live states only, and it follows dsh-mission:state.
+  const listeners = {};
+  const hookWin = {
+    __dshMissionState: { a: 'running' },
+    addEventListener: (type, fn) => { listeners[type] = fn; },
+    removeEventListener: () => {},
+  };
+  const hookParts = { set: null };
+  const useState = (init) => { const value = typeof init === 'function' ? init() : init; return [value, (next) => { hookParts.set = next; }]; };
+  const useEffect = (fn) => fn();
+  const useMissionOn = new Function('window', 'useState', 'useEffect', `${line('MISSION_ON')}\n${cut('useMissionOn')}\nreturn useMissionOn;`)(hookWin, useState, useEffect);
+  assert.equal(useMissionOn('a'), true);
+  assert.equal(useMissionOn('b'), false);
+  for (const state of ['starting', 'waiting', 'down', 'paused', 'problem']) {
+    hookWin.__dshMissionState.a = state;
+    assert.equal(useMissionOn('a'), true, state);
+  }
+  for (const state of ['none', 'finished', undefined]) {
+    hookWin.__dshMissionState.a = state;
+    assert.equal(useMissionOn('a'), false, String(state));
+  }
+  hookWin.__dshMissionState.a = 'running';
+  listeners['dsh-mission:state']();
+  assert.equal(hookParts.set, true, 'a dsh-mission:state event reads the state again');
+
+  // The list, drawn with stand-ins for React: the list is open, so the Mission option shows.
+  const render = (props) => {
+    let first = true;
+    const refs = [];
+    const stubs = {
+      h: (type, p, ...children) => ({ type, props: p ?? {}, children: children.flat(Infinity) }),
+      useState: (init) => { if (first) { first = false; return [true, () => {}]; } return [typeof init === 'function' ? init() : init, () => {}]; },
+      useRef: () => { const ref = { current: refs.length === 0 ? 'depth-button' : null }; refs.push(ref); return ref; },
+      useEffect: () => {}, useLayoutEffect: () => {},
+      ReactDOM: { createPortal: (node) => node }, React: { Fragment: 'Fragment' },
+      tgUi: () => ({ Info: 'Info' }), icon: () => null, TOGGLE_CSS: '', window: { clearTimeout() {}, setTimeout() {} }, document: { body: 'body' },
+    };
+    const names = Object.keys(stubs);
+    const DepthButton = new Function(...names, `${line('DEPTHS')}\n${line('LENS_IDS')}\n${line('FACT_LENSES')}\nconst TIP_MS = 3000;\n${cut('useSlowTip')}\n${cut('DepthButton')}\nreturn DepthButton;`)(...names.map((name) => stubs[name]));
+    const t = (key) => (key === 'depth.mission.hint' ? 'hint at {0}' : key === 'depth.mission.send' ? 'Send talks at {0}.' : key === 'depth.open' ? 'Depth: {0}.' : key);
+    return DepthButton({ t, depth: 'standard', busy: false, onPick() {}, onPickLens() {}, ...props });
+  };
+  const all = (node, out = []) => {
+    if (node && typeof node === 'object') { out.push(node); for (const child of node.children ?? []) all(child, out); }
+    return out;
+  };
+  const find = (tree, attr) => all(tree).find((node) => node.type === 'button' && attr in node.props);
+  const level = (tree) => all(tree).find((node) => node.props?.className === 'lbl lvl').children.join('');
+  const listbox = (tree) => all(tree).find((node) => node.props?.role === 'listbox' && node.props?.['aria-label'] === 'depth.title');
+  const selected = (tree) => all(listbox(tree)).filter((node) => node.props?.role === 'option' && node.props['aria-selected'] === true).map((node) => ('data-mission' in node.props ? 'mission' : node.children.find((c) => c?.type === 'b')?.children.join('')));
+
+  let from = null;
+  const idle = render({ onChooseMission: (el) => { from = el; }, onLongRun() {} });
+  const mission = find(idle, 'data-mission');
+  assert.ok(mission, 'Depth lists Mission');
+  assert.equal(mission.props.role, 'option', 'Mission is an option of the Depth list, like Quick, Standard and Thorough');
+  assert.ok(all(listbox(idle)).includes(mission), 'inside the listbox');
+  assert.ok(!all(listbox(idle)).includes(find(idle, 'data-long-run')), 'Mission settings… stays a plain button under the list');
+  assert.equal(mission.props.disabled, false);
+  assert.deepEqual(selected(idle), ['depth.standard']);
+  assert.equal(level(idle), '· depth.standard');
+  // The (i) sits beside Mission settings…, outside the list (a listbox holds only options), and names the Depth Send keeps.
+  const row = all(idle).find((node) => String(node.props?.className ?? '').split(' ').includes('dsh-me-mrow'));
+  const info = row.children.find((node) => node.type === 'Info');
+  assert.ok(info, 'Mission has its (i)');
+  assert.equal(info.props.what, 'hint at depth.standard');
+  assert.ok(!all(listbox(idle)).some((node) => node.type === 'Info'), 'no (i) inside the listbox');
+  assert.deepEqual(listbox(idle).children.filter(Boolean).map((node) => node.props?.role), ['option', 'option', 'option', 'option'], 'the listbox holds only its four options');
+  mission.props.onClick();
+  assert.equal(from, 'depth-button', 'the pick gets the Depth button of this chat box (for Start Mission\'s tip and focus there)');
+
+  const chosen = render({ onChooseMission() {}, onLongRun() {}, chosen: true });
+  assert.deepEqual(selected(chosen), ['mission'], 'chosen: Mission is the selected option, Standard is not');
+  assert.equal(level(chosen), '· depth.mission', 'Depth reads Mission while it is chosen');
+  assert.equal(find(chosen, 'data-mission').props.disabled, false);
+  assert.match(all(chosen).find((node) => node.props?.['aria-haspopup'] === 'dialog').props.title, /Send talks at depth\.standard\./, 'the title says at which Depth Send talks');
+  assert.ok(all(find(chosen, 'data-mission')).some((node) => node.type === 'small' && node.children.includes('depth.mission.chosen')));
+
+  const on = render({ onChooseMission() {}, onLongRun() {}, missionOn: true });
+  assert.equal(find(on, 'data-mission').props.disabled, true, 'greyed while a Mission is on');
+  assert.equal(find(on, 'data-mission').props.title, 'depth.mission.on');
+  assert.deepEqual(selected(on), ['mission'], 'and selected');
+  assert.equal(level(on), '· depth.mission', 'Depth reads Mission while one is on');
+
+  // Where no Mission can start (Mission says why: Recon keeping Missions out, no folder, Mission switched off), the option is
+  // greyed with that reason instead of telling the user to press a greyed Start Mission.
+  const cannot = render({ onChooseMission() {}, onLongRun() {}, missionCannot: 'This conversation has no folder.' });
+  assert.equal(find(cannot, 'data-mission').props.disabled, true, 'greyed where no Mission can start');
+  assert.equal(find(cannot, 'data-mission').props.title, 'This conversation has no folder.');
+  assert.ok(all(find(cannot, 'data-mission')).some((node) => node.type === 'small' && node.children.includes('depth.mission.cannot')));
+  assert.match(all(cannot).find((node) => node.type === 'Info').props.what, /This conversation has no folder\./);
+  const cannotOn = render({ onChooseMission() {}, onLongRun() {}, missionOn: true, missionCannot: 'x' });
+  assert.equal(find(cannotOn, 'data-mission').props.title, 'depth.mission.on', 'a Mission on says that first');
+
+  const none = render({ missionOn: true, chosen: true });
+  assert.equal(find(none, 'data-mission'), undefined, 'no Mission option while Mission is off or the conversation is a locked Recon');
+  assert.equal(level(none), '· depth.standard');
+});
+
+test('Mission stage E: the modes service says a tool\'s group and tier, for what the assistant may do while a Mission is paused', async () => {
+  const { boot, makeWorld } = await import('./app.mjs');
+  const app = boot(makeWorld(), { known: ['read', 'write', 'bash'] });
+  const kind = app.service().toolKind;
+  assert.deepEqual({ ...kind('read') }, { group: 'read', tier: 1, sorted: true });
+  assert.deepEqual({ ...kind('write') }, { group: 'change', tier: 2, sorted: true });
+  assert.deepEqual({ ...kind('bash') }, { group: 'run', tier: 3, sorted: true });
+  assert.equal(kind('some_tool_nobody_sorted').sorted, false);
+  app.stop();
 });

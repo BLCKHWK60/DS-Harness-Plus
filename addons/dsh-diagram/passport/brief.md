@@ -2,12 +2,12 @@
 
 What it is for: Accurate diagrams from a description: flowcharts, trees, sequences, timelines, charts and formula plots. The model says what is in the diagram; layout, drawing and checking are done for it. Nothing to install.
 
-This brief was written by Creator Plus from the plugin's own files. Its README below is the full description, complete enough to rebuild the plugin from; improve this brief by hand, with the user's yes.
+This brief was written by Creator Plus from the add-on's own files. Its README below is the full description, complete enough to rebuild the add-on from; improve this brief by hand, with the user's yes.
 
 ## What it must keep doing
 
 - Its tools: diagram_draw.
-- The services it gives other plugins: diagrams.
+- The services it gives other add-ons: diagrams.
 - Its settings: enabled, theme, folder, save, skills.
 
 ## Its README
@@ -55,7 +55,7 @@ After layout, the add-on looks for: boxes that overlap; text that does not fit i
 ## Where the picture goes
 
 - **In the chat:** as the row for the tool call while the model works, and again under the finished turn, because the app folds tool steps away once a turn is done. If the model drew a diagram, fixed it and drew it again under the same name, only the last version is shown there. The picture in the chat always uses the app's light or dark colours. Click it for full size.
-- **As a file:** in a `diagrams` folder inside the conversation's folder, named after the title. A new title that is already taken gets a number; when the model names the file itself, it replaces its own earlier drawing. A file that this add-on did not write is never replaced.
+- **As a file:** in a `diagrams` folder inside the thread's folder, named after the title. A new title that is already taken gets a number; when the model names the file itself, it replaces its own earlier drawing. A file that this add-on did not write is never replaced.
 
 **Settings → Diagrams:** the master switch, save as a file or not, the folder's name, and the colours of the saved file (automatic follows light or dark mode of whatever shows it).
 
@@ -65,14 +65,14 @@ After layout, the add-on looks for: boxes that overlap; text that does not fit i
 - Service `diagrams` (apiVersion 1): `draw(description)` returns `{ok, errors}` or `{ok, kind, title, width, height, outline, problems, svg(options)}`. Meant for other add-ons.
 - Routes: `GET /dsh-diagram/status`; `GET /dsh-diagram/svg` with header `x-dsh-diagram` (and `x-dsh-theme`); `GET /dsh-diagram/list` with headers `x-dsh-session`, `x-dsh-from`, `x-dsh-to` for the drawings of one turn.
 - Client slots: `tool.call.toolview` keyed `diagram_draw`, `conversation.chat.turnTail`, `settings.section`. Pictures are shown as images from a blob, which cannot run scripts.
-- A list of drawings (id, conversation, time, file) is kept under the dsh home in `diagrams/index.json`, capped at 600, so pictures still show after a restart if they were saved.
+- A list of drawings (id, thread, time, file) is kept under the dsh home in `diagrams/index.json`, capped at 600, so pictures still show after a restart if they were saved.
 
 ## Checked
 
 - **Unit tests:** 12 now (`test/`; this list is from the first version, see also "Since 0.57.0"): formulas (and that names such as `constructor` are refused); text measuring and wrapping; error sentences; flowcharts in both directions with a loop, a decision, a group and a self-arrow; 250 random flowcharts in which no two boxes may overlap and every picture must be well-formed; trees, sequences, timelines; charts placed from the numbers (a bar for 210 on an axis to 250 is exactly 210/250 of the height); the check on a deliberately messy drawing; themes and escaping; file names and never replacing someone else's file; every example in the skill draws without problems.
 - **By eye:** all five kinds rendered to pictures and looked at, in light and dark.
 - **Live, in the throwaway web profile with a test model server:** the tool reached the model, a flowchart was drawn, and the picture appeared in the chat under the finished turn in the app's dark colours; the settings page saved a change.
-- **Not checked:** a real model writing descriptions; saving into a conversation's folder from inside the app (the lab had saving off so as not to write into a real folder; the saving code itself is unit-tested); very large diagrams; right-to-left and non-Latin text (widths are estimated for Latin letters); the Mac desktop app.
+- **Not checked:** a real model writing descriptions; saving into a thread's folder from inside the app (the lab had saving off so as not to write into a real folder; the saving code itself is unit-tested); very large diagrams; right-to-left and non-Latin text (widths are estimated for Latin letters); the Mac desktop app.
 
 ## Limits
 
@@ -89,3 +89,7 @@ After layout, the add-on looks for: boxes that overlap; text that does not fit i
 ## Since 0.57.0
 
 - **A chart from another add-on shows again after a restart.** `show(agent, {title, description, file})`: when `file` is a path ending in `.svg` (Data saves each `data_chart` chart that way), it is recorded in `diagrams/index.json` with the drawing. After a restart, or once 80 newer drawings have pushed it out of memory, the chat shows that file, but only while it still carries this add-on's mark; any other file is never served. Unit test: a stand-in app shows a chart with its file, loads the add-on again with the same list, and gets the chart from the list and the picture route; a file without the mark, a path that is not an SVG and a drawing without a file are not served.
+
+## Stage 6a: Recon drawings stay in Recon (item 4A, 22 November 2026: built and checked in the lab only)
+
+A thread in the Recon space, whatever its mode, never puts a drawing's title into the shared list (`diagrams/index.json`): its drawings show in the chat until the app restarts. Its SVG file is saved only in the thread's own run folder in Recon's room (`run-<id>/diagrams/`, from Recon's `roomFolderOf`), which End and wipe deletes; never in the room itself, which every Recon thread shares. When Recon gives no run folder (Recon off or older, an error, a thread outside the room) the answer says "Not saved as a file: this Recon thread is not in Recon's room."

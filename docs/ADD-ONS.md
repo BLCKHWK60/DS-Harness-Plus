@@ -12,24 +12,24 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 
 | Add-on | Tier | Works right away? | Settings page | Command |
 | --- | --- | --- | --- | --- |
-| [Cowork sidebar](#cowork-sidebar) | Core | yes | the left sidebar itself | |
+| [Left panel](#left-panel) | Core | yes | the left panel itself, and Settings → Spaces | |
 | [Colour schemes](#colour-schemes) | Core | yes (stock colours until you pick) | Settings → Colours | |
 | [Modes](#modes) | Core | yes | Settings → Modes | `/mode` |
-| [Model Tiers](#model-tiers) | Core | yes | Settings → Model Tiers | |
+| [Model tiers](#model-tiers) | Core | yes | Settings → Model tiers | |
 | [Privacy](#privacy) | Core | yes | | `/privacy` |
 | [Memory](#memory) | Core | yes (starts empty) | Settings → Memory | |
 | [Budget guard](#budget-guard) | Core | yes | Settings → Budget guard | |
-| [Automations](#automations) | Core | yes (phone alerts after setup) | Settings → Alerts, and the Automation runs page | |
+| [Automations](#automations) | Core | yes (phone alerts after setup) | Settings → Alerts, and the Automations page | |
 | [Library](#library) | Core | after you add a folder | Settings → Library | |
 | [Mac bridge](#mac-bridge) | Core | after you allow something | Settings → Mac | |
-| [Finance](#finance) | Beta | after you switch it on | Settings → Finance, and the Finance tab | |
-| [Balance](#balance) | Core | yes | The foot of the sidebar | |
-| [Data](#data) | Beta | after you switch it on | Settings → Data, and the Data tab | |
-| [Research](#research) | Beta | after you switch it on | Settings → Research, and the Research tab | |
-| [Scout](#scout) | Experimental | after you switch it on | Settings → Scout, and the Scout tab | `/scout` |
-| [Recon](#recon) | Separate download | after you switch it on (needs the `tor` program) | Settings → Recon, and the Recon tab | `/recon` |
+| [Finance](#finance) | Beta | after you switch it on | Settings → Finance, and Finance mode | |
+| [Balance](#balance) | Core | yes | The foot of the left panel | |
+| [Data](#data) | Beta | after you switch it on | Settings → Data, and Data mode | |
+| [Research](#research) | Beta | after you switch it on | Settings → Research, and Research mode | |
+| [Scout](#scout) | Experimental | after you switch it on | Settings → Scout, and Scout mode | `/scout` |
+| [Recon](#recon) | Separate download | after you switch it on (needs the `tor` program) | Settings → Recon, and the Recon space | `/recon` |
 | [Mission](#mission) | Core | yes | Settings → Mission | `/mission` |
-| [Global Search](#global-search) | Core | yes | Cmd-K, or the search icon at the top of the sidebar | |
+| [Global search](#global-search) | Core | yes | Cmd-K, or the search icon at the top of the left panel | |
 | [Activity indicator](#activity-indicator) | Core | yes | Settings → Activity | `/activity` |
 | [PDF reader](#pdf-reader) | Core | yes | Settings → PDF reader | `/pdf` |
 | [Diagram builder](#diagram-builder) | Core | yes | Settings → Diagrams | |
@@ -37,15 +37,16 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Code map](#code-map) | Core | yes | Settings → Code tools | `/codemap` |
 | [Self-improvement](#self-improvement) | Core | after setup, in its page | Settings → Self-improve | `/evolve` |
 | [Usage counter](#usage-counter) | Core | yes | Settings → Usage | `/usage` |
+| [Tool use](#tool-use) | Core | yes | Settings → Tool use | |
 | [Deep research](#deep-research) | Core | yes | Settings → Research → Advanced | |
 | [Code power](#code-power) | Core | yes | Settings → Code tools → Reviews and fixes | `/review` |
-| [Sampling presets](#sampling-presets) | Core | after setup | Settings → Model Tiers → Sampling | `/sampling` |
+| [Sampling presets](#sampling-presets) | Core | after setup | Settings → Model tiers → Sampling | `/sampling` |
 | [Model arena](#model-arena) | Core | after setup, in its page | Settings → Arena | `/arena` |
 | [Agent swarm](#agent-swarm) | Experimental | after setup | Settings → Swarm | |
 | [Benchmark](#benchmark) | Core | after setup, in its page | Settings → Benchmark | `/benchmark` |
 | [Route health](#route-health) | Experimental | after setup | dot in the chat box | `/routes` |
 | [Model router](#model-router) | Experimental | after setup | | `/router` |
-| [Role prompts](#role-prompts) | Core | after setup | Settings → Model Tiers → Instructions for every conversation | |
+| [Role prompts](#role-prompts) | Core | after setup | Settings → Model tiers → Instructions for every thread | |
 | [Notify](#notify) | Experimental | after setup | Settings → Alerts | `/notify` |
 | [Media tools](#media-tools) | Experimental | after setup | | |
 | [Sync](#sync) | Core | after setup | | `/sync` |
@@ -54,69 +55,63 @@ Each settings block goes into `~/.dsh/profiles/desktop/cordis.patch.yml`, at the
 | [Learned skills](#learned-skills) | Core | after setup (nothing is installed without your yes) | Settings → Learned skills | `/skills` |
 | [Settings helper](#settings-helper) | Core | yes | the Settings window itself | |
 | [Artifacts](#artifacts) | Beta | after you switch it on | Settings → Artifacts, and the Artifacts page | |
-| [Content](#content) | Beta | after you switch it on | Settings → Content, and the Content tab | |
+| [Content](#content) | Beta | after you switch it on | Settings → Content, and Content mode | |
 | [Split Plus](#split-plus) | Experimental | after you switch it on | Settings → Split Plus, and the Split page | |
-| [Devices](#devices) | Experimental | after you switch it on | Settings → Devices, and the Devices tab | |
-| [Creator Plus](#creator-plus) | Experimental | after you switch it on | Settings → Creator Plus, and the Creator Plus tab | |
+| [Devices](#devices) | Experimental | after you switch it on | Settings → Devices, and the Devices space | |
+| [Creator Plus](#creator-plus) | Experimental | after you switch it on | Settings → Creator Plus, and the Workshop space | |
 | [Tuner Plus](#tuner-plus) | Experimental | after you switch it on, needs Apple's mlx-lm | Settings → Tuner Plus | |
 | [Engines](#engines) | Experimental | after you pick an engine | the Engines page | `/engine` |
 
 ---
 
-## Cowork sidebar
+## Left panel
 
-Replaces the left sidebar with a tabbed one:
-- **Chat / Cowork / Code tabs** at the top. The tab decides the mode of **new** conversations, and the mode drop-down leaves the chat box. A conversation's mode is fixed at its first message; to change one later, type `/mode`.
-- **A New button that follows the tab:** New chat, New task, New code task.
-- **Each tab's own sections:**
-  - **Chat:** Model Arena.
-  - **Cowork:** Automation tasks, **Connectors** and **Skills**.
-  - **Code:** Connectors and Skills.
+Replaces the app's left panel with one that has five **space** buttons at the top: **Chat**, **Code**, **Devices**, **Recon** and **Workshop**. A space is where a thread lives; how a thread works is its **mode**, picked in the Mode list under the chat box (see [Modes](#modes)). How spaces, modes, ticks and start modes fit together is in [MODES-AND-SETTINGS.md](MODES-AND-SETTINGS.md).
+- **The space buttons.** Chat always shows. Code shows unless you hide it in **Settings → Spaces**. Devices, Recon and Workshop show while their add-on is on (Workshop needs Creator Plus or Tuner Plus). Recon is red and Devices violet. Each window keeps its own space, and clicking a space opens the thread you last had open there.
+- **A New button that follows the space:** New chat, New code task, New device task, New Recon search, New workshop task.
+- **Rows:** Projects, Artifacts, Automations and Plugins in every space; Model arena in Chat and Workshop; **Connectors** and **Skills** in Chat and Code; Tuner Plus and Benchmark in Workshop.
 
-  **Each tab lists only its own conversations.** Code shows your coding projects, Chat your chats, Cowork your tasks. Use the `⋯` on a conversation or a project to move it to another tab, or on a conversation to **Archive** it (the tab ends with an **Archived** list where each one has **Restore**), or to **Delete** it. Delete moves the conversation to a **Trash** list at the end of the tab; **Put back** returns it within 30 days, and after that it is removed for good. A conversation you used since the app started leaves the list at once and its files move at the next start; **Show all** gives the app's full list with search.
+  **Each space lists only its own threads.** Chat shows **Chats** (standalone threads) first, then **Projects** as folders. The other spaces show your folders, **Scratch** and **Other**. Use the `⋯` on a thread to **Archive** it (the space ends with an **Archived** list where each one has **Restore**), or to **Delete** it. Delete moves the thread to a **Trash** list at the end of the space; **Put back** returns it within 30 days, and after that it is removed for good. A thread you used since the app started leaves the list at once and its files move at the next start; **Show all** gives the app's full list with search. Threads of a hidden space stay reachable through Show all and ⌘K.
 
-  **Scratch: a place with no folder of yours.** New conversations of every tab except Code start in **Scratch**: each works in a private folder of its own, never in a folder of yours, and its files go with it when you delete it (through the 30-day trash). Code starts in the open or last used project; Recon in its room. Change any tab in **Settings → Start places**; the **Scratch | Folder** switch on the start page starts the other way once. A Scratch conversation's `⋯` has **Keep in a project…**, which copies its files into a new folder of a project and continues there. Each tab's list shows a **Scratch** group, with **Clean up…** for old ones. Files you drop into a Scratch chat are copied into its folder, so Data and the PDF reader can open them. Sync never carries Scratch conversations. More in the Cowork sidebar's README.
+  **The Cowork switch (Chat space).** Under the chat box of a new Chat thread. Off: the thread keeps its own files, and deleting it deletes them. On: it works in a project folder you pick (the default workspace is chosen first). Once the thread has started, the switch becomes a small place label ("Standalone" or the project's name). On a standalone thread, **Continue in a project…** starts a new thread in a project you pick, with the old thread attached for the assistant to read.
 
-  **The Chat tab has no folders.** A chat lives on its own, so the Chat tab hides the workspace picker (in its default folder and in Scratch), starts a new chat in Scratch (or, set to Folder on Settings → Start places, in the app's default workspace), and shows your chats as one flat list. The `⋯` on a chat can **Promote to Cowork** or **Promote to Code** (the same conversation, in the new mode) or **Continue in a project…** (a new conversation in a project you pick, with the chat attached for the assistant to read).
+  **Scratch: a place with no folder of yours.** A Scratch thread works in a private folder of its own, never in a folder of yours, and its files go with it when you delete it (through the 30-day trash). Where new threads of each space start is set in **Settings → Spaces** (the same setting as **Settings → Start places**): Chat starts standalone, Code in the open or last used project, Recon in its room. The **Scratch | Folder** switch on the start page starts the other way once. A Scratch thread's `⋯` has **Keep in a project…**, which copies its files into a new folder of a project and continues there. Each space's list shows a **Scratch** group, with **Clean up…** for old ones. Files you drop into a Scratch thread are copied into its folder, so Data and the PDF reader can open them. Sync never carries Scratch threads. More in the add-on's README (`addons/dsh-cowork-shell/README.md`).
 
-  The start page shows a greeting per tab, and on most tabs suggestion chips under the chat box (Create slides, Build website, …) that fill in a starter prompt.
+  The start page shows a greeting per space, and suggestion chips under the chat box (Create slides, Build website, …) that follow the mode you pick and fill in a starter prompt.
 
   **Connectors** lists your MCP servers. Each shows whether it is connected and how many tools it brings, with an on/off switch. A short form writes out the settings lines for a new one. **Skills** lists the skills the assistant can use, with search.
-- **Your projects and Settings**, as before.
+- **Settings**, at the bottom, as before.
 
-When a conversation waits for you (an approval, a plan review or a question), a **Needs you** block appears at the top of the list on every tab; click it to open the conversation at the question.
+When a thread waits for you (an approval, a plan review or a question), a **Needs you** block appears at the top of the list in every space; click it to open the thread at the question.
 
-The **More** menu in the sidebar ends with three switches: **Wide chat area** (the conversation and the message box use the width of the window instead of a centred column), **Hide DeepSeek logos** (the logo and name at the top of the sidebar and the logo on the start page) and **Show the date as the title** (the start page shows today's date, like "11 November, 2026", instead of the greeting).
+The **More** menu in the left panel ends with three switches: **Wide chat area** (the thread and the chat box use the width of the window instead of a centred column), **Hide DeepSeek logos** (the logo and name at the top of the left panel and the logo on the start page) and **Show the date as the title** (the start page shows today's date, like "11 November, 2026", instead of the greeting).
 
-To get the normal sidebar back, switch **Cowork sidebar** off on the **Plugins** page. It takes effect at once. Use that main switch, not the switch for its inner row on the details page: that one would leave you with no sidebar at all. To choose which pages each tab shows, see `addons/dsh-cowork-shell/README.md`.
+To get the app's own left panel back, switch **Left panel** off on the **Plugins** page. It takes effect at once. Use that main switch, not the switch for its inner row on the details page: that one would leave you with no left panel at all.
 
-### Since 0.33: rows of tabs, coming back to a tab, and projects
+### Projects
 
-- **Tabs in rows of three.** With more than three tabs (Chat, Cowork, Code, Finance, Data) the tabs sit in two rows, each with its icon and full name.
-- **How many tabs** (since 0.57.0): **Settings → Modes → Sidebar → Tabs in the sidebar** (1 to 5, 3 unless you change it) sets how many of your own modes get a tab, in their order. A tab an add-on adds (Finance, Data, Research, Scout, Recon) always shows while it is switched on. A mode without a tab says so on its card: it can then only be reached with `/mode`.
-- **Each tab remembers where you were.** Clicking a tab opens the conversation you last had open in that tab. A tab you have not used yet opens its start page. This is kept in the app window, not in your settings.
-- **Projects.** In every tab except Chat the list is headed by **+ New**. Pick a folder: it becomes a project in that tab. The small gear on a project's row opens its page:
-  - **Name** and the tab it shows under.
-  - **Instructions**: what the assistant should know and do in every conversation of the project. They are kept by Plus, not written into your folder. A file named AGENTS.md or CLAUDE.md in the folder is read by the app as before.
-  - **Files**: what is in the folder. **Add files** (or dropping files onto the box) copies them into the folder. A file is never replaced: a name that is taken gets " (2)".
-  - **Conversations** of the project, and **New conversation**.
+Open the **Projects** row and press **+ New**, then pick a folder: it becomes a project. The small gear on a project's row opens its page:
+- **Name**.
+- **Instructions**: what the assistant should know and do in every thread of the project. They are kept by Plus, not written into your folder. A file named AGENTS.md or CLAUDE.md in the folder is read by the app as before.
+- **Files**: what is in the folder. **Add files** (or dropping files onto the box) copies them into the folder. A file is never replaced: a name that is taken gets " (2)".
+- **Threads** of the project, and a button to start a new one.
 
 ### Since 0.38: project types
 
-A Cowork project can have a type: ready-made instructions for a kind of work. Open a project's page (the gear on its row) to choose one. A new project shows the choice at the top, with **Blank** selected: Blank adds nothing, so Cowork works as before.
+A project can have a type: ready-made instructions for a kind of work. Open a project's page (the gear on its row) to choose one. A new project shows the choice at the top, with **Blank** selected: Blank adds nothing.
 
 | Type | What it is for |
 |---|---|
 | **Research** | Deep research from many sources, written up as reports with every claim cited. |
 | **Learn** | A tutor that teaches from your own materials: explanations, quizzes, flashcards, progress over time. |
 | **Paperwork** | Letters, bills, contracts, deadlines and drafted replies. It is told to keep your papers private. |
-| **Plan** | Plan and track any project: tasks, owners, dates, status and risks. |
+| **Plan** | Plan and track any project: to-dos, owners, dates, status and risks. |
 | **Write** | Long-form writing: outline, style guide or story bible, and revision passes across the manuscript. |
 
 - A type is a starting point. Its instructions are copied into the project, and you can change them as you like.
 - If the project already has instructions of yours, picking a type shows the new ones first. You then choose: replace yours, keep yours and only change the type, or cancel.
 - **Your own types:** under the instructions, **Save as my preset…** keeps the current text as a type of your own. It is then offered for every project. This is the way to add a method of your own.
-- Types are for projects under the Cowork tab. Finance, Data and Code keep their own tabs because they have their own tools.
+- Finance, Data and Code need no type: they are modes with their own tools.
 
 ### Since 0.39: instructions written by a model
 
@@ -135,10 +130,10 @@ On a project's page, under the instructions, **Generate with a model…** lets a
 - **Earlier versions** keeps the last 10 saved versions of a project's instructions. "Put back" restores one.
 - If the folder changes a lot after instructions were generated, the page says so and suggests generating again. It never does so by itself.
 
-### Since 0.39: Data and Finance tools in Cowork projects
+### Since 0.39: Data and Finance tools in projects
 
 - A project of a type that uses them (Research, Paperwork, Plan) is pointed at the Data tools for tables and, for Research, the Finance tools. The Type card says whether they are available and where to switch them on.
-- **Paperwork** conversations start with Web set to Off, so your papers do not turn into web queries. You can switch Web on in the chat box.
+- **Paperwork** threads start with Web set to Off, so your papers do not turn into web queries. You can switch Web on in the chat box.
 
 ## Colour schemes
 
@@ -149,20 +144,20 @@ Pick the colours of the whole app in **Settings → Colours**:
 - **Forest** (green and mint)
 - **Custom**, your own colours
 
-Each has a light and a dark version and follows **Settings → General → Appearance**. On the Mac, **Solid sidebar on the Mac** paints the sidebar in the scheme's colour instead of see-through. Details and the custom format are in `addons/dsh-color-schemes/README.md`.
+Each has a light and a dark version and follows **Settings → General → Appearance**. On the Mac, **Solid left panel on the Mac** paints the left panel in the scheme's colour instead of see-through. Details and the custom format are in `addons/dsh-color-schemes/README.md`.
 
 ## Modes
 
-Chat, Cowork and Code modes, chosen per conversation with the selector in the chat box or `/mode`.
+Plain chat, Chat, Cowork and Code modes, and the add-on modes (Research, Data, Finance, Scout, Content, Automations, Devices, Recon, Creator Plus). A mode is a set of instructions and tools. Pick it in the **Mode list** under the chat box (or with `/mode`): Plain chat first, then the modes ticked for the thread's space. A change applies from your next message; the thread stays in its space. **Settings → Modes** gives every mode five ticks, one per space, and **Settings → Spaces** sets each space's start mode, start place and preset. In Devices, Recon and Workshop every mode keeps that space's safety rules. The details are in [MODES-AND-SETTINGS.md](MODES-AND-SETTINGS.md).
 
-The chat box also gets four buttons for the open conversation:
-- **Web** is one selector, the same in every tab (since 18 November 2026): **Off**, **All** (every kind of source, as before; where every tab starts except Chat, which starts Off), or any mix of sources you tick: **verified sources**, **academic papers**, **news**, **ordinary sites**, **forums and boards**, **social media and channels**, **archives** (removed Reddit posts) and **Other** (your own sources). For example "only verified sources and forums". The button reads `Web · All`, `Web · Verified + Forums`, `Web · 4 sources` or the name of a selection you saved. Results of unticked kinds are left out of searches, their pages are not opened, and the assistant is told how to search for the kinds you ticked. In Research and Scout Off is greyed (they always search; switch Tools off to stop them). In Recon the list also has **Tor**, **Usenet** and **I2P** (not set up yet). How much the assistant searches is Depth. Off also stops shell commands and programs that go online, and takes away the image tools of an outside image service. Connectors you added stay on and can still reach the internet; the Off hint says so.
-- **Depth** sets how much work the conversation gets: **Quick**, **Standard** or **Thorough**. With Web on it sets how much the assistant searches (Thorough: at least ten searches and ten pages read, key facts checked in two sources); it also sets planning, checks before finishing, and, at Thorough, one review by a helper in tabs that can start helpers (Cowork, Code and modes with all tools). At Thorough a turn also gets one check just before it ends (shown as a one-line row "Thorough: one check before finishing"); the model fixes only what is missing and cannot start a new research run then. It costs one more model reply per Thorough turn. The Depth you pick is also where new conversations start (Settings → Modes sets it too). It is the same in **every tab**, Recon, Research and Scout included: in Recon it also sets how hard Recon searches with its own tools, and in Research and Scout (and for a deep research run asked for anywhere) it sets the size of a research run: Quick about 10 minutes and up to 4 helpers, Standard about 25 and 6, Thorough about 45 and 8. Research's separate Depth is gone. **Effort** on the model button is how hard the model thinks. Updating to 0.59.0 moves each conversation's Web level into its Depth once (Deep becomes Thorough).
-- **Tools** says whether the assistant has any tools ("Tools on" or "Tools off"). Click it for one switch that turns every tool off or back on for this conversation, and for the list of what the assistant can and cannot call. With tools off, the assistant is offered nothing, so it does not try and you see no failed attempts. In a conversation started in the app's PTC mode, the panel says so: there the assistant reaches tools from inside small programs it writes, and "Tools off" stops those programs too.
-- **The models chip** says whether helper agents use this conversation's model (**One model for everything**) or the role models (**Different models**).
-- Research with helper agents and a cited report is in the **Research** tab (see Deep research).
+The chat box also gets four buttons for the open thread:
+- **Web** is one selector, the same in every space and mode (since 18 November 2026): **Off**, **All** (every kind of source, as before; where every mode starts except Chat, which starts Off), or any mix of sources you tick: **verified sources**, **academic papers**, **news**, **ordinary sites**, **forums and boards**, **social media and channels**, **archives** (removed Reddit posts) and **Other** (your own sources). For example "only verified sources and forums". The button reads `Web · All`, `Web · Verified + Forums`, `Web · 4 sources` or the name of a selection you saved. Results of unticked kinds are left out of searches, their pages are not opened, and the assistant is told how to search for the kinds you ticked. In Research and Scout Off is greyed (they always search; switch Tools off to stop them). In Recon the list also has **Tor**, **Usenet** and **I2P** (not set up yet). How much the assistant searches is Depth. Off also stops shell commands and programs that go online, and takes away the image tools of an outside image service. Connectors you added stay on and can still reach the internet; the Off hint says so.
+- **Depth** sets how much work the thread gets: **Quick**, **Standard** or **Thorough**. With Web on it sets how much the assistant searches (Thorough: at least ten searches and ten pages read, key facts checked in two sources); it also sets planning, checks before finishing, and, at Thorough, one review by a helper in modes that can start helpers (Cowork, Code and modes with all tools). At Thorough a turn also gets one check just before it ends (shown as a one-line row "Thorough: one check before finishing"); the model fixes only what is missing and cannot start a new research run then. It costs one more model reply per Thorough turn. The Depth you pick is also where new threads start (Settings → Modes sets it too). It is the same in **every space and mode**, Recon, Research and Scout included: in Recon it also sets how hard Recon searches with its own tools, and in Research and Scout (and for a deep research run asked for anywhere) it sets the size of a research run: Quick about 10 minutes and up to 4 helpers, Standard about 25 and 6, Thorough about 45 and 8. Research's separate Depth is gone. **Effort** on the model button is how hard the model thinks. Updating to 0.59.0 moves each thread's Web level into its Depth once (Deep becomes Thorough).
+- **Tools** says whether the assistant has any tools ("Tools on" or "Tools off"). Click it for one switch that turns every tool off or back on for this thread, and for the list of what the assistant can and cannot call. With tools off, the assistant is offered nothing, so it does not try and you see no failed attempts. In a thread started on the app's PTC preset, the panel says so: there the assistant reaches tools from inside small programs it writes, and "Tools off" stops those programs too.
+- **The models chip** says whether helper agents use this thread's model (**One model for everything**) or the role models (**Different models**).
+- Research with helper agents and a cited report is **Research** mode (see Deep research).
 
-With the Cowork sidebar on, the sidebar tabs choose instead, and the chat-box selector is hidden. A mode decides which tools the assistant may use, how its sandbox (access level) is set, a default tier, and a short instruction. The default mode, Cowork, allows every tool, so nothing is restricted until you choose otherwise. Edit or add modes on **Settings → Modes**.
+A mode decides which tools the assistant may use, how its sandbox (access level) is set, a default tier, and a short instruction. Plain chat and Cowork allow every tool the space allows, so nothing is restricted until you choose otherwise. Edit or add modes on **Settings → Modes**.
 
 ### Since 0.33: a working method for Code
 
@@ -172,55 +167,54 @@ What the app itself already shows for code work: each file change as a card (cli
 
 ### Since 0.40: one model or several for helper agents
 
-Some tools start helper agents: a `/mission` run, Deep research, Agent swarm, the Tier tools, Code power. Helpers can run on the conversation's own model or on other models. Each different model has to be loaded at the same time, which matters when your models are large and your memory is not.
+Some tools start helper agents: a `/mission` run, Deep research, Agent swarm, the Tier tools, Code power. Helpers can run on the thread's own model or on other models. Each different model has to be loaded at the same time, which matters when your models are large and your memory is not.
 
-- **The models chip** in the chat box, beside Tools, shows it at a glance: **One model** means everything runs on the conversation's model. An amber **3 models** means up to three may be loaded at once.
-- Click it to switch between **One model for everything** and **Different models**, for this conversation. Under "Different models" it lists every model the conversation may use and where each is set.
-- **One model is the default.** "Use this for new conversations too" changes the default.
+- **The models chip** in the chat box, beside Tools, shows it at a glance: **One model** means everything runs on the thread's model. An amber **3 models** means up to three may be loaded at once.
+- Click it to switch between **One model for everything** and **Different models**, for this thread. Under "Different models" it lists every model the thread may use and where each is set.
+- **One model is the default.** "Use this for new threads too" changes the default.
 - A `/mission` run also says it in its first line: "one model" or "3 models", with their names.
-- Where the other models are set: Settings → Model Tiers → Role models, and Settings → Mission → Models for a run.
+- Where the other models are set: Settings → Model tiers → Role models, and Settings → Mission → Models for a run.
 - Not covered: the Self-improvement, Arena and Benchmark pages run the models you pick there.
 
 ### Since 0.34: Rerun, and hiding the thumbs
 
-Under every answer there is a **Rerun** button (a round arrow, between the thumbs and Branch). Pick another model in the chat box, then press it: Plus makes a copy of the conversation up to your question and asks the question again with the model that is selected now. The new model does not see the old answer. The old answer stays in the original conversation, so you can compare the two. The copy opens by itself, in the same tab and the same folder.
+Under every answer there is a **Rerun** button (a round arrow, between the thumbs and Branch). Pick another model in the chat box, then press it: Plus makes a copy of the thread up to your question and asks the question again with the model that is selected now. The new model does not see the old answer. The old answer stays in the original thread, so you can compare the two. The copy opens by itself, in the same space and the same folder.
 
-- The app cannot erase an answer inside a conversation, which is why a rerun is a copy.
+- The app cannot erase an answer inside a thread, which is why a rerun is a copy.
 - Pictures and files that were attached to the question are not sent again; the button says so when that applies.
 - **Settings → Modes → Buttons under an answer** has two switches: **Rerun button** (on by default) and **Hide thumbs up and thumbs down** (off by default). Feedback from the chat box menu still works when the thumbs are hidden.
 
 ### Since 18 November 2026: one Web selector, and your own sources
 
-- **Settings → Web sources** (beside Modes): the lists that decide what counts as verified, academic and news (one site per line), your **saved selections** (save one from the Web button with "Save as…"), the **starting ticks** of each tab (set from the Web button with "Use for new … conversations"), and **Other sources**.
+- **Settings → Web sources** (beside Modes): the lists that decide what counts as verified, academic and news (one site per line), your **saved selections** (save one from the Web button with "Save as…"), the **starting ticks** of each mode (set from the Web button with "Use for new … threads"), and **Other sources**.
 - **Other sources** are your own: a site with a login, a key, a browser cookie or a private address. Give each a name, its search address (with `{query}`) or start address, and its kind of login, then type the login once. It is kept in the app's secret store (as Finance's keys) or, if you choose, in the macOS Keychain, never in the settings, and never shown again. The assistant sees only the source's name, and the login is taken out of everything it reads. **Test** shows whether the source answers. Sites that sign in through their own web form are not supported: copy the sign-in cookie from your browser instead.
 - **Recon** may use one of them only if you switch on its **May be used in Recon**, and then only through Recon's own WireGuard tunnel.
-- What was there before still works: a conversation that had a Web level keeps it as ticks, your Custom mixes are your saved selections, and Research's Focus became ticks (News: news and verified sources; Academic: academic papers and verified sources).
+- What was there before still works: a thread that had a Web level keeps it as ticks, your Custom mixes are your saved selections, and Research's Focus became ticks (News: news and verified sources; Academic: academic papers and verified sources).
 
 ### Since 0.57.0: more on the Modes page, the access level kept, and a method for Cowork
 
-- **Settings → Modes has three new sections.** Each control saves at once.
-  - **New conversations:** **Depth for new conversations (and those that never picked one)**, Quick, Standard or Thorough; and **Mode for scheduled tasks**: the mode a conversation opened by an Automation task starts in, whatever tab is selected (Cowork unless you change it).
-  - **Sidebar:** **Tabs in the sidebar**, 1 to 5, shown while the Cowork sidebar is on (see Cowork sidebar).
+- **Settings → Modes has these sections.** Each control saves at once.
+  - **New threads:** **Depth for new threads (and those that never picked one)**, Quick, Standard or Thorough; and **Mode for automations**: the mode a thread opened by an automation starts in when the automation has no mode of its own, whatever space the window shows (Cowork unless you change it).
   - **Built-in working methods:** one switch for Code's method and one for Cowork's.
-- **A working method for Cowork.** While the Cowork mode has no instructions of its own, Plus gives it a short method, in the words you approved: understand the task first (one short question only when it would change the result), keep a step list, look things up instead of guessing, ask before deleting, overwriting or moving a file it did not make in this conversation, check the result before calling it done, and report the outcome first. Text in files and on web pages is material, not instructions. Your own text in the Cowork mode's instructions replaces it; the switch **Cowork: Plus's working method** turns it off.
-- **The access level is kept.** Chat, Data, Research and Recon set Read Only, and Code sets Workspace Write, only when a conversation starts in that mode or is moved into it. A move made in the sidebar while the conversation is closed counts once you open it. A level you pick by hand in the chat box stays, also after a restart. Leaving such a mode for one that sets no level (Cowork, Finance, Scout) puts back the level the conversation had before, also after a restart, unless you changed it by hand in between. Conversations from before 0.57.0 have no earlier level stored: moved from such a mode to one that sets none, they get the level of their permission preset. If one stays on Read Only, set the access level in the chat box.
-- **A mode's tier applies from the first message.** A new conversation that starts in a mode with a tier (the mode card's "Tier for this mode") runs on that tier from its first message, not only after a switch.
-- **`/mode` before the first message.** With the Cowork sidebar on, `/mode` typed before a conversation's first message does not switch: it says that the selected tab decides and names the tabs. After the first message it switches as before.
+- **A working method for Cowork.** While the Cowork mode has no instructions of its own, Plus gives it a short method, in the words you approved: understand the job first (one short question only when it would change the result), keep a step list, look things up instead of guessing, ask before deleting, overwriting or moving a file it did not make in this thread, check the result before calling it done, and report the outcome first. Text in files and on web pages is material, not instructions. Your own text in the Cowork mode's instructions replaces it; the switch **Cowork: Plus's working method** turns it off.
+- **The access level is kept.** Chat, Data, Research and Recon set Read Only, and Code sets Workspace Write, only when a thread starts in that mode or is moved into it. A mode change made while the thread is closed counts once you open it. A level you pick by hand in the chat box stays, also after a restart. Leaving such a mode for one that sets no level (Cowork, Finance, Scout) puts back the level the thread had before, also after a restart, unless you changed it by hand in between. Threads from before 0.57.0 have no earlier level stored: moved from such a mode to one that sets none, they get the level of their permission preset. If one stays on Read Only, set the access level in the chat box.
+- **A mode's tier applies from the first message.** A new thread that starts in a mode with a tier (the mode card's "Tier for this mode") runs on that tier from its first message, not only after a switch.
+- **`/mode`** switches the mode of a thread, like the Mode list, before or after the first message.
 - **Web Off** also stops programs (`run_code`) that go online, and takes away `generate_image` and `edit_image` unless the image service is on this Mac or your own network. Connectors stay on and can still reach the internet.
-- **Scout keeps its rules** under a model version set to **Use only these** (Settings → Model Tiers), as Recon already did.
+- **Scout keeps its rules** under a model version set to **Use only these** (Settings → Model tiers), as Recon already did.
 
-## Model Tiers
+## Model tiers
 
 **In the chat box:** one button beside the send button shows the model and the effort. It opens a panel where you:
 
 - pick any model, or one of your saved versions of a model;
 - drag the **effort** slider from Off to Ultra Code;
 - pick a **tier**;
-- open **Sampling** to set temperature and max output tokens for this conversation, and **Save as new version…** to keep them under a name.
+- open **Sampling** to set temperature and max output tokens for this thread, and **Save as new version…** to keep them under a name.
 
 This replaces the app's own model menu while the add-on is on.
 
-**Tiers** are ways of working. Five starters ship: Fast, Balanced, Deep, Creative and Code review. None has a model: a tier applies its rules to whatever model you are on, until you give it one. On **Settings → Model Tiers** each tier has:
+**Tiers** are ways of working. Five starters ship: Fast, Balanced, Deep, Creative and Code review. None has a model: a tier applies its rules to whatever model you are on, until you give it one. On **Settings → Model tiers** each tier has:
 
 - a name and its own instructions for the model;
 - a model, or a saved model version (optional);
@@ -247,45 +241,45 @@ If you used Tiers before 0.10, your tiers keep their names (Haiku, Sonnet, Opus,
 By default the app reports to its maker in two ways, whichever model you use. This add-on switches both off:
 
 - **Usage events:** on the desktop app, an event for each message you send, with the model name, your device and account ids and details of your Mac. No prompts or answers.
-- **Conversation upload on feedback:** pressing thumbs-up or thumbs-down on an answer uploads the conversation up to that point.
+- **Thread upload on feedback:** pressing thumbs-up or thumbs-down on an answer uploads the thread up to that point.
 
-Type `/privacy` in a chat to see that both are off. To switch reporting back on, switch the Privacy add-on off on the Plugins page and restart the app.
+Type `/privacy` in a thread to see that both are off. To switch reporting back on, switch the Privacy add-on off on the Plugins page and restart the app.
 
-Still on, because they are features and not reporting: update checks, your DeepSeek sign-in while you are signed in, the plugin list, web search when a conversation uses it, and any cloud model you pick. With a local model, your prompts and answers go only to your model server. For certainty about every connection, use a firewall app.
+Still on, because they are features and not reporting: update checks, your DeepSeek sign-in while you are signed in, the plugin list, web search when a thread uses it, and any cloud model you pick. With a local model, your prompts and answers go only to your model server. For certainty about every connection, use a firewall app.
 
 ## Memory
 
-A short list of lasting things the assistant should know about you: who you are, how you like answers, long projects. It is given to every new conversation.
+A short list of lasting things the assistant should know about you: who you are, how you like answers, long projects. It is given to every new thread.
 
 - Open **Settings → Memory**, type an entry and press **Remember**. Every entry can be edited and deleted.
 - When you tell the assistant to remember something, it **suggests** an entry. A card under the answer asks **Remember this?** with **Save** and **No**. Nothing is saved without your yes.
 - The list is kept short on purpose (about a page). Entries older than four months are marked "Is this still true?".
-- A change applies to conversations you start afterwards. Never put passwords here: the list is sent to the model.
+- A change applies to threads you start afterwards. Never put passwords here: the list is sent to the model.
 
 Details: `addons/dsh-memory/README.md`.
 
 ## Budget guard
 
-Stops a task that is running away. A task is everything the assistant does after one message of yours, with its helper agents counted in.
+Stops a run that is running away. A run is everything the assistant does after one message of yours, with its helper agents counted in.
 
-- It works as installed, with generous limits: 300 steps and 20,000,000 tokens per task, and a check for the same action repeated 8 times in a row.
-- At a limit the task stops and a card under it says why. Your next message lets it go on with a fresh allowance.
-- **Settings → Budget guard** changes the limits, adds a limit on minutes or on tokens per day, and shows your biggest recent task so you can set limits that fit.
+- It works as installed, with generous limits: 300 steps and 20,000,000 tokens per run, and a check for the same action repeated 8 times in a row.
+- At a limit the run stops and a card under it says why. Your next message lets it go on with a fresh allowance.
+- **Settings → Budget guard** changes the limits, adds a limit on minutes or on tokens per day, and shows your biggest recent run so you can set limits that fit.
 - The limits are enforced by the app itself. It counts tokens, not money.
 
 Details: `addons/dsh-budget/README.md`.
 
 ## Automations
 
-Your scheduled tasks in one place: how every run ended, what needs you, what was missed, and alerts when one fails or needs you.
+Your automations in one place: how every run ended, what needs you, what was missed, and alerts when one fails or needs you.
 
-- **Automations**, a row on every tab. Tiles (on, ran today, missed, failed, next run), what needs you, the times missed while the app was closed (with Run now), one card per automation (an on/off switch, its rule in plain words, its tab, Run now, Details), a Day/Week/Month timeline, and the last runs. A run that came late says so.
+- **Automations**, a row in every space. Tiles (on, ran today, missed, failed, next run), what needs you, the times missed while the app was closed (with Run now), one card per automation (an on/off switch, its rule in plain words, where it runs (**Runs in: Space · Mode**, for example "Runs in: Chat · Finance"), Run now, Details), a Day/Week/Month timeline, and the last runs. A run that came late says so.
 - **Details** changes the name and instruction, sets this automation's own alerts and how long its past runs are kept, and deletes it. The app's own editor is one click away.
 - **Deleted automations** stay in the trash for 30 days, with Put back, wherever they were deleted.
-- **The Automations tab**: its chat makes and changes automations and answers questions about their results ("what did the morning brief say on Monday?").
-- **Settings → Alerts** chooses what you are told about and where. As installed, you get a notification on this Mac when a scheduled task fails, is stopped or waits for you. **Phone alerts** go through the free ntfy app.
-- An alert is one short line with the task's name and what happened, for example "Morning brief failed". It never contains your instruction or the answer.
-- Tasks run only while the app is running. Nothing runs while the Mac sleeps.
+- **Automations mode** (a button on the Automations page, or the Mode list in Chat): its threads make and change automations and answers questions about their results ("what did the morning brief say on Monday?").
+- **Settings → Alerts** chooses what you are told about and where. As installed, you get a notification on this Mac when an automation fails, is stopped or waits for you. **Phone alerts** go through the free ntfy app.
+- An alert is one short line with the automation's name and what happened, for example "Morning brief failed". It never contains your instruction or the answer.
+- Automations run only while the app is running. Nothing runs while the Mac sleeps.
 
 Details: `addons/dsh-automations/README.md`.
 
@@ -295,7 +289,7 @@ Lets the assistant search your own documents and quote them with the file and th
 
 - **Settings → Library**: add folders of readings, papers, notes or slides. Their documents are read into an index on this Mac. New and changed files are picked up by themselves.
 - It reads plain text, Markdown, PDF, Word and similar, and PowerPoint, using what macOS ships. Nothing is installed and nothing is sent anywhere to build the index.
-- Ask in a tab where tools are on, for example "What did the week 4 reading say about elasticity?". The answer should name the file and the page.
+- Ask in a thread where tools are on, for example "What did the week 4 reading say about elasticity?". The answer should name the file and the page.
 - **Try a search** on the page shows what the assistant would find for a few words.
 - Search goes by words, not meaning. A scanned PDF with no text layer cannot be searched.
 
@@ -314,7 +308,7 @@ Details: `addons/dsh-mac/README.md`.
 
 ## Balance
 
-Shows your DeepSeek balance in one line at the foot of the sidebar, above More.
+Shows your DeepSeek balance in one line at the foot of the left panel, above More.
 
 - It reads from the DeepSeek account you are signed in to and, if the app has a DeepSeek API key saved, from that key. The account is shown first.
 - Press the line to read again. Point at it to see every balance and when it was read.
@@ -325,14 +319,14 @@ Details: `addons/dsh-balance/README.md`.
 
 ## Data
 
-A tab for analysing the data files in a folder. Switch it on in **Settings → Data**, open the Data tab, and pick the folder that holds your files.
+A mode for analysing the data files in a folder, offered in the Chat and Code spaces. Switch it on in **Settings → Data** (**Offer the Data mode**), pick **Data** in the Mode list, and pick the folder that holds your files.
 
 - **It reads** CSV, TSV, JSON and Excel files as tables, Word and text files as documents, and PDFs through the PDF reader.
-- **It does not load your data into the conversation.** The assistant first looks at what each file holds (columns, types, gaps, ranges), then runs queries against the real files.
-- **Every number has its query.** A mark like [Q7] after a number is the query that produced it; open that step in the conversation to see it.
+- **It does not load your data into the thread.** The assistant first looks at what each file holds (columns, types, gaps, ranges), then runs queries against the real files.
+- **Every number has its query.** A mark like [Q7] after a number is the query that produced it; open that step in the thread to see it.
 - **Saved analyses.** Say "save this analysis as …". Later say "run … again" and it reports what moved since the last run. Settings → Data lists them.
-- **Read Only** (since 0.57.0): a new Data conversation runs Read Only, so the app's file and command tools cannot change your files without asking you first. New files (cleaned tables, charts) go into a `data-output` folder inside your folder. Data's own tools read nothing outside the conversation's folder; the app's own read tool is only told to stay inside it.
-- An AGENTS.md or CLAUDE.md file in the folder is read by the app, as in every tab: use it to explain your data.
+- **Read Only** (since 0.57.0): a new Data thread runs Read Only, so the app's file and command tools cannot change your files without asking you first. New files (cleaned tables, charts) go into a `data-output` folder inside your folder. Data's own tools read nothing outside the thread's folder; the app's own read tool is only told to stay inside it.
+- An AGENTS.md or CLAUDE.md file in the folder is read by the app, as in every mode: use it to explain your data.
 - Reruns happen when you ask, not by themselves.
 
 Details: `addons/dsh-data/README.md`.
@@ -341,8 +335,8 @@ Details: `addons/dsh-data/README.md`.
 
 - **Charts from the data.** Ask for a chart, or let the assistant decide: it draws a bar, line or scatter chart straight from a query (the tool `data_chart`), so no number is copied by hand. The chart shows under the answer and carries its query's id.
 - **Python for statistics.** For what a query cannot do (tests, regression, correlation, forecasts, cleaning, combining files, special charts) the assistant writes a small Python program and runs it (`data_python`). Plus keeps its own private Python folder with pandas, numpy, scipy, matplotlib, openpyxl, statsmodels and scikit-learn. It is set up by itself the first time Data is on (a download of about 450 MB; Settings → Data shows how far it is, and has **Set up again** if it failed). It needs a Python 3 on the Mac (Homebrew's or python.org's).
-- **What a program may do.** It runs inside macOS's own sandbox: no internet, it can read the conversation's folder and nothing else in your home folder, and it can write only into a folder named `data-output` inside the conversation's folder. So a program cannot change any of your files outside `data-output`. Charts it saves there are shown in the chat.
-- **Web on or off.** A new Data conversation starts with Web on, so the assistant can search the web and run deep research. Set Web to Off in the chat box and it works from your files alone. What can go out with Web on is under "Since 0.57.0" below.
+- **What a program may do.** It runs inside macOS's own sandbox: no internet, it can read the thread's folder and nothing else in your home folder, and it can write only into a folder named `data-output` inside the thread's folder. So a program cannot change any of your files outside `data-output`. Charts it saves there are shown in the thread.
+- **Web on or off.** A new Data thread starts with Web on, so the assistant can search the web and run deep research. Set Web to Off in the chat box and it works from your files alone. What can go out with Web on is under "Since 0.57.0" below.
 
 ### Since 0.35: broken charts are caught
 
@@ -350,21 +344,21 @@ Sometimes a model writes a chart program that puts a label far outside the plot,
 
 ### Since 0.57.0: Read Only, chart files, and what can go out
 
-- **Read Only.** A conversation that starts in Data, or is moved into it, runs Read Only: the app's file and command tools cannot change your files without asking you first. Python keeps its own sandbox and still writes into `data-output`. Data conversations started before 0.57.0 keep their permission. You can change it in the chat box, and a level you pick by hand is kept. Moving the conversation to a tab that sets no permission of its own, such as Cowork, gives back the one it had before, unless you changed it by hand.
-- **Charts.** The chart tool draws bar, line and scatter charts; pie, area and other charts are drawn with Python. A bar chart over dates is now really a bar chart: one bar per date, up to 30. In a Data conversation every chart the chart tool draws is also saved as an SVG file in `data-output` (for example `revenue-by-region-q7.svg`), never over a file that is already there, and it shows again in the conversation after a restart. In other tabs that use the chart tool, no file is written.
+- **Read Only.** A thread that starts in Data, or is moved into it, runs Read Only: the app's file and command tools cannot change your files without asking you first. Python keeps its own sandbox and still writes into `data-output`. Data threads started before 0.57.0 keep their permission. You can change it in the chat box, and a level you pick by hand is kept. Switching the thread to a mode that sets no permission of its own, such as Cowork, gives back the one it had before, unless you changed it by hand.
+- **Charts.** The chart tool draws bar, line and scatter charts; pie, area and other charts are drawn with Python. A bar chart over dates is now really a bar chart: one bar per date, up to 30. In a Data thread every chart the chart tool draws is also saved as an SVG file in `data-output` (for example `revenue-by-region-q7.svg`), never over a file that is already there, and it shows again in the thread after a restart. In other modes that use the chart tool, no file is written.
 - **Web stays on, and the privacy text says what can go out.** With Web on, the words the assistant searches for (also in deep research) go to the app's web search provider, and the pages it opens are fetched from the web. Data's own tools never send your files anywhere, and its Python programs have no internet. The assistant is told to keep private details from your files (names of people or customers, account numbers, rows, exact figures) out of searches; that is an instruction, not a check. Read Only stops writing, not going online. With Web Off there are no searches, pages or deep research, and commands and programs that look like they go online are stopped (a check on their text, which catches the usual ways, not every way). Connectors you added stay on and can still reach the internet, and your model always gets what the assistant reads. Settings → Data says the same under "Good to know".
-- **Tools load as needed.** Data conversations start with the core tools plus the data and PDF tools; the others are added when the work needs them. The switch is **Settings → Modes → Load tools as needed → Data**, on by default.
+- **Tools load as needed.** Data threads start with the core tools plus the data and PDF tools; the others are added when the work needs them. The switch is **Settings → Modes → Load tools as needed → Data**, on by default.
 
 ## Finance
 
-A fourth tab, beside Chat, Cowork and Code, for researching companies, markets and economies. It is research, not advice.
+A mode for researching companies, markets and economies, offered in the Chat space. It is research, not advice.
 
-- **Settings → Finance → Show the Finance tab** switches it on. Off takes the tab and everything with it away again.
-- On the tab's start page, choose the **kind** (company, sector, economy, whole market), type the **subject**, and choose the **market** (Global unless you change it), the **focus** and the **period**. Then ask, or press one of the buttons: Deep dive, Earnings review, News and mood, Compare, Sector scan, Economy brief, What changed.
+- **Settings → Finance → Offer the Finance mode** switches it on. Off takes the mode and everything with it away again.
+- On the start page of a Finance thread, choose the **kind** (company, sector, economy, whole market), type the **subject**, and choose the **market** (Global unless you change it), the **focus** and the **period**. Then ask, or press one of the buttons: Deep dive, Earnings review, News and mood, Compare, Sector scan, Economy brief, What changed.
 - The assistant is given a method: figures only from sources it fetched, each with its date; facts, claims, opinions and its own reading kept apart; a look ahead; both sides; what it could not find; no buy or sell advice.
 - **Built-in data, no key needed:** a company's reported figures and its filings from the US securities regulator (US-listed companies and many foreign ones), and yearly readings for economies from the World Bank. Each number comes with its period, source and date.
 - **Your own data sources:** on **Settings → Finance → Data sources**, add a data service (Finnhub, Financial Modeling Prep, Alpha Vantage, EODHD, or any other with an `https` address) and paste its key. This is how share prices, estimates and forecasts come in. The key is kept in the app's secret store, not in the settings, and the assistant can only read from that service.
-- **Scheduled briefs:** on the same page, schedule a short recurring update on something you follow. It runs as a task in the app's scheduler, its conversation appears under the Finance tab, and the run shows on the Automation runs page.
+- **Briefs on a schedule:** on the same page, schedule a short recurring update on something you follow. It runs as an automation, its thread opens in Chat · Finance, and the run shows on the Automations page.
 - Without a source of your own it has no share prices, estimates or forecasts. For those, and for companies listed only outside the US, it works with web search and Deep research, so figures can be delayed. Check them against the source it names.
 - The watchlist and your own markets are on **Settings → Finance**.
 
@@ -375,32 +369,32 @@ Details: `addons/dsh-finance/README.md`.
 - **Prices** (`finance_prices`): closing prices over time for up to five shares, indices, currencies or coins, with a chart. Several at once are drawn from a common start of 100. The source is Yahoo Finance's public chart data: closing prices, possibly delayed, not an official feed, and it can stop working.
 - **News** (`finance_news`): recent articles on a company or topic, and how much was written per day and in what tone, with charts. The source is the GDELT project. It allows one request every five seconds and often answers "too many requests"; the assistant then uses web search.
 - **Social media** (`finance_social`): public posts from Hacker News, Mastodon and Lemmy, with a chart of posts per day and a rough count of how many lean positive or negative. **X (Twitter), Reddit and StockTwits refuse readers without an account**; the assistant reaches them through web search only and says so.
-- **Your own files.** A Finance conversation in a folder can use the Data tools on the files there (a portfolio, exported statements), when Data is switched on.
+- **Your own files.** A Finance thread in a folder can use the Data tools on the files there (a portfolio, exported statements), when Data is switched on.
 - **It follows the question.** Asked only for the financials, it gives figures and charts. Asked about sentiment, it brings in news and social media. Asked for the full picture, all of it.
 - **Charts.** A full answer is expected to have several: prices, figures by year, coverage and mood over time, comparisons.
 
 ### Since 0.34: the adviser
 
-**Settings → Finance → Adviser → Act as my financial adviser** (off by default). On, the assistant works the way an adviser would: it gets to know you from your profile, does the research, judges how an idea fits what you hold, and ends with one clear call (buy, add, hold, trim, sell, avoid or wait), with its reasons, the main risk and what would change its mind. Before it can be switched on for the first time you read a plain-words warning (it is an AI, not a licensed or regulated adviser, it can be wrong, money can be lost) and type "I understand"; you are asked once. Every answer ends with the line "AI output, not regulated advice." It may ask you a short question when one missing fact would change its call. It applies from your next message, also in conversations that already exist.
+**Settings → Finance → Adviser → Act as my financial adviser** (off by default). On, the assistant works the way an adviser would: it gets to know you from your profile, does the research, judges how an idea fits what you hold, and ends with one clear call (buy, add, hold, trim, sell, avoid or wait), with its reasons, the main risk and what would change its mind. Before it can be switched on for the first time you read a plain-words warning (it is an AI, not a licensed or regulated adviser, it can be wrong, money can be lost) and type "I understand"; you are asked once. Every answer ends with the line "AI output, not regulated advice." It may ask you a short question when one missing fact would change its call. It applies from your next message, also in threads that already exist.
 
 - **Your profile** appears under the switch: goals, time frame, the loss you can bear, what you hold, limits. You write it, and the assistant adds a dated line when you tell it something lasting (tool `finance_profile_save`). It is one file on your Mac (`finance/profile.md` in the app's data folder) and is sent to your model with each Finance message. Leave out account numbers; the tool refuses them.
 - It gives its research and its call in every reply. If one missing fact would really change the call, it may ask for it briefly (in plain text or with a question card) and says how the call would change; otherwise it states what it assumed and goes on.
-- Figures still come only from sources fetched in the conversation, with dates. That rule does not change.
+- Figures still come only from sources fetched in the thread, with dates. That rule does not change.
 - The assistant does not claim a named licence, firm or registration. It is an AI model working from what it could fetch, and it can be wrong. Decisions are yours.
 - Off, Finance is as before: research only, and it does not say buy, sell or hold.
 - The Finance instructions cannot be edited in Settings → Modes: Plus writes them back within seconds. The switch is the way to change them.
 
 ### Since 0.57.0: the selection in the chat box, and Tools off
 
-- **The selection in the chat box.** Once a Finance conversation has started, its chat box shows the selection in one pill: kind, subject, market, focus and period. Press a part to pick another value, or type a new subject and press Return (Escape leaves it as it was). The change is for that conversation only, and the assistant follows it from its next step. The start page's drop-downs, where new conversations start, stay as they were.
+- **The selection in the chat box.** Once a Finance thread has started, its chat box shows the selection in one pill: kind, subject, market, focus and period. Press a part to pick another value, or type a new subject and press Return (Escape leaves it as it was). The change is for that thread only, and the assistant follows it from its next step. The start page's drop-downs, where new threads start, stay as they were.
 - **With Tools off** (the Tools button), the assistant has no data tools and cannot check a figure. It may still give figures from memory, but it is told to mark each one as from memory and possibly out of date, to say which period it is for when it knows, and never to give it a source or an "as of" date.
 
 ## Research
 
-A tab for researching a question in depth, built on the [Deep research](#deep-research) engine. Switch it on in **Settings → Research**; it needs the Deep research add-on.
+A mode for researching a question in depth, offered in the Chat and Code spaces, built on the [Deep research](#deep-research) engine. Switch it on in **Settings → Research**; it needs the Deep research add-on.
 
 - **A question that needs outside facts gets a full run** (a quick fact that one or two pages settle is looked up directly). Helper agents plan sub-questions, search and read pages at the same time, review what is missing and search again. A writer then turns the findings into a report that cites its sources by number.
-- **Depth** is the Depth button every tab has (since 0.59.0): here it sets the run's size, Quick about 10 minutes, Standard about 25, Thorough about 45. Its former **Focus** is the **Web** button's ticks, the same selector as every tab (tick Academic papers, News or any mix); Off is greyed there, because Research always has the web (the Tools switch stops it).
+- **Depth** is the Depth button every thread has (since 0.59.0): here it sets the run's size, Quick about 10 minutes, Standard about 25, Thorough about 45. Its former **Focus** is the **Web** button's ticks, the same selector as everywhere (tick Academic papers, News or any mix); Off is greyed there, because Research always has the web (the Tools switch stops it).
 - **Live progress** shows above the message box: the stage, the round, searches, pages read, sources and helpers at work.
 - The report ends with three **follow-up questions**, which become buttons once the run is done.
 - **Saved reports:** each report is saved as Markdown. Settings → Research lists the latest and has **Show in Finder**.
@@ -411,17 +405,17 @@ Details: `addons/dsh-research/README.md`.
 
 - **Sources no helper read stay in the report, with a clearer label.** Each source in the Sources list is marked **read**, **seen only in search results, not read**, or **not read, and not seen in search results**. A page counts as read only when a helper's fetch of it came back without an error; an error page such as 403 or 404 does not count. When a finding comes from a page its helper did not read, the report says so in the sentence, and the Checks count those sources.
 - **What the check does.** It makes sure every citation is in the source list. It does not compare a claim with the text of its page, so check the important claims yourself.
-- **Read Only.** A conversation that starts in Research, or is moved into it, runs Read Only, so the assistant cannot change your files without asking you first. Moving it to Cowork puts back the level it had before, also after a restart, unless you changed it by hand. Saved reports and diagrams are still written. A Research conversation from before 0.57.0 keeps its level.
+- **Read Only.** A thread that starts in Research, or is moved into it, runs Read Only, so the assistant cannot change your files without asking you first. Moving it to Cowork puts back the level it had before, also after a restart, unless you changed it by hand. Saved reports and diagrams are still written. A Research thread from before 0.57.0 keeps its level.
 
 ## Scout
 
-A tab for finding work: jobs, freelance projects, contracts and public tenders. It is research, not a tracker: nothing is sent, submitted or applied for. Switch it on in **Settings → Scout**.
+A mode for finding work, offered in the Chat space: jobs, freelance projects, contracts and public tenders. It is research, not a tracker: nothing is sent, submitted or applied for. Switch it on in **Settings → Scout**.
 
 - **The start page:** the work, the place, your pay target, the work type, and the markets as chips (USA, UK, Germany and Spain to begin with; add or remove any). **+ Files** puts a resume or notes into the Scout folder.
 - **A run** says what it understood, researches the field first (the job's names in each language, how many postings each name has, pay), picks sources, searches, reads the promising postings and removes duplicates.
 - **Sources** are a list you control on Settings → Scout: switch any on or off, or add your own. Each says how it may be reached: through its interface, one page at a time, or only through a search engine (its pages are then never fetched). Some interfaces need a free key, which is kept in the app's secret store.
 - **Your files and profile** stay in the Scout folder. Scout is told to show you a profile draft and save it only after you agree.
-- `/scout` shows the conversation's model and how many reports are saved.
+- `/scout` shows the thread's model and how many reports are saved.
 
 Details: `addons/dsh-scout/README.md`.
 
@@ -432,36 +426,56 @@ Details: `addons/dsh-scout/README.md`.
 - **Reports, and what is new.** The report is saved as Markdown and a table (CSV) with the scores, reasons, signs and drafts. Scout can list and read its earlier reports and says what is new since the last run. **Settings → Scout → Saved reports** lists them, with **Show reports in Finder**.
 - **US and UK sources.** Public tenders from the UK's Contracts Finder and Find a Tender (open data, no key) and from SAM.gov in the US (a free key from your SAM.gov account). The freelance boards Upwork, PeoplePerHour, YunoJuno, Freelancer.com and Guru are found through search engines only and never signed in to. SAM.gov has not yet been tried with a real key.
 - **No contact details in searches.** A search that holds an email address or a phone number is refused, also for the helpers Scout starts. Under the app's PTC preset, a program's own requests are not checked; the tools it calls are.
-- **Its rules stay** under a model version set to **Use only these** (Settings → Model Tiers).
+- **Its rules stay** under a model version set to **Use only these** (Settings → Model tiers).
 
 ## Recon
 
-An isolated tab for research on .onion sites and Usenet text newsgroups: journalism, finding and citing sources, threat intelligence. It is not a browser. It needs the `tor` program (`brew install tor`; Plus does not install it). Switch it on in **Settings → Recon**.
+A sealed space and mode for research on .onion sites and Usenet text newsgroups: journalism, finding and citing sources, threat intelligence. It is not a browser. It needs the `tor` program (`brew install tor`; Plus does not install it). Switch it on in **Settings → Recon**.
 
-- **Start a Recon conversation with the New button in the Recon tab.** It runs in Recon's own empty folder, not in one of yours.
+- **Start a Recon thread with New Recon search in the Recon space.** It runs in Recon's own empty folder, not in one of yours.
 - **Only its own tools:** search and read .onion sites through Tor, search and read Usenet text newsgroups through your news server, and, once you switch them on, the Internet Archive and the GDELT news index. Text only, behind filters, and every source gets a number like [S3] and a citation.
-- **Isolated:** nothing from other conversations comes in, and nothing of it goes to them. A model on this Mac or in your own network gets what Recon finds; a cloud model only after you type `/recon cloud` in that conversation.
-- **Commands:** `/recon` (the state), `/recon log` (every search and source), `/recon export` (one text file), `/recon end` (ends the conversation and deletes it), `/recon stop` (stops Tor).
+- **Isolated:** nothing from other threads comes in, and nothing of it goes to them. A model on this Mac or in your own network gets what Recon finds; a cloud model only after you type `/recon cloud` in that thread.
+- **Commands:** `/recon` (the state), `/recon log` (every search and source), `/recon export` (one text file), `/recon end` (ends the thread and deletes it), `/recon stop` (stops Tor).
 
-- **Web sources** (since 18 November 2026): Recon's Web button is the same selector as every tab's, with a second group only Recon has: **Tor**, **Usenet** and **I2P** (not set up yet). Tick any mix, for example "only Usenet and Tor" or "only Tor and verified sources"; Recon's tools for what is not ticked do not run. Your own other sources marked **May be used in Recon** are read through WireGuard only. Settings → Recon starts with a **Hidden networks** section that says this. All of Recon's rules stay.
+- **Web sources** (since 18 November 2026): Recon's Web button is the same selector as everywhere else, with a second group only Recon has: **Tor**, **Usenet** and **I2P** (not set up yet). Tick any mix, for example "only Usenet and Tor" or "only Tor and verified sources"; Recon's tools for what is not ticked do not run. Your own other sources marked **May be used in Recon** are read through WireGuard only. Settings → Recon starts with a **Hidden networks** section that says this. All of Recon's rules stay.
 - **Status dots** (since 18 November 2026): the bar under Recon's chat box shows a dot for Tor, Usenet, WireGuard, I2P (grey, not set up yet) and each of your own sources allowed in Recon: green when it is ready or working, red or grey when not. Hover over a dot to see why.
 
 Details: `addons/dsh-recon/README.md`.
 
 ### Since 0.57.0: a start page, the Archive read directly, and links that survive a restart
 
-- **The start page** asks "What should Recon look into?" and has five starter chips: Search .onion sites, Search Usenet, News coverage, Old web page, Check a claim. A status bar shows Tor, Usenet, the Internet Archive's route, the conversation's model and whether findings may go to it. Agreeing to a cloud model stays something you type (`/recon cloud`): there is no button for it.
+- **The start page** asks "What should Recon look into?" and has five starter chips: Search .onion sites, Search Usenet, News coverage, Old web page, Check a claim. A status bar shows Tor, Usenet, the Internet Archive's route, the thread's model and whether findings may go to it. Agreeing to a cloud model stays something you type (`/recon cloud`): there is no button for it.
 - **Read Internet Archive copies directly (not through Tor)**, on **Settings → Recon → More sources**, is on by default. Copies are then read straight from the Archive, which sees this Mac's internet address (or your VPN's, when the page goes out through a WireGuard tunnel you set up in Recon). Off sends them through Tor again, where the Archive refuses most reads. GDELT and .onion sites always go through Tor. The Internet Archive and GDELT themselves stay off until you switch them on there. `/recon` and the status bar say which route is used.
-- **After a restart**, earlier [S3] citations, links and `/recon export` keep working: Recon rebuilds a conversation's sources from the saved conversation. Nothing new is stored on disk.
-- **Kept out elsewhere:** Global Search never shows a Recon conversation, Sync never pushes or pulls one, and Mission does not work in one.
+- **After a restart**, earlier [S3] citations, links and `/recon export` keep working: Recon rebuilds a thread's sources from the saved thread. Nothing new is stored on disk.
+- **Kept out elsewhere:** Global search never shows a Recon thread, Sync never pushes or pulls one, and Mission does not work in one.
 
 ## Mission
 
-Gives a goal to several models at once, and keeps the work inside a conversation's folder. You use it by typing a command in the chat box of a conversation that has a folder. It works in Code, Cowork and Data.
+Gives a goal to several models at once, and keeps the work inside a thread's folder. You start a **Mission** with **Start Mission** beside Send, or by typing `/mission` and the goal in the chat box of a thread that has a folder (choosing **Mission** in Depth only selects it). Start Mission and a typed `/mission` work in every space and mode, inside the space's own rules: in Recon only when Recon's settings allow it, in Devices and Workshop only while the add-on that keeps that space's rules is on, and in Creator Plus mode only in a folder Creator Plus accepts.
+
+### One Mission: Start Mission, the strip and the main button (19 November 2026)
+
+- **Starting.** Talk the work through first, as usual. Then press **Start Mission** beside Send (picking **Mission** in Depth only selects it and makes Start Mission the main button): what you typed and the whole thread so far become its brief. It asks one question first. Typing `/mission <goal>` starts the same Mission, without the question.
+- **Its limits** are in Depth → **Mission settings…** for this thread (starting values in Settings → Mission): a **time limit** (2 hours unless you change it) or **No time limit** (it runs until its checklist is done), **laps** (0: no lap limit) and **steps** (0: worked out from the laps).
+- **While it works**, a strip above the chat box says how it stands and what the main button will do. The main button takes Send's place:
+  - **Add note** while it runs: your text reaches it at its next step, and it keeps going.
+  - **Answer and continue** when it has questions for you: number your answers 1., 2., … or write one answer for all. Unanswered questions keep the default it named.
+  - **Resume** when it is paused or stopped by a problem. After a problem it checks first and tells you if something still needs fixing.
+- On the strip: **Pause**, **Finish this lap** (shown only while it can still do something), **End**, **Checklist** and **Report**, each with an (i). The app's own Stop stays too and pauses the Mission at once.
+- While it is paused, Enter talks to the assistant as usual. `/` commands work at any time.
+- When it ends, Send and Start Mission come back.
+
+### Questions, time and continuing (20 November 2026)
+
+- **Questions card.** While a Mission has questions for you, a card under the strip lists them: one field each, the default it uses if you do not answer, and who asked (the plan, the review or an item). Answer what you can and press **Send answers**; empty fields keep their default. You can still type answers in the chat box and press **Answer and continue**. **Hide** folds the card into one line. Each Split Plus pane has its own card.
+- **Skip, use your judgement.** A chip per question: the Mission decides itself instead of taking the default, and the report says what it chose.
+- **Asked early.** The plan asks everything it can foresee right away, so you see its questions while you are still at the screen. The Mission never stops to wait: it goes on with its defaults.
+- **Not enough time.** If the plan needs more time than the Mission has, it asks once: **Keep** the limit (it does the most important items first and lists the rest), **Give it more** (the time it recommends) or **No time limit**.
+- **Continue after the end.** When a Mission ends with questions left, answer or skip them in the card and press **Answer and continue**. It asks **How much more time?** and suggests a time from how long its items took so far (at most a quarter of its first time limit, never more than 30 minutes); pick another or No time limit. The same Mission goes on, with its strip and main button. **End** stays final unless it still has questions for you.
 
 ### A run: several models on one goal (since 0.37)
 
-Type `/mission` and the goal, for example `/mission make every test pass and add a --json option`. To choose the permission mode for the run, name it first: `/mission auto …`.
+Type `/mission` and the goal, for example `/mission make every test pass and add a --json option`. To choose the Mission access for the run, name it first: `/mission auto …`.
 
 1. A **planner** model reads the project and writes a checklist. Each item says when it is done and, where it can, a command that proves it.
 2. **Worker** models do the items one at a time. After each, Plus runs the item's command itself. Passed means the command really passed. Failed means the item is tried again, and the last try goes to the planner's model.
@@ -471,30 +485,30 @@ Type `/mission` and the goal, for example `/mission make every test pass and add
 
 | You type | What it does |
 |---|---|
-| `/mission <goal>` | Starts a run. It then goes on by itself. |
+| `/mission <goal>` | Starts a Mission with this thread's Mission settings. It then goes on by itself. |
 | `/mission stop` | Pauses the run. |
 | `/mission resume` | Carries on. Also takes up items that waited for your yes. |
 | `/mission end` | Closes the run now, with a report. |
 | `/mission report` | How the run stands, or its final report. |
 
-- **If you are away** and a worker needs your yes for a file (Restricted and Ask-Auto), the card waits 3 minutes. Then the item is set aside as NEEDS YOU and the run carries on. `/mission resume` takes it up again when you are back.
-- **Which models:** Settings → Mission → **Models for a run**. Leave a role on "Follow Model Tiers" to use your plan, implement and review role models. Under **Per project** a project can have its own three models.
-- **Limits:** Settings → Mission → **How far a run may go** (12 items, 3 tries per item, 2 reviews, 60 steps unless you change them).
-- While a run is on, the conversation's own model only keeps it moving. Pause the run to work with it yourself.
+- **If you are away** and a worker needs your yes for a file (Restricted and Ask), the card waits 3 minutes. Then the item is set aside as NEEDS YOU and the run carries on. `/mission resume` takes it up again when you are back.
+- **Which models:** Settings → Mission → **Models for a run**. Leave a role on "Follow Model tiers" to use your plan, implement and review role models. Under **Per project** a project can have its own three models.
+- **Limits:** Settings → Mission → **Checklist limits (every Mission)** (12 items and 3 tries per item unless you change them); the time limit, laps and steps are in Depth → Mission settings….
+- While a Mission is on, the thread's own model only keeps it moving. Pause the Mission to talk with it yourself.
 - A run works in every permission preset of the app, PTC included (since 0.37.1).
 - A long step shows as several rounds that say it is still working. That is normal.
-- If the conversation's model does not keep the run moving for five rounds in a row, the run pauses itself and `/mission` says why.
+- If the thread's model does not keep the run moving for five rounds in a row, the run pauses itself and `/mission` says why.
 - Each run keeps its log and every model's answer in `.dsh-mission/runs` inside the folder.
 
-### Permission modes and checkpoints (since 0.36)
+### Mission access and checkpoints (since 0.36)
 
 | You type | What it does |
 |---|---|
-| `/mission restricted` | Nothing outside the folder is read or changed, and you are never asked for it. Inside, new files are free; before changing or deleting an existing file it asks you, once per file. |
-| `/mission ask` | The same inside the folder. For anything outside, it has to ask you first. |
-| `/mission auto` | Inside the folder it works without asking. For anything outside, it has to ask you first. |
-| `/mission on` | Switches on the mode chosen in Settings → Mission (Restricted unless you change it). |
-| `/mission off` | Lifts the mode. |
+| `/mission restricted` | Mission access **Restricted**: nothing outside the folder is read or changed, and you are never asked for it. Inside, new files are free; before changing or deleting an existing file it asks you, once per file. |
+| `/mission ask` | Mission access **Ask**: the same inside the folder. For anything outside, it has to ask you first. |
+| `/mission auto` | Mission access **Auto**: inside the folder it works without asking. For anything outside, it has to ask you first. |
+| `/mission on` | Switches on the Mission access chosen in Settings → Mission (Restricted unless you change it). |
+| `/mission off` | Switches Mission access off. |
 | `/mission checkpoints` | Lists the checkpoints, numbered. |
 | `/mission back 12` | Puts the folder back as it was at checkpoint 12. This can be undone: the state before going back is a checkpoint too. |
 | `/mission` | Shows what is on and lists these commands. |
@@ -503,9 +517,9 @@ The app shows a command's answer as one line. Click the line to open the rest.
 
 **How it keeps its word**
 
-- A question appears as the app's approval card. A yes to a file holds for that file for the rest of the conversation.
-- While a mode is on, the conversation uses the app's **Workspace Write** permission. The app's own sandbox then stops any change outside the folder, whatever a terminal command tries.
-- A checkpoint is taken at the start of every turn and before every terminal command. In Restricted and Ask-Auto, if a command changes or deletes an existing file you have not approved, the file is put back at once and the assistant has to ask.
+- A question appears as the app's approval card. A yes to a file holds for that file for the rest of the thread.
+- While Mission access is on, the thread uses the app's **Workspace Write** permission. The app's own sandbox then stops any change outside the folder, whatever a terminal command tries.
+- A checkpoint is taken at the start of every turn and before every terminal command. In Restricted and Ask, if a command changes or deletes an existing file you have not approved, the file is put back at once and the assistant has to ask.
 
 **Good to know**
 
@@ -518,26 +532,26 @@ The app shows a command's answer as one line. Click the line to open the rest.
 
 ### Where it does not work (since 0.57.0)
 
-- **Recon conversations.** `/mission` answers that it is not available there and changes nothing. Only `/mission off`, `stop` and `end` still answer, to take back what an earlier version started.
-- **A tier with Sub-agents switched off.** A run's planner, workers and reviewer are helper agents, so `/mission <goal>` and `/mission resume` are refused with the reason and what to do: switch Sub-agents on for the tier in Settings → Model Tiers, or pick another tier. A run already under way pauses at its next step. The permission modes and checkpoints start no helpers and still work.
+- **Recon threads.** `/mission` answers that it is not available there and changes nothing. Only `/mission off`, `stop` and `end` still answer, to take back what an earlier version started.
+- **A tier with Sub-agents switched off.** A run's planner, workers and reviewer are helper agents, so `/mission <goal>` and `/mission resume` are refused with the reason and what to do: switch Sub-agents on for the tier in Settings → Model tiers, or pick another tier. A run already under way pauses at its next step. Mission access and checkpoints start no helpers and still work.
 
 Details: `addons/dsh-mission/README.md`.
 
-## Global Search
+## Global search
 
-One box that finds your conversations by their titles and by the text of their messages, in every tab, and your projects by name.
+One box that finds your threads by their titles and by the text of their messages, in every space, and your projects by name.
 
-- Press **Cmd-K** (Ctrl-K), or the search icon at the top of the sidebar. Results are grouped by tab; projects come last. Arrow keys move, **Enter** opens, **Esc** closes.
+- Press **Cmd-K** (Ctrl-K), or the search icon at the top of the left panel. Results are grouped under space headings, with the mode as a tag; projects come last. Devices and Workshop threads show in every space (opening one switches the window to its space). Arrow keys move, **Enter** opens, **Esc** closes.
 - Results are only shown to you. Nothing is given to a model.
-- **Recon conversations are never shown** (since 0.57.0), neither by their title nor by the text of their messages. A conversation that began in another tab and was moved into Recon later holds nothing from Recon, so it stays findable.
+- **Recon threads are never shown** (since 0.57.0), neither by their title nor by the text of their messages. A thread that began in another space and was moved into Recon later holds nothing from Recon, so it stays findable.
 
 Details: `addons/dsh-search/README.md`.
 
 ## Code map
 
-Makes a compact map of the project a conversation works in: its files, the functions and classes in them, and what uses what. The assistant looks things up in the map and reads one function at a time instead of whole files, which uses far fewer tokens on a large project. Nothing is installed, and nothing is written into your project; the map is kept in the app's own data folder.
+Makes a compact map of the project a thread works in: its files, the functions and classes in them, and what uses what. The assistant looks things up in the map and reads one function at a time instead of whole files, which uses far fewer tokens on a large project. Nothing is installed, and nothing is written into your project; the map is kept in the app's own data folder.
 
-**Settings → Code tools** (the page also holds Code power, on its **Reviews and fixes** tab) has a **Code map** tab that shows each mapped folder with its numbers, lets you map it again or delete its map, and sets the limits and extra patterns to leave out. It will not map your whole home folder or whole personal folders such as Documents. `/codemap` shows the state in a chat.
+**Settings → Code tools** (the page also holds Code power, on its **Reviews and fixes** tab) has a **Code map** tab that shows each mapped folder with its numbers, lets you map it again or delete its map, and sets the limits and extra patterns to leave out. It will not map your whole home folder or whole personal folders such as Documents. `/codemap` shows the state in a thread.
 
 It also adds four "reverse engineer" skills. Type `/` in the chat box and pick:
 
@@ -560,9 +574,9 @@ Open **Settings → Self-improve**:
 
 In a cycle the reviewer looks at what fails on the Learn tasks and proposes small changes: a new lesson, a reworded one, or a section of standing instructions. Each change is tested on the Check and Guard tasks, which the reviewer never saw. A change reaches you only if it raises the score, breaks nothing, does not make answers much longer and does not contain a test answer. You then **Approve** or **Decline** it. Every version is kept, and **Use this version** puts an earlier one back.
 
-**Per model version.** Under Setup, **What to improve** can be a saved model version. Each version has its own tasks and lessons, tested with that version's settings and instructions, and its approved lessons are used only in conversations on that version. This is how you tune one model for one job: write starting instructions on the version, add tasks for the job, and let the loop improve on them.
+**Per model version.** Under Setup, **What to improve** can be a saved model version. Each version has its own tasks and lessons, tested with that version's settings and instructions, and its approved lessons are used only in threads on that version. This is how you tune one model for one job: write starting instructions on the version, add tasks for the job, and let the loop improve on them.
 
-Approved instructions are used in your real conversations too; a switch turns that off. Only the Learn tasks, the model's answers and why they failed are sent to the reviewer, with keys, addresses and home-folder paths removed. Your conversations are never sent.
+Approved instructions are used in your real threads too; a switch turns that off. Only the Learn tasks, the model's answers and why they failed are sent to the reviewer, with keys, addresses and home-folder paths removed. Your threads are never sent.
 
 What it cannot do: make a small model reason like a large one on work it has never seen. Expect gains on kinds of work you repeat and can check, and use ten or more tasks per kind of work.
 
@@ -576,12 +590,20 @@ Counts requests and tokens per day, provider and model. It never stores what you
     freeModels: ['<PROVIDER>/<MODEL>']
 ```
 
+## Tool use
+
+Notes every tool the assistant uses, asks for or is refused, in every space and mode, in helpers and Mission runs, and inside programs. It keeps only names and counts: which thread, mode and preset, which tool, its setting at that moment (On, Ask, Off, Locked), whether it was on offer from the start or fetched later, what happened and why, how long it took and how much text came back. It never keeps what a tool was given or gave back. It also notes when the tools on offer in a thread change.
+
+**Settings → Tool use** shows a time range (last 30 days, last 6 months, all), a mode filter and four lists: tools **asked for often but off**, **loaded but never used**, **held in reserve but always called**, and **refused most**, plus a table of every tool. Each suggestion has a button that opens the right Settings page (Tool access or Modes); nothing changes until you change it there. **Save a copy** downloads the records as a table file; **Start fresh** removes them all (it asks first).
+
+Records are kept for one year; change that with **Keep records for** (30 days to 10 years). When you delete a thread for good, its lines stay for the counts but no longer point at it.
+
 ## Deep research
 
-Gives the assistant a `deep_research` tool. Its settings are in **Settings → Research**, in the collapsed group **Advanced: research engine**. Use the **Research** tab, where a question that needs outside facts gets a full run, or ask for it in plain words ("do deep research on ...") in a conversation whose Web button is not Off. (Depth **Thorough** is not deep research either: it only asks the assistant to search and read more itself.)
+Gives the assistant a `deep_research` tool. Its settings are in **Settings → Research**, in the collapsed group **Advanced: research engine**. Use **Research** mode, where a question that needs outside facts gets a full run, or ask for it in plain words ("do deep research on ...") in a thread whose Web button is not Off. (Depth **Thorough** is not deep research either: it only asks the assistant to search and read more itself.)
 
 - **How it works:** it plans sub-questions with search queries, sends out helpers that search and read pages at the same time, then **reviews what was found**: what is still missing, where sources contradict each other, what needs the original document. It writes sharper queries from that and sends helpers out again. At the end it writes a report that cites its sources by number. It checks that every citation is in the source list, and marks each source **read**, **seen only in search results, not read**, or **not read, and not seen in search results** (these labels are new in 0.57.0; a page counts as read only when its fetch came back without an error). Findings from pages no helper read stay in the report with their label; `requireFetched: true` in the configuration file leaves them out instead. Claims are not compared with the text of the pages.
-- **Three depths**: a run follows the Depth of the conversation that starts it (the Depth button, the same in every tab, since 0.59.0):
+- **Three depths**: a run follows the Depth of the thread that starts it (the Depth button, the same in every space and mode, since 0.59.0):
 
   | Depth | Rounds | Helpers at once | Time limit |
   | --- | --- | --- | --- |
@@ -589,10 +611,10 @@ Gives the assistant a `deep_research` tool. Its settings are in **Settings → R
   | Standard | 2 | up to 6 | 25 minutes |
   | Thorough | 3 | up to 8 | 45 minutes |
 
-- **Which model the helpers use:** Settings → Research → **Model for the helpers** sets it for all conversations: **This conversation's model** (the default) or **Role models**, set in Settings → Model Tiers → Role models (the planner, reviewer and writer use "Plan", the searchers use "Fast"). One conversation can choose its own with the models chip in its chat box (**One model for everything** or **Different models**).
-- **Helpers at once:** when the conversation is on a tier, that tier's sub-agent limit (Settings → Model Tiers) also applies, and the lower number wins.
+- **Which model the helpers use:** Settings → Research → **Model for the helpers** sets it for all threads: **This thread's model** (the default) or **Role models**, set in Settings → Model tiers → Role models (the planner, reviewer and writer use "Plan", the searchers use "Fast"). One thread can choose its own with the models chip in its chat box (**One model for everything** or **Different models**).
+- **Helpers at once:** when the thread is on a tier, that tier's sub-agent limit (Settings → Model tiers) also applies, and the lower number wins.
 - Deeper runs take longer and use many more tokens.
-- Use Standard mode, not PTC mode, for research.
+- Use the Standard preset, not PTC, for research.
 - **How good is it?** The method is the one the well-known research products use, but they have their own search engines and tuned models. Here the result depends on your model and on the app's web search. A small local model gives thin results at any depth. Quality has not been measured against those products.
 
 Details: `addons/dsh-deep-research/README.md`.
@@ -601,27 +623,27 @@ Details: `addons/dsh-deep-research/README.md`.
 
 A thin bar that shows what the model and its helpers are doing right now, so you can see at a glance that work is still going on. It works the moment it is installed.
 
-- **What it shows:** prompt processing, thinking, writing, tool calls, web search, scripts, sub-agents, other conversations, waiting for your approval (everything pulses in one colour) and errors (everything pulses red). A short text beside it adds figures such as `TG 42 t/s · Tool read_file 2s · BG 2`.
-- **It is part of the message box:** the line above the message box sits in the top of the box, in the same colour and width, with no space between. Switch **Fit the message box** off in **Settings → Activity** to let it span the whole chat area. For a wider chat and box, use **Wide chat area** in the sidebar's More menu; the line follows.
+- **What it shows:** prompt processing, thinking, writing, tool calls, web search, scripts, sub-agents, other threads, waiting for your approval (everything pulses in one colour) and errors (everything pulses red). A short text beside it adds figures such as `TG 42 t/s · Tool read_file 2s · BG 2`.
+- **It is part of the message box:** the line above the message box sits in the top of the box, in the same colour and width, with no space between. Switch **Fit the message box** off in **Settings → Activity** to let it span the whole chat area. For a wider chat and box, use **Wide chat area** in the left panel's More menu; the line follows.
 - **Seven designs** in **Settings → Activity**: a line or a lane of threads above the chat box, lanes or a history tape on the lower window edge, small spinning rings beside the model button, or two of them together. The page has a preview.
 - **You choose what is tracked:** each kind of work has its own switch and colour. You can also turn the text or its figures off, use words in place of short codes, hide the bar while nothing runs, or switch off all movement.
 - **Sounds:** it can play a short sound when the app starts waiting for you and when a turn fails. Pick from nine sounds, set the volume, and choose whether the waiting sound repeats until you answer.
-- It keeps no text of your conversations and sends nothing anywhere.
+- It keeps no text of your threads and sends nothing anywhere.
 
 The speeds for thinking and writing are estimates from the live stream that correct themselves after each answer. The prompt-processing speed is known once the first token arrives, so while a prompt is being read you see the seconds so far and the last measured speed. Details: `addons/dsh-activity/README.md`.
 
 ### Since 0.34: fold the message box away
 
-The line above the message box has a small arrow at its right end. A click folds the message box down, so only the line and the row of figures under it are left and more of the conversation shows. The arrow then points up; another click brings the box back. It stays folded in every conversation and tab, and after a restart, until you click. While it is folded you cannot type or press Stop; unfold first. **Settings → Activity → Arrow to fold the message box away** takes the arrow out.
+The line above the message box has a small arrow at its right end. A click folds the message box down, so only the line and the row of figures under it are left and more of the thread shows. The arrow then points up; another click brings the box back. It stays folded in every thread and space, and after a restart, until you click. While it is folded you cannot type or press Stop; unfold first. **Settings → Activity → Arrow to fold the message box away** takes the arrow out.
 
 ## PDF reader
 
 Lets the model read PDF files properly. It uses what comes with macOS, so nothing is installed and nothing leaves your Mac.
 
-- Put a PDF in the conversation's folder and ask about it by name, for example "Summarise report.pdf with page numbers". Type `/pdf report.pdf` to see its page count, contents list and which pages are scans.
+- Put a PDF in the thread's folder and ask about it by name, for example "Summarise report.pdf with page numbers". Type `/pdf report.pdf` to see its page count, contents list and which pages are scans.
 - The model can read page ranges, search for a phrase, re-read a page with columns kept apart (for tables), turn a page into a picture, and recognise the text on a scanned page.
 - A built-in skill makes it give a page for every claim, like `(p. 12)`, quote only what it has actually read, and list any pages it could not read.
-- **Where it may read:** the conversation's folder, plus folders you add in **Settings → PDF reader**. "Allow any PDF on this Mac" is off unless you switch it on.
+- **Where it may read:** the thread's folder, plus folders you add in **Settings → PDF reader**. "Allow any PDF on this Mac" is off unless you switch it on.
 
 Complex tables and maths formulas can still come out wrong as text; for those the model can look at the page as a picture if it is a model that can see images. Password-protected PDFs cannot be read. Details: `addons/dsh-pdf/README.md`.
 
@@ -631,7 +653,7 @@ Lets the model draw accurate diagrams. The model only describes what is in the d
 
 - **Ask in plain words:** "Draw a flowchart of how a bill becomes law", "Make a mind map of this chapter", "Plot sin(x) and cos(x) from 0 to 2 pi", "Chart these sales figures".
 - **Kinds:** flowcharts and concept maps, trees and mind maps, sequences (who tells whom what, in order), timelines, charts (bars, lines, points) and plots of formulas.
-- **Where it appears:** in the chat, under the answer, in the app's colours. Click it for full size. It is also saved as an SVG file in a `diagrams` folder inside the conversation's folder; change or switch that off in **Settings → Diagrams**.
+- **Where it appears:** in the thread, under the answer, in the app's colours. Click it for full size. It is also saved as an SVG file in a `diagrams` folder inside the thread's folder; change or switch that off in **Settings → Diagrams**.
 - **The check:** if boxes overlap, a label does not fit, or too many arrows cross, the model is told and usually draws it again. A small note on the picture says if something was left unfixed.
 
 The drawing is exact, but what goes into it is still the model's. Read a diagram with the same care as the answer it belongs to. Details: `addons/dsh-diagram/README.md`.
@@ -644,7 +666,7 @@ A chart point's x may be a date (`["2026-03-31", 12.5]` or `["2026-03", 12.5]`).
 
 A tutor that makes you do the thinking, because trying first is what makes things stick. It asks a question before it teaches, helps in small steps, gives the answer last, asks you to explain it back, and brings each idea back days later.
 
-- **Start:** in any conversation type `/learn` and a topic, a file or some code, for example `/learn chapter3.pdf`. A study bar appears above the chat box; press **Start**.
+- **Start:** in any thread type `/learn` and a topic, a file or some code, for example `/learn chapter3.pdf`. A study bar appears above the chat box; press **Start**.
 - **While studying:** try the question, even with a guess. **Hint** asks for a small step. **Show answer** unlocks when the level allows it. **End** stops and keeps what you finished.
 - **Three levels,** switchable from the bar: Gentle (the answer whenever you ask), Firm (an attempt first; the answer after three hints or when you give up after trying), Strict (also say where you are stuck before each hint; no giving up early). Firm is the default.
 - **Reviews:** each idea comes back after 1, 3, 7, 16 and 35 days, sooner if you needed the answer. `/learn review` goes through what is due. **Settings → Learning** shows what is due and how each topic is going.
@@ -654,19 +676,19 @@ Use a strong model as the tutor, and prefer studying from your own PDF or notes:
 
 ## Code power
 
-Its settings are on the **Reviews and fixes** tab of **Settings → Code tools**. Adds skills for reviewing a pull request (`/review`), fixing failing tests in a loop, trying several solutions and keeping the best, and a blind judge that compares candidate changes. Nothing to set up. Uses your Model Tiers role models when they are set.
+Its settings are on the **Reviews and fixes** tab of **Settings → Code tools**. Adds skills for reviewing a pull request (`/review`), fixing failing tests in a loop, trying several solutions and keeping the best, and a blind judge that compares candidate changes. Nothing to set up. Uses your Model tiers role models when they are set.
 
 ## Sampling presets
 
-Named settings such as "precise" (low temperature) or "creative", picked automatically by kind of task or by mode, or by hand with `/sampling`. Set them up on the **Sampling** tab of **Settings → Model Tiers**.
+Named settings such as "precise" (low temperature) or "creative", picked automatically by kind of job or by mode, or by hand with `/sampling`. Set them up on the **Sampling** tab of **Settings → Model tiers**.
 
 ## Model arena
 
 Ask several models the same question at once, read the answers under neutral labels (A, B, C), pick a winner, then reveal which model was which.
 
-Open **Settings → Arena** (or **Model Arena** in the sidebar). Under **Setup**, pick at least two models from the list; you can set an effort for each. Optionally pick a **judge model**, which compares the answers without knowing who wrote them. The other options each have a one-line explanation: answers per round, hiding names, the judge's criteria, the time limit, the longest answer, and how long rounds are kept. Changes save as you make them.
+Open **Settings → Arena** (or the **Model arena** row in the Chat and Workshop spaces). Under **Setup**, pick at least two models from the list; you can set an effort for each. Optionally pick a **judge model**, which compares the answers without knowing who wrote them. The other options each have a one-line explanation: answers per round, hiding names, the judge's criteria, the time limit, the longest answer, and how long rounds are kept. Changes save as you make them.
 
-Then type a question and press **Ask the models**. The answers appear side by side as A, B, C, D. Press **Pick this answer** on the one you prefer, **Ask the judge** if you set one, and **Reveal the models** to see who wrote what, with speed and token counts. The `/arena` commands still work in a chat. The judge needs the Code power add-on, which is installed with Plus.
+Then type a question and press **Ask the models**. The answers appear side by side as A, B, C, D. Press **Pick this answer** on the one you prefer, **Ask the judge** if you set one, and **Reveal the models** to see who wrote what, with speed and token counts. The `/arena` commands still work in a thread. The judge needs the Code power add-on, which is installed with Plus.
 
 ## Benchmark
 
@@ -674,11 +696,11 @@ Runs your own test questions over several models and settings, scores the answer
 
 Open **Settings → Benchmark**. The page walks you through the first run in three steps. First, add the **models to test**. Second, create a **suite**: press **New suite** (or **Add an example suite**), write what to ask, and choose how each answer is graded: contains a text, is exactly a text, matches a pattern, or is scored by a judge model. Third, choose the suite and press **Run**; the page says how many model calls that makes.
 
-Optional settings: temperatures and max output tokens to try on each model, how many times each prompt is repeated, limits on time and spend, and prices per model for the cost column. Results show score, speed, errors and cost per model and setting, plus a recommendation per category. The `/benchmark` commands still work in a chat.
+Optional settings: temperatures and max output tokens to try on each model, how many times each prompt is repeated, limits on time and spend, and prices per model for the cost column. Results show score, speed, errors and cost per model and setting, plus a recommendation per category. The `/benchmark` commands still work in a thread.
 
 ## Route health
 
-Checks that each provider answers, shows a coloured dot in the chat box, and moves conversations to a tier's backup model while a provider is down (for example a home server that is asleep).
+Checks that each provider answers, shows a coloured dot in the chat box, and moves threads to a tier's backup model while a provider is down (for example a home server that is asleep).
 
 ```yaml
 - id: route-health
@@ -696,7 +718,7 @@ Lets a small, fast model choose, for each message, which of 2 to 5 models should
 
 ## Role prompts
 
-Adds your own standing instructions to every conversation, or only for some tiers. Write them on the **Instructions for every conversation** tab of **Settings → Model Tiers**. Ready-made texts for planning, coding and routing are in `addons/dsh-role-prompts/examples/`.
+Adds your own standing instructions to every thread, or only for some tiers. Write them on the **Instructions for every thread** tab of **Settings → Model tiers**. Ready-made texts for planning, coding and routing are in `addons/dsh-role-prompts/examples/`.
 
 ```yaml
 - id: role-prompts
@@ -726,11 +748,11 @@ For alerts without writing a command, on this Mac and on your phone, use [Automa
 
 Image generation and editing through any OpenAI-compatible images service, and an "ask me first" gate for the browser and computer-control tools. Needs the service's address and model; full example in `addons/dsh-media-tools/README.md`. Keys are never written in the file: you give the **name** of an environment variable that holds the key.
 
-Since 0.57.0, a conversation with Web set to Off has no image tools, unless the image service's address is on this Mac or your own network.
+Since 0.57.0, a thread with Web set to Off has no image tools, unless the image service's address is on this Mac or your own network.
 
 ## Sync
 
-Keeps your conversations (and, if you want, your project list) the same on several Macs, through a **private** git repository you create (on GitHub, for example). Neither Mac has to be on for the other to sync. Optional encryption with `age`.
+Keeps your threads (and, if you want, your project list) the same on several Macs, through a **private** git repository you create (on GitHub, for example). Neither Mac has to be on for the other to sync. Optional encryption with `age`.
 
 ```yaml
 - id: sync
@@ -741,13 +763,13 @@ Keeps your conversations (and, if you want, your project list) the same on sever
 
 Use a normal private git remote: a private repository on GitHub, GitLab or a server of your own. **Avoid iCloud Drive for this.** Git keeps many small files and locks that iCloud copies, delays and renames, so a repository kept there can get damaged without warning. The add-on does accept a folder path (even one in iCloud Drive) if you insist, but it is not recommended.
 
-Then `/sync push` on one Mac and `/sync pull` on the other. **Before the first pull, back up `~/.dsh/sessions`**, because pulling copies the other Mac's conversations in. A conversation tied to a project folder can only be continued on a Mac where that folder has the same path. The details, including automatic sync and encryption, are in `addons/dsh-sync/README.md`.
+Then `/sync push` on one Mac and `/sync pull` on the other. **Before the first pull, back up `~/.dsh/sessions`**, because pulling copies the other Mac's threads in. A thread tied to a project folder can only be continued on a Mac where that folder has the same path. The details, including automatic sync and encryption, are in `addons/dsh-sync/README.md`.
 
-**Recon conversations are never synced** (since 0.57.0): they are never pushed or pulled, and one an earlier version pushed is taken off the remote's branch (its git history still holds it). Which conversations are Recon's is known from the Modes add-on, so while Modes is off or still starting, push and pull stop and say why.
+**Recon threads are never synced** (since 0.57.0): they are never pushed or pulled, and one an earlier version pushed is taken off the remote's branch (its git history still holds it). Which threads are Recon's is known from the Modes add-on, so while Modes is off or still starting, push and pull stop and say why.
 
 ## Shared settings (Experimental)
 
-**Experimental: tried only on one Mac so far.** Keeps the settings you change in the app's pages the same on two Macs, through one `settings.json` in a folder such as iCloud Drive. Those settings are Modes, Model Tiers, the Cowork tabs, Sampling presets and Colours. It holds no secrets, and nothing that is about one Mac only: on/off switches, folders, paths, permission switches, Recon and Notify stay where they are. It is off until you choose a folder. The installer can ask once about iCloud Drive (the answer is No unless you say Yes), or you can choose the folder yourself with `bash scripts/install.sh --settings "<folder>"`. The README section **Same settings on both Macs** explains how to use it. The details are in `addons/dsh-shared-settings/README.md`.
+**Experimental: tried only on one Mac so far.** Keeps the settings you change in the app's pages the same on two Macs, through one `settings.json` in a folder such as iCloud Drive. Those settings are Modes (with its spaces), Model tiers, the left panel's layout, Sampling presets and Colours. It holds no secrets, and nothing that is about one Mac only: on/off switches, folders, paths, permission switches, Recon and Notify stay where they are. It is off until you choose a folder. The installer can ask once about iCloud Drive (the answer is No unless you say Yes), or you can choose the folder yourself with `bash scripts/install.sh --settings "<folder>"`. The README section **Same settings on both Macs** explains how to use it. The details are in `addons/dsh-shared-settings/README.md`.
 
 ## Context saver
 
@@ -755,46 +777,46 @@ Shortens very large tool results before the model reads them and keeps the full 
 
 ## Learned skills
 
-Learns from your past conversations where you corrected the assistant, and proposes skills, Memory facts and project rules. **Nothing is installed until you say yes** on Settings → Learned skills.
+Learns from your past threads where you corrected the assistant, and proposes skills, Memory facts and project rules. **Nothing is installed until you say yes** on Settings → Learned skills.
 
-- **Learn now** (or `/skills learn`) reads your corrections, Stops, thumbs down and feedback, never Recon conversations, helpers or ones you marked **Never learn from this**. A reading model on this Mac or your own network needs no tick; one on the internet needs your tick, and shows you what it would send first.
-- Accepted skills stay in this add-on's own folder, with every version kept and **Put back**. Each reaches every tab, one tab or one project; Recon never gets one. **Start clean** keeps them out of a project.
+- **Learn now** (or `/skills learn`) reads your corrections, Stops, thumbs down and feedback, never Recon threads, helpers or ones you marked **Never learn from this**. A reading model on this Mac or your own network needs no tick; one on the internet needs your tick, and shows you what it would send first.
+- Accepted skills stay in this add-on's own folder, with every version kept and **Put back**. Each reaches every mode, one mode or one project; Recon never gets one. **Start clean** keeps them out of a project.
 - Learning by itself is off; nightly or weekly only proposes. Details: `addons/dsh-skill-architect/README.md`.
 
 ## Settings helper
 
-Sorts the Plus pages of the Settings window into groups with headings (Tabs and modes, Models, Cost and limits, Agents and runs, Knowledge and files, Look and this Mac), gives every page an icon, and adds a **search field** at the top of the window.
+Sorts the Plus pages of the Settings window into groups with headings (Everyday, Models and spending, Spaces and modes, Workshop, Agents and code, Research and sources, Privacy and safety, Learning, Add-ons and updates, Advanced), gives every page an icon, and adds a **search field** at the top of the window.
 
 - **Cmd-F** (Ctrl-F) jumps to the field. Type any word: a page, a setting, or what it does ("trim", "budget", "Tor"). **Enter** opens the result, scrolls to the setting and outlines it.
 - It also finds settings that have no control on any page; those are marked **configuration file only**, and **Open configuration file** at the top of the window is where to change them.
-- **A small gear beside Send** in the chat box opens the settings of the mode you are in, in a popup: Chat, Cowork and Code open the Modes page; Data, Recon, Scout, Finance, Content, Devices, Creator Plus, Research and Automations open their own page. You change them there exactly as in Settings. **Open in Settings** in the popup's header takes you to the full page; **Close**, Esc, or a click outside closes it. Switch the gear off with `modeGear` (see the add-on's README).
-- **Export in every mode**: a download icon left of the gear opens **Export this conversation**: *Conversation only*, *Conversation and thinking*, or *Full session log* (the model and its settings, the instructions, thinking, every tool call and result, other log events and the raw log as stored), as Markdown, plain text, HTML, JSON or PDF (through the print window), to download or copy; and the app's own complete ZIP. Switch off with `exportButton`. A conversation another add-on keeps apart (Recon) exports only through its own Export…, which is in its gear.
-- **A mode's own buttons are in the gear**: Devices rules, Creator Plus, the Finance selection and Recon's Export are under **In this conversation** at the top of the gear's popup, not in the chat box, so every mode's chat box has the same buttons in the same places (Modes' Same chat box, on by default). Switch with `extrasInGear`.
+- **A small gear beside Send** in the chat box opens the settings of the thread's mode, in a popup: Plain chat, Chat, Cowork and Code open the Modes page; Data, Recon, Scout, Finance, Content, Devices, Creator Plus, Research and Automations open their own page. You change them there exactly as in Settings. **Open in Settings** in the popup's header takes you to the full page; **Close**, Esc, or a click outside closes it. Switch the gear off with `modeGear` (see the add-on's README).
+- **Export in every mode**: a download icon left of the gear opens **Export this thread**: *Messages only*, *Messages and thinking*, or *Full thread log* (the model and its settings, the instructions, thinking, every tool call and result, other log events and the raw log as stored), as Markdown, plain text, HTML, JSON or PDF (through the print window), to download or copy; and the app's own complete ZIP. Switch off with `exportButton`. A thread another add-on keeps apart (Recon) exports only through its own Export…, which is in its gear.
+- **A mode's own buttons are in the gear**: Devices rules, Creator Plus, the Finance selection and Recon's Export are under **In this thread** at the top of the gear's popup, not in the chat box, so every mode's chat box has the same buttons in the same places (Modes' Same chat box, on by default). Switch with `extrasInGear`.
 - Works right away. To switch it off, use the Plugins panel. Details: `addons/dsh-settings-plus/README.md`.
 
 ## Agent swarm
 
-**Experimental.** Gives the assistant one tool, `run_swarm`, which runs a named group of helper agents on one task and returns every member's answer under its own heading. A group works in one of three ways: **fanout** (all at once), **pipeline** (in order, each seeing what the earlier ones wrote) or **debate** (two to five rounds, each member reading the others' last answers and revising). Nothing is set up by default: with no group defined it does nothing. Define groups on **Settings → Swarm**; each has a token cap and an optional money cap, so a runaway swarm stops. Details: `addons/dsh-agent-swarm/README.md`.
+**Experimental.** Gives the assistant one tool, `run_swarm`, which runs a named group of helper agents on one job and returns every member's answer under its own heading. A group works in one of three ways: **fanout** (all at once), **pipeline** (in order, each seeing what the earlier ones wrote) or **debate** (two to five rounds, each member reading the others' last answers and revising). Nothing is set up by default: with no group defined it does nothing. Define groups on **Settings → Swarm**; each has a token cap and an optional money cap, so a runaway swarm stops. Details: `addons/dsh-agent-swarm/README.md`.
 
 ## Artifacts
 
-**Beta, off until you switch it on in Settings → Artifacts.** Every file a conversation makes or changes shows as a card under the answer, in every tab. A click opens it beside the chat in a quick viewer (Markdown, web pages, code, tables, JSON, pictures, audio, video, PDF) or in the app's own preview. Every change to a file's content is kept as a version in Artifacts' own folder, never beside your file. **What changed** compares versions. The **Artifacts** page lists everything, filtered by tab, kind, date and folder. A web page opens cleaned: no scripts, no outside pictures, nothing that sends. **Run page** is a separate, clearly worded step. **Clean up** moves chosen artifacts to the app's trash (30 days, Put back), never a kept (★) one. An artifact made in a Scratch conversation goes with the conversation. Details: `addons/dsh-artifacts/README.md`.
+**Beta, off until you switch it on in Settings → Artifacts.** Every file a thread makes or changes shows as a card under the answer, in every space. A click opens it beside the chat in a quick viewer (Markdown, web pages, code, tables, JSON, pictures, audio, video, PDF) or in the app's own preview. Every change to a file's content is kept as a version in Artifacts' own folder, never beside your file. **What changed** compares versions. The **Artifacts** page lists everything, filtered by space, kind, date and folder. A web page opens cleaned: no scripts, no outside pictures, nothing that sends. **Run page** is a separate, clearly worded step. **Clean up** moves chosen artifacts to the app's trash (30 days, Put back), never a kept (★) one. An artifact made in a Scratch thread goes with the thread. Details: `addons/dsh-artifacts/README.md`.
 
 ## Content
 
-**Beta, off until you switch it on in Settings → Content.** A tab for writing from your own material: books and chapters, articles, blog posts, scripts, outlines for podcasts and videos. Its method: report what the folder holds, ask what to build (kind, audience, length), read before writing, keep apart what a source says, what you said and the assistant's own words, mark unsupported statements, propose angles and an outline before the draft, save every draft, publish nothing. Web, Depth and Long run work as in every tab. It reads Word files and spreadsheets through Data and PDFs through the PDF reader when those are on. Needs Modes and the Cowork sidebar. Details: `addons/dsh-content/README.md`.
+**Beta, off until you switch it on in Settings → Content.** A mode for writing from your own material, offered in the Chat space: books and chapters, articles, blog posts, scripts, outlines for podcasts and videos. Its method: report what the folder holds, ask what to build (kind, audience, length), read before writing, keep apart what a source says, what you said and the assistant's own words, mark unsupported statements, propose angles and an outline before the draft, save every draft, publish nothing. Web, Depth and Start Mission work as in every mode. It reads Word files and spreadsheets through Data and PDFs through the PDF reader when those are on. Needs Modes and the Left panel add-on. Details: `addons/dsh-content/README.md`.
 
 ## Split Plus
 
-**Experimental, off until you switch it on in Settings → Split Plus.** Two to four conversations side by side on one **Split** page, each in any mode and with its own chat box and access level, sharing one folder (or a Scratch folder of its own). A new pane starts in the same folder as the selected one. Each pane's title shows its mode, its folder and its state (Working, Waiting for you, New, Done). A pane in Recon opens only in Recon's own room, and a Recon pane is sealed: nothing is sent out of it to another pane. Details: `addons/dsh-split-plus/README.md`.
+**Experimental, off until you switch it on in Settings → Split Plus.** Two to four threads side by side on one **Split** page, each in any mode and with its own chat box and access level, sharing one folder (or a Scratch folder of its own). A new pane starts in the same folder as the selected one. Each pane's title shows its mode, its folder and its state (Working, Waiting for you, New, Done). A pane in Recon opens only in Recon's own room, and a Recon pane is sealed: nothing is sent out of it to another pane. Details: `addons/dsh-split-plus/README.md`.
 
 ## Devices
 
-**Experimental, off until you switch it on in Settings → Devices.** A tab for devices you connect to your Mac: it identifies what is plugged in by USB or paired by Bluetooth, reads a serial port, reads an ESP32's details and makes a checked backup of its flash, reads an Android phone's details and log, and can change an Android setting with undo. Writing ESP32 firmware is possible only behind strict conditions you set (a checked backup, the recovery path, official firmware with a matching checksum, a dry run and your yes). The assistant never writes a device command itself and has no shell in this tab. Only for devices that are yours. These steps were tested with stand-ins, not on real devices. Details: `addons/dsh-bench/README.md`.
+**Experimental, off until you switch it on in Settings → Devices.** A space and mode for devices you connect to your Mac: it identifies what is plugged in by USB or paired by Bluetooth, reads a serial port, reads an ESP32's details and makes a checked backup of its flash, reads an Android phone's details and log, and can change an Android setting with undo. Writing ESP32 firmware is possible only behind strict conditions you set (a checked backup, the recovery path, official firmware with a matching checksum, a dry run and your yes). The assistant never writes a device command itself and has no shell in the Devices space, whatever the mode. Only for devices that are yours. These steps were tested with stand-ins, not on real devices. Details: `addons/dsh-bench/README.md`.
 
 ## Creator Plus
 
-**Experimental, off until you switch it on in Settings → Creator Plus.** A tab that builds and improves plugins so they fit everything you have. Its jobs: build a new plugin, change an existing one, keep everything working after an app update, and improve from the conversation logs. The options under the chat box pick the job (New plugin, Improve, Find what went wrong, Rebuild, Combine or split, Find gaps, Check after an update, Explain) and which plugins it may look at. The app's own plugins are only read and explained, never edited. Results appear as cards on Settings → Creator Plus with **Try it in the trial copy**, **Apply to my setup**, **Not now** and **Undo**; nothing in your setup changes without your yes. Long runs are switched off in this tab for now. Details: `addons/dsh-creator-plus/README.md`.
+**Experimental, off until you switch it on in Settings → Creator Plus.** A mode, at home in the Workshop space, that builds and improves add-ons so they fit everything you have. Its jobs: build a new add-on, change an existing one, keep everything working after an app update, and improve from the thread logs. The options under the chat box pick the job (New add-on, Improve, Find what went wrong, Rebuild, Combine or split, Find gaps, Check after an update, Explain) and which add-ons it may look at. The app's own add-ons and those from other makers are only read and explained, never edited. Results appear as cards on Settings → Creator Plus with **Try it in the trial copy**, **Apply to my setup**, **Not now** and **Undo**; nothing in your setup changes without your yes. Missions are switched off in Creator Plus mode for now. Details: `addons/dsh-creator-plus/README.md`.
 
 ## Tuner Plus
 
@@ -802,4 +824,4 @@ Sorts the Plus pages of the Settings window into groups with headings (Tabs and 
 
 ## Engines
 
-**Experimental.** Lets a Code conversation be answered by an outside coding engine (the first is OpenCode, which Plus does not install) instead of the app's own, and compares an engine with the app on the same task, side by side, on the **Engines** page. Nothing runs until you pick an engine in the model menu or start a comparison. The engine works in a copy of your project inside a macOS sandbox; what reaches your project is decided by the app: by default nothing until you type `/engine apply`. A file you changed in the meantime is never overwritten. Details: `addons/dsh-engines/README.md`.
+**Experimental.** Lets a thread in the Code space (in any mode) be answered by an outside coding engine (the first is OpenCode, which Plus does not install) instead of the app's own, and compares an engine with the app on the same task, side by side, on the **Engines** page. Nothing runs until you pick an engine in the model menu or start a comparison. The engine works in a copy of your project inside a macOS sandbox; what reaches your project is decided by the app: by default nothing until you type `/engine apply`. A file you changed in the meantime is never overwritten. Details: `addons/dsh-engines/README.md`.

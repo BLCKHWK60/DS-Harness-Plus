@@ -1,27 +1,27 @@
-// lib/merge.mjs — append-only 三分支合并语义（纯函数，零依赖）。
+// lib/merge.mjs — append-only three-way merge rules (pure functions, no dependencies).
 //
-// 会话日志是 append-only：三方（合并基点 base、本地 ours、远端 theirs）
-// 逐文件按字节比较。规则（绝不静默覆盖——ours/theirs 任一字节都会存续）：
-// - 相同（ours == theirs）→ 保留 ours；
-// - 仅本地变（theirs == base）→ 保留 ours；
-// - 仅远端变（ours == base）→ 采纳 theirs（本地无增量可丢，不是覆盖）；
-// - 双边纯追加（base 是 ours 与 theirs 的共同字节前缀）→ 保留 ours 在原路径，
-//   theirs 整体留存为 fork 文件（两边保留）；
-// - 其余（任一侧重写/压缩打包/删除等真实分歧）→ 同样保留 ours + fork theirs，
-//   并响亮报告 diverged，绝不替用户取舍。
+// Session logs are append-only: the three sides (the merge base, local ours, remote theirs)
+// are compared byte by byte, file by file. Rules (never a silent overwrite — every byte of ours and theirs survives):
+// - the same (ours == theirs) → keep ours;
+// - only local changed (theirs == base) → keep ours;
+// - only remote changed (ours == base) → take theirs (nothing local is lost; this is not an overwrite);
+// - both sides only appended (base is a shared byte prefix of ours and theirs) → keep ours at the original path,
+//   and keep all of theirs as a fork file (both kept);
+// - anything else (a real divergence: one side rewrote, compacted, deleted…) → also keep ours + fork theirs,
+//   and report diverged loudly; never choose for the user.
 //
-// 内容按 Buffer 语义比较：zstd 等二进制日志与 UTF-8 文本同一套规则。
+// Content is compared as a Buffer: binary logs such as zstd follow the same rules as UTF-8 text.
 
 import { MERGE_KINDS } from './constants.mjs'
 
-/** 任意内容形态 → Buffer|undefined。 */
+/** Any content shape → Buffer|undefined. */
 function norm(value) {
   if (value === undefined || value === null) return undefined
   if (Buffer.isBuffer(value)) return value
   return Buffer.from(String(value))
 }
 
-/** a 是否为 b 的字节前缀（等长即相等）。 */
+/** Whether a is a byte prefix of b (equal length means equal). */
 function isPrefix(prefix, whole) {
   return prefix !== undefined && whole !== undefined
     && prefix.length <= whole.length
@@ -29,12 +29,12 @@ function isPrefix(prefix, whole) {
 }
 
 /**
- * 单路径三方分类。
- * @param {Buffer|string|undefined} base - 合并基点内容。
- * @param {Buffer|string|undefined} ours - 本地内容。
- * @param {Buffer|string|undefined} theirs - 远端内容。
+ * The three-way class of one path.
+ * @param {Buffer|string|undefined} base - the merge base content.
+ * @param {Buffer|string|undefined} ours - the local content.
+ * @param {Buffer|string|undefined} theirs - the remote content.
  * @returns {{kind: string, keepOurs: boolean, forkTheirs: boolean}}
- *   kind ∈ MERGE_KINDS；keepOurs=false 时采纳 theirs（theirs-only）。
+ *   kind ∈ MERGE_KINDS; keepOurs=false takes theirs (theirs-only).
  */
 export function classifyPath(base, ours, theirs) {
   const b = norm(base)
@@ -46,23 +46,23 @@ export function classifyPath(base, ours, theirs) {
   if (o === undefined && t === undefined) {
     return { kind: MERGE_KINDS.IDENTICAL, keepOurs: true, forkTheirs: false }
   }
-  // 仅本地变：远端仍是基点内容。
+  // Only local changed: the remote still has the base content.
   if (equalsOrBothMissing(t, b)) {
     return { kind: MERGE_KINDS.OURS_ONLY, keepOurs: true, forkTheirs: false }
   }
-  // 仅远端变：本地仍是基点内容 → 采纳远端（本地无增量，非覆盖）。
+  // Only remote changed: local still has the base content → take the remote (nothing local is added, not an overwrite).
   if (equalsOrBothMissing(o, b)) {
     return { kind: MERGE_KINDS.THEIRS_ONLY, keepOurs: false, forkTheirs: false }
   }
-  // 双边纯追加：共同基点前缀 + 各自后缀 → 两边保留，远端转 fork 文件。
+  // Both only appended: shared base prefix + each side's own tail → keep both; the remote becomes a fork file.
   if (isPrefix(b, o) && isPrefix(b, t)) {
     return { kind: MERGE_KINDS.APPEND_BOTH, keepOurs: true, forkTheirs: true }
   }
-  // 真实分歧（重写/打包/单侧删除等）：同样两边保留 + 响亮报告。
+  // A real divergence (rewrite, compaction, one-sided delete…): also keep both, and report it loudly.
   return { kind: MERGE_KINDS.DIVERGED, keepOurs: true, forkTheirs: true }
 }
 
-/** 两侧同时缺失或字节相等。 */
+/** Both sides missing, or equal byte for byte. */
 function equalsOrBothMissing(left, right) {
   if (left === undefined && right === undefined) return true
   if (left === undefined || right === undefined) return false
@@ -70,8 +70,8 @@ function equalsOrBothMissing(left, right) {
 }
 
 /**
- * 整批冲突路径的合并计划（pull 阶段对 merge 冲突路径逐一调用 classifyPath）。
- * @param {Array<{path: string, base?: Buffer|string, ours?: Buffer|string, theirs?: Buffer|string}>} conflicts - 冲突路径。
+ * The merge plan for a batch of conflicting paths (the pull step calls classifyPath for each merge-conflict path).
+ * @param {Array<{path: string, base?: Buffer|string, ours?: Buffer|string, theirs?: Buffer|string}>} conflicts - the conflicting paths.
  * @returns {{resolutions: Array<{path: string, kind: string, adoptTheirs: boolean, forkTheirs: boolean}>, summary: {kept: number, adopted: number, appended: number, diverged: number, forkPaths: string[]}}}
  */
 export function planMerge(conflicts) {

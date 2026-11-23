@@ -121,8 +121,8 @@ test('search and read through the stand-in Tor, with every stop', { skip: !mac }
   assert.equal(blocklist.info().size, 1201);
 
   // Reading: only what was shown.
-  assert.match(await onion.read('c1', `http://${GOOD}/other`), /was not shown in this conversation, so it was not opened/);
-  assert.match(await onion.read('c2', `http://${GOOD}/leaks`), /was not shown in this conversation, so it was not opened/, 'another conversation was not shown it');
+  assert.match(await onion.read('c1', `http://${GOOD}/other`), /was not shown in this thread, so it was not opened/);
+  assert.match(await onion.read('c2', `http://${GOOD}/leaks`), /was not shown in this thread, so it was not opened/, 'another thread was not shown it');
   assert.match(await onion.read('c1', 'https://example.com/'), /only \.onion addresses/);
   const before = hits.length;
   const page = await onion.read('c1', `http://${GOOD}/leaks`);

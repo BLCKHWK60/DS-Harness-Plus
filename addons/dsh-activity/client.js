@@ -162,8 +162,11 @@ window.__ModuleLoader__.load({
     // routes on its own timer, even in a hidden window. This gives all of them ONE shared Settings copy (read once, renewed when
     // Settings changes or after 30 seconds at the most) and one kind of polling loop that stops while the window is hidden.
     // The first copy of this block to run puts the shared state on `window.__dshPoll`; later copies reuse it, so 30 add-ons share one.
+    // A newer copy (higher API) replaces an older shared object instead of reusing it, so an older page file that runs first (an
+    // add-on edited in creator mode, a partly updated install) cannot keep the whole page on an older helper. Raise API with every
+    // change to how the shared state behaves.
     const dshPoll = (() => {
-      const API = 1;
+      const API = 2;
       const root = typeof window !== 'undefined' ? window : globalThis;
       if (root.__dshPoll && root.__dshPoll.api >= API) return root.__dshPoll;
 
@@ -172,7 +175,7 @@ window.__ModuleLoader__.load({
       /** Without the change event (an older app) the copy is only trusted for a moment. */
       const SETTINGS_TTL_NO_EVENTS = 2000;
       const WRITES = ['mutate', 'update', 'replace'];
-      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0 };
+      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0, changes: 0, repeats: 0, watchers: 0 };
       const cache = { value: undefined, at: 0, inflight: null, gen: 0, events: false };
       const changeListeners = new Set();
       const watched = new WeakSet();
@@ -192,38 +195,72 @@ window.__ModuleLoader__.load({
         cache.gen += 1;
       }
 
-      /** Listen once per page connection for "Settings changed" (the app sends it after every write, from any window). */
+      /** Changes already handled, `ns + revision` -> when: the same change reaches the page once per add-on that listens. */
+      const heard = new Map();
+      /** How long a change counts as "the same one" when it arrives again through another add-on's connection. */
+      const HEARD_MS = 2000;
+      /** The app's own marker for a wrapped service: `ctx.remote` hands out a NEW wrapper object at every read. */
+      const ORIGINAL = typeof Symbol === 'function' ? Symbol.for('cordis.original') : '__original';
+      /** Marks our own write wrapper, so it is never wrapped a second time. */
+      const OURS = '__dshPollWrite';
+
+      /**
+       * One "Settings changed" event from the app. Every add-on that listens hears the same event; it is acted on once.
+       * Bug of 21 November 2026 (a new chat made the page read Settings 12-17 times a second, the app ran at 100% and the
+       * tab crashed): `ctx.remote` is a new object at every read, so the old `watched.has(remote)` never matched and every
+       * read added one more listener; one change then woke every listener and each one started its own read.
+       */
+      function changed(ns, revision) {
+        if (typeof revision === 'number' || typeof revision === 'string') {
+          const now = Date.now();
+          for (const [key, at] of heard) if (now - at > HEARD_MS) heard.delete(key);
+          const key = `${String(ns)}\u0000${String(revision)}`;
+          if (heard.has(key)) { stats.repeats += 1; return; }
+          heard.set(key, now);
+        }
+        stats.changes += 1;
+        invalidate();
+        for (const listener of [...changeListeners]) {
+          try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
+        }
+      }
+
+      /** Listen once per add-on for "Settings changed" (the app sends it after every write, from any window). */
       function watch(ctx) {
         const remote = ctx && ctx.remote;
-        if (!remote || watched.has(remote)) return;
-        watched.add(remote);
+        if (!remote) return;
+        // Keyed on the add-on's own context, which stays the same object (its `remote` does not).
+        const key = ctx !== null && (typeof ctx === 'object' || typeof ctx === 'function') ? ctx : (remote[ORIGINAL] || remote);
+        if (watched.has(key)) return;
+        watched.add(key);
         try {
           if (typeof remote.$on === 'function') {
-            remote.$on('settings/document-updated', (ns) => {
-              invalidate();
-              for (const listener of [...changeListeners]) {
-                try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
-              }
-            });
+            remote.$on('settings/document-updated', changed);
+            stats.watchers += 1;
             cache.events = true;
           }
         } catch { /* no change event here: the short copy time covers it */ }
         try {
-          if (typeof ctx.on === 'function') ctx.on('connection/reset', invalidate);
+          if (typeof ctx.on === 'function') ctx.on('connection/reset', () => { heard.clear(); invalidate(); });
         } catch { /* optional */ }
         // This page's own writes drop the copy before their answer comes back, so a read that follows a write is never behind it.
         const settings = remote.settings;
-        if (settings && !wrapped.has(settings)) {
-          wrapped.add(settings);
+        const target = settings && (settings[ORIGINAL] || settings);
+        if (settings && !wrapped.has(target)) {
+          wrapped.add(target);
           for (const name of WRITES) {
             const original = settings[name];
-            if (typeof original !== 'function') continue;
+            // Already ours (put there through another add-on's wrapper object): wrapping it again would stack wrappers.
+            // An older copy's wrapper (marked `true`) is wrapped once more: it drops only the older copy's own cache.
+            if (typeof original !== 'function' || original[OURS] === API) continue;
             try {
-              settings[name] = function (...args) {
+              const write = function (...args) {
                 invalidate();
                 const done = original.apply(this, args);
                 return done && typeof done.then === 'function' ? done.then((out) => { invalidate(); return out; }, (error) => { invalidate(); throw error; }) : done;
               };
+              write[OURS] = API;
+              settings[name] = write;
             } catch { /* a frozen object keeps the plain call */ }
           }
         }
@@ -375,7 +412,7 @@ window.__ModuleLoader__.load({
     // ---- dsh-poll:end ----
 
     const NS = 'activity';
-    const DICT = { en: { 'section.title': 'Activity' }, zh: { 'section.title': '活动指示' } };
+    const DICT = { en: { 'section.title': 'Activity' } };
 
     /** Every kind of work: its name on the settings page, what it means, and its built-in colour. */
     const KINDS = [
@@ -385,8 +422,8 @@ window.__ModuleLoader__.load({
       { id: 'tool', label: 'Tool calls', hint: 'A tool is running.', color: '#ef9f27', speed: 0.6 },
       { id: 'web', label: 'Web search', hint: 'A web search or fetch tool is running.', color: '#378add', speed: 0.7 },
       { id: 'script', label: 'Scripts and commands', hint: 'A shell command or script tool is running.', color: '#639922', speed: 0.45 },
-      { id: 'sub', label: 'Sub-agents', hint: 'Helpers of this conversation are working.', color: '#d85a30', speed: 0.5 },
-      { id: 'other', label: 'Other conversations', hint: 'Another conversation is working.', color: '#9a988f', speed: 0.3 },
+      { id: 'sub', label: 'Sub-agents', hint: 'Helpers of this thread are working.', color: '#d85a30', speed: 0.5 },
+      { id: 'other', label: 'Other threads', hint: 'Another thread is working.', color: '#9a988f', speed: 0.3 },
       { id: 'wait', label: 'Waiting for you', hint: 'The app waits for your approval. Everything pulses in this colour.', color: '#d4537e', speed: 0 },
       { id: 'error', label: 'Errors and retries', hint: 'A turn failed, or the model request is being retried. Everything pulses in this colour.', color: '#e24b4a', speed: 0 },
     ];
@@ -1230,7 +1267,7 @@ input.dsh-ac-field { width: 260px; }
       useEffect(() => { if (!helpersOnly) setStopping(false); }, [helpersOnly]);
       const stop = helpersOnly && sessionId && cancelSession
         ? h('button', {
-          type: 'button', className: 'dsh-ac-stop', disabled: stopping, title: 'Stop the helpers of this conversation',
+          type: 'button', className: 'dsh-ac-stop', disabled: stopping, title: 'Stop the helpers of this thread',
           onClick: () => {
             setStopping(true);
             Promise.resolve().then(() => cancelSession?.(sessionId)).catch(() => {}).finally(() => setTimeout(() => setStopping(false), 4000));
@@ -1397,7 +1434,7 @@ input.dsh-ac-field { width: 260px; }
         { className: 'dsh-ac-page' },
         h('style', null, CSS),
         h('h2', { className: 'dsh-ac-title' }, 'Activity indicator'),
-        h('p', { className: 'dsh-ac-desc' }, 'A thin bar that shows what the model and its helpers are doing: reading the prompt, thinking, writing, running tools, searching the web, or working in the background. It keeps no text of your conversations and sends nothing anywhere.'),
+        h('p', { className: 'dsh-ac-desc' }, 'A thin bar that shows what the model and its helpers are doing: reading the prompt, thinking, writing, running tools, searching the web, or working in the background. It keeps no text of your threads and sends nothing anywhere.'),
         note.text ? h(PlainNote, { text: note.text, details: note.details, kind: note.error ? 'error' : 'info' }) : null,
 
         h('div', { className: 'dsh-ac-group' }, h('span', null, 'Preview')),
@@ -1431,7 +1468,7 @@ input.dsh-ac-field { width: 260px; }
           { title: 'Thickness', hint: 'How heavy the lines are.' },
           h('select', { className: 'dsh-ac-field', value: String(value.weight ?? 2), 'aria-label': 'Thickness', onChange: (event) => set('weight', Number(event.target.value)) }, h('option', { value: '1' }, 'Thin'), h('option', { value: '2' }, 'Normal'), h('option', { value: '3' }, 'Bold')),
         ),
-        toggle('collapse', 'Arrow to fold the message box away', 'Adds a small arrow at the right end of the line. A click folds the message box down so only the line is left, and more of the conversation shows. Another click brings the box back. It stays folded in every conversation, and after a restart, until you click.', true),
+        toggle('collapse', 'Arrow to fold the message box away', 'Adds a small arrow at the right end of the line. A click folds the message box down so only the line is left, and more of the thread shows. Another click brings the box back. It stays folded in every thread, and after a restart, until you click.', true),
         toggle('fit', 'Fit the message box', 'On keeps the line above the message box exactly as wide as the box, so the two look like one. Off lets it span the whole chat area.', true),
         toggle('hideIdle', 'Hide when nothing is running', 'Off keeps a faint resting line, so the chat box does not jump.', false),
         toggle('still', 'No movement', 'Colour only: nothing flows, spins or pulses.', false),
@@ -1478,7 +1515,7 @@ input.dsh-ac-field { width: 260px; }
         toggle('text', 'Show the text', 'A short line that says what is running. It has its own row, so the bar never gets shorter.', true),
         toggle('figures', 'Figures', 'Tokens per second, seconds and counts.', true),
         toggle('promptSpeed', 'Last prompt speed', `Adds "${value.words === true ? 'Prompt speed' : 'PP'} 1,850 t/s" while the model thinks or writes. It is known once the first token arrives.`, true),
-        toggle('context', 'Conversation size', `Adds "${value.words === true ? 'context' : 'ctx'} 12.4k": the tokens the last request held.`, true),
+        toggle('context', 'Thread size', `Adds "${value.words === true ? 'context' : 'ctx'} 12.4k": the tokens the last request held.`, true),
 
         h('div', { className: 'dsh-ac-group' }, h('span', null, 'Ticker tape')),
         usesTape ? null : h('p', { className: 'dsh-ac-desc', style: { margin: '0 0 4px' } }, 'These apply to the designs with a ticker tape.'),
@@ -1492,7 +1529,7 @@ input.dsh-ac-field { width: 260px; }
         toggle('tapeMarks', 'A mark every 10 seconds', '', true),
 
         h('div', { className: 'dsh-ac-group' }, h('span', null, 'Advanced')),
-        toggle('words', 'Show words, not short codes', 'On: "Writing", "Reading prompt", "Sub-agents", "Other chats". Off: the short codes TG, PP, BG and OC that the app\'s own logs use.', false),
+        toggle('words', 'Show words, not short codes', 'On: "Writing", "Reading prompt", "Sub-agents", "Other threads". Off: the short codes TG, PP, BG and OC that the app\'s own logs use.', false),
 
         h('div', { className: 'dsh-ac-group' }, h('span', null, 'Tool names')),
         h(

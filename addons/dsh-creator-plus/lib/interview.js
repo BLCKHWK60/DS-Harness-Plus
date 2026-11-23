@@ -13,7 +13,7 @@ export const ALWAYS = [
   { id: 'together', question: 'Should the new plugin stand alone, or work with plugins you already have?', options: ['Stand alone', 'Work with others (name them)'], recommended: 'Stand alone', why: 'A plugin that stands alone cannot break another one; it can still read what others offer.' },
   { id: 'look', question: 'Should it match the look of what you have, or have a look of its own?', options: ['Match what I have', 'A look of its own (describe it)'], recommended: 'Match what I have', why: 'Matching keeps every page alike and readable in light and dark.' },
   { id: 'change', question: 'Does an existing plugin have to change for it?', options: ['No, nothing else changes', 'Yes (name it and what changes)'], recommended: 'No, nothing else changes', why: 'Nothing else changes, so nothing else can break; a change to another plugin is shown, backed up and tested first.' },
-  { id: 'where', question: 'Which tabs should it appear in, and what may it do (read only, change files, go online)?', options: ['Only where you start it, read only', 'Name the tabs and what it may do'], recommended: 'Only where you start it, read only', why: 'The smallest reach is the safest start; it can be widened later.' },
+  { id: 'where', question: 'Which modes should it appear in, and what may it do (read only, change files, go online)?', options: ['Only where you start it, read only', 'Name the modes and what it may do'], recommended: 'Only where you start it, read only', why: 'The smallest reach is the safest start; it can be widened later.' },
 ];
 
 /**
@@ -23,7 +23,7 @@ export const ALWAYS = [
  */
 export function nextQuestion({ answers = {}, kind = '', preferences = {} }) {
   if (!KINDS.includes(kind) && !answers.kind) {
-    return { id: 'kind', question: 'What kind of plugin is it?', options: ['A tool the assistant calls', 'A tab (a mode)', 'A page or panel', 'A look', 'An automation', 'A model provider'], recommended: 'A tool the assistant calls', usual: preferences.kind ?? '', why: 'Each kind has its own recipe.' };
+    return { id: 'kind', question: 'What kind of plugin is it?', options: ['A tool the assistant calls', 'A mode', 'A page or panel', 'A look', 'An automation', 'A model provider'], recommended: 'A tool the assistant calls', usual: preferences.kind ?? '', why: 'Each kind has its own recipe.' };
   }
   for (const item of ALWAYS) {
     if (!answers[item.id]) return { ...item, usual: preferences[item.id] ?? '' };
@@ -59,12 +59,12 @@ export function briefText({ title, kind, purpose, must = [], mustNot = [], answe
     '## What it must never do',
     '',
     ...(mustNot.length ? mustNot.map((line) => `- ${oneLine(line, 300)}`) : []),
-    '- Weaken another tab\'s safety rules, change the app\'s own files or a third-party plugin, or keep a password or key in a file.',
+    '- Weaken another mode\'s safety rules, change the app\'s own files or a third-party plugin, or keep a password or key in a file.',
     '',
     '## How it fits',
     '',
     ...ALWAYS.map((item) => `- ${item.question} ${oneLine(answers[item.id] ?? item.recommended, 200)}`),
-    ...(assumed.length ? ['', '## Assumed (a Long run did not stop to ask; the user can change these)', '', ...assumed.map((line) => `- ${oneLine(line, 300)}`)] : []),
+    ...(assumed.length ? ['', '## Assumed (a Mission did not stop to ask; the user can change these)', '', ...assumed.map((line) => `- ${oneLine(line, 300)}`)] : []),
     '',
   ].join('\n');
 }
@@ -100,8 +100,8 @@ export function planOf({ folder, kind, tools = [], commands = [], tabs = [], slo
 export function planText(plan, fit) {
   return [
     `Plan for ${plan.folder} (${plan.kind}):`,
-    `- Creates: a new plugin folder ${plan.folder} in this conversation's build folder, with its tests, README and passport; nothing in your real setup.`,
-    `- Adds: ${[plan.tools.length ? `tools ${plan.tools.join(', ')}` : '', plan.commands.length ? `commands ${plan.commands.map((name) => `/${name}`).join(', ')}` : '', plan.newModes.length ? `the tab ${plan.newModes.join(', ')}` : '', `a Settings page`].filter(Boolean).join('; ')}.`,
+    `- Creates: a new plugin folder ${plan.folder} in this thread's build folder, with its tests, README and passport; nothing in your real setup.`,
+    `- Adds: ${[plan.tools.length ? `tools ${plan.tools.join(', ')}` : '', plan.commands.length ? `commands ${plan.commands.map((name) => `/${name}`).join(', ')}` : '', plan.newModes.length ? `the mode ${plan.newModes.join(', ')}` : '', `a Settings page`].filter(Boolean).join('; ')}.`,
     `- Appears in: ${plan.modes.length ? plan.modes.join(', ') : 'where it is started'}.`,
     plan.changes.length ? `- Changes: ${plan.changes.map((change) => `${change.plugin} (${(change.files ?? []).join(', ')})`).join('; ')}.` : '- Changes no other plugin.',
     '',

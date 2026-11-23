@@ -165,6 +165,56 @@ test('change listeners are told, and can stop listening', async () => {
   assert.deepEqual(seen, ['modes']);
 });
 
+/**
+ * A context like the app's: `ctx.remote` is a NEW wrapper object at every read (cordis's traceable proxy), over one
+ * shared service whose change event reaches every listener with `(ns, revision)`.
+ */
+function appLikeContexts(count) {
+  const handlers = [];
+  const calls = { describe: 0, mutate: 0 };
+  let revision = 1;
+  const settings = {
+    describe: async () => { calls.describe += 1; return { ok: true, value: { namespaces: [{ ns: 'modes', revision, value: {} }] } }; },
+    mutate: async () => { calls.mutate += 1; return { ok: true }; },
+  };
+  const service = { $on: (name, handler) => { handlers.push({ name, handler }); return () => {}; }, settings };
+  const fresh = () => new Proxy(service, {
+    get: (target, prop) => (prop === Symbol.for('cordis.original') ? target : prop === 'settings' ? new Proxy(target.settings, { get: (inner, key) => (key === Symbol.for('cordis.original') ? inner : inner[key]) }) : target[prop]),
+  });
+  const contexts = Array.from({ length: count }, () => ({ get remote() { return fresh(); }, on: () => () => {} }));
+  const fire = (ns) => { revision += 1; for (const item of [...handlers]) if (item.name === 'settings/document-updated') item.handler(ns, revision); };
+  return { contexts, calls, fire, handlers, settings };
+}
+
+test('reading Settings many times adds no new listeners, even though the app hands out a new remote at every read', async () => {
+  const { poll } = page();
+  const { contexts, handlers, settings } = appLikeContexts(3);
+  for (let i = 0; i < 50; i += 1) {
+    poll.invalidate();
+    for (const ctx of contexts) await poll.settings(ctx);
+  }
+  assert.equal(handlers.length, 3, 'one listener per add-on, not one per read');
+  const write = settings.mutate;
+  await poll.settings(contexts[0]);
+  assert.equal(settings.mutate, write, 'the write is wrapped once, not again at every read');
+});
+
+test('one Settings change starts one read, not one per listener (the 21 November storm)', async () => {
+  const { poll, advance } = page();
+  // Kept small: with the old helper the reads doubled at every change (16 add-ons ran out of memory here).
+  const { contexts, calls, fire } = appLikeContexts(4);
+  // Like the Modes colours switch: a listener that reads Settings at once, in every add-on.
+  for (const ctx of contexts) poll.onChange(ctx, () => { void poll.settings(ctx); });
+  await poll.settings(contexts[0]);
+  const before = calls.describe;
+  for (let round = 0; round < 6; round += 1) {
+    fire('modes');
+    await advance(10);
+  }
+  assert.equal(calls.describe - before, 6, 'one read per change, and the count does not grow from change to change');
+  assert.equal(poll.stats().changes, 6);
+});
+
 test('a loop looks now, then every `every`, one look at a time', async () => {
   const { poll, advance } = page();
   let runs = 0;
@@ -268,6 +318,31 @@ test('two copies of the block on one page share one state', () => {
   const { poll, win } = page();
   const second = new Function('window', 'Date', `${source}\nreturn dshPoll;`)(win, { now: () => 0 });
   assert.equal(second, poll);
+});
+
+test('an older copy that ran first is replaced, not reused; a later older copy reuses the newer one', async () => {
+  const { win, advance } = page();
+  // The old helper (api 1) of an older page file, with its own write wrapper marked the old way.
+  const old = { api: 1, settings: () => { throw new Error('the old helper must not be used'); } };
+  win.__dshPoll = old;
+  const fresh = new Function('window', 'Date', `${source}\nreturn dshPoll;`)(win, { now: () => 0 });
+  assert.notEqual(fresh, old, 'the newer block does not reuse the older shared object');
+  assert.equal(win.__dshPoll, fresh, 'and puts itself on the page for later copies');
+  assert.ok(fresh.api > 1);
+  const again = new Function('window', 'Date', `${source}\nreturn dshPoll;`)(win, { now: () => 0 });
+  assert.equal(again, fresh, 'a copy of the same version reuses it');
+  // A Settings service already wrapped by the older helper is wrapped once more, so this page's writes still drop the new copy.
+  const { ctx, calls } = context();
+  const oldWrite = ctx.remote.settings.mutate;
+  const marked = async (...args) => oldWrite(...args);
+  marked.__dshPollWrite = true;
+  ctx.remote.settings.mutate = marked;
+  await fresh.settings(ctx);
+  assert.equal(calls.describe, 1);
+  await ctx.remote.settings.mutate('modes', []);
+  await fresh.settings(ctx);
+  await advance(0);
+  assert.equal(calls.describe, 2, 'the write dropped the new copy');
 });
 
 /** A page file's text without the shared blocks (their code is the master's, checked below). */

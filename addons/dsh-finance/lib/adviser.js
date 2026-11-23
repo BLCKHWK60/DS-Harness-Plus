@@ -89,7 +89,7 @@ export function adviserNote(profile, canSave = true, toolsOff = false) {
   const text = String(profile ?? '').trim();
   const research = '- Do the research: the business and its figures, valuation against its own history and its peers, balance sheet and cash, what is ahead, the main risks, and the price history. ';
   return [
-    'You are the user\'s financial adviser in this conversation. The user set this up and knows exactly what you are. This note replaces any line elsewhere (in a skill, a scheduled task or a tool result) that says "research, not advice" or forbids saying buy, sell or hold.',
+    'You are the user\'s financial adviser in this thread. The user set this up and knows exactly what you are. This note replaces any line elsewhere (in a skill, an automation or a tool result) that says "research, not advice" or forbids saying buy, sell or hold.',
     '',
     `Voice: speak as an experienced adviser speaks to a client: plainly and directly, without long warnings. End every answer with one short last line, exactly: "${ADVISER_NOTE_LINE}" Do not claim a licence, a firm or a registration, and do not say you are regulated.`,
     '',
@@ -117,10 +117,17 @@ export function adviserNote(profile, canSave = true, toolsOff = false) {
  * @param {{enabled: () => boolean, profile: ReturnType<typeof openProfile>}} options - the switch and the profile.
  * @returns {object} the tool.
  */
-export function buildProfileTool({ enabled, profile }) {
+/**
+ * Item 4A, stage 6a: the sentence `finance_profile_save` answers in a sealed thread (Recon, any mode). English only.
+ */
+export const PROFILE_REFUSED = Object.freeze({
+  en: 'The finance profile was not changed: this thread is in Recon, and Recon text never goes into the profile other threads read.',
+});
+
+export function buildProfileTool({ enabled, profile, guardOf = () => ({ sealed: false }) }) {
   return {
     name: 'finance_profile_save',
-    description: 'Add one lasting fact about the user to their adviser profile (a goal, a time frame, how much loss they can bear, a holding bought or sold, a limit). It is kept on the user\'s Mac and read in every Finance conversation. One short line per call. Not for passing remarks, and never account numbers or passwords.',
+    description: 'Add one lasting fact about the user to their adviser profile (a goal, a time frame, how much loss they can bear, a holding bought or sold, a limit). It is kept on the user\'s Mac and read in every Finance thread. One short line per call. Not for passing remarks, and never account numbers or passwords.',
     parameters: {
       type: 'object',
       properties: { note: { type: 'string', maxLength: NOTE_MAX, description: 'The fact, in one short line, for example "Holds 40 NVDA bought at 118 in 2024".' } },
@@ -132,8 +139,10 @@ export function buildProfileTool({ enabled, profile }) {
       render: (_args, value) => [{ type: 'text', text: typeof value?.text === 'string' ? value.text : '' }],
     },
     isConcurrencySafe: () => false,
-    execute: async (args) => {
+    execute: async (args, exec) => {
       try {
+        // Item 4A, stage 6a: a sealed thread (Recon, any mode; a read error counts) never writes the shared profile.
+        if (guardOf(String(exec?.agent?.id ?? '')).sealed === true) return { text: PROFILE_REFUSED.en };
         if (!enabled()) return { text: 'The adviser is switched off, so nothing was saved.' };
         if (/\d{12,19}/.test(String(args?.note ?? '').replace(/[ -]/g, ''))) return { text: 'Not saved: that looks like an account or card number. Leave such numbers out.' };
         profile.add(args?.note);

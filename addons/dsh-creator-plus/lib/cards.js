@@ -67,7 +67,7 @@ export const MOVES = {
 /** @returns {string} why a button cannot act on this card now, or ''. */
 export function moveRefusal(card, act) {
   if (!MOVES[act]) return 'unknown card action';
-  if (['try', 'apply', 'undo'].includes(act) && !['new-plugin', 'change'].includes(card?.kind)) return 'Only a ready plugin or a prepared change can be tried, applied or undone.';
+  if (['try', 'apply', 'undo'].includes(act) && !['new-plugin', 'change'].includes(card?.kind)) return 'Only a ready add-on or a prepared change can be tried, applied or undone.';
   if (!MOVES[act].includes(card?.status)) return `This card is "${card?.status}": ${act === 'undo' ? 'only what was applied can be undone' : act === 'apply' ? 'it was applied, undone or set aside already' : 'that is not possible now'}.`;
   return '';
 }

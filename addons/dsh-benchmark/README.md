@@ -1,8 +1,8 @@
 # Benchmark
 
-Host plugin `@local/dsh-benchmark` (dsh 0.2.2-rc.1). It runs **your prompt suites** over a grid of **targets** (model routes; a server alias id such as an oMLX profile `<model>:<name>` is just another target), **temperatures**, **output caps** and **seeds**, grades every answer, and reports score, spread across seeds, latency, tokens and cost per cell. It then recommends the best cell per category and target and exports it as a `dsh-sampling-presets` fragment. **Nothing is configured by default**: with no targets or suites it does nothing; a bad config fails at load.
+Host add-on `@local/dsh-benchmark` (dsh 0.2.2-rc.1). It runs **your prompt suites** over a grid of **targets** (model routes; a server alias id such as an oMLX profile `<model>:<name>` is just another target), **temperatures**, **output caps** and **seeds**, grades every answer, and reports score, spread across seeds, latency, tokens and cost per cell. It then recommends the best cell per category and target and exports it as a `dsh-sampling-presets` fragment. **Nothing is configured by default**: with no targets or suites it does nothing; a bad config fails at load.
 
-It is a separate plugin and does not touch Bench Lab (a community plugin; its runner, registry and panel stay as they are; Bench Lab's profile ids can be used as targets). Model calls go through dsh (`ctx.llm.stream`), so provider keys stay in dsh: this plugin holds **no token or key** and its saved files contain none.
+It is a separate add-on and does not touch Bench Lab (a community plugin; its runner, registry and panel stay as they are; Bench Lab's profile ids can be used as targets). Model calls go through dsh (`ctx.llm.stream`), so provider keys stay in dsh: this add-on holds **no token or key** and its saved files contain none.
 
 ## Configuration
 
@@ -42,7 +42,7 @@ It is a separate plugin and does not touch Bench Lab (a community plugin; its ru
 - **Recommendation** per category and target: the highest mean score; among cells within `scoreTolerance` of it the lowest mean latency, then the lowest cost. It is marked **low confidence** with the reasons when it has fewer than `minSeeds` seeds, a spread above 0.15, or any errored run.
 - **Export** writes only confident picks, as `presets:` named `<category>-<target>` plus a `categories:` hint, for you to merge into the sampling-presets config. Nothing is applied automatically.
 
-**Canaries for Tuning Plus.** The add-on also holds twelve small general tasks (a sum, one word, a JSON object, a comparison, a reversed word, colours, a translation, a capital, a letter count, a sort, a yes/no, a tool name), each graded by code (`CANARIES` in `index.js`, service `canaries()`). Nothing here runs them: Tuning Plus asks for them to see whether a candidate became worse at everything else. With Benchmark off, Tuning Plus promotes nothing.
+**Canaries for Tuner Plus.** The add-on also holds twelve small general tasks (a sum, one word, a JSON object, a comparison, a reversed word, colours, a translation, a capital, a letter count, a sort, a yes/no, a tool name), each graded by code (`CANARIES` in `index.js`, service `canaries()`). Nothing here runs them: Tuning Plus asks for them to see whether a candidate became worse at everything else. With Benchmark off, Tuning Plus promotes nothing.
 
 ## Settings page
 
@@ -73,15 +73,15 @@ Settings > **Benchmark** now sets the add-on up and runs it; no file editing is 
 
 ## Not done
 
-- **`ctx.jobs` integration** is also not done: jobs run in this plugin's own background task and do not survive a Host restart (finished jobs do, as files; a running job's partial runs are not saved).
+- **`ctx.jobs` integration** is also not done: jobs run in this add-on's own background task and do not survive a Host restart (finished jobs do, as files; a running job's partial runs are not saved).
 - **Judge cost** is not added to the job cost or the spend cap.
 - **Top-p, min-p and other server-side sampling** cannot be swept from dsh (it sends only temperature and max tokens); sweep them with server-side profile aliases as targets.
 - Cost uses prices you supply; there is no live price lookup.
-- The scored engines of Bench Lab's own plan (EvalScope, Harbor, item banks) are not part of this plugin.
+- The scored engines of Bench Lab's own plan (EvalScope, Harbor, item banks) are not part of this add-on.
 
 ## About Bench Lab's `runnerToken`
 
-Spec hazard 4: the `benchlab` row in your live profile patch holds the runner token in plain text. This plugin does not use or change it, and I did not touch `~/.dsh`. Rotate that token and move it to dsh's credential store when you next edit that profile.
+Spec hazard 4: the `benchlab` row in your live profile patch holds the runner token in plain text. This add-on does not use or change it, and I did not touch `~/.dsh`. Rotate that token and move it to dsh's credential store when you next edit that profile.
 
 ## Verified (rc.1, mock model, throwaway home)
 
@@ -97,16 +97,16 @@ Real models (every answer was scripted), long jobs, the `/benchmark` command in 
 - **Unit tests:** 12 (the add-on had none): graders, statistics, what a prompt still needs, settings read live, loading with nothing or with a mistake in the file, a full job with one failing model (errors never scored), the read routes (fence, GET only, id check, no prompt or answer in them), the write route's refusals (no login, wrong method, unknown action, bad suite name, bad or unknown job id, broken JSON, oversize body, unknown suite), run and cancel through the route.
 - **Live, starting from an empty config:** added two models, made a suite on the page (prompt, grading, name, category), added the example suite, set two temperatures and two repeats, ran the suite (8 calls, finished, results table and recommendations shown), set limits and a price and saw the cost appear in the next run. The settings landed in the profile's `cordis.patch.yml` in the documented shape.
 - A name with a slash was refused with a plain message. Switching the way of grading to the judge and back kept the text (a bug found and fixed during the check).
-- **`/benchmark list`** in a chat still works.
+- **`/benchmark list`** in a thread still works.
 - **Look:** checked in the stock scheme (dark) and Forest (dark and light).
 
-**Not checked:** Cancel on the page (the mock answers at once, so no job stays running; cancel is covered by a unit test); a judge-graded prompt with a real model; the spend limit stopping a real run; the Chinese strings (new texts fall back to English); a narrow window for this page specifically (it shares its layout rules with the Arena page, which was checked at 900 px); the Mac desktop app.
+**Not checked:** Cancel on the page (the mock answers at once, so no job stays running; cancel is covered by a unit test); a judge-graded prompt with a real model; the spend limit stopping a real run; a narrow window for this page specifically (it shares its layout rules with the Arena page, which was checked at 900 px); the Mac desktop app.
 
 ## Lens measuring (Lens part, step 25)
 
 - **New grader, "Contains none of these"** (`noneOf`): passes when the answer contains none of the phrases, in any letter case, also across lines. Phrases are separated by `|` or new lines (`phrasesOf`). A prompt needs at least one phrase. The other graders are unchanged.
 - **"Add the Lenses suite"** on the Suites section: each of the six Lenses (the approved text, word for word, as the system text; a test keeps it the same as Modes' `lib/lens.js`) on three questions: two judged against what the Lens asks for, one checked for phrases it must not use (softening for Blunt, praise for Skeptic, interpretation for Data only, unattributed claims for Journalistic, overclaiming for Scientific, gloom for Encouraging). Category `lens`. The judged ones need a judge model.
-- **A guide, not proof:** Benchmark puts the system text in front of the message; in a conversation a Lens will be in the instructions (step 26). Only the owner can run it on his models; nothing reaches his conversations.
+- **A guide, not proof:** Benchmark puts the system text in front of the message; in a thread a Lens will be in the instructions (step 26). Only the owner can run it on his models; nothing reaches his threads.
 - Tested: the grader (pass, fail, letter case, across lines, a prompt without phrases), the other graders unchanged, the suite (18 prompts, the approved texts, valid with a judge). Lab: the button added the suite with no problem shown.
 
 

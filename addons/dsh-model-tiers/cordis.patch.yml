@@ -3,8 +3,8 @@
       name: '@local/dsh-model-tiers'
       config:
         # No models are preconfigured. Pick a model for each starter tier in
-        # Settings > Model Tiers, or leave it empty: a tier with no model applies
-        # its rules to whatever model the conversation uses.
+        # Settings > Model tiers, or leave it empty: a tier with no model applies
+        # its rules to whatever model the thread uses.
         maxSubagents: 4
         ultraAutoDelegate: true
         activeTiers: '{}'

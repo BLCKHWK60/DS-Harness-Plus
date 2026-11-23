@@ -16,7 +16,12 @@
     "sessionQuery",
     "sessions",
     "settings",
-    "uiWorkspace"
+    "uiWorkspace",
+    "agentPresets",
+    "sessionPersistence",
+    "sessionProjections",
+    "sessionProjectionCache",
+    "agents"
   ],
   "events": [
     "session/event"
@@ -42,6 +47,10 @@
     {
       "name": "sidebar.panellist",
       "id": "automations"
+    },
+    {
+      "name": "conversation.input.right",
+      "id": "automations-schedule"
     }
   ],
   "settings": [
@@ -68,7 +77,10 @@
     "ntfyTopic",
     "deletedToTrash",
     "oldRunsToTrash",
-    "tab"
+    "tab",
+    "scheduleButton",
+    "runsInTheirTab",
+    "scheduleFromRecon"
   ],
   "instructionChars": 1160,
   "rows": [

@@ -59,7 +59,7 @@ export function buildMarketTools({ enabled, show }) {
   /** Draw a chart and say in one line whether the user sees it. */
   const draw = (exec, title, description) => {
     const shown = show(exec, { title, description: { kind: 'chart', title, ...description } });
-    return shown.ok ? `Chart "${title}": shown to the user in the chat, under your answer.` : `Chart "${title}" could not be drawn (${(shown.errors ?? []).join(' ').slice(0, 160)}).`;
+    return shown.ok ? `Chart "${title}": shown to the user in the thread, under your answer.` : `Chart "${title}" could not be drawn (${(shown.errors ?? []).join(' ').slice(0, 160)}).`;
   };
   const today = () => new Date().toISOString().slice(0, 10);
   const common = { output, isConcurrencySafe: () => true };

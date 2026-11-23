@@ -89,7 +89,7 @@ export const Config = z.object({
   enabled: z.boolean().default(true).volatile(),
   /** The small gear beside Send that opens the current mode's settings page in a popup. */
   modeGear: z.boolean().default(true).volatile(),
-  /** The Export button beside the gear: this conversation as a file (Markdown, text, HTML, JSON), at three levels. */
+  /** The Export button beside the gear: this thread as a file (Markdown, text, HTML, JSON), at three levels. */
   exportButton: z.boolean().default(true).volatile(),
   /** A mode's own extra buttons (Devices rules, Creator Plus, Export for Recon, Focus, Finance pill, route badge) live in the gear's popup instead of the chat box. Only with the gear on and "Same chat box in every mode" on. */
   extrasInGear: z.boolean().default(true).volatile(),
@@ -259,40 +259,102 @@ const send = (res, status, type, body, extra = {}) => {
   res.end(body);
 };
 
+/** A JSON object stored as text (a Modes setting), or {} when it is not one. */
+const readObject = (text) => {
+  try {
+    const value = typeof text === 'string' ? JSON.parse(text || '{}') : text;
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  } catch {
+    return {};
+  }
+};
+
+/**
+ * Item 4A, stage 6a (belt, as Search and Sync): whether a conversation is kept apart (Recon) and so never exported
+ * here. Any one of these says yes:
+ * - Modes says so (`modes.isolated(id)`), or Modes or its answer fails (fail closed);
+ * - Modes' settings mark it (`sessionIsolated[id] === true`) or put it in the Recon space (`sessionSpaces[id] === 'recon'`);
+ * - its stored folder (the log's `session` header `cwd`) is Recon's room (`recon.isRoom`). This covers a closed thread
+ *   whose space and mark writes both failed.
+ * No Modes add-on at all: only the last two can say yes (nothing else keeps a conversation apart).
+ * @param {object} from - what is known.
+ * @param {() => any} from.modes - returns the Modes service.
+ * @param {() => any} from.modesSettings - returns the Modes add-on's stored settings (`settings.describe()` value).
+ * @param {() => any} from.recon - returns the Recon service.
+ * @param {string} session - the conversation id.
+ * @param {string} [cwd] - its stored folder, when known.
+ * @returns {boolean} kept apart.
+ */
+export function keptApart({ modes, modesSettings, recon }, session, cwd = '') {
+  let service;
+  try {
+    service = modes();
+  } catch {
+    return true;
+  }
+  if (service) {
+    try {
+      if (service.isolated?.(session) === true) return true;
+    } catch {
+      return true;
+    }
+  }
+  let stored;
+  try {
+    stored = modesSettings();
+  } catch {
+    stored = undefined;
+  }
+  if (readObject(stored?.sessionIsolated)[session] === true) return true;
+  if (readObject(stored?.sessionSpaces)[session] === 'recon') return true;
+  if (cwd) {
+    try {
+      if (recon()?.isRoom?.(cwd) === true) return true;
+    } catch {
+      // Recon cannot say: the checks above decide.
+    }
+  }
+  return false;
+}
+
 /** `?session=<id>&level=&format=` is the file; `&info=1` says whether the conversation may be exported and what it is called. */
 async function exportResponse(ctx, inner, config, req, res) {
   const json = (status, value) => send(res, status, 'application/json; charset=utf-8', JSON.stringify(value));
   try {
     const refused = inner.connection.requestRejection(req);
     if (refused !== undefined) return send(res, refused, 'text/plain', '');
-    if (plain(config?.enabled) === false || plain(config?.exportButton) === false) return json(404, { ok: false, reason: 'Export is switched off.' });
+    if (plain(config?.enabled) === false || plain(config?.exportButton) === false) return json(404, { ok: false, reason: 'Export is switched off. Switch it on in Settings → Start here → Export button on/off.' });
     const url = new URL(req.url ?? '', 'http://localhost');
     const session = url.searchParams.get('session') ?? '';
-    if (!/^[A-Za-z0-9._-]{1,120}$/.test(session)) return json(400, { ok: false, reason: 'No conversation given.' });
-    let isolated = false;
-    try {
-      isolated = ctx.get('modes')?.isolated?.(session) === true;
-    } catch {
-      isolated = false;
-    }
-    if (isolated) return json(403, { ok: false, isolated: true, reason: "This conversation is kept apart from the others. It is exported only through its own tab's Export…, shown below." });
+    if (!/^[A-Za-z0-9._-]{1,120}$/.test(session)) return json(400, { ok: false, reason: 'No thread given.' });
+    const apart = (cwd = '') => keptApart({
+      modes: () => ctx.get('modes'),
+      modesSettings: () => ctx.get('settings')?.describe?.().find((entry) => entry.ns === 'modes')?.value,
+      recon: () => ctx.get('recon'),
+    }, session, cwd);
+    const refuseApart = () => json(403, { ok: false, isolated: true, reason: "This thread is sealed, so it is kept apart from the others. It is exported only through its own Export…, shown below." });
+    // A Modes answer `isolated?.(session) === true` is the first check (keptApart); the stored folder is checked once the log is read.
+    if (apart()) return refuseApart();
     const query = ctx.get('sessionQuery');
-    if (typeof query?.readSession !== 'function') return json(503, { ok: false, reason: 'The app cannot read stored conversations here.' });
+    if (typeof query?.readSession !== 'function') return json(503, { ok: false, reason: 'The app cannot read stored threads here. Update the app, or use the app\'s own archive (Download the ZIP).' });
     let log;
     try {
       log = await query.readSession(session);
     } catch {
-      return json(404, { ok: false, reason: 'That conversation was not found.' });
+      return json(404, { ok: false, reason: 'That thread was not found. It may have been deleted; open it from the list and try again.' });
     }
+    // Item 4A, stage 6a (belt): a thread whose stored folder is Recon's room is never exported here.
+    const header = (Array.isArray(log?.events) ? log.events : []).find((event) => event?.type === 'session');
+    if (typeof header?.cwd === 'string' && header.cwd && apart(header.cwd)) return refuseApart();
     const level = url.searchParams.get('level') ?? 'conversation';
     const format = url.searchParams.get('format') ?? 'md';
-    if (!LEVELS.includes(level) || !FORMATS.includes(format)) return json(400, { ok: false, reason: 'Unknown level or format.' });
+    if (!LEVELS.includes(level) || !FORMATS.includes(format)) return json(400, { ok: false, reason: 'That level or format is not known. Pick one from the lists, then try again.' });
     // Review H10: keys and passwords are hidden unless the user unticks it; for the full log that is the default.
     const hide = (url.searchParams.get('hide') ?? (level === 'full' ? '1' : '0')) === '1';
     const made = buildExport(log?.events ?? [], { level, format, sessionId: session, hide });
     if (url.searchParams.get('info') === '1') return json(200, { ok: true, title: made.title, filename: made.filename, size: Buffer.byteLength(made.body), counts: made.counts, hidden: hide });
     send(res, 200, made.mime, made.body, { 'content-disposition': `attachment; filename="${made.filename.replace(/[^A-Za-z0-9._-]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(made.filename)}` });
   } catch {
-    send(res, 500, 'application/json; charset=utf-8', JSON.stringify({ ok: false, reason: 'The export failed.' }));
+    send(res, 500, 'application/json; charset=utf-8', JSON.stringify({ ok: false, reason: 'The export failed. Close this window and try again.' }));
   }
 }

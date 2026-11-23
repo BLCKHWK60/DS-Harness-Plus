@@ -9,3 +9,5 @@ ELECTRON_RUN_AS_NODE=1 "/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSe
 ```
 
 The installer leaves the test folder out of an installed copy: run them from the Plus folder.
+
+Item 4A, stage 6a (22 November 2026) added test/space-6a.test.mjs (diagram-sealed-no-index outside and inside Recon's room, a Modes that throws, no Modes); the whole suite 15 tests, all passing.

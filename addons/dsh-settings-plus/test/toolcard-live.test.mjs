@@ -42,7 +42,7 @@ test('a request shows in the poll, an answer through the bridge allows the tool,
     // A longer permission than the request offered is a No.
     assert.deepEqual(bridge.answer({ id: one.id, choice: 'conversation' }), { ok: true });
     const out = await asking;
-    assert.match(out.text, /Allowed: you may call bash in this conversation/);
+    assert.match(out.text, /Allowed: you may call bash in this thread/);
     assert.deepEqual(bridge.poll().requests, [], 'an answered request is gone');
     assert.equal(service().record('s1').allowed, 1);
   } finally {

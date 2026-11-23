@@ -90,7 +90,7 @@ export function findingsOf(events, { sealed = false, toolOwner = () => '', expor
  * @returns {Promise<{read: number, left: string[], byPlugin: Record<string, object[]>, general: object[]}>} the findings, grouped.
  */
 export async function readLogs({ query, since = 0, isSealed = () => false, toolOwner = () => '', wanted = [], recon = 'structure', exportsService, most = 200 }) {
-  if (typeof query?.listSessions !== 'function' || typeof query?.readSurface !== 'function') return { read: 0, left: ['The app\'s conversation history is not available here.'], byPlugin: {}, general: [] };
+  if (typeof query?.listSessions !== 'function' || typeof query?.readSurface !== 'function') return { read: 0, left: ['The app\'s thread history is not available here.'], byPlugin: {}, general: [] };
   const records = await query.listSessions();
   const want = new Set(wanted);
   const byPlugin = {};
@@ -105,7 +105,7 @@ export async function readLogs({ query, since = 0, isSealed = () => false, toolO
     if (!id || Number(header.updatedAt ?? header.createdAt ?? 0) < since) continue;
     // Helpers are left out: whether a helper of a sealed conversation is sealed may not be known after a restart.
     if (header.parentSession) {
-      left.push(`${id}: a helper's conversation, not read.`);
+      left.push(`${id}: a helper's thread, not read.`);
       continue;
     }
     let sealed = false;
@@ -149,6 +149,6 @@ export function findingCards({ byPlugin, general }) {
       cards.push({ id: `${plugin}:${kind}:${list[0].tool ?? ''}`, plugin, kind, title: `${plugin}: ${what} (${list.length} time${list.length === 1 ? '' : 's'})`, evidence: list.slice(0, 5).map((item) => `${item.conversation}${item.sealed ? ' (Recon: structure only)' : ''}: ${item.text}`), count: list.length });
     }
   }
-  if (general.length > 0) cards.push({ id: 'general', plugin: '', kind: 'general', title: `Not tied to one plugin: ${general.length} correction${general.length === 1 ? '' : 's'} or unfinished turn${general.length === 1 ? '' : 's'}`, evidence: general.slice(0, 5).map((item) => `${item.conversation}: ${item.text}`), count: general.length });
+  if (general.length > 0) cards.push({ id: 'general', plugin: '', kind: 'general', title: `Not tied to one add-on: ${general.length} correction${general.length === 1 ? '' : 's'} or unfinished turn${general.length === 1 ? '' : 's'}`, evidence: general.slice(0, 5).map((item) => `${item.conversation}: ${item.text}`), count: general.length });
   return cards.sort((a, b) => b.count - a.count);
 }

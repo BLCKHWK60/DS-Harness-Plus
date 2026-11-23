@@ -34,7 +34,7 @@ test('Research runs Read Only, and a Research mode stored before that is replace
 
 test('Settings → Research and its search entry say what the check really does', () => {
   const client = readFileSync(join(import.meta.dirname, '..', 'client.js'), 'utf8');
-  const description = /'(A tab for researching a question in depth\.[^']*)'/.exec(client)?.[1];
+  const description = /'(A mode, in the Mode list under the chat box \(Chat and Code\), for researching a question in depth\.[^']*)'/.exec(client)?.[1];
   assert.ok(description, 'the page description is found');
   assert.match(description, /writes a report that cites its sources by number\./);
   assert.match(description, /Every citation is checked to be in the source list/);
@@ -76,7 +76,7 @@ test('Research has no Depth of its own any more: the Modes Depth button, the sam
   assert.doesNotMatch(client + host, /researchDepth/, 'never reads or writes the old setting');
   assert.doesNotMatch(client, /label: 'Depth'/, 'no Depth dropdown or segments of its own');
   assert.match(host, /ctx\.get\('modes'\)\?\.depthOf\?\.\(sessionId\)/);
-  assert.match(client, /The same Depth as in every tab/);
+  assert.match(client, /The same Depth as in every mode and space/);
   // Nothing of Research's own in the chat box any more: Focus is the Web selector's ticks (18 November 2026).
   assert.doesNotMatch(client, /id: 'research-controls'|function ResearchControls\(|label: 'Focus'/);
   assert.match(client, /'Sources \(formerly Focus\)'/);

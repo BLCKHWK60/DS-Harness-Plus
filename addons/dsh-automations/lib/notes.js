@@ -128,6 +128,83 @@ export function diffCatalog(known, catalog) {
   };
 }
 
+/** Stage 7 (point 29): whether an automation runs only once (a time, a delay, or a rule that repeats once). */
+export function isOnce(entry) {
+  if (entry?.kind === 'at' || entry?.kind === 'after') return true;
+  return entry?.kind === 'rrule' && /(^|[;:\s])COUNT=1(;|\s|$)/.test(String(entry.rrule ?? ''));
+}
+
+/**
+ * Stage 7 (point 29): a one-time automation that ended with no recorded run stays on the page as "Did not start" until
+ * the owner deletes it. Other ended automations keep today's behaviour (hidden when nothing was recorded).
+ * @param {object} entry - the app's catalog entry.
+ * @param {{note?: object, hasRun?: boolean, held?: boolean, ranSince?: number, keepDays?: number, now?: number, closedAt?: (time: number) => boolean}} facts -
+ *   its notes; whether a run of it is in the list (a held run, where nothing ran, does not count); whether a held run of it is; since when recorded runs mark it; its keep rule's days (0: no limit);
+ *   the time now; whether Automations was not running at a time (its beat stopped).
+ * @returns {{reason: string, at?: number} | null} why (a key: 'automationsOff', a pause reason, or 'unknown') and when it
+ *   was due; null when it is not such an automation.
+ */
+export function didNotStart(entry, { note = {}, hasRun = false, held = false, ranSince = 0, keepDays = 31, now = Date.now(), closedAt = () => false, threadHeld = () => false } = {}) {
+  if (!entry || entry.status !== 'ended' || !isOnce(entry) || hasRun || note.ran === true) return null;
+  // Stage 7 lab (bug C): the app delivered it to a thread and nothing held it: it ran (shown by ranUnrecorded instead).
+  if (ranSign(entry, { note, held, threadHeld })) return null;
+  const delivered = Date.parse(String(entry.lastDelivery?.deliveredAt ?? ''));
+  const scheduled = Date.parse(String(entry.scheduledAt ?? ''));
+  const at = Number.isFinite(delivered) ? delivered : Number.isFinite(scheduled) ? scheduled : undefined;
+  // Before runs marked their automation, a run may have left the list by age: past its keep time, stay as today (hidden).
+  const marked = at !== undefined && at >= ranSince;
+  if (!marked && (at === undefined || (keepDays > 0 && now - at > keepDays * 24 * 60 * 60 * 1000))) return null;
+  let reason = 'unknown';
+  if (Number.isFinite(delivered) && closedAt(delivered)) reason = 'automationsOff';
+  else if (PAUSE_REASONS.includes(note.pauseReason)) reason = note.pauseReason;
+  else if (held) reason = 'held';
+  return at === undefined ? { reason } : { reason, at };
+}
+
+/**
+ * Stage 7 lab (bug C): signs that the app ran a delivery of an automation: a delivery receipt (the app wrote the message
+ * into a thread) with a known thread, and nothing held it (no held run, no pause of the add-on's, its thread not held).
+ * @returns {{at: number, sessionId: string} | null}
+ */
+function ranSign(entry, { note = {}, held = false, threadHeld = () => false } = {}) {
+  const delivered = Date.parse(String(entry?.lastDelivery?.deliveredAt ?? ''));
+  if (!Number.isFinite(delivered)) return null;
+  const sessionId = String(entry.lastDelivery?.targetSessionId ?? entry.target?.sessionId ?? '');
+  if (!sessionId) return null;
+  if (held || PAUSE_REASONS.includes(note.pauseReason)) return null;
+  let heldThread = true;
+  try {
+    heldThread = threadHeld(sessionId) === true;
+  } catch {
+    heldThread = true;
+  }
+  return heldThread ? null : { at: delivered, sessionId };
+}
+
+/**
+ * Stage 7 lab (bug C): a one-time automation the app ran with no run recorded here (most often: the Automations add-on was
+ * off then, so the app's own scheduler ran it alone). It is listed like an ended automation that ran, for as long as its
+ * keep rule would have kept that run.
+ * @param {object} entry - the app's catalog entry.
+ * @param {{note?: object, hasRun?: boolean, held?: boolean, keepDays?: number, now?: number, closedAt?: (time: number) => boolean, threadHeld?: (sessionId: string) => boolean}} facts -
+ *   as for didNotStart; `threadHeld`: whether a thread's run was held (nothing ran in it).
+ * @returns {{at: number, sessionId: string, off: boolean} | null} when it was delivered, its thread, and whether
+ *   Automations was off then; null when it is not such an automation.
+ */
+export function ranUnrecorded(entry, { note = {}, hasRun = false, held = false, keepDays = 31, now = Date.now(), closedAt = () => false, threadHeld = () => false } = {}) {
+  if (!entry || entry.status !== 'ended' || !isOnce(entry) || hasRun || note.ran === true) return null;
+  const sign = ranSign(entry, { note, held, threadHeld });
+  if (!sign) return null;
+  if (keepDays > 0 && now - sign.at > keepDays * 24 * 60 * 60 * 1000) return null;
+  let off = false;
+  try {
+    off = closedAt(sign.at) === true;
+  } catch {
+    off = false;
+  }
+  return { ...sign, off };
+}
+
 /** The time between two runs of an automation, when its rule says it simply; undefined otherwise. */
 export function everyOf(entry) {
   const day = 24 * 60 * 60 * 1000;
@@ -159,6 +236,15 @@ export function everyOf(entry) {
 }
 
 const TAB_RE = /^[a-z0-9][a-z0-9_-]{0,127}$/;
+/** Item 4A, stage 6b (J9, J17): a pause caused by a space, told apart from a mode-gone pause (a mode id). */
+const SPACE_PAUSE_RE = /^space:(devices|workshop|recon)$/;
+const pauseId = (value) => (TAB_RE.test(String(value ?? '')) || SPACE_PAUSE_RE.test(String(value ?? '')) ? String(value) : '');
+/** Stage 6b: the spaces a run may be stored in (never Recon: "this thread only", D9), and the five a thread can be in. */
+const RUN_SPACE_IDS = ['chat', 'code', 'devices', 'workshop'];
+const SPACE_IDS = ['chat', 'code', 'devices', 'recon', 'workshop'];
+const THREAD_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
+/** Stage 6b: why a space paused an automation (the page's sentence picks its words by it). */
+const PAUSE_REASONS = ['devicesOff', 'devicesOld', 'workshopOff', 'workshopOld', 'unticked', 'unavailable', 'unknown', 'automationsOff', 'modesOld', 'held'];
 
 /**
  * Per-automation notes: created-in tab, own alerts, own keep rule, and the recipes of all of them.
@@ -170,7 +256,18 @@ export function openNotes(file) {
   let known = read.known && typeof read.known === 'object' ? read.known : {};
   // Deleted automations the trash could not take yet (it was off or starting), kept until it can.
   let held = Array.isArray(read.held) ? read.held.filter((recipe) => recipe?.id).slice(-200) : [];
-  const save = () => writeJson(file, { tasks, known, held });
+  // Stage 7 (point 29): since when a recorded run marks its automation (`ran`), so a one-time automation with no mark
+  // is known to have had no run, even after old runs left the list. Set once, the first time these notes are opened.
+  const ranSince = Number.isFinite(read.ranSince) ? read.ranSince : Date.now();
+  const save = () => writeJson(file, { tasks, known, held, ranSince });
+  // Kept at once, so a restart before any other change does not move the time forward.
+  if (!Number.isFinite(read.ranSince)) {
+    try {
+      save();
+    } catch {
+      // Not writable now: the next change saves it.
+    }
+  }
   const noteOf = (id) => tasks[id] ?? (tasks[id] = {});
   return {
     /** @returns {object} the notes of one automation (a copy). */
@@ -194,13 +291,20 @@ export function openNotes(file) {
     /**
      * Take the app's list in: returns what came and went, and remembers the recipes.
      * @param {object[]} catalog - the app's list.
-     * @param {(entry: object) => string} createdIn - the tab a new one was created in ('' when not known).
+     * @param {(entry: object) => string | {createdIn: string, createdSpace?: string, createdBy?: string}} createdIn - the
+     *   tab a new one was created in ('' when not known); stage 6b: or `{createdIn, createdSpace, createdBy}`.
      */
     take(catalog, createdIn) {
       const change = diffCatalog(known, catalog);
       for (const entry of change.added) {
         const note = noteOf(String(entry.id));
-        if (note.createdIn === undefined) note.createdIn = createdIn(entry) || '';
+        if (note.createdIn !== undefined) continue;
+        const said = createdIn(entry);
+        if (said && typeof said === 'object') {
+          note.createdIn = TAB_RE.test(String(said.createdIn ?? '')) ? String(said.createdIn) : '';
+          if (note.createdSpace === undefined && SPACE_IDS.includes(said.createdSpace)) note.createdSpace = said.createdSpace;
+          if (note.createdBy === undefined && THREAD_RE.test(String(said.createdBy ?? ''))) note.createdBy = String(said.createdBy);
+        } else note.createdIn = said || '';
       }
       const next = {};
       for (const entry of catalog) {
@@ -218,6 +322,109 @@ export function openNotes(file) {
     setCreatedIn(id, tab) {
       if (!TAB_RE.test(String(tab ?? ''))) return;
       noteOf(String(id)).createdIn = String(tab);
+      save();
+    },
+    /**
+     * Item 6: the tab an automation's new threads open in. Written only by the clock button, New on the Automations
+     * page, or a change of "Runs in" there; '' takes it away. Automations the assistant or Finance made have none.
+     */
+    setRunTab(id, tab) {
+      const note = noteOf(String(id));
+      if (tab === '' || tab === null || tab === undefined) delete note.runTab;
+      else if (TAB_RE.test(String(tab))) note.runTab = String(tab);
+      else return;
+      save();
+    },
+    /**
+     * Item 4A, stage 6b (J6): the space an automation's new threads open in (with `runTab`, its run place). Written only by
+     * the clock button, New, Change under "Runs in", and the assistant's schedule tools in a guest thread. One of chat,
+     * code, devices, workshop (never Recon); '' takes it away.
+     */
+    setRunSpace(id, space) {
+      const note = noteOf(String(id));
+      if (space === '' || space === null || space === undefined) {
+        if (note.runSpace === undefined) return;
+        delete note.runSpace;
+      } else if (RUN_SPACE_IDS.includes(space)) note.runSpace = space;
+      else return;
+      save();
+    },
+    /** Stage 6b: the space the thread it was made from is in (any of the five; '' takes it away). */
+    setCreatedSpace(id, space) {
+      const note = noteOf(String(id));
+      if (space === '' || space === null || space === undefined) {
+        if (note.createdSpace === undefined) return;
+        delete note.createdSpace;
+      } else if (SPACE_IDS.includes(space)) note.createdSpace = space;
+      else return;
+      save();
+    },
+    /** Stage 6b (J15): the thread it was made from (a thread id; '' takes it away). */
+    setCreatedBy(id, sessionId) {
+      const note = noteOf(String(id));
+      if (sessionId === '' || sessionId === null || sessionId === undefined) {
+        if (note.createdBy === undefined) return;
+        delete note.createdBy;
+      } else if (THREAD_RE.test(String(sessionId))) note.createdBy = String(sessionId);
+      else return;
+      save();
+    },
+    /** Stage 6b (J8): a stored Chat or Code place whose mode is no longer offered there ('unticked') or is hidden. */
+    setPlaceNote(id, kind) {
+      const note = noteOf(String(id));
+      if (kind === 'unticked' || kind === 'hidden') {
+        if (note.placeNote === kind) return;
+        note.placeNote = kind;
+      } else if (note.placeNote !== undefined) delete note.placeNote;
+      else return;
+      save();
+    },
+    /** Stage 7 (point 29): a run of this automation was recorded (kept even when the run leaves the list). */
+    markRan(id) {
+      const note = noteOf(String(id));
+      if (note.ran === true) return;
+      note.ran = true;
+      save();
+    },
+    /** @returns {number} since when `markRan` marks every recorded run (earlier runs may have left the list unmarked). */
+    ranSince: () => ranSince,
+    /** Stage 6b: why a space paused it (PAUSE_REASONS), for the page's sentence; '' takes it away. */
+    setPauseReason(id, reason) {
+      const note = noteOf(String(id));
+      if (PAUSE_REASONS.includes(reason)) {
+        if (note.pauseReason === reason) return;
+        note.pauseReason = reason;
+      } else if (note.pauseReason !== undefined) delete note.pauseReason;
+      else return;
+      save();
+    },
+    /**
+     * Item 6: how Plus made an automation ('button' or 'new'), so the tab-gone guard knows which tab to watch. Stage 6b:
+     * also 'tool' (the assistant's schedule tools in a guest thread in Devices or Workshop).
+     */
+    setMade(id, how) {
+      if (how !== 'button' && how !== 'new' && how !== 'tool') return;
+      noteOf(String(id)).made = how;
+      save();
+    },
+    /** Item 6: paused because its tab was switched off (the tab's id), or '' when that no longer holds. */
+    setPausedFor(id, tab) {
+      const note = noteOf(String(id));
+      // Stage 6b: also 'space:<id>' (a space that cannot run it now).
+      if (tab && pauseId(tab)) note.pausedFor = String(tab);
+      else if (note.pausedFor !== undefined) delete note.pausedFor;
+      else return;
+      save();
+    },
+    /**
+     * Item 6: it was paused while its tab was off, and that tab is on again (the tab's id); it stays paused until the
+     * owner resumes or changes it, and the note says why. '' takes the note away.
+     */
+    setPausedBack(id, tab) {
+      const note = noteOf(String(id));
+      if (tab && pauseId(tab)) note.pausedBack = String(tab);
+      else if (note.pausedBack !== undefined) delete note.pausedBack;
+      else return;
       save();
     },
     /**

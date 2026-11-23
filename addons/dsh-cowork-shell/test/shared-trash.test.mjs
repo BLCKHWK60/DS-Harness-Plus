@@ -182,7 +182,7 @@ test('records are written whole: no temp file is left, and old ones from a write
     const hourAgo = (Date.now() - 2 * 60 * 60 * 1000) / 1000;
     utimesSync(stale, hourAgo, hourAgo);
     assert.equal(trash.list()[0].count, 2, 'a stray temp file changes nothing');
-    assert.throws(() => trash.erase('pending.json.123.4.tmp'), /not a conversation id/);
+    assert.throws(() => trash.erase('pending.json.123.4.tmp'), /not a thread id/);
     trash.sweepTemp();
     assert.equal(existsSync(stale), false, 'an hour old: swept');
     assert.equal(existsSync(fresh), true, 'a write may still be going on');

@@ -31,7 +31,7 @@ test('each Lens keeps the plan\'s words, the guard lines the owner chose, and st
     assert.ok(text.startsWith(`Lens: ${LENS_NAMES[id]}. ${plan[id]}`), `${id}: the plan's words first`);
     // Every Lens: wins on wording, the tab's rules first, a required warning is not softening.
     assert.ok(text.endsWith(LENS_GUARD), `${id}: the guard last`);
-    assert.match(LENS_GUARD, /tab's own rules, labels and order of sections come first/);
+    assert.match(LENS_GUARD, /mode's own rules, labels and order of sections come first/);
     assert.match(LENS_GUARD, /A required warning is not softening/);
     assert.ok(text.length <= LENS_MAX, `${id}: ${text.length} characters`);
     for (const phrase of banned) assert.ok(!text.toLowerCase().includes(phrase), `${id}: no "${phrase}"`);
@@ -41,7 +41,7 @@ test('each Lens keeps the plan\'s words, the guard lines the owner chose, and st
   for (const id of ['skeptic', 'encouraging']) assert.ok(!LENS_PROMPTS[id].includes(LENS_UNCHECKED), id);
   assert.match(LENS_UNCHECKED, /A figure from memory is never a fact\./);
   // Blunt uses a tab's own labels where it has them.
-  assert.match(LENS_PROMPTS.blunt, /Mark each key claim as fact, inference or guess; where this tab already labels claims its own way, use its labels instead\./);
+  assert.match(LENS_PROMPTS.blunt, /Mark each key claim as fact, inference or guess; where this mode already labels claims its own way, use its labels instead\./);
 });
 
 test('the Lens goes only into its own section (step 26), never into Modes\' notes; the page never holds its texts', () => {
@@ -69,7 +69,7 @@ test('the chat box: the Lens is the second part of the Depth list (step 28), sto
   assert.equal(lensNow({}, 's'), 'default');
   assert.equal(lensNow({ sessionLens: JSON.stringify({ s: 'skeptic' }) }, 's'), 'skeptic');
   assert.equal(lensNow({ sessionLens: JSON.stringify({ s: 'nonsense' }) }, 's'), 'default');
-  // A pick is for this conversation only; Default stores nothing; never touches Web or Depth.
+  // A pick is for this thread only; Default stores nothing; never touches Web or Depth.
   assert.deepEqual(settingOps('lens', 'blunt', { sessionLens: JSON.stringify({ x: 'skeptic' }) }, 's'), [{ op: 'set', path: ['sessionLens'], value: JSON.stringify({ x: 'skeptic', s: 'blunt' }) }]);
   assert.deepEqual(settingOps('lens', 'default', { sessionLens: JSON.stringify({ s: 'blunt' }) }, 's'), [{ op: 'set', path: ['sessionLens'], value: '{}' }]);
   // "Depth · Thorough · Blunt"; Default reads as before. The hint only for a fact Lens with Web Off (never in Research or Scout).
@@ -81,7 +81,7 @@ test('the chat box: the Lens is the second part of the Depth list (step 28), sto
   assert.match(source, /h\('div', \{ className: 'chips', role: 'listbox', 'aria-label': t\('lens\.title'\) \}/);
   assert.match(source, /maxHeight: Math\.max\(200, rect\.top - 24\)/);
   for (const key of ['lens.title', 'lens.note', 'lens.web.off', 'depth.open.lens', ...LENS_IDS.flatMap((id) => [`lens.${id}`, `lens.${id}.hint`])]) {
-    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 1, `${key}: once, English only`);
   }
   // The English names and uses are the approved ones.
   for (const id of LENS_IDS) assert.ok(source.includes(`'lens.${id}': '${LENS_NAMES[id]}'`), id);
@@ -90,12 +90,12 @@ test('the chat box: the Lens is the second part of the Depth list (step 28), sto
 test('the texts are exactly as the owner approved them word for word (15 November 2026)', () => {
   assert.deepEqual(LENS_PROMPTS, {
   "default": "",
-  "blunt": "Lens: Blunt. The most direct Lens. Answer first, at whatever length the question needs. No softening, euphemism, praise, reassurance or moral commentary, and no concern for whose feelings a fact hurts. Give the most likely explanation, not the most charitable one. Mark each key claim as fact, inference or guess; where this tab already labels claims its own way, use its labels instead. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
-  "scientific": "Lens: Scientific. Rank the evidence: reviews, trials, single studies, opinion. Give sample sizes, effect sizes and whether it was replicated. Say what would change the conclusion. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
-  "journalistic": "Lens: Journalistic. Who, what, when, where, and how we know. Every claim attributed. Confirmed kept apart from alleged. Say what is still unknown. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
-  "data-only": "Lens: Data only. Numbers, tables and charts with sources. No interpretation beyond what the figures show. \"No data\" said plainly. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
-  "skeptic": "Lens: Skeptic. Argue the strongest case against it. List what would have to be true, and what breaks first. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
-  "encouraging": "Lens: Encouraging. The same facts, nothing hidden. Lead with what works and the next step. This Lens decides how the answer is worded, over general style preferences. The tab's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening."
+  "blunt": "Lens: Blunt. The most direct Lens. Answer first, at whatever length the question needs. No softening, euphemism, praise, reassurance or moral commentary, and no concern for whose feelings a fact hurts. Give the most likely explanation, not the most charitable one. Mark each key claim as fact, inference or guess; where this mode already labels claims its own way, use its labels instead. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The mode's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+  "scientific": "Lens: Scientific. Rank the evidence: reviews, trials, single studies, opinion. Give sample sizes, effect sizes and whether it was replicated. Say what would change the conclusion. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The mode's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+  "journalistic": "Lens: Journalistic. Who, what, when, where, and how we know. Every claim attributed. Confirmed kept apart from alleged. Say what is still unknown. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The mode's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+  "data-only": "Lens: Data only. Numbers, tables and charts with sources. No interpretation beyond what the figures show. \"No data\" said plainly. Anything you could not check is an inference or a guess, not a fact. A figure from memory is never a fact. This Lens decides how the answer is worded, over general style preferences. The mode's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+  "skeptic": "Lens: Skeptic. Argue the strongest case against it. List what would have to be true, and what breaks first. This Lens decides how the answer is worded, over general style preferences. The mode's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening.",
+  "encouraging": "Lens: Encouraging. The same facts, nothing hidden. Lead with what works and the next step. This Lens decides how the answer is worded, over general style preferences. The mode's own rules, labels and order of sections come first; the Lens changes tone and emphasis inside them. A required warning is not softening."
 });
 });
 
@@ -151,6 +151,6 @@ test('the page applies the same rules to your own Lenses as Modes does, and offe
   assert.match(source, /own\.map\(\(entry\) => h\('button', \{ key: entry\.id, type: 'button', role: 'option'/);
   assert.match(source, /h\(OwnLenses, \{ t, saved: general\.ownLenses \?\? \[\], onSave: \(list\) => saveNow\('ownLenses', list\) \}\)/);
   for (const key of ['own.group', 'own.hint', 'own.name', 'own.text', 'own.add', 'own.remove', 'own.save', 'own.saved', 'own.full', 'own.empty', 'own.problem', 'lens.own.hint']) {
-    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 2, `${key}: English and Chinese`);
+    assert.equal(source.split('\n').filter((text) => text.includes(`'${key}':`)).length, 1, `${key}: once, English only`);
   }
 });

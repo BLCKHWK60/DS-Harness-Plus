@@ -34,9 +34,9 @@ export const LATE_MODE_ID = 'isolated-late'
 
 /** Why push and pull are held while the Modes add-on cannot be asked. */
 /** Why push and pull wait while Recon's list of moved conversations is damaged. */
-export const RECON_DAMAGED_REASON = 'Sync did not run: Recon\'s list of conversations moved out of Recon (door.json) is damaged, so Sync cannot tell which ones must never be synced. Recon kept a copy and says how to repair it (Settings → Recon). Nothing was sent or received.'
+export const RECON_DAMAGED_REASON = 'Sync did not run: Recon\'s list of threads moved out of Recon (door.json) is damaged, so Sync cannot tell which ones must never be synced. Recon kept a copy and says how to repair it (Settings → Recon). Nothing was sent or received.'
 
-export const UNKNOWN_REASON = 'Sync did not run: the Modes add-on is not running, and it is what tells Sync which conversations are isolated (Recon), which are never synced. Switch Modes on, or wait a moment after the app starts, and try again.'
+export const UNKNOWN_REASON = 'Sync did not run: the Modes add-on is not running, and it is what tells Sync which threads are sealed (Recon), which are never synced. Switch Modes on, or wait a moment after the app starts, and try again.'
 
 /** Thrown inside Sync's lock when nobody can say which conversations are isolated: nothing is copied, removed or sent. */
 export class IsolationUnknownError extends Error {
@@ -69,7 +69,7 @@ export async function askIsolation(source) {
     if (answer?.known === true && typeof answer.exclude === 'function') return { ...answer, ids: answer.ids instanceof Set ? answer.ids : new Set(), scratch: answer.scratch instanceof Set ? answer.scratch : new Set() }
     return unknownIsolation(typeof answer?.reason === 'string' && answer.reason ? answer.reason : UNKNOWN_REASON)
   } catch (error) {
-    return unknownIsolation(`Sync did not run: it could not tell which conversations are isolated (${messageOf(error)}).`)
+    return unknownIsolation(`Sync did not run: it could not tell which threads are sealed (${messageOf(error)}).`)
   }
 }
 
@@ -124,11 +124,16 @@ function parentOf(header) {
  * @param {string[]} [from.open] - ids of the conversations open in the app.
  * @param {(id: string) => boolean} [from.isolated] - `modes.isolated(id)`, asked only for open conversations.
  * @param {Map<string, string>} [from.parents] - conversation id -> its parent's id.
+ * @param {string[]} [from.rooms] - item 4A, stage 6a: conversations whose saved folder Recon says is its room.
  * @returns {Set<string>} the isolated conversations.
  */
-export function isolatedIds({ modes, open = [], isolated, parents = new Map() }) {
+export function isolatedIds({ modes, open = [], isolated, parents = new Map(), rooms = [] }) {
   const ids = new Set()
   for (const [id, value] of Object.entries(readObject(modes?.sessionIsolated))) if (value === true) ids.add(id)
+  // Item 4A, stage 6a (belt): a thread recorded in the Recon space, whatever its mode (nothing ever moves into Recon),
+  // and a thread whose saved folder is Recon's room (`rooms`, from Recon's isRoom), whose space and mark writes failed.
+  for (const [id, value] of Object.entries(readObject(modes?.sessionSpaces))) if (value === 'recon') ids.add(id)
+  for (const id of rooms) if (typeof id === 'string' && id) ids.add(id)
   for (const id of open) {
     let yes
     try {
@@ -165,7 +170,7 @@ export function excludeFor(ids) {
  * @returns {Promise<{known: boolean, reason?: string, ids: Set<string>, scratch: Set<string>, exclude: (rel: string) => boolean}>}
  *   `known` false when the Modes add-on cannot be asked: then nothing may be pushed or pulled.
  */
-export async function readIsolation({ settings, modes, agents, sessionPersistence, scratchPlace = '', reconMoved } = {}) {
+export async function readIsolation({ settings, modes, agents, sessionPersistence, scratchPlace = '', reconMoved, recon } = {}) {
   const none = unknownIsolation()
   /** @returns {object | undefined} the Modes add-on's settings now. */
   const modesSettings = () => {
@@ -188,7 +193,7 @@ export async function readIsolation({ settings, modes, agents, sessionPersistenc
         if (typeof id === 'string' && id) listed.push({ id, cwd: snapshot?.header?.cwd })
       }
     } catch (error) {
-      return { ...none, reason: `Sync did not run: the conversations could not be listed to leave out isolated ones (${String(error?.message ?? error).slice(0, 200)}). Try again in a moment.` }
+      return { ...none, reason: `Sync did not run: the threads could not be listed to leave out sealed ones (${String(error?.message ?? error).slice(0, 200)}). Try again in a moment.` }
     }
   }
   // Modes' marks and the open conversations are read after the only wait, so they are as recent as possible.
@@ -200,7 +205,25 @@ export async function readIsolation({ settings, modes, agents, sessionPersistenc
   } catch {
     open = []
   }
-  const ids = isolatedIds({ modes: value, open, isolated: (id) => modes?.isolated?.(id) === true && modes?.get?.(id) !== LATE_MODE_ID, parents })
+  // Item 4A, stage 6a (belt): threads whose saved folder Recon says is its room (asked once per folder; only a yes counts).
+  const rooms = []
+  if (typeof recon?.isRoom === 'function') {
+    const said = new Map()
+    for (const { id, cwd } of listed) {
+      if (typeof cwd !== 'string' || !cwd) continue
+      if (!said.has(cwd)) {
+        let yes = false
+        try {
+          yes = recon.isRoom(cwd) === true
+        } catch {
+          yes = false
+        }
+        said.set(cwd, yes)
+      }
+      if (said.get(cwd)) rooms.push(id)
+    }
+  }
+  const ids = isolatedIds({ modes: value, open, isolated: (id) => modes?.isolated?.(id) === true && modes?.get?.(id) !== LATE_MODE_ID, parents, rooms })
   // Recon's list of moved conversations is damaged (it keeps a copy and says so on its page): which conversations
   // were moved cannot be told, and they must never be synced, so nothing is synced until it is repaired.
   try {

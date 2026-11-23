@@ -89,7 +89,7 @@ export const unknownWriter = (by) => NOT_A_WRITER.has(String(by?.provider ?? '')
 
 /**
  * Whether a row may train, decided by code (the plan's "May it train?"). Never for Recon (whose rows are
- * never made), for a signed-in source, for a row whose secrets could not be masked, or for a failure.
+ * never made) or a row from the Recon or Devices space, for a signed-in source, for a row whose secrets could not be masked, or for a failure.
  * Each provider has a switch (all start at yes); text written by Anthropic's models may not train an
  * adapter that writes open-ended text unless the owner switched that on (it starts at off).
  * @param {object} row - the row.
@@ -98,6 +98,9 @@ export const unknownWriter = (by) => NOT_A_WRITER.has(String(by?.provider ?? '')
  */
 export function mayTrain(row, { providers = {}, anthropicOpenEnded = false, purpose, withRejected = false } = {}) {
   if (!row || row.mode === 'recon') return { ok: false, why: 'Recon is never harvested' };
+  // Item 4A, stage 6a: by space too: a row from the Recon or the Devices space (any mode) never trains.
+  if (row.space === 'recon') return { ok: false, why: 'Recon is never harvested' };
+  if (row.space === 'devices') return { ok: false, why: 'the Devices space is never harvested' };
   if (row.kind === 'failure') return { ok: false, why: 'a failure is kept to find the weakest spot, not to train' };
   if (row.signedIn) return { ok: false, why: 'it came from a signed-in source' };
   if (row.unsure) return { ok: false, why: 'its secrets could not all be masked' };

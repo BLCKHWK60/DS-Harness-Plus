@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Experimental: Checks that your configured models answer, keeps an up, slow or down state for each, and moves a conversation to its fallback model when one is unreachable.",
+  "description": "Experimental: Checks that your configured models answer, keeps an up, slow or down state for each, and moves a thread to its fallback model when one is unreachable.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

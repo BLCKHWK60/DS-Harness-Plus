@@ -9,3 +9,5 @@ ELECTRON_RUN_AS_NODE=1 "/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSe
 ```
 
 The installer leaves the test folder out of an installed copy: run them from the Plus folder.
+
+`test/space.test.mjs` (2 tests) and two tests at the end of `test/app.test.mjs` (item 4A stage 6a): the harvest skips the Devices space and the Recon space (any mode); rows of those spaces never train.

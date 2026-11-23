@@ -34,7 +34,7 @@ export function resolvePdf(raw, rules = {}) {
   if (!path || path.includes('\0')) return { error: 'Give the path of a PDF file.' };
   if (path === '~' || path.startsWith('~/')) path = resolve(home, path.slice(2));
   else if (!isAbsolute(path)) {
-    if (!rules.cwd) return { error: 'Give the full path of the PDF; this conversation has no folder to look in.' };
+    if (!rules.cwd) return { error: 'Give the full path of the PDF; this thread has no folder to look in.' };
     path = resolve(rules.cwd, path);
   }
   if (!/\.pdf$/i.test(path)) return { error: 'Only files that end in .pdf can be read.' };
@@ -55,7 +55,7 @@ export function resolvePdf(raw, rules = {}) {
       .map((root) => real(root.startsWith('~/') ? resolve(home, root.slice(2)) : root))
       .filter(Boolean);
     if (!roots.some((root) => inside(root, file))) {
-      return { error: `${path} is outside this conversation's folder. Copy the PDF into the folder, or allow its folder in Settings → PDF reader.` };
+      return { error: `${path} is outside this thread's folder. Copy the PDF into the folder, or allow its folder in Settings → PDF reader.` };
     }
   }
   return { file, size: stats.size, mtime: Math.round(stats.mtimeMs) };

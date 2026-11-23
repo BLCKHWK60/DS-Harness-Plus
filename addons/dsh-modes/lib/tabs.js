@@ -38,14 +38,16 @@ export function orderTabs(tabs, order) {
 
 /**
  * The modes that have a tab in the sidebar, in its order.
- * @param {Array<{id: string, label: string, extra?: boolean}>} modes - every mode; `extra` marks one an add-on adds.
+ * @param {Array<{id: string, label: string, extra?: boolean, added?: boolean}>} modes - every mode; `extra` marks one an add-on adds, `added` a built-in mode added later.
  * @param {unknown} maxTabs - the sidebar's tab count.
  * @param {unknown} [order] - the sidebar's own tab order (`tabOrder`), if any.
  * @returns {Array<{id: string, label: string}>} the modes with a tab.
  */
 export function sidebarTabs(modes, maxTabs, order) {
   const list = Array.isArray(modes) ? modes : [];
-  return orderTabs([...list.filter((mode) => !mode.extra).slice(0, tabCount(maxTabs)), ...list.filter((mode) => mode.extra)], order);
+  // A built-in mode added later (Plain chat, `added`) never takes a tab: it lives in the Mode list.
+  const own = list.filter((mode) => !mode.added);
+  return orderTabs([...own.filter((mode) => !mode.extra).slice(0, tabCount(maxTabs)), ...own.filter((mode) => mode.extra)], order);
 }
 
 /**
@@ -59,5 +61,5 @@ export function sidebarTabs(modes, maxTabs, order) {
  */
 export function beforeFirstMessage({ current, tabs, command }) {
   const list = tabs.length > 0 ? ` Tabs: ${tabs.join(', ')}.` : '';
-  return `Not switched. Before the first message, the selected sidebar tab decides the mode of a new conversation (now: ${current}).${list} Pick a tab, or use /${command} after your first message.`;
+  return `Not switched. Before the first message, the selected tab in the left panel decides the mode of a new thread (now: ${current}).${list} Pick a tab, or use /${command} after your first message.`;
 }

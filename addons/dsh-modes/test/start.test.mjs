@@ -14,6 +14,19 @@ import { join } from 'node:path';
 import { trashedIds } from '../lib/trashed.js';
 import { boot, makeWorld, maskNow, sessionOf, settle } from './app.mjs';
 
+/** Run with spaces switched off (the lab switch DSH_SPACES_LAB=0): the old tab paths, as before item 4A stage 3a. */
+async function tabsOnly(run) {
+  const before = process.env.DSH_SPACES_LAB;
+  process.env.DSH_SPACES_LAB = '0';
+  try {
+    return await run();
+  } finally {
+    if (before === undefined) delete process.env.DSH_SPACES_LAB;
+    else process.env.DSH_SPACES_LAB = before;
+  }
+}
+
+
 const levelOf = (world, id) => world.sessions.get(id).level ?? world.defaultLevel;
 /** A setting's value: a volatile field is a reactive reference until something writes it. */
 const read = (value) => (value && typeof value === 'object' && typeof value.get === 'function' ? value.get() : value);
@@ -334,7 +347,7 @@ test('a mode\'s tier applies to a conversation that starts in it, never on a rel
   app.stop();
 });
 
-test('before the first message, a move to a mode without a tier puts the earlier tier back, unless one was picked by hand', async () => {
+test('before the first message, a move to a mode without a tier puts the earlier tier back, unless one was picked by hand', () => tabsOnly(async () => {
   const modes = JSON.stringify({
     chat: { label: 'Chat', tools: 'none', sandbox: 'read-only', defaultTier: '', prompt: '' },
     cowork: { label: 'Cowork', tools: 'all', sandbox: 'inherit', defaultTier: '', prompt: '' },
@@ -360,9 +373,9 @@ test('before the first message, a move to a mode without a tier puts the earlier
   assert.deepEqual(app.tierCalls.filter(([id]) => id === 'b2'), [['b2', 'strong']]);
   await app.firstTurn(second);
   app.stop();
-});
+}));
 
-test('a conversation an Automation task opens does not keep the selected tab\'s tier when the task\'s mode has none', async () => {
+test('a conversation an Automation task opens does not keep the selected tab\'s tier when the task\'s mode has none', () => tabsOnly(async () => {
   const modes = JSON.stringify({
     cowork: { label: 'Cowork', tools: 'all', sandbox: 'inherit', defaultTier: '', prompt: '' },
     code: { label: 'Code', tools: 'all', sandbox: 'workspace-write', defaultTier: 'strong', prompt: '' },
@@ -376,9 +389,9 @@ test('a conversation an Automation task opens does not keep the selected tab\'s 
   assert.equal(app.service().get('task-1'), 'cowork');
   assert.deepEqual(app.tierCalls, [['task-1', 'strong'], ['task-1', 'everyday']]);
   app.stop();
-});
+}));
 
-test('an Automation task\'s conversation is on the earlier tier before the task\'s message is sent, however slow the tier change', async () => {
+test('an Automation task\'s conversation is on the earlier tier before the task\'s message is sent, however slow the tier change', () => tabsOnly(async () => {
   const modes = JSON.stringify({
     cowork: { label: 'Cowork', tools: 'all', sandbox: 'inherit', defaultTier: '', prompt: '' },
     code: { label: 'Code', tools: 'all', sandbox: 'workspace-write', defaultTier: 'strong', prompt: '' },
@@ -401,29 +414,29 @@ test('an Automation task\'s conversation is on the earlier tier before the task\
   assert.equal(app.service().get('ran'), 'code');
   assert.equal(app.tierCalls.length, 2);
   app.stop();
-});
+}));
 
-test('with the sidebar, /mode before the first message answers that the tab decides and names the tabs', async () => {
+test('with the old sidebar tabs, /mode before the first message answers that the tab decides and names the tabs', () => tabsOnly(async () => {
   const FINANCE = { label: 'Finance', tools: 'all', sandbox: 'inherit', defaultTier: '', prompt: 'Finance method.' };
   const world = makeWorld({ extraModes: JSON.stringify({ finance: FINANCE }) });
   const app = boot(world, { tabs: true, maxTabs: 2 });
   const { agent } = await app.open('m1');
   const answer = await app.command(agent, 'code');
   assert.equal(answer.kind, 'error');
-  assert.match(answer.text, /^Not switched\. Before the first message, the selected sidebar tab decides the mode of a new conversation \(now: Cowork\)\./);
+  assert.match(answer.text, /^Not switched\. Before the first message, the selected tab in the left panel decides the mode of a new thread \(now: Cowork\)\./);
   assert.match(answer.text, /Tabs: Chat, Cowork, Finance\./, 'the first two modes, then the add-on\'s');
   assert.match(answer.text, /use \/mode after your first message/);
   assert.equal(sessionModes(world).m1, undefined, 'nothing was stored');
   assert.equal(app.service().get('m1'), 'cowork');
   const list = await app.command(agent, '');
   assert.equal(list.kind, 'success');
-  assert.match(list.text, /selected sidebar tab decides/);
+  assert.match(list.text, /selected tab in the left panel decides/);
   await app.firstTurn(agent);
   const later = await app.command(agent, 'code');
   assert.equal(later.kind, 'success');
   assert.equal(app.service().get('m1'), 'code', 'after the first message /mode works as before');
   app.stop();
-});
+}));
 
 test('without the sidebar, /mode before the first message switches as before', async () => {
   const world = makeWorld();
@@ -514,7 +527,7 @@ test('Data loads its tools as needed, with its data and PDF tools there from the
 });
 
 test('once, data is added to a stored "load tools as needed" list; switched off after that, it stays off', async () => {
-  const world = makeWorld({ trimModes: ['cowork'] });
+  const world = makeWorld({ trimModes: ['cowork'], plainAdded: true });
   let app = boot(world);
   await app.open('x0');
   await settle();
@@ -527,6 +540,46 @@ test('once, data is added to a stored "load tools as needed" list; switched off 
   await settle();
   assert.deepEqual([...read(world.config.trimModes)], ['cowork']);
   app.stop();
+});
+
+test('item 4A, stage 4: once, Plain chat gets the Cowork mode\'s choices (load tools as needed, skills off, Tool access); changed after that, it stays', async () => {
+  const access = { cowork: { groups: { mac: 'ask' }, tools: {} }, code: { groups: {}, tools: {} }, _defaults: { cowork: { groups: { mac: 'ask' }, tools: {} } } };
+  const world = makeWorld({ trimModes: ['cowork', 'data'], dataTrimAdded: true, skillsOff: JSON.stringify({ cowork: ['pr-review'] }), toolAccess: JSON.stringify(access) });
+  let app = boot(world);
+  await app.open('p0');
+  await settle();
+  assert.deepEqual([...read(world.config.trimModes)], ['cowork', 'data', 'plain']);
+  assert.deepEqual(JSON.parse(read(world.config.skillsOff)), { cowork: ['pr-review'], plain: ['pr-review'] });
+  const after = JSON.parse(read(world.config.toolAccess));
+  assert.deepEqual(after.plain, access.cowork);
+  assert.deepEqual(after._defaults.plain, access._defaults.cowork);
+  assert.deepEqual(after.code, access.code, 'nothing else changes');
+  assert.equal(read(world.config.plainAdded), true);
+  world.config.trimModes = ['cowork', 'data'];
+  app.stop();
+  app = boot(world);
+  await app.open('p1');
+  await settle();
+  assert.deepEqual([...read(world.config.trimModes)], ['cowork', 'data'], 'switched off after that, it stays off');
+  app.stop();
+});
+
+test('item 4A, stage 4: Plain chat is in every mode list, also beside a saved list of your own, has all tools, no instructions and no tab', async () => {
+  const world = makeWorld({ modes: JSON.stringify({ mine: { label: 'Mine', tools: 'none' } }), sessionModes: JSON.stringify({ q1: 'plain' }), plainAdded: true, dataTrimAdded: true });
+  const app = boot(world);
+  const ids = app.service().list().map((mode) => mode.id);
+  assert.ok(ids.includes('mine') && ids.includes('plain'), ids.join(','));
+  assert.ok(ids.indexOf('plain') > ids.indexOf('mine'), 'after your own modes');
+  const { masks } = await app.open('q1');
+  assert.ok((maskNow(masks)?.allow ?? ['all']).length > 0, 'it has tools');
+  assert.doesNotMatch(app.prompt('q1'), /You are in (Cowork|Code|Chat) mode/, 'no instructions or method of its own');
+  app.stop();
+  const own = makeWorld({ modes: JSON.stringify({ plain: { label: 'My plain', tools: 'none' } }), plainAdded: true, dataTrimAdded: true });
+  const second = boot(own);
+  assert.equal(second.service().list().find((mode) => mode.id === 'plain').label, 'My plain', 'your own mode of the same id wins');
+  second.stop();
+  const { sidebarTabs } = await import('../lib/tabs.js');
+  assert.deepEqual(sidebarTabs([{ id: 'chat' }, { id: 'plain', added: true }, { id: 'x', extra: true }], 5).map((tab) => tab.id), ['chat', 'x'], 'never a tab of its own');
 });
 
 test('the trash: moved conversations with their helpers, waiting ones, and an unreadable trash', () => {
@@ -597,7 +650,7 @@ test('Depth reaches the model: the care note, then the web note, then how much t
   for (const id of ['c1', 'c2', 'c3', 'r1', 'g1', 's1']) await app.open(id);
   const c1 = app.prompt('c1');
   const care = c1.indexOf(DEPTH_PROMPTS.thorough);
-  const webNote = c1.search(/Web is on for this conversation/);
+  const webNote = c1.search(/Web is on for this thread/);
   const search = c1.indexOf(DEPTH_SEARCH_PROMPTS.thorough);
   assert.ok(care >= 0 && webNote > care && search > webNote, `order: care ${care}, web ${webNote}, search ${search}`);
   // Web Off: the care note stays; nothing about searching.
@@ -614,7 +667,7 @@ test('Depth reaches the model: the care note, then the web note, then how much t
   goals.set('g1', MISSION);
   const during = app.prompt('g1');
   assert.ok(!during.includes('How much care') && !during.includes(DEPTH_SEARCH_PROMPTS.thorough), during);
-  assert.match(during, /Web is on for this conversation/, 'the web note itself stays');
+  assert.match(during, /Web is on for this thread/, 'the web note itself stays');
   // Also while its goal is disarmed (after a restart or an error) and the user writes: Mission still
   // conducts the run and refuses every other tool.
   goals.set('g1', { ...MISSION, activation: 'disarmed' });

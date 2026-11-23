@@ -264,7 +264,7 @@ export function findingsIn(messages) {
     }
     const partial = !print;
     if (partial) {
-      text = [...Array(entry.parts).keys()].map((index) => (entry.pieces.has(index + 1) ? entry.pieces.get(index + 1) : `\n[Part ${index + 1} of ${entry.parts} was not read in this conversation.]\n`)).join('');
+      text = [...Array(entry.parts).keys()].map((index) => (entry.pieces.has(index + 1) ? entry.pieces.get(index + 1) : `\n[Part ${index + 1} of ${entry.parts} was not read in this thread.]\n`)).join('');
       const cited = fullPrint.get(entry.n);
       if (cited?.startsWith(entry.prefix)) print = cited;
     }

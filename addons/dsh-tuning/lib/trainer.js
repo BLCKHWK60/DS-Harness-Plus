@@ -1,9 +1,9 @@
 /**
  * Training on the owner's own Mac (plan steps T5, T9, T13), with Apple's mlx-lm, from a Python the owner
- * points Tuning Plus at. Tuning Plus installs nothing and downloads nothing: the base model is a folder on
+ * points Tuner Plus at. Tuner Plus installs nothing and downloads nothing: the base model is a folder on
  * this Mac, every command is fixed and run without a shell, and the child runs with the Hugging Face hub
  * offline. The base model's files are never changed: the adapter, a fused copy and every temporary file
- * are written in Tuning Plus's own folder, and the base model's files are fingerprinted before and after.
+ * are written in Tuner Plus's own folder, and the base model's files are fingerprinted before and after.
  */
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -15,13 +15,13 @@ import { fileURLToPath } from 'node:url';
 /** The fixed script that answers exam requests (lib/answer.py). */
 export const ANSWER_SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'answer.py');
 
-/** How the owner installs the trainer (Tuning Plus never does). */
+/** How the owner installs the trainer (Tuner Plus never does). */
 export const HOW_TO_INSTALL = 'Tuner Plus trains with Apple\'s MLX trainer (mlx-lm), which you install yourself in a Python of its own, for example: make a folder, run "uv venv" and "uv pip install mlx-lm" in it (or "python3 -m venv .venv" and ".venv/bin/pip install mlx-lm"), then give Tuner Plus the full path of that Python (…/.venv/bin/python). Tuner Plus never installs anything.';
 
 /** The environment of every trainer run: no downloads, no telemetry. */
 export const OFFLINE_ENV = { HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1', HF_DATASETS_OFFLINE: '1', HF_HUB_DISABLE_TELEMETRY: '1', TOKENIZERS_PARALLELISM: 'false' };
 
-/** @returns {string} why a path is not a Python Tuning Plus may run, or ''. */
+/** @returns {string} why a path is not a Python Tuner Plus may run, or ''. */
 export function pythonProblem(path) {
   const value = String(path ?? '').trim();
   if (!value) return HOW_TO_INSTALL;
@@ -31,7 +31,7 @@ export function pythonProblem(path) {
   return '';
 }
 
-/** @returns {string} why a folder is not a local MLX model Tuning Plus may train or answer with, or ''. */
+/** @returns {string} why a folder is not a local MLX model Tuner Plus may train or answer with, or ''. */
 export function modelProblem(path) {
   const value = String(path ?? '').trim();
   if (!value) return 'Give the folder of the base model on this Mac (an MLX model folder with config.json).';
@@ -96,7 +96,7 @@ export function trainSettings(input = {}) {
 
 /**
  * Python is started isolated (-I: no current folder, no script folder, no PYTHON* settings and no user
- * packages on its path), in a new empty working folder: a planted mlx_lm/ in a folder Tuning Plus writes to
+ * packages on its path), in a new empty working folder: a planted mlx_lm/ in a folder Tuner Plus writes to
  * is never imported.
  */
 export const ISOLATED = '-I';
@@ -177,7 +177,7 @@ export function progressOf(raw) {
 export function runPython({ python, args, timeoutMs, signal, onLine, spawnFn = spawn }) {
   return new Promise((resolveRun) => {
     const started = Date.now();
-    // Isolated, in a new empty folder: nothing in Tuning Plus's own folder can be imported as a module.
+    // Isolated, in a new empty folder: nothing in Tuner Plus's own folder can be imported as a module.
     const cwd = emptyFolder();
     const clean = () => rmSync(cwd, { recursive: true, force: true });
     let child;

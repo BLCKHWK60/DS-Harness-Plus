@@ -224,7 +224,7 @@ test('cards: made with Read and Ask-Auto whatever is sent, updated field by fiel
     const md = readFileSync(join(folder, 'devices', 'esp32-board-1', 'card.md'), 'utf8');
     assert.match(md, /^# ESP32 board 1\n/);
     assert.match(md, /- Highest level: Read/);
-    assert.match(md, /- How it asks: Ask-Auto/);
+    assert.match(md, /- How it asks: Ask$/m);
     assert.doesNotMatch(md, /hunter22/);
     const again = bench.saveCard({ name: 'esp32 BOARD 1', firmware: 'v5.1', chip: 'ESP32' }, new Date(at.getTime() + 60_000));
     assert.equal(again.made, false);
@@ -295,7 +295,7 @@ test('links: Devices never writes through a link in its folder', () => {
 });
 
 /** The add-on on a stand-in app. */
-function plugin({ extraModes = '{}', enabled = true, folder = '', modeOf = () => MODE_ID, longChecks, modesExtra = {} } = {}) {
+function plugin({ extraModes = '{}', enabled = true, folder = '', modeOf = () => MODE_ID, longChecks, modesExtra = {}, mission, ports } = {}) {
   const provided = {};
   const home = scratch();
   const registered = new Map();
@@ -310,7 +310,7 @@ function plugin({ extraModes = '{}', enabled = true, folder = '', modeOf = () =>
   };
   const when = new Map();
   const tools = { register(tool, options) { registered.set(tool.name, tool); when.set(tool.name, options?.when); return () => registered.delete(tool.name); } };
-  const services = { dshHomePath: (name) => join(home, name), settings, tools, modes: { get: modeOf, isolated: () => false, ...modesExtra }, agents: { list: () => [] } };
+  const services = { dshHomePath: (name) => join(home, name), settings, tools, modes: { get: modeOf, isolated: () => false, ...modesExtra }, agents: { list: () => [] }, ...(mission ? { mission } : {}) };
   const config = { enabled, folder, ...(longChecks === undefined ? {} : { longChecks }) };
   const guards = [];
   const ctx = {
@@ -322,10 +322,11 @@ function plugin({ extraModes = '{}', enabled = true, folder = '', modeOf = () =>
     inject() {},
     logger: { warn() {}, info() {} },
   };
-  apply(ctx, config, { identify: async () => usbReport(parseIoreg(IOREG), ['/dev/cu.SLAB_USBtoUART']) });
+  apply(ctx, config, { identify: async (onPorts) => { if (ports) onPorts(ports); return usbReport(parseIoreg(IOREG), ['/dev/cu.SLAB_USBtoUART']); } });
   return {
     home, config, registered, handlers, guards, when, provided, stored: () => stored,
     call: (name, args) => registered.get(name).execute(args, { agent: { id: 'b1' } }),
+    callAsHelper: (name, args) => registered.get(name).execute(args, { name, agent: { id: 'h1', header: { parentSession: 'b1' } } }),
     close() { for (const dispose of disposers) dispose(); rmSync(home, { recursive: true, force: true }); },
   };
 }
@@ -342,11 +343,11 @@ test('on a stand-in app: the mode and Devices\' tools come and go with the switc
     assert.match((await app.call('bench_devices', {})).text, /No device has a card yet/);
     assert.match((await app.call('bench_devices', { name: 'nothing' })).text, /There is no card/);
     assert.equal(existsSync(join(app.home, 'bench')), false, 'looking makes nothing');
-    assert.match((await app.call('bench_card', { name: 'ESP32 board 1', chip: 'ESP32', connects: ['usb'] })).text, /^Made the card for ESP32 board 1: .*card\.md\. Permissions: highest level Read, asks Ask-Auto\.$/);
+    assert.match((await app.call('bench_card', { name: 'ESP32 board 1', chip: 'ESP32', connects: ['usb'] })).text, /^Made the card for ESP32 board 1: .*card\.md\. Permissions: highest level Read, asks Ask\.$/);
     assert.match((await app.call('bench_log', { name: 'ESP32 board 1', title: 'Identified over USB', found: 'CP2102 bridge on /dev/cu.SLAB_USBtoUART' })).text, /entry 2 added/);
     const one = (await app.call('bench_devices', { name: 'ESP32 board 1' })).text;
     assert.match(one, /- Chip: ESP32/);
-    assert.match(one, /Permissions, set by the user: highest level Read, asks Ask-Auto\n- Linked to: no device yet/);
+    assert.match(one, /Permissions, set by the user: highest level Read, asks Ask\n- Linked to: no device yet/);
     assert.match(one, /Identified over USB/);
     assert.ok(existsSync(join(app.home, 'bench', 'devices', 'esp32-board-1', 'card.md')));
     app.config.enabled = false;
@@ -441,9 +442,9 @@ test('the Devices note is given only in Devices conversations', () => {
     app.handlers['agent/created']({ agent: agentFor('c1') });
     assert.match(sections.get('b1').text(), /The Devices folder is .*bench/);
     assert.match(sections.get('b1').text(), /- Commands, programs, background jobs and any tool not on Devices' list: closed\./);
-    assert.match(sections.get('b1').text(), /- Long run checks: open\. On, with the Mac's device ports closed to them/);
+    assert.match(sections.get('b1').text(), /- Mission checks: open\. On, with the Mac's device ports closed to them/);
     app.config.longChecks = false;
-    assert.match(sections.get('b1').text(), /- Long run checks: closed\. Switched off in Settings → Devices/);
+    assert.match(sections.get('b1').text(), /- Mission checks: closed\. Switched off in Settings → Devices/);
     assert.equal(sections.get('c1').text(), '');
   } finally {
     app.close();
@@ -512,12 +513,40 @@ test('the note says the web level and Ultra Code when the Modes add-on gives the
     const sections = new Map();
     const agentFor = (id) => ({ id, ctx: { effect: (fn) => fn(), systemPrompt: { section: (spec) => sections.set(id, spec) } } });
     app.handlers['agent/created']({ agent: agentFor('b1') });
-    assert.match(sections.get('b1').text(), /Web access in this conversation: verified\. Firmware and write steps come only from/);
+    assert.match(sections.get('b1').text(), /Web access in this thread: verified\. Firmware and write steps come only from/);
     assert.match(sections.get('b1').text(), /Ultra Code is on: helpers may identify, read and diagnose side by side; only one write runs at a time/);
     plain.handlers['agent/created']({ agent: agentFor('b2') });
-    assert.doesNotMatch(sections.get('b2').text(), /Web access in this conversation|Ultra Code/);
+    assert.doesNotMatch(sections.get('b2').text(), /Web access in this thread|Ultra Code/);
   } finally {
     app.close();
     plain.close();
+  }
+});
+
+test('Mission stage E: a Mission helper\'s first open of a serial port asks through the Mission\'s card (mission.askYes); Mission off or not its helper: refused as before', async () => {
+  const asked = [];
+  let answer = { id: 'a1', text: 'This needs the user\'s yes (Devices asks). It waits in the Mission\'s card; the other helpers carry on.' };
+  const app = plugin({ mission: { askYes: async (request) => { asked.push(request); return answer; } }, ports: [{ port: '/dev/cu.SLAB_USBtoUART', id: 'usb 0x10c4:0xea60 serial 0001', label: 'CP2102 USB to UART Bridge' }] });
+  try {
+    await settle();
+    await app.call('bench_card', { name: 'ESP32 board 1' });
+    await app.call('bench_usb', {});
+    const said = (await app.callAsHelper('bench_serial_watch', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', minutes: 0.1 })).text;
+    assert.match(said, /It waits in the Mission's card/);
+    assert.equal(asked.length, 1);
+    assert.equal(asked[0].sessionId, 'h1');
+    assert.equal(asked[0].addon, 'bench');
+    assert.match(asked[0].key, /^bench_serial_watch:opening the serial port of ESP32 board 1#[0-9a-f]{16}$/, 'review of stage E: the port and the device on it are part of the key');
+    assert.equal(asked[0].what, 'Opening the serial port of ESP32 board 1');
+    assert.match(asked[0].reason, /^Open the serial port \/dev\/cu\.SLAB_USBtoUART of "ESP32 board 1"\?/);
+    assert.equal(asked[0].cannot, undefined);
+    answer = { id: 'a1', said: 'no', unasked: true, text: 'Not asked: this Mission runs on Full auto.' };
+    assert.match((await app.callAsHelper('bench_serial_watch', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', minutes: 0.1 })).text, /Full auto/);
+    answer = undefined;
+    assert.match((await app.callAsHelper('bench_serial_watch', { name: 'ESP32 board 1', port: '/dev/cu.SLAB_USBtoUART', minutes: 0.1 })).text, /a helper of a run cannot ask/, 'not a Mission\'s helper');
+    const card = JSON.parse(readFileSync(join(app.home, 'bench', 'devices', 'esp32-board-1', 'card.json'), 'utf8'));
+    assert.notEqual(card.permissions?.portAgreed, true, 'nothing was agreed without the yes');
+  } finally {
+    app.close();
   }
 });

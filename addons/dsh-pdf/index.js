@@ -12,7 +12,8 @@
  *
  * The tools may open PDFs in the conversation's folder and in folders the owner
  * lists; anywhere else only if the owner allows it. Extracted text is kept in
- * memory only. Page pictures are saved under the dsh home and removed after a day.
+ * memory only. Page pictures are saved under the dsh home and removed after a day; a thread in the Recon space
+ * (any mode) saves them only in its own run folder in Recon's room, which End and wipe deletes (item 4A, stage 6a, I8).
  *
  * Service `pdfReader` (apiVersion 1): `info(path, cwd?)`, `read(path, options?, cwd?)`.
  * Route: `GET /dsh-pdf/status`. Command: `/pdf <file>`.
@@ -34,7 +35,7 @@ const PAGE_FILE_DAYS = 1;
 export const Config = z.object({
   /** Master switch. Off makes every tool say so. */
   enabled: z.boolean().default(true).volatile(),
-  /** Extra folders whose PDFs may be read, besides the conversation's own folder. */
+  /** Extra folders whose PDFs may be read, besides the thread's own folder. */
   folders: z.array(z.string()).default([]).volatile(),
   /** Allow any PDF on this Mac. Off keeps the tools to the folders above. */
   anywhere: z.boolean().default(false).volatile(),
@@ -84,7 +85,8 @@ export function readSettings(config) {
  * @param {object} deps.reader - from `createReader`.
  * @param {() => object} deps.settings - current settings.
  * @param {(exec: object) => Promise<string>} deps.folderOf - the working folder of the calling conversation.
- * @param {(file: string, page: number) => string} deps.pagePath - where a page picture is saved.
+ * @param {(file: string, page: number, exec?: object) => string | {error: string, sealed?: boolean} | {out: string, sealed: boolean}} deps.pagePath -
+ *   where a page picture is saved: a path, or `{out, sealed}`, or `{error}` when it may not be saved anywhere.
  * @returns {object[]} tool definitions.
  */
 export function buildTools({ reader, settings, folderOf, pagePath }) {
@@ -168,9 +170,12 @@ export function buildTools({ reader, settings, folderOf, pagePath }) {
       ...common,
       timeoutMs: 120_000,
       execute: withPdf(async (ref, args, exec) => {
-        const out = pagePath(ref.file, Math.round(Number(args.page) || 0));
+        const where = pagePath(ref.file, Math.round(Number(args.page) || 0), exec);
+        if (where && typeof where === 'object' && where.error) return where.error;
+        const out = typeof where === 'string' ? where : where.out;
         const made = await reader.image(ref, args.page, args.scale, out, exec?.signal);
-        return `Page ${Math.round(Number(args.page))} was saved as a picture, ${made.width} × ${made.height} pixels:\n${made.out}\nLook at it with the read_image tool (file_path = that path); this needs a model that can see images. The file is removed after a day.`;
+        const gone = where?.sealed === true ? 'The file is deleted with this thread\'s folder in Recon\'s room (End and wipe).' : 'The file is removed after a day.';
+        return `Page ${Math.round(Number(args.page))} was saved as a picture, ${made.width} × ${made.height} pixels:\n${made.out}\nLook at it with the read_image tool (file_path = that path); this needs a model that can see images. ${gone}`;
       }),
     },
     {
@@ -182,6 +187,55 @@ export function buildTools({ reader, settings, folderOf, pagePath }) {
       execute: withPdf((ref, args, exec) => reader.ocr(ref, args.page, exec?.signal)),
     },
   ];
+}
+
+/** Item 4A, stage 6a (I8): a Recon thread's page picture goes only into its own run folder in Recon's room. */
+export const SEALED_NO_PAGE_IMAGE = 'No page picture was made: this Recon thread has no folder of its own in Recon\'s room, and its pictures may be saved nowhere else. Use pdf_read or pdf_ocr for the text.';
+/** Name of the pictures folder inside a Recon thread's run folder. */
+export const ROOM_PAGES_FOLDER = 'pdf-pages';
+
+/**
+ * Item 4A, stage 6a (STAGE6A-DESIGN.md 2.6, copied: no import across add-ons): whether a thread is sealed (Recon,
+ * any mode). No Modes: not sealed (as before); a Modes that throws or cannot answer: sealed (fail closed).
+ * @param {() => any} getModes - returns the Modes service.
+ * @param {string} id - the thread (or helper) id.
+ * @returns {boolean} sealed.
+ */
+export function sealedThread(getModes, id) {
+  let modes;
+  try {
+    modes = getModes();
+  } catch {
+    return false;
+  }
+  if (!modes) return false;
+  try {
+    if (typeof modes.guardOf === 'function') return modes.guardOf(String(id ?? ''))?.sealed !== false;
+    return modes.isolated?.(id) === true || String(modes.spaces?.of?.(id) ?? '') === 'recon';
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Where a page picture of a sealed thread goes: `<run folder>/pdf-pages/<name>`, or '' when Recon gives no run
+ * folder (Recon off, an older Recon, an error, a thread outside the room).
+ * @param {() => any} getRecon - returns the Recon service.
+ * @param {string} id - the thread (or helper) id.
+ * @param {string} name - the file name.
+ * @returns {string} absolute path, or ''.
+ */
+export function roomPagePath(getRecon, id, name) {
+  let folder = '';
+  try {
+    folder = getRecon()?.roomFolderOf?.(String(id ?? ''));
+  } catch {
+    folder = '';
+  }
+  if (typeof folder !== 'string' || !folder) return '';
+  const dir = join(folder, ROOM_PAGES_FOLDER);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  return join(dir, name);
 }
 
 /**
@@ -231,10 +285,21 @@ export function apply(ctx, config) {
     }
   }
 
-  /** A stable, harmless file name for a page picture. */
-  const pagePath = (file, page) => {
+  /**
+   * A stable, harmless file name for a page picture. Item 4A, stage 6a (I8): a sealed thread's picture goes only into
+   * its own run folder in Recon's room (End and wipe deletes it), never the shared pictures folder; none when Recon
+   * gives no such folder.
+   */
+  const pagePath = (file, page, exec) => {
+    const name = `${createHash('sha256').update(file).digest('hex').slice(0, 12)}-p${page}.png`;
+    const agent = exec?.agent;
+    const id = String(agent?.id ?? agent?.session?.id ?? agent?.sessionId ?? '');
+    if (sealedThread(() => ctx.get('modes'), id)) {
+      const out = roomPagePath(() => ctx.get('recon'), id, name);
+      return out ? { out, sealed: true } : { error: SEALED_NO_PAGE_IMAGE, sealed: true };
+    }
     if (!pagesDir) throw new Error('There is no folder to save page pictures in.');
-    return join(pagesDir, `${createHash('sha256').update(file).digest('hex').slice(0, 12)}-p${page}.png`);
+    return join(pagesDir, name);
   };
 
   /**
@@ -331,7 +396,7 @@ export function apply(ctx, config) {
             const now = settings();
             if (!now.enabled) return { kind: 'success', text: 'The PDF reader is switched off (Settings → PDF reader).' };
             const path = String(rawInput ?? '').trim().replace(/^["']|["']$/g, '');
-            if (!path) return { kind: 'success', text: `Usage: /${commandName} <file.pdf>. PDFs may be read from this conversation's folder${now.folders.length > 0 ? `, ${now.folders.join(', ')}` : ''}${now.anywhere ? ' and anywhere on this Mac' : ''}.` };
+            if (!path) return { kind: 'success', text: `Usage: /${commandName} <file.pdf>. PDFs may be read from this thread's folder${now.folders.length > 0 ? `, ${now.folders.join(', ')}` : ''}${now.anywhere ? ' and anywhere on this Mac' : ''}.` };
             try {
               const cwd = await folderOfAgent(agent);
               return { kind: 'success', text: await reader.info(refOf(path, cwd)) };

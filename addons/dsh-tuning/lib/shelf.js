@@ -91,7 +91,7 @@ export function setServing(shelf, id, { way, provider, model, path = '' }, at = 
   return entry;
 }
 
-/** Which team roles wear an entry (a team in Model Tiers names it for a role). */
+/** Which team roles wear an entry (a team in Model tiers names it for a role). */
 export function setRoles(shelf, id, roles, at = Date.now()) {
   const entry = find(shelf, id);
   entry.roles = (Array.isArray(roles) ? roles : []).filter((role) => role && typeof role.tier === 'string' && ['lead', 'helper', 'checker', 'judge'].includes(role.role)).slice(0, 20).map((role) => ({ tier: clip(role.tier, 60), role: role.role }));

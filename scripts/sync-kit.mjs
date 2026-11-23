@@ -1,11 +1,24 @@
 // Copies docs/shared/dsh-kit.js into every add-on page file (addons/*/client.js) that has the two marker lines.
 // `node scripts/sync-kit.mjs` rewrites them; `node scripts/sync-kit.mjs --check` only reports drift (exit 1).
+// `--only dsh-a,dsh-b` limits the run to those add-ons; `--skip dsh-c,dsh-d` leaves those out (for an add-on someone
+// else is editing at the moment: sync it once they are done). Both work with --check too.
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const check = process.argv.includes('--check');
+/** The names after a flag (`--only a,b` or `--only=a,b`), or null when the flag is not given. */
+const listArg = (flag) => {
+  const at = process.argv.findIndex((arg) => arg === flag || arg.startsWith(`${flag}=`));
+  if (at < 0) return null;
+  const raw = process.argv[at].includes('=') ? process.argv[at].split('=').slice(1).join('=') : process.argv[at + 1] ?? '';
+  return new Set(raw.split(',').map((name) => name.trim()).filter(Boolean));
+};
+const only = listArg('--only');
+const skip = listArg('--skip') ?? new Set();
+/** Whether this run touches an add-on. */
+const wanted = (name) => (only === null || only.has(name)) && !skip.has(name);
 // Two shared blocks: the small helpers (docs/shared/dsh-kit.js) and the shared page parts (docs/shared/dsh-ui.js).
 // A page file uses a block by having its two marker lines; the master carries both markers itself.
 const BLOCKS = [
@@ -20,6 +33,7 @@ for (const { name: blockName, master: masterPath, begin: BEGIN, end: END } of BL
   let blockDrift = 0;
   let seen = 0;
   for (const name of readdirSync(join(root, 'addons')).sort()) {
+    if (!wanted(name)) continue;
     const file = join(root, 'addons', name, 'client.js');
     if (!existsSync(file)) continue;
     const text = readFileSync(file, 'utf8');
@@ -49,6 +63,7 @@ const storeMaster = readFileSync(join(root, 'docs/shared/json-store.js'), 'utf8'
 let storeDrift = 0;
 let storeSeen = 0;
 for (const name of readdirSync(join(root, 'addons')).sort()) {
+  if (!wanted(name)) continue;
   const file = join(root, 'addons', name, 'lib', 'json-store.js');
   if (!existsSync(file)) continue;
   storeSeen += 1;

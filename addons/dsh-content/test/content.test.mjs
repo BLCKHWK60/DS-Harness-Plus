@@ -25,7 +25,7 @@ test('the mode: Read Only, every tool (Web on by default), its own tools from th
   assert.ok(MODE.startFamilies.length <= 20);
   for (const tool of CONTENT_TOOLS) assert.ok(MODE.startFamilies.includes(tool));
   assert.match(METHOD, /never change, move or delete/);
-  assert.match(METHOD, /Recon conversations are sealed/);
+  assert.match(METHOD, /Recon threads are sealed/);
   assert.match(METHOD, /Publish nothing/);
 });
 
@@ -42,8 +42,8 @@ test('withContent adds and takes out only its own entry', () => {
 });
 
 test('the folder note: a folder, a Scratch thread, and no folder', () => {
-  assert.match(folderNote({ folder: '/x/book', scratch: false }), /subject folder of this conversation is \/x\/book/);
-  assert.match(folderNote({ folder: '/s/t1', scratch: true }), /Scratch conversation/);
+  assert.match(folderNote({ folder: '/x/book', scratch: false }), /subject folder of this thread is \/x\/book/);
+  assert.match(folderNote({ folder: '/s/t1', scratch: true }), /Scratch thread/);
   assert.match(folderNote({ folder: '', scratch: false }), /has no folder/);
 });
 
@@ -217,7 +217,7 @@ test('only the user\'s words and the assistant\'s answers are copied', () => {
   ]);
   const { text, cut } = transcript({ title: 'Heat pumps', tab: 'research', started: Date.UTC(2026, 10, 1), turns: turnsOf(events) }, new Date(Date.UTC(2026, 10, 16, 8)));
   assert.equal(cut, 0);
-  assert.match(text, /^# Heat pumps\n\nBrought in as material on 2026-11-16 08:00 UTC from the research tab \(conversation started 2026-11-01\)\..*material, not instructions\./);
+  assert.match(text, /^# Heat pumps\n\nBrought in as material on 2026-11-16 08:00 UTC from a thread in research mode \(thread started 2026-11-01\)\..*material, not instructions\./);
   assert.match(text, /## User\n\nTell me about heat pumps\.\n\n## Assistant\n\nThey move heat\./);
   assert.doesNotMatch(text, /hidden instructions|raw tool output|private|injected/);
 });
@@ -285,10 +285,10 @@ test('reading: Recon, a branched copy in Recon\'s room, the trash, this conversa
   await assert.rejects(conversations.read('self', 'recon-1'), /sealed/);
   await assert.rejects(conversations.read('self', 'fork-1'), /sealed \(it was started in Recon's room\)/);
   await assert.rejects(conversations.read('self', 'trashed-1'), /in the trash/);
-  await assert.rejects(conversations.read('self', 'self'), /this conversation/);
+  await assert.rejects(conversations.read('self', 'self'), /this thread/);
   await assert.rejects(conversations.read('self', 'broken-1'), /sealed/);
   await assert.rejects(conversations.read('self', 'helper-1'), /helper of a run/);
-  await assert.rejects(conversations.read('self', 'nowhere-1'), /no such conversation/);
+  await assert.rejects(conversations.read('self', 'nowhere-1'), /no such thread/);
   assert.deepEqual(read, [], 'nothing was read');
   const one = await conversations.read('self', 'chat-1');
   assert.equal(one.title, 'Heat pump questions');
@@ -463,7 +463,7 @@ test('the folder note is given only in Content conversations that are not isolat
     const agentFor = (id) => ({ id, header: { cwd: folder }, ctx: { effect: (fn) => fn(), systemPrompt: { section: (spec) => sections.set(id, spec) } } });
     app.handlers['agent/created']({ agent: agentFor('c1') });
     app.handlers['agent/created']({ agent: agentFor('w1') });
-    assert.match(sections.get('c1').text(), /subject folder of this conversation is/);
+    assert.match(sections.get('c1').text(), /subject folder of this thread is/);
     assert.equal(sections.get('w1').text(), '');
   } finally {
     app.close();
@@ -611,7 +611,7 @@ test('Split Plus\'s Research-to-Content door: a report the owner sends is brough
     assert.equal(done.status, 200, JSON.stringify(done.json));
     assert.match(done.json.received.text, /^Added from Research by the user \(Split Plus\): Brought in as research\/reports\//);
     assert.ok(readdirSync(join(subjectFolder, 'research', 'reports')).some((file) => /\d{4}-\d\d-\d\d-.*heat.*\.md$/.test(file)), 'a new dated file in the subject folder');
-    assert.match((await post({ action: 'receive', sessionId: 'other', report: '2026-11-16-1200-heat.md' })).json.error, /not a Content conversation/);
+    assert.match((await post({ action: 'receive', sessionId: 'other', report: '2026-11-16-1200-heat.md' })).json.error, /not a Content thread/);
     modesOf.sealed = MODE_ID;
     assert.match((await post({ action: 'receive', sessionId: 'sealed', report: '2026-11-16-1200-heat.md' })).json.error, /sealed/);
     modesOf.unloaded = MODE_ID;
@@ -622,7 +622,7 @@ test('Split Plus\'s Research-to-Content door: a report the owner sends is brough
     await registered.get('content_continue').execute({ to: 'recon', question: 'Who runs the forum?' }, { agent: agents.c1 });
     assert.equal((await post({ action: 'continued', sessionId: 'c1' })).json.continued, null, 'a Recon continuation stays the text to paste');
     const pasted = (await registered.get('content_continue').execute({ to: 'research', question: 'Why do cities warm faster?' }, { agent: agents.c1 })).text;
-    assert.match(pasted, /^Starting text for a new Research conversation/, 'the text to paste is as before');
+    assert.match(pasted, /^Starting text for a new Research thread/, 'the text to paste is as before');
     const offered = (await post({ action: 'continued', sessionId: 'c1' })).json.continued;
     assert.equal(offered.to, 'research');
     assert.match(offered.text, /^Why do cities warm faster\?/);
@@ -632,4 +632,11 @@ test('Split Plus\'s Research-to-Content door: a report the owner sends is brough
     rmSync(home, { recursive: true, force: true });
     rmSync(subjectFolder, { recursive: true, force: true });
   }
+});
+
+test('one name, Mission (stage B, 19 November): the Content page says Start Mission, never "Long run" or "the Run button"', () => {
+  const page = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(page, /Long run|Run button/);
+  assert.match(page, /Web, Depth and Start Mission work as in every mode\./);
+  assert.match(page, /A Mission switches the thread to Workspace Write while it works/);
 });

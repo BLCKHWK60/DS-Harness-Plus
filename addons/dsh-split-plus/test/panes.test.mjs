@@ -64,7 +64,7 @@ test('titles: folder names, short letters and states', () => {
 });
 
 /** A stand-in app: Modes, settings and the web server, nothing real. */
-function standIn({ enabled = true, isolated = new Set(), modesOn = true } = {}) {
+function standIn({ enabled = true, isolated = new Set(), modesOn = true, spaces } = {}) {
   const routes = new Map();
   const set = [];
   const known = new Set(['s1', 's2', 'r1']);
@@ -75,6 +75,7 @@ function standIn({ enabled = true, isolated = new Set(), modesOn = true } = {}) 
       if (!known.has(id)) throw new Error(`modes: unknown session "${id}"`);
       set.push([id, mode, options]);
     },
+    ...(spaces ? { spaces } : {}),
   };
   const settingsRows = [{ ns: 'modes', value: { modes: { chat: { label: 'Chat' }, code: { label: 'Code' }, research: { label: 'Research' } }, extraModes: JSON.stringify({ recon: { label: 'Recon', isolated: true } }) } }];
   const ctx = {
@@ -193,4 +194,24 @@ test('a pane opened from a conversation that sits in Recon\'s room never opens t
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
+});
+
+// Item 4A, final fix round (lab: medium): with spaces on, Add pane offers the window's space's modes, its start mode
+// first (the page reads the window's space); greyed modes are not offered.
+test('with spaces on, the page gets each space\'s modes and start mode from Modes; off: none', async () => {
+  const spaces = {
+    live: () => true,
+    list: () => [{ id: 'chat' }, { id: 'code' }],
+    modesIn: (id) => (id === 'chat' ? [{ id: 'plain', label: 'Plain chat' }, { id: 'chat' }, { id: 'research' }, { id: 'recon', greyed: true }] : [{ id: 'code' }, { id: 'research' }]),
+    startOf: (id) => (id === 'chat' ? 'plain' : 'code'),
+  };
+  const { routes } = standIn({ spaces });
+  const { data } = await hit(routes, { query: '?sessions=s1' });
+  assert.deepEqual(data.spaces, { chat: { modes: ['plain', 'chat', 'research'], start: 'plain' }, code: { modes: ['code', 'research'], start: 'code' } });
+  const off = standIn({ spaces: { ...spaces, live: () => false } });
+  assert.equal(data.modes.find((row) => row.id === 'plain')?.label, 'Plain chat', 'Plain chat (built in to Modes) is offered');
+  assert.equal((await hit(off.routes, { query: '?sessions=s1' })).data.spaces, null);
+  const client = (await import('node:fs')).readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  assert.match(client, /getAttribute\('data-cws-space'\)/, 'the page reads the window\'s space');
+  assert.match(client, /useState\(offered\.start\)/, 'Add pane starts on the space\'s start mode');
 });

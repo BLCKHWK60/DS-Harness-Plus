@@ -186,8 +186,8 @@ export const changed = (diff) => Boolean(diff.app || diff.added.length || diff.r
  */
 export function mapText(map, selected = []) {
   const want = new Set(selected);
-  const lines = [`App ${map.app.version || '?'}, Plus ${map.plus.version || '?'}; ${map.plugins.length} plugins, ${map.modes.length} tabs, ${map.tools.length} tools.`];
-  lines.push(`Tabs: ${map.modes.map((mode) => `${mode.id}${mode.isolated ? ' (sealed)' : ''}`).join(', ')}.`);
+  const lines = [`App ${map.app.version || '?'}, Plus ${map.plus.version || '?'}; ${map.plugins.length} plugins, ${map.modes.length} modes, ${map.tools.length} tools.`];
+  lines.push(`Modes: ${map.modes.map((mode) => `${mode.id}${mode.isolated ? ' (sealed)' : ''}`).join(', ')}.`);
   for (const plugin of map.plugins) {
     const head = `- ${plugin.name} (${plugin.id}; ${plugin.origin}${plugin.locked ? ', locked' : ''}; ${plugin.enabled ? 'on' : 'off'}${plugin.version ? `; ${plugin.version}` : ''})`;
     if (!want.has(plugin.name) && !want.has(plugin.id) || !plugin.touches) {

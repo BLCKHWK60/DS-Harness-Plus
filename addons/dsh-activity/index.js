@@ -45,7 +45,7 @@ export const Config = z.object({
   words: z.boolean().default(false).volatile(),
   /** Add the last prompt-processing speed to the text while the model thinks or writes. */
   promptSpeed: z.boolean().default(true).volatile(),
-  /** Add how many tokens the conversation holds to the text. */
+  /** Add how many tokens the thread holds to the text. */
   context: z.boolean().default(true).volatile(),
   /** Show nothing at all while nothing is running. */
   hideIdle: z.boolean().default(false).volatile(),

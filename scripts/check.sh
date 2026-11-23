@@ -380,7 +380,7 @@ if ask '\n' && [ -f "$home/tuning/row.jsonl" ] && ask 'n\n' && [ -f "$home/tunin
 else
   say "FAIL  data removal removed something it should not"; tail -20 "$home/data.log"; failed=1
 fi
-if ask 'y\nDELETE\n' && grep -q 'tuning' "$home/data.log" && grep -q 'WARNING: this includes the Cowork trash' "$home/data.log" \
+if ask 'y\nDELETE\n' && grep -q 'tuning' "$home/data.log" && grep -q 'WARNING: this includes the left panel' "$home/data.log" \
    && [ ! -e "$home/tuning" ] && [ ! -e "$home/cowork-shell" ] && [ ! -e "$home/trash" ] && [ ! -e "$home/arena" ] && [ ! -e "$home/benchmarks" ] \
    && [ -f "$home/skill-architect/skills/s.md" ] && [ -f "$home/plugins/mine/p.js" ] && [ -f "$home/devices/d" ] && [ -f "$home/sessions/s.json" ] && [ -f "$home/skills/k.md" ] && [ -d "$home/backups/deepseek-harness-plus" ] \
    && [ -f "$home/elsewhere/precious.txt" ] && [ -L "$home/mission" ] && [ -f "$home/profiles/check/package.json" ]; then

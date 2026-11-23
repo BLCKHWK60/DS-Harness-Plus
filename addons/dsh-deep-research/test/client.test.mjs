@@ -115,7 +115,8 @@ test('Research alone has no Advanced group', () => {
 
 test('no question box or raw error text in the page', () => {
   assert.ok(!/window\.(prompt|confirm|alert)\(/.test(DEEP));
-  assert.ok(!/#[0-9a-fA-F]{3,6}\b/.test(DEEP.split('dsh-kit:end')[1].split('dsh-merge:begin')[0] + DEEP.split('dsh-merge:end')[1]));
+  // The shared blocks (dsh-kit, dsh-ui) are checked by their own tests; their one fixed colour is the shadow's black, which UI-STYLE allows.
+  assert.ok(!/#[0-9a-fA-F]{3,6}\b/.test(DEEP.split('dsh-ui:end')[1].split('dsh-merge:begin')[0] + DEEP.split('dsh-merge:end')[1]));
 });
 
 test('Settings search can open the Advanced group: openTab reaches the host, before or after it mounts', () => {

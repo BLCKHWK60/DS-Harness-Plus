@@ -143,7 +143,7 @@ const source = readFileSync(join(import.meta.dirname, '..', 'client.js'), 'utf8'
 let page = null;
 const sandbox = {
   window: { __ModuleLoader__: { load: (module) => { page = module; } } },
-  document: { hidden: false, baseURI: 'http://127.0.0.1:55314/', documentElement: { getAttribute: (name) => (name === 'data-cws-tab' ? bar.tab : null), style: { setProperty: () => {}, removeProperty: () => {} } } },
+  document: { hidden: false, baseURI: 'http://127.0.0.1:55314/', documentElement: { getAttribute: (name) => (name === 'data-cws-tab' ? bar.tab : name === 'data-cws-space' ? (bar.space ?? null) : null), style: { setProperty: () => {}, removeProperty: () => {} } } },
   fetch: async (address) => {
     if (!String(address).includes('session=')) return { ok: true, json: async () => state };
     bar.asked += 1;
@@ -270,7 +270,7 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 20));
   const now = walk(section.component({}));
   const toggle = elementsOf(now).find((element) => element.props['aria-label'] === 'Read Internet Archive copies directly (not through Tor)');
   check('the page has the switch for reading the Archive directly', toggle?.props.role === 'switch' && toggle.props['aria-checked'] === 'true', JSON.stringify(toggle?.props ?? null));
-  check('its description says the copies go through the WireGuard tunnel', allText(now).includes('through the WireGuard tunnel (or straight where a conversation allowed /recon direct)') && allText(now).includes('GDELT and .onion sites always go through Tor.'));
+  check('its description says the copies go through the WireGuard tunnel', allText(now).includes('through the WireGuard tunnel (or straight where a thread allowed /recon direct)') && allText(now).includes('GDELT and .onion sites always go through Tor.'));
   const before = mutations.length;
   toggle.props.onClick();
   await tick();
@@ -290,26 +290,26 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 20));
     return { nodes, text: allText(nodes), pills: nodesOfClass(nodes, 'dsh-rc-pill').map((node) => ({ text: allText([node]), state: node.element.props['data-state'] })), hint: nodesOfClass(nodes, 'dsh-rc-hint')[0] };
   };
   const shown = await draw('s1');
-  check('it asks the route about its own conversation', bar.asked === 1 && bar.last === 'http://127.0.0.1:55314/dsh-recon/state?session=s1', bar.last);
+  check('it asks the route about its own thread', bar.asked === 1 && bar.last === 'http://127.0.0.1:55314/dsh-recon/state?session=s1', bar.last);
   check('it shows Tor, Usenet, the Archive\'s route and the model', ['Tor starts with the first search', 'Usenet on, 2 accounts', 'Internet Archive read directly', 'small, on this Mac', 'Findings go to this model'].every((text) => shown.pills.some((pill) => pill.text === text)), JSON.stringify(shown.pills));
   check('a local model is shown as fine', shown.pills.find((pill) => pill.text === 'Findings go to this model')?.state === 'ok');
-  check('it says the conversation is isolated', allText([shown.hint]).startsWith('Isolated:') && shown.hint.element.props['data-error'] === 'false');
-  check('it says what isolation means, and not that nothing goes out', allText([shown.hint]).includes('nothing from other conversations comes in, and nothing of it goes to them') && !allText([shown.hint]).includes('nothing goes out'), allText([shown.hint]));
+  check('it says the thread is isolated', allText([shown.hint]).startsWith('Sealed:') && shown.hint.element.props['data-error'] === 'false');
+  check('it says what isolation means, and not that nothing goes out', allText([shown.hint]).includes('nothing from other threads comes in, and nothing of it goes to them') && !allText([shown.hint]).includes('nothing goes out'), allText([shown.hint]));
   check('it has no button: agreeing to a cloud model stays typed', elementsOf(shown.nodes).every((element) => element.type !== 'button'));
 
   bar.conversation = { ...bar.conversation, model: 'big', provider: 'DeepSeek', where: 'cloud', may: false };
   const cloud = await draw('s2');
   check('a cloud model shows findings held back', cloud.pills.some((pill) => pill.text === 'big, in the cloud' && pill.state === 'warn') && cloud.pills.some((pill) => pill.text === 'Findings held back' && pill.state === 'warn'), JSON.stringify(cloud.pills));
-  check('and says to type /recon cloud', allText([cloud.hint]).includes('Type /recon cloud to agree for this conversation') && cloud.hint.element.props['data-error'] === 'true');
+  check('and says to type /recon cloud', allText([cloud.hint]).includes('Type /recon cloud to agree for this thread') && cloud.hint.element.props['data-error'] === 'true');
 
   bar.conversation = { ...bar.conversation, may: true, agreed: true, inRoom: false };
   const outside = await draw('s3');
-  check('a conversation outside Recon\'s folder is told to start a new one', allText([outside.hint]).includes('not in Recon\'s own folder'));
+  check('a thread outside Recon\'s folder is told to start a new one', allText([outside.hint]).includes('not in Recon\'s own folder'));
 
   bar.conversation = { known: false };
   const unknown = await draw('s4');
-  check('a conversation the app has not loaded shows its model as not known yet', unknown.pills.some((pill) => pill.text === 'Model not known yet' && pill.state === 'none') && !unknown.pills.some((pill) => pill.text === 'No model picked'), JSON.stringify(unknown.pills));
-  check('and does not ask to pick a model', !allText([unknown.hint]).startsWith('Pick a model') && allText([unknown.hint]).includes('once the app has loaded this conversation') && unknown.hint.element.props['data-error'] === 'false', allText([unknown.hint]));
+  check('a thread the app has not loaded shows its model as not known yet', unknown.pills.some((pill) => pill.text === 'Model not known yet' && pill.state === 'none') && !unknown.pills.some((pill) => pill.text === 'No model picked'), JSON.stringify(unknown.pills));
+  check('and does not ask to pick a model', !allText([unknown.hint]).startsWith('Pick a model') && allText([unknown.hint]).includes('once the app has loaded this thread') && unknown.hint.element.props['data-error'] === 'false', allText([unknown.hint]));
 
   bar.conversation = { known: true, recon: true, inRoom: true, model: '', provider: '', where: '', may: false, agreed: false };
   const none = await draw('s4b');
@@ -319,6 +319,16 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 20));
   const asked = bar.asked;
   await draw('s5');
   check('on another tab it does not ask the route', bar.asked === asked);
+
+  // Item 4A, stage 6a: any mode in the Recon space gets the bar (the tab is the mode's, the space is Recon).
+  bar.space = 'recon';
+  bar.tab = 'research';
+  await draw('s6');
+  check('in the Recon space, whatever the mode, it asks the route', bar.asked === asked + 1);
+  bar.space = 'chat';
+  await draw('s7');
+  check('in another space with another mode it does not', bar.asked === asked + 1);
+  bar.space = undefined;
 }
 
 console.log(fails === 0 ? `ALL OK (${ran})` : `${fails} of ${ran} FAILED`);

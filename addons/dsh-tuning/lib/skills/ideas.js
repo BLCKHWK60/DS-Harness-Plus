@@ -1,11 +1,11 @@
 /**
  * Skill ideas (step 8; the owner's prompt, part 3, "Where a skill idea comes from"). Ideas come only from
  * the harvest's rows, so they follow the harvest's own switches and reading rules (Recon never, a
- * conversation that received an export from Recon never, Scratch yes, signed-in sources never), and never
+ * thread that received an export from Recon never, Scratch yes, signed-in sources never), and never
  * from the exam: the exam stays a fair test of what an idea becomes.
  *
  *   - repeated: the same kind of job done several times in checked work (tests passed, or finished clean
- *     and not corrected), with the same tools, in more than one conversation;
+ *     and not corrected), with the same tools, in more than one thread;
  *   - corrected: a point the owner corrected more than once;
  *   - rescued: a job the local model failed and a stronger model or a longer run then got right (Mission);
  *   - tool trouble: one tool whose call failed and then worked on the next try, again and again;
@@ -91,7 +91,7 @@ export function ideasFrom({ rows = [], skills = [], pluginsWithSkills = new Set(
   const usable = (Array.isArray(rows) ? rows : []).filter((row) => row && row.signedIn !== true && row.unsure !== true && row.exam !== true);
   const ideas = [];
 
-  // The same kind of job, checked, with the same tools, in more than one conversation.
+  // The same kind of job, checked, with the same tools, in more than one thread.
   const jobs = usable.filter((row) => row.kind === 'toolcalls' && CHECKED.has(String(row.proof?.check ?? ''))).map((row) => ({ row, words: keyWords(requestText(row)).slice(0, 40), steps: stepsOf(row) })).filter((one) => one.steps.length > 0 && one.words.length > 0);
   for (const group of grouped(jobs, (a, b) => [...a.steps].sort().join(',') === [...b.steps].sort().join(',') && jaccard(a.words, b.words) >= 0.3)) {
     const sessions = new Set(group.map((one) => sessionOf(one.row)));
@@ -101,7 +101,7 @@ export function ideasFrom({ rows = [], skills = [], pluginsWithSkills = new Set(
       // Its first row names it: more rows of the same work never change it ("Do not suggest this again" holds).
       signature: `repeated|${[...group[0].steps].sort().join(',')}|${group[0].row.id}`,
       title: `A job you did ${group.length} times: ${cut(requestText(group[0].row), 60)}`,
-      text: `This kind of job was done ${group.length} times in checked work (its tests passed, or it finished clean and you did not correct it), in ${sessions.size} conversations, with the same tools: ${group[0].steps.join(', ')}. For example ${group.slice(0, 2).map((one) => quote(requestText(one.row))).join(' and ')}. A skill could hold the steps, so a model does it right the first time.`,
+      text: `This kind of job was done ${group.length} times in checked work (its tests passed, or it finished clean and you did not correct it), in ${sessions.size} threads, with the same tools: ${group[0].steps.join(', ')}. For example ${group.slice(0, 2).map((one) => quote(requestText(one.row))).join(' and ')}. A skill could hold the steps, so a model does it right the first time.`,
       rows: group.map((one) => one.row.id),
       sample: requestText(group[0].row),
     });

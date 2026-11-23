@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Chat, Cowork and Code modes you can switch per session: tool access, sandbox mode, default tier and a short prompt per mode.",
+  "description": "The Mode list under the chat box: modes such as Chat, Cowork and Code that you can switch per thread, each with its tool access, sandbox, default tier and a short prompt, and which modes each space offers.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

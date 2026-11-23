@@ -18,7 +18,7 @@ const request = (over = {}) => ({
 
 test('the card says what Plus wrote, in plain words, and the reason is marked as not checked', () => {
   const m = card.model(request(), 600000);
-  assert.equal(m.heading, 'The AI asks to use: Run commands in Terminal in this conversation');
+  assert.equal(m.heading, 'The AI asks to use: Run commands in Terminal in this thread');
   assert.equal(m.rawName, 'bash');
   assert.equal(m.risk, 'Risk: High. It can change or delete files, run programs, reach other models or services.');
   assert.equal(m.reasonLabel, "The AI's reason, in its own words (not checked):");
@@ -41,7 +41,7 @@ test('a hostile reason stays plain text: no markup survives as a tag, nothing lo
     assert.ok(!/[\u0000-\u001f‪-‮​-‏]/.test(m.reason), 'no control or direction characters');
     assert.ok(!m.reason.includes('\n'), 'one line');
     // The headline, risk and warnings are Plus's own: the reason cannot change them.
-    assert.equal(m.heading, 'The AI asks to use: Run commands in Terminal in this conversation');
+    assert.equal(m.heading, 'The AI asks to use: Run commands in Terminal in this thread');
     assert.equal(m.risk.startsWith('Risk: High.'), true);
   }
   // The reason is only ever handed to the page as a text child (React writes text, never markup).
@@ -196,18 +196,18 @@ test('bridge: a request that waits ends with the wait, and Modes loading late or
 test('the headline names exactly how far the buttons reach', () => {
   const said = (over) => card.model(request(over), 1).heading;
   // High risk: this conversation at most.
-  assert.match(said({}), /in this conversation$/);
+  assert.match(said({}), /in this thread$/);
   // High risk after outside material: one use only.
   assert.match(said({ outsideMaterial: true }), /for one use only$/);
   // Low risk, everything offered: all four reaches are named.
   const wide = { tier: 1, longest: 'always', choices: ['once', 'conversation', 'mode', 'always', 'deny', 'never'].map((id) => ({ id })) };
-  assert.match(said(wide), /in this conversation, the whole tab or always$/);
-  assert.match(said({ ...wide, longest: 'mode' }), /in this conversation or the whole tab$/);
+  assert.match(said(wide), /in this thread, the whole mode or always$/);
+  assert.match(said({ ...wide, longest: 'mode' }), /in this thread or the whole mode$/);
   // The headline always matches the longest button that is really shown.
   for (const over of [{}, { outsideMaterial: true }, wide, { ...wide, longest: 'mode' }, { ...wide, recon: true }]) {
     const req = request(over);
     const widest = card.choices(req).filter((one) => one.kind === 'allow').pop()?.id;
-    const expect = { once: 'for one use only', conversation: 'in this conversation', mode: 'in this conversation or the whole tab', always: 'in this conversation, the whole tab or always' }[widest];
+    const expect = { once: 'for one use only', conversation: 'in this thread', mode: 'in this thread or the whole mode', always: 'in this thread, the whole mode or always' }[widest];
     assert.ok(card.model(req, 1).heading.endsWith(expect), `${JSON.stringify(over)} -> ${expect}`);
   }
 });
@@ -268,11 +268,12 @@ test('a refusal that is not "no longer waiting" is a failed send, not a gone req
   assert.ok(!/no longer waiting/.test(card.answerResult(200, { ok: false, reason: 'x' }).text));
 });
 
-test('Recon wording says plainly what Recon can and cannot ask for, and the card says tab, never mode', () => {
+test('Recon wording says plainly what Recon can and cannot ask for, and the card names the scopes thread and mode', () => {
   const m = card.model(request({ recon: true, tier: 2, choices: [{ id: 'once' }, { id: 'deny' }] }), 1);
   for (const word of ['Terminal', 'connectors', 'engines', 'helpers', 'online']) assert.ok(m.risk.includes(word), word);
-  assert.ok(!/\bmode\b/i.test(JSON.stringify([Object.values(card.LABEL), m.heading, m.risk])));
-  assert.equal(card.LABEL.mode, 'Allow in this tab');
+  assert.ok(!/\b(tab|conversation)\b/i.test(JSON.stringify([Object.values(card.LABEL), m.heading, m.risk])));
+  assert.equal(card.LABEL.mode, 'Allow in this mode');
+  assert.equal(card.LABEL.conversation, 'Allow in this thread');
 });
 
 test('the page wires the new guards and keeps no dead helper or unused style', () => {

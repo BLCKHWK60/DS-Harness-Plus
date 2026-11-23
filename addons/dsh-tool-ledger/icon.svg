@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Tool ledger">
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#101826"/>
+  <g fill="none" stroke="#9db7ff" stroke-width="3" stroke-linecap="round">
+    <path d="M18 20h28M18 30h28M18 40h18"/>
+  </g>
+  <path d="M40 38l8 8M44 36a6 6 0 1 1-8 8" fill="none" stroke="#8f6bff" stroke-width="3" stroke-linecap="round"/>
+</svg>

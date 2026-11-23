@@ -66,9 +66,9 @@ test('signals: corrections you typed, Stops, thumbs down with a note, feedback; 
 test('what may be read: nothing without Modes; helpers and the reasons given are left out', () => {
   const records = [{ header: { id: 'a' } }, { header: { id: 'h', origin: 'subagent', parentSession: 'a' } }, { header: { id: 'r' } }];
   assert.deepEqual(pickConversations(records, { known: false, why: () => '' }), { read: [], left: [] });
-  const picked = pickConversations(records, { known: true, why: (id) => (id === 'r' ? 'isolated (Recon)' : '') });
+  const picked = pickConversations(records, { known: true, why: (id) => (id === 'r' ? 'sealed (Recon)' : '') });
   assert.deepEqual(picked.read.map((record) => record.header.id), ['a']);
-  assert.deepEqual(picked.left, [{ id: 'h', why: 'a helper' }, { id: 'r', why: 'isolated (Recon)' }]);
+  assert.deepEqual(picked.left, [{ id: 'h', why: 'a helper' }, { id: 'r', why: 'sealed (Recon)' }]);
 });
 
 test('what goes to the reading model is redacted; its proposals are checked', () => {
@@ -101,7 +101,7 @@ test('proposals: quotes go once you decide, or when their conversation is delete
 
 // ---- the add-on in a stand-in app -------------------------------------------------------------
 
-function standIn({ modes = true, where = 'http://127.0.0.1:9000/v1', allowInternet = false, answer, mission, reconExports, extra = {}, tuning, skillsList } = {}) {
+function standIn({ modes = true, where = 'http://127.0.0.1:9000/v1', allowInternet = false, answer, mission, reconExports, extra = {}, tuning, skillsList, services: more = {} } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'architect-'));
   const config = { enabled: true, readingModel: JSON.stringify({ provider: 'own', model: 'reader' }), allowInternet, nolearn: '[]', projectsOff: '[]' };
   let provider;
@@ -136,6 +136,7 @@ function standIn({ modes = true, where = 'http://127.0.0.1:9000/v1', allowIntern
     ...(mission ? { mission } : {}),
     ...(reconExports ? { reconExports } : {}),
     ...(tuning ? { tuning } : {}),
+    ...more,
   };
   services.skills = { list: skillsList ?? (async () => [{ name: 'pdf', provider: 'filesystem' }]), registerProvider: (make) => { provider = make({ invalidate: () => {} }); return () => {}; } };
   const ctx = {
@@ -252,6 +253,22 @@ test('finished Mission runs with stuck items are read too, never one in Recon\'s
   }
 });
 
+test('a continued Mission run (two runs.jsonl lines with one id) is read once', async () => {
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const app = standIn();
+  try {
+    const folder = join(app.home, 'work');
+    mkdirSync(join(folder, '.dsh-mission', 'runs', 'r1'), { recursive: true });
+    writeFileSync(join(folder, '.dsh-mission', 'runs', 'r1', 'run.json'), JSON.stringify({ items: [{ title: 'Fix the parser', status: 'stuck', tries: 3, note: 'Its command did not pass.' }] }));
+    mkdirSync(join(app.home, 'mission'), { recursive: true });
+    writeFileSync(join(app.home, 'mission', 'runs.jsonl'), `${JSON.stringify({ id: 'r1', folder })}\n${JSON.stringify({ id: 'r1', folder, continues: 1 })}\n`);
+    const preview = await app.post({ action: 'preview' });
+    assert.equal((preview.json.preview.text.match(/took 3 tries and was not finished/g) ?? []).length, 1);
+  } finally {
+    app.done();
+  }
+});
+
 test('the schedule is off unless chosen, and shows its state', async () => {
   const app = standIn();
   try {
@@ -311,7 +328,7 @@ test('the work loop learns (plan step S8): a run with the loop is read with its 
     assert.equal(done.status, 200, JSON.stringify(done.json));
     assert.deepEqual(saved, [recipe]);
     const version = await app.post({ action: 'accept', id: waiting[1].id });
-    assert.match(JSON.stringify(version.json), /Change it yourself on Settings → Model Tiers → Model versions/);
+    assert.match(JSON.stringify(version.json), /Change it yourself on Settings → Model tiers → Model versions/);
   } finally {
     app.done();
   }
@@ -503,5 +520,49 @@ test('the final name check asks afresh; a deleted learned skill is not brought b
     for (const cwd of ['/PRIVATE/TMP/dsh-recon-x', '/tmp/x/../dsh-recon-x', '//tmp/dsh-recon-x', '/private/tmp/dsh-recon-room/sub']) assert.deepEqual(await app.provider().list({ cwd }), [], cwd);
   } finally {
     app.done();
+  }
+});
+
+// ---- Item 4A, stage 6a (STAGE6A-DESIGN.md 4.3, P3) ---------------------------------------------------------------------
+
+/** Learn and accept the one skill, so the provider has something to show. */
+const withSkill = async (app) => {
+  const learned = await app.post({ action: 'learn' });
+  const waiting = learned.json.proposals.filter((item) => item.state === 'waiting' && item.kind === 'skill');
+  assert.equal(waiting.length, 1, JSON.stringify(learned.json));
+  for (const proposal of waiting) assert.equal((await app.post({ action: 'accept', id: proposal.id })).status, 200);
+};
+
+test('no-skills-sealed-guest: a sealed thread (any mode in the Recon space) gets no learned skill; an ordinary thread does', async () => {
+  const sealedScope = { name: 'sealed scope' };
+  const chatScope = { name: 'chat scope' };
+  const modes = { get: () => 'research', isolated: (id) => id === 'i1', guardOf: (id) => ({ top: id, space: id === 'g1' ? 'recon' : 'chat', mode: 'research', sealed: id === 'g1', sealedBy: id === 'g1' ? 'recon' : '', reconSpace: id === 'g1', guardedBy: '', noPrograms: false, homeMode: false, fresh: false, unknownTop: false }) };
+  const app = standIn({ services: { modes, agents: { list: () => [{ id: 'g1', scope: sealedScope }, { id: 'c9', scope: chatScope }] } } });
+  try {
+    await withSkill(app);
+    assert.deepEqual((await app.provider().list({ cwd: '/w/books', scope: chatScope })).map((skill) => skill.name), ['check-dates']);
+    assert.deepEqual(await app.provider().list({ cwd: '/w/books', scope: sealedScope }), [], 'Research in Recon: no learned skill');
+    assert.equal(await app.provider().get({ locator: 'check-dates' }, { cwd: '/w/books', scope: sealedScope }), undefined);
+  } finally {
+    app.done();
+  }
+});
+
+test('skills-modes-absent: with an older Modes, or no Modes service, the skills are shown as before', async () => {
+  const scope = { name: 'scope' };
+  const app = standIn({ services: { agents: { list: () => [{ id: 'c9', scope }] } } });
+  try {
+    await withSkill(app);
+    const shown = await app.provider().list({ cwd: '/w/books', scope });
+    assert.deepEqual(shown.map((skill) => skill.name), ['check-dates']);
+  } finally {
+    app.done();
+  }
+  const absent = standIn({ services: { modes: undefined, agents: { list: () => [{ id: 'c9', scope }] } } });
+  try {
+    await withSkill(absent);
+    assert.deepEqual((await absent.provider().list({ cwd: '/w/books', scope })).map((skill) => skill.name), ['check-dates'], 'no Modes service: not sealed (I28)');
+  } finally {
+    absent.done();
   }
 });

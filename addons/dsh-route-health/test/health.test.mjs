@@ -171,7 +171,7 @@ test('with a fallback the refusal names the new model and the conversation is mo
   const app = fakeApp({ routes: { cloud: routeSettings(server.url, { failureThreshold: 1 }) }, tiers });
   t.after(app.stop);
   await app.health.probeNow('cloud');
-  await assert.rejects(step(app, 'cloud'), /Your conversation now uses local\/small; send your message again/);
+  await assert.rejects(step(app, 'cloud'), /Your thread now uses local\/small; send your message again/);
   assert.deepEqual(moves, [{ id: 'a1', skipsCloud: true, skipsOther: false }]);
 });
 

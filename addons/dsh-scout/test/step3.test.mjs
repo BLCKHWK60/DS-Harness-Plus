@@ -560,7 +560,7 @@ test('step 3 in a conversation: sources and gaps, checks, scores, the report and
     assert.ok(Array.isArray(store.get('c1', 'P1').checks), 'the checks are kept with the posting');
     const checks = await run('scout_assess', { ids: ['P1', 'P9'] });
     assert.match(checks, /Checks on 1 posting; no pay target given/);
-    assert.match(checks, /Not found in this conversation: P9/);
+    assert.match(checks, /Not found in this thread: P9/);
     assert.match(checks, /Freshness: suggested 4 \(responses due 2026-11-28, in 13 days/);
     assert.match(checks, /Legitimacy: suggested 5 \(no warning signs in the full text\)/);
     assert.match(checks, /UNTRUSTED SOURCE TEXT/);
@@ -570,7 +570,7 @@ test('step 3 in a conversation: sources and gaps, checks, scores, the report and
     const row = { rank: 1, posting: 'P1', fit: 4, fit_reason: 'environmental assessment work', freshness: 4, freshness_reason: 'due in 13 days', pay_score: 3, pay_reason: 'contract value only', legitimacy: 5, legitimacy_reason: 'public council notice', contact: 'the council\'s procurement team', channel: 'the notice\'s portal', timing: 'before 28 November', trigger: 'RFQ 2026/47 published 13 November', draft: 'Dear procurement team, we read RFQ 2026/47…' };
     const saved = await run('scout_report', { title: 'Environmental work UK', markdown: '## Understanding\nTender search for environmental assessment work in the UK.', opportunities: [{ ...row, signals: 'made up', new: 'made up' }] });
     assert.match(saved, /1 opportunities, 1 new since earlier reports/);
-    assert.match(saved, /The 3 postings found in this conversation are noted/);
+    assert.match(saved, /The 3 postings found in this thread are noted/);
     const [first] = listReports(folder.root);
     const table = reportRows(folder.root, first.name);
     assert.equal(table[0].title, 'CA18682 - RFQ 2026/47 - Kilcurry Subcatchment Targeted River & Catchment Assessment', 'filled in from the posting');
@@ -585,8 +585,8 @@ test('step 3 in a conversation: sources and gaps, checks, scores, the report and
     assert.match(resaved, /1 opportunities, 1 new since earlier reports/);
     assert.equal(reportRows(folder.root, `${first.name}-2`)[0].new, 'new');
     assert.match(readReport(folder.root, first.name), /Tender search for environmental assessment work in the UK\.\n/, 'the first save is not overwritten');
-    assert.match(await run('scout_reports'), /2 saved reports, newest first:\n- 2026-11-15-1000-environmental-work-uk-2 · [^\n]* · saved by this conversation/);
-    assert.match(await run('scout_reports', { compare: true }), /only saved reports are this conversation's own/);
+    assert.match(await run('scout_reports'), /2 saved reports, newest first:\n- 2026-11-15-1000-environmental-work-uk-2 · [^\n]* · saved by this thread/);
+    assert.match(await run('scout_reports', { compare: true }), /only saved reports are this thread's own/);
 
     // A later run, in another conversation: what the first run ranked, what it found but did not rank, and what is new.
     conversation = 'c2';

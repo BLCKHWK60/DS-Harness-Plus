@@ -1,6 +1,6 @@
 # DeepSeek Harness Plus
 
-Extra features for the **DeepSeek Harness** desktop app on the Mac: a tabbed sidebar with Chat, Cowork and Code tabs, colour schemes (including Harbor's navy and teal), work modes, model tiers, a blind model arena, agent swarms, deep research, a usage counter, benchmarks, syncing between Macs, a searchable Settings window and more. Forty-eight add-ons in all, described in [docs/ADD-ONS.md](docs/ADD-ONS.md). Every mode, its tools, its instructions and its settings are described in [docs/MODES-AND-SETTINGS.md](docs/MODES-AND-SETTINGS.md).
+Extra features for the **DeepSeek Harness** desktop app on the Mac: a left panel with five spaces (Chat, Code, Devices, Recon, Workshop) and a Mode list in the chat box, colour schemes (including Harbor's navy and teal), work modes, model tiers, a blind model arena, agent swarms, deep research, a usage counter, benchmarks, syncing between Macs, a searchable Settings window and more. Forty-nine add-ons in all, described in [docs/ADD-ONS.md](docs/ADD-ONS.md). How spaces and modes work, and every mode with its tools, its instructions and its settings, are described in [docs/MODES-AND-SETTINGS.md](docs/MODES-AND-SETTINGS.md).
 
 The add-ons plug into the normal app. Nothing in the app itself is changed, so app updates do not wipe them, and you can remove them at any time.
 
@@ -16,7 +16,7 @@ You do not need to know how to code to install or use this.
 2. **Install Plus.** Download the newest `DS-Harness-Plus-<version>.dmg` from the [Releases page](https://github.com/BLCKHWK60/DS-Harness-Plus/releases/latest), open it, and double-click **`Install.command`**. If macOS blocks it, follow [Install](#install) below: it takes one extra minute, once.
 3. **Get a DeepSeek key.** Sign in at [platform.deepseek.com](https://platform.deepseek.com), open **API keys**, create a key and copy it. Keep it private: it is like a password, and using it costs money.
 4. **Paste it in the app.** Open DeepSeek Harness, go to **Settings → Models**, add DeepSeek and paste the key.
-5. **Ask something.** Start a new conversation and type a question. That is all: the extra tabs and settings can wait.
+5. **Ask something.** Click **New chat** and type a question. That is all: the other spaces, modes and settings can wait.
 
 <!-- Screenshot to add: docs/images/quick-start-models.png (Settings → Models with the key box) -->
 
@@ -24,14 +24,14 @@ You do not need to know how to code to install or use this.
 
 ## Words used in this guide
 
-- **Add-on:** one extra feature that Plus puts into the app. Plus is a set of 48 of them. Some work as soon as they are installed; the others stay off until you switch them on.
-- **Mode:** the way a conversation works. Chat answers in one reply. Cowork and Code can use tools, read and change files and run commands. Finance, Data, Research, Scout and Recon are more modes, each for one kind of job.
-- **Tab:** a button at the top of the left sidebar, one for each mode. A tab shows only its own conversations. A new conversation starts in the mode of the tab you are in.
-- **Conversation:** one thread with the assistant, from your first message on. It keeps its own mode, model and settings.
-- **Workspace (project):** a folder of yours that a conversation may work in. **Scratch** is the exception: a private folder with no link to your own files.
+- **Add-on:** one extra feature that Plus puts into the app. Plus is a set of 49 of them. Some work as soon as they are installed; the others stay off until you switch them on.
+- **Space:** where a thread lives: Chat, Code, Devices, Recon or Workshop, the buttons at the top of the left panel. A space shows only its own threads. Each window keeps its own space.
+- **Mode:** how a thread works: a set of instructions and tools. Plain chat has no extra instructions. Chat answers in one reply. Cowork and Code can use tools, read and change files and run commands. Finance, Data, Research, Scout and Content are more modes, each for one kind of job. Pick one in the Mode list under the chat box; a change applies from your next message. Settings → Modes ticks which spaces offer each mode.
+- **Thread:** everything you and the assistant write to each other on one subject, from your first message on. It stays in its space and keeps its own mode, model and settings.
+- **Workspace (project):** a folder of yours that a thread may work in. **Scratch** is the exception: a private folder with no link to your own files.
 - **Model:** the AI service that answers. You add models yourself in Settings → Models.
 - **Tier:** a saved choice of model, effort and rules, such as Fast or Deep. You pick it from the model button in the chat box.
-- **Depth:** how much work a conversation gets: Quick, Standard or Thorough.
+- **Depth:** how much work a thread gets: Quick, Standard or Thorough. **Mission**, the highest step, selects a Mission: a goal that several models work on by themselves.
 - **Tool:** something the assistant can do besides writing text, such as searching the web or reading a file.
 - **Helper:** a second assistant that the first one starts for a part of the job.
 - **Tier of an add-on (Core, Beta, Experimental):** how well tested it is. Core is the polished set; Experimental is for people who like to try things and may change or fail.
@@ -84,45 +84,46 @@ Beta add-ons work, but are new. They are labelled *Beta* and also stay off until
 
 <!-- tiers:start (made from addon-tiers.json by scripts/dev-tiers.mjs; do not edit by hand) -->
 
-**Core: finished, on by default (29)**
+**Core: finished, on by default (30)**
 
 | Add-on | Why |
 | --- | --- |
 | Activity | Finished and tested: a small indicator of what the assistant is doing. |
-| Alerts | Finished and tested: shows how scheduled tasks ended. |
+| Alerts | Finished and tested: shows how automations ended. |
 | Balance | Finished and tested: shows your DeepSeek balance. |
 | Benchmark | Finished and tested: compares models on your own questions. |
-| Budget | Finished and tested: limits that stop a runaway task. |
+| Budget | Finished and tested: limits that stop a run that costs too much. |
 | Code map | Finished and tested: a compact map of your project. |
 | Code power | Finished and tested: code review and fix skills. |
 | Colours | Finished and tested: colour schemes for the whole app. |
-| Cowork sidebar | Finished and tested: the Chat, Cowork and Code tabs. |
 | Deep research | Finished and tested: parallel research with checked sources. |
 | Diagrams | Finished and tested: drawn diagrams from a description. |
 | Learned skills | Finished and tested; nothing is installed without your approval. |
 | Learning | Finished and tested: a tutor that makes you do the thinking. |
+| Left panel | Finished and tested: the five space buttons (Chat, Code, Devices, Recon, Workshop). |
 | Library | Finished and tested: search your own documents. |
 | Mac tools | Finished and tested: Spotlight and Shortcuts, only in folders you allow. |
 | Memory | Finished and tested: lasting facts about you. |
 | Mission | Finished and tested: a goal worked on by several models. |
 | Model arena | Finished and tested: a blind comparison of models. |
-| Model Tiers | Finished and tested: the model button and tiers. |
+| Model tiers | Finished and tested: the model button and tiers. |
 | Modes | Finished and tested: Chat, Cowork and Code modes. |
 | PDF reader | Finished and tested: reads PDFs with the Mac's own tools. |
 | Privacy | Finished and tested: switches off the app's reporting. |
 | Role prompts | Finished and tested: your own instruction sections. |
 | Sampling | Finished and tested: temperature and length presets. |
-| Search | Finished and tested: find conversations with Cmd-K. |
+| Search | Finished and tested: find threads with Cmd-K. |
 | Self-improvement | Finished and tested; every change needs your approval. |
 | Settings Plus | Finished and tested: groups and searches the Settings window. |
-| Sync | Finished and tested: conversations between Macs through your own git repository. |
+| Sync | Finished and tested: threads between Macs through your own git repository. |
+| Tool use | Finished and tested: notes which tools the assistant used, asked for or was refused (names and counts only), so the record is complete from the first day. |
 | Usage | Finished and tested: counts requests and tokens. |
 
 **Beta: installed but off until you switch it on (5)**
 
 | Add-on | Why |
 | --- | --- |
-| Artifacts | Works, but its privacy rules for private conversations were fixed only recently. |
+| Artifacts | Works, but its privacy rules for private threads were fixed only recently. |
 | Content | Works, but is new and has had little use by people other than its maker. |
 | Data | Works, but is new and has had little use by people other than its maker. |
 | Finance | Works, but gives market views, so it starts off and shows a warning first. |
@@ -140,10 +141,10 @@ Beta add-ons work, but are new. They are labelled *Beta* and also stay off until
 | Media tools | Image tools for an outside service; little tested and it can cost money. |
 | Model router | Picks the model for you each turn; costs and results are hard to predict. |
 | Notify | Runs a command you write when a turn ends; being merged into Alerts. |
-| Route health | Moves a conversation to another model by itself when one is down; not proven. |
+| Route health | Moves a thread to another model by itself when one is down; not proven. |
 | Scout | Searches for work on outside sites; little tested. |
 | Shared settings | Tried on one Mac only; a wrong merge could overwrite settings on another Mac. |
-| Split Plus | Several conversations in one window; not yet tried in the desktop app. |
+| Split Plus | Several threads in one window; not yet tried in the desktop app. |
 | Tuner Plus | Collects training rows from your work; new and not yet proven. |
 
 **Separate download (1)**
@@ -158,21 +159,21 @@ Beta add-ons work, but are new. They are labelled *Beta* and also stay off until
 
 Recon can search `.onion` sites through Tor and read Usenet newsgroups. Because of that it is **not in the main download**. It is a second disk image, `DS-Harness-Plus-Recon-<version>.dmg`, with its own installer, a warning you must agree to, and its own uninstaller. Install the main Plus download first, then open the Recon image and double-click **`Install Recon.command`**. Recon is added switched off. You are responsible for what you do with it; read the warning in that download before you agree.
 
-If you already have Recon installed, updating Plus keeps it exactly as it is, which means **the old Recon stays old**: it does not get the privacy fixes of the newer release. When that is the case the installer ends with a clear warning that names the Recon download. To update Recon, use the Recon download of the same version (`Install Recon.command`); its on or off switch stays as you had it. In Settings, Recon's page is listed under **Advanced**.
+If you already have Recon installed, updating Plus keeps it exactly as it is, which means **the old Recon stays old**: it does not get the privacy fixes of the newer release. When that is the case the installer ends with a clear warning that names the Recon download. To update Recon, use the Recon download of the same version (`Install Recon.command`); its on or off switch stays as you had it. In Settings, Recon's page is listed under **Privacy and safety**.
 ## First steps
 
 1. **Add your models.** Go to **Settings → Models** in the app. You can paste an API key for a provider there, or add your own server (for example a model server on another computer). No files to edit.
-2. **Look at the new pages.** A new install opens **Settings** in a **Simple** view with a few pages: **Start here, Models, Built-in plugins, Agent presets** and **About Plus** (plus Account and General). To get the other pages, click **Advanced** at the top of Settings (you can click Simple again later). Settings is under your name at the bottom-left of the sidebar. In Advanced, **Settings** has **Colours, Model Tiers, Modes, Sampling, Usage, Benchmark, Arena** and **Swarm** pages, and the pages the sections below name. The chat box (where you type) gets one **model button** beside the send button, with the model list, an effort slider from Off to Ultra Code, tiers and sampling, and, once set up, a model-health dot.
+2. **Look at the new pages.** A new install opens **Settings** in a **Simple** view with a few pages: **Start here, Models, Built-in plugins, Agent presets** and **About Plus** (plus Account and General). To get the other pages, click **Advanced** at the top of Settings (you can click Simple again later). Settings is under your name at the bottom-left of the left panel. In Advanced, **Settings** has **Colours, Model tiers, Spaces, Modes, Sampling, Usage, Benchmark, Arena** and **Swarm** pages, and the pages the sections below name. The chat box (where you type) gets one **model button** beside the send button, with the model list, an effort slider from Off to Ultra Code, tiers and sampling, and, once set up, a model-health dot.
 3. **Switch on what you want.** Some add-ons work right away. The others do nothing until you give them a little setup, for example which models the arena should compare. [docs/ADD-ONS.md](docs/ADD-ONS.md) says which is which and how to set each one up.
 
 ### What works the moment you install
 
-- **Cowork sidebar:** Chat, Cowork and Code tabs at the top of the left sidebar. Each tab lists only its own conversations and projects, and has its own sections: Model Arena under Chat, and Automation tasks, Connectors (your MCP servers, with on/off switches) and Skills under Cowork and Code. The start page gets a greeting and suggestion chips. A tab picks the mode of new conversations, so the chat box no longer needs a mode drop-down. To get the normal sidebar back, switch **Cowork sidebar** off on the **Plugins** page.
+- **Left panel:** five space buttons at the top of the left panel: Chat, Code, Devices, Recon and Workshop. Devices, Recon and Workshop show only while their add-on is on: switch the add-on on on the **Plugins** page, then switch on its **Offer the … mode** switch on its own Settings page (**Settings → Devices**, **Settings → Recon** or **Settings → Creator Plus**); each is off until you do. Workshop also shows while **Tuner Plus** is on. Each space lists only its own threads and projects and has its own rows: Model arena in Chat and Workshop, Connectors and Skills in Chat and Code, Tuner Plus and Benchmark in Workshop. The start page gets a greeting per space and starter chips that follow the mode you pick. In Chat, the **Cowork** switch on a new thread chooses its own folder (off) or a project folder (on). To get the app's own left panel back, switch **Left panel** off on the **Plugins** page.
 - **Colours:** pick a colour scheme in **Settings → Colours**: DeepSeek Harness (the stock colours, the default), Harbor, Graphite or Forest, each in light and dark.
-- **Modes:** Chat, Cowork and Code modes, switchable per conversation, plus a **Web** button in the chat box (On or Off), a **Depth** button (Quick, Standard, Thorough: how much it searches, plans, checks and reviews) and a **Tools** button that lists what the assistant can call. **Settings → Modes** also sets the Depth new conversations start with, the mode for scheduled tasks, how many of your modes get a sidebar tab, and the built-in working methods for Code and Cowork. An access level you pick by hand in the chat box is kept, also after a restart.
-- **Model Tiers:** one model button in the chat box: pick any model and drag the effort slider. Five starter tiers (Fast, Balanced, Deep, Creative, Code review) work at once on whatever model you use. No model is preconfigured.
-- **Code map:** a compact map of the project a conversation works in, so the assistant looks things up instead of reading whole files. Plus four "reverse engineer" skills. Nothing to install.
-- **Privacy:** switches off the app's usage reporting and the upload of a conversation when you rate an answer. `/privacy` shows the state.
+- **Modes:** Plain chat, Chat, Cowork and Code modes in the **Mode list** under the chat box, changeable in every thread, plus a **Web** button in the chat box (On or Off), a **Depth** button (Quick, Standard, Thorough: how much it searches, plans, checks and reviews) and a **Tools** button that lists what the assistant can call. **Settings → Modes** also sets the Depth new threads start with, the mode for automations, which spaces offer each mode (the ticks), and the built-in working methods for Code and Cowork. **Settings → Spaces** sets each space's start mode, start place and preset. An access level you pick by hand in the chat box is kept, also after a restart.
+- **Model tiers:** one model button in the chat box: pick any model and drag the effort slider. Five starter tiers (Fast, Balanced, Deep, Creative, Code review) work at once on whatever model you use. No model is preconfigured.
+- **Code map:** a compact map of the project a thread works in, so the assistant looks things up instead of reading whole files. Plus four "reverse engineer" skills. Nothing to install.
+- **Privacy:** switches off the app's usage reporting and the upload of a thread when you rate an answer. `/privacy` shows the state.
 - **Usage counter:** counts requests and tokens per day and model (never your text).
 - **Deep research** and **Code power:** new tools and skills the assistant can use.
 
@@ -199,13 +200,13 @@ Installing again after an uninstall counts as an update too: the uninstaller lea
 
 The add-ons are written for **DeepSeek Harness 0.2.2 up to, but not including, 0.3.0**. That range is the only one they have been tested with. The installer prints it, together with the version of your app, every time you run it.
 
-**What happens when the app is newer than that.** When the app moves to 0.3.0 or later, it is expected to **switch all the Plus add-ons off** and show a warning that they may crash or lose data. We have not seen this happen (it is read from how the app checks versions), so treat it as likely rather than certain. Your conversations, models and settings are not deleted by it.
+**What happens when the app is newer than that.** When the app moves to 0.3.0 or later, it is expected to **switch all the Plus add-ons off** and show a warning that they may crash or lose data. We have not seen this happen (it is read from how the app checks versions), so treat it as likely rather than certain. Your threads, models and settings are not deleted by it.
 
 **What to do.**
 1. If you have not updated the app yet, wait: do not update to a version above the range until a new Plus release says it supports it.
 2. If the app has updated already and the add-ons are off, leave them off. Do not switch them on, and do not run `Install.command` from an older Plus: the installer refuses an app version it does not know and changes nothing.
 3. Look for a newer DeepSeek Harness Plus release made for your app version.
-4. If you need Plus now, install the DeepSeek Harness version inside the range, then run the installer. Your conversations stay either way; the saved setup copies in `~/.dsh/backups/deepseek-harness-plus/` can undo a Plus change.
+4. If you need Plus now, install the DeepSeek Harness version inside the range, then run the installer. Your threads stay either way; the saved setup copies in `~/.dsh/backups/deepseek-harness-plus/` can undo a Plus change.
 
 Plus does not widen the range by itself, and neither should you edit it: each new app version has to be tried with the add-ons first.
 
@@ -213,9 +214,9 @@ Plus does not widen the range by itself, and neither should you edit it: each ne
 
 Double-click **`Uninstall.command`**. It removes the add-ons (including Recon, if you installed it) and their files. It does **not** remove everything. At the end it prints what stays on your Mac and why:
 
-- your conversations, your models and your skills (the app's own, not Plus's), the **learned skills you approved** (`~/.dsh/skill-architect`) and the add-ons you or Creator Plus made (`~/.dsh/plugins`): Plus never removes these, not even with "also remove my Plus data";
+- your threads, your models and your skills (the app's own, not Plus's), the **learned skills you approved** (`~/.dsh/skill-architect`) and the add-ons you or Creator Plus made (`~/.dsh/plugins`): Plus never removes these, not even with "also remove my Plus data";
 - settings you wrote into the settings file: they do nothing now, and come back into effect if you install again;
-- **Plus's own data folders** in `~/.dsh` (for example Mission records, Artifacts, Library index, Memory, the Cowork trash). **Conversations you deleted in the Cowork sidebar are kept in `~/.dsh/trash/conversations`** for 30 days, and the app cannot show them without Plus. "Also remove my Plus data" deletes that trash for good;
+- **Plus's own data folders** in `~/.dsh` (for example Mission records, Artifacts, Library index, Memory, the left panel's trash). **Threads you deleted in the left panel are kept in `~/.dsh/trash/conversations`** for 30 days, and the app cannot show them without Plus. "Also remove my Plus data" deletes that trash for good;
 - **passwords in the macOS Keychain** (for example Recon's logins). Plus never deletes Keychain items; the output says how to remove them yourself;
 - **the settings file you share between Macs** (the iCloud Drive file, if you set that up). It is outside the app's folder and other Macs may use it;
 - the dated copies of your setup in `~/.dsh/backups/deepseek-harness-plus/`;
@@ -229,23 +230,23 @@ Double-click **`Uninstall.command`**. It removes the add-ons (including Recon, i
 2. Run **`Install.command`** there too.
 3. Add your models in **Settings → Models**.
 4. Optional: to keep the same **settings** on both Macs, use iCloud Drive (below).
-5. Optional: to see the same **conversations** on both Macs, set up the **Sync** add-on (see [docs/ADD-ONS.md](docs/ADD-ONS.md#sync)). It needs a private git repository that both Macs can reach. Neither Mac has to be switched on for the other to sync. Recon conversations are never synced.
+5. Optional: to see the same **threads** on both Macs, set up the **Sync** add-on (see [docs/ADD-ONS.md](docs/ADD-ONS.md#sync)). It needs a private git repository that both Macs can reach. Neither Mac has to be switched on for the other to sync. Recon threads are never synced.
 
 ### Same settings on both Macs, through iCloud Drive
 
-The **Shared settings** add-on keeps the settings you change in the app's own pages in one file, `settings.json`, in a folder in iCloud Drive. Those settings are Modes, Model Tiers, the Cowork tabs, Sampling presets and Colours. Change something on one Mac and the other Mac picks it up within about a minute. The file never holds secrets: API keys, tokens and passwords stay on each Mac.
+The **Shared settings** add-on keeps the settings you change in the app's own pages in one file, `settings.json`, in a folder in iCloud Drive. Those settings are Modes (with its spaces), Model tiers, the left panel's layout, Sampling presets and Colours. Change something on one Mac and the other Mac picks it up within about a minute. The file never holds secrets: API keys, tokens and passwords stay on each Mac.
 
 Shared settings is **Experimental**, so it is copied switched **off** and only with **Everything**. The question below is asked only when it is part of the install, and it works only after you switch **Shared settings** on in the app under **Plugins**. When it is not part of the install, nothing is asked and no folder is saved.
 
 1. On the first Mac, run **`Install.command`**, choose **Everything**, and answer **y** when it asks *"Share settings through iCloud Drive?"*. It uses the folder **iCloud Drive → DeepSeek Harness Plus**. Then switch **Shared settings** on under Plugins.
 2. On the second Mac, do the same (choose Everything, answer y, switch it on). When the app opens there, it takes the settings from the file. Its own earlier settings are kept in `~/.dsh/shared-settings/backups`.
 
-To use another folder, or from Terminal: `bash scripts/install.sh --settings "<folder>"`. To stop sharing on one Mac: `bash scripts/install.sh --no-settings`. Type `/shared-settings` in a conversation to see what is shared and when it last synced.
+To use another folder, or from Terminal: `bash scripts/install.sh --settings "<folder>"`. To stop sharing on one Mac: `bash scripts/install.sh --no-settings`. Type `/shared-settings` in the chat box to see what is shared and when it last synced.
 
 **Good to know:**
 - Not shared:
-  - which conversation sits in which tab;
-  - the tier a conversation uses;
+  - which thread sits in which space;
+  - the tier a thread uses;
   - which add-ons are switched on;
   - settings written by hand into the settings file rather than in a Settings page.
 - If you change the same setting on both Macs at once, the copy in iCloud wins. The other value is kept in the backups folder.
@@ -271,7 +272,7 @@ Send them the link to this project, https://github.com/BLCKHWK60/DS-Harness-Plus
 | `Install.command`, `Uninstall.command` | Double-click to install or remove. |
 | `addons/` | The add-ons. Each has a `README.md` with its full technical notes. |
 | `docs/ADD-ONS.md` | What each add-on does and how to set it up. |
-| `docs/MODES-AND-SETTINGS.md` | Every mode (tab): what it is for, its instructions, its tools, its settings; the Settings window's groups and search; the gaps found, fixed and still open. |
+| `docs/MODES-AND-SETTINGS.md` | Every mode: what it is for, its instructions, its tools, its settings; the Settings window's groups and search; the gaps found, fixed and still open. |
 | `docs/HOW-IT-WORKS.md` | For technical readers: how the install works, how to test, how to change an add-on. |
 | `templates/` | Optional ready-to-fill examples: model servers, memory, MCP tool servers, backups. |
 | `extras/dsh-intel-mcp/` | Optional Python tools (code map, reverse engineering, context store). Needs Python; not installed automatically. |

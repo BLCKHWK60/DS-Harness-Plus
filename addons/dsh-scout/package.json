@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Experimental: A Scout mode and tab that searches for work (jobs, freelance projects, contracts, tenders) across the markets you choose, researches titles, skills and pay first, and plans how to approach the best opportunities. Nothing is sent or applied for. Works with local or cloud models: your files and profile are kept on this Mac, and their text goes only to the model the conversation uses, which may be a cloud model. Off until you switch it on.",
+  "description": "Experimental: A Scout mode, in the Chat space, that searches for work (jobs, freelance projects, contracts, tenders) across the markets you choose, researches titles, skills and pay first, and plans how to approach the best opportunities. Nothing is sent or applied for. Works with local or cloud models: your files and profile are kept on this Mac, and their text goes only to the model the thread uses, which may be a cloud model. Off until you switch it on.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

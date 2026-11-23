@@ -18,15 +18,15 @@ And one skill, `read-pdf`, loaded only when used. It makes the model look at the
 
 ## How to use it
 
-- Put a PDF in the conversation's folder and ask about it by name: "Summarise report.pdf with page numbers."
-- `/pdf report.pdf` in a chat shows the page count, contents list and which pages are scans.
+- Put a PDF in the thread's folder and ask about it by name: "Summarise report.pdf with page numbers."
+- `/pdf report.pdf` in a thread shows the page count, contents list and which pages are scans.
 - **Settings → PDF reader:** the master switch, more folders PDFs may be read from, "Allow any PDF on this Mac" (off by default), and how much text one read returns.
 
 ## Where it may read
 
 These tools open files themselves, so they keep their own fence. A PDF can be read when it is:
 
-- in the conversation's own folder (or a sub-folder), or
+- in the thread's own folder (or a sub-folder), or
 - in a folder you listed on the settings page, or
 - anywhere, only if you switched on "Allow any PDF on this Mac".
 
@@ -35,7 +35,7 @@ Links that point out of an allowed folder are followed and refused. Only files e
 ## What it keeps
 
 - The text of up to four PDFs is held in memory while the app runs, so repeated reads are instant. It is never written to disk.
-- Page pictures are saved under the app's data folder (`pdf-reader/pages/`) and removed after a day.
+- Page pictures are saved under the app's data folder (`pdf-reader/pages/`) and removed after a day. A thread in the Recon space (any mode) saves them only in its own run folder in Recon's room (`run-<id>/pdf-pages/`), which End and wipe deletes; when Recon gives no such folder, or Modes cannot say, `pdf_page_image` makes no picture and says so (item 4A, stage 6a).
 
 ## Limits
 

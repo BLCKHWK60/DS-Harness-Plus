@@ -1,6 +1,6 @@
 # Tests: @local/dsh-memory
 
-7 tests in 1 file: test/store.test.mjs.
+14 tests in 3 files: test/json-store.test.mjs, test/space.test.mjs, test/store.test.mjs.
 
 Run with the app's own Node (stand-ins only; never against the real app data):
 

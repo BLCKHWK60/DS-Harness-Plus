@@ -80,7 +80,7 @@ check_version() {
       0.[3-9]*|0.[1-9][0-9]*|[1-9]*)
         say "Your app is NEWER than this release knows. Nothing was changed. Do not install over it:"
         say "  - The add-ons have not been tested with this app version, and the app may switch them off."
-        say "  - If you already updated the app and the add-ons are off, your conversations and settings are still there."
+        say "  - If you already updated the app and the add-ons are off, your threads and settings are still there."
         say "  - Look for a newer $PLUS_NAME release made for your app version. See \"When the app updates\" in the README." ;;
       *)
         say "Your app is OLDER than this release needs. Update $APP_NAME, then run this again." ;;
@@ -193,7 +193,7 @@ choose_shared_folder() {
     [ "${SHARED_WILL_INSTALL:-0}" = 1 ] || return 0
     [ -t 0 ] && [ ! -f "$SHARED_RECORD" ] && [ -d "$ICLOUD_DRIVE" ] || return 0
     say ""
-    say "Optional, Experimental (tried only on one Mac so far): keep your Plus settings (modes, tiers, tabs, colours) the same on your other Mac,"
+    say "Optional, Experimental (tried only on one Mac so far): keep your Plus settings (modes, spaces, tiers, colours) the same on your other Mac,"
     say "through a file in iCloud Drive. Secrets such as API keys are never put in it."
     say "The Shared settings add-on is copied but switched off: it only works once you switch it on in $APP_NAME under Plugins."
     ask_no "Share settings through iCloud Drive?" || return 0
@@ -247,7 +247,7 @@ folder_size() { du -sh "$1" 2>/dev/null | cut -f1 | tr -d ' '; }
 print_what_stays() {
   say ""
   say "What stays on this Mac, and why:"
-  say "  - Your conversations and your models. They belong to $APP_NAME, not to Plus."
+  say "  - Your threads and your models. They belong to $APP_NAME, not to Plus."
   say "  - Your skills ($DSH_HOME/skills)."
   local kept; kept=$(plus_lib kept "$HERE/addon-tiers.json" "$DSH_HOME" 2>/dev/null)
   if [ -n "$kept" ]; then
@@ -263,7 +263,7 @@ print_what_stays() {
       [ -n "$folder" ] && say "      $folder ($(folder_size "$DSH_HOME/$folder")): $what"
     done
     if printf '%s\n' "$1" | cut -f1 | grep -qx 'trash'; then
-      say "    The conversations you deleted in the Cowork sidebar are kept in $DSH_HOME/trash/conversations."
+      say "    The threads you deleted in the left panel are kept in $DSH_HOME/trash/conversations."
       say "    The app cannot show them without Plus. To get one back, install Plus again and use the Trash."
     fi
   else
@@ -306,9 +306,9 @@ offer_data_removal() {
   printf '%s\n' "$list" | while IFS="$(printf '\t')" read -r folder what; do
     [ -n "$folder" ] && say "  $(folder_size "$DSH_HOME/$folder")  $DSH_HOME/$folder"
   done
-  say "Not removed in any case: your conversations, skills (learned skills you approved too), plugins, models, the saved setup copies, the Keychain, and files outside the app's folder."
+  say "Not removed in any case: your threads, skills (learned skills you approved too), plugins, models, the saved setup copies, the Keychain, and files outside the app's folder."
   if printf '%s\n' "$list" | cut -f1 | grep -qx 'trash'; then
-    say "WARNING: this includes the Cowork trash ($DSH_HOME/trash), so conversations you deleted there are gone for good."
+    say "WARNING: this includes the left panel's trash ($DSH_HOME/trash), so threads you deleted there are gone for good."
   fi
   local one two
   one=$(data_answer "Remove these folders? [y/N]")

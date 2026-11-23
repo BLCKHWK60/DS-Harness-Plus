@@ -141,7 +141,7 @@ export function createClearnet({ run, forward, sources, trail, on = () => true, 
   const last = new Map();
   /** One GET to one site, through the relay; `how` says whether it went through WireGuard. */
   const get = async (id, url, extra = {}) => {
-    if (sources.count(id) > MAX_FETCHES) throw new Error(`This conversation has made ${MAX_FETCHES} requests, which is its limit. Start a new Recon conversation to go on.`);
+    if (sources.count(id) > MAX_FETCHES) throw new Error(`This thread has made ${MAX_FETCHES} requests, which is its limit. Start a new Recon thread to go on.`);
     const target = new URL(url);
     const host = target.hostname;
     const since = now() - (last.get(host) ?? 0);
@@ -161,7 +161,7 @@ export function createClearnet({ run, forward, sources, trail, on = () => true, 
       way.close();
     }
   };
-  const route = (how) => (how === 'wireguard' ? 'through WireGuard' : 'directly (you allowed it for this conversation)');
+  const route = (how) => (how === 'wireguard' ? 'through WireGuard' : 'directly (you allowed it for this thread)');
   const off = 'The ordinary web is switched off in Settings → Recon → More sources. Nothing was sent.';
 
   return {
@@ -228,7 +228,7 @@ export function createClearnet({ run, forward, sources, trail, on = () => true, 
       if (!parsed.ok) return parsed.why;
       const again = sources.find(id, parsed.url);
       if (again && !again.partial && Number(part) > 1) return show(again, part);
-      if (!trail.has(id, parsed.url)) return 'That exact address was not shown in this conversation, so it was not opened. Use an address exactly as a search result or a page gave it, or the bare front page of a site that was shown. Do not build or change an address. If the user wants another address read, they paste it themselves.';
+      if (!trail.has(id, parsed.url)) return 'That exact address was not shown in this thread, so it was not opened. Use an address exactly as a search result or a page gave it, or the bare front page of a site that was shown. Do not build or change an address. If the user wants another address read, they paste it themselves.';
       let url = parsed.url;
       let page;
       for (let hop = 0; hop < 5; hop += 1) {

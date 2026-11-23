@@ -26,7 +26,7 @@ test('the trail: only addresses shown, and the bare front page of a site among t
   assert.equal(trail.has('c1', 'https://forum.example.org/'), true, 'its front page');
   assert.equal(trail.has('c1', 'https://forum.example.org/t/124'), false, 'not another page of it');
   assert.equal(trail.has('c1', 'https://evil.example.net/?leak=findings'), false, 'not an address built by the model');
-  assert.equal(trail.has('c2', 'https://forum.example.org/t/123?page=2'), false, 'not another conversation');
+  assert.equal(trail.has('c2', 'https://forum.example.org/t/123?page=2'), false, 'not another thread');
   trail.forget('c1');
   assert.equal(trail.has('c1', 'https://forum.example.org/'), false);
   // Full: the oldest go, the newest stay readable.
@@ -89,7 +89,7 @@ test('a search goes through the tunnel; an engine that gives nothing passes to t
   assert.equal(back.via, 'wireguard');
   assert.equal(back.n, 1);
   // An address the conversation was not shown is not opened.
-  assert.match(await web.read('c1', 'https://evil.example.net/?q=secret'), /was not shown in this conversation/);
+  assert.match(await web.read('c1', 'https://evil.example.net/?q=secret'), /was not shown in this thread/);
 });
 
 test('no tunnel and no permission: nothing is sent, and the tool says so; the ordinary web switched off says so too', async () => {

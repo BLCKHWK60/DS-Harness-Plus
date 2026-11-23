@@ -27,7 +27,7 @@ test('repeated work: the same kind of job, checked, with the same tools, in more
   assert.equal(ideas.length, 1);
   assert.equal(ideas[0].kind, 'repeated');
   assert.match(ideas[0].title, /A job you did 3 times: Update the changelog/);
-  assert.match(ideas[0].text, /in 3 conversations, with the same tools: read, edit, bash/);
+  assert.match(ideas[0].text, /in 3 threads, with the same tools: read, edit, bash/);
   assert.equal(ideas[0].rows.length, 3);
   // One conversation only, or not checked, or another set of tools: no idea.
   assert.equal(ideasFrom({ rows: changelogJobs().map((row) => ({ ...row, from: { session: 'one' } })) }).length, 0);
@@ -259,12 +259,12 @@ test('a skill from plain words: only while the skills part is on; never in Recon
     assert.equal(entry.opts.when({ agent: agent('c1') }), true);
     assert.equal(entry.opts.when({ agent: agent('c1', { parentSession: 'c0' }) }), false, 'never offered to a helper');
     const call = (id, args, extra) => entry.tool.execute({ name: 'write-changelogs', description: 'When writing a changelog', text: 'Newest first. Plain words.', ...args }, { agent: agent(id, extra), name: 'tuning_skill_draft' });
-    assert.match((await call('c1', { parentSession: undefined }, { parentSession: 'c1' })).text, /Only the conversation itself/);
+    assert.match((await call('c1', { parentSession: undefined }, { parentSession: 'c1' })).text, /Only the thread itself/);
     assert.match((await call('c2')).text, /used a signed-in source/);
-    assert.match((await call('c3')).text, /export from Recon|does not learn from this conversation/);
-    assert.match((await call('c4')).text, /Never in Recon|does not learn from this conversation/);
-    assert.match((await call('c5')).text, /This conversation used a signed-in source/, 'a fork\'s copied turns count');
-    assert.match((await call('c6')).text, /A helper of this conversation used a signed-in source/);
+    assert.match((await call('c3')).text, /export from Recon|does not learn from this thread/);
+    assert.match((await call('c4')).text, /Never in Recon|does not learn from this thread/);
+    assert.match((await call('c5')).text, /This thread used a signed-in source/, 'a fork\'s copied turns count');
+    assert.match((await call('c6')).text, /A helper of this thread used a signed-in source/);
     conversations.c1aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3z = conversations.c1;
     const ok = await call('c1aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3z', { source: 'https://example.com/changelog-guide' });
     assert.match(ok.text, /Saved as a draft: write-changelogs \(for this project/);

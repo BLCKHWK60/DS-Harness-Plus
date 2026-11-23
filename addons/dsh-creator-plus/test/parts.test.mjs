@@ -169,8 +169,8 @@ test('what a built plugin\'s own code does is checked, not only what its plan sa
     blocked({ 'lib/a.js': "ctx.get('settings').mutate('modes', [{ op: 'set', path: ['extraModes'], value: '{}' }]);" }, /Modes add-on's settings/);
     blocked({ 'lib/a.js': "settings.mutate('notes', ops);" }, /belong to @local\/dsh-notes/);
     blocked({ 'lib/a.js': 'const target = pick(); settings.mutate(target, ops);' }, /names only while running/);
-    blocked({ 'src/deep/x.js': "const ops = [{ op: 'set', path: ['modes'], value: '{}' }];" }, /table of tabs/);
-    blocked({ 'lib/a.js': "const tab = 'recon';" }, /sealed tab "recon"/);
+    blocked({ 'src/deep/x.js': "const ops = [{ op: 'set', path: ['modes'], value: '{}' }];" }, /table of modes/);
+    blocked({ 'lib/a.js': "const tab = 'recon';" }, /sealed mode "recon"/);
     blocked({ 'index.js': "ctx.on('tools/pre-execute', (exec, next) => ({ kind: 'run' }));" }, /hooks every tool call/);
     blocked({ 'index.js': 'ctx.tools?.guard?.(() => undefined);' }, /hooks every tool call/);
     blocked({ 'cordis.patch.yml': "- insert:\n    - id: hello\n      name: '@local/dsh-hello'\n- disabled: true\n  id: recon\n" }, /would change the setup/);
@@ -336,6 +336,11 @@ test('passports: six files and an empty lessons folder; the brief is never overw
     assert.equal(readFileSync(join(dir, 'brief.md'), 'utf8'), 'improved by hand');
     assert.ok(JSON.parse(files['touches.json']).tools.includes('bench_usb'));
     assert.doesNotMatch(Object.values(files).join('\n'), /\/Users\/[a-z]/, 'no personal path');
+    // Point 29: a Plus add-on's brief says "add-on"; a built-in or third-party one keeps the app's word.
+    assert.match(files['brief.md'], /from the add-on's own files/);
+    assert.doesNotMatch(files['brief.md'].split('## Its README')[0], /plugin/i);
+    const builtIn = passportFiles({ scan, origin: 'built-in', at: 0 })['brief.md'];
+    assert.match(builtIn, /from the plugin's own files/);
     // Every Plus add-on carries one.
     for (const folder of readdirSync(ADDONS).filter((name) => name.startsWith('dsh-'))) assert.ok(existsSync(join(ADDONS, folder, 'passport', 'origin.json')), `${folder} has a passport`);
   } finally {
@@ -647,7 +652,7 @@ test('cards: "do not suggest this again" holds for the same suggestion', () => {
     assert.equal(moveRefusal({ kind: 'change', status: 'open' }, 'apply'), '');
     assert.match(moveRefusal({ kind: 'change', status: 'applied' }, 'apply'), /applied, undone or set aside/);
     assert.match(moveRefusal({ kind: 'change', status: 'open' }, 'undo'), /only what was applied/);
-    assert.match(moveRefusal({ kind: 'finding', status: 'open' }, 'apply'), /Only a ready plugin or a prepared change/);
+    assert.match(moveRefusal({ kind: 'finding', status: 'open' }, 'apply'), /Only a ready add-on or a prepared change/);
     assert.match(moveRefusal({ kind: 'change', status: 'open' }, 'explode'), /unknown/);
     const data = cards.add({ kind: 'change', title: 'c', data: { a: 1 } });
     assert.deepEqual(cards.set(data.id, 'applied', 'done', { applyBackup: '/b' }).data, { a: 1, applyBackup: '/b' });
@@ -660,12 +665,12 @@ test('the bar: a boundary in code; a run that can change does not start with not
   const known = ['@local/dsh-notes', '@local/dsh-files', '@deepseek-ai/dsh-tool-shell'];
   const state = barState({ selection: ['@local/dsh-notes', 'not-there'], run: 'improve', logsFrom: '7' }, known);
   assert.deepEqual(state.selection, ['@local/dsh-notes']);
-  assert.equal(barState({ run: 'nonsense' }, known).run, 'new', 'a new conversation starts on New plugin');
+  assert.equal(barState({ run: 'nonsense' }, known).run, 'new', 'a new conversation starts on New add-on');
   assert.equal(buildRefusal(barState({}, known)), '');
   assert.match(buildRefusal(barState({ run: 'explain' }, known)), /reports only/);
   assert.match(buildRefusal(barState({ run: 'new', lookOnly: true }, known)), /Look only/);
   assert.deepEqual(barState({ all: true }, known).selection, known);
-  assert.match(startRefusal(barState({ run: 'improve' }, known)), /Pick the plugins/);
+  assert.match(startRefusal(barState({ run: 'improve' }, known)), /Pick the add-ons/);
   assert.equal(startRefusal(barState({ run: 'new' }, known)), '');
   assert.equal(startRefusal(barState({ run: 'improve', lookOnly: true }, known)), '');
   assert.match(startRefusal(barState({ run: 'combine', selection: ['@local/dsh-notes'] }, known)), /at least two/);
@@ -687,7 +692,8 @@ test('Depth and the Long run: questions only in the first minute', () => {
   assert.equal(questionRefusal({ longSince: 1000, now: 60_000 }), '');
   assert.equal(questionRefusal({ longSince: 1000, now: 62_000 }), LONG_RUN_NO_QUESTIONS);
   assert.match(depthText('quick'), /Depth: Quick\.\n- Build: .*no trial install/);
-  assert.match(depthText('standard', { long: true }), /Depth: Long run\.[\s\S]*never waits/);
+  assert.match(depthText('standard', { long: true }), /Depth: Mission\.[\s\S]*never waits/);
+  assert.doesNotMatch(depthText('standard', { long: true }) + LONG_RUN_NO_QUESTIONS, /Long run/, 'one name, Mission (stage B)');
 });
 
 test('who may read the logs: this Mac by default; the network or any only when the user says so', () => {
@@ -740,7 +746,7 @@ test('the logs: failures tied to their plugin with the evidence; a sealed conver
   const read = await readLogs({ query, since: 0, isSealed: (id) => id === 'sealed', toolOwner: owner, wanted: ['@local/dsh-files'] });
   assert.equal(read.read, 2);
   assert.ok(read.left.some((line) => /^exported: it carries a Recon export/.test(line)));
-  assert.ok(read.left.some((line) => /^helper: a helper's conversation, not read/.test(line)), 'a helper (maybe of a sealed conversation) is not read');
+  assert.ok(read.left.some((line) => /^helper: a helper's thread, not read/.test(line)), 'a helper (maybe of a sealed conversation) is not read');
   const cards = findingCards(read);
   const failing = cards.find((card) => card.kind === 'tool-error');
   assert.equal(failing.plugin, '@local/dsh-files');
@@ -813,4 +819,12 @@ test('the tab: Workspace Write with its own guard, no shell, a method under the 
 test('a yes is the user\'s plain yes, not a no that starts with yes', () => {
   for (const yes of ['yes', 'Yes, build it.', 'ok', 'go ahead', 'build it', 'looks good']) assert.equal(saidYes(yes), true, yes);
   for (const no of ['', 'no', 'yes but not yet, wait', 'don\'t build it', 'what does it do?', 'not ok']) assert.equal(saidYes(no), false, no);
+});
+
+test('Mission stage E: the words for a card that waits in a Mission\'s card', async () => {
+  const { CREATOR_REASON, CREATOR_CHANGE_REASON, CREATOR_INSTALL_NOTE, CREATOR_CHANGE_NOTE } = await import('../lib/tools.js');
+  assert.equal(CREATOR_REASON, 'Allow does what Apply on its card in Settings → Creator Plus does: it installs exactly the checked copy, with a way back. Read the code there first (Show the code).');
+  assert.match(CREATOR_CHANGE_REASON, /^Allow does what Apply on its card in Settings → Creator Plus does: it applies exactly the change shown there/);
+  assert.equal(CREATOR_INSTALL_NOTE, 'Installing it in your real setup needs the user\'s yes: it waits in the Mission\'s card above the chat box.');
+  assert.match(CREATOR_CHANGE_NOTE, /needs the user's yes: it waits in the Mission's card above the chat box\.$/);
 });

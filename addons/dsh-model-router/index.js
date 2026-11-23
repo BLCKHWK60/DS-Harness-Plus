@@ -410,13 +410,13 @@ export function apply(ctx, config) {
         () =>
           inner.commands.register({
             name: commandName,
-            description: 'Show the router state for this session; `off` leaves the model alone, `on` resumes routing',
+            description: 'Show the router state for this thread; `off` leaves the model alone, `on` resumes routing',
             input: { hint: '[on|off]' },
             handler: async ({ agent, rawInput }) => {
               const arg = String(rawInput ?? '').trim().toLowerCase();
               if (arg === 'off' || arg === 'on') {
                 modelRouter.setEnabled(agent.id, arg === 'on');
-                return { kind: 'success', text: `Routing ${arg === 'on' ? 'on' : 'off'} for this session.` };
+                return { kind: 'success', text: `Routing ${arg === 'on' ? 'on' : 'off'} for this thread.` };
               }
               if (arg) return { kind: 'error', text: 'Usage: /router [on|off]' };
               const status = modelRouter.status(agent.id);

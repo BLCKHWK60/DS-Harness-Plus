@@ -1,24 +1,24 @@
-// lib/age.mjs — age 二进制探测与加解密（零 DSH 依赖）。
+// lib/age.mjs — finding the age program, and encrypting and decrypting with it (no DSH dependency).
 //
-// age 是「探测 → 使用 → 优雅降级」的可选外部二进制：encrypted 后端在 resolve
-// 期探测其是否存在，缺 age/缺 recipient/identity 时降级为明文 git 并显式警告，
-// 绝不硬依赖 age。操作期（encrypted 模式下）加解密失败一律 fail closed
-// （AGE_FAILED），绝不静默回退成明文传输。
+// age is an optional outside program used as "find it → use it → fall back cleanly": the encrypted backend looks
+// for it when the config is resolved, and without age, a recipient or an identity it falls back to plain git with a
+// clear warning; age is never a hard requirement. During an operation (encrypted mode) any encrypt or decrypt
+// failure fails closed (AGE_FAILED) and never silently falls back to sending plain text.
 //
-// runner 契约（与 git 一致，但 args 为「含可执行路径的完整 argv」）：
+// The runner contract (as for git, but args is the "full argv including the program path"):
 //   run(args, { cwd, timeoutMs, signal, binary, maxBytes }) → { code, stdout, stderr }
-//   args[0] 为 age 可执行路径，其余为 age 参数。
+//   args[0] is the age program path, the rest are age's arguments.
 
 import { redactText } from './sanitize.mjs'
 import { ageFailed } from './errors.mjs'
 
 /**
- * 探测 age：`age --version` 退出 0 → 返回配置的二进制路径；否则（含 runner
- * 抛错）返回 null。纯探测，不抛错——调用方据此降级。
- * @param {(args: string[], opts?: object) => Promise<{code: number, stdout: string|Buffer, stderr: string}>} run - 子进程 runner。
- * @param {string} [ageBin] - age 可执行路径（默认 'age'）。
- * @param {{timeoutMs?: number, cwd?: string}} [opts] - 探测参数。
- * @returns {Promise<string|null>} 二进制路径或 null。
+ * Find age: `age --version` exits 0 → returns the configured program path; otherwise (including a runner that
+ * throws) returns null. Only a probe, never throws: the caller falls back on null.
+ * @param {(args: string[], opts?: object) => Promise<{code: number, stdout: string|Buffer, stderr: string}>} run - the child-process runner.
+ * @param {string} [ageBin] - the age program path (default 'age').
+ * @param {{timeoutMs?: number, cwd?: string}} [opts] - probe options.
+ * @returns {Promise<string|null>} the program path, or null.
  */
 export async function detectAge(run, ageBin = 'age', opts = {}) {
   if (typeof ageBin !== 'string' || ageBin.length === 0) return null
@@ -31,10 +31,10 @@ export async function detectAge(run, ageBin = 'age', opts = {}) {
 }
 
 /**
- * 执行一条 age 命令并把失败包成 AGE_FAILED（stderr 尾部脱敏嵌入）。
- * @param {(args: string[], opts?: object) => Promise<{code: number, stdout: string|Buffer, stderr: string}>} run - 子进程 runner。
- * @param {string[]} args - 完整 argv（含可执行路径）。
- * @param {{cwd?: string, timeoutMs?: number}} [opts] - 命令参数。
+ * Run one age command and wrap a failure as AGE_FAILED (with the tail of stderr, secrets removed).
+ * @param {(args: string[], opts?: object) => Promise<{code: number, stdout: string|Buffer, stderr: string}>} run - the child-process runner.
+ * @param {string[]} args - the full argv (including the program path).
+ * @param {{cwd?: string, timeoutMs?: number}} [opts] - command options.
  * @returns {Promise<{code: number, stdout: string|Buffer, stderr: string}>}
  */
 async function runAge(run, args, opts = {}) {
@@ -52,11 +52,11 @@ async function runAge(run, args, opts = {}) {
 }
 
 /**
- * age 加密单个明文文件 → 密文文件：`age -r <recipient> -o <out> <in>`。
- * 文件入参（非 stdin）避免写管道的宿主限制；身份文件无需、不触网。
- * @param {(args: string[], opts?: object) => Promise<{code: number, stdout: string|Buffer, stderr: string}>} run - 子进程 runner。
- * @param {object} deps - {ageBin, recipient, inPath, outPath, timeoutMs?, cwd?}。
- * @returns {Promise<string>} 密文输出路径。
+ * age-encrypt one plain file → an encrypted file: `age -r <recipient> -o <out> <in>`.
+ * File arguments (not stdin) avoid the host's limits on writing to a pipe; no identity file is needed, no network.
+ * @param {(args: string[], opts?: object) => Promise<{code: number, stdout: string|Buffer, stderr: string}>} run - the child-process runner.
+ * @param {object} deps - {ageBin, recipient, inPath, outPath, timeoutMs?, cwd?}.
+ * @returns {Promise<string>} the encrypted output path.
  */
 export async function ageEncrypt(run, deps) {
   await runAge(run, [deps.ageBin, '-r', deps.recipient, '-o', deps.outPath, deps.inPath], deps)
@@ -64,12 +64,12 @@ export async function ageEncrypt(run, deps) {
 }
 
 /**
- * age 解密密文文件 → 明文文件：`age -d -i <identity> -o <out> <in>`。
- * 身份文件必须是「无口令」的 age 私钥（有口令会走 TTY 提示；stdin 已 ignore，
- * 将立即失败——这是 fail-closed 的预期行为，用户需用无口令身份文件）。
- * @param {(args: string[], opts?: object) => Promise<{code: number, stdout: string|Buffer, stderr: string}>} run - 子进程 runner。
- * @param {object} deps - {ageBin, identity, inPath, outPath, timeoutMs?, cwd?}。
- * @returns {Promise<string>} 明文输出路径。
+ * age-decrypt one encrypted file → a plain file: `age -d -i <identity> -o <out> <in>`.
+ * The identity file must be an age private key WITHOUT a passphrase (a passphrase asks on the TTY; stdin is ignored,
+ * so it fails at once — the expected fail-closed behaviour; the user needs an identity file without a passphrase).
+ * @param {(args: string[], opts?: object) => Promise<{code: number, stdout: string|Buffer, stderr: string}>} run - the child-process runner.
+ * @param {object} deps - {ageBin, identity, inPath, outPath, timeoutMs?, cwd?}.
+ * @returns {Promise<string>} the plain output path.
  */
 export async function ageDecrypt(run, deps) {
   await runAge(run, [deps.ageBin, '-d', '-i', deps.identity, '-o', deps.outPath, deps.inPath], deps)

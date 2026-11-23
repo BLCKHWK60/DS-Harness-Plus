@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Artifacts",
-    "description": "Every file a conversation makes shows as a card in its thread, opens rendered beside the chat, keeps its versions and is listed on one Artifacts page. Off until you switch it on."
+    "description": "Every file a thread makes shows as a card in its thread, opens rendered beside the chat, keeps its versions and is listed on one Artifacts page. Off until you switch it on."
   }
 }

@@ -21,7 +21,7 @@ const FP = 'SHA256:' + 'A'.repeat(43);
 const FP2 = 'SHA256:' + 'B'.repeat(43);
 const unquote = (word) => String(word).replace(/^'|'$/g, '').replace(/'\\''/g, "'");
 
-function world() {
+function world({ mission } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'bench-net-'));
   const state = {
     asked: [], calls: [], approve: 'allowed-once', approveSecond: undefined,
@@ -121,6 +121,7 @@ function world() {
     logger: { warn() {}, info() {} },
   };
   apply(ctx, { enabled: true, folder: '' }, {
+    ...(mission ? { mission } : {}),
     identify: async () => 'USB report',
     find: async (id) => `/fake/bin/${id}`,
     run,
@@ -548,6 +549,39 @@ test('Windows Update and BITS: changed only when the user names them, after a re
     assert.match(await change('WlanSvc', 'stop WlanSvc'), /never stops or changes it/);
     assert.match(await app.call('bench_undo', { name: 'NAS', which: 'last' }), /service BITS: Stopped, starts Manual → Running, starts Manual\. Each was read back/);
     assert.equal(app.state.server.services.get('BITS').status, 'Running');
+  } finally {
+    app.close();
+  }
+});
+
+test('review of Mission stage E: an Allow in the Mission\'s card covers only the key the owner was shown; a helper that meets another key is asked again', async () => {
+  // Mission's matching, as in its runner: an Allow is used once, by a request with the same key.
+  const allowed = new Set();
+  const asked = [];
+  const mission = { askYes: async ({ key, reason }) => {
+    if (allowed.has(key)) { allowed.delete(key); return { granted: true, id: 'a' }; }
+    asked.push({ key, reason });
+    return { id: `a${asked.length}`, text: 'This needs the user\'s yes (Devices asks). It waits in the Mission\'s card.' };
+  } };
+  const app = world({ mission });
+  try {
+    await settle();
+    assert.equal((await app.post({ action: 'network', label: 'Home' })).status, 200);
+    await app.call('bench_card', { name: 'Slate 7' });
+    assert.equal((await app.post({ action: 'net', name: 'Slate 7', address: '192.168.8.1', port: 22, user: 'root' })).status, 200);
+    assert.match(await app.call('bench_network', { action: 'trust', name: 'Slate 7' }, { helper: true }), /waits in the Mission's card/);
+    assert.match(asked[0].reason, /SHA256:A{43}/);
+    // The owner checks F1 and allows it; before the item is redone the address answers with another key.
+    allowed.add(asked[0].key);
+    app.state.hostKey = FP2;
+    assert.match(await app.call('bench_network', { action: 'trust', name: 'Slate 7' }, { helper: true }), /waits in the Mission's card/, 'not trusted with a key the owner never saw');
+    assert.equal(asked.length, 2);
+    assert.notEqual(asked[1].key, asked[0].key);
+    assert.match(asked[1].reason, /SHA256:B{43}/);
+    assert.equal(existsSync(join(app.home, 'bench', 'network', 'known_hosts')) && /bench-slate-7/.test(readFileSync(join(app.home, 'bench', 'network', 'known_hosts'), 'utf8')), false, 'nothing trusted');
+    // The key the owner allowed: that exact request goes on, once.
+    app.state.hostKey = FP;
+    assert.match(await app.call('bench_network', { action: 'trust', name: 'Slate 7' }, { helper: true }), /is trusted: key SHA256:A{43}/);
   } finally {
     app.close();
   }

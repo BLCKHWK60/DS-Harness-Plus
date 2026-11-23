@@ -1,18 +1,18 @@
-// lib/encrypted.mjs — age 加密的 git 传输后端（零 DSH 依赖）。
+// lib/encrypted.mjs — git transport backend encrypted with age (no DSH dependency).
 //
-// 传输语义（在镜像层之上）：明文镜像只存在于本地工作树 <repoDir>/sessions/
-// （.gitignore 忽略、绝不提交）；git 仓库只跟踪 <repoDir>/encrypted/**/*.age
-// 密文（每会话文件一个 age 密文）。远端看到的只有密文 + git 元数据（提交信息、
-// 文件名结构、.gitignore），绝无明文会话字节。
+// Transport rules (above the mirror layer): the plain mirror exists only in the local work tree <repoDir>/sessions/
+// (ignored by .gitignore, never committed); the git repository tracks only the <repoDir>/encrypted/**/*.age
+// files (one age file per session file). The remote sees only encrypted files + git metadata (commit messages,
+// the file-name structure, .gitignore), never plain session bytes.
 //
-// - push：镜像 → sessions/ → 加密到 encrypted/ → 提交 → push（被拒时拉取调和
-//   重推一次，绝不强推）。
-// - pull：本地提交检查点 → fetch → 取 merge-base 与远端的密文树解密成明文 →
-//   用 lib/merge.mjs 的三分支语义在明文上合并（append-only keep-both + fork）
-//   → 重新加密 → 提交（与 git 后端一致，pull 不自动 push）。
-// - 无 age / 缺 recipient / identity：resolve 期降级为明文 git（内部复用
-//   SyncEngine），显式警告进入 status/push/pull 结果与日志；绝不静默降级。
-// - 加密模式下 age 加解密失败 → AGE_FAILED fail closed，绝不回退明文传输。
+// - push: mirror → sessions/ → encrypt into encrypted/ → commit → push (when refused, pull, reconcile and
+//   push once more; never force-push).
+// - pull: local commit checkpoint → fetch → decrypt the merge-base's and the remote's encrypted trees into plain text →
+//   merge the plain text with lib/merge.mjs's three-way rules (append-only, keep both + fork)
+//   → encrypt again → commit (as with the git backend, pull does not push on its own).
+// - no age / no recipient / no identity: falls back to plain git while resolving (reusing
+//   SyncEngine inside), with a clear warning in the status/push/pull results and the log; never a silent fallback.
+// - in encrypted mode an age encrypt or decrypt failure → AGE_FAILED, fails closed, never falls back to plain-text transport.
 
 import { promises as fs } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -30,11 +30,11 @@ import { forkFileName } from './paths.mjs'
 import { messageOf, SyncError } from './errors.mjs'
 import { redactText, sanitizeRemote } from './sanitize.mjs'
 
-/** 插件自有引用：记录最近一次已调和（push/pull 后本地与远端一致）的远端头，
- * 作为下一次三方合并的基点（encrypted 后端不做 git 合并提交，需自持基点）。 */
+/** The plugin's own ref: the remote head at the last reconcile (local and remote equal after a push or pull),
+ * used as the base of the next three-way merge (the encrypted backend makes no git merge commit, so it keeps its own base). */
 const BASE_REF = 'refs/dsh-sync/base'
 
-/** 递归枚举 root 下全部常规文件（POSIX 相对路径；符号链接跳过）。 */
+/** List every regular file under root, recursively (POSIX relative paths; symbolic links skipped). */
 async function listRelFiles(root) {
   const files = []
   const walk = async (dir) => {
@@ -58,7 +58,7 @@ async function listRelFiles(root) {
   return files
 }
 
-/** 读整棵树为 Map<rel, Buffer>。 */
+/** Read a whole tree as Map<rel, Buffer>. */
 async function readTree(root) {
   const map = new Map()
   for (const rel of await listRelFiles(root)) {
@@ -67,7 +67,7 @@ async function readTree(root) {
   return map
 }
 
-/** 把 Map<rel, Buffer> 写回 root（mkdir -p；删除 map 中不存在的既有文件）。 */
+/** Write Map<rel, Buffer> back to root (mkdir -p; deletes existing files that are not in the map). */
 async function writeTree(root, map) {
   for (const rel of await listRelFiles(root)) {
     if (!map.has(rel)) await fs.unlink(path.join(root, ...rel.split('/')))
@@ -80,11 +80,11 @@ async function writeTree(root, map) {
 }
 
 /**
- * 加密整棵明文树 → 密文树（每文件一个 age 密文；删除明文已消失的密文）。
- * @param {string} plainRoot - 明文树根。
- * @param {string} encRoot - 密文树根。
- * @param {object} deps - {run, ageBin, recipient, timeoutMs}。
- * @returns {Promise<number>} 加密文件数。
+ * Encrypt a whole plain tree → an encrypted tree (one age file per file; deletes encrypted files whose plain file is gone).
+ * @param {string} plainRoot - the plain tree root.
+ * @param {string} encRoot - the encrypted tree root.
+ * @param {object} deps - {run, ageBin, recipient, timeoutMs}.
+ * @returns {Promise<number>} the number of files encrypted.
  */
 export async function encryptTree(plainRoot, encRoot, deps) {
   const plainFiles = await listRelFiles(plainRoot)
@@ -136,10 +136,10 @@ async function readEncCache(file) {
 }
 
 /**
- * 解密整棵密文树 → 明文 Map<rel, Buffer>（只读 .age 文件，其余跳过）。
- * @param {string} encRoot - 密文树根。
- * @param {object} deps - {run, ageBin, identity, timeoutMs}。
- * @returns {Promise<Map<string, Buffer>>} 明文相对路径 → 内容。
+ * Decrypt a whole encrypted tree → a plain Map<rel, Buffer> (reads only .age files, skips the rest).
+ * @param {string} encRoot - the encrypted tree root.
+ * @param {object} deps - {run, ageBin, identity, timeoutMs}.
+ * @returns {Promise<Map<string, Buffer>>} plain relative path → content.
  */
 export async function decryptTree(encRoot, deps) {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-sync-dec-'))
@@ -167,14 +167,14 @@ export async function decryptTree(encRoot, deps) {
 }
 
 /**
- * 明文三方合并（复用 lib/merge.mjs 的 classifyPath 语义）：
- * 以 ours 为底，theirs-only 采纳远端；append-both/diverged 保留 ours + 把 theirs
- * 写为 fork 文件。返回合并后整树与计数。
- * @param {Map<string, Buffer>} base - 合并基点树。
- * @param {Map<string, Buffer>} ours - 本地树。
- * @param {Map<string, Buffer>} theirs - 远端树。
- * @param {string} stamp - fork 文件名 UTC 时间戳（yyyyMMddHHmmss）。
- * @param {string} deviceShort - 设备短 id（fork 归属）。
+ * Three-way merge of plain text (reusing the classifyPath rules of lib/merge.mjs):
+ * ours is the base; theirs-only takes the remote; append-both/diverged keep ours + write theirs
+ * as a fork file. Returns the merged tree and the counts.
+ * @param {Map<string, Buffer>} base - the merge base tree.
+ * @param {Map<string, Buffer>} ours - the local tree.
+ * @param {Map<string, Buffer>} theirs - the remote tree.
+ * @param {string} stamp - the fork file name's UTC timestamp (yyyyMMddHHmmss).
+ * @param {string} deviceShort - the short device id (whose fork it is).
  * @returns {{merged: Map<string, Buffer>, forks: string[], adopted: number, appended: number, diverged: number}}
  */
 export function mergeTrees(base, ours, theirs, stamp, deviceShort) {
@@ -187,9 +187,9 @@ export function mergeTrees(base, ours, theirs, stamp, deviceShort) {
   for (const rel of keys) {
     const remote = theirs.get(rel)
     const verdict = classifyPath(base.get(rel), ours.get(rel), remote)
-    // 远端删除（theirs 无字节）是这棵树里唯一「没有远端内容可留存」的分歧：
-    // 采纳删除＝从合并树移除，其余＝保留 ours 并计分歧。绝不把 undefined 塞进
-    // merged —— writeTree 对每个条目 fs.writeFile，undefined 会直接抛错。
+    // A remote delete (theirs has no bytes) is the only divergence in this tree with "no remote content to keep":
+    // taking the delete = removing it from the merged tree; otherwise = keep ours and count a divergence. Never put undefined into
+    // merged — writeTree calls fs.writeFile for every entry, and undefined throws at once.
     if (verdict.kind === MERGE_KINDS.THEIRS_ONLY) {
       if (remote === undefined) merged.delete(rel)
       else merged.set(rel, remote)
@@ -205,22 +205,22 @@ export function mergeTrees(base, ours, theirs, stamp, deviceShort) {
         else diverged += 1
       }
     }
-    // identical / ours-only：保留 ours（已在 merged 中）。
+    // identical / ours-only: keep ours (already in merged).
   }
   return { merged, forks, adopted, appended, diverged }
 }
 
 /**
- * age 加密的 git 传输后端：对会话镜像内容加密后再推、解密后再合并。
- * 与 SyncEngine 同 surface（status/push/pull + deviceId setter），可作为引擎
- * 直接交给命令/工具/自动模式；无 age 时内部降级为明文 SyncEngine。
+ * Git transport backend encrypted with age: session mirror content is encrypted before a push and decrypted before a merge.
+ * Same surface as SyncEngine (status/push/pull + the deviceId setter), so it can be handed as the engine straight to the
+ * command, the tools and automatic mode; without age it falls back to a plain SyncEngine inside.
  */
 export class EncryptedBackend {
   /** @type {import('./git.mjs').GitBackend} */
   #git
-  /** @type {SyncEngine} 明文降级引擎（无 age / 缺配置时复用）。 */
+  /** @type {SyncEngine} the plain fallback engine (reused without age or with missing config). */
   #plain
-  /** @type {(args: string[], opts?: object) => Promise<{code: number, stdout: string|Buffer, stderr: string}>} age runner。 */
+  /** @type {(args: string[], opts?: object) => Promise<{code: number, stdout: string|Buffer, stderr: string}>} the age runner. */
   #run
   /** @type {string} */
   #ageBin
@@ -250,11 +250,11 @@ export class EncryptedBackend {
   #logger
   /** @type {string[]} */
   #warnings = []
-  /** @type {Promise<{mode: string, warnings: string[]}>|undefined} 惰性探测结果。 */
+  /** @type {Promise<{mode: string, warnings: string[]}>|undefined} the lazy probe result. */
   #ready
 
   /**
-   * @param {object} deps - {git, sessionRoot, repoDir, remote, branch, deviceId, reportMeta, reportError, onForks, logger, run, ageBin, ageRecipient, ageIdentity, timeoutMs}。
+   * @param {object} deps - {git, sessionRoot, repoDir, remote, branch, deviceId, reportMeta, reportError, onForks, logger, run, ageBin, ageRecipient, ageIdentity, timeoutMs}.
    */
   constructor(deps) {
     this.#git = deps.git
@@ -286,19 +286,19 @@ export class EncryptedBackend {
     })
   }
 
-  /** 设备 id（fork 归属；同步转发给明文降级引擎）。 */
+  /** The device id (whose fork it is; passed on to the plain fallback engine too). */
   set deviceId(value) {
     this.#deviceId = value
     this.#plain.deviceId = value
   }
 
-  /** 设备短 id（fork 文件名后缀，≤8 位小写十六进制）。 */
+  /** The short device id (the fork file name suffix, at most 8 lowercase hex digits). */
   get deviceShort() {
     return this.#deviceId.replaceAll('-', '').slice(0, 8).toLowerCase() || 'unknown'
   }
 
   /**
-   * 惰性探测并解析传输模式（首次操作触发，结果缓存）。
+   * Probe lazily and resolve the transport mode (on the first operation; the result is cached).
    * @returns {Promise<{mode: string, warnings: string[]}>}
    */
   probeMode() {
@@ -321,12 +321,12 @@ export class EncryptedBackend {
     return this.#ready
   }
 
-  /** 串行执行一次加密路径操作（同仓库互斥；明文降级由 SyncEngine 自行串行）。 */
+  /** Run one encrypted-path operation at a time (one per repository; the plain fallback serialises itself in SyncEngine). */
   #schedule(fn) {
     return this.#git.schedule(fn)
   }
 
-  /** 失败包装：脱敏 → reportError → 结构化错误结果（warnings 一并携带）。 */
+  /** Failure wrapper: remove secrets → reportError → a structured error result (warnings carried along). */
   #fail(error) {
     const message = redactText(messageOf(error))
     this.#reportError(message)
@@ -334,7 +334,7 @@ export class EncryptedBackend {
     return { ok: false, error: message, warnings: this.#warnings }
   }
 
-  /** remote 未配置时响亮失败（状态类操作不拦）。 */
+  /** Fail loudly when no remote is configured (status operations are not blocked). */
   #requireRemote() {
     if (this.#remote === undefined || this.#remote.trim() === '') {
       throw new Error('no sync remote configured — set config.remote (status/diff work without one)')
@@ -342,7 +342,7 @@ export class EncryptedBackend {
   }
 
   /**
-   * 镜像 sessionRoot → 明文工作树 sessions/（encrypted 后端不写 device.txt）。
+   * Mirror sessionRoot → the plain work tree sessions/ (the encrypted backend does not write device.txt).
    * dsh-sync addition: isolated conversations are left out, as in SyncEngine: `opts.isolation` is asked inside the lock
    * right after the listing (an unknown answer throws before the worktree is touched); `opts.exclude` is a fixed rule.
    * `seen.answer` receives the answer.
@@ -363,7 +363,7 @@ export class EncryptedBackend {
     })
   }
 
-  /** 确保 .gitignore（忽略明文 sessions/）与仓库就绪。 */
+  /** Make sure .gitignore (ignoring the plain sessions/) and the repository are ready. */
   async #ensureEncryptedRepo() {
     const gitignore = path.join(this.#repoDir, '.gitignore')
     const content = Buffer.from(`${MIRROR_DIR}/\n`)
@@ -376,7 +376,7 @@ export class EncryptedBackend {
     await this.#git.bootstrap()
   }
 
-  /** 加密明文 sessions/ → encrypted/（返回加密文件数）。 */
+  /** Encrypt the plain sessions/ → encrypted/ (returns the number of files encrypted). */
   async #encryptMirror() {
     const encRoot = path.join(this.#repoDir, ENC_DIR)
     await fs.mkdir(encRoot, { recursive: true })
@@ -390,15 +390,15 @@ export class EncryptedBackend {
     })
   }
 
-  /** 明文工作树里的 fork 文件清单（sessions/ 前缀，排序）。 */
+  /** The list of fork files in the plain work tree (with the sessions/ prefix, sorted). */
   async #plainForkFiles() {
     const files = await listRelFiles(path.join(this.#repoDir, MIRROR_DIR))
     return files.filter(file => FORK_NAME_RE.test(file.split('/').at(-1) ?? '')).map(file => `${MIRROR_DIR}/${file}`).sort()
   }
 
   /**
-   * 解密某提交的密文树为明文 Map<rel, Buffer>。
-   * @param {string} rev - 提交 sha 或引用名。
+   * Decrypt a commit's encrypted tree into a plain Map<rel, Buffer>.
+   * @param {string} rev - a commit sha or ref name.
    * @returns {Promise<Map<string, Buffer>>}
    */
   async #treeAtRev(rev) {
@@ -430,8 +430,8 @@ export class EncryptedBackend {
   }
 
   /**
-   * 状态：先本地初始化 + 镜像（不提交），再收集 git 状态；fork 清单改从明文
-   * 树读取（密文树里的 fork 文件名带 .age 后缀，不是面向用户的形态）。
+   * Status: first a local init + mirror (no commit), then collect the git status; the fork list is read from the plain
+   * tree instead (fork file names in the encrypted tree end in .age, which is not the form shown to users).
    * @param {{isolation?: Function, exclude?: (rel: string) => boolean}} [opts] - dsh-sync addition, as SyncEngine.status.
    * @returns {Promise<object>}
    */
@@ -447,7 +447,7 @@ export class EncryptedBackend {
         await this.#ensureEncryptedRepo()
         await this.#mirrorOnly(opts, seen)
       } catch {
-        // 初始化/镜像失败不阻断状态：collectStatus 返回带 error 的快照。
+        // A failed init or mirror does not block status: collectStatus returns a snapshot with an error.
       }
       const snapshot = await collectStatus(this.#git, { branch: this.#branch, remote: this.#remote ?? '' })
       const isolation = typeof opts.isolation === 'function' ? { isolation: await isolationSummary(seen.answer, opts.isolation) } : {}
@@ -456,8 +456,8 @@ export class EncryptedBackend {
   }
 
   /**
-   * 推送：镜像 → 加密 → 提交 → push；被拒时拉取调和后重推一次。
-   * @param {object} [opts] - {signal?: AbortSignal, isolation?, exclude?, beforeCommit?}（dsh-sync addition，见 SyncEngine.push）。
+   * Push: mirror → encrypt → commit → push; when refused, pull and reconcile, then push once more.
+   * @param {object} [opts] - {signal?: AbortSignal, isolation?, exclude?, beforeCommit?} (dsh-sync addition, see SyncEngine.push).
    * @returns {Promise<object>}
    */
   async push(opts = {}) {
@@ -507,8 +507,8 @@ export class EncryptedBackend {
   }
 
   /**
-   * 拉取：本地提交检查点 → fetch → 明文三方合并 → 重新加密 → 提交。
-   * @param {object} [opts] - {signal?: AbortSignal, isolation?, exclude?}（dsh-sync addition，见 SyncEngine.push）。
+   * Pull: local commit checkpoint → fetch → three-way merge of plain text → encrypt again → commit.
+   * @param {object} [opts] - {signal?: AbortSignal, isolation?, exclude?} (dsh-sync addition, see SyncEngine.push).
    * @returns {Promise<object>}
    */
   async pull(opts = {}) {
@@ -534,8 +534,8 @@ export class EncryptedBackend {
   }
 
   /**
-   * 拉取内部步骤（push 重试路径复用；前置已保证仓库存在且本地已提交）。
-   * @param {object} [opts] - {signal?: AbortSignal}。
+   * The inner pull steps (reused by the push retry; the caller has made sure the repository exists and local is committed).
+   * @param {object} [opts] - {signal?: AbortSignal}.
    * @returns {Promise<object>}
    */
   async #pullInternal(opts = {}) {
@@ -554,8 +554,8 @@ export class EncryptedBackend {
       this.#reportMeta({ lastPullAt: Date.now() })
       return { ok: true, pulled: false, forks: [], adopted: 0, appended: 0, diverged: 0, warnings: this.#warnings }
     }
-    // 三方合并基点：最近一次已调和的远端头（自持引用）；首次同步无基点 → 空树
-    // （与 git 的 unrelated histories 语义一致：全部为 theirs-only 采纳）。
+    // The three-way merge base: the remote head at the last reconcile (our own ref); the first sync has no base → an empty tree
+    // (the same as git's unrelated-histories rule: everything is theirs-only and taken).
     const baseHead = (await this.#git.refSha(BASE_REF)) ?? (await this.#git.mergeBaseOf(head, remoteHead))
     const ours = await readTree(path.join(this.#repoDir, MIRROR_DIR))
     const base = baseHead === undefined ? new Map() : await this.#treeAtRev(baseHead)
@@ -572,8 +572,8 @@ export class EncryptedBackend {
         }
       }
     }
-    // fork 路径统一加 sessions/ 前缀，与 git 后端的 ls-files 约定一致（handleForks
-    // 与展示都依赖该前缀）。
+    // Fork paths all get the sessions/ prefix, as in the git backend's ls-files convention (handleForks
+    // and the display both rely on this prefix).
     const forks = rawForks.filter(rel => merged.has(rel)).map(rel => `${MIRROR_DIR}/${rel}`)
     // dsh-sync fix: record the remote head as a second parent. Without it the pull commit is not a
     // descendant of the remote, so every later push was rejected as "remote moved".

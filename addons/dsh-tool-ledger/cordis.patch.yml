@@ -1,0 +1,8 @@
+- insert:
+    - id: tool-ledger
+      name: '@local/dsh-tool-ledger'
+      config:
+        # Records tool names, states and counts only; never what a tool was given or gave back.
+        # Both settings are on Settings > Tool use.
+        enabled: true
+        keepDays: 365

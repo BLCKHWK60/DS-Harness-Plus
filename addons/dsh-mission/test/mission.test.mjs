@@ -76,7 +76,7 @@ test('the three modes decide file calls as the owner asked', () => {
       const ask = call(mode, 'read', { file_path: outside });
       assert.equal(ask.kind, 'ask');
       assert.deepEqual(ask.outside, [outside]);
-      assert.match(ask.question, /read outside the conversation's folder/);
+      assert.match(ask.question, /read outside the thread's folder/);
       // A change outside is left to the app's sandbox, which refuses it and asks on the retry.
       assert.deepEqual(call(mode, 'write', { file_path: outside }), { kind: 'allow' });
       assert.deepEqual(call(mode, 'read', { file_path: outside }, none, (path) => path === outside), { kind: 'allow' });
@@ -240,14 +240,16 @@ test('the record keeps approvals across a restart and a mode change', async () =
 test('settings fall back to Restricted', async () => {
   const { readSettings, HELP } = await import('../index.js');
   const limits = { maxItems: 12, maxTries: 3, maxReviews: 2, maxSteps: 60, waitMinutes: 3 };
-  const long = { minutes: 120, laps: 10, fullTime: false, keepAwake: true, battery: false, retry: true, effort: true };
+  // Point 17: When it needs you (Ask, keep working) and Wait for me (30 minutes, migrated from waitMinutes 3; until you answer).
+  // Stage E: Talk and look things up, and Carry on by itself after a restart, unless changed.
+  const long = { minutes: 120, laps: 10, steps: 0, fullTime: false, keepAwake: true, battery: false, retry: true, effort: true, helpers: 4, needs: 'ask', waitAsk: 30, waitHold: 0, assistant: 'look', carryOn: true };
   // The work loop's settings (plan steps S3 to S5): no tab, one call at a time, unless the owner sets them.
   assert.deepEqual(readSettings({}), { enabled: true, loopTabs: [], callsAtOnce: {}, defaultMode: 'restricted', limits, roles: {}, projects: {}, long });
   assert.deepEqual(readSettings({ loopTabs: '["research","Bad Tab!",3]', callsAtOnce: '{"local":4,"cloud":99,"x":"no"}' }).loopTabs, ['research', '3']);
   assert.deepEqual(readSettings({ callsAtOnce: '{"local":4,"cloud":99,"tiny":0,"x":"no"}' }).callsAtOnce, { local: 4, cloud: 16, tiny: 1 }, 'between 1 and 16 (the owner\'s answer)');
   assert.deepEqual(readSettings({ loopTabs: 'not json' }).loopTabs, []);
   // Long run defaults: one place (Settings → Mission), kept in range.
-  assert.deepEqual(readSettings({ longMinutes: 5000, longLaps: 0, longFullTime: true, longKeepAwake: false, longBattery: true, longRetry: false, longEffort: false }).long, { minutes: 720, laps: 1, fullTime: true, keepAwake: false, battery: true, retry: false, effort: false });
+  assert.deepEqual(readSettings({ longMinutes: 5000, longLaps: 0, longFullTime: true, longKeepAwake: false, longBattery: true, longRetry: false, longEffort: false }).long, { minutes: 720, laps: 0, steps: 0, fullTime: true, keepAwake: false, battery: true, retry: false, effort: false, helpers: 4, needs: 'ask', waitAsk: 30, waitHold: 0, assistant: 'look', carryOn: true }, 'stage B: laps 0 is no lap limit');
   const set = readSettings({ enabled: false, defaultMode: 'auto', maxTries: 99, maxSteps: 'x', waitMinutes: 0, roles: '{"plan":{"provider":"p","model":"big"},"review":{"provider":"","model":"x"},"other":{"provider":"p","model":"m"}}', projects: '{"/w":{"implement":{"provider":"p","model":"coder"}},"/empty":{}}' });
   assert.equal(set.enabled, false);
   assert.equal(set.defaultMode, 'auto');
@@ -335,7 +337,7 @@ test('a run goes plan, work, checks, review, finish, and commands decide what pa
 
   finish(run, '', 20 * 60000);
   assert.equal(run.status, 'incomplete');
-  assert.deepEqual(tally(run), { verified: 2, reviewed: 1, unverified: 0, stuck: 0, aside: 1, open: 0, total: 4 });
+  assert.deepEqual(tally(run), { verified: 2, reviewed: 1, unverified: 0, stuck: 0, aside: 1, parked: 0, open: 0, total: 4 });
   const text = report(run);
   assert.match(text, /^Mission not complete: 3 of 4 items done\. 1 needs your yes\./);
   assert.match(text, /Waiting for your yes:\n- Item 3: change src\/a\.js\?/);
@@ -444,7 +446,7 @@ test('a step runs on its own: a short call waits, is told to come back, and the 
     const runner = createRunner(ctx, { settings: () => ({ limits: { maxItems: 12, maxTries: 3, maxReviews: 0, maxSteps: 60, waitMinutes: 3 }, roles: {}, projects: {} }), pointsOf: () => points, afterCommand: async () => [], warn: () => {}, home: undefined });
     const agent = { id: 'conv', model: { current: () => ({ provider: 'p', model: 'm' }) } };
     const started = await runner.start(agent, 'do one small thing', { mode: 'auto', root });
-    assert.match(started, /^Mission started \(Full Auto\)/);
+    assert.match(started, /^Mission started \(Auto\)/);
     // The app's own cap on rounds is far above the run's step limit: waiting rounds must not end a run.
     assert.ok(calls[0][1] >= 1000);
     assert.equal(runner.isOn('conv'), true);
@@ -515,7 +517,7 @@ test('one model for everything is the default; the roles\' models need the conve
       policy = say;
       made = false;
       const text = await runner.start(agent(`a${index}`), 'do one small thing', { mode: 'auto', root });
-      assert.match(text, /^Mission started \(Full Auto\), one model\./);
+      assert.match(text, /^Mission started \(Auto\), one model\./);
       assert.match(text, /Models: one model for everything \(big-one\)\. To use different models/);
       await runner.step(agent(`a${index}`), new AbortController().signal, 5000);
       assert.equal(used.at(-1), 'big-one');
@@ -525,7 +527,7 @@ test('one model for everything is the default; the roles\' models need the conve
     policy = 'roles';
     made = false;
     const text = await runner.start(agent('b'), 'do one small thing', { mode: 'auto', root });
-    assert.match(text, /^Mission started \(Full Auto\), 3 models\./);
+    assert.match(text, /^Mission started \(Auto\), 3 models\./);
     assert.match(text, /Models: 3 different models: planner tier-plan, worker tier-implement, reviewer mission-review\. They may be loaded at the same time\./);
     await runner.step(agent('b'), new AbortController().signal, 5000);
     assert.equal(used.at(-1), 'tier-plan');
@@ -552,7 +554,7 @@ test('checkpoints are refused for a home, Documents or system folder, in plain w
       assert.equal(point.skipped, true);
       assert.equal(point.number, 0);
       assert.match(point.reason, /Checkpoints are off for this folder: it is too broad/);
-      assert.match(point.reason, /Long run, works without them/);
+      assert.match(point.reason, /including a Mission, works without them/);
       assert.equal(existsSync(join(folder, OWN_FOLDER)), false, 'no hidden store is made in a broad folder');
       // Everything that reads checkpoints answers "nothing" instead of failing, so a run goes on.
       assert.deepEqual(await points.since(''), { changed: [], deleted: [], added: [] });

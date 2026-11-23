@@ -60,9 +60,9 @@ test('End and wipe deletes a conversation folder and nothing else', () => {
     mkdirSync(other);
     writeFileSync(join(other, 'keep.txt'), 'keep');
 
-    assert.throws(() => wipeFiles({ id, folder: other }, root), /not a conversation of this app/);
-    assert.throws(() => wipeFiles({ id: 'other-id-123', folder }, root), /not a conversation of this app/);
-    assert.throws(() => wipeFiles({ id, folder }, folder), /not a conversation of this app/);
+    assert.throws(() => wipeFiles({ id, folder: other }, root), /not a thread of this app/);
+    assert.throws(() => wipeFiles({ id: 'other-id-123', folder }, root), /not a thread of this app/);
+    assert.throws(() => wipeFiles({ id, folder }, folder), /not a thread of this app/);
     assert.throws(() => wipeFiles({ id: '../x', folder }, root), /not a conversation id/);
     assert.equal(existsSync(join(folder, 'session.v4.jsonl.zstd')), true);
     assert.equal(wipeFiles({ id, folder, cache }, root), true);
@@ -87,12 +87,12 @@ test('End and wipe deletes a conversation folder and nothing else', () => {
 
 test('the request counter and the count of sources read are kept apart', () => {
   const sources = openSources();
-  assert.equal(sources.readCount('r'), 0, 'an unknown conversation has read nothing');
+  assert.equal(sources.readCount('r'), 0, 'an unknown thread has read nothing');
   assert.equal(sources.known('r'), false, 'and asking adds no entry for it');
   assert.equal(sources.count('r'), 1, 'each request counts, for the 400-request limit');
   assert.equal(sources.count('r'), 2);
   assert.equal(sources.readCount('r'), 0, 'requests are not sources');
-  assert.equal(sources.empty('r'), false, 'a conversation that made requests is not empty');
+  assert.equal(sources.empty('r'), false, 'a thread that made requests is not empty');
   sources.keep('r', { kind: 'onion', url: `http://${'b'.repeat(56)}.onion/`, title: 'T', text: 'x', bytes: 1 });
   assert.equal(sources.readCount('r'), 1);
   assert.equal(sources.count('r'), 3, 'reading a source leaves the request count alone');
@@ -114,7 +114,7 @@ test('End and wipe also takes the conversation out of the Cowork sidebar\'s tras
     assert.deepEqual(wipeTrashed(trashDir, id), { removed: true, unlisted: true });
     assert.equal(existsSync(join(trashDir, id)), false);
     assert.deepEqual(JSON.parse(readFileSync(join(trashDir, 'pending.json'), 'utf8')), [{ id: 'session-other' }]);
-    assert.equal(existsSync(join(trashDir, 'session-other')), true, 'another conversation in the trash is left alone');
+    assert.equal(existsSync(join(trashDir, 'session-other')), true, 'another thread in the trash is left alone');
     assert.deepEqual(wipeTrashed(trashDir, id), { removed: false, unlisted: false }, 'nothing left to take out');
     assert.deepEqual(wipeTrashed('', id), { removed: false, unlisted: false });
     assert.deepEqual(wipeTrashed(trashDir, '../x'), { removed: false, unlisted: false }, 'an id that could leave the trash folder is refused');

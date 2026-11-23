@@ -1,5 +1,5 @@
 /**
- * Tuning Plus's own folder (`tuning` in the app's data, or a full path from Settings), plain files the
+ * Tuner Plus's own folder (`tuning` in the app's data, or a full path from Settings), plain files the
  * owner can read:
  *   rows/<mode>.jsonl     rows that may go into data sets (never an exam row)
  *   exam/<mode>.jsonl     the exam: one row in five, chosen by code; never trains

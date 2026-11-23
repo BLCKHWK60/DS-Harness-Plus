@@ -53,7 +53,7 @@ export const PINS_MAX = 500;
 export const METHOD = `You are in Finance mode: a research desk for companies, markets and economies. Your job is to help the user understand where something is going, not only where it has been, by putting three kinds of evidence side by side: the reported figures, what the news is reporting, and what people are saying.
 
 Rules that always hold:
-1. Figures come from sources, never from memory. Every number (price, revenue, margin, growth, valuation, rate) must come from a source you fetched in this conversation, and carries its source and its date. If you could not fetch it, say so; do not fill the gap from what you remember.
+1. Figures come from sources, never from memory. Every number (price, revenue, margin, growth, valuation, rate) must come from a source you fetched in this thread, and carries its source and its date. If you could not fetch it, say so; do not fill the gap from what you remember.
 2. Keep four things apart and label them: reported facts; what management claims or guides; what others think (analysts, journalists, social media); and your own reading.
 3. Look ahead. Cover guidance, announced plans, upcoming dates (earnings, launches, rulings, votes), order books and pipelines, hiring, and what competitors, customers, suppliers and regulators are doing.
 4. Give both sides. State the case for and the case against, each with its evidence, and what would have to be true for each.
@@ -174,7 +174,7 @@ export function changeSelection(current, values, markets = MARKETS) {
  */
 export function toolsOffNote(adviser = false) {
   return [
-    'Tools are off in this Finance conversation, so you have no data tools now: no figure can be fetched or checked, and no data source, web search or Library can be used.',
+    'Tools are off in this Finance thread, so you have no data tools now: no figure can be fetched or checked, and no data source, web search or Library can be used.',
     'You may still give figures from memory, but only marked as such: after every figure (a price, revenue, a margin, growth, a valuation, a rate) say that it is from memory and may be out of date, for example "(from memory, may be out of date)". Never present a figure as current or as coming from a source. Say which period a remembered figure is for (for example FY2023) when you know it, but never give it a source or an "as of" date you did not check. If you do not remember a figure well enough, say so instead of guessing.',
     'For sourced, current figures the user can switch Tools on in the chat box.',
     adviser ? '' : 'This is research, not advice: do not tell the user to buy, sell or hold.',
@@ -192,13 +192,13 @@ export function selectionNote(selection) {
   const period = PERIODS.find((item) => item.id === sel.period);
   const kind = KINDS.find((item) => item.id === sel.kind);
   let subject;
-  if (sel.kind === 'brief') subject = `"${sel.subject}" (this conversation was opened by a scheduled task; its instruction says what to do)`;
+  if (sel.kind === 'brief') subject = `"${sel.subject}" (this thread was opened by an automation; its instruction says what to do)`;
   else if (sel.kind === 'market') subject = sel.subject ? `the whole market (the user added: "${sel.subject}")` : 'the whole market, not one company';
   else if (sel.subject) subject = `${kind.label.toLowerCase()} "${sel.subject}"`;
   else subject = `not chosen yet (a ${kind.label.toLowerCase()}): take it from the user's message, and ask if it is unclear`;
   const market = sel.market === MARKETS[0] ? 'Global (all markets; no single country)' : `${sel.market} only`;
   return [
-    'The user\'s selection for this Finance conversation, made with the drop-downs (on the start page, or for this conversation in its chat box). "The selected subject" or "the selected market" in a message means these:',
+    'The user\'s selection for this Finance thread, made with the drop-downs (on the start page, or for this thread in its chat box). "The selected subject" or "the selected market" in a message means these:',
     `- Subject: ${subject}`,
     `- Market: ${market}`,
     `- Focus: ${focus.text}`,
@@ -243,7 +243,7 @@ export function openPins(file) {
   /** @type {Map<string, object>} */
   let pins = new Map();
   if (file) {
-    const read = readJsonStore(file, () => ({}), { label: 'the choices Finance kept for each conversation', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
+    const read = readJsonStore(file, () => ({}), { label: 'the choices Finance kept for each thread', valid: (value) => value && typeof value === 'object' && !Array.isArray(value) });
     pins = new Map(Object.entries(read).map(([id, value]) => [id, readSelection(value)]));
   }
   const keep = (key, value) => {

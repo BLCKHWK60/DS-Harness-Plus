@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "An isolated Recon mode and tab for research on .onion sites and Usenet text newsgroups: its conversations have only the recon tools, share nothing with the rest of the app, and ask before content goes to a cloud model. This version is the isolation frame; it has no network access yet. Off until you switch it on.",
+  "description": "A sealed Recon mode and space for research on .onion sites and Usenet text newsgroups: its threads have only the recon tools, share nothing with the rest of the app, and ask before content goes to a cloud model. Off until you switch it on.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

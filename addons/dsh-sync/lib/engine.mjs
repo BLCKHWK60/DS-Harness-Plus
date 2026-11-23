@@ -1,12 +1,12 @@
-// lib/engine.mjs — 同步编排（业务层；DSH 服务经回调注入，本模块零 DSH 依赖）。
+// lib/engine.mjs — sync orchestration (business layer; DSH services come in as callbacks, so this module has no DSH dependency).
 //
-// 操作语义：
-// - push：镜像 → 提交 → push；被拒（远端领先）→ fetch + 拉取调和 → 重推一次；
-//   绝不强推。
-// - pull：先镜像 + 提交本地（保证合并基点是已提交状态）→ fetch → 三分支合并
-//   （lib/merge.mjs 的 append-only 语义）→ 合并提交。冲突双方字节永不丢弃：
-//   本地保留原路径，远端留存为 fork 文件。
-// - 全部操作经 git.schedule 串行（同一仓库互不穿插）。
+// Operation rules:
+// - push: mirror → commit → push; refused (the remote is ahead) → fetch + pull and reconcile → push once more;
+//   never force-push.
+// - pull: first mirror + commit locally (so the merge base is a committed state) → fetch → three-way merge
+//   (the append-only rules of lib/merge.mjs) → merge commit. The bytes of both sides of a conflict are never dropped:
+//   local keeps the original path, the remote is kept as a fork file.
+// - every operation runs one at a time through git.schedule (operations on one repository never interleave).
 
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -20,44 +20,44 @@ import { messageOf, SyncError } from './errors.mjs'
 import { redactText, sanitizeRemote } from './sanitize.mjs'
 
 /**
- * 同步引擎。
+ * The sync engine.
  * @typedef {object} EngineDeps
- * @property {import('./git.mjs').GitBackend} git - git 后端。
- * @property {string} sessionRoot - 会话存储根（绝对）。
- * @property {string} repoDir - 同步仓库根（绝对）。
- * @property {string} remote - 远端地址原文（展示时 sanitize）。
- * @property {string} branch - 分支名。
- * @property {string} deviceId - 设备 id（fork 归属）。
- * @property {(patch: object) => void} reportMeta - 元数据补丁回调（index.mjs 写领域）。
- * @property {(message: string) => void} reportError - 最近错误回调（写领域 lastError）。
- * @property {(forkRelPaths: string[]) => void} onForks - fork 文件产生回调（index.mjs 做会话级 fork + 事件）。
- * @property {{debug: Function, info: Function, warn: Function, error: Function}} logger - 日志。
+ * @property {import('./git.mjs').GitBackend} git - the git backend.
+ * @property {string} sessionRoot - the session store root (absolute).
+ * @property {string} repoDir - the sync repository root (absolute).
+ * @property {string} remote - the remote address as given (sanitised when shown).
+ * @property {string} branch - the branch name.
+ * @property {string} deviceId - the device id (whose fork it is).
+ * @property {(patch: object) => void} reportMeta - the metadata patch callback (index.mjs writes the domain).
+ * @property {(message: string) => void} reportError - the latest-error callback (writes the domain's lastError).
+ * @property {(forkRelPaths: string[]) => void} onForks - the callback when fork files appear (index.mjs forks the session and sends the event).
+ * @property {{debug: Function, info: Function, warn: Function, error: Function}} logger - the log.
  */
 export class SyncEngine {
   /** @type {EngineDeps} */
   #deps
 
-  /** @param {EngineDeps} deps - 依赖。 */
+  /** @param {EngineDeps} deps - the dependencies. */
   constructor(deps) {
     this.#deps = deps
   }
 
-  /** 设备 id（fork 文件名后缀；领域就绪后由 index.mjs 补齐）。 */
+  /** The device id (the fork file name suffix; index.mjs fills it in once the domain is ready). */
   set deviceId(value) {
     this.#deps.deviceId = value
   }
 
-  /** 设备短 id（fork 文件名后缀，≤8 位小写十六进制）。 */
+  /** The short device id (the fork file name suffix, at most 8 lowercase hex digits). */
   get deviceShort() {
     return this.#deps.deviceId.replaceAll('-', '').slice(0, 8).toLowerCase() || 'unknown'
   }
 
-  /** 串行执行一次同步操作（同仓库互斥）。 */
+  /** Run one sync operation at a time (one per repository). */
   #schedule(fn) {
     return this.#deps.git.schedule(fn)
   }
 
-  /** 失败包装：脱敏 → reportError → 结构化错误结果。 */
+  /** Failure wrapper: remove secrets → reportError → a structured error result. */
   #fail(error) {
     const message = redactText(messageOf(error))
     this.#deps.reportError(message)
@@ -65,7 +65,7 @@ export class SyncEngine {
     return { ok: false, error: message }
   }
 
-  /** remote 未配置时响亮失败（状态类操作不拦）。 */
+  /** Fail loudly when no remote is configured (status operations are not blocked). */
   #requireRemote() {
     if (this.#deps.remote === undefined || this.#deps.remote.trim() === '') {
       throw new Error('no sync remote configured — set config.remote (status/diff work without one)')
@@ -73,12 +73,12 @@ export class SyncEngine {
   }
 
   /**
-   * 镜像 + 提交（push/pull 共用前置）。
+   * Mirror + commit (the shared first step of push and pull).
    * @returns {Promise<{deviceWritten: boolean, mirror: {mirrored: number, unchanged: number, deleted: string[], forkedPreserved: string[], skippedLinks: string[]}}>}
    */
-  // 镜像（不提交）：把 sessionRoot 的字节镜像进工作树 + 确保设备文件。
-  // 只写本地工作树，不触网、不确认、不提交。调用方已持有 schedule 锁，
-  // 这里绝不能再走 #schedule。
+  // Mirror (no commit): mirror sessionRoot's bytes into the work tree + make sure of the device file.
+  // Writes only the local work tree: no network, no confirmation, no commit. The caller already holds the schedule lock,
+  // so this must never go through #schedule again.
   // dsh-sync addition: the files of isolated conversations (Recon) are left out and taken out of the worktree
   // (lib/isolation.mjs). `opts.isolation` (an async getter) is asked inside the lock, right after the session store is
   // listed; an unknown answer stops the operation there (IsolationUnknownError). `opts.exclude` is a fixed rule, for
@@ -104,8 +104,8 @@ export class SyncEngine {
     return { deviceWritten, mirror }
   }
 
-  // 前置镜像 + 提交。调用方（push/pull）已持有 schedule 锁，这里绝不能再走
-  // #schedule —— 嵌套 schedule 会在同一 git 链上自锁（fnM 等 fnP 完成、fnP 等 fnM）。
+  // The first step: mirror + commit. The caller (push/pull) already holds the schedule lock, so this must never go through
+  // #schedule again — a nested schedule locks itself on the same git chain (fnM waits for fnP, fnP waits for fnM).
   // dsh-sync addition: `opts.beforeCommit` (the project manifest) runs here, inside the lock, once the isolated
   // conversations are known.
   async #mirrorAndCommit(message, opts = {}) {
@@ -119,8 +119,8 @@ export class SyncEngine {
   }
 
   /**
-   * 状态：先本地初始化 + 镜像（不提交），使未同步的会话变更以"未提交文件"
-   * 形式进入 dirty；只写本地工作树，不触网、不确认。
+   * Status: first a local init + mirror (no commit), so unsynced session changes enter dirty as "uncommitted files";
+   * writes only the local work tree: no network, no confirmation.
    * dsh-sync addition: `opts.isolation` is asked inside the lock which conversations are isolated; they are left out of
    * the mirror, and when the answer is not known nothing is copied. The answer is returned as `isolation` (plain data).
    * @param {{isolation?: Function, exclude?: (rel: string) => boolean}} [opts]
@@ -134,7 +134,7 @@ export class SyncEngine {
         await this.#deps.git.ensureRepo()
         await this.#mirrorOnly(opts, seen)
       } catch {
-        // 初始化/镜像失败不阻断状态：collectStatus 会返回带 error 的快照。
+        // A failed init or mirror does not block status: collectStatus returns a snapshot with an error.
       }
       const snapshot = await collectStatus(this.#deps.git, { branch: this.#deps.branch, remote: this.#deps.remote ?? '' })
       return typeof opts.isolation === 'function' ? { ...snapshot, isolation: await isolationSummary(seen.answer, opts.isolation) } : snapshot
@@ -142,17 +142,17 @@ export class SyncEngine {
   }
 
   /**
-   * 推送：镜像 → 提交 → push；被拒时拉取调和后重推一次。
+   * Push: mirror → commit → push; when refused, pull and reconcile, then push once more.
    * @param {object} [opts] - {signal?: AbortSignal, isolation?: Function, exclude?: (rel: string) => boolean, beforeCommit?: Function}
-   *   （isolation/exclude：孤立会话；beforeCommit：项目清单；dsh-sync addition，见 #mirrorOnly）。
+   *   (isolation/exclude: isolated sessions; beforeCommit: the project list; dsh-sync addition, see #mirrorOnly).
    * @returns {Promise<{ok: boolean, pushed?: boolean, head?: string, mirrored?: number, deleted?: number, remote?: string, error?: string}>}
    */
   push(opts = {}) {
     return this.#schedule(async () => {
       try {
         this.#requireRemote()
-        // git 命令以 repoDir 为 cwd，首次操作前必须保证它存在（cwd 缺失时
-        // spawn 静默失败，甚至伪装成 exit 0）。
+        // git commands use repoDir as cwd, so it must exist before the first operation (with no cwd
+        // spawn fails silently, and can even pass itself off as exit 0).
         await fs.mkdir(this.#deps.repoDir, { recursive: true })
         await this.#deps.git.bootstrap()
         const mirror = await this.#mirrorAndCommit('dsh-sync: push snapshot', opts)
@@ -162,7 +162,7 @@ export class SyncEngine {
           if (!(error instanceof SyncError && error.code === 'PUSH_REJECTED')) {
             throw error
           }
-          // 远端领先：先拉取调和（保留双方），再重推一次。
+          // The remote is ahead: first pull and reconcile (keeping both sides), then push once more.
           this.#deps.logger.info('push rejected (remote moved); pulling and reconciling before one retry')
           // dsh-sync addition: the merge leaves out the same isolated conversations the mirror did.
           const pulled = await this.#pullInternal({ ...opts, exclude: mirror.exclude })
@@ -189,8 +189,8 @@ export class SyncEngine {
   }
 
   /**
-   * 拉取：本地提交 → fetch → 三分支合并（append-only 语义）。
-   * @param {object} [opts] - {signal?: AbortSignal, isolation?: Function, exclude?: (rel: string) => boolean}（见 push）。
+   * Pull: local commit → fetch → three-way merge (append-only rules).
+   * @param {object} [opts] - {signal?: AbortSignal, isolation?: Function, exclude?: (rel: string) => boolean} (see push).
    * @returns {Promise<{ok: boolean, pulled?: boolean, merged?: boolean, adopted?: number, appended?: number, diverged?: number, forks?: string[], head?: string, error?: string}>}
    */
   pull(opts = {}) {
@@ -211,8 +211,8 @@ export class SyncEngine {
   }
 
   /**
-   * 拉取内部步骤（push 重试路径复用；前置已保证仓库存在且本地已提交）。
-   * @param {object} [opts] - {signal?: AbortSignal}。
+   * The inner pull steps (reused by the push retry; the caller has made sure the repository exists and local is committed).
+   * @param {object} [opts] - {signal?: AbortSignal}.
    * @returns {Promise<object>}
    */
   async #pullInternal(opts = {}) {
@@ -232,7 +232,7 @@ export class SyncEngine {
     }
     const behind = await this.#deps.git.countCommitsSafe(head, remoteHead)
     if (behind === 0) {
-      // 本地领先（远端无新提交）：无拉取内容。
+      // Local is ahead (no new commits on the remote): nothing to pull.
       this.#deps.reportMeta({ lastPullAt: Date.now() })
       return { ok: true, pulled: false, forks: [], adopted: 0, appended: 0, diverged: 0 }
     }
@@ -285,12 +285,12 @@ export class SyncEngine {
   }
 
   /**
-   * 冲突解决：逐路径分类 → ours/theirs 检出 → 远端侧留存为 fork 文件 →
-   * 全量暂存（提交由调用方落合并提交）。失败时 abortMerge 恢复。
+   * Conflict resolution: classify each path → check out ours/theirs → keep the remote side as a fork file →
+   * stage everything (the caller makes the merge commit). On failure abortMerge restores the state.
    *
-   * 删除/修改冲突（一侧删除、另一侧修改）同样走 keep-both：git 只为存在的一侧
-   * 登记 stage，缺失的一侧按「该侧删除了该文件」解释——删除意图保留，另一侧
-   * 按既有规则存续（远端内容仍以 fork 文件留存）。绝不因缺 stage 而中止整次 pull。
+   * A delete/modify conflict (one side deleted, the other changed) also keeps both: git registers a stage only for
+   * the side that exists, and the missing side is read as "that side deleted the file" — the delete is kept, and the other side
+   * survives by the usual rules (the remote content is still kept as a fork file). A missing stage never stops the whole pull.
    * @returns {Promise<{adopted: number, appended: number, diverged: number, forks: string[]}>}
    */
   async #resolveConflicts() {
@@ -306,40 +306,40 @@ export class SyncEngine {
         entries.push({ path: conflict.path, base, ours, theirs })
       }
       const { resolutions, summary } = planMerge(entries)
-      /** 路径 → ours/theirs 字节；某侧缺失即该侧删除了该文件（git 不登记其 stage）。 */
+      /** Path → ours/theirs bytes; a missing side means that side deleted the file (git registers no stage for it). */
       const sides = new Map(entries.map(entry => [entry.path, entry]))
       const forks = []
       const now = new Date()
-      // 严格 14 位 UTC 戳（yyyyMMddHHmmss）：与 lib/encrypted.mjs 同口径剔除 ISO
-      // 分隔符（`-`/`:`/`T`）后再截断。仅去掉 `-`/`:` 会留下 `T`，使
-      // forkFileName 的 /^\d{14}$/ 失配并静默回退到纪元戳。
+      // A strict 14-digit UTC stamp (yyyyMMddHHmmss): as in lib/encrypted.mjs, strip the ISO
+      // separators (`-`/`:`/`T`) before cutting. Removing only `-`/`:` would leave the `T`, so
+      // forkFileName's /^\d{14}$/ would not match and would silently fall back to the epoch stamp.
       const stamp = now.toISOString().replace(/[-:T]/gu, '').slice(0, 14)
       for (const resolution of resolutions) {
         const side = sides.get(resolution.path)
         const hasOurs = side?.ours !== undefined
         const hasTheirs = side?.theirs !== undefined
         const absolute = path.join(this.#deps.repoDir, ...resolution.path.split('/'))
-        // `checkout --ours/--theirs` 对缺失的 stage 会失败（`does not have
-        // our/their version`），因此每一侧都先看它在冲突里是否存在。
+        // `checkout --ours/--theirs` fails for a missing stage (`does not have
+        // our/their version`), so each side is first checked for being in the conflict.
         if (resolution.adoptTheirs) {
           if (hasTheirs) await this.#deps.git.checkoutStage('theirs', resolution.path)
           else await fs.rm(absolute, { force: true })
           continue
         }
         if (resolution.forkTheirs && hasTheirs) {
-          // 先取 theirs 工作树字节 → 写 fork 文件 → 再恢复 ours 侧。
+          // First take theirs' work-tree bytes → write the fork file → then restore the ours side.
           await this.#deps.git.checkoutStage('theirs', resolution.path)
           const content = await fs.readFile(absolute)
           const forkName = forkFileName(path.posix.basename(resolution.path), stamp, this.deviceShort)
           await fs.writeFile(path.join(path.dirname(absolute), forkName), content)
-          // ours 缺失＝本地已删除：保留删除，远端内容只以 fork 文件存续。
+          // ours is missing = deleted locally: keep the delete; the remote content survives only as a fork file.
           if (hasOurs) await this.#deps.git.checkoutStage('ours', resolution.path)
           else await fs.rm(absolute, { force: true })
           const forkRel = path.posix.join(path.posix.dirname(resolution.path), forkName)
           forks.push(forkRel)
           continue
         }
-        // 远端已删除（theirs 缺失）：保留本地版本，分歧照常计入 summary.diverged。
+        // The remote deleted it (theirs is missing): keep the local version; the divergence counts in summary.diverged as usual.
         if (hasOurs) await this.#deps.git.checkoutStage('ours', resolution.path)
         else await fs.rm(absolute, { force: true })
       }
@@ -349,7 +349,7 @@ export class SyncEngine {
       try {
         await this.#deps.git.abortMerge()
       } catch {
-        // 恢复失败以原始错误为主，恢复失败只记录。
+        // On a failed restore the original error comes first; the restore failure is only logged.
       }
       throw error
     }

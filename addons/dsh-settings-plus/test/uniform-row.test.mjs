@@ -22,9 +22,11 @@ function rowEntries() {
   return out;
 }
 
-// The same in every mode: the core buttons (Modes), Run (Mission), Export and the gear (this add-on), the activity
+// The same in every mode: the core buttons (Modes), Start Mission (Mission), Export and the gear (this add-on), the activity
 // signs and the model button. Status, not a choice: the route badge and the Scratch mark.
-const SAME_EVERYWHERE = ['mode-select', 'mode-toggles', 'activity', 'mission-run-button', 'plus-export', 'plus-mode-gear', 'model-tier'];
+// Item 6: the clock "Schedule this…" (Automations) is the same in every mode too.
+// Item 4A, stage 4: the Cowork switch / place label (Cowork sidebar) belongs to the Chat space, the same in every mode there.
+const SAME_EVERYWHERE = ['mode-select', 'mode-toggles', 'activity', 'mission-run-button', 'plus-export', 'plus-mode-gear', 'model-tier', 'automations-schedule', 'cowork-switch'];
 const STATUS = ['route-health-badge', 'cowork-scratch-mark'];
 // A choice only one mode has and needs per conversation (the owner's rules of 18 November 2026): hidden in the box and
 // shown UNDER it, in the one options area every mode shares (dsh-cowork-shell's OptionsArea), in that mode only. Its
@@ -87,9 +89,9 @@ test('the row\'s words follow the box\'s width alone: the parts that differ per 
   assert.ok(modes.includes(`html[data-dsh-uniform="true"] .dsh-me-tools .lvl{max-width:${lvl};overflow:hidden;text-overflow:ellipsis}`), 'values: measured at their cap');
   assert.match(modes, /\[data-dsh-measure\] \.dsh-me-tools:not\(\[data-f1\]\) button\[data-helpers\] \.lbl\{display:inline-block;min-width:[\d.]+em\}/, 'One model / 2 models');
   assert.match(modes, /\[data-dsh-measure\] \.dsh-me-tools:not\(\[data-f2\]\) button\[data-tools\] \.lbl\{display:inline-block;min-width:[\d.]+em\}/, 'Tools on / off');
-  // Run: "Run" and "Running" have one width (that of "Running").
+  // Start Mission (and, while a Mission is on, its main button) keeps one width.
   const run = ref(/html\[data-dsh-uniform="true"\] \.dsh-ms-runbtn\{min-width:(\d+)px;box-sizing:border-box;justify-content:center\}/);
-  assert.ok(run >= 80, 'Run as wide as "Running"');
+  assert.ok(run >= 80, 'Start Mission keeps one width');
   // The classes measured are the ones the owners draw.
   assert.ok(clientOf('dsh-model-tiers').includes("className: 'dsh-mtm-trigger dsh-mc-trigger'"));
   assert.ok(clientOf('dsh-mission').includes("className: 'dsh-ms-runbtn'"));
@@ -97,7 +99,7 @@ test('the row\'s words follow the box\'s width alone: the parts that differ per 
   assert.match(modes, /'data-tools': none \? 'off' : 'on'/);
 });
 
-test('the same buttons whatever the conversation\'s state: Depth stays (greyed) with Tools off, Run stays (greyed) where a run cannot start', () => {
+test('the same buttons whatever the conversation\'s state: Depth stays (greyed) with Tools off, Start Mission stays (greyed) where a Mission cannot start', () => {
   const modes = clientOf('dsh-modes');
   assert.match(modes, /off && !uniform \? null : h\(DepthButton, \{\s*t, depth: sessionDepthNow, kind: depthKind\(modeDef\), busy: state\.busy, disabled: off,/);
   assert.match(modes, /disabled: busy \|\| disabled, 'data-depth': depth/);
@@ -109,9 +111,9 @@ test('the same buttons whatever the conversation\'s state: Depth stays (greyed) 
   assert.match(body, /getAttribute\('data-dsh-uniform'\) === 'true'/);
   assert.match(body, /setOff\(\/switched off\/i\.test/);
   assert.match(body, /disabled: !notReady \|\| busy, title: why/);
-  // The same word, icon and class as the live button.
+  // The same word, icon and class as the live button (stage B, 19 November: "Start Mission", was "Long run").
   assert.equal((body.match(/className: 'dsh-ms-runbtn'/g) ?? []).length, 1);
-  assert.match(body, /'Long run'\),/);
+  assert.match(body, /'Start Mission'\),/);
 });
 
 test('a mode\'s own button never lingers on another tab: forgotten when the conversation changes, hidden on another sidebar tab', () => {
@@ -125,8 +127,10 @@ test('a mode\'s own button never lingers on another tab: forgotten when the conv
   const recon = clientOf('dsh-recon');
   assert.match(recon, /setRecon\(false\);\s*setOpen\(false\);\s*if \(!sessionId\) return undefined;/);
   assert.match(recon, /if \(!recon \|\| otherTab\) return h\('style', null, DOOR_CSS\);/);
-  // The sidebar's selected tab is the mode the check compares with.
-  assert.match(clientOf('dsh-cowork-shell'), /root\.setAttribute\('data-cws-tab', selected\.id\)/);
+  // The sidebar's selected tab is the mode the check compares with; with the space buttons (item 4A, stage 3a), the open
+  // thread's mode (a new one's: the mode it was given), so a Devices thread keeps its button in any space.
+  assert.match(clientOf('dsh-cowork-shell'), /root\.setAttribute\('data-cws-tab', shownTabId\)/);
+  assert.match(clientOf('dsh-cowork-shell'), /const shownTabId = spacesOn \? \(typeof openMode === 'string' && openMode \?/);
 });
 
 test('one Export: in a Recon conversation the shared Export button opens Recon\'s own export window', () => {

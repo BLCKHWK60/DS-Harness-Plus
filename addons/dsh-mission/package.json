@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Mission: give a goal to several models at once. A planner writes a checklist, workers do it, real commands prove it, a reviewer checks it. Three permission modes keep the work inside the conversation's folder, with checkpoints you can go back to.",
+  "description": "Mission: give a goal to several models at once. A planner writes a checklist, workers do it, real commands prove it, a reviewer checks it. Three Mission access levels keep the work inside the thread's folder, with checkpoints you can go back to.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

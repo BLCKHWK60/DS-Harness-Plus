@@ -101,7 +101,7 @@ export function saveChart(base, folder, name, svg) {
   mkdirSync(wanted, { recursive: true });
   // A link that leads out of the conversation's folder is not followed.
   const dir = realpathSync(wanted);
-  if (dir !== root && !dir.startsWith(root + sep)) throw new Error(`${folder} leads outside this conversation's folder`);
+  if (dir !== root && !dir.startsWith(root + sep)) throw new Error(`${folder} leads outside this thread's folder`);
   for (let n = 1; n <= 200; n += 1) {
     const path = join(dir, `${name}${n === 1 ? '' : `-${n}`}.svg`);
     try {

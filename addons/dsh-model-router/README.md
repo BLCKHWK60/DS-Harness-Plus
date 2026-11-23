@@ -1,6 +1,6 @@
 # Model router
 
-Host plugin `@local/dsh-model-router` (dsh 0.2.2-rc.1). A small routing model picks, for each turn, one of **2 to 5 candidate models** for the user's request. **Nothing is configured by default**: with no candidates the plugin does nothing, and with 1 or more than 5 it fails at load.
+Host add-on `@local/dsh-model-router` (dsh 0.2.2-rc.1). A small routing model picks, for each turn, one of **2 to 5 candidate models** for the user's request. **Nothing is configured by default**: with no candidates the plugin does nothing, and with 1 or more than 5 it fails at load.
 
 ## When the choice takes effect (important)
 
@@ -12,14 +12,14 @@ The spec's statement that `agent/pre-step` is the only legal place to route is t
 
 ## How a decision is made
 
-1. Skip the turn when routing is off for the Session, or when the current route is not a candidate and the router already chose one earlier (someone else, for example you in the composer, changed the route: the router **stands down** and `/router on` resumes it). A route that moved because route health saw the chosen route go down is **not** treated as manual.
+1. Skip the turn when routing is off for the thread, or when the current route is not a candidate and the router already chose one earlier (someone else, for example you in the composer, changed the route: the router **stands down** and `/router on` resumes it). A route that moved because route health saw the chosen route go down is **not** treated as manual.
 2. **Stickiness**: for `policy.stickyTurns` turns after a switch the current candidate stays and the routing model is not called.
 3. Ask the routing model (`ctx.llm.stream`, temperature 0, small token cap) with the candidates' `strengths`, the last `prompt.includeLastN` requests and the current one; it answers JSON `{route, reason, confidence}`.
 4. **Fail safe**: a timeout, an error, unparsable JSON, an unknown or unusable route, or `confidence < policy.minConfidence` keeps the current candidate (or `policy.defaultCandidate` when set).
-5. **Health**: with the route-health plugin loaded and `respectHealth` on, candidates on a `down` route are not offered and cannot be chosen.
+5. **Health**: with the route-health add-on loaded and `respectHealth` on, candidates on a `down` route are not offered and cannot be chosen.
 6. Apply: a Tier candidate goes through `modelTiers.setSessionTier` (route, effort, persisted like a composer choice); an explicit route uses `agent.model.select()` (with its optional `reasoningEffort`).
 
-Every decision is kept in memory (last 20 per Session): `/router` prints the state and the last five (turn, from, to, reason); `/router off` leaves the model alone, `/router on` resumes. Service `modelRouter`: `status(sessionId)`, `setEnabled(sessionId, on)`, `onDecision(handler)`.
+Every decision is kept in memory (last 20 per thread): `/router` prints the state and the last five (turn, from, to, reason); `/router off` leaves the model alone, `/router on` resumes. Service `modelRouter`: `status(sessionId)`, `setEnabled(sessionId, on)`, `onDecision(handler)`.
 
 ## Configuration
 
@@ -39,7 +39,7 @@ No route, model or address is preset. `localOnly` on a candidate is accepted but
 
 ## Costs to know
 
-Each routed turn adds one small model call and up to the timeout in latency at the first step. Every switch changes the model mid-conversation, which discards the inference server's KV cache for that session (hence the stickiness default). Candidates share one conversation history; dsh adds its model-switch notice.
+Each routed turn adds one small model call and up to the timeout in latency at the first step. Every switch changes the model mid-thread, which discards the inference server's KV cache for that thread (hence the stickiness default). Candidates share one thread history; dsh adds its model-switch notice.
 
 ## Verified (rc.1, scripted mock model, throwaway home)
 
@@ -47,10 +47,10 @@ A refactor request on the small route: step 1 on the small model, step 2 on the 
 
 ## Not verified
 
-Routing quality with a real small model (all answers were scripted; the spec's 8-of-10 scripted-prompt target needs real models); the median added latency; `stickyTurns` across several turns in one session and the stand-down rule (needs a long session; covered by unit checks only for stickiness); Tier candidates (`setSessionTier` path); the route-health interplay; the spec's `allowEscalation`, `localOnly` and benchmark replay.
+Routing quality with a real small model (all answers were scripted; the spec's 8-of-10 scripted-prompt target needs real models); the median added latency; `stickyTurns` across several turns in one thread and the stand-down rule (needs a long thread; covered by unit checks only for stickiness); Tier candidates (`setSessionTier` path); the route-health interplay; the spec's `allowEscalation`, `localOnly` and benchmark replay.
 
 ## Tests
 
-Run from the Plus folder with the app's own Node. `test/router.test.mjs` (settings defaults, the candidate checks, the routing-answer reader, the decision rules, the add-on on a stand-in app: switching, a failing or doubtful routing model, manual choices respected, steps after the first, isolated conversations, route health, `/router`, and starter tiers that have no model of their own: routing now keeps working after the first turn instead of switching itself off).
+Run from the Plus folder with the app's own Node. `test/router.test.mjs` (settings defaults, the candidate checks, the routing-answer reader, the decision rules, the add-on on a stand-in app: switching, a failing or doubtful routing model, manual choices respected, steps after the first, isolated threads, route health, `/router`, and starter tiers that have no model of their own: routing now keeps working after the first turn instead of switching itself off).
 
-Fixed with its test: with starter tiers (no model of their own) the router switched itself off after one turn, because it looked for the tier's model, which is empty. It now recognises such a tier by the tier the conversation is on.
+Fixed with its test: with starter tiers (no model of their own) the router switched itself off after one turn, because it looked for the tier's model, which is empty. It now recognises such a tier by the tier the thread is on.

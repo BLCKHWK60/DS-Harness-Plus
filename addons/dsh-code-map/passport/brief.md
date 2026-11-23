@@ -1,29 +1,32 @@
 # Brief: @local/dsh-code-map
 
-What it is for: A compact map of the project (files, symbols, what uses what) so the model looks things up instead of reading whole files, plus four reverse-engineer skills. Nothing to install.
+What it is for: A compact map of your project so the assistant looks things up instead of reading whole files, plus reverse-engineer skills. Nothing to install.
 
-This brief was written by Creator Plus from the plugin's own files. Its README below is the full description, complete enough to rebuild the plugin from; improve this brief by hand, with the user's yes.
+This brief was written by Creator Plus from the add-on's own files. Its README below is the full description, complete enough to rebuild the add-on from; improve this brief by hand, with the user's yes.
 
 ## What it must keep doing
 
 - Its tools: code_map_overview, code_map_file, code_map_find, code_map_related, code_map_read.
-- The services it gives other plugins: codeMap.
+- The services it gives other add-ons: codeMap.
 - Its settings: enabled, promptHint, maxFiles, maxFileKb, extraIgnore, dataDir, commandName, skills.
 
 ## Its README
 
-# Code map
+# Code map (part of "Code tools")
+
+**Code tools** is one Settings page with two add-ons behind it: **Code map** (this add-on: the map of your project and four reverse-engineer guides) and **Code power** (reviews and fixes: four guides and a blind judge; see `../dsh-code-power`). Code map's page is called "Code tools" and shows a tab for each add-on of the pair that is installed; Code power's settings are the "Reviews and fixes" tab. Each add-on works alone: with only Code map there is no second tab, and with only Code power it has a page of its own. Folder names, setting names, tool names and saved data did not change. When Code map is switched off, its five tools are no longer offered to the model at all (before, they were offered and answered "switched off").
+
 
 Add-on `@local/dsh-code-map` (dsh 0.2.2-rc.1). Two things:
 
-1. **A code map.** A compact map of the project a conversation works in: its files, the functions, classes and types in them with line numbers, and what uses what. The assistant looks things up in the map and reads one function at a time, instead of reading whole files. On a large project that uses far fewer tokens.
+1. **A code map.** A compact map of the project a thread works in: its files, the functions, classes and types in them with line numbers, and what uses what. The assistant looks things up in the map and reads one function at a time, instead of reading whole files. On a large project that uses far fewer tokens.
 2. **Four "reverse engineer" skills.** Step-by-step guides the assistant follows to take something apart and write it up: a code base, a website, an API or file format, an installed app.
 
 Nothing is installed: it runs on the app's own engine, with no downloads and no network use. Nothing is written into your project: each map is one file in the app's data folder (`<dsh home>/code-map/<id>/index.json`). It works with nothing configured.
 
 ## What the assistant gets
 
-Five tools, in conversations that have tools (Cowork and Code):
+Five tools, in threads that have tools (Cowork and Code):
 
 | Tool | What it answers |
 | --- | --- |
@@ -51,7 +54,7 @@ In a folder that looks like a code project (or already has a map), three lines a
 - **Names and structure only.** The map does not hold file contents. For text inside files the assistant still uses search.
 - **Size.** At most 5,000 files and 400 KB per file by default (both on the Settings page), 80 MB in total, two minutes per build. A bigger folder is mapped in part, and the page says so.
 - **Folders that are too broad** (your home folder, the disk root, system folders) are refused.
-- **The hint also shows in Chat mode** when the chat's folder is a code project. The add-on cannot see which tools a conversation has, so the hint is worded "if the tools are available" and is about 100 tokens.
+- **The hint also shows in Chat mode** when the thread's folder is a code project. The add-on cannot see which tools a thread has, so the hint is worded "if the tools are available" and is about 100 tokens.
 
 ## What it saves (measured)
 
@@ -84,7 +87,7 @@ Type `/` in the chat box and pick one, or just ask. Each ends in a written docum
 
 **Settings → Code map**: the two switches, every mapped folder with its numbers (**Map again**, **Delete map**), the limits, extra patterns to leave out, and the skills.
 
-`/codemap` shows the numbers for the conversation's folder; `/codemap build` maps it again; `/codemap clear` deletes its map.
+`/codemap` shows the numbers for the thread's folder; `/codemap build` maps it again; `/codemap clear` deletes its map.
 
 ```yaml
 - id: code-map
@@ -103,7 +106,7 @@ The first five are live (`.volatile()`), so the Settings page changes them witho
 
 ## Safety
 
-- Only the conversation's working folder is mapped. The tools take paths relative to it; absolute paths, `..`, `~` and anything outside are refused.
+- Only the thread's working folder is mapped. The tools take paths relative to it; absolute paths, `..`, `~` and anything outside are refused.
 - A file can be read through these tools only if it is in the map. Before each read the file is checked again: it must still be a plain file inside the folder, so a file or folder swapped for a link after mapping is not read.
 - The page's data comes from `GET /dsh-code-map/status` (numbers and folder paths, never file contents). **Map again** and **Delete map** go to `POST /dsh-code-map/action`. Both sit behind the app's own fence (login cookie, Host and Origin check) and are never cached. The POST also needs a JSON body under 2 KB and the header `x-dsh-code-map: 1`, and it only accepts the id of a folder that already has a map, or of the app's default folder. So the page cannot point the mapper at an arbitrary path. A POST was chosen because the app offers add-ons no ready-made channel for a page-to-host action, and a GET must not change anything.
 - Service for other add-ons: `ctx.get('codeMap')` with `ensure(folder)` and `list()`.
@@ -134,7 +137,7 @@ The first five are live (`.volatile()`), so the Settings page changes them witho
 
 **Not checked:**
 
-- A real model calling the tools in a conversation. The mock model cannot call tools; the tools were exercised through the unit tests against real folders and through `measure.mjs`.
+- A real model calling the tools in a thread. The mock model cannot call tools; the tools were exercised through the unit tests against real folders and through `measure.mjs`.
 - `/codemap build` and `/codemap clear` typed in the chat box (the command with no argument was; the same code is covered by a unit test).
 - The skills being followed by a real model, and how they show in the `/` menu.
 - The Mac desktop app, light mode, and colour schemes other than the default one.

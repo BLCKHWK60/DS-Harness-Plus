@@ -150,7 +150,7 @@ test('plaintext git: sessions travel both ways and stay byte-identical', async (
   await a.run('push');
   const second = await b.run('pull');
   assert.match(second.text, /remote changes merged/);
-  assert.match(second.text, /copied 1 session file/);
+  assert.match(second.text, /copied 1 thread file/);
   assert.equal(b.read('proj-a/sess-1/session.jsonl'), 'line1\nline2\nline3\n');
   assert.deepEqual(walk(b.sessions).filter((f) => f.includes('.tmp')), [], 'no temp files left');
   // no false conflicts: the original wrote one shared device.txt per device and every pull reported a fork
@@ -561,7 +561,7 @@ test('askIsolation never throws, and anything but a usable answer means "not kno
   assert.equal((await askIsolation(undefined)).reason, UNKNOWN_REASON);
   const thrown = await askIsolation(async () => { throw new Error('settings busy'); });
   assert.equal(thrown.known, false);
-  assert.match(thrown.reason, /could not tell which conversations are isolated \(settings busy\)/);
+  assert.match(thrown.reason, /could not tell which threads are sealed \(settings busy\)/);
   assert.equal((await askIsolation(async () => ({ known: true }))).known, false, 'no rule to leave files out');
   assert.equal((await askIsolation(async () => ({ known: false, reason: 'Modes is starting' }))).reason, 'Modes is starting');
   const good = await askIsolation(async () => ({ known: true, ids: new Set(['r1']), exclude: (rel) => rel.includes('/r1/') }));
@@ -607,7 +607,7 @@ test('plaintext git: an isolated conversation is never pushed, and the other mac
   a.put('--proj--/r~003A1/session.jsonl', 'RECON-SECRET-TEXT\n');
   const pushed = await a.run('push');
   assert.equal(pushed.kind, 'success', pushed.text);
-  assert.match(pushed.text, /left out 1 file\(s\) of isolated \(Recon\) and Scratch conversations: they are never synced/);
+  assert.match(pushed.text, /left out 1 file\(s\) of sealed \(Recon\) and Scratch threads: they are never synced/);
   assert.deepEqual(git(remote, 'ls-tree', '-r', '--name-only', 'main').trim().split('\n'), ['sessions/--proj--/c1/session.jsonl']);
   assert.equal(git(remote, 'log', '--all', '-p').includes('RECON-SECRET-TEXT'), false, 'not in any commit');
   assert.ok(!walk(a.repo).some((file) => file.includes('r~003A1')), 'not even in the local worktree');
@@ -616,7 +616,7 @@ test('plaintext git: an isolated conversation is never pushed, and the other mac
   assert.equal(b.has('--proj--/r~003A1/session.jsonl'), false);
   // The live files of the isolated conversation are left as they are.
   assert.equal(a.read('--proj--/r~003A1/session.jsonl'), 'RECON-SECRET-TEXT\n');
-  assert.match((await a.run('status')).text, /isolated conversations \(Recon\): 1, never synced/);
+  assert.match((await a.run('status')).text, /sealed threads \(Recon\): 1, never synced/);
 });
 
 test('a conversation pushed by an earlier version leaves the remote\'s branch once it is known to be isolated', async () => {
@@ -631,7 +631,7 @@ test('a conversation pushed by an earlier version leaves the remote\'s branch on
   a.isolate('r1');
   const pushed = await a.run('push');
   assert.equal(pushed.kind, 'success', pushed.text);
-  assert.match(pushed.text, /took 1 file\(s\) of isolated \(Recon\) and Scratch conversations out of the sync repository \(its git history still holds them\)/);
+  assert.match(pushed.text, /took 1 file\(s\) of sealed \(Recon\) and Scratch threads out of the sync repository \(its git history still holds them\)/);
   assert.deepEqual(git(remote, 'ls-tree', '-r', '--name-only', 'main').trim().split('\n'), ['sessions/--proj--/c1/session.jsonl']);
   assert.equal(a.read('--proj--/r1/session.jsonl'), 'recon talk\n', 'the live files stay');
   // The other machine's copy, which only Sync put there and nobody changed, goes with it.
@@ -677,7 +677,7 @@ test('a conversation moved into the Recon tab after it ran is still synced, open
   a.put('--proj--/moved/session.jsonl', 'budget talk\n');
   const pushed = await a.run('push');
   assert.equal(pushed.kind, 'success', pushed.text);
-  assert.ok(!/isolated conversations/.test(pushed.text), pushed.text);
+  assert.ok(!/isolated threads/.test(pushed.text), pushed.text);
   assert.equal((await c.run('pull')).kind, 'success');
   assert.equal(c.read('--proj--/moved/session.jsonl'), 'budget talk\n');
   delete open.moved;
@@ -718,7 +718,7 @@ exec '${realGit}' "$@"
   assert.equal((await pulling).kind, 'success');
   const pushed = await pushing;
   assert.equal(pushed.kind, 'success', pushed.text);
-  assert.match(pushed.text, /left out 1 file\(s\) of isolated \(Recon\) and Scratch conversations/);
+  assert.match(pushed.text, /left out 1 file\(s\) of sealed \(Recon\) and Scratch threads/);
   assert.equal(git(remote, 'log', '--all', '-p').includes('RECON-SECRET-TEXT'), false, 'not in any commit on the remote');
   assert.equal(git(a.repo, 'log', '--all', '-p').includes('RECON-SECRET-TEXT'), false, 'not in any local commit either');
 });
@@ -729,13 +729,13 @@ test('without the Modes add-on nothing is pushed or pulled, and status copies no
   a.put('--proj--/r1/session.jsonl', 'maybe recon\n');
   const push = await a.run('push');
   assert.equal(push.kind, 'error');
-  assert.match(push.text, /Sync did not run: the Modes add-on is not running, and it is what tells Sync which conversations are isolated \(Recon\)/);
+  assert.match(push.text, /Sync did not run: the Modes add-on is not running, and it is what tells Sync which threads are sealed \(Recon\)/);
   assert.equal(git(remote, 'branch', '--list').trim(), '', 'the remote received nothing');
   const pull = await a.run('pull');
   assert.equal(pull.kind, 'error');
   assert.match(pull.text, /Modes add-on is not running/);
   const status = await a.run('status');
-  assert.match(status.text, /isolated conversations \(Recon\): unknown, so push and pull wait: the Modes add-on is not running/);
+  assert.match(status.text, /sealed threads \(Recon\): unknown, so push and pull wait: the Modes add-on is not running/);
   assert.ok(!existsSync(join(a.repo, 'sessions')) || walk(join(a.repo, 'sessions')).length === 0, 'nothing copied into the worktree');
 });
 
@@ -772,7 +772,7 @@ test('encrypted backend: an isolated conversation never reaches the remote, and 
   assert.match(push.text, /Modes add-on is not running/);
   assert.equal(git(remote, 'rev-parse', 'main').trim(), before, 'the remote received nothing');
   assert.ok(!existsSync(join(off.repo, 'sessions')) || walk(join(off.repo, 'sessions')).length === 0, 'nothing copied into the worktree');
-  assert.match((await off.run('status')).text, /isolated conversations \(Recon\): unknown, so push and pull wait/);
+  assert.match((await off.run('status')).text, /sealed threads \(Recon\): unknown, so push and pull wait/);
 });
 
 
@@ -824,13 +824,13 @@ test('plaintext git: a Scratch thread and its helper are never pushed, and the o
   a.put(`${folder}/h1/session.jsonl`, 'SCRATCH-HELPER-TEXT\n');
   const pushed = await a.run('push');
   assert.equal(pushed.kind, 'success', pushed.text);
-  assert.match(pushed.text, /left out 2 file\(s\) of isolated \(Recon\) and Scratch conversations/);
+  assert.match(pushed.text, /left out 2 file\(s\) of sealed \(Recon\) and Scratch threads/);
   assert.deepEqual(git(remote, 'ls-tree', '-r', '--name-only', 'main').trim().split('\n'), ['sessions/--proj--/c1/session.jsonl']);
   assert.equal(/SCRATCH-(PRIVATE|HELPER)-TEXT/.test(git(remote, 'log', '--all', '-p')), false, 'not in any commit');
   assert.equal((await b.run('pull')).kind, 'success');
   assert.equal(b.has(`${folder}/s1/session.jsonl`), false);
   assert.equal(a.read(`${folder}/s1/session.jsonl`), 'SCRATCH-PRIVATE-TEXT\n', 'the live files stay');
-  assert.match((await a.run('status')).text, /Scratch conversations: 2, never synced/);
+  assert.match((await a.run('status')).text, /Scratch threads: 2, never synced/);
 });
 
 test('a Scratch thread pushed by an earlier Sync leaves the remote\'s branch, and a pull never writes one', async () => {
@@ -855,7 +855,7 @@ test('a Scratch thread pushed by an earlier Sync leaves the remote\'s branch, an
   const now = device(plainCfg(remote, { home }), { stored: [{ header: { id: 's1', cwd: join(home, 'scratch') } }] });
   const pushed = await now.run('push');
   assert.equal(pushed.kind, 'success', pushed.text);
-  assert.match(pushed.text, /took 1 file\(s\) of isolated \(Recon\) and Scratch conversations out of the sync repository/);
+  assert.match(pushed.text, /took 1 file\(s\) of sealed \(Recon\) and Scratch threads out of the sync repository/);
   assert.ok(!git(remote, 'ls-tree', '-r', '--name-only', 'main').includes(`${folder}/s1`), 'off the branch');
   assert.equal(now.read(`${folder}/s1/session.jsonl`), 'scratch talk\n', 'the live files stay');
 });
@@ -958,4 +958,34 @@ test('with Recon switched off, a whole push runs and leaves out the moved conver
   assert.doesNotMatch(pushed.text, /switched off/);
   assert.equal(git(remote, 'log', '--all', '-p').includes('MOVED-SECRET'), false);
   assert.ok(git(remote, 'ls-tree', '-r', '--name-only', 'main').includes('--proj--/c1/session.jsonl'));
+});
+
+// ---- item 4A, stage 6a: the Recon space keeps its rules for any mode (STAGE6A-DESIGN.md, P4 belt) -------------------
+
+test('sync-skip-by-space: a thread recorded in the Recon space (any mode, no mark) and its helpers are never synced', async () => {
+  const { isolatedIds, readIsolation } = await import('../lib/isolation.mjs');
+  const modes = { sessionIsolated: '{}', sessionSpaces: JSON.stringify({ rr: 'recon', ch: 'chat', dv: 'devices' }) };
+  const ids = isolatedIds({ modes, parents: new Map([['h1', 'rr']]) });
+  assert.ok(ids.has('rr'));
+  assert.ok(ids.has('h1'), 'its helper too');
+  assert.ok(!ids.has('ch') && !ids.has('dv'));
+  const read = await readIsolation({ settings: { describe: () => [{ ns: 'modes', value: modes }] }, sessionPersistence: { list: async () => [] } });
+  assert.equal(read.known, true);
+  assert.ok(read.ids.has('rr'));
+});
+
+test('hidden-by-room-folder: a closed thread whose saved folder is Recon\'s room is never synced (no space, no mark)', async () => {
+  const { readIsolation } = await import('../lib/isolation.mjs');
+  const asked = [];
+  const recon = { isRoom: (folder) => { asked.push(folder); return folder.startsWith('/tmp/dsh-recon-room'); } };
+  const snapshots = [{ header: { id: 'lost', cwd: '/tmp/dsh-recon-room/run-lost' } }, { header: { id: 'ch', cwd: '/Users/me/app' } }, { header: { id: 'ch2', cwd: '/Users/me/app' } }, { header: { id: 'h2', parentSession: 'lost', cwd: '/Users/me/app' } }];
+  const read = await readIsolation({ settings: { describe: () => [{ ns: 'modes', value: { sessionIsolated: '{}' } }] }, sessionPersistence: { list: async () => snapshots }, recon });
+  assert.equal(read.known, true);
+  assert.ok(read.ids.has('lost'));
+  assert.ok(read.ids.has('h2'), 'its helper too');
+  assert.ok(!read.ids.has('ch'));
+  assert.equal(asked.filter((folder) => folder === '/Users/me/app').length, 1, 'asked once per folder');
+  const throwing = await readIsolation({ settings: { describe: () => [{ ns: 'modes', value: { sessionIsolated: '{}' } }] }, sessionPersistence: { list: async () => snapshots }, recon: { isRoom: () => { throw new Error('x'); } } });
+  assert.equal(throwing.known, true);
+  assert.ok(!throwing.ids.has('lost'), 'only Recon\'s yes counts');
 });

@@ -1,6 +1,6 @@
 # Notify
 
-Host plugin `@local/dsh-notify` (dsh 0.2.2-rc.1). dsh has no desktop notifications; this runs a command **you list** when something happens. **Nothing is configured by default**: with no rules it does not even listen.
+Host add-on `@local/dsh-notify` (dsh 0.2.2-rc.1). dsh has no desktop notifications; this runs a command **you list** when something happens. **Nothing is configured by default**: with no rules it does not even listen.
 
 ## Where you set it up (no YAML needed)
 
@@ -43,7 +43,7 @@ command: [osascript, -e, 'display notification (system attribute "DSH_NOTIFY_MES
 
 - Never blocks a turn: the command runs in the background; a failure or timeout is counted and logged, not raised.
 - Flood control: `minIntervalSeconds` per rule and `maxPerMinute` overall.
-- Events replayed from history (resuming a session) do not notify.
+- Events replayed from history (resuming a thread) do not notify.
 - `/notify` shows rules and counts (started, failed and the last error code, skipped by the rate limit); `/notify test [rule]` runs a rule with a sample event and ignores the rate limits. Service `notify`: `rules`, `test`, `stats`.
 
 ## Checked

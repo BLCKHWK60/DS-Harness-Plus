@@ -157,8 +157,8 @@ window.__ModuleLoader__.load({
     const { ask: askInPage } = dshKit;
 
     const NS = 'skillArchitect';
-    const DICT = { en: { 'section.title': 'Learned skills' }, zh: { 'section.title': '学到的技能' } };
-    const KIND_LABELS = { skill: 'Skill', fact: 'Fact for Memory', rule: 'Project rule', habit: 'Model habit', lesson: 'Tab lesson', recipe: 'Work loop recipe', version: 'Model version setting' };
+    const DICT = { en: { 'section.title': 'Learned skills' } };
+    const KIND_LABELS = { skill: 'Skill', fact: 'Fact for Memory', rule: 'Project rule', habit: 'Model habit', lesson: 'Mode lesson', recipe: 'Work loop recipe', version: 'Model version setting' };
     const WHERE = { local: 'on this Mac', network: 'on your own network', cloud: 'on the internet', unknown: 'somewhere unknown (treated as the internet)' };
 
     const CSS = `
@@ -202,7 +202,7 @@ window.__ModuleLoader__.load({
         return [];
       }
     };
-    const reachText = (reach) => (reach.kind === 'project' ? `project ${reach.folder.split('/').pop()}` : reach.kind === 'tab' ? `tab ${reach.tab}` : 'every tab');
+    const reachText = (reach) => (reach.kind === 'project' ? `project ${reach.folder.split('/').pop()}` : reach.kind === 'tab' ? `mode ${reach.tab}` : 'every mode');
 
     function SkillCard({ skill, busy, act }) {
       const [open, setOpen] = useState(false);
@@ -220,7 +220,7 @@ window.__ModuleLoader__.load({
             h('button', { type: 'button', className: 'dsh-sa-btn', disabled: busy || text === skill.text, onClick: () => act({ action: 'update', name: skill.name, text }) }, 'Save as a new version'),
             h('select', { className: 'dsh-sa-btn', value: '', 'aria-label': 'Put back a version', onChange: (event) => { if (event.target.value) act({ action: 'putBack', name: skill.name, version: Number(event.target.value) }); } },
               h('option', { value: '' }, 'Put back a version…'),
-              skill.versions.filter((version) => version.n !== skill.current).reverse().map((version) => h('option', { key: version.n, value: version.n }, `${version.n}: ${new Date(version.at).toLocaleString()} ${version.why}`))))) : null);
+              skill.versions.filter((version) => version.n !== skill.current).reverse().map((version) => h('option', { key: version.n, value: version.n }, `${version.n}: ${new Date(version.at).toLocaleString('en-GB')} ${version.why}`))))) : null);
     }
 
     /** A recipe's lines as the owner reads them: its file, name, kind, the words that pick it, its shape, steps and stop. */
@@ -273,11 +273,11 @@ window.__ModuleLoader__.load({
         waiting && proposal.kind === 'skill' ? h('input', { className: 'dsh-sa-field', value: name, 'aria-label': 'Skill name', onChange: (event) => setName(event.target.value) }) : null,
         waiting ? h('textarea', { className: 'dsh-sa-field', rows: 4, value: text, 'aria-label': 'Proposal text', onChange: (event) => setText(event.target.value) }) : h('div', { className: 'dsh-sa-text' }, proposal.text),
         waiting && (proposal.kind === 'habit' || proposal.kind === 'lesson') ? h('p', null, 'Accepting marks it done; add the text yourself on Settings → Self-improve as your own lesson, on the model version it is about.') : null,
-        waiting && proposal.kind === 'version' ? h('p', null, 'Accepting marks it done; change the version yourself on Settings → Model Tiers → Model versions.') : null,
+        waiting && proposal.kind === 'version' ? h('p', null, 'Accepting marks it done; change the version yourself on Settings → Model tiers → Model versions.') : null,
         proposal.kind === 'recipe' && proposal.recipe ? h(RecipeChange, { proposal }) : null,
         waiting && proposal.kind === 'recipe' ? h('p', null, 'Accepting saves it in Mission\'s recipes as a new version; the earlier one is kept in recipes/old. Runs with the work loop use it from the next one.') : null,
         (proposal.quotes ?? []).map((quote, index) => h('div', { key: index, className: 'dsh-sa-quote' }, quote)),
-        proposal.quotesGone ? h('p', null, 'Its quotes are gone: the conversation was deleted.') : null);
+        proposal.quotesGone ? h('p', null, 'Its quotes are gone: the thread was deleted.') : null);
     }
 
     function Page({ appCtx }) {
@@ -342,7 +342,7 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dsh-sa' },
         h('style', null, CSS),
         h('h2', null, 'Learned skills'),
-        h('p', null, 'Reads your past conversations where you corrected the assistant, stopped it, gave a thumbs down with a note, or sent feedback, and proposes what to change: a skill, a fact for Memory, a rule for a project. Nothing is installed until you accept it here. Learned skills are plain text; nothing a model writes is ever run.'),
+        h('p', null, 'Reads your past threads where you corrected the assistant, stopped it, gave a thumbs down with a note, or sent feedback, and proposes what to change: a skill, a fact for Memory, a rule for a project. Nothing is installed until you accept it here. Learned skills are plain text; nothing a model writes is ever run.'),
         note.text ? h('p', { 'data-error': String(note.error), role: 'status' }, note.text) : null,
 
         h('h3', null, 'Reading model'),
@@ -360,21 +360,21 @@ window.__ModuleLoader__.load({
           h('button', { type: 'button', className: 'dsh-sa-btn', disabled: busy || !data.readingModel || data.learning, onClick: () => void act({ action: 'learn', seen: Boolean(preview) }, 'Done: see the proposals below.') }, data.learning ? 'Learning…' : 'Learn now')),
         found ? h('div', { className: 'dsh-sa-card' },
           !found.known ? h('p', { 'data-error': 'true' }, found.reason) : null,
-          h('p', null, `${found.candidates.length} conversation${found.candidates.length === 1 ? '' : 's'} with something to learn from; ${found.left.length} left out.`),
+          h('p', null, `${found.candidates.length} thread${found.candidates.length === 1 ? '' : 's'} with something to learn from; ${found.left.length} left out.`),
           found.candidates.map((item) => h('div', { key: item.id, className: 'dsh-sa-row' },
             h('span', { className: 'dsh-sa-grow' }, `${item.tab || '?'} · ${item.cwd.split('/').pop() || 'no folder'} · ${item.corrections} correction(s), ${item.stops} stop(s), ${item.thumbsDown} thumbs down, ${item.feedback} feedback`),
             h('button', { type: 'button', className: 'dsh-sa-btn', disabled: busy, onClick: () => void act({ action: 'nolearn', sessionId: item.id, on: true }, 'It will never be read.').then(() => setFound((before) => ({ ...before, candidates: before.candidates.filter((other) => other.id !== item.id) }))) }, 'Never learn from this'))),
           found.left.length > 0 ? h('p', null, `Left out: ${[...new Set(found.left.map((item) => item.why))].join(', ')}.`) : null) : null,
-        preview ? h('div', { className: 'dsh-sa-card' }, h('p', null, `This goes to ${preview.model}, ${WHERE[preview.where] ?? preview.where}, from ${preview.conversations} conversation(s):`), h('div', { className: 'dsh-sa-text' }, preview.text || '(nothing to send)')) : null,
-        data.nolearn.length > 0 ? h('p', null, `${data.nolearn.length} conversation(s) marked "never learn from this".`) : null,
+        preview ? h('div', { className: 'dsh-sa-card' }, h('p', null, `This goes to ${preview.model}, ${WHERE[preview.where] ?? preview.where}, from ${preview.conversations} thread(s):`), h('div', { className: 'dsh-sa-text' }, preview.text || '(nothing to send)')) : null,
+        data.nolearn.length > 0 ? h('p', null, `${data.nolearn.length} thread(s) marked "never learn from this".`) : null,
         h('div', { className: 'dsh-sa-row' },
           h('span', { className: 'dsh-sa-grow' }, 'Learn by itself (only proposes; only while the app is open; only with a model on this Mac or your network)'),
           h('select', { className: 'dsh-sa-btn', value: data.schedule, disabled: busy, 'aria-label': 'Learn by itself', onChange: (event) => void setSettings(appCtx, { schedule: event.target.value }).then(load) },
             h('option', { value: 'off' }, 'Off'), h('option', { value: 'nightly' }, 'Nightly'), h('option', { value: 'weekly' }, 'Weekly'))),
-        data.schedule !== 'off' && data.lastRun ? h('p', null, `Last run ${new Date(data.lastRun).toLocaleString()}. ${data.lastNote}${data.missed ? ' Runs were missed while the app was closed; they are not caught up.' : ''}`) : null,
+        data.schedule !== 'off' && data.lastRun ? h('p', null, `Last run ${new Date(data.lastRun).toLocaleString('en-GB')}. ${data.lastNote}${data.missed ? ' Runs were missed while the app was closed; they are not caught up.' : ''}`) : null,
 
         h('h3', null, `Waiting for your yes (${waiting.length})`),
-        waiting.length === 0 ? h('p', null, 'Nothing waits. Learn now, or type /skills learn in a chat.') : waiting.map((proposal) => h(ProposalCard, { key: proposal.id, proposal, busy, act })),
+        waiting.length === 0 ? h('p', null, 'Nothing waits. Learn now, or type /skills learn in a thread.') : waiting.map((proposal) => h(ProposalCard, { key: proposal.id, proposal, busy, act })),
         decided.length > 0 ? h('p', null, `Decided lately: ${decided.map((item) => `${KIND_LABELS[item.kind]} ${item.state}`).join(', ')}.`) : null,
 
         h('h3', null, `Learned skills (${data.skills.filter((skill) => !skill.deleted).length})`),
@@ -387,7 +387,7 @@ window.__ModuleLoader__.load({
           h('button', { type: 'button', className: 'dsh-sa-btn', disabled: busy, onClick: () => void act({ action: 'add', ...draft, reach: { kind: 'all' } }, 'Added.').then((next) => { if (next) setDraft({ name: '', description: '', text: '' }); }) }, 'Add')),
 
         h('h3', null, 'Good to know'),
-        h('p', null, 'A learned skill never takes the name of one of your skills, a project\'s, Plus\'s or the app\'s, and never changes them. Recon conversations get none and are never read. A project can start clean: its folder is listed below.'),
+        h('p', null, 'A learned skill never takes the name of one of your skills, a project\'s, Plus\'s or the app\'s, and never changes them. Recon threads get none and are never read. A project can start clean: its folder is listed below.'),
         h('div', { className: 'dsh-sa-row' },
           h('select', { className: 'dsh-sa-field', value: '', disabled: busy, 'aria-label': 'A project that starts clean', onChange: (event) => { const folder = event.target.value; if (folder) void act({ action: 'projectOff', folder, on: true }, 'That project starts clean: no learned skills there.'); } },
             h('option', { value: '' }, 'Start clean in a project (no learned skills there)…'),

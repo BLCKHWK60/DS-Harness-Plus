@@ -218,7 +218,7 @@ export function sourcesAllow({ ticks, lists, address }) {
   return {
     ok: false,
     kinds,
-    why: `This conversation's Web sources are ${tickedWords(ticks)}, which leaves out ${what}: ${host} was not opened. Name it to the user as a lead: they can tick ${kinds[0] === 'unknown' ? 'every kind of source' : what} on the Web button, or add the site to a list on Settings → Web sources. Do not try to reach it another way (a command, a program, another tool).`,
+    why: `This thread's Web sources are ${tickedWords(ticks)}, which leaves out ${what}: ${host} was not opened. Name it to the user as a lead: they can tick ${kinds[0] === 'unknown' ? 'every kind of source' : what} on the Web button, or add the site to a list on Settings → Web sources. Do not try to reach it another way (a command, a program, another tool).`,
   };
 }
 
@@ -271,10 +271,10 @@ export function filterSearchText(text, sources, ticks, lists, answer = '') {
   if (out.length === 0) return { text, left: 0 };
   const drop = new Set(out);
   let body = String(text ?? '').split('\n').filter((line) => !(line.startsWith('- [') && [...drop].some((url) => line.includes(`](${url})`)))).join('\n');
-  if (answer && body.includes(answer)) body = body.replace(answer, '(The search service\'s own summary was left out: it may draw on results that are not among this conversation\'s Web sources.)');
+  if (answer && body.includes(answer)) body = body.replace(answer, '(The search service\'s own summary was left out: it may draw on results that are not among this thread\'s Web sources.)');
   const kept = sources.length - out.length;
   if (kept === 0) body = body.replace(/Sources:\n?/, 'Sources: none of the ticked kinds.\n');
-  body += `\n\n(${out.length} result${out.length === 1 ? ' was' : 's were'} left out because ${out.length === 1 ? 'it is' : 'they are'} not among this conversation's Web sources: ${tickedWords(ticks.filter((kind) => KINDS.includes(kind)))}.)`;
+  body += `\n\n(${out.length} result${out.length === 1 ? ' was' : 's were'} left out because ${out.length === 1 ? 'it is' : 'they are'} not among this thread's Web sources: ${tickedWords(ticks.filter((kind) => KINDS.includes(kind)))}.)`;
   return { text: body, left: out.length };
 }
 

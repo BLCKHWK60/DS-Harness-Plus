@@ -18,7 +18,7 @@ export const SHELL_TOOLS = new Set(['bash', 'shell', 'pwsh', 'powershell', 'term
 export const signedInTool = (name) => /^mcp__/.test(String(name ?? ''));
 /** Bench's and Recon's own tools: a turn that called one is never a row, whatever the tab says now. */
 export const closedTool = (name) => /^(?:bench|recon)_/.test(String(name ?? ''));
-/** How long a conversation must be quiet before its newest turn counts as not corrected. */
+/** How long a thread must be quiet before its newest turn counts as not corrected. */
 export const QUIET_MS = 6 * 60 * 60_000;
 const timeOf = (event) => {
   const value = event?.time ?? event?.data?.time ?? event?.at;
@@ -43,9 +43,9 @@ const argsOf = (raw) => {
 const commandOf = (args) => String(args?.command ?? args?.cmd ?? args?.script ?? args?.text ?? '');
 
 /**
- * The turns of one conversation, from its stored events.
+ * The turns of one thread, from its stored events.
  * @param {{type: string, data?: object}[]} events - oldest first.
- * @param {number} [inherited] - events at the start copied from another conversation (a fork): left out.
+ * @param {number} [inherited] - events at the start copied from another thread (a fork): left out.
  * @returns {{turn: number, request: string, tools: {name: string, args: object, error: boolean, result: string}[], answer: string, end: string, by: {provider: string, model: string}}[]} the turns.
  */
 export function turnsOf(events, inherited = 0) {
@@ -121,7 +121,7 @@ export function turnsOf(events, inherited = 0) {
   return turns;
 }
 
-/** The time of a conversation's newest event (0 when the events carry no times). */
+/** The time of a thread's newest event (0 when the events carry no times). */
 export function lastTimeOf(events) {
   const list = Array.isArray(events) ? events : [];
   for (let index = list.length - 1; index >= 0; index -= 1) {
@@ -144,16 +144,16 @@ export function maskedCalls(tools) {
   });
   return { calls, unsure };
 }
-/** Whether a turn may be a row now: finished, not closed, and not the newest turn of a conversation still in use. */
+/** Whether a turn may be a row now: finished, not closed, and not the newest turn of a thread still in use. */
 export const settled = (turn, quiet) => !turn.closed && (!turn.last || quiet === true);
 
 const callText = (call) => JSON.stringify({ name: call.name, arguments: call.args });
 const solution = (turn, tools) => JSON.stringify({ calls: tools.map((call) => ({ name: call.name, arguments: call.args })), answer: turn.answer.slice(0, 8000) });
 
 /**
- * Rows from a conversation's turns: tool calls that solved a request (tests passed, or the turn finished
+ * Rows from a thread's turns: tool calls that solved a request (tests passed, or the turn finished
  * with no failed call and the owner did not correct it), and failed calls beside the call that then worked.
- * The newest turn waits until a later turn shows it was not corrected, or the conversation was quiet for
+ * The newest turn waits until a later turn shows it was not corrected, or the thread was quiet for
  * hours (`quiet`). A turn that called Bench's or Recon's own tools is never a row.
  * @param {object[]} turns - from turnsOf.
  * @param {{mode: string, session: string, depth?: string, quiet?: boolean}} meta - where they came from.
@@ -200,7 +200,7 @@ export function withdrawnIds(turns, meta) {
  * Rows from a finished Mission run: an item whose check command passed (a checked row), a try that failed
  * before it (a failure row, for the weakest spot), and the cheapest model that passed each item (router).
  * @param {{run: object, log: object[], mode: string, session: string, models?: Record<string, number>}} input -
- *   run.json, log.jsonl entries, the conversation's mode, and a cost rank per model (lower is cheaper).
+ *   run.json, log.jsonl entries, the thread's mode, and a cost rank per model (lower is cheaper).
  * @returns {object[]} rows.
  */
 export function rowsFromRun({ run, log, mode, session, models = {} }) {
@@ -233,7 +233,7 @@ export function rowsFromRun({ run, log, mode, session, models = {} }) {
  * @param {{subject: string}} meta
  * @returns {object[]} rows.
  */
-/** Where a claim came from that may be harvested: a Research report, this conversation, the owner's own words. */
+/** Where a claim came from that may be harvested: a Research report, this thread, the owner's own words. */
 export const SAFE_ORIGINS = new Set(['research', 'content', 'owner']);
 
 export function rowsFromLedger(state, { subject }) {
@@ -243,7 +243,7 @@ export function rowsFromLedger(state, { subject }) {
   for (const claim of Array.isArray(state?.claims) ? state.claims : []) {
     if (!claim?.ruled || !claim.standing || !claim.text) continue;
     // Only a claim whose origin is known and safe (never Recon, never unknown), citing no source of
-    // another origin (a Recon source cited by a claim of this conversation).
+    // another origin (a Recon source cited by a claim of this thread).
     if (!SAFE_ORIGINS.has(String(claim.origin ?? '').toLowerCase())) continue;
     if ((Array.isArray(claim.sources) ? claim.sources : []).some((id) => unsafe.has(id))) continue;
     const text = [`Claim: ${claim.text}`, claim.who ? `Who says it: ${claim.who}` : '', claim.passage ? `Passage: ${claim.passage}` : ''].filter(Boolean).join('\n');

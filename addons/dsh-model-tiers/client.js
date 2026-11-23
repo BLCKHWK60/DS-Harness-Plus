@@ -255,7 +255,7 @@ window.__ModuleLoader__.load({
       },
     };
 
-    /** Starter rules. No model is preconfigured: a tier with no model uses the conversation's model. */
+    /** Starter rules. No model is preconfigured: a tier with no model uses the thread's model. */
     const STARTER_RULES = { webSearch: true, webFetch: true, browser: true, subagents: true };
     const DEFAULT_TIERS = {
       haiku: { provider: '', model: '', effort: 'low', ...STARTER_RULES },
@@ -270,7 +270,7 @@ window.__ModuleLoader__.load({
 
     const DICT = {
       en: {
-        'section.title': 'Model Tiers',
+        'section.title': 'Model tiers',
         'section.description':
           'Five model slots for planning, coding, and review. Each tier carries its own model, effort, internet access, and sub-agent policy.',
         'tier.haiku': 'Fast',
@@ -299,7 +299,7 @@ window.__ModuleLoader__.load({
           'At Ultra Code, push the model to split independent work across sub-agents instead of waiting to be asked.',
         'settings.active': 'Tiers in use right now',
         'settings.activeHint':
-          'Conversations that have a tier chosen in the chat box. Clearing this returns every conversation to its normal model choice.',
+          'Threads that have a tier chosen in the chat box. Clearing this returns every thread to its normal model choice.',
         'settings.clearActive': 'Clear tiers in use',
         'settings.saved': 'Saved',
         'settings.saving': 'Saving…',
@@ -308,58 +308,13 @@ window.__ModuleLoader__.load({
         'settings.noCatalog': 'The model list could not be read. Type the model service and model name yourself.',
         'settings.writable': 'These tiers are saved as you change them.',
         'composer.tier': 'Model',
-        'composer.configure': 'Set up tiers in Settings → Model Tiers',
+        'composer.configure': 'Set up tiers in Settings → Model tiers',
         'composer.clear': 'Use normal model selection',
         'composer.noConfig': 'No tiers are set up yet.',
         'composer.busy': 'Switching…',
         'composer.failed': 'Could not switch tier',
         'composer.codeHint': 'Review, check, and fix code',
         'composer.net': 'Internet',
-      },
-      zh: {
-        'section.title': '模型层级',
-        'section.description':
-          '用于规划、编码和审查的五个模型位。每个层级都有自己的模型、推理强度、网络权限和子代理策略。',
-        'tier.haiku': 'Fast',
-        'tier.sonnet': 'Balanced',
-        'tier.opus': 'Deep',
-        'tier.fable': 'Creative',
-        'tier.code': 'Code review',
-        'effort.off': '关闭',
-        'effort.low': '低',
-        'effort.medium': '中',
-        'effort.high': '高',
-        'effort.extra-high': '极高',
-        'effort.ultra': 'Ultra Code',
-        'settings.model': '模型',
-        'settings.provider': '提供商',
-        'settings.customModel': '模型 ID',
-        'settings.effort': '推理强度',
-        'settings.webSearch': '网页搜索',
-        'settings.webFetch': '网页抓取',
-        'settings.browser': '浏览器',
-        'settings.subagents': '子代理',
-        'settings.cap': '最大并发的子代理数',
-        'settings.capHint': '对所有层级生效，默认 4。',
-        'settings.ultraAuto': 'Ultra Code 自动委派',
-        'settings.ultraAutoHint': '在 Ultra Code 下主动把独立工作拆给子代理，而不是等待指令。',
-        'settings.active': '当前会话的层级',
-        'settings.activeHint': '在输入框中固定了层级的会话。清除后所有会话恢复普通模型选择。',
-        'settings.clearActive': '清除已激活层级',
-        'settings.saved': '已保存',
-        'settings.saving': '保存中…',
-        'settings.reset': '恢复默认值',
-        'settings.loading': '正在加载模型层级…',
-        'settings.noCatalog': '没有可用的模型目录，请手动填写提供商和模型 ID。',
-        'settings.writable': '这些设置会写入当前配置补丁。',
-        'composer.tier': '模型',
-        'composer.configure': '在 设置 → 模型层级 中配置',
-        'composer.clear': '使用普通模型选择',
-        'composer.noConfig': '尚未配置模型层级。',
-        'composer.busy': '切换中…',
-        'composer.failed': '无法切换层级',
-        'composer.codeHint': '审查、检查并修复代码',
-        'composer.net': '网络',
       },
     };
 
@@ -1227,7 +1182,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
               name = id;
             }
             // The app ships these four without a name of their own; it names them in its own menus.
-            const shipped = { standard: 'Standard mode', ptc: 'PTC mode', minimal: 'Minimal mode', cordis: 'Creator mode' };
+            const shipped = { standard: 'Standard', ptc: 'PTC', minimal: 'Minimal', cordis: 'Creator' };
             return { id, name: name && name !== id ? name : shipped[id] ?? id };
           })
           .filter((row) => row.id);
@@ -1600,7 +1555,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
         h(
           'div',
           { className: 'dsh-mt-fallbackbody' },
-          h('span', { className: 'dsh-mt-hint' }, 'Used only while the work loop is on (Ultra Code, or a tab switched on in Settings → Mission) and the conversation\'s helpers use different models (the models chip). The lead plans and takes a step that failed twice, so make it the strongest. Helpers do the steps; two or more different models make attempts differ more. The checker checks, the judge picks between attempts. A saved version brings its model and output limit; its temperature is not passed to helpers. Recon runs keep their own model. Empty: as before.'),
+          h('span', { className: 'dsh-mt-hint' }, 'Used only while the work loop is on (Ultra Code, or a mode switched on in Settings → Mission) and the thread\'s helpers use different models (the models chip). The lead plans and takes a step that failed twice, so make it the strongest. Helpers do the steps; two or more different models make attempts differ more. The checker checks, the judge picks between attempts. A saved version brings its model and output limit; its temperature is not passed to helpers. Recon runs keep their own model. Empty: as before.'),
           member('lead', 'Lead', team.lead, (value) => setRole('lead', value)),
           ...helpers.map((value, index) => member(`helper-${index}`, `Helper ${index + 1}`, value, (next) => setHelper(index, next))),
           helpers.length < 6 ? member(`helper-${helpers.length}`, helpers.length === 0 ? 'Helper' : 'Another helper', null, (next) => setHelper(helpers.length, next)) : null,
@@ -1630,7 +1585,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
       const view = result.value.namespaces.find((entry) => entry.ns === NS);
       if (!view) {
         throw new Error(
-          'These settings could not be read. Check that the Model Tiers add-on is switched on, then reload the app.',
+          'These settings could not be read. Check that the Model tiers add-on is switched on, then reload the app.',
         );
       }
       return { config: normalizeConfig(view.value), revision: view.revision };
@@ -1796,7 +1751,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
         );
       const modelCount = groups.reduce((sum, group) => sum + group.models.length, 0);
       const options = [
-        h('option', { key: 'none', value: '' }, 'No model: keep the model the conversation is on'),
+        h('option', { key: 'none', value: '' }, 'No model: keep the model the thread is on'),
       ];
       if ((!known || !visible) && tier.model) {
         options.push(
@@ -2204,7 +2159,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
           h('span', { className: 'dsh-mt-cardtitle' }, name),
           h('span', { className: 'dsh-mt-profilemeta' }, `${tier.id} · ${customRouteLabel(tier)}`),
           activeCount > 0
-            ? h('span', { className: 'dsh-mt-profileused' }, `${activeCount} conversation${activeCount === 1 ? '' : 's'} using it`)
+            ? h('span', { className: 'dsh-mt-profileused' }, `${activeCount} thread${activeCount === 1 ? '' : 's'} using it`)
             : null,
         ),
         h(
@@ -2240,8 +2195,8 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
                 tier.version
                   ? 'The model version above is in charge of this tier’s model.'
                   : tier.provider && tier.model
-                    ? 'Picking this tier switches the conversation to this model, with default settings.'
-                    : 'No model set: this tier keeps whatever model the conversation is on.',
+                    ? 'Picking this tier switches the thread to this model, with default settings.'
+                    : 'No model set: this tier keeps whatever model the thread is on.',
               ),
             ),
             h(
@@ -2488,7 +2443,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
             short: 'N',
             role: '',
             prompt: '',
-            // No model: a new tier follows the model the conversation is on until you pick one.
+            // No model: a new tier follows the model the thread is on until you pick one.
             provider: '',
             model: '',
             effort: 'medium',
@@ -2760,7 +2715,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
       };
 
       const projectKeys = [
-        { key: 'ungrouped', label: 'Conversations without a project' },
+        { key: 'ungrouped', label: 'Threads without a project' },
         ...workspaceRows.map((workspace) => ({
           key: workspace.workspaceId,
           label: workspace.title || workspace.path || workspace.workspaceId,
@@ -2999,7 +2954,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
         }
       }
 
-      if (ops.length === 0) throw new Error('No recognized Model Tiers settings found in the import.');
+      if (ops.length === 0) throw new Error('No recognized Model tiers settings found in the import.');
       return ops;
     }
 
@@ -3091,7 +3046,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
           h(
             'p',
             { className: 'dsh-mt-hint' },
-            'The export holds starter tiers, your tiers, model versions, project profiles, fallbacks and the models for roles. What each conversation picked is left out on purpose.',
+            'The export holds starter tiers, your tiers, model versions, project profiles, fallbacks and the models for roles. What each thread picked is left out on purpose.',
           ),
           h(
             'p',
@@ -3118,7 +3073,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
           h('textarea', {
             className: 'dsh-mt-backup',
             value: text,
-            placeholder: 'Paste a Model Tiers export JSON here to merge it…',
+            placeholder: 'Paste a Model tiers export JSON here to merge it…',
             spellCheck: false,
             rows: 8,
             onChange: (event) => {
@@ -3171,7 +3126,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
         };
         routeMissing('Primary', { provider: tier.provider, model: tier.model });
         if (tier.version && !config.versionsById?.[tier.version]) {
-          tierIssues.push(`Model version "${tier.version}" no longer exists; the tier uses its own model, or the conversation's.`);
+          tierIssues.push(`Model version "${tier.version}" no longer exists; the tier uses its own model, or the thread's.`);
         }
         for (const variant of tier.variants ?? []) routeMissing('Variant', variant);
         for (const fallback of config.fallbackChains?.[tier.id] ?? []) routeMissing('Fallback', fallback);
@@ -3196,7 +3151,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
       for (const [sessionId, entry] of activeEntries) {
         const tierId = typeof entry === 'string' ? entry : entry?.tier;
         if (tierId && !tierIds.has(tierId)) {
-          issues.push(`Session ${sessionId}: pinned tier "${tierId}" no longer exists.`);
+          issues.push(`Thread ${sessionId}: pinned tier "${tierId}" no longer exists.`);
         }
       }
       for (const [key, project] of Object.entries(config.projectProfiles?.projects ?? {})) {
@@ -3224,11 +3179,11 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
         { label: 'Models for roles', value: roleCount },
         { label: 'Fallbacks', value: fallbackCount },
         { label: 'Project profiles', value: config.projectProfiles?.profiles?.length ?? 0 },
-        { label: 'Conversations with a tier', value: activeEntries.length },
+        { label: 'Threads with a tier', value: activeEntries.length },
         { label: 'Workspaces', value: workspaceRows.length },
       ];
       const report = [
-        'Model Tiers health',
+        'Model tiers health',
         `Catalog: ${catalog ? 'loaded' : 'unavailable'}`,
         ...summaryCards.map((card) => `${card.label}: ${card.value}`),
         '',
@@ -3270,7 +3225,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
           h(
             'p',
             { className: 'dsh-mt-hint' },
-            'Read-only checks: are the chosen models in your list, are any conversations tied to a tier that is gone, and do project profiles point at real tiers. A warning changes nothing.',
+            'Read-only checks: are the chosen models in your list, are any threads tied to a tier that is gone, and do project profiles point at real tiers. A warning changes nothing.',
           ),
           h(
             'div',
@@ -3605,16 +3560,16 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
         h(
           'details',
           { className: 'dsh-mt-fallback' },
-          h('summary', { className: 'dsh-mt-fallbackhead' }, `Instructions per app mode (${filled})`),
+          h('summary', { className: 'dsh-mt-fallbackhead' }, `Instructions per preset (${filled})`),
           h(
             'div',
             { className: 'dsh-mt-fallbackbody' },
             h(
               'span',
               { className: 'dsh-mt-hint' },
-              'The app’s modes are the ones you pick above the chat box of a new conversation (Standard, PTC, Minimal, Creator), plus any you add in Settings → Agent presets. Give a mode its own text for this version, and choose whether it is added to the instructions above or used alone.',
+              'The app’s presets are the ones you pick above the chat box of a new thread (Standard, PTC, Minimal, Creator), plus any you add in Settings → Agent presets. Give a preset its own text for this version, and choose whether it is added to the instructions above or used alone.',
             ),
-            rows.length === 0 ? h('span', { className: 'dsh-mt-hint' }, 'The list of modes could not be read from the app.') : null,
+            rows.length === 0 ? h('span', { className: 'dsh-mt-hint' }, 'The list of presets could not be read from the app. Reload the app to try again.') : null,
             rows.map((preset) =>
               h(
                 'div',
@@ -4033,8 +3988,8 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
           'div',
           { className: 'dsh-mt-page' },
           h(Styles),
-          h('div', { className: 'dsh-mt-head' }, h('h2', null, 'Model Tiers')),
-          h('div', { className: 'dsh-mt-status', 'data-error': 'true' }, 'These settings are unavailable. Check that the Model Tiers add-on is switched on.'),
+          h('div', { className: 'dsh-mt-head' }, h('h2', null, 'Model tiers')),
+          h('div', { className: 'dsh-mt-status', 'data-error': 'true' }, 'These settings are unavailable. Check that the Model tiers add-on is switched on.'),
         );
       }
 
@@ -4140,7 +4095,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
         h(
           'div',
           { className: 'dsh-mt-head' },
-          h('h2', null, 'Model Tiers'),
+          h('h2', null, 'Model tiers'),
           h(
             'p',
             null,
@@ -4150,7 +4105,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
         ),
         h(
           'div',
-          { className: 'dsh-mt-tabs', role: 'tablist', 'aria-label': 'Model Tiers pages' },
+          { className: 'dsh-mt-tabs', role: 'tablist', 'aria-label': 'Model tiers pages' },
           topTabs.map((tab) =>
             h(
               'button',
@@ -4253,8 +4208,8 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
                 tier.versionId
                   ? `The saved model version “${tier.versionName}” is in charge of the model.`
                   : tier.ownProvider && tier.ownModel
-                    ? 'Picking this tier switches the conversation to this model, with default settings.'
-                    : 'No model set: this tier keeps whatever model the conversation is on.',
+                    ? 'Picking this tier switches the thread to this model, with default settings.'
+                    : 'No model set: this tier keeps whatever model the thread is on.',
               ),
               h(EffortRange, { effort: tier.effort, onChange: (effort) => setTier(id, { effort }) }),
               h(
@@ -4413,7 +4368,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
           h(
             'div',
             { className: 'dsh-mt-hint' },
-            'Clearing this returns every conversation to its normal model choice. The next message keeps the current model and stops using the tier’s effort and access rules.',
+            'Clearing this returns every thread to its normal model choice. The next message keeps the current model and stops using the tier’s effort and access rules.',
           ),
           h(
             'div',
@@ -4615,7 +4570,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
 
     /**
      * The one model control of the chat box: model or saved version, effort slider,
-     * tier, and sampling for this conversation. It replaces the app's own model menu
+     * tier, and sampling for this thread. It replaces the app's own model menu
      * while this add-on is on.
      */
     function ModelControl({ appCtx, sessionId, useWorkspaces }) {
@@ -4657,7 +4612,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
         setSaveName(null);
       }, [sessionId]);
 
-      // The app's own record of this conversation's model, so the button is right even when no tier is set.
+      // The app's own record of this thread's model, so the button is right even when no tier is set.
       const directory = (() => {
         try {
           return appCtx.get('modelDirectories')?.directoryFor?.(sessionId) ?? null;
@@ -4789,7 +4744,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
 
       const config = state.config;
       const selection = config ? resolveSelection(config, sessionId) : undefined;
-      // The route in use: this conversation's tier choice, else what the app has selected.
+      // The route in use: this thread's tier choice, else what the app has selected.
       const route = selection
         ? { provider: selection.provider, model: selection.model }
         : current?.provider && current?.model
@@ -4837,7 +4792,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
         }));
 
       /**
-       * Record this conversation's choice and switch the app to its model.
+       * Record this thread's choice and switch the app to its model.
        * @param {object} choice - tierId, version, provider, model, effort, temperature, maxTokens.
        * @param {(latest: object) => object[]} [extraOps] - more settings changes for the same save.
        */
@@ -4885,7 +4840,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
           setState((prev) => ({ ...prev, busy: null, config: saved.config, revision: saved.revision, error: null }));
         } catch (error) {
           // A failed model switch must not leave a misleading choice behind:
-          // put back only this conversation's earlier entry.
+          // put back only this thread's earlier entry.
           if (saved) {
             try {
               const previous = config.activeTiers?.[sessionId];
@@ -4910,7 +4865,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
         }
       };
 
-      /** What the conversation has now, as a choice to change one part of. */
+      /** What the thread has now, as a choice to change one part of. */
       const baseChoice = () =>
         route
           ? {
@@ -4952,7 +4907,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
       const pickTier = (id) => {
         const tier = config?.tiers?.[id];
         if (!tier) return;
-        // A tier with no model of its own keeps the model the conversation is on.
+        // A tier with no model of its own keeps the model the thread is on.
         const provider = tier.provider || route?.provider;
         const model = tier.model || route?.model;
         if (!provider || !model) {
@@ -4981,7 +4936,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
         applySelection({ ...base, effort: next });
       };
 
-      /** The Ultra Code switch beside Effort, for this conversation only (plan step S1). */
+      /** The Ultra Code switch beside Effort, for this thread only (plan step S1). */
       const ultraOn = state.config?.sessionUltra?.[sessionId] === true;
       const flipUltra = async () => {
         if (!state.config || state.busy) return;
@@ -5098,7 +5053,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
         }
       };
 
-      /** Forget this conversation's tier and settings; the model it is on stays. */
+      /** Forget this thread's tier and settings; the model it is on stays. */
       const clearChoice = async () => {
         if (!config) return;
         setState((prev) => ({ ...prev, busy: 'clear', error: null }));
@@ -5119,7 +5074,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
         }
       };
 
-      // A new conversation in a project with a tier set starts on that set's default tier, once.
+      // A new thread in a project with a tier set starts on that set's default tier, once.
       useEffect(() => {
         if (autoProfileAppliedRef.current) return;
         if (!config || selection || !projectDefaultTierId || !route) return;
@@ -5161,7 +5116,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
             {
               className: 'dsh-mtm-pop',
               role: 'dialog',
-              'aria-label': 'Model, effort and tier for this conversation',
+              'aria-label': 'Model, effort and tier for this thread',
               ref: popRef,
               style: {
                 position: 'fixed',
@@ -5299,9 +5254,9 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
               h('div', { className: 'dsh-mtm-note' }, effort === 'ultra'
                 ? 'On through the top effort step. Lower Effort to switch it separately.'
                 : activeTier && activeTier.subagents === false
-                  ? 'This tier runs no helpers (Sub-agents is off for it in Settings → Model Tiers), so the switch changes nothing here.'
+                  ? 'This tier runs no helpers (Sub-agents is off for it in Settings → Model tiers), so the switch changes nothing here.'
                   : ultraOn
-                    ? 'On for this conversation: the work is spread over helpers where the parts are independent, at the effort above. Slower and uses more tokens.'
+                    ? 'On for this thread: the work is spread over helpers where the parts are independent, at the effort above. Slower and uses more tokens.'
                     : 'Off: one line of work, as before. On spreads the work over helpers at the effort above.'),
             ),
             // ---- tier
@@ -5544,7 +5499,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
             ),
             state.error ? h('div', { className: 'dsh-mtm-error', role: 'alert' }, state.error) : null,
             ),
-            h('div', { className: 'dsh-mtm-foot' }, 'Tiers and saved versions: Settings → Model Tiers'),
+            h('div', { className: 'dsh-mtm-foot' }, 'Tiers and saved versions: Settings → Model tiers'),
           );
 
       return h(
@@ -5563,7 +5518,7 @@ body:has(.dsh-mtm-wrap) [data-slot="conversation.input.model"] { display: none !
             'aria-label': route
               ? `Model ${triggerText}${activeTier ? `, tier ${tierLabel(activeTier)}` : ''}${effortLabel ? `, effort ${effortLabel}` : ''}`
               : 'Select model',
-            title: route ? `${route.provider}/${route.model}` : 'Select a model for this conversation',
+            title: route ? `${route.provider}/${route.model}` : 'Select a model for this thread',
             onClick: () => {
               if (open) setOpen(false);
               else {

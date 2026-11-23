@@ -7,7 +7,7 @@
 import fs from 'node:fs'; import path from 'node:path';
 const root = process.argv[2] ?? '.';
 const read = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
-const SLOT = { 'conversation.input.left': 'chat box, left group', 'conversation.input.right': 'chat box, beside the send button', 'conversation.input.dock': 'above the chat box', 'conversation.chat.turnTail': 'under an answer', 'conversation.chat.assistant-actions': 'action row under an answer', 'conversation.hero.options': 'start page of a new conversation', 'conversation.hero.brand.mark': 'start page', 'sidebar.panellist': 'sidebar', 'sidebar.panel.icon': 'sidebar', 'sidebar.footer.action': 'bottom of the sidebar', 'shell.overlay': 'window edge', 'shell.leading': 'sidebar' };
+const SLOT = { 'conversation.input.left': 'chat box, left group', 'conversation.input.right': 'chat box, beside the send button', 'conversation.input.dock': 'above the chat box', 'conversation.chat.turnTail': 'under an answer', 'conversation.chat.assistant-actions': 'action row under an answer', 'conversation.hero.options': 'start page of a new thread', 'conversation.hero.brand.mark': 'start page', 'sidebar.panellist': 'left panel', 'sidebar.panel.icon': 'left panel', 'sidebar.footer.action': 'bottom of the left panel', 'shell.overlay': 'window edge', 'shell.leading': 'left panel' };
 const ORDER = ['dsh-cowork-shell', 'dsh-modes', 'dsh-mission', 'dsh-data', 'dsh-finance', 'dsh-deep-research', 'dsh-model-tiers', 'dsh-agent-swarm', 'dsh-code-power', 'dsh-code-map', 'dsh-diagram', 'dsh-pdf', 'dsh-library', 'dsh-memory', 'dsh-learn', 'dsh-automations', 'dsh-mac', 'dsh-activity', 'dsh-budget', 'dsh-balance', 'dsh-usage-ledger', 'dsh-evolve', 'dsh-benchmark', 'dsh-model-arena', 'dsh-model-router', 'dsh-route-health', 'dsh-sampling-presets', 'dsh-role-prompts', 'dsh-context-saver', 'dsh-media-tools', 'dsh-notify', 'dsh-privacy', 'dsh-color-schemes', 'dsh-sync', 'dsh-shared-settings'];
 // Code comments are written for maintainers. For the guide: take out plan and step references and dates in
 // brackets, and say "you" where a comment says "the owner".
@@ -18,7 +18,7 @@ const plain = (text) => text
   .replace(/\b[Tt]he owner (picks|types|ticked|ticks|installed|chose|switched|saved|accepted|sets|says)\b/g, (m, v) => `you ${{ picks: 'pick', types: 'type', ticked: 'ticked', ticks: 'tick', installed: 'installed', chose: 'chose', switched: 'switched', saved: 'saved', accepted: 'accepted', sets: 'set', says: 'say' }[v]}`)
   .replace(/\b[Tt]he owner\b/g, 'you').replace(/\bowner\b/g, 'you').replace(/\s+([.,;:])/g, '$1').replace(/\s{2,}/g, ' ').trim();
 // Pages that moved into another page (Phase 2): where to find them now.
-const MOVED = { 'dsh-sampling-presets': 'Model Tiers → Sampling', 'dsh-notify': 'Alerts', 'dsh-role-prompts': 'Model Tiers → Instructions for every conversation', 'dsh-code-power': 'Code tools → Reviews and fixes', 'dsh-code-map': 'Code tools', 'dsh-deep-research': 'Research → Advanced' };
+const MOVED = { 'dsh-sampling-presets': 'Model tiers → Sampling', 'dsh-notify': 'Alerts', 'dsh-role-prompts': 'Model tiers → Instructions for every thread', 'dsh-code-power': 'Code tools → Reviews and fixes', 'dsh-code-map': 'Code tools', 'dsh-deep-research': 'Research → Advanced' };
 const dirs = fs.readdirSync(path.join(root, 'addons')).filter((d) => fs.existsSync(path.join(root, 'addons', d, 'package.json')));
 dirs.sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99));
 const facts = []; const out = [];

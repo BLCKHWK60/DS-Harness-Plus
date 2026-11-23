@@ -1,6 +1,6 @@
 {
   "kind": "mode",
-  "label": "A tab (a mode)",
+  "label": "A mode",
   "when": "A new kind of work with its own method, tools and rules.",
   "files": [
     "package.json",
@@ -31,27 +31,27 @@
     {
       "id": "extra-modes",
       "mark": "must",
-      "text": "index.js: add the mode through the Modes add-on's extraModes when switched on, take it out when switched off, and move defaultMode back to cowork if it pointed at the tab (copy the pattern of dsh-bench's syncMode)."
+      "text": "index.js: add the mode through the Modes add-on's extraModes when switched on, take it out when switched off, and move defaultMode back to cowork if it pointed at the mode (copy the pattern of dsh-bench's syncMode). Do not write spaceSettings: Modes keeps the space's start mode."
     },
     {
       "id": "tools-when",
       "mark": "must",
-      "text": "Its tools are registered with `when` so they are offered only in this tab and its helpers; other tabs' tool lists do not change."
+      "text": "Its tools are registered with `when` so they are offered only in this mode and its helpers; other modes' tool lists do not change."
     },
     {
       "id": "guard",
       "mark": "must",
-      "text": "An allow-list guard for the tab's conversations: tools/pre-execute before next(), and a final ctx.tools.guard (needs inject ['tools'])."
+      "text": "An allow-list guard for the mode's threads: tools/pre-execute before next(), and a final ctx.tools.guard (needs inject ['tools'])."
     },
     {
       "id": "icon",
       "mark": "default",
-      "text": "The Cowork sidebar shows a dot for a tab it does not know; its icon is a separate change to dsh-cowork-shell and dsh-settings-plus, put to the user."
+      "text": "The left panel shows a dot for a mode it does not know; its icon is a separate change to dsh-cowork-shell and dsh-settings-plus, put to the user."
     },
     {
       "id": "page",
       "mark": "must",
-      "text": "client.js: Settings page with the switch and what the tab does and does not do."
+      "text": "client.js: Settings page with the switch and what the mode does and does not do."
     },
     {
       "id": "readme",

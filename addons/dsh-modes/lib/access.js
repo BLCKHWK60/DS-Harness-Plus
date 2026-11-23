@@ -55,9 +55,12 @@ export function parseAccess(value) {
   return result;
 }
 
-/** @returns {boolean} whether a mode is fixed by its own safety rules. */
+/**
+ * @returns {boolean} whether a mode is fixed by its own safety rules. Item 4A, stage 6a: a guarded copy (a guest in
+ * Devices or Workshop) too: grid choices and "mode" grants of its mode never carry into it (I17).
+ */
 export function lockedMode(mode) {
-  return Boolean(mode) && (mode.isolated === true || LOCKED_MODES.includes(mode.id));
+  return Boolean(mode) && (mode.isolated === true || Boolean(mode.guardedBy) || LOCKED_MODES.includes(mode.id));
 }
 
 /**
@@ -155,7 +158,7 @@ export function longestScope(tier, { outsideMaterial = false, recon = false } = 
 
 const LABELS = {
   once: 'Allow once',
-  conversation: 'Allow in this conversation',
+  conversation: 'Allow in this thread',
   mode: 'Allow in this mode',
   always: 'Always allow',
   deny: 'Deny',
@@ -184,7 +187,7 @@ export function wording({ tool, reason, outsideMaterial, recon = false, helper =
   const entry = classify(tool);
   const tier = TIERS[entry.tier] ?? TIERS[3];
   const risk = recon ? 'Highest' : tier.word === 'High' ? 'High' : tier.word;
-  const says = recon ? 'it can open a way out of a sealed tab, and what Recon read could leave with it' : tier.says;
+  const says = recon ? 'it can open a way out of a sealed thread, and what Recon read could leave with it' : tier.says;
   const cleaned = cleanReason(reason);
   const kind = OUTSIDE_KINDS[outsideMaterial] ?? OUTSIDE_KINDS.web;
   return {
@@ -193,8 +196,8 @@ export function wording({ tool, reason, outsideMaterial, recon = false, helper =
     tier: entry.tier,
     reasonLine: cleaned ? `The AI's reason, in its own words (not checked): “${cleaned}”` : "The AI gave no reason.",
     reason: cleaned,
-    outsideWarning: outsideMaterial ? `Earlier in this conversation it read ${kind.read}. ${kind.carry} can carry instructions meant to trick the AI.` : '',
-    helperWarning: helper ? 'A helper agent asked for this, not the conversation itself.' : '',
+    outsideWarning: outsideMaterial ? `Earlier in this thread it read ${kind.read}. ${kind.carry} can carry instructions meant to trick the AI.` : '',
+    helperWarning: helper ? 'A helper agent asked for this, not the thread itself.' : '',
     reconWarning: recon ? 'This is Recon, which is sealed on purpose. Only allow this if you asked for it yourself.' : '',
   };
 }
@@ -242,8 +245,8 @@ export function decide(want) {
   const recon = mode?.isolated === true || mode?.id === 'recon';
   if (!tool || typeof tool !== 'string') return refuse('unknown', 'No tool was named.');
   if (tool === REQUEST_TOOL || tool === CATALOG_TOOL) return refuse('self', 'You already have this tool.');
-  if (want.toolsOff) return refuse('tools-off', 'Tools are switched off in this conversation by the user. Nothing can be requested. Carry on without tools.');
-  if (mode && NO_TOOL_MODES.includes(mode.id)) return refuse('locked', 'This conversation is held without tools. It cannot be given any here.');
+  if (want.toolsOff) return refuse('tools-off', 'Tools are switched off in this thread by the user. Nothing can be requested. Carry on without tools.');
+  if (mode && NO_TOOL_MODES.includes(mode.id)) return refuse('locked', 'This thread is kept without tools. It cannot be given any here.');
   if (HIDDEN_FROM_AI(tool) || RECON_NEVER.includes(tool)) return refuse('never', 'That can never be requested. Only the user can open it, in Settings.');
   if (entry.tier >= SETTINGS_ONLY) return refuse('never', `"${entry.plain}" cannot be requested by the AI. Only the user can switch it on, in Settings → Tool access. Carry on without it.`);
   if (!want.known && !want.addonOff) return refuse('unknown', `No tool called "${tool}" exists here. Call ${CATALOG_TOOL} to see the names.`);
@@ -252,14 +255,14 @@ export function decide(want) {
   if (recon && !reconMayAsk(tool, { online: want.online })) return refuse('recon-limit', RECON_LIMIT_TEXT);
   if (state === 'on') return refuse('already', 'This tool is already available. Just call it.');
   if (state === 'off') return refuse('off', 'The user has switched this tool off here. It cannot be requested.');
-  if (state === 'locked' && !recon) return refuse('locked', "This tab's own safety rules fix its tools. It cannot be requested here.");
+  if (state === 'locked' && !recon) return refuse('locked', "This mode's own safety rules fix its tools. It cannot be requested here.");
   if (want.fenced) return refuse('fenced', want.fenceWhy || 'Something the user switched off keeps this tool out here (for example Web Off). A permission cannot lift that.');
   if (want.blockedByUser) return refuse('dont-ask', 'The user chose not to be asked about this tool again. Do not ask again; carry on without it.');
   if (want.deniedRecently) return refuse('denied-recently', `The user said no to "${entry.plain}" a moment ago. Do not ask again now; carry on without it.`);
   if (want.unansweredRecently) return refuse('unanswered-recently', `Your request for "${entry.plain}" was not answered a moment ago. Do not ask again now; carry on without it and say in your report that this is waiting for the user.`);
-  if (want.tooManyNoes) return refuse('too-many-noes', 'The user has said no to, or not answered, several of your requests in this conversation. Do not ask for any more tools now; carry on with what you have.');
+  if (want.tooManyNoes) return refuse('too-many-noes', 'The user has said no to, or not answered, several of your requests in this thread. Do not ask for any more tools now; carry on with what you have.');
   if (want.helper && want.helperReadsPages && entry.tier >= 2) return refuse('helper-limit', 'A helper that reads web pages may only ask for tools that look or read (tier 0 and 1).');
-  if (want.reconExport && entry.tier >= 2) return refuse('recon-export', 'This conversation holds material from Recon. Only tools that look or read (tier 0 and 1) can be requested here.');
+  if (want.reconExport && entry.tier >= 2) return refuse('recon-export', 'This thread holds material from Recon. Only tools that look or read (tier 0 and 1) can be requested here.');
   if (want.tooMany) return refuse('too-many', 'Too many requests are waiting for the user already. Carry on without this tool.');
   if (want.unattended) return refuse('unattended', `Nobody is there to answer, so "${entry.plain}" was not allowed. Carry on without it, and say in your report that this is waiting for the user.`);
   const longest = longestScope(entry.tier, { outsideMaterial: Boolean(want.outsideMaterial), recon });
@@ -285,7 +288,7 @@ export function answerText(choice, tool) {
   if (choice === 'timeout') return `The user did not answer about "${entry.plain}" in time. Do not ask again; carry on without it and say in your report that this is waiting for the user.`;
   if (choice === 'unavailable') return `"${entry.plain}" needs the user's yes, and they could not be asked just now. Carry on without it.`;
   if (choice === 'once') return `Allowed for exactly ONE call of ${tool}. Once you have called it, the permission is used up and a second call is refused; it also lapses when this turn ends. Ask again if you need it again.`;
-  return `Allowed: you may call ${tool} ${choice === 'conversation' ? 'in this conversation' : choice === 'mode' ? 'in this mode' : 'from now on'}.`;
+  return `Allowed: you may call ${tool} ${choice === 'conversation' ? 'in this thread' : choice === 'mode' ? 'in this mode' : 'from now on'}.`;
 }
 
 /** Whether a grant is still valid. */

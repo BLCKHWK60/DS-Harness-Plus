@@ -66,7 +66,8 @@ test('the tab a draft ends up in remembers it once its mode is recorded', () => 
   assert.match(deps, /libSnap\.byId\[libSnap\.currentId\]\?\.blank/);
   assert.match(deps, /state\.sessionModes\?\.\[libSnap\.currentId\]/);
   // Its mode is asked for right after its first message, not at the next 10-second refresh.
-  assert.match(deps, /if \(!sess\.blank && now\.sessionModes\?\.\[id\] === undefined\) \{\s*const timer = setTimeout\(\(\) => void model\.refresh\(\), 700\);/);
+  // (Item 4A: with the space buttons, until its space is recorded.)
+  assert.match(deps, /if \(!sess\.blank && \(now\.spacesOn \? now\.sessionSpaces\?\.\[id\] : now\.sessionModes\?\.\[id\]\) === undefined\) \{\s*const timer = setTimeout\(\(\) => void model\.refresh\(\), 700\);/);
 });
 
 // Recon's room (18 November 2026): a conversation started from the Recon tab always lands in Recon's
@@ -134,8 +135,15 @@ test('the new conversation opens in the tab\'s usual place, never a room, and sa
   assert.match(body, /if \(startPlaceOf\(tabId\) === 'scratch'\)/);
   assert.match(body, /const home = homeFor\(library\.get\(\), tabId\);/);
   assert.match(body, /if \(!cwd \|\| inIsolatedRoom\(cwd\)\) throw/);
+  // Fix round (item 4A): made inside its project, so the app knows where it is and the chat box is not locked on
+  // "Choose a workspace to start" (spaces hide the folder picker in Chat).
+  assert.match(body, /if \(known\) workspaceId = String\(known\.workspaceId \?\? ''\);/);
+  assert.match(body, /workspaceId = String\(made\?\.workspaceId \?\? ''\);/);
+  assert.match(body, /workspaceId = cwd \? String\(home\.workspaceId \?\? ''\) : '';/);
+  assert.match(body, /const where = workspaceId \? \{ workspaceId \} : \{ cwd \};/);
+  assert.match(body, /await sessions\.create\(\{ \.\.\.where, agentPreset: preset \}\) : await sessions\.create\(where\)/);
   assert.match(body, /action: 'move', session: id, tab: tabId, sessionId: child, folder: scratch \? `\$\{cwd\}\/\$\{child\}` : cwd, title/);
   assert.match(body, /workspace\.openSession\(child\);/);
-  assert.match(source, /'move\.recon': 'Opened as a new \{tab\} conversation; the Recon original stays in Recon\.',/);
+  assert.match(source, /'move\.recon': 'Opened as a new \{tab\} thread; the Recon original stays in Recon\.',/);
   assert.match(source, /patch\.sessionIsolated = readObject\(modesNs\.value\?\.sessionIsolated\);/);
 });

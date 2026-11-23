@@ -1,14 +1,14 @@
 # Balance
 
-Plugin `@local/dsh-balance` (dsh 0.2.2-rc.2). One line at the bottom of the sidebar with your DeepSeek balance.
+Add-on `@local/dsh-balance` (dsh 0.2.2-rc.2). One line at the bottom of the left panel with your DeepSeek balance.
 
 ## What you see
 
-At the foot of the sidebar, above **More**: `Balance   $12.34`.
+At the foot of the left panel, above **More**: `Balance   $12.34`.
 
 - **Press it** to read the balance again. It also reads again by itself every five minutes while the window is in view.
 - **Point at it** to see every balance, where each comes from, and when it was read.
-- With the sidebar narrowed to icons, only the amount is shown, without cents.
+- With the left panel narrowed to icons, only the amount is shown, without cents.
 - A dash (—) means there is no balance to show. Point at it for the reason.
 
 ## Where the balance comes from
@@ -48,8 +48,8 @@ The third-party plugin "DeepSeek Balance" (`dsh-ds-balance`, up to 3.1.1) shows 
 
 ## Code
 
-`lib/balance.js` (reading and adding up the balances), `index.js` (the `GET/POST /dsh-balance/data` route), `client.js` (the line in the sidebar). Tests: `test/balance.test.mjs`.
+`lib/balance.js` (reading and adding up the balances), `index.js` (the `GET/POST /dsh-balance/data` route), `client.js` (the line in the left panel). Tests: `test/balance.test.mjs`.
 
 ## Tested
 
-In the lab (web version) on 2026-11-12: the line appeared at the foot of the Cowork sidebar above More; with a made-up key, DeepSeek's real service refused it and the line showed a dash with "DeepSeek refused the API key." in the pointer text. Not tested in the lab: a real balance (no real key or account is used there), the signed-in account (unit tests only), the narrow sidebar, pressing the line.
+In the lab (web version) on 2026-11-12: the line appeared at the foot of the left panel above More; with a made-up key, DeepSeek's real service refused it and the line showed a dash with "DeepSeek refused the API key." in the pointer text. Not tested in the lab: a real balance (no real key or account is used there), the signed-in account (unit tests only), the narrow sidebar, pressing the line.

@@ -79,15 +79,15 @@ export const cloudPolicy = (value) => (CLOUD_POLICIES.includes(value) ? value : 
  * @returns {{ok: boolean, why: string}} `why` is for the user, in plain words.
  */
 export function mayReceive({ place, route, id, consent, policy = 'ask' }) {
-  if (!route) return { ok: false, why: 'The model of this conversation could not be told, so nothing is sent to it. Pick a model in the chat box.' };
+  if (!route) return { ok: false, why: 'The model of this thread could not be told, so nothing is sent to it. Pick a model in the chat box.' };
   if (staysHome(place)) return { ok: true, why: '' };
   const rule = cloudPolicy(policy);
   if (rule === 'always') return { ok: true, why: '' };
   if (rule === 'never') {
     const what = place?.where === 'cloud' ? `a cloud model (${place.name || route.provider}${place.host ? `, ${place.host}` : ''})` : `a model whose location is unknown (${place?.name || route.provider})`;
-    return { ok: false, why: `This conversation uses ${what}. Cloud models are switched off for Recon (Settings → Recon → Models), so nothing has been sent. The user picks a model on this computer or in their own network, or changes that setting.` };
+    return { ok: false, why: `This thread uses ${what}. Cloud models are switched off for Recon (Settings → Recon → Models), so nothing has been sent. The user picks a model on this computer or in their own network, or changes that setting.` };
   }
   if (consent.has(id, route)) return { ok: true, why: '' };
   const who = place?.where === 'cloud' ? `a cloud model (${place.name || route.provider}${place.host ? `, ${place.host}` : ''})` : `a model whose location is unknown (${place?.name || route.provider})`;
-  return { ok: false, why: `This conversation uses ${who}. What Recon finds would be sent to it. Nothing has been sent. To agree for this conversation, the user types /recon cloud. To avoid it, the user picks a model on this computer or in their own network.` };
+  return { ok: false, why: `This thread uses ${who}. What Recon finds would be sent to it. Nothing has been sent. To agree for this thread, the user types /recon cloud. To avoid it, the user picks a model on this computer or in their own network.` };
 }

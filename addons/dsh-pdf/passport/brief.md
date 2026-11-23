@@ -2,12 +2,12 @@
 
 What it is for: Lets a model read PDFs properly: page-numbered text, search, tables kept in columns, page pictures and text recognition for scans, using what comes with macOS. Nothing to install.
 
-This brief was written by Creator Plus from the plugin's own files. Its README below is the full description, complete enough to rebuild the plugin from; improve this brief by hand, with the user's yes.
+This brief was written by Creator Plus from the add-on's own files. Its README below is the full description, complete enough to rebuild the add-on from; improve this brief by hand, with the user's yes.
 
 ## What it must keep doing
 
 - Its tools: pdf_info, pdf_read, pdf_search, pdf_page_image, pdf_ocr.
-- The services it gives other plugins: pdfReader.
+- The services it gives other add-ons: pdfReader.
 - Its settings: enabled, folders, anywhere, readChars, skills, commandName.
 
 ## Its README
@@ -32,15 +32,15 @@ And one skill, `read-pdf`, loaded only when used. It makes the model look at the
 
 ## How to use it
 
-- Put a PDF in the conversation's folder and ask about it by name: "Summarise report.pdf with page numbers."
-- `/pdf report.pdf` in a chat shows the page count, contents list and which pages are scans.
+- Put a PDF in the thread's folder and ask about it by name: "Summarise report.pdf with page numbers."
+- `/pdf report.pdf` in a thread shows the page count, contents list and which pages are scans.
 - **Settings → PDF reader:** the master switch, more folders PDFs may be read from, "Allow any PDF on this Mac" (off by default), and how much text one read returns.
 
 ## Where it may read
 
 These tools open files themselves, so they keep their own fence. A PDF can be read when it is:
 
-- in the conversation's own folder (or a sub-folder), or
+- in the thread's own folder (or a sub-folder), or
 - in a folder you listed on the settings page, or
 - anywhere, only if you switched on "Allow any PDF on this Mac".
 

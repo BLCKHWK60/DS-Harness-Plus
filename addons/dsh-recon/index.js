@@ -31,11 +31,11 @@ import { homedir, tmpdir, userInfo } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { nameOf, readAccounts, removeCommandFor, serviceOf, storeCommandFor } from './lib/accounts.js';
 import { onionAddressesIn, openTrail } from './lib/address.js';
-import { MODE_ID, TOOLS, withRecon } from './lib/mode.js';
+import { MODE_ID, SPACE_RULES, TOOLS, withRecon } from './lib/mode.js';
 import { CLAIM_MAX, DRAFTS, DRAFT_MAX, SEARCH_MS, SUB_MAX, ULTRA_TOOL, isRecipeHelperTask, judgeAccepted, judgeTask, materialOf, wideSearch, writerTask } from './lib/ultra.js';
 import { cloudPolicy, mayReceive, openConsent, providerPlace, staysHome } from './lib/model.js';
 import { exportText, writeExport } from './lib/export.js';
-import { MARKER_RE, MESSAGE_MAX, NEVER_GOES, NOT_KEPT, WARNINGS, addressKey, addressesIn, buildExport, covers, decoded, exportLine, exportMessage, exportsInText, isOnion, movedService, openDoor, safeExportParent, sharesRun, urlsIn, writeExportFolder } from './lib/door.js';
+import { MARKER_RE, MESSAGE_MAX, NEVER_GOES, NOT_KEPT, WARNINGS, addressKey, addressesIn, buildExport, covers, decoded, exportLine, exportMessage, exportsInText, isOnion, movedService, openDoor, safeExportParent, sharesRun, shownNames, urlsIn, writeExportFolder } from './lib/door.js';
 import { openForward } from './lib/forward.js';
 import { login, loginName } from './lib/keychain.js';
 import { AHMIA, createOnion } from './lib/onion.js';
@@ -56,6 +56,7 @@ import { createTor, findTor, torVersion } from './lib/tor.js';
 import { createVpn, findWireproxy, readVpnList, vpnNameOf, vpnRemoveCommandFor, vpnStoreCommandFor, vpnStored } from './lib/vpn.js';
 import { copyOtherFiles, copyRoomFile, filesNote, filesPart, listRoomFiles, namedByCalls, pickedFiles, runFolderName } from './lib/roomfiles.js';
 import { MOVE_FOLDER, buildDraft, buildMove, messagesFromEvents } from './lib/move.js';
+import { makeGuardOf } from './lib/space-guard.js';
 
 export const name = 'dsh-recon';
 
@@ -208,7 +209,7 @@ function askedRoom(value) {
 export let ROOM = roomFrom(process.env.DSH_RECON_ROOM, process.env.DSH_HOME);
 
 export const Config = z.object({
-  /** The Recon mode and tab. Off leaves nothing of it in the app. */
+  /** The Recon mode and space. Off leaves nothing of it in the app. */
   enabled: z.boolean().default(false).volatile(),
   /** Where the tor program is. Empty looks in the usual places (Homebrew, /usr/local). Plus does not install it. */
   torPath: z.string().default('').volatile(),
@@ -230,7 +231,7 @@ export const Config = z.object({
    */
   archiveOn: z.boolean().default(false).volatile(),
   /**
-   * A Long run here may check its work with small commands that Mission runs with no internet, no
+   * A Mission here may check its work with small commands that Mission runs with no internet, no
    * name lookups, no other programs, nothing of the home folder and writing only in the run's folder.
    * Off (the owner's default): no commands at all; the reviewer judges each step by reading.
    */
@@ -244,7 +245,7 @@ export const Config = z.object({
   archiveDirect: z.boolean().default(true).volatile(),
   /** The GDELT Project's index of news coverage, asked through Recon's Tor. On lets recon_news_search work. */
   newsOn: z.boolean().default(false).volatile(),
-  /** The ordinary web (recon_web_search, recon_web_read), through WireGuard only, or straight where a conversation allowed it. */
+  /** The ordinary web (recon_web_search, recon_web_read), through WireGuard only, or straight where a thread allowed it. */
   webOn: z.boolean().default(true).volatile(),
   /**
    * The Usenet accounts: a news server each, with its own login. No login is kept here: each is in
@@ -273,8 +274,8 @@ export const Config = z.object({
   /** Where the wireproxy program is. Empty looks in the usual places (Homebrew). Plus does not install it. */
   wireproxyPath: z.string().default('').volatile(),
   /**
-   * Cloud models in a Recon conversation (18 November 2026, the owner's choice): 'ask' (the default) hands
-   * what Recon finds to a cloud model only after /recon cloud in that conversation; 'always' without asking;
+   * Cloud models in a Recon thread (18 November 2026, the owner's choice): 'ask' (the default) hands
+   * what Recon finds to a cloud model only after /recon cloud in that thread; 'always' without asking;
    * 'never' not at all. A model on this Mac or in your own network always gets it.
    */
   cloudModels: z.union([z.const('ask'), z.const('always'), z.const('never')]).default('ask').volatile(),
@@ -330,7 +331,7 @@ export function apply(ctx, config, standIns = {}) {
   ctx.effect(() => () => vpn.stop(), 'recon: wireguard');
   /** Conversations whose user allowed direct connections (no tunnel works, or none is set up): in memory only. */
   const directOk = new Set();
-  const ASK_DIRECT = 'Tell the user this. To allow direct connections for this conversation anyway, they type /recon direct (the sites then see this Mac\'s internet address); /recon block takes it back.';
+  const ASK_DIRECT = 'Tell the user this. To allow direct connections for this thread anyway, they type /recon direct (the sites then see this Mac\'s internet address); /recon block takes it back.';
   /**
    * The relay to one server outside Tor (lib/forward.js): through the WireGuard tunnel when one works,
    * straight only when the user allowed it for this conversation. Otherwise nothing is sent.
@@ -348,9 +349,9 @@ export function apply(ctx, config, standIns = {}) {
   /** How a conversation reaches what is not Tor just now, in words. */
   const clearWayText = (id) => {
     const now = vpn.status();
-    if (vpnList().length === 0) return directOk.has(String(id)) ? 'directly (you allowed it for this conversation; no WireGuard is set up)' : 'blocked: no WireGuard is set up, and direct connections are not allowed in this conversation (/recon direct)';
+    if (vpnList().length === 0) return directOk.has(String(id)) ? 'directly (you allowed it for this thread; no WireGuard is set up)' : 'blocked: no WireGuard is set up, and direct connections are not allowed in this thread (/recon direct)';
     if (now.state === 'ready') return `through WireGuard (${now.name})`;
-    return directOk.has(String(id)) ? 'through WireGuard when it starts, else directly (you allowed it for this conversation)' : 'through WireGuard when it starts; blocked if no configuration works (/recon direct allows direct connections)';
+    return directOk.has(String(id)) ? 'through WireGuard when it starts, else directly (you allowed it for this thread)' : 'through WireGuard when it starts; blocked if no configuration works (/recon direct allows direct connections)';
   };
   const usenet = createUsenet({ run: runLocked, route: usenetRoute, accounts: usenetAccounts, defaultAccount: usenetDefault, login, forward: clearForward, sources });
   /** The ordinary web's addresses each conversation was shown (search results, links on pages it read, your messages). */
@@ -390,7 +391,7 @@ export function apply(ctx, config, standIns = {}) {
     vpnTest = { state: 'running', text: 'Starting WireGuard…' };
     const result = await vpn.start();
     vpnTest = result.ok
-      ? { state: 'ok', text: `WireGuard works: ${result.name} passed traffic at ${new Date().toLocaleTimeString()}. It keeps running while Recon uses it.` }
+      ? { state: 'ok', text: `WireGuard works: ${result.name} passed traffic at ${new Date().toLocaleTimeString('en-GB')}. It keeps running while Recon uses it.` }
       : { state: 'failed', text: result.why.slice(0, 600) };
   };
   const lookForLogins = () => {
@@ -407,7 +408,7 @@ export function apply(ctx, config, standIns = {}) {
     const wasReady = tor.status().state === 'ready';
     try {
       await tor.start();
-      torTest = { state: 'ok', text: wasReady ? `Tor is connected (checked at ${new Date().toLocaleTimeString()}). A Recon conversation is using it, so it was left running.` : `Tor connected to its network at ${new Date().toLocaleTimeString()}. No site was opened. Tor was stopped again and its temporary folder deleted.` };
+      torTest = { state: 'ok', text: wasReady ? `Tor is connected (checked at ${new Date().toLocaleTimeString('en-GB')}). A Recon thread is using it, so it was left running.` : `Tor connected to its network at ${new Date().toLocaleTimeString('en-GB')}. No site was opened. Tor was stopped again and its temporary folder deleted.` };
     } catch (error) {
       torTest = { state: 'failed', text: String(error?.message ?? error).slice(0, 300) };
     } finally {
@@ -568,6 +569,29 @@ export function apply(ctx, config, standIns = {}) {
     const id = topIdOf(agent);
     return Boolean(id) && service?.get?.(id) === MODE_ID && service?.isolated?.(id) === true;
   };
+  /**
+   * Item 4A, stage 6a: the thread's space rules as Modes tells them (lib/space-guard.js). No Modes: not sealed, no
+   * space; Modes there and throwing: sealed with the unknown guard.
+   */
+  const guardOf = makeGuardOf(() => ctx.get('modes'));
+  /**
+   * Item 4A, stage 6a: whether an agent is a Recon-space thread (any mode, the Recon mode included), or a helper of
+   * one. A permission (Recon's tools, runs, room folders, moves), so it comes only from a real read: Modes' `reconSpace`,
+   * never its error value. An older Modes (no guardOf): the Recon mode as before, or the Recon space and isolated.
+   */
+  const inReconSpace = (agent) => {
+    const id = topIdOf(agent);
+    if (!id) return false;
+    const service = modes();
+    if (!service) return false;
+    try {
+      if (typeof service.guardOf === 'function') return service.guardOf(id)?.reconSpace === true;
+      if (inRecon(agent)) return true;
+      return service.spaces?.of?.(id) === 'recon' && service.isolated?.(id) === true;
+    } catch {
+      return false;
+    }
+  };
   /** The conversation's model, and where it runs. */
   const modelOf = (agent) => {
     let route;
@@ -620,7 +644,7 @@ export function apply(ctx, config, standIns = {}) {
       const before = trail.count(id);
       if (found.shown.length > 0) trail.add(id, found.shown);
       const opened = trail.count(id) - before;
-      if (added > 0 || opened > 0) sources.note(id, 'restored', `rebuilt from the saved conversation after the app started: ${count(added, 'source', 'sources')}${found.sources.length > added ? ` (${found.sources.length - added} already known)` : ''}, ${count(opened, 'address', 'addresses')} it was shown`);
+      if (added > 0 || opened > 0) sources.note(id, 'restored', `rebuilt from the saved thread after the app started: ${count(added, 'source', 'sources')}${found.sources.length > added ? ` (${found.sources.length - added} already known)` : ''}, ${count(opened, 'address', 'addresses')} it was shown`);
     } catch (error) {
       warn(`could not rebuild a conversation's sources: ${String(error?.message ?? error)}`);
     }
@@ -637,22 +661,25 @@ export function apply(ctx, config, standIns = {}) {
       const service = ctx.get('settings');
       const row = service?.describe?.().find((entry) => entry.ns === MODES_NS);
       if (!row) {
-        problem = 'The Modes add-on is not running, so there is no Recon tab.';
+        problem = 'The Modes add-on is not running, so there is no Recon space. Switch Modes on on the Plugins page.';
         return;
       }
       if (row.value?.extraModes === undefined || row.value?.sessionIsolated === undefined) {
-        problem = 'The Modes add-on is an older version that cannot isolate a mode. Update Plus.';
+        problem = 'The Modes add-on is an older version that cannot seal a mode. Update Plus.';
         return;
       }
       const on = enabled();
       const ops = [];
       const next = withRecon(row.value.extraModes, on);
       if (next !== undefined) ops.push({ op: 'set', path: ['extraModes'], value: next });
+      // Item 4A, stage 6b (D14): without the Cowork sidebar (and in the lab with spaces off) `defaultMode` still picks a new
+      // thread's mode, so it must not name a mode that is gone. With spaces, Modes already skips a start mode whose
+      // add-on is off and keeps the owner's choice (lib/spaces.js draftStartMode, startModeGone).
       if (!on && row.value.defaultMode === MODE_ID) ops.push({ op: 'set', path: ['defaultMode'], value: 'cowork' });
       if (ops.length > 0) await service.mutate(MODES_NS, ops);
       problem = '';
     } catch (error) {
-      problem = `The Recon tab could not be ${enabled() ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
+      problem = `The Recon space could not be ${enabled() ? 'added' : 'removed'}: ${String(error?.message ?? error).slice(0, 160)}`;
       warn(problem);
     } finally {
       syncing = false;
@@ -725,7 +752,7 @@ export function apply(ctx, config, standIns = {}) {
   }
   const ultraTool = {
     name: ULTRA_TOOL,
-    description: `Ultra Code's wider run, from a fixed recipe (offered only while Ultra Code is on). action "search": Recon's own code runs each sub-question (at most ${SUB_MAX}) through every lane that is on (onion sites, the ordinary web, news) and a counter-search on each key claim (at most ${CLAIM_MAX}), through the same screens and routes as the other tools; read what matters with the read tools. action "report": ${DRAFTS} writers and a judge, on this conversation's model and with no tools, write the report from the sources read here; present it with its [S#] citations.`,
+    description: `Ultra Code's wider run, from a fixed recipe (offered only while Ultra Code is on). action "search": Recon's own code runs each sub-question (at most ${SUB_MAX}) through every lane that is on (onion sites, the ordinary web, news) and a counter-search on each key claim (at most ${CLAIM_MAX}), through the same screens and routes as the other tools; read what matters with the read tools. action "report": ${DRAFTS} writers and a judge, on this thread's model and with no tools, write the report from the sources read here; present it with its [S#] citations.`,
     parameters: {
       type: 'object',
       properties: {
@@ -744,9 +771,9 @@ export function apply(ctx, config, standIns = {}) {
       try {
         const agent = exec?.agent;
         if (!enabled()) return { text: 'Recon is switched off in Settings → Recon.' };
-        if (!inRecon(agent) || agent?.header?.parentSession || agent?.session?.header?.parentSession) return { text: 'This works only in a Recon conversation itself. It was not run.' };
-        if (!ultraOn(agent)) return { text: 'Ultra Code is off for this conversation, so the wider run is not offered. Nothing was run.' };
-        if (!inRoom(agent)) return { text: 'This Recon conversation runs in a folder of the user\'s, so its tools are off. Nothing was run.' };
+        if (!inRecon(agent) || agent?.header?.parentSession || agent?.session?.header?.parentSession) return { text: 'This works only in a Recon thread itself. It was not run.' };
+        if (!ultraOn(agent)) return { text: 'Ultra Code is off for this thread, so the wider run is not offered. Nothing was run.' };
+        if (!inRoom(agent)) return { text: 'This Recon thread runs in a folder of the user\'s, so its tools are off. Nothing was run.' };
         const allowed = gate(agent);
         if (!allowed.ok) return { text: allowed.why };
         const id = topIdOf(agent);
@@ -757,11 +784,11 @@ export function apply(ctx, config, standIns = {}) {
         } catch {
           webOff = false;
         }
-        if (webOff) return { text: "Recon's web is off for this conversation (the Web button), so the wider run is not done. Nothing was run." };
+        if (webOff) return { text: "Recon's web is off for this thread (the Web button), so the wider run is not done. Nothing was run." };
         restore(topOf(agent));
         const question = String(args?.question ?? '').trim();
         /** Why to stop before the next step: stopped, Recon switched off, the conversation ended ('' to go on). */
-        const stop = () => (exec?.signal?.aborted ? 'the call was stopped' : !enabled() ? 'Recon was switched off' : ended.has(id) || wipeList.has(id) ? 'the conversation was ended' : '');
+        const stop = () => (exec?.signal?.aborted ? 'the call was stopped' : !enabled() ? 'Recon was switched off' : ended.has(id) || wipeList.has(id) ? 'the thread was ended' : '');
         if (args?.action === 'search') {
           const lanes = [{ name: 'Onion sites', search: (query) => onion.search(id, query) }];
           if (plain(config?.webOn) !== false) lanes.push({ name: 'The ordinary web', search: (query) => clearnet.search(id, query) });
@@ -774,7 +801,7 @@ export function apply(ctx, config, standIns = {}) {
         }
         if (args?.action === 'report') {
           const read = sources.full(id);
-          if (read.length === 0) return { text: 'Nothing was read in this conversation yet, so there is nothing to write a report from.' };
+          if (read.length === 0) return { text: 'Nothing was read in this thread yet, so there is nothing to write a report from.' };
           const material = materialOf(read, (source) => sources.cite(source));
           const drafts = [];
           const failed = [];
@@ -821,7 +848,7 @@ export function apply(ctx, config, standIns = {}) {
       const tools = ctx.get('tools');
       if (!tools?.register) return;
       // A helper's searches and reads belong to its conversation: one numbering of sources, one log, one export.
-      toolsOff = buildTools({ enabled, inRecon: (exec) => inRecon(exec?.agent), inRoom: (exec) => inRoom(exec?.agent), gate: (exec) => gate(exec?.agent), onion, clearnet, boards, usenet, web, sources, idOf: (exec) => topIdOf(exec?.agent), restore: (exec) => restore(topOf(exec?.agent)), ticks: (exec) => ticksOf(topIdOf(exec?.agent)), kinds: kindsOf, other }).map((tool) => tools.register(tool));
+      toolsOff = buildTools({ enabled, inRecon: (exec) => inReconSpace(exec?.agent), inRoom: (exec) => inRoom(exec?.agent), gate: (exec) => gate(exec?.agent), onion, clearnet, boards, usenet, web, sources, idOf: (exec) => topIdOf(exec?.agent), restore: (exec) => restore(topOf(exec?.agent)), ticks: (exec) => ticksOf(topIdOf(exec?.agent)), kinds: kindsOf, other }).map((tool) => tools.register(tool));
       // Ultra Code's fixed recipe: offered only to the conversation itself, only while Ultra Code is on.
       toolsOff.push(tools.register(ultraTool, { when: ({ agent }) => !(agent?.header?.parentSession ?? agent?.session?.header?.parentSession) && ultraOn(agent) && inRecon(agent) }));
     } else if (!on && toolsOff) {
@@ -849,7 +876,56 @@ export function apply(ctx, config, standIns = {}) {
     for (const dispose of toolsOff ?? []) if (typeof dispose === 'function') dispose();
     toolsOff = undefined;
   }, 'recon: follow the switch');
+  // Item 4A, stage 6a: every other mode in the Recon space (the thread and its helpers) gets Recon's rules on hostile
+  // text, text only, minors, read only and addresses. The Recon mode has them in its own method.
+  const spaceSections = new Map();
+  /** Whether an agent needs the section now: a Recon-space thread or helper whose thread is not in the Recon mode. */
+  const needsSpaceRules = (agent) => {
+    if (!inReconSpace(agent)) return false;
+    try {
+      return modes()?.get?.(topIdOf(agent)) !== MODE_ID;
+    } catch {
+      return true;
+    }
+  };
+  const installSpaceRules = (agent) => {
+    if (!agent?.id || spaceSections.has(agent.id) || !agent.ctx?.systemPrompt) return;
+    try {
+      const dispose = agent.ctx.effect(() => agent.ctx.systemPrompt.section({
+        name: 'recon:space',
+        order: 58,
+        interpolate: false,
+        text: () => {
+          try {
+            return needsSpaceRules(agent) ? SPACE_RULES : '';
+          } catch {
+            return '';
+          }
+        },
+      }), 'recon space rules');
+      spaceSections.set(agent.id, dispose);
+    } catch (error) {
+      warn(`could not add Recon's rules for another mode: ${String(error?.message ?? error)}`);
+    }
+  };
+  ctx.on('agent/created', ({ agent }) => installSpaceRules(agent));
+  try {
+    for (const agent of ctx.get('agents')?.list?.() ?? []) installSpaceRules(agent);
+  } catch {
+    /* agents appear later */
+  }
+  ctx.effect(() => () => {
+    for (const dispose of spaceSections.values()) {
+      try {
+        dispose?.();
+      } catch {
+        /* the conversation may already be closing */
+      }
+    }
+    spaceSections.clear();
+  }, 'recon: space rules');
   ctx.on('agent/disposed', ({ agent }) => {
+    spaceSections.delete(agent?.id);
     consent.forget(agent?.id);
     // A conversation that never read anything leaves no entry behind; loaded again, its history is
     // read again, so the numbers it used are known again.
@@ -868,6 +944,13 @@ export function apply(ctx, config, standIns = {}) {
    */
   const holdsRecon = (agent) => {
     if (!agent?.id) return false;
+    // Item 4A, stage 6a: every other mode in the Recon space (and its helpers) counts as holding Recon's findings from
+    // its first step (I12): it may have read the room. The Recon mode keeps its own rule below (findings, helpers,
+    // compaction), so a fresh Recon thread or a refused tool can still be explained by its model. When Modes cannot
+    // tell (its error value, or a helper with no known thread) the gate holds too: a refusal fails closed.
+    if (needsSpaceRules(agent)) return true;
+    const guard = guardOf(String(agent.id));
+    if (guard.sealed === true && guard.unknownTop === true) return true;
     // A helper of a Recon conversation carries its goal, plan and findings from its first request on
     // (review finding 3): it counts as holding them.
     if (topIdOf(agent) !== String(agent.id) && inRecon(agent)) return true;
@@ -901,8 +984,8 @@ export function apply(ctx, config, standIns = {}) {
     const place = providerPlace(settingsOf('llm-pi-ai')?.providers, route?.provider);
     if (mayReceive({ place, route, id: topIdOf(agent), consent, policy: cloudModels() }).ok || !holdsRecon(agent)) return next();
     const who = !route ? 'not known' : `${route.model} (${place.name || route.provider}), ${place.where === 'cloud' ? 'in the cloud' : 'at a place Recon cannot tell, treated as cloud'}`;
-    const agree = cloudModels() === 'never' ? ' (cloud models are switched off in Settings → Recon → Models)' : enabled() && inRecon(agent) ? ', or type /recon cloud to agree to this model for this conversation' : '';
-    throw new Error(`This conversation holds what Recon found, and its model is ${who}. Nothing was sent. Pick a model on this computer or in your own network${agree}, then send your message again.${door.problem() ? ` (${door.problem()})` : ''}`);
+    const agree = cloudModels() === 'never' ? ' (cloud models are switched off in Settings → Recon → Models)' : enabled() && inReconSpace(agent) ? ', or type /recon cloud to agree to this model for this thread' : '';
+    throw new Error(`This thread holds what Recon found, and its model is ${who}. Nothing was sent. Pick a model on this computer or in your own network${agree}, then send your message again.${door.problem() ? ` (${door.problem()})` : ''}`);
   });
   // Mentions of other conversations: an isolated conversation takes in none, and none takes in an
   // isolated one. The app's own handler runs outside this one, so it never sees what is taken out.
@@ -918,7 +1001,7 @@ export function apply(ctx, config, standIns = {}) {
   // What the assistant writes in a Recon conversation is kept for the export.
   ctx.on('session/event', (session, event) => {
     try {
-      if (event?.type !== 'assistant/message' || !session?.id || !inRecon({ id: session.id, header: session.header })) return;
+      if (event?.type !== 'assistant/message' || !session?.id || !inReconSpace({ id: session.id, header: session.header })) return;
       const content = event.data?.message?.content;
       const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map((block) => (block?.type === 'text' ? block.text : '')).join('\n') : '';
       // A Long run's helpers write their findings as answers: kept with their conversation.
@@ -952,18 +1035,18 @@ export function apply(ctx, config, standIns = {}) {
 
   const status = (agent) => {
     if (!enabled()) return 'Recon is switched off in Settings → Recon.';
-    if (!inRecon(agent)) return 'This is not a Recon conversation. Start one from the Recon tab. A conversation of another tab cannot become one.';
+    if (!inReconSpace(agent)) return 'This is not a Recon thread. Start one with the New button in the Recon space. A thread in another space cannot become one.';
     const { route, place } = modelOf(agent);
     const model = route ? `${route.model} (${place.name || route.provider})` : 'no model picked';
     const where = !route ? '' : staysHome(place) ? (place.where === 'local' ? 'on this computer' : `in your own network (${place.host})`) : place.where === 'cloud' ? `in the cloud${place.host ? ` (${place.host})` : ''}` : 'at a place Recon cannot tell, treated as cloud';
     const allowed = gate(agent);
     restore(agent);
     return [
-      'Recon conversation: isolated.',
-      inRoom(agent) ? 'Folder: Recon\'s own empty folder. The model is told no path of yours.' : 'Folder: a folder of yours, so the tools are OFF in this conversation. Start a new one with the New button in the Recon tab.',
-      `Tools: only ${TOOLS.join(', ')}. No programs, files, memory, helpers or other modes; a Long run (the Run button) adds helpers on this conversation's model, with file tools in the run's own folder in the room, and no programs or commands.`,
+      'Recon thread: sealed.',
+      inRoom(agent) ? 'Folder: Recon\'s own empty folder. The model is told no path of yours.' : 'Folder: a folder of yours, so the tools are OFF in this thread. Start a new one with the New button in the Recon space.',
+      toolsLine(agent),
       `Model: ${model}${where ? `, ${where}` : ''}.`,
-      allowed.ok ? (staysHome(place) ? 'What Recon finds stays on your own machines.' : cloudModels() === 'always' ? 'What Recon finds goes to this cloud model: Settings → Recon → Models allows cloud models without asking.' : 'You agreed that what Recon finds goes to this cloud model, for this conversation.') : cloudModels() === 'never' ? 'What Recon finds is NOT sent to this model: cloud models are switched off in Settings → Recon → Models. Pick a local model.' : 'What Recon finds is NOT sent to this model. Type /recon cloud to agree for this conversation, or pick a local model.',
+      allowed.ok ? (staysHome(place) ? 'What Recon finds stays on your own machines.' : cloudModels() === 'always' ? 'What Recon finds goes to this cloud model: Settings → Recon → Models allows cloud models without asking.' : 'You agreed that what Recon finds goes to this cloud model, for this thread.') : cloudModels() === 'never' ? 'What Recon finds is NOT sent to this model: cloud models are switched off in Settings → Recon → Models. Pick a local model.' : 'What Recon finds is NOT sent to this model. Type /recon cloud to agree for this thread, or pick a local model.',
       `Outside Tor (the Internet Archive read directly, Usenet, the ordinary web): ${clearWayText(topIdOf(agent))}.`,
       `Network: .onion sites through Recon's own Tor (${tor.status().state}). Usenet: ${usenetRoute() === 'direct' ? `encrypted connections, ${clearWayText(topIdOf(agent))}; accounts: ${usenetAccounts().map((account) => `${nameOf(account)} (${account.host || 'no server yet'}:${account.port})`).join(', ') || '(none set yet)'}` : 'off (Settings → Recon → Usenet)'}.`,
       `The ordinary web: ${plain(config?.webOn) !== false ? `on, ${clearWayText(topIdOf(agent))}` : 'off (Settings → Recon → More sources)'}.`,
@@ -971,6 +1054,30 @@ export function apply(ctx, config, standIns = {}) {
       `Blocklist of banned sites: ${blocklist.ready() ? `${blocklist.info().size} sites, fetched ${new Date(blocklist.info().at).toISOString().slice(0, 16).replace('T', ' ')} UTC` : 'not fetched yet; it is fetched before the first search or page'}.`,
       `Read so far: ${sources.list(agent.id).length} sources. /recon log shows every search and source.`,
     ].join('\n');
+  };
+  /**
+   * Item 4A, stage 6a: the status line about tools. The Recon mode: its own list, as before. Another mode in Recon:
+   * what Modes gives it now (sealed: Recon's tools for the web, its own local tools, files only in the room).
+   */
+  const toolsLine = (agent) => {
+    const id = topIdOf(agent);
+    let mode = '';
+    try {
+      mode = String(modes()?.get?.(id) ?? '');
+    } catch {
+      mode = '';
+    }
+    if (!mode || mode === MODE_ID) return `Tools: only ${TOOLS.join(', ')}. No programs, files, memory, helpers or other modes; a Mission (Start Mission beside Send) adds helpers on this thread's model, with file tools in the run's own folder in the room, and no programs or commands.`;
+    let list = [];
+    try {
+      const mask = modes()?.currentMask?.(id);
+      if (Array.isArray(mask?.allow)) list = mask.allow.map(String);
+      else if (Array.isArray(mask)) list = mask.map(String);
+    } catch {
+      list = [];
+    }
+    const shown = list.length > 0 ? `${list.slice(0, 40).join(', ')}${list.length > 40 ? ` and ${list.length - 40} more` : ''}` : 'Recon\'s tools for the web, and the mode\'s own local tools';
+    return `Tools: ${shown}. Mode ${mode} in Recon is sealed: it goes online only through Recon's tools, keeps its files in Recon's room, and writes nothing other threads read.`;
   };
   // ---- export, and End and wipe ------------------------------------------------------------------
 
@@ -995,9 +1102,70 @@ export function apply(ctx, config, standIns = {}) {
       agent = undefined;
     }
     if (!agent || topIdOf(agent) !== String(agent.id)) return false;
-    return inRecon(agent) && inRoom(agent);
+    // Item 4A, stage 6a: any mode in the Recon space, in the room.
+    return inReconSpace(agent) && inRoom(agent);
   };
-  if (typeof ctx.provide === 'function') ctx.effect(() => ctx.provide('recon', Object.freeze({ apiVersion: 2, runs: runsIn, runFolder: (id) => (runsIn(id) ? runFolder(id) : ''), longChecks: () => plain(config?.longChecks) === true })), 'recon: run folders');
+  /**
+   * Item 4A fix round: whether a folder is Recon's room or inside it (Modes asks, so a new thread in the room is only
+   * ever a sealed Recon thread, whatever space the window shows). Read through real paths; false when unreadable.
+   */
+  /**
+   * Item 4A, stage 6a: real paths remembered per path string (Modes asks for every thread, often). Only a path that
+   * resolves is kept, so a folder made later is read again; at most 500.
+   */
+  const realPaths = new Map();
+  const realOf = (path) => {
+    const key = String(path);
+    const known = realPaths.get(key);
+    if (known !== undefined) return known;
+    const real = realpathSync(key);
+    if (realPaths.size >= 500) realPaths.delete(realPaths.keys().next().value);
+    realPaths.set(key, real);
+    return real;
+  };
+  const isRoom = (path) => {
+    if (!path) return false;
+    try {
+      const here = realOf(path);
+      const room = realOf(ROOM);
+      return here === room || here.startsWith(`${room}/`);
+    } catch {
+      return false;
+    }
+  };
+  /** The agent for an id, or a bare `{id}` when the app has not loaded it. */
+  const agentFor = (id) => {
+    try {
+      return ctx.get('agents')?.get?.(String(id ?? '')) ?? { id: String(id ?? '') };
+    } catch {
+      return { id: String(id ?? '') };
+    }
+  };
+  /** Item 4A, stage 6a: whether a thread (or a helper's thread) is a Recon-space thread, any mode. */
+  const inSpace = (id) => Boolean(id) && inReconSpace(agentFor(id));
+  /**
+   * Item 4A, stage 6a: the thread's own `run-<id>` folder in the room when its folder (a helper's: its thread's, by
+   * header) is the room; '' otherwise. Never asks Modes, so Modes may call it while it works out a thread's mode.
+   */
+  const roomRunFolder = (id) => {
+    if (!id) return '';
+    const agent = agentFor(id);
+    if (!inRoom(agent)) return '';
+    return runFolder(topIdOf(agent));
+  };
+  if (typeof ctx.provide === 'function') ctx.effect(() => ctx.provide('recon', Object.freeze({
+    // Item 4A, stage 6a: apiVersion 3 adds inSpace, roomRunFolder and roomFolderOf; runs now means any mode in the
+    // Recon space, in the room.
+    apiVersion: 3,
+    runs: runsIn,
+    runFolder: (id) => (runsIn(id) ? runFolder(id) : ''),
+    longChecks: () => plain(config?.longChecks) === true,
+    isRoom,
+    inSpace,
+    roomRunFolder,
+    /** For add-ons: a Recon-space thread's run folder in the room, else '' (then the caller saves nothing). */
+    roomFolderOf: (id) => (inSpace(id) ? roomRunFolder(id) : ''),
+  })), 'recon: run folders');
   if (typeof ctx.provide === 'function') ctx.effect(() => ctx.provide('reconWipe', Object.freeze({ has: (id) => wipeList.has(String(id)), list: () => wipeList.list(), onChange: (listener) => { wipeListeners.add(listener); return () => wipeListeners.delete(listener); } })), 'recon: wipe list');
   /** Set once the app's conversation services are there. */
   let wiper;
@@ -1037,7 +1205,7 @@ export function apply(ctx, config, standIns = {}) {
     const again = setTimeout(dropRunFolder, 3000);
     again.unref?.();
     await tor.stop();
-    if (!wiper) return 'What this conversation read is forgotten and Tor is stopped. The conversation itself could not be deleted: this version of the app does not offer what that needs. Its saved history still holds what it read until you delete it: archive it yourself, then delete it from the list.';
+    if (!wiper) return 'What this thread read is forgotten and Tor is stopped. The thread itself could not be deleted: this version of the app does not offer what that needs. Its saved history still holds what it read until you delete it: archive it yourself, then delete it from the list.';
     wipeList.add(id);
     let closed = true;
     try {
@@ -1048,8 +1216,8 @@ export function apply(ctx, config, standIns = {}) {
     }
     const gone = await wiper.sweep().then(() => !wipeList.has(id), () => false);
     return [
-      'Ended. What this conversation read is forgotten, and Tor is stopped with its temporary folder deleted.',
-      closed ? 'The conversation is closed and taken off the list.' : 'The conversation could not be taken off the list; archive it yourself.',
+      'Ended. What this thread read is forgotten, and Tor is stopped with its temporary folder deleted.',
+      closed ? 'The thread is closed and taken off the list.' : 'The thread could not be taken off the list; archive it yourself.',
       gone ? 'Its files are deleted. They are not in the trash.' : 'Its files are deleted as soon as the app lets go of it, at the latest when the app next starts. They do not go to the trash.',
       'An export you made before is kept; delete that file yourself if you do not want it.',
     ].join('\n');
@@ -1135,16 +1303,16 @@ export function apply(ctx, config, standIns = {}) {
   const doorYes = new Set();
   /** Said in the window and in the export when a conversation is read from its saved messages after a restart. */
   const RESTART_NOTE = 'What Recon read before the app restarted is not kept; only the messages are.';
-  const NO_ONION = 'An onion address is never opened outside Recon. Nothing was opened. It is a citation: name it, and tell the user it can be read only in a Recon conversation.';
-  const NOT_ASKED = 'This address came from a Recon export. It is opened only after the user says yes, and a helper cannot ask. Nothing was opened: name it as a citation, and let the conversation itself ask.';
+  const NO_ONION = 'An onion address is never opened outside Recon. Nothing was opened. It is a citation: name it, and tell the user it can be read only in a Recon thread.';
+  const NOT_ASKED = 'This address came from a Recon export. It is opened only after the user says yes, and a helper cannot ask. Nothing was opened: name it as a citation, and let the thread itself ask.';
   const SAID_NO = 'The user said no to opening this address from a Recon export. Nothing was opened. Do not try another way.';
-  const NO_MEMORY = 'This conversation holds a Recon export, and text from Recon must not shape later sessions: Memory takes nothing that repeats the export or names one of its addresses. Nothing was suggested.';
+  const NO_MEMORY = 'This thread holds a Recon export, and text from Recon must not shape later threads: Memory takes nothing that repeats the export or names one of its addresses. Nothing was suggested.';
   /** Whether an agent is outside Recon: a conversation of another tab, or one of its helpers. */
   const outsideRecon = (agent) => {
     if (!agent) return false;
     try {
       const id = topIdOf(agent);
-      return !inRecon(agent) && modes()?.isolated?.(id) !== true;
+      return !inReconSpace(agent) && modes()?.isolated?.(id) !== true;
     } catch {
       return false;
     }
@@ -1210,6 +1378,25 @@ export function apply(ctx, config, standIns = {}) {
     const ask = [...new Set(urls.map(addressKey).filter((key) => key && [...carried.keys].some((exportKey) => covers(exportKey, key)) && !doorYes.has(`${carried.conversation}|${key}`)))];
     return ask.length > 0 ? { ask } : {};
   };
+  /**
+   * Mission stage E: a helper of a Mission that meets this rule tells its Mission (`mission.askYes`). Recon's own
+   * question then waits in the Mission's card (Ask modes) or is listed as not asked (Full auto); Allow there is the
+   * same as the conversation's own yes to it. The onion and Memory refusals are listed as not possible for a
+   * helper and never allowable. Undefined when Mission is not there, the caller is not a Mission's helper, or
+   * anything fails: Recon's refusal holds as before.
+   */
+  const askMission = async (exec, request) => {
+    try {
+      const mission = ctx.get('mission');
+      const sessionId = String(exec?.agent?.id ?? '');
+      if (typeof mission?.askYes !== 'function' || !sessionId) return undefined;
+      const said = await mission.askYes({ sessionId, addon: 'recon', ...request });
+      return said && typeof said === 'object' ? said : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  const helperOf = (exec) => Boolean((exec?.agent?.header ?? exec?.agent?.session?.header)?.parentSession);
   // Decided before any other add-on is asked. Independent of Recon's switch: an export made earlier keeps its rules.
   ctx.on('tools/pre-execute', async (exec, next) => {
     // Ultra Code's writers and judge have no tools (Modes gives them none; this holds whatever else is on).
@@ -1221,13 +1408,44 @@ export function apply(ctx, config, standIns = {}) {
       warn(`could not check a call against the export rules: ${String(error?.message ?? error)}`);
       rule = {};
     }
-    if (rule.deny) return { kind: 'deny', reason: rule.deny };
+    if (rule.deny) {
+      if ((rule.deny === NO_ONION || rule.deny === NO_MEMORY) && helperOf(exec)) {
+        const onion = rule.deny === NO_ONION;
+        await askMission(exec, {
+          key: onion ? `onion:${String(exec.name ?? '')}` : 'memory',
+          what: onion ? 'Open an onion address outside Recon' : 'Keep text from a Recon export in Memory',
+          reason: rule.deny,
+          cannot: true,
+        });
+      }
+      return { kind: 'deny', reason: rule.deny };
+    }
     if (rule.ask) {
       const header = exec.agent?.header ?? exec.agent?.session?.header;
-      if (header?.parentSession) return { kind: 'deny', reason: NOT_ASKED };
+      const reason = `Open ${rule.ask.slice(0, 5).join(', ')}${rule.ask.length > 5 ? ` and ${rule.ask.length - 5} more` : ''}? ${rule.ask.length === 1 ? 'It came' : 'They came'} from a Recon export in this thread: the site sees a visit from this Mac, not through Tor.`;
+      if (header?.parentSession) {
+        // A helper cannot ask the app's card. A Mission's helper asks its Mission instead (stage E).
+        const addresses = [...rule.ask].sort();
+        // Review of stage E (second pass): Mission matches an Allow on this key, so it is never cut short: a long list
+        // ends in a fingerprint of all its addresses, so an Allow covers only the same addresses.
+        const full = `open:${addresses.join(',')}`;
+        const key = full.length <= 300 ? full : `${full.slice(0, 283)}#${createHash('sha256').update(full).digest('hex').slice(0, 16)}`;
+        const said = await askMission(exec, {
+          key,
+          what: `Open ${addresses.slice(0, 5).join(', ')}${addresses.length > 5 ? ` and ${addresses.length - 5} more` : ''} (from a Recon export: the site sees a visit from this Mac, not through Tor)`.slice(0, 300),
+          reason,
+        });
+        if (said?.granted === true) {
+          // The owner's Allow in the Mission's card is the conversation's yes to these addresses, as on Recon's own card.
+          const conversation = topIdOf(exec.agent);
+          for (const address of rule.ask) doorYes.add(`${conversation}|${address}`);
+          return next();
+        }
+        if (said && typeof said.text === 'string' && said.text.trim()) return { kind: 'deny', reason: said.text };
+        return { kind: 'deny', reason: NOT_ASKED };
+      }
       const approval = ctx.get('approval');
       if (!approval?.request) return { kind: 'deny', reason: NOT_ASKED };
-      const reason = `Open ${rule.ask.slice(0, 5).join(', ')}${rule.ask.length > 5 ? ` and ${rule.ask.length - 5} more` : ''}? ${rule.ask.length === 1 ? 'It came' : 'They came'} from a Recon export in this conversation: the site sees a visit from this Mac, not through Tor.`;
       let outcome;
       try {
         outcome = await approval.request({ agent: exec.agent, toolName: exec.name, ...(exec.callId ? { callId: exec.callId } : {}), reason, displayReason: { en: reason }, signal: exec.signal });
@@ -1312,7 +1530,8 @@ export function apply(ctx, config, standIns = {}) {
   /** The tabs an export may go to: every tab but Recon (Bench too, the owner's answer: Bench never takes export text as his words). */
   const doorTabs = () => {
     try {
-      return (modes()?.list?.() ?? []).filter((mode) => mode.id !== MODE_ID).map((mode) => ({ id: mode.id, label: mode.label }));
+      // Item 4A, stage 6a fix: `names` carries each mode's English name when Modes offers it (English only since stage 7).
+      return (modes()?.list?.() ?? []).filter((mode) => mode.id !== MODE_ID).map((mode) => ({ id: mode.id, label: mode.label, names: shownNames(modes(), String(mode.id ?? '')) }));
     } catch {
       return [];
     }
@@ -1326,7 +1545,8 @@ export function apply(ctx, config, standIns = {}) {
     const open = headers.filter((header) => {
       try {
         const mode = modes()?.get?.(header.id);
-        return modes()?.isolated?.(header.id) === false && mode !== MODE_ID;
+        // Item 4A, stage 6a: never a thread in the Recon space, whatever its mode.
+        return modes()?.isolated?.(header.id) === false && mode !== MODE_ID && modes()?.spaces?.of?.(header.id) !== 'recon';
       } catch {
         return false;
       }
@@ -1337,14 +1557,41 @@ export function apply(ctx, config, standIns = {}) {
     } catch {
       titles = [];
     }
-    return open.map((header, index) => ({ id: header.id, title: (titles[index]?.status === 'fulfilled' ? String(titles[index].value?.title?.title ?? '') : '') || 'Untitled conversation', tab: String(modes()?.get?.(header.id) ?? '') }));
+    const spaceOf = (id) => {
+      try {
+        return String(modes()?.spaces?.of?.(id) ?? '');
+      } catch {
+        return '';
+      }
+    };
+    // Each target is labelled with its mode's name (from the Modes list), never its id; the page names the space.
+    let labels = new Map();
+    try {
+      labels = new Map((modes()?.list?.() ?? []).map((mode) => [String(mode?.id ?? ''), String(mode?.label ?? '').trim()]));
+    } catch {
+      labels = new Map();
+    }
+    const modeIdOf = (id) => {
+      try {
+        return String(modes()?.get?.(id) ?? '');
+      } catch {
+        return '';
+      }
+    };
+    return open.map((header, index) => {
+      const tab = modeIdOf(header.id);
+      const space = spaceOf(header.id);
+      // Item 4A, stage 6a fix: `names` carries the mode's and space's English names when Modes offers them (English
+      // only since stage 7); the page falls back to `mode` and its own space names for an older Modes.
+      return { id: header.id, title: (titles[index]?.status === 'fulfilled' ? String(titles[index].value?.title?.title ?? '') : '') || 'Untitled thread', tab, mode: labels.get(tab) || tab, space, names: shownNames(modes(), tab, space) };
+    });
   };
   const exportFolderDefault = () => (typeof home === 'function' ? home('recon', 'exports') : '');
   /** The Recon conversation a page asks about, when the export door may open for it. */
   const doorSource = async (sessionId) => {
     if (!enabled()) throw new Error('Recon is switched off.');
     const id = String(sessionId ?? '').slice(0, 200);
-    if (ended.has(id) || wipeList.has(id)) throw new Error('This conversation was ended and wiped.');
+    if (ended.has(id) || wipeList.has(id)) throw new Error('This thread was ended and wiped.');
     let agent;
     try {
       agent = ctx.get('agents')?.get?.(id);
@@ -1352,20 +1599,20 @@ export function apply(ctx, config, standIns = {}) {
       agent = undefined;
     }
     if (agent) {
-      if (!inRecon(agent) || topIdOf(agent) !== id) throw new Error('Only a Recon conversation of its own can be exported, from its own chat box.');
+      if (!inReconSpace(agent) || topIdOf(agent) !== id) throw new Error('Only a Recon thread of its own can be exported, from its own chat box.');
       return { id, agent };
     }
     // Not loaded since the app started: decided by id and by its saved header.
     const saved = await savedRecon(id);
-    if (!saved.ok) throw new Error('Only a Recon conversation of its own can be exported, from its own chat box.');
+    if (!saved.ok) throw new Error('Only a Recon thread of its own can be exported, from its own chat box.');
     let surface;
     try {
       surface = await ctx.get('sessionQuery').readSurface(id);
     } catch (error) {
-      throw new Error(`The conversation's saved messages could not be read (${String(error?.code ?? error?.message ?? error).slice(0, 80)}).`);
+      throw new Error(`The thread's saved messages could not be read (${String(error?.code ?? error?.message ?? error).slice(0, 80)}).`);
     }
     const header = surface?.session ?? {};
-    if (header.parentSession || header.origin === 'subagent') throw new Error('Only a Recon conversation of its own can be exported, from its own chat box.');
+    if (header.parentSession || header.origin === 'subagent') throw new Error('Only a Recon thread of its own can be exported, from its own chat box.');
     return { id, events: surface?.events ?? [], restarted: true };
   };
   /**
@@ -1381,7 +1628,8 @@ export function apply(ctx, config, standIns = {}) {
     let ok = false;
     try {
       const service = modes();
-      if (service?.get?.(id) === MODE_ID && service?.isolated?.(id) === true) {
+      // Item 4A, stage 6a: the Recon mode, or any mode in the Recon space; sealed either way.
+      if ((service?.get?.(id) === MODE_ID || service?.spaces?.of?.(id) === 'recon') && service?.isolated?.(id) === true) {
         const query = ctx.get('sessionQuery');
         const header = typeof query?.listSessions === 'function' ? (await query.listSessions()).map((record) => record?.header ?? {}).find((one) => one.id === id) : undefined;
         ok = Boolean(header) && !header.parentSession && header.origin !== 'subagent';
@@ -1412,7 +1660,7 @@ export function apply(ctx, config, standIns = {}) {
       return true;
     }
   };
-  const RUNNING_REFUSAL = 'Recon is running in this conversation: export when the run is done.';
+  const RUNNING_REFUSAL = 'Recon is running in this thread: export when the run is done.';
   const newExportId = () => `E${Date.now().toString(36).slice(-4).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
   /**
    * Which of the room's files are this conversation's own: its run folder, and what its own tool calls
@@ -1448,7 +1696,7 @@ export function apply(ctx, config, standIns = {}) {
       leaves: [
         `${built.counts.reports} report${built.counts.reports === 1 ? '' : 's'} written by Recon's model`,
         `${built.counts.sources} source${built.counts.sources === 1 ? '' : 's'}, as citations (title, address, author and date as shown, when read, its lane): never the text of a page`,
-        ...(built.counts.messages > 0 ? [`your ${built.counts.messages} message${built.counts.messages === 1 ? '' : 's'} in the conversation`] : []),
+        ...(built.counts.messages > 0 ? [`your ${built.counts.messages} message${built.counts.messages === 1 ? '' : 's'} in the thread`] : []),
         `${built.addresses.length} address${built.addresses.length === 1 ? '' : 'es'}, each marked origin: Recon`,
       ],
       notKept: NOT_KEPT,
@@ -1464,6 +1712,18 @@ export function apply(ctx, config, standIns = {}) {
   const claimFor = async (sessionId, tab) => {
     const service = modes();
     if (typeof service?.set !== 'function') throw new Error('The Modes add-on is not running.');
+    // Item 4A fix round: with spaces, the new thread is claimed with its space's start mode (Settings → Spaces), not the
+    // tab id as a mode (Chat's tab id is the old answer-only Chat mode), and recorded in that space.
+    const spaces = service.spaces;
+    if (typeof spaces?.live === 'function' && spaces.live() && typeof spaces.startDraft === 'function' && typeof spaces.ofMode === 'function') {
+      const space = ['devices', 'workshop'].includes(tab) ? tab : spaces.ofMode(tab);
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const started = await spaces.startDraft(sessionId, { space });
+        if (!started?.missing) return;
+        await new Promise((done) => setTimeout(done, 250));
+      }
+      throw new Error(`modes: unknown session "${sessionId}"`);
+    }
     let lastError;
     for (let attempt = 0; attempt < 20; attempt += 1) {
       try {
@@ -1488,7 +1748,7 @@ export function apply(ctx, config, standIns = {}) {
     const built = exportOf(source, body.what, id, at);
     // The files the owner ticked in Recon's room: text goes in, quoted; any other file is copied unopened.
     const files = pickedFiles(ROOM, body.files, await roomScope(source));
-    if (built.counts.reports + built.counts.sources + built.counts.messages + files.length === 0) throw new Error('There is nothing to export: nothing was read in this conversation, no report was kept and no file was ticked.');
+    if (built.counts.reports + built.counts.sources + built.counts.messages + files.length === 0) throw new Error('There is nothing to export: nothing was read in this thread, no report was kept and no file was ticked.');
     const addFiles = (copiedTo) => {
       if (files.length === 0) return;
       const part = filesPart(files, copiedTo);
@@ -1516,19 +1776,19 @@ export function apply(ctx, config, standIns = {}) {
     if (message.length > MESSAGE_MAX) throw new Error('This export is too long for one message. Send it to a folder instead.');
     if (to === 'new') {
       const tab = String(body.tab ?? 'content');
-      if (!doorTabs().some((one) => one.id === tab)) throw new Error('An export goes to a tab other than Recon.');
+      if (!doorTabs().some((one) => one.id === tab)) throw new Error('An export goes to a mode other than Recon. Pick another mode.');
       door.add({ id, at, what: built.json.what, from: agent.id, to: [], addresses: built.addresses });
-      sources.note(agent.id, 'export', `door: ${built.json.what} to a new conversation in ${tab} (${built.counts.sources} sources)`);
+      sources.note(agent.id, 'export', `door: ${built.json.what} to a new thread in ${tab} (${built.counts.sources} sources)`);
       return { id, tab, message };
     }
     if (to === 'existing') {
       const target = String(body.target ?? '').slice(0, 200);
-      if (!(await doorTargets()).some((one) => one.id === target)) throw new Error('That conversation cannot take an export (it is Recon\'s, sealed, or not there).');
+      if (!(await doorTargets()).some((one) => one.id === target)) throw new Error('That thread cannot take an export (it is Recon\'s, sealed, or not there).');
       door.add({ id, at, what: built.json.what, from: agent.id, to: [{ kind: 'conversation', id: target }], addresses: built.addresses });
-      sources.note(agent.id, 'export', `door: ${built.json.what} added to another conversation (${built.counts.sources} sources)`);
+      sources.note(agent.id, 'export', `door: ${built.json.what} added to another thread (${built.counts.sources} sources)`);
       return { id, target, message };
     }
-    throw new Error('Pick where it goes: a new conversation, one that exists, or a folder.');
+    throw new Error('Pick where it goes: a new thread, one that exists, or a folder.');
   };
   /**
    * A conversation that began in Recon, for a move to another tab: Recon's own, or one held locked
@@ -1537,10 +1797,12 @@ export function apply(ctx, config, standIns = {}) {
    */
   const moveSource = async (sessionId) => {
     const id = String(sessionId ?? '').slice(0, 200);
-    if (ended.has(id) || wipeList.has(id)) throw new Error('This conversation was ended and wiped.');
+    if (ended.has(id) || wipeList.has(id)) throw new Error('This thread was ended and wiped.');
     const service = modes();
     const mode = service?.get?.(id);
-    if (service?.isolated?.(id) !== true || (mode !== MODE_ID && mode !== 'isolated-locked')) throw new Error('Only a conversation that began in Recon moves this way.');
+    // Item 4A, stage 6a: any mode in the Recon space moves this way too (a real read only, never Modes' error value).
+    const reconSpace = guardOf(id).reconSpace === true;
+    if (!reconSpace && (service?.isolated?.(id) !== true || (mode !== MODE_ID && mode !== 'isolated-locked'))) throw new Error('Only a thread that began in Recon moves this way.');
     let agent;
     try {
       agent = ctx.get('agents')?.get?.(id);
@@ -1555,7 +1817,7 @@ export function apply(ctx, config, standIns = {}) {
     try {
       surface = await ctx.get('sessionQuery').readSurface(id);
     } catch (error) {
-      throw new Error(`The conversation's saved messages could not be read (${String(error?.code ?? error?.message ?? error).slice(0, 80)}).`);
+      throw new Error(`The thread's saved messages could not be read (${String(error?.code ?? error?.message ?? error).slice(0, 80)}).`);
     }
     const header = surface?.session ?? {};
     if (header.parentSession || header.origin === 'subagent') throw new Error('A helper does not move on its own.');
@@ -1586,7 +1848,7 @@ export function apply(ctx, config, standIns = {}) {
     if (!route && cloudModels() === 'always') return;
     if (agreeCloud === true && cloudModels() === 'ask' && route) consent.agree(child, route);
     const allowed = mayReceive({ place, route, id: child, consent, policy: cloudModels() });
-    if (!allowed.ok) throw new Error(`Nothing was moved. ${allowed.why.replace(/^This conversation uses/, 'The new conversation uses').replace(/ To agree for this conversation, the user types \/recon cloud\./, ' Tick the agreement in the window, or pick a model on this computer or in your own network first.')}`);
+    if (!allowed.ok) throw new Error(`Nothing was moved. ${allowed.why.replace(/^This thread uses/, 'The new thread uses').replace(/ To agree for this thread, the user types \/recon cloud\./, ' Tick the agreement in the window, or pick a model on this computer or in your own network first.')}`);
   };
   /** The conversations a move opened (their summary is Recon's): they hold Recon's findings for the cloud check. */
   // A damaged list cannot say which conversations a move opened: every conversation counts as one (fail closed).
@@ -1602,13 +1864,13 @@ export function apply(ctx, config, standIns = {}) {
   const doorMove = async (body) => {
     if (door.problem()) throw new Error(door.problem());
     const source = await moveSource(body.session);
-    if (runningNow(source.id)) throw new Error('Recon is running in this conversation: move it when the run is done.');
+    if (runningNow(source.id)) throw new Error('Recon is running in this thread: move it when the run is done.');
     if (body.consent !== true) throw new Error('Nothing was moved: the move needs the preview window first (what leaves, and your yes).');
     const tab = String(body.tab ?? '');
     const target = doorTabs().find((one) => one.id === tab);
-    if (!target) throw new Error('A conversation moves to a tab other than Recon.');
+    if (!target) throw new Error('A thread moves to a mode other than Recon. Pick another mode.');
     const child = String(body.sessionId ?? '').slice(0, 200);
-    if (!child || child === source.id) throw new Error('The new conversation is missing.');
+    if (!child || child === source.id) throw new Error('The new thread is missing.');
     const parent = safeExportParent(String(body.folder ?? ''), [ROOM, DEFAULT_ROOM]);
     // The new conversation becomes one of the picked tab first, so its model is the one it will really use; only
     // then is the cloud check made (before anything is written). A refusal leaves an empty conversation of that tab.
@@ -1660,7 +1922,7 @@ export function apply(ctx, config, standIns = {}) {
       // opened outside Recon, others after a yes, nothing into Memory) and the cloud check knows it.
       door.add({ id, at, what: 'move', from: source.id, to: [{ kind: 'conversation', id: child, tab }], addresses: addressesIn(`${summary.markdown}\n${full}`) });
       recorded = true;
-      sources.note(source.id, 'export', `moved to a new ${tab} conversation (summary${full ? ' and the whole conversation' : ''}, ${copied.length} file${copied.length === 1 ? '' : 's'} copied)`);
+      sources.note(source.id, 'export', `moved to a new ${tab} thread (summary${full ? ' and the whole thread' : ''}, ${copied.length} file${copied.length === 1 ? '' : 's'} copied)`);
       const draft = buildDraft({ title: String(body.title ?? '').slice(0, 200), tabLabel: target.label || tab, folder: where, files: copied, skipped, hasFull: Boolean(full), at });
       return { id, tab, label: target.label || tab, draft: exportMessage(id, at, draft), folder: where, files: copied.length, skipped: skipped.length };
     } catch (error) {
@@ -1717,9 +1979,9 @@ export function apply(ctx, config, standIns = {}) {
               // The page made the new conversation: it becomes one of the picked tab, and the export reached it.
               if (door.problem()) throw new Error(door.problem());
               const entry = door.get(String(body.id ?? ''));
-              if (!entry || (entry.to ?? []).length > 0) throw new Error('There is no export waiting for a new conversation.');
+              if (!entry || (entry.to ?? []).length > 0) throw new Error('There is no export waiting for a new thread.');
               const tab = String(body.tab ?? '');
-              if (!doorTabs().some((one) => one.id === tab)) throw new Error('An export goes to a tab other than Recon.');
+              if (!doorTabs().some((one) => one.id === tab)) throw new Error('An export goes to a mode other than Recon. Pick another mode.');
               const sessionId = String(body.sessionId ?? '').slice(0, 200);
               await claimFor(sessionId, tab);
               door.delivered(entry.id, { kind: 'conversation', id: sessionId, tab });
@@ -1742,41 +2004,41 @@ export function apply(ctx, config, standIns = {}) {
       () =>
         inner.commands.register({
           name: 'recon',
-          description: 'Recon conversation: show its isolation and model, or agree to a cloud model',
+          description: 'Recon thread: show how it is sealed and its model, or agree to a cloud model',
           input: { hint: '[status | cloud | direct | block | log | export | end confirm | stop]' },
           handler: async ({ agent, rawInput }) => {
             try {
               const word = String(rawInput ?? '').trim().toLowerCase();
               if (!word || word === 'status') return { kind: 'success', text: status(agent) };
               if (word === 'cloud') {
-                if (!enabled() || !inRecon(agent)) return { kind: 'error', text: status(agent) };
+                if (!enabled() || !inReconSpace(agent)) return { kind: 'error', text: status(agent) };
                 const { route, place } = modelOf(agent);
                 if (!route) return { kind: 'error', text: 'Pick a model in the chat box first.' };
-                if (staysHome(place)) return { kind: 'success', text: 'This conversation\'s model runs on your own machines. Nothing to agree to.' };
+                if (staysHome(place)) return { kind: 'success', text: 'This thread\'s model runs on your own machines. Nothing to agree to.' };
                 if (cloudModels() === 'never') return { kind: 'error', text: 'Cloud models are switched off for Recon (Settings → Recon → Models). Pick a model on this computer or in your own network, or change that setting.' };
-                if (cloudModels() === 'always') return { kind: 'success', text: 'Nothing to agree to: Settings → Recon → Models allows cloud models in every Recon conversation.' };
+                if (cloudModels() === 'always') return { kind: 'success', text: 'Nothing to agree to: Settings → Recon → Models allows cloud models in every Recon thread.' };
                 consent.agree(agent.id, route);
-                return { kind: 'success', text: `Agreed: what Recon finds in this conversation is sent to ${route.model} (${place.name || route.provider}). This holds for this conversation and this model until the app is closed.` };
+                return { kind: 'success', text: `Agreed: what Recon finds in this thread is sent to ${route.model} (${place.name || route.provider}). This holds for this thread and this model until the app is closed.` };
               }
               if (word === 'log') {
-                if (!enabled() || !inRecon(agent)) return { kind: 'error', text: status(agent) };
+                if (!enabled() || !inReconSpace(agent)) return { kind: 'error', text: status(agent) };
                 restore(agent);
-                return { kind: 'success', text: `Research log of this conversation\n\n${sources.log(agent.id)}` };
+                return { kind: 'success', text: `Research log of this thread\n\n${sources.log(agent.id)}` };
               }
               if (word === 'export') {
-                if (!enabled() || !inRecon(agent)) return { kind: 'error', text: status(agent) };
+                if (!enabled() || !inReconSpace(agent)) return { kind: 'error', text: status(agent) };
                 restore(agent);
                 const found = sources.full(agent.id);
                 const notes = sources.notes(agent.id);
-                if (found.length === 0 && notes.length === 0) return { kind: 'error', text: 'There is nothing to export: nothing was read in this conversation, and nothing the assistant wrote was kept since the app was started.' };
+                if (found.length === 0 && notes.length === 0) return { kind: 'error', text: 'There is nothing to export: nothing was read in this thread, and nothing the assistant wrote was kept since the app was started.' };
                 const file = writeExport(exportFolder(), exportText({ sources: found, cite: (source) => sources.cite(source), log: sources.log(agent.id), notes }));
                 sources.note(agent.id, 'export', `written (${found.length} sources, ${notes.length} notes)`);
-                return { kind: 'success', text: `Exported ${found.length} sources and ${notes.length} notes to:\n${file}\n\nEverything from sources and from the assistant is quoted and marked as untrusted material in that file. If you give the file to another tab or tool, leave the marks in.` };
+                return { kind: 'success', text: `Exported ${found.length} sources and ${notes.length} notes to:\n${file}\n\nEverything from sources and from the assistant is quoted and marked as untrusted material in that file. If you give the file to another thread or tool, leave the marks in.` };
               }
               if (word === 'end' || word === 'wipe' || word === 'end confirm' || word === 'wipe confirm') {
-                if (!inRecon(agent)) return { kind: 'error', text: status(agent) };
+                if (!inReconSpace(agent)) return { kind: 'error', text: status(agent) };
                 // Review H11: a permanent delete is never one typed word. Without "confirm" nothing is done.
-                if (!word.endsWith(' confirm')) return { kind: 'error', text: `/recon ${word} deletes this conversation for good: what it read is forgotten, Tor is stopped and the conversation and its files are deleted, with no way back. Nothing was deleted. To go on, type /recon ${word} confirm` };
+                if (!word.endsWith(' confirm')) return { kind: 'error', text: `/recon ${word} deletes this thread for good: what it read is forgotten, Tor is stopped and the thread and its files are deleted, with no way back. Nothing was deleted. To go on, type /recon ${word} confirm` };
                 return { kind: 'success', text: await endAndWipe(agent) };
               }
               if (word === 'stop') {
@@ -1786,14 +2048,14 @@ export function apply(ctx, config, standIns = {}) {
               }
               // WireGuard missing or not working: the user may let this conversation connect directly (16 November).
               if (word === 'direct') {
-                if (!enabled() || !inRecon(agent)) return { kind: 'error', text: status(agent) };
+                if (!enabled() || !inReconSpace(agent)) return { kind: 'error', text: status(agent) };
                 directOk.add(topIdOf(agent));
-                return { kind: 'success', text: 'Allowed for this conversation: when no WireGuard tunnel works, what is not Tor (the Internet Archive read directly, Usenet, the ordinary web) goes straight from this Mac, and those sites see its internet address. A working tunnel is still used first. /recon block takes this back. It holds until the app is closed.' };
+                return { kind: 'success', text: 'Allowed for this thread: when no WireGuard tunnel works, what is not Tor (the Internet Archive read directly, Usenet, the ordinary web) goes straight from this Mac, and those sites see its internet address. A working tunnel is still used first. /recon block takes this back. It holds until the app is closed.' };
               }
               if (word === 'block') {
-                if (!enabled() || !inRecon(agent)) return { kind: 'error', text: status(agent) };
+                if (!enabled() || !inReconSpace(agent)) return { kind: 'error', text: status(agent) };
                 directOk.delete(topIdOf(agent));
-                return { kind: 'success', text: 'Blocked again: without a working WireGuard tunnel, nothing outside Tor is sent from this conversation.' };
+                return { kind: 'success', text: 'Blocked again: without a working WireGuard tunnel, nothing outside Tor is sent from this thread.' };
               }
               return { kind: 'error', text: `/recon does not know "${word.slice(0, 40)}". Use /recon, /recon cloud, /recon direct, /recon block, /recon log, /recon export, /recon end confirm or /recon stop.` };
             } catch (error) {
@@ -1825,7 +2087,7 @@ export function apply(ctx, config, standIns = {}) {
     const allowed = gate(agent);
     return {
       known: true,
-      recon: enabled() && inRecon(agent),
+      recon: enabled() && inReconSpace(agent),
       inRoom: inRoom(agent),
       model: route?.model ?? '',
       provider: route ? place.name || route.provider : '',

@@ -16,7 +16,7 @@ export const Config = z.object({
    * Tokens you leave out keep the app's own value.
    */
   custom: z.string().default('').volatile(),
-  /** On the Mac desktop app, paint the sidebar solid in the scheme's colour instead of see-through. */
+  /** On the Mac desktop app, paint the left panel solid in the scheme's colour instead of see-through. */
   opaqueMacSidebar: z.boolean().default(true).volatile(),
 });
 

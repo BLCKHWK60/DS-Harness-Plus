@@ -254,7 +254,7 @@ test('saving, the answer to the model, settings and the skill', (t) => {
 
   const result = draw({ kind: 'flow', title: 'Tea', nodes: [{ id: 'a' }, { id: 'b' }, { id: 'c' }], edges: [{ from: 'a', to: 'b' }] });
   const text = answerText(result, { id: 'abcdef012345', file: '/work/diagrams/tea.svg' });
-  assert.match(text, /^Drawn: Tea \(flow, \d+ × \d+\)\. It is shown to the user in the chat\.\nSaved as: \/work\/diagrams\/tea\.svg\nDiagram id: abcdef012345/);
+  assert.match(text, /^Drawn: Tea \(flow, \d+ × \d+\)\. It is shown to the user in the thread\.\nSaved as: \/work\/diagrams\/tea\.svg\nDiagram id: abcdef012345/);
   assert.match(text, /What was drawn:\nFlowchart reading top to bottom: 3 boxes, 1 arrows\./);
   assert.match(text, /Problems to fix \(1\):\n- One box has no arrow: "c"/);
   assert.match(text, /again with the same "name"/);

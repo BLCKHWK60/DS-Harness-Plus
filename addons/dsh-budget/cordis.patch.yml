@@ -2,13 +2,13 @@
     - id: budget
       name: '@local/dsh-budget'
       config:
-        # Works with nothing set: generous limits that only a runaway task reaches.
+        # Works with nothing set: generous limits that only a runaway run reaches.
         # Change them on Settings > Budget guard. 0 means no limit. Optional:
-        #   maxSteps: 300         # requests the conversation itself makes in one task
-        #   maxHelperSteps: 1500  # requests its helpers (Deep research, Mission) make in one task; 0 = shared with maxSteps
-        #   maxTokens: 20000000   # tokens in one task, helpers included
-        #   maxMinutes: 0         # minutes one task may run
+        #   maxSteps: 300         # requests the thread itself makes in one run
+        #   maxHelperSteps: 1500  # requests its helpers (Deep research, Mission) make in one run; 0 = shared with maxSteps
+        #   maxTokens: 20000000   # tokens in one run, helpers included
+        #   maxMinutes: 0         # minutes one run may take
         #   maxRepeats: 8         # the same tool call in a row
-        #   dayTokens: 0          # tokens per day, all conversations
+        #   dayTokens: 0          # tokens per day, all threads
         # A first install of Plus starts with lower values (see new-install-defaults.json).
         enabled: true

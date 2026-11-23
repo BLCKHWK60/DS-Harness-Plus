@@ -1,19 +1,19 @@
-// lib/paths.mjs — 路径解析与越界校验（零依赖）。
+// lib/paths.mjs — path resolution and escape checks (no dependencies).
 //
-// 全部纯函数：解析同步根/工作树根、校验嵌套关系、把会话文件相对路径
-// 安全地映射进工作树。任何把外部输入拼进路径的地方必须先经 assertRelPath
-// 或 containment 检查（路径越界 = PATH_UNSAFE 响亮失败，绝不静默）。
+// All pure functions: resolve the sync root and the work-tree root, check that they do not nest, and map a session
+// file's relative path safely into the work tree. Anywhere outside input is joined into a path must first pass assertRelPath
+// or a containment check (a path escape = PATH_UNSAFE, a loud failure, never silent).
 
 import path from 'node:path'
 import { FORK_NAME_RE, MIRROR_DIR } from './constants.mjs'
 import { badConfig, pathUnsafe } from './errors.mjs'
 
 /**
- * 解析会话存储根：配置为空时取 $DSH_HOME/sessions；两者皆缺 → 响亮失败。
- * 目录是否真实存在由消费方（镜像/状态）处理；这里只做路径层面的解析。
- * @param {string} configured - Config.sessionRoot（'' = 默认）。
- * @param {string|undefined} [dshHome] - 环境 $DSH_HOME（测试注入）。
- * @returns {string} 绝对路径。
+ * Resolve the session store root: an empty config takes $DSH_HOME/sessions; both missing → a loud failure.
+ * Whether the folder really exists is for the consumers (mirror, status); this only resolves the path.
+ * @param {string} configured - Config.sessionRoot ('' = default).
+ * @param {string|undefined} [dshHome] - the environment's $DSH_HOME (passed in by tests).
+ * @returns {string} an absolute path.
  */
 export function resolveSessionRoot(configured, dshHome = process.env.DSH_HOME) {
   if (typeof configured === 'string' && configured.length > 0) {
@@ -26,10 +26,10 @@ export function resolveSessionRoot(configured, dshHome = process.env.DSH_HOME) {
 }
 
 /**
- * 解析同步仓库工作树根：配置为空时取 $DSH_HOME/dsh-session-sync/repo。
- * @param {string} configured - Config.repoDir（'' = 默认）。
- * @param {string|undefined} [dshHome] - 环境 $DSH_HOME（测试注入）。
- * @returns {string} 绝对路径。
+ * Resolve the sync repository's work-tree root: an empty config takes $DSH_HOME/dsh-session-sync/repo.
+ * @param {string} configured - Config.repoDir ('' = default).
+ * @param {string|undefined} [dshHome] - the environment's $DSH_HOME (passed in by tests).
+ * @returns {string} an absolute path.
  */
 export function resolveRepoDir(configured, dshHome = process.env.DSH_HOME) {
   if (typeof configured === 'string' && configured.length > 0) {
@@ -42,10 +42,10 @@ export function resolveRepoDir(configured, dshHome = process.env.DSH_HOME) {
 }
 
 /**
- * 两目录不得互相包含：镜像会把 sessionRoot 复制进 repoDir（或反之时递归）。
- * @param {string} sessionRoot - 已解析的会话存储根。
- * @param {string} repoDir - 已解析的同步仓库根。
- * @returns {void} 违反时抛 BAD_CONFIG。
+ * Neither folder may contain the other: the mirror copies sessionRoot into repoDir (or would recurse the other way).
+ * @param {string} sessionRoot - the resolved session store root.
+ * @param {string} repoDir - the resolved sync repository root.
+ * @returns {void} throws BAD_CONFIG when broken.
  */
 export function assertNestingSafe(sessionRoot, repoDir) {
   const inside = (a, b) => {
@@ -61,10 +61,10 @@ export function assertNestingSafe(sessionRoot, repoDir) {
 }
 
 /**
- * 校验会话文件的相对路径：拒绝绝对路径、空段、`.`/`..`、反斜杠与越界。
- * 镜像与 fork 路径拼接的唯一入口。
- * @param {string} rel - 相对路径（POSIX 分隔）。
- * @returns {string} 规范化后的同一相对路径。
+ * Check a session file's relative path: refuses absolute paths, empty segments, `.`/`..`, backslashes and escapes.
+ * The only way in for joining mirror and fork paths.
+ * @param {string} rel - the relative path (POSIX separators).
+ * @returns {string} the same relative path, normalised.
  */
 export function assertRelPath(rel) {
   if (typeof rel !== 'string' || rel.length === 0) {
@@ -83,39 +83,39 @@ export function assertRelPath(rel) {
 }
 
 /**
- * 段是否形如文件名（含扩展名；排除空段与 `.`/`..`）。
- * 用于区分旧扁平布局的 `<id>/<file>` 与新布局的 `<projectKey>/<sessionId>`。
- * @param {string} segment - 单个路径段。
- * @returns {boolean} 形如文件名为 true。
+ * Whether a segment looks like a file name (has an extension; not empty, not `.`/`..`).
+ * Used to tell the old flat layout's `<id>/<file>` from the new layout's `<projectKey>/<sessionId>`.
+ * @param {string} segment - one path segment.
+ * @returns {boolean} true when it looks like a file name.
  */
 function looksLikeFileSegment(segment) {
   return segment.length > 0 && segment !== '.' && segment !== '..' && segment.includes('.')
 }
 
 /**
- * 解码宿主 `encodeSegment` 的 `~XXXX` 转义（逆运算；宿主
- * session-persistence-jsonl/src/format.ts:198-213）。无转义时原样返回；
- * 宿主把 `~` 本身也转义成 `~007E`，故单遍替换即无损可逆。
- * @param {string} segment - 已编码的单个路径段。
- * @returns {string} 解码后的段。
+ * Decode the host's `encodeSegment` `~XXXX` escapes (the inverse; host
+ * session-persistence-jsonl/src/format.ts:198-213). Without escapes it is returned as is;
+ * the host also escapes `~` itself as `~007E`, so one pass of replacing is lossless and reversible.
+ * @param {string} segment - one encoded path segment.
+ * @returns {string} the decoded segment.
  */
 export function decodeSegment(segment) {
   return segment.replace(/~([0-9A-Fa-f]{4})/gu, (_match, hex) => String.fromCharCode(parseInt(hex, 16)))
 }
 
 /**
- * fork 相对路径 → 会话 id。
+ * A fork's relative path → the session id.
  *
- * 主锚点 = fork 文件名本身（`forkFileName` 的命名规则，FORK_NAME_RE）：fork 文件
- * 永远与被 fork 的文件同目录，故会话 id 恒为其**父目录段**——与布局深度无关
- * （宿主 <mirrorDir>/<projectKey>/<sessionId>/<file> 与旧扁平
- * <mirrorDir>/<sessionId>/<file> 同解，深度不再是判据）。
- * 非 fork 路径保留既有宽松映射（≥4 段取第 2 段；3 段且末段形如文件名取第 1 段，
- * 人工批准项①），因为调用方也用它把普通镜像文件归到会话。
- * 其余形态（根级文件、目录、空段/`..`、非镜像前缀）→ undefined。
- * @param {string} forkPath - 镜像相对路径（POSIX 分隔）。
- * @param {string} [mirrorDir] - 镜像目录名（默认 MIRROR_DIR）。
- * @returns {string|undefined} 解码后的会话 id；无法映射时 undefined。
+ * Main anchor = the fork file name itself (the naming rule of `forkFileName`, FORK_NAME_RE): a fork file
+ * always sits in the same folder as the file it forks, so the session id is always its **parent folder segment** — whatever the layout depth
+ * (the host's <mirrorDir>/<projectKey>/<sessionId>/<file> and the old flat
+ * <mirrorDir>/<sessionId>/<file> resolve the same; depth is no longer the test).
+ * A path that is not a fork keeps the existing loose mapping (4 or more segments take the 2nd; 3 segments whose last looks like a file name take the 1st,
+ * approved by a person, item 1), because callers also use it to assign ordinary mirror files to a session.
+ * Any other shape (a root-level file, a folder, an empty segment or `..`, a prefix that is not the mirror) → undefined.
+ * @param {string} forkPath - the mirror-relative path (POSIX separators).
+ * @param {string} [mirrorDir] - the mirror folder name (default MIRROR_DIR).
+ * @returns {string|undefined} the decoded session id; undefined when it cannot be mapped.
  */
 export function sessionIdOfForkPath(forkPath, mirrorDir = MIRROR_DIR) {
   if (typeof forkPath !== 'string' || forkPath.length === 0) return undefined
@@ -139,23 +139,23 @@ export function sessionIdOfForkPath(forkPath, mirrorDir = MIRROR_DIR) {
 }
 
 /**
- * 相对路径 → 工作树镜像路径（<repoDir>/sessions/<rel>）。
- * @param {string} repoDir - 同步仓库根。
- * @param {string} mirrorDir - 镜像目录名（MIRROR_DIR）。
- * @param {string} rel - 已校验的相对路径。
- * @returns {string} 工作树内绝对路径。
+ * A relative path → the mirror path in the work tree (<repoDir>/sessions/<rel>).
+ * @param {string} repoDir - the sync repository root.
+ * @param {string} mirrorDir - the mirror folder name (MIRROR_DIR).
+ * @param {string} rel - the checked relative path.
+ * @returns {string} the absolute path inside the work tree.
  */
 export function mirrorPathOf(repoDir, mirrorDir, rel) {
   return path.join(repoDir, mirrorDir, ...assertRelPath(rel).split('/'))
 }
 
 /**
- * fork 文件名：<basename>.remote-fork-<UTC 14 位时间戳>-<设备短 id>。
- * 同一目录内同一时刻的冲突靠设备 id 区分；绝不覆盖既有 fork 文件。
- * @param {string} basename - 原文件名。
- * @param {string} timestampUtc - UTC 时间戳（yyyyMMddHHmmss）。
- * @param {string} deviceShort - 设备短 id（≤ 8 位小写十六进制）。
- * @returns {string} fork 文件名。
+ * The fork file name: <basename>.remote-fork-<14-digit UTC timestamp>-<short device id>.
+ * Conflicts in the same folder at the same moment are told apart by the device id; an existing fork file is never overwritten.
+ * @param {string} basename - the original file name.
+ * @param {string} timestampUtc - the UTC timestamp (yyyyMMddHHmmss).
+ * @param {string} deviceShort - the short device id (at most 8 lowercase hex digits).
+ * @returns {string} the fork file name.
  */
 export function forkFileName(basename, timestampUtc, deviceShort) {
   const stamp = /^\d{14}$/u.test(timestampUtc) ? timestampUtc : '19700101000000'

@@ -241,6 +241,38 @@ export function createStore({ dir, now = Date.now }) {
       }
       return before - load().grants.length;
     },
+    /**
+     * Fix round (6a review): a conversation wiped (Recon's End and wipe): its lines go from the log and its older copy,
+     * so nothing of it stays outside Recon's room. @returns {number} lines removed.
+     */
+    dropLog(sessionIds) {
+      const gone = new Set((Array.isArray(sessionIds) ? sessionIds : [sessionIds]).map((id) => String(id ?? '')).filter(Boolean));
+      if (gone.size === 0) return 0;
+      let removed = 0;
+      for (const file of [logFile, `${logFile}.1`]) {
+        try {
+          if (!existsSync(file)) continue;
+          const lines = readFileSync(file, 'utf8').split('\n');
+          const kept = lines.filter((line) => {
+            if (!line) return false;
+            try {
+              return !gone.has(String(JSON.parse(line)?.sessionId ?? ''));
+            } catch {
+              return true;
+            }
+          });
+          const dropped = lines.filter(Boolean).length - kept.length;
+          if (dropped === 0) continue;
+          const tmp = `${file}.${process.pid}.tmp`;
+          writeFileSync(tmp, kept.length > 0 ? `${kept.join('\n')}\n` : '', { mode: 0o600 });
+          renameSync(tmp, file);
+          removed += dropped;
+        } catch {
+          // tried again at the next wipe event or timer
+        }
+      }
+      return removed;
+    },
     /** @returns {boolean} whether something was revoked. */
     revoke(grantId, who = 'user') {
       const found = load().grants.find((grant) => grant.id === grantId);

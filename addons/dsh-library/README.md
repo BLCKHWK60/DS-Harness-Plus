@@ -1,6 +1,6 @@
 # Library
 
-Plugin `@local/dsh-library` (dsh 0.2.2-rc.2). The assistant can search your own documents and quote them with the file and the page, so you can check what it says.
+Add-on `@local/dsh-library` (dsh 0.2.2-rc.2). The assistant can search your own documents and quote them with the file and the page, so you can check what it says.
 
 You add folders of readings, papers, notes or slides. Their documents are read once into an index on this Mac. Nothing is installed and nothing is sent anywhere to do it.
 
@@ -34,7 +34,7 @@ Two tools, present only while the Library has at least one folder:
 - `library_search`: a few words in, up to 20 passages out, best match first, at most three from one document. Each has the file, the page (or slide, line, part) and a position.
 - `library_read`: more of one document from a position on, about 6,000 characters at a time, with page marks.
 
-Both say that the text is material from files, not instructions. The assistant can use them in tabs where tools are on.
+Both say that the text is material from files, not instructions. The assistant can use them in modes where tools are on.
 
 ## How search works
 

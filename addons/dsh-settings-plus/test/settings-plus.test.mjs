@@ -111,6 +111,9 @@ test('the gear finds the conversation\'s mode, and the page that holds its setti
   assert.deepEqual(plugin.modeNamed(undefined, 'Code'), { id: 'code', label: 'Code' });
   assert.equal(plugin.modeNamed(view, 'Nothing'), undefined);
   assert.equal(plugin.modeNamed(view, ''), undefined);
+  // Item 4A fix round: Plain chat is built in and never stored, yet it is known by id and by name (its page: Modes).
+  assert.deepEqual(plugin.modeOf({ ...view, sessionModes: JSON.stringify({ p: 'plain' }) }, 'p'), { id: 'plain', label: 'Plain chat' });
+  assert.deepEqual(plugin.modeNamed(view, 'Plain chat'), { id: 'plain', label: 'Plain chat' });
 
   const pages = ['modes', 'data', 'recon', 'alerts', 'research'];
   assert.equal(plugin.pageForMode('data', pages), 'data');
@@ -159,4 +162,32 @@ test('searching for the Tool access on/off switch leads to the Tool access page,
   const words = page.keywords.join(' ').toLowerCase();
   for (const word of ['tool access on', 'tool access off', 'switch off', 'toolaccesson']) assert.ok(words.includes(word), word);
   assert.match(page.description, /on or off/);
+});
+
+test('item 4A fix round: the gear asks Modes\' Mode route first (its id and name, Plain chat and a space\'s start mode included)', () => {
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
+  const open = source.slice(source.indexOf('function ModeGear('), source.indexOf("'Settings for this mode', onClick"));
+  assert.match(open, /fetch\(new URL\('dsh-modes\/mode', document\.baseURI\)/);
+  assert.match(open, /if \(typeof current === 'string' && current\) mode = \{ id: current, label: String\(viaMode\.value\.currentLabel \|\| BUILT_IN_NAMES\[current\] \|\| current\) \};/);
+  assert.ok(open.indexOf("'dsh-modes/mode'") < open.indexOf("'dsh-modes/tools'"), 'the older tools route only when the Mode route cannot say');
+  const { plugin } = loadClient();
+  assert.equal(plugin.pageForMode('plain', ['modes', 'data']), 'modes', 'a Plain chat thread opens Settings → Modes');
+});
+
+test('item 4A fix round: the settings search has the relabelled Automations switch and the space map, in English only', () => {
+  const index = JSON.parse(readFileSync(new URL('../settings-index.json', import.meta.url), 'utf8'));
+  const tab = index.find((entry) => entry.field === 'automations.tab');
+  assert.equal(tab.label, 'Offer the Automations mode');
+  assert.ok(tab.keywords.includes('automations tab'), 'the old name stays findable');
+  const spaces = index.find((entry) => entry.field === 'modes.sessionSpaces');
+  assert.doesNotMatch(spaces.description, /not shown yet/);
+  assert.ok(spaces.keywords.includes('space') && spaces.keywords.includes('thread'), 'English words still find it');
+});
+
+test('stage 7 (point 29): the settings search index has no Chinese anywhere, keywords included', () => {
+  const raw = readFileSync(new URL('../settings-index.json', import.meta.url), 'utf8');
+  const cjk = /[\u3000-\u303f\u3400-\u9fff\uf900-\ufaff\uff00-\uffef]/;
+  assert.doesNotMatch(raw, cjk, 'no Chinese characters in settings-index.json');
+  const index = JSON.parse(raw);
+  for (const entry of index) for (const word of entry.keywords || []) assert.ok(typeof word === 'string' && word.trim(), `${entry.field}: empty keyword`);
 });

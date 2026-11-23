@@ -25,7 +25,14 @@
     "tools",
     "uiWorkspace",
     "web",
-    "credentials"
+    "credentials",
+    "agentPresets",
+    "recon",
+    "bench",
+    "creatorPlus",
+    "tuning",
+    "toolLedger",
+    "workingDirectory"
   ],
   "events": [
     "agent/created",
@@ -40,7 +47,8 @@
     "agent/pre-step",
     "agent/disposed",
     "tools/pre-execute",
-    "tools/post-execute"
+    "tools/post-execute",
+    "agent-preset/selected"
   ],
   "tools": [
     "other_search",
@@ -49,7 +57,10 @@
   "commands": [],
   "routes": [
     "/dsh-modes/tools",
-    "/dsh-modes/other"
+    "/dsh-modes/other",
+    "/dsh-modes/preset",
+    "/dsh-modes/mode",
+    "/dsh-modes/engine-held-taken"
   ],
   "slots": [
     {
@@ -71,6 +82,14 @@
     {
       "name": "settings.section",
       "id": "web-sources"
+    },
+    {
+      "name": "conversation.hero.options",
+      "id": "modes-preset-info"
+    },
+    {
+      "name": "conversation.session.header.actions",
+      "id": "modes-preset-info"
     }
   ],
   "settings": [
@@ -113,6 +132,7 @@
     "sessionHelpers",
     "rerunButton",
     "hideFeedback",
+    "spaceColours",
     "commandName",
     "trimModes",
     "sessionToolSets",
@@ -123,7 +143,21 @@
     "academicSources",
     "newsSources",
     "otherSources",
-    "modeStart"
+    "modeStart",
+    "presetLock",
+    "sessionSpaces",
+    "modeSpaces",
+    "spaceSettings",
+    "spacesFilled",
+    "sessionModeChanges",
+    "spacesRefreshed",
+    "plainAdded",
+    "plainCarried",
+    "plainCarriedIn",
+    "plainFence",
+    "modeDescriptions",
+    "sealedExtra",
+    "gridInGuarded"
   ],
   "instructionChars": 0,
   "rows": [

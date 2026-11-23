@@ -19,7 +19,7 @@ const turn = (n, ...inner) => [event('turn/start', { turn: n }), event('request/
 const codeTurn = (n, request) => [user(request), ...turn(n, call(`e${n}`, 'edit', { file_path: `f${n}.js` }), result(`e${n}`, 'ok'), call(`t${n}`, 'bash', { command: 'npm test' }), result(`t${n}`, '9 passing'), answer('Done, tests pass.'))];
 
 /** The stand-in app. */
-function world({ enabled = true, harvest = { code: true, content: true, corrections: true }, power = true, idle = 3600, claims = 80, extra = {}, extraModes = {}, isolated = {}, providers = {}, setup, services: more = {} } = {}) {
+function world({ enabled = true, harvest = { code: true, content: true, corrections: true }, power = true, idle = 3600, claims = 80, extra = {}, extraModes = {}, isolated = {}, spaces = {}, providers = {}, setup, services: more = {} } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'tuning-app-'));
   const subject = join(home, 'subjects', 'heat-pumps');
   mkdirSync(join(subject, '.content'), { recursive: true });
@@ -46,7 +46,7 @@ function world({ enabled = true, harvest = { code: true, content: true, correcti
   const modeMap = { c1: 'code', r1: 'recon', h1: 'recon', h2: 'code', e1: 'cowork', cn1: 'content', ...extraModes };
   const config = { enabled, harvest: JSON.stringify(harvest), folder: '', python: pythonPath, models: JSON.stringify({ small: modelDir }), teacher: '', teacherCloud: false, providers: '{}', anthropicOpenEnded: false, nightShift: true, idleMinutes: 15, nightMinutes: 30, nightTrain: '[]', examLimit: 40 };
   const settings = {
-    describe: () => [{ ns: 'modes', value: { sessionIsolated: JSON.stringify({ r1: true, ...isolated }), sessionModes: JSON.stringify(modeMap) } }, { ns: 'tuning', value: config }, { ns: 'llm-pi-ai', value: { providers: { p: { baseURL: 'http://127.0.0.1:9/v1' }, ...providers } } }],
+    describe: () => [{ ns: 'modes', value: { sessionIsolated: JSON.stringify({ r1: true, ...isolated }), sessionModes: JSON.stringify(modeMap), sessionSpaces: JSON.stringify(spaces) } }, { ns: 'tuning', value: config }, { ns: 'llm-pi-ai', value: { providers: { p: { baseURL: 'http://127.0.0.1:9/v1' }, ...providers } } }],
     mutate: async (ns, ops) => {
       assert.equal(ns, 'tuning');
       for (const op of ops) config[op.path[0]] = op.value;
@@ -343,7 +343,7 @@ test('tools in the chat: offered only while on and never in Recon; a start needs
     assert.equal(when({ agent: { id: 'c1' } }), true);
     assert.equal(when({ agent: { id: 'r1' } }), false, 'not in Recon');
     const start = w.registered.get('tuning_start').tool;
-    assert.match((await start.execute({ model: 'small', goal: 'judge' }, { agent: { id: 'h9', header: { parentSession: 'c1' } } })).text, /Only the conversation itself/);
+    assert.match((await start.execute({ model: 'small', goal: 'judge' }, { agent: { id: 'h9', header: { parentSession: 'c1' } } })).text, /Only the thread itself/);
     w.state.approve = 'rejected';
     assert.match((await start.execute({ model: 'small', goal: 'judge' }, { agent: { id: 'c1' } })).text, /The owner said no/);
     assert.match(w.state.asked[0], /^Improve small at "Judge the way I do"/);
@@ -649,5 +649,90 @@ test('skills per tab (step 14): your click switches off, in one tab, skills from
     assert.equal(view.skills?.tabs ?? null, null);
   } finally {
     old.close();
+  }
+});
+
+test('Mission stage E: a Mission helper\'s tuning_start waits in the Mission\'s card and starts nothing; Allow there starts exactly that run once; never while off or from Recon', async () => {
+  const told = [];
+  let answer = { id: 'a1', text: 'This needs the user\'s yes (Tuner Plus): it waits in the Mission\'s card above the chat box, and nothing is done until then. Carry on with the rest.' };
+  const w = world({ claims: 200, services: { mission: { askYes: async (request) => { told.push(request); return answer; } } } });
+  try {
+    await w.app.harvest();
+    const start = w.registered.get('tuning_start').tool;
+    const helper = { agent: { id: 'h9', header: { parentSession: 'c1' } } };
+    const said = (await start.execute({ model: 'small', goal: 'judge', sets: ['standings'], method: '4', minutes: 10 }, helper)).text;
+    assert.match(said, /it waits in the Mission's card[\s\S]*Nothing was started\.$/);
+    assert.equal(w.state.trained, 0);
+    assert.equal(w.state.asked.length, 0, 'no app card for a helper');
+    assert.equal(told[0].sessionId, 'h9');
+    assert.equal(told[0].addon, 'tuning');
+    assert.equal(told[0].act, true);
+    assert.equal(told[0].needed, false);
+    assert.deepEqual(told[0].ref, { model: 'small', goal: 'judge', sets: ['standings'], method: '4', minutes: 10 });
+    assert.equal(told[0].key, `start:${JSON.stringify(told[0].ref)}`);
+    assert.match(told[0].what, /^Start a Tuner Plus run: Improve small at "Judge the way I do"/);
+    assert.match(told[0].reason, /This uses this Mac while it runs\.$/);
+    // Full auto: not asked, and nothing started.
+    answer = { id: 'a1', said: 'no', unasked: true, text: 'Not asked: this Mission runs on Full auto.' };
+    assert.match((await start.execute({ model: 'small', goal: 'judge' }, helper)).text, /^Not asked: this Mission runs on Full auto\. Nothing was started\.$/);
+    // Not a Mission's helper: as before.
+    answer = undefined;
+    assert.match((await start.execute({ model: 'small', goal: 'judge' }, helper)).text, /Only the thread itself/);
+    // Allow in the Mission's card: never from Recon, never with a run that is not valid.
+    const allow = w.provided.tuning.missionAllow;
+    assert.match((await allow({ sessionId: 'r1', ref: told[0].ref })).text, /never starts a run from Recon/);
+    assert.equal((await allow({ sessionId: 'c1', ref: { ...told[0].ref, minutes: 99999 } })).ok, false);
+    assert.equal((await allow({ sessionId: 'c1', ref: { ...told[0].ref, goal: 'nope' } })).ok, false);
+    const done = await allow({ sessionId: 'c1', key: told[0].key, ref: told[0].ref });
+    assert.equal(done.ok, true);
+    assert.match(done.text, /^Started: Improve small at "Judge the way I do"[\s\S]*The result comes as a card on Settings → Tuner Plus\.$/);
+    assert.equal((await allow({ sessionId: 'c1', ref: told[0].ref })).ok, false, 'one run at a time');
+    for (let i = 0; i < 200 && w.state.trained === 0; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(w.state.trained, 1, 'that run, once');
+    w.config.enabled = false;
+    assert.match((await allow({ sessionId: 'c1', ref: told[0].ref })).text, /switched off/);
+  } finally {
+    w.close();
+  }
+});
+
+// ---- Item 4A, stage 6a: the harvest by space (STAGE6A-DESIGN.md 4.3, P3) ---------------------------------------------
+
+test('harvest-skips-devices-space: no conversation in the Devices space is harvested, whatever its mode; its rows would never train', async () => {
+  const devicesThread = { header: { id: 'd1', cwd: '/w/devices-project' }, events: codeTurn(1, 'flash the board firmware') };
+  const w = world({ extra: { d1: devicesThread }, extraModes: { d1: 'code' }, services: { modes: { get: (id) => (id === 'd1' || id === 'c1' ? 'code' : id === 'r1' ? 'recon' : 'cowork'), isolated: (id) => id === 'r1', guardOf: (id) => ({ top: id, space: id === 'd1' ? 'devices' : id === 'r1' ? 'recon' : 'chat', mode: 'code', sealed: id === 'r1', sealedBy: id === 'r1' ? 'recon' : '', reconSpace: id === 'r1', guardedBy: id === 'd1' ? 'devices' : '', noPrograms: id === 'd1', homeMode: false, fresh: false, unknownTop: false }) } } });
+  try {
+    const summary = await w.app.harvest();
+    const everything = storedRows(w.home).map((row) => JSON.stringify(row)).join('\n');
+    assert.match(everything, /fix the parser/, 'a Code thread in Chat is harvested as before');
+    assert.doesNotMatch(everything, /flash the board firmware/);
+    assert.ok(summary.left.some((one) => one.id === 'd1' && /Devices space/.test(one.why)));
+    assert.ok(storedRows(w.home).filter((row) => /fix the parser/.test(JSON.stringify(row))).every((row) => row.space === 'chat'), 'each row carries its thread\'s space');
+  } finally {
+    w.close();
+  }
+});
+
+test('harvest-skips-recon-space: any mode recorded in the Recon space is left out as Recon, also with its mark lost', async () => {
+  const guest = { header: { id: 'q1', cwd: '/w/q' }, events: codeTurn(1, 'search the sealed web') };
+  const guestHelper = { header: { id: 'q2', cwd: '/w/q2', parentSession: 'q1' }, events: codeTurn(1, 'a helper of the sealed guest') };
+  const w = world({ extra: { q1: guest, q2: guestHelper }, extraModes: { q1: 'code', q2: 'code' }, spaces: { q1: 'recon' } });
+  try {
+    const summary = await w.app.harvest();
+    const everything = storedRows(w.home).map((row) => JSON.stringify(row)).join('\n');
+    assert.doesNotMatch(everything, /sealed web|sealed guest/);
+    assert.ok(summary.left.some((one) => one.id === 'q1' && one.why === 'sealed (Recon)'));
+    assert.ok(summary.left.some((one) => one.id === 'q2' && one.why === 'sealed (Recon)'), 'its helper too');
+    assert.match(everything, /fix the parser/);
+  } finally {
+    w.close();
+  }
+  // A newer Modes that says a thread is sealed (any mode in Recon): left out, whatever its recorded marks.
+  const sealed = world({ extra: { q1: guest }, extraModes: { q1: 'research' }, services: { modes: { get: () => 'research', isolated: () => false, guardOf: (id) => ({ top: id, space: id === 'q1' ? 'recon' : 'chat', mode: 'research', sealed: id === 'q1' || id === 'r1', sealedBy: '', reconSpace: id === 'q1', guardedBy: '', noPrograms: false, homeMode: false, fresh: false, unknownTop: false }) } } });
+  try {
+    const summary = await sealed.app.harvest();
+    assert.ok(summary.left.some((one) => one.id === 'q1' && one.why === 'sealed (Recon)'));
+  } finally {
+    sealed.close();
   }
 });

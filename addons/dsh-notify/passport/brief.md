@@ -2,18 +2,18 @@
 
 What it is for: Runs a command you list when a turn ends or dsh waits for your approval, for example to show a macOS notification. Off until configured; never blocks a turn.
 
-This brief was written by Creator Plus from the plugin's own files. Its README below is the full description, complete enough to rebuild the plugin from; improve this brief by hand, with the user's yes.
+This brief was written by Creator Plus from the add-on's own files. Its README below is the full description, complete enough to rebuild the add-on from; improve this brief by hand, with the user's yes.
 
 ## What it must keep doing
 
-- The services it gives other plugins: notify.
+- The services it gives other add-ons: notify.
 - Its settings: enabled, rules, maxPerMinute, commandName.
 
 ## Its README
 
 # Notify
 
-Host plugin `@local/dsh-notify` (dsh 0.2.2-rc.1). dsh has no desktop notifications; this runs a command **you list** when something happens. **Nothing is configured by default**: with no rules it does not even listen.
+Host add-on `@local/dsh-notify` (dsh 0.2.2-rc.1). dsh has no desktop notifications; this runs a command **you list** when something happens. **Nothing is configured by default**: with no rules it does not even listen.
 
 ## Configuration
 
@@ -52,7 +52,7 @@ command: [osascript, -e, 'display notification (system attribute "DSH_NOTIFY_MES
 
 - Never blocks a turn: the command runs in the background; a failure or timeout is counted and logged, not raised.
 - Flood control: `minIntervalSeconds` per rule and `maxPerMinute` overall.
-- Events replayed from history (resuming a session) do not notify.
+- Events replayed from history (resuming a thread) do not notify.
 - `/notify` shows rules and counts (started, failed and the last error code, skipped by the rate limit); `/notify test [rule]` runs a rule with a sample event and ignores the rate limits. Service `notify`: `rules`, `test`, `stats`.
 
 ## Checked

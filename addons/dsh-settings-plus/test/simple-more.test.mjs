@@ -41,7 +41,7 @@ const entry = (field, label, extra = {}) => ({ page: 'none', pageLabel: 'Some ad
 
 test('the left list has the plain headings, every page once, and the Core / Beta / Experimental label of its add-on', () => {
   const labels = plugin.GROUPS.map((group) => group.label);
-  for (const wanted of ['Everyday', 'Models and spending', 'Modes and tabs', 'Research and sources', 'Privacy and safety', 'Learning', 'Add-ons and updates', 'Advanced']) assert.ok(labels.includes(wanted), wanted);
+  for (const wanted of ['Everyday', 'Models and spending', 'Spaces and modes', 'Research and sources', 'Privacy and safety', 'Learning', 'Add-ons and updates', 'Advanced']) assert.ok(labels.includes(wanted), wanted);
   const all = plugin.GROUPS.flatMap((group) => group.pages);
   assert.equal(new Set(all).size, all.length, 'a page is in one group only');
   for (const id of all) {
@@ -64,7 +64,7 @@ test('the Simple view keeps only Start here and About Plus in the list; everythi
 });
 
 test('the Simple list: the model, web, access, spending, notifications, add-ons, colours and export, saved through Settings', () => {
-  for (const text of ['Which model answers', 'The web in each tab', 'What the assistant may change', 'Daily spending limit', 'Stop a runaway task', 'A task needs me', 'Light or dark', 'Colour scheme', 'Export button', 'Which add-ons are on', 'Show me everything']) assert.ok(SOURCE.includes(`'${text}'`), text);
+  for (const text of ['Which model answers', 'The web in each mode', 'What the assistant may change', 'Daily spending limit', 'Stop a runaway run', 'An automation needs me', 'Light or dark', 'Colour scheme', 'Export button', 'Which add-ons are on', 'Show me everything']) assert.ok(SOURCE.includes(`'${text}'`), text);
   assert.match(SOURCE, /writeSettings\(appCtx, 'permission', \[\{ op: 'set', path: \['defaultPreset'\]/);
   // Full access is never offered in Simple: it stays on the General page, which asks first.
   assert.ok(!/\['danger-full-access'/.test(SOURCE));
@@ -272,7 +272,7 @@ test('#2: Recon\'s program paths and engine address ask before saving and before
 
 // ---- review: runaway switch, colour name, More settings wording, MindsHub ----
 
-test('"Stop a runaway task" changes only the per-task limits: the daily limit and Budget\'s master switch stay as they are', () => {
+test('"Stop a runaway run" changes only the per-task limits: the daily limit and Budget\'s master switch stay as they are', () => {
   const budget = (value, user = {}) => ({ ns: 'budget', value, user, base: {} });
   const full = { enabled: true, maxSteps: 300, maxHelperSteps: 1500, maxTokens: 20000000, maxRepeats: 8, maxLongSteps: 5000, maxLongTokens: 60000000, maxMinutes: 0, dayTokens: 2000000 };
   assert.equal(plugin.runawayOn(budget(full)), true);
@@ -324,10 +324,10 @@ test('first-run step 4 is true for a new install and an existing one, on or off'
   const on = plugin.toolAccessLine(true);
   const off = plugin.toolAccessLine(false);
   // On: names what a new install starts with, and that an existing setup keeps what it has. It never says nothing changes.
-  assert.match(on, /new install starts with accounts and connectors, other Mac apps, and app and plugins on Ask in Cowork and Code/);
+  assert.match(on, /new install starts with accounts and connectors, other Mac apps, and app and plugins on Ask in Cowork mode and Code mode/);
   assert.match(on, /existing setup keeps the choices it has/);
-  assert.ok(!/nothing changes|stays exactly|every tab keeps the tools it has today/i.test(on));
-  // Off (an existing install until the owner switches it on): every tab has exactly its own tools.
+  assert.ok(!/nothing changes|stays exactly|every (tab|mode) keeps the tools it has today/i.test(on));
+  // Off (an existing install until the owner switches it on): every mode has exactly its own tools.
   assert.match(off, /switched off/);
   assert.match(off, /exactly the tools it has always had/);
   assert.equal(plugin.toolAccessLine(undefined), on, 'unknown reads as the default (on)');

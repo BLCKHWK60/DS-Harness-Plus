@@ -31,7 +31,7 @@
     {
       "id": "register",
       "mark": "must",
-      "text": "Register the tool with `when` so it is offered only in the tabs the plan names; its answer is {text} through a safely() wrapper that turns an error into a plain sentence; give it a timeoutMs."
+      "text": "Register the tool with `when` so it is offered only in the modes the plan names; its answer is {text} through a safely() wrapper that turns an error into a plain sentence; give it a timeoutMs."
     },
     {
       "id": "stand-ins",

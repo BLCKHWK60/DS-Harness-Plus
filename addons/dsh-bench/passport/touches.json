@@ -8,6 +8,7 @@
   "uses": [
     "agents",
     "approval",
+    "coworkScratch",
     "dshHomePath",
     "modes",
     "reconExports",

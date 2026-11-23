@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Beta: Every file a conversation makes or changes shows as a card in its thread, opens rendered beside the chat, keeps its versions and is listed on one Artifacts page, from every tab. Off until you switch it on.",
+  "description": "Beta: Every file a thread makes or changes shows as a card in its thread, opens rendered beside the chat, keeps its versions and is listed on one Artifacts page, from every space. Off until you switch it on.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

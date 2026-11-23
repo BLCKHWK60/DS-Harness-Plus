@@ -1,6 +1,6 @@
 # Tests: @local/dsh-agent-swarm
 
-13 tests in 1 file: test/swarm.test.mjs.
+35 tests in 2 files: test/swarm.test.mjs (13) and test/ptc.test.mjs (22, a swarm called from inside a program under PTC).
 
 Run with the app's own Node (stand-ins only; never against the real app data):
 

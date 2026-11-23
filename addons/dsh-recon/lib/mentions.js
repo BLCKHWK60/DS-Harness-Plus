@@ -10,7 +10,7 @@ const MENTION = /@\[((?:\\.|[^\\\]])*)\]\((dsh-session:[^\s)]*)\)|(dsh-session:[
 const SCHEME = 'dsh-session:';
 
 /** What stands in for a mention that was taken out. */
-export const LEFT_OUT = '[a reference to another conversation was left out: Recon conversations are isolated]';
+export const LEFT_OUT = '[a reference to another thread was left out: Recon threads are sealed]';
 
 /**
  * @param {string} uri - `dsh-session:` and the conversation id as base64url JSON.

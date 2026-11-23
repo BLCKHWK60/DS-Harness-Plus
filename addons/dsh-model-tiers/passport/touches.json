@@ -1,7 +1,7 @@
 {
   "name": "@local/dsh-model-tiers",
   "folder": "dsh-model-tiers",
-  "at": "2026-11-17",
+  "at": "2026-11-21",
   "provides": [
     "modelTiers"
   ],
@@ -14,6 +14,7 @@
     "mission",
     "modelDirectories",
     "modes",
+    "ptcRuntime",
     "sessionPersistence",
     "sessions",
     "settings",
@@ -32,7 +33,8 @@
     "agent/request",
     "agent/request-error",
     "agent/disposed",
-    "tools/pre-execute"
+    "tools/pre-execute",
+    "tools/result"
   ],
   "tools": [
     "delegate_role",

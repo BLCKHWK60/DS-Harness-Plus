@@ -398,7 +398,7 @@ test('step 2, the research tools in a conversation', async () => {
     assert.match(named, /Spanish: /, 'languages come from the selected markets');
     assert.match(await run('scout_demand', { titles: ['Data Engineer'], market: 'Germany' }), /Bundesagentur für Arbeit Jobbörse: \d+/);
     const pay = await run('scout_pay', { what: 'Data Engineer', market: 'Germany' });
-    assert.match(pay, /No posting found in this conversation/);
+    assert.match(pay, /No posting found in this thread/);
     assert.match(pay, /Adzuna's pay statistics for Germany need its free key/);
     assert.match(pay, /Entgeltatlas/);
   } finally {

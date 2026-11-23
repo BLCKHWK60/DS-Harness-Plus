@@ -49,8 +49,8 @@ export function readState(entries) {
     usageEvents: usageOff ? 'off' : 'on',
     lines: [
       feedbackOff
-        ? 'Conversation upload on feedback: off. Rating an answer stays on this Mac.'
-        : 'Conversation upload on feedback: ON. Rating an answer uploads the conversation to the app\'s maker.',
+        ? 'Thread upload on feedback: off. Rating an answer stays on this Mac.'
+        : 'Thread upload on feedback: ON. Rating an answer uploads the thread to the app\'s maker.',
       usageOff
         ? 'Usage events: off.'
         : 'Usage events: ON. Each message sent is reported with its model name, your ids and hardware details.',
@@ -97,7 +97,7 @@ export function apply(ctx, config) {
                 kind: now.feedbackUpload === 'off' && now.usageEvents === 'off' ? 'success' : 'error',
                 text: [
                   ...now.lines,
-                  'Still on, by design: update checks, your DeepSeek sign-in while signed in, the plugin list, and web search when a conversation uses it.',
+                  'Still on, by design: update checks, your DeepSeek sign-in while signed in, the plugin list, and web search when a thread uses it.',
                 ].join('\n'),
               };
             },

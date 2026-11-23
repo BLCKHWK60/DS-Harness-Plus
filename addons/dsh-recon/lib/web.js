@@ -84,7 +84,7 @@ export function createWeb({ port, run, sources, on, archiveDirect = () => false,
   /** Refusals per conversation and kind of request: `${id} ${kind}` → count. */
   const strikes = new Map();
   const off = (id, kind) => (strikes.get(`${id} ${kind}`) ?? 0) >= 2;
-  const offText = (kind) => `${KINDS[kind]} is now off for the rest of this conversation, because the service turned it away twice. Nothing more will be sent for it, however it is asked. Do not call it again. Finish with the other sources and tell the user this one was unavailable.`;
+  const offText = (kind) => `${KINDS[kind]} is now off for the rest of this thread, because the service turned it away twice. Nothing more will be sent for it, however it is asked. Do not call it again. Finish with the other sources and tell the user this one was unavailable.`;
   /** Why this kind of request is not sent, if it is held back or off. */
   const holding = (id, kind) => {
     if (off(id, kind)) return offText(kind);
@@ -111,7 +111,7 @@ export function createWeb({ port, run, sources, on, archiveDirect = () => false,
     const key = `${id} ${kind}`;
     strikes.set(key, (strikes.get(key) ?? 0) + 1);
     if (!off(id, kind)) return undefined;
-    sources.note(id, 'source off', `${KINDS[kind]} switched off for this conversation after two refusals`);
+    sources.note(id, 'source off', `${KINDS[kind]} switched off for this thread after two refusals`);
     return offText(kind);
   };
   /**
@@ -126,7 +126,7 @@ export function createWeb({ port, run, sources, on, archiveDirect = () => false,
     const since = now() - (last.get(host) ?? 0);
     if (since < PACE[host]) await sleep(PACE[host] - since);
     last.set(host, now());
-    if (sources.count(id) > 400) throw new Error('This conversation has made 400 requests, which is its limit. Start a new Recon conversation to go on.');
+    if (sources.count(id) > 400) throw new Error('This thread has made 400 requests, which is its limit. Start a new Recon thread to go on.');
     const request = { op: 'get', url: `https://${host}${path}`, verify: true, ...(ca ? { ca } : {}), timeoutMs: 90_000, ...extra };
     if (!straight) return { ...(await run({ ...request, proxyPort: ready.port, user: `recon-${id}` }, { proxyPort: ready.port, timeoutMs: 120_000 })), direct: false };
     // The locked process reaches one local port, which leads to the Archive's own address and nowhere else.

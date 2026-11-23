@@ -96,9 +96,9 @@ test('a project is pointed at the shared tools its type uses', async () => {
   assert.equal(noteOf('P', '', []), '');
   assert.equal(sharedNote([]), '');
   const both = noteOf('Taxes', 'Be brief.', ['data', 'finance']);
-  assert.match(both, /^This conversation belongs to the project "Taxes"[\s\S]*Be brief\.\n\nFor tables in this folder[\s\S]*data_query[\s\S]*\nFor figures about companies[\s\S]*finance_prices/);
+  assert.match(both, /^This thread belongs to the project "Taxes"[\s\S]*Be brief\.\n\nFor tables in this folder[\s\S]*data_query[\s\S]*\nFor figures about companies[\s\S]*finance_prices/);
   // A typed project without instructions of its own still gets the pointer.
   assert.match(noteOf('Taxes', '  ', ['data']), /^For tables in this folder/);
   assert.ok(!noteOf('Taxes', 'Be brief.', ['data']).includes('finance_'));
-  assert.equal(noteOf('Taxes', 'Be brief.'), 'This conversation belongs to the project "Taxes". The user wrote these instructions for every conversation in this project. Follow them:\n\nBe brief.');
+  assert.equal(noteOf('Taxes', 'Be brief.'), 'This thread belongs to the project "Taxes". The user wrote these instructions for every thread in this project. Follow them:\n\nBe brief.');
 });

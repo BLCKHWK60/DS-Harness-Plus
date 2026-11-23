@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Beta: A Research mode and tab for researching a question in depth with the Deep research engine: focus in the chat box (its Depth is the Depth button every tab has), live progress of each run, a cited report with follow-up questions as buttons, and every report saved as Markdown. Off until you switch it on.",
+  "description": "Beta: A Research mode for researching a question in depth with the Deep research engine: focus in the chat box (its Depth is the Depth button every mode has), live progress of each run, a cited report with follow-up questions as buttons, and every report saved as Markdown. Off until you switch it on.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

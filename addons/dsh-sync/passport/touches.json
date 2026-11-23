@@ -4,7 +4,8 @@
   "at": "2026-11-17",
   "provides": [],
   "uses": [
-    "reconMoved"
+    "reconMoved",
+    "recon"
   ],
   "events": [],
   "tools": [],

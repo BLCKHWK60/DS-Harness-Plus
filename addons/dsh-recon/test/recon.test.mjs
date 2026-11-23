@@ -46,7 +46,7 @@ test('content goes to a cloud model only after the user agreed, for that convers
   assert.match(refused.why, /\/recon cloud/);
   consent.agree('a', route);
   assert.equal(mayReceive({ place: cloud, route, id: 'a', consent }).ok, true);
-  assert.equal(mayReceive({ place: cloud, route, id: 'b', consent }).ok, false, 'another conversation has not agreed');
+  assert.equal(mayReceive({ place: cloud, route, id: 'b', consent }).ok, false, 'another thread has not agreed');
   assert.equal(mayReceive({ place: cloud, route: { provider: 'far', model: 'other' }, id: 'a', consent }).ok, false, 'another model has not been agreed to');
   assert.equal(mayReceive({ place: { where: 'unknown', host: '', name: 'x' }, route: { provider: 'x', model: 'm' }, id: 'c', consent }).ok, false);
   consent.forget('a');
@@ -69,7 +69,7 @@ test('a tool runs only in a Recon conversation and only past the model gate', as
   state.gate = { ok: false, why: 'not agreed' };
   assert.equal(await run(), 'not agreed');
   state.recon = false;
-  assert.match(await run(), /only in a conversation of the Recon tab/);
+  assert.match(await run(), /only in a thread in the Recon space/);
   state.enabled = false;
   assert.match(await run(), /switched off/);
 });

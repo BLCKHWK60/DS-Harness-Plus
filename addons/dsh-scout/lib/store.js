@@ -50,7 +50,7 @@ export function openStore(folder = '') {
   const load = (id) => {
     try {
       const file = fileOf(id);
-      const saved = file ? readJsonStore(file, () => undefined, { label: 'what Scout kept for a conversation' }) : undefined;
+      const saved = file ? readJsonStore(file, () => undefined, { label: 'what Scout kept for a thread' }) : undefined;
       if (saved !== undefined) return fromSaved(saved);
     } catch {
       /* a record that cannot be turned into a list: start afresh */
@@ -104,7 +104,7 @@ export function openStore(folder = '') {
     /** Count one request; throws when the conversation reached its limit. */
     request(id) {
       const entry = of(id);
-      if (entry.requests >= REQUESTS) throw new Error(`this conversation made ${REQUESTS} requests, which is its limit. Start a new Scout conversation to go on`);
+      if (entry.requests >= REQUESTS) throw new Error(`this thread made ${REQUESTS} requests, which is its limit. Start a new Scout thread to go on`);
       entry.requests += 1;
       // Saved at once, so the count holds after a restart even when nothing new was kept.
       save(id, entry);

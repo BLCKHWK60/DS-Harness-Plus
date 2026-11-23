@@ -8,6 +8,9 @@
  * back as the answer, followed by what it changed and whether that was put into the project.
  */
 
+/** Said when the app asks again after the newest message was already answered (nothing runs). */
+export const AGAIN_TEXT = '(Answered above. The engine did not run again.)';
+
 /** A queue that turns pushed values into something `for await` can read. */
 function channel() {
   const items = [];
@@ -41,6 +44,15 @@ const textOf = (message) => {
   return Array.isArray(content) ? content.map((block) => (block?.type === 'text' ? String(block.text ?? '') : '')).join('\n') : '';
 };
 
+/** The text of a message when it is the user's own (not a note the app or the scheduler added), else ''. */
+function ownText(message) {
+  if (message?.role !== 'user') return '';
+  const kind = message.source?.kind;
+  if (kind !== undefined && kind !== 'user') return '';
+  const text = textOf(message).trim();
+  return text && !/^<system-reminder>/.test(text) ? text : '';
+}
+
 /**
  * The user's newest own message in what dsh sent.
  * @param {object[]} messages - the request's messages.
@@ -49,23 +61,35 @@ const textOf = (message) => {
 export function taskOf(messages) {
   const list = Array.isArray(messages) ? messages : [];
   for (let at = list.length - 1; at >= 0; at -= 1) {
-    const message = list[at];
-    if (message?.role !== 'user') continue;
-    const kind = message.source?.kind;
-    if (kind !== undefined && kind !== 'user') continue;
-    const text = textOf(message).trim();
-    if (text && !/^<system-reminder>/.test(text)) return text;
+    const text = ownText(list[at]);
+    if (text) return text;
   }
   return '';
 }
 
 /**
+ * Stage 6b lab fix: whether the user's newest own message already has an answer after it. The app can add a note after
+ * an answer (a Scratch thread's folder moved on its first turn) and ask again; the engine must not run that task twice.
+ * @param {object[]} messages - the request's messages.
+ * @returns {boolean} true when an assistant message follows the newest own user message.
+ */
+export function answeredAlready(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  for (let at = list.length - 1; at >= 0; at -= 1) {
+    if (list[at]?.role === 'assistant') return true;
+    if (ownText(list[at])) return false;
+  }
+  return false;
+}
+
+/**
  * @param {object} deps - `adapters` (engine id -> engine file), `models(engine)` (model names the user listed),
  *   `turn({engine, model, task, signal, say})` (does one turn; resolves to `{input, output}`; `say(text)` streams text),
- *   `aside(messages)` (answers a request that is not a conversation's turn, such as a title; returns text).
+ *   `aside(messages)` (answers a request that is not a conversation's turn, such as a title; returns text),
+ *   `again()` (optional: the line said when the newest message was already answered; English by default).
  * @returns {{providers: string[], adapter: object}} what `llm.registerAdapter` takes.
  */
-export function engineModels({ adapters, models, turn, aside }) {
+export function engineModels({ adapters, models, turn, aside, again }) {
   const idOf = (engine) => `engine-${engine}`;
   const engineOf = (provider) => String(provider).replace(/^engine-/, '');
   const adapter = {
@@ -78,7 +102,9 @@ export function engineModels({ adapters, models, turn, aside }) {
       const label = adapters[engine]?.label ?? engine;
       return [{ id: 'default', name: `${label}: its own default model` }, ...models(engine).map((name) => ({ id: name, name: `${label}: ${name}` }))].map((model) => ({ ...model, provider, contextWindow: 1_000_000, maxTokens: 64_000 }));
     },
-    resolveModel: async (provider, model) => ({ provider, id: model, name: `${adapters[engineOf(provider)]?.label ?? provider}: ${model === 'default' ? 'its own default model' : model}`, contextWindow: 1_000_000, maxTokens: 64_000 }),
+    // `context` and `defaultMaxTokens` are what the app reads (compaction-basic checks them when an existing
+    // thread switches to the engine; without them the switch fails with MODEL_SWITCH_COMPACTION_FAILED).
+    resolveModel: async (provider, model) => ({ provider, id: model, name: `${adapters[engineOf(provider)]?.label ?? provider}: ${model === 'default' ? 'its own default model' : model}`, contextWindow: 1_000_000, maxTokens: 64_000, context: { contextWindow: 1_000_000 }, defaultMaxTokens: 64_000 }),
     async prepareCall(provider, model, signal) {
       return { model: await adapter.resolveModel(provider, model, signal), stream: (options) => adapter.stream(options) };
     },
@@ -98,6 +124,11 @@ export function engineModels({ adapters, models, turn, aside }) {
           // A conversation's turn comes with the conversation's tools. Other requests (the app asking
           // for a title, a summary) come without, and must not start an engine.
           const isTurn = Array.isArray(options.tools) && options.tools.length > 0;
+          // Already answered (the app asked again after its own note): nothing runs, one short line.
+          if (isTurn && answeredAlready(options.messages)) {
+            say(typeof again === 'function' ? String(again() || '') || AGAIN_TEXT : AGAIN_TEXT);
+            return;
+          }
           const done = !isTurn ? undefined : await turn({ engine, model: options.model === 'default' ? '' : String(options.model ?? ''), task, messages: options.messages, signal: options.signal, say });
           if (done === undefined) say(await aside(options.messages));
           else usage = { inputTokens: Number(done.input) || 0, outputTokens: Number(done.output) || 0 };

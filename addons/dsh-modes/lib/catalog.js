@@ -18,7 +18,7 @@ export const GROUPS = [
   { id: 'helpers', label: 'Helpers and other models', about: 'Start helper agents, swarms and deep research that use other models.' },
   { id: 'make', label: 'Make things', about: 'Draw diagrams, make images, documents and reports.' },
   { id: 'schedule', label: 'Schedule and remember', about: 'Schedules, goals, memory and the step list.' },
-  { id: 'devices', label: 'Devices', about: 'Phones, boards, routers and other gear (Devices tab).' },
+  { id: 'devices', label: 'Devices', about: 'Phones, boards, routers and other gear (the Devices space).' },
   { id: 'app', label: 'App and plugins', about: 'Change the app itself: plugins, workflows, Tool access.' },
 ];
 export const UNSORTED_GROUP = { id: 'unsorted', label: 'Not sorted', about: 'New tools nobody has sorted yet. They start on Ask.' };
@@ -45,11 +45,11 @@ export const REQUEST_TOOL = 'request_tool_access';
 const E = (group, tier, plain, purpose, addon, match) => ({ group, tier, plain, purpose, addon, ...match });
 const ENTRIES = [
   // ---- read files ----
-  E('read', 1, 'Read a file', 'Reads a file inside the conversation\'s folder.', 'app', { names: ['read'] }),
+  E('read', 1, 'Read a file', 'Reads a file inside the thread\'s folder.', 'app', { names: ['read'] }),
   E('read', 1, 'Find files by name', 'Lists files that match a pattern.', 'app', { names: ['glob'] }),
   E('read', 1, 'Search inside files', 'Searches the text of files in the folder.', 'app', { names: ['grep'] }),
   E('read', 0, 'Look at a picture', 'Reads an image file so the AI can see it.', 'app', { names: ['read_image'] }),
-  E('read', 0, 'Folder in use', 'Says which folder the conversation works in.', 'app', { names: ['working_directory'] }),
+  E('read', 0, 'Folder in use', 'Says which folder the thread works in.', 'app', { names: ['working_directory'] }),
   E('read', 1, 'Read a PDF', 'Reads, searches and looks at PDF files.', 'dsh-pdf', { prefix: 'pdf_' }),
   E('read', 1, 'Your Library', 'Searches and reads your own documents in the Library.', 'dsh-library', { prefix: 'library_' }),
   E('read', 1, 'Code map', 'Overview of a codebase: files, symbols, what uses what.', 'dsh-code-map', { prefix: 'code_map_' }),
@@ -86,19 +86,19 @@ const ENTRIES = [
   E('helpers', 3, 'Deep research', 'Parallel helpers research a question and write a cited report.', 'dsh-deep-research', { names: ['deep_research'] }),
   E('helpers', 3, 'Engines', 'Hands work to another engine or coding tool.', 'dsh-engines', { names: ['engine'] }),
   // ---- make things ----
-  E('make', 0, 'Draw a diagram', 'Draws a flow chart, tree, timeline or chart in the chat.', 'dsh-diagram', { names: ['diagram_draw', 'present'] }),
+  E('make', 0, 'Draw a diagram', 'Draws a flow chart, tree, timeline or chart in the thread.', 'dsh-diagram', { names: ['diagram_draw', 'present'] }),
   E('make', 2, 'Make an image', 'Makes or edits a picture with an image service (can cost money).', 'dsh-media-tools', { names: ['generate_image', 'edit_image'] }),
-  E('make', 2, 'Write content', 'Plans, drafts and checks written content in the Content tab.', 'dsh-content', { prefix: 'content_' }),
+  E('make', 2, 'Write content', 'Plans, drafts and checks written content in Content mode.', 'dsh-content', { prefix: 'content_' }),
   // Creator Plus tools write and change add-ons (code that then runs): as powerful as the Terminal.
   E('make', 3, 'Build a skill or tool', 'Creator Plus tools that scaffold and change add-ons.', 'dsh-creator-plus', { prefix: 'creator_' }),
   E('make', 2, 'Reports', 'Writes results or reports.', 'dsh-automations', { names: ['automation_results'] }),
   // ---- schedule and remember ----
-  E('schedule', 0, 'Step list', 'Keeps a list of steps for the conversation.', 'app', { names: ['todo_write'] }),
+  E('schedule', 0, 'Step list', 'Keeps a list of steps for the thread.', 'app', { names: ['todo_write'] }),
   E('schedule', 0, 'Ask you a question', 'Asks you a question and waits.', 'app', { names: ['ask_user_question'] }),
   E('schedule', 0, 'Skills', 'Loads a skill (a written how-to).', 'app', { names: ['skill'] }),
   E('schedule', 0, 'Leave plan mode', 'Ends plan mode.', 'app', { names: ['exit_plan_mode'] }),
-  E('schedule', 2, 'Schedules', 'Creates, changes and lists scheduled tasks.', 'app', { prefix: 'schedule_' }),
-  E('schedule', 2, 'Remember', 'Saves something for later conversations.', 'dsh-memory', { names: ['remember'] }),
+  E('schedule', 2, 'Schedules', 'Creates, changes and lists automations.', 'app', { prefix: 'schedule_' }),
+  E('schedule', 2, 'Remember', 'Saves something for later threads.', 'dsh-memory', { names: ['remember'] }),
   E('schedule', 0, 'Goals', 'Sets a goal, reads it, updates progress.', 'app', { names: ['create_goal', 'get_goal', 'update_goal'] }),
   E('schedule', 0, 'Load more tools', 'Lists and adds families of tools.', 'dsh-modes', { names: ['tools_find'] }),
   // ---- devices ----
@@ -112,7 +112,7 @@ const ENTRIES = [
   E('app', 3, 'Skill architect', 'Writes and changes skills.', 'dsh-skill-architect', { names: ['skills'] }),
   // ---- tier 4: never self-grantable ----
   E('app', 4, 'Mission', 'Runs a long mission with checkpoints. Switched on only in Settings.', 'dsh-mission', { names: ['mission', 'mission_step', 'mission_request'], prefix: 'mission_' }),
-  E('app', 4, 'Recon', 'Recon\'s own research tools. They never leave the Recon tab.', 'dsh-recon', { prefix: 'recon_', names: ['recon'] }),
+  E('app', 4, 'Recon', 'Recon\'s own research tools. They never leave the Recon space.', 'dsh-recon', { prefix: 'recon_', names: ['recon'] }),
   E('app', 4, 'Secrets and keys', 'The secret store, the Keychain and keys. Never given to the AI.', 'app', { prefix: 'credentials', names: ['keychain', 'secrets', 'secret_store'] }),
   E('app', 4, 'Access level', 'Changes how much the app may touch (sandbox, permission level).', 'app', { names: ['set_access_level', 'permission_mode', 'sandbox_policy'] }),
   E('app', 4, 'Tool access itself', 'Changes what is allowed. Only you do that, in Settings.', 'dsh-modes', { names: ['tool_access', 'set_tool_access'] }),

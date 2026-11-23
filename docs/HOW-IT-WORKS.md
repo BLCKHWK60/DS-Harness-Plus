@@ -7,7 +7,7 @@ DeepSeek Harness (dsh) is built on the Cordis plugin framework. The desktop app 
 - `package.json`: the profile's plugin dependencies, plus `dsh.profile.bundles`, the ordered list of **bundles** (packages that contribute a patch layer).
 - `cordis.patch.yml`: the user's own layer, applied after every bundle. A row here with the same `id` as a bundle's row replaces that row's `config`.
 
-Each add-on in `addons/` is a bundle: a package with `dsh.bundle.patch` pointing at its own `cordis.patch.yml`, which inserts one row with safe defaults (mostly "do nothing until configured"). Forty-two of the 48 add-ons also have a browser half (`client.js`, declared under `dsh.client`) that adds a Settings page or a chat-box control. Live data reaches those pages through small read-only `GET` routes registered on the app's web server behind its login and Host/Origin checks (`/dsh-<add-on>/...`). They never serve keys or prompt text.
+Each add-on in `addons/` is a bundle: a package with `dsh.bundle.patch` pointing at its own `cordis.patch.yml`, which inserts one row with safe defaults (mostly "do nothing until configured"). Forty-three of the 49 add-ons also have a browser half (`client.js`, declared under `dsh.client`) that adds a Settings page or a chat-box control. Live data reaches those pages through small read-only `GET` routes registered on the app's web server behind its login and Host/Origin checks (`/dsh-<add-on>/...`). They never serve keys or prompt text.
 
 The add-ons are plain JavaScript (ES modules for the host half, the lazy-CJS client format for the browser half). Nothing needs building. Each add-on carries its own copy of two small MIT libraries (`schemastery`, `cosmokit`) in `node_modules/@deepseek-ai/`; those folders are part of the source and are committed on purpose.
 
@@ -50,5 +50,5 @@ Rules worth keeping:
 ## Known limits
 
 - About 40% of the settings can still only be changed in the configuration file; most add-ons have a Settings page for the rest, and the search field there finds both. The app's Plugins page can host a per-add-on configuration page (`plugins.row.config` slot); none of the add-ons uses it yet.
-- Plugins outside the dsh repository cannot add events to a conversation, so progress views (swarm, arena, benchmark) live in Settings, not in the chat.
+- Plugins outside the dsh repository cannot add events to a thread, so progress views (swarm, arena, benchmark) live in Settings, not in the thread.
 - Built for dsh 0.2.2 up to, not including, 0.3.0 (the range is in `addon-tiers.json`), on Apple Silicon macOS. Each add-on's README lists what was and was not verified.

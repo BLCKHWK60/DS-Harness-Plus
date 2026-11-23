@@ -88,3 +88,51 @@ export function startOps(start, current, sessionId) {
   if (start.tools === 'off' && own('sessionTools')[sessionId] === undefined) put('sessionTools', false);
   return ops;
 }
+
+/** The per-conversation fields a start writes. */
+export const START_FIELDS = Object.freeze(['sessionWeb', 'sessionWebLevel', 'sessionWebSources', 'sessionDepth', 'sessionHelpers', 'sessionTools']);
+
+/** @returns {boolean} whether two stored values are the same. */
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * What a start wrote for one conversation, from its operations: field -> the conversation's value (undefined: removed).
+ * @param {Array<{path: string[], value: string}>} ops - startOps (or restartOps) output.
+ * @param {string} sessionId - the conversation.
+ * @returns {Record<string, unknown>}
+ */
+export function seededBy(ops, sessionId) {
+  const seeded = {};
+  for (const op of ops) seeded[op.path[0]] = objectOf(op.value)[sessionId];
+  return seeded;
+}
+
+/**
+ * Item 4A, fix round 2: a draft whose mode is picked (or claimed) before its first message gets the new mode's starting
+ * values. What the earlier mode's start wrote (`seeded`) and is still unchanged is taken back first; what the owner set
+ * by hand on the draft (a value that differs from what was seeded, or one set with nothing seeded) stays. After the first
+ * message nothing calls this: a mode change then keeps Web, Depth and Lens (the owner's answer).
+ * @param {object} start - normalizeStart output for the new mode (all '' when it has none).
+ * @param {object} current - the live settings (as startOps).
+ * @param {string} sessionId - the draft.
+ * @param {Record<string, unknown> | undefined} seeded - seededBy of the earlier start.
+ * @returns {{ops: Array<{op: 'set', path: string[], value: string}>, seeded: Record<string, unknown>}} the writes, and what they seeded.
+ */
+export function restartOps(start, current, sessionId, seeded) {
+  const cleaned = {};
+  const taken = new Set();
+  for (const field of START_FIELDS) {
+    const own = { ...objectOf(current?.[field]) };
+    if (seeded && Object.hasOwn(seeded, field) && same(own[sessionId], seeded[field]) && own[sessionId] !== undefined) {
+      delete own[sessionId];
+      taken.add(field);
+    }
+    cleaned[field] = own;
+  }
+  // The new mode's values go where the draft now has none.
+  const ops = startOps(start, Object.fromEntries(START_FIELDS.map((field) => [field, JSON.stringify(cleaned[field])])), sessionId);
+  const next = seededBy(ops, sessionId);
+  const written = new Set(ops.map((op) => op.path[0]));
+  for (const field of taken) if (!written.has(field)) ops.push({ op: 'set', path: [field], value: JSON.stringify(cleaned[field]) });
+  return { ops, seeded: next };
+}

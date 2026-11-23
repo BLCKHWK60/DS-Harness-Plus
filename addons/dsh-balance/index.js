@@ -15,7 +15,7 @@ export const name = 'dsh-balance';
 export const DATA_PATH = '/dsh-balance/data';
 
 export const Config = z.object({
-  /** Off takes the balance out of the sidebar and asks DeepSeek nothing. */
+  /** Off takes the balance out of the left panel and asks DeepSeek nothing. */
   enabled: z.boolean().default(true).volatile(),
 });
 

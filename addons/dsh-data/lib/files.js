@@ -19,7 +19,7 @@ const SKIP = new Set(['node_modules', '.git', '__pycache__', '.venv', 'venv', 'd
  * @returns {{path: string, shown: string}} the real path, and the path as shown (relative to the folder).
  */
 export function inside(root, named) {
-  if (!root) throw new Error('This conversation has no folder. Start a conversation in the folder that holds your data (pick the folder on the start page).');
+  if (!root) throw new Error('This thread has no folder. Start a thread in the folder that holds your data (pick the folder on the start page).');
   const text = String(named ?? '').trim();
   if (!text) throw new Error('Name a file.');
   const base = realpathSync(root);
@@ -27,9 +27,9 @@ export function inside(root, named) {
   try {
     path = realpathSync(isAbsolute(text) ? text : resolve(base, text));
   } catch {
-    throw new Error(`There is no file "${text}" in this conversation's folder. Use data_files to see what is there.`);
+    throw new Error(`There is no file "${text}" in this thread's folder. Use data_files to see what is there.`);
   }
-  if (path !== base && !path.startsWith(base + sep)) throw new Error(`"${text}" is outside this conversation's folder. Data mode only reads files inside it.`);
+  if (path !== base && !path.startsWith(base + sep)) throw new Error(`"${text}" is outside this thread's folder. Data mode only reads files inside it.`);
   return { path, shown: relative(base, path) || '.' };
 }
 

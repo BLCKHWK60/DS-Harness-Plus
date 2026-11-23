@@ -29,7 +29,7 @@ export function portRefusal(port, shown) {
   const value = String(port ?? '');
   if (!/^\/dev\/cu\.[A-Za-z0-9._-]{1,80}$/.test(value)) return `"${value.slice(0, 80)}" is not a serial port Devices opens: give a /dev/cu.… port that bench_usb listed.`;
   if (OWN.test(value)) return `${value} is the Mac's own port, not a device's.`;
-  if (shown && !shown.has(value)) return `${value} was not listed by bench_usb in this conversation in the last hour. Call bench_usb first, then use a port it listed for a device.`;
+  if (shown && !shown.has(value)) return `${value} was not listed by bench_usb in this thread in the last hour. Call bench_usb first, then use a port it listed for a device.`;
   return '';
 }
 

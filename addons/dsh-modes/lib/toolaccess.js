@@ -26,6 +26,14 @@
  *     Mission's own wait time where it has one), stores the permission and puts the tool on offer. A Stop cancels
  *     the waiting request (`cancel(agentId)`): a late Allow stores nothing.
  *
+ *     A Mission's helper (deps.parkable(requester), Mission stage D) never gets a card: its request is parked in the
+ *     Mission's card (deps.park, which is mission.parkApproval) and the answer is code 'parked'. A policy that offers
+ *     only one call gives code 'once-only' (the Mission lists it as not possible). `unattended` does not apply to it.
+ *   grantParked({sessionId, tool}) -> {ok: true, id} | {ok: false, text}
+ *     The Mission's card allowed a parked request: decides again (as a helper) and stores a 'conversation' permission.
+ *   denyParked({sessionId, tool})                  the Mission's card denied it: the usual refusal time after a Deny.
+ *   useParking({parkable, park})                   set once by the plugin: mission.canPark and mission.parkApproval.
+ *
  *   Data for the Tool access page:
  *     grid() -> { modes, groups, cells, summary }  setCell({modeId, groupId, state}) setTool({modeId, tool, state})
  *     resetMode(modeId)    toolsOf(modeId) -> advanced rows     catalogueFor(sessionId, {group?, search?})
@@ -52,6 +60,18 @@ export const NOES_PER_CONVERSATION = 3;
 export const NOES_WINDOW_MS = 10 * 60_000;
 /** The longest a request may wait, however long a Mission is willing to. */
 export const WAIT_MAX_MS = 120 * 60_000;
+/** The choices of a Mission helper's parked request (Mission stage D), shown in the Mission's card. */
+export const PARK_CHOICES = [
+  { id: 'item', label: 'Allow for this item' },
+  { id: 'mission', label: 'Allow for this Mission' },
+  { id: 'deny', label: 'Deny' },
+];
+/** What a Mission's helper is told when the policy allows a tool only one call at a time. */
+/** Fix round (6a review): the reason a sealed (Recon) thread's request is logged and parked with (its own stays in Recon). */
+export const SEALED_REASON = 'Recon request (its reason stays in Recon)';
+export const ONCE_ONLY = 'This tool can only be allowed for one call at a time, and nobody can give that to a Mission\'s helper while it works. Carry on without it; it is listed in the Mission\'s report.';
+/** What the user is told when such a tool is allowed in the Mission's card. */
+const ONCE_ONLY_USER = 'This tool can only be allowed for one call at a time now (for example after a web page was read), so it cannot be allowed for a Mission\'s helpers.';
 
 /**
  * @param {object} deps - what the service needs from the plugin (all of it optional except the store and the readers).
@@ -123,8 +143,40 @@ export function createToolAccess(deps) {
     // A map that only ever grows is no help: forget conversations that have been quiet.
     if (noes.size > 200) for (const [key, list] of noes) if (list.every((at) => at <= now() - NOES_WINDOW_MS)) noes.delete(key);
   };
+  /** A parked request was answered in the Mission's card: its line under "Waiting for you" goes (it is not waiting any more). */
+  const clearParked = (top, tool) => {
+    const asked = String(tool ?? '').trim().slice(0, 128);
+    for (const event of store.waiting()) if (event.sessionId === top && event.tool === asked && event.code === 'parked') store.clearWaiting(event.id, 'mission');
+  };
   const noesOf = (top) => (noes.get(top) ?? []).filter((at) => at > now() - NOES_WINDOW_MS).length;
   const deniedKey = (top, tool) => `${top}\u0000${tool}`;
+
+  /**
+   * The policy again for a parked request the user now answers: the fences, the tab's rules and the tool's own state
+   * count; the waiting limits and the "no" counters do not (the user is the one answering).
+   */
+  function judgeAgain(top, asked) {
+    const mode = modeOf(top);
+    const names = known(top);
+    const entry = classify(asked);
+    const { state, fence } = view(top, asked);
+    const addonOff = !names.includes(asked) && entry.sorted && /^dsh-/.test(entry.addon) && deps.addonOn?.(entry.addon) !== true;
+    return decide({
+      tool: asked,
+      mode,
+      state,
+      known: names.includes(asked),
+      addonOff,
+      fenced: fence.fenced,
+      fenceWhy: fence.why,
+      outsideMaterial: deps.outsideMaterial?.(top) ?? false,
+      helper: true,
+      online: deps.online?.() ?? [],
+      reconExport: deps.reconExport?.(top) === true,
+      blockedByUser: store.isBlocked(asked, mode.id),
+      toolsOff: deps.toolsOff?.(top) === true,
+    });
+  }
 
   /** @returns {Promise<{choice: string, expiresAt?: number}>} the card's answer, or "unavailable" when nothing can ask. */
   async function showCard(request, waitMs, requester) {
@@ -222,9 +274,17 @@ export function createToolAccess(deps) {
         const names = known(top);
         const entry = classify(asked);
         const { state, fence } = view(top, asked);
-        const unattended = deps.unattended?.(top) === true;
-        const outside = outsideMaterial ?? deps.outsideMaterial?.(top) ?? false;
         const helper = Boolean(requester) && requester !== top;
+        // A Mission's helper (Mission stage D): its request is parked in the Mission's card instead of a card that waits,
+        // so nobody needs to be there now, and the `unattended` refusal does not apply to it.
+        let parkable = false;
+        try {
+          parkable = helper && deps.parkable?.(requester) === true;
+        } catch {
+          parkable = false;
+        }
+        const unattended = deps.unattended?.(top) === true && !parkable;
+        const outside = outsideMaterial ?? deps.outsideMaterial?.(top) ?? false;
         const pause = denied.get(deniedKey(top, asked));
         if (pause !== undefined && pause.until <= now()) denied.delete(deniedKey(top, asked));
         const paused = pause !== undefined && pause.until > now() ? pause.kind : '';
@@ -247,14 +307,20 @@ export function createToolAccess(deps) {
           helperReadsPages: helper && deps.helperReads?.(requester) === true,
           deniedRecently: paused === 'denied',
           unansweredRecently: paused === 'unanswered',
-          tooManyNoes: noesOf(top) >= NOES_PER_CONVERSATION,
+          // A Mission's helper's request is parked, never shown at once: the owner answers when they choose, so the
+          // counters against pestering do not apply (Mission keeps its own limit of approvals that wait).
+          tooManyNoes: !parkable && noesOf(top) >= NOES_PER_CONVERSATION,
           online: deps.online?.() ?? [],
-          tooMany: mine >= PENDING_PER_CONVERSATION || waitingMine.length >= WAITING_PER_CONVERSATION || waitingAll.length >= WAITING_MAX,
+          tooMany: !parkable && (mine >= PENDING_PER_CONVERSATION || waitingMine.length >= WAITING_PER_CONVERSATION || waitingAll.length >= WAITING_MAX),
           reconExport: deps.reconExport?.(top) === true,
           blockedByUser: store.isBlocked(asked, mode.id),
           toolsOff: deps.toolsOff?.(top) === true,
         });
-        const base = { sessionId: top, modeId: mode.id, tool: asked, tier: entry.tier, reason, outside: Boolean(outside), unattended, who: helper ? 'helper' : undefined };
+        // Fix round (6a review): a sealed thread's reason (the model's own words about what it read) is never written
+        // outside Recon's room: the log and a parked card get a fixed line; the live card still shows the real reason.
+        const sealedAsker = mode?.isolated === true || mode?.id === 'recon';
+        const keptReason = sealedAsker ? SEALED_REASON : reason;
+        const base = { sessionId: top, modeId: mode.id, tool: asked, tier: entry.tier, reason: keptReason, outside: Boolean(outside), unattended, who: helper ? 'helper' : undefined };
         if (decision.action === 'refuse') {
           const waiting = decision.code === 'unattended';
           // Refusals that repeat are not logged again and again.
@@ -264,6 +330,34 @@ export function createToolAccess(deps) {
           if (waiting) noteNo(top);
           store.log({ ...base, type: waiting ? 'waiting' : 'refused', id: waiting ? store.newId() : undefined, code: decision.code });
           return text({ code: decision.code, text: decision.text, choice: 'refused' });
+        }
+        if (parkable) {
+          // The policy offers only one call: nobody can give that to a helper while it works. Listed as "cannot".
+          if (decision.longest === 'once') {
+            try {
+              deps.park?.({ sessionId: requester, kind: 'tool', tool: asked, plain: entry.plain, reason: keptReason, wording: decision.wording, choices: [], cannot: true });
+            } catch {
+              // Mission is optional
+            }
+            store.log({ ...base, type: 'refused', code: 'once-only' });
+            return text({ code: 'once-only', text: ONCE_ONLY, choice: 'refused' });
+          }
+          let parked;
+          try {
+            parked = deps.park?.({ sessionId: requester, kind: 'tool', tool: asked, plain: entry.plain, reason: keptReason, wording: decision.wording, choices: PARK_CHOICES.map((one) => ({ ...one })) });
+          } catch {
+            parked = undefined;
+          }
+          // Mission point 17 (20 November 2026): a Mission on Full auto never asks, so its 'no' is 'not-asked', not
+          // 'denied': the user never said no (no cooldown, no noes counted, as with a parked no).
+          if (parked?.said === 'no') return text({ code: parked.unasked === true ? 'not-asked' : 'denied', text: parked.text, choice: 'refused' });
+          if (parked?.cannot === true) return text({ code: 'once-only', text: parked.text || ONCE_ONLY, choice: 'refused' });
+          if (parked?.id) {
+            // One line under "Waiting for you" per tool and conversation, not one per helper.
+            if (!waitingMine.some((event) => event.tool === asked)) store.log({ ...base, type: 'waiting', id: store.newId(), code: 'parked' });
+            return text({ code: 'parked', text: parked.text, choice: 'refused' });
+          }
+          // Not a Mission helper after all (an older Mission): the usual card below.
         }
         const request = { id: store.newId(), sessionId: top, modeId: mode.id, modeLabel: mode.label ?? mode.id, tool: asked, plain: entry.plain, tier: entry.tier, wording: decision.wording, choices: decision.choices, defaultChoice: decision.defaultChoice, longest: decision.longest, recon: decision.recon, outsideMaterial: outside || false, openedAt: now(), ...(helper ? { requester: 'helper' } : {}) };
         store.log({ ...base, type: 'asked', id: request.id });
@@ -299,6 +393,59 @@ export function createToolAccess(deps) {
       } catch (error) {
         deps.warn?.(`tool access: ${error?.message ?? error}`);
         return text({ code: 'error', text: 'The request could not be made. Carry on without the tool.', choice: 'refused' });
+      }
+    },
+
+    /**
+     * Where a Mission's helpers park their requests (Mission stage D): set once by the plugin.
+     * @param {{parkable?: (requester: string) => boolean, park?: (request: object) => object | undefined}} hooks - mission.canPark and mission.parkApproval.
+     */
+    useParking(hooks = {}) {
+      if (typeof hooks.parkable === 'function') deps.parkable = hooks.parkable;
+      if (typeof hooks.park === 'function') deps.park = hooks.park;
+    },
+    /**
+     * A parked request of a Mission's helper was allowed in the Mission's card ("Allow for this item" or "Allow for
+     * this Mission"): a permission for the conversation, if the policy still offers one now.
+     * @param {{sessionId: string, tool: string}} want - the conversation (top) and the tool.
+     * @returns {Promise<{ok: true, id: string} | {ok: false, text: string}>} the stored permission's id, or why not.
+     */
+    async grantParked({ sessionId, tool } = {}) {
+      try {
+        clearParked(deps.topOf ? deps.topOf(sessionId) : sessionId, tool);
+        if (!enabled()) return { ok: false, text: 'Tool access is switched off, so this tool cannot be allowed here. Switch it on in Settings → Modes → Tool access.' };
+        const top = deps.topOf ? deps.topOf(sessionId) : sessionId;
+        const asked = String(tool ?? '').trim().slice(0, 128);
+        const decision = judgeAgain(top, asked);
+        if (decision.action === 'refuse') return { ok: false, text: decision.text };
+        if (!SCOPES.slice(SCOPES.indexOf('conversation')).includes(decision.longest)) return { ok: false, text: ONCE_ONLY_USER };
+        const mode = modeOf(top);
+        const entry = classify(asked);
+        const stored = store.add({ tool: asked, scope: 'conversation', sessionId: top, modeId: mode.id, tier: entry.tier });
+        store.log({ sessionId: top, modeId: mode.id, tool: asked, tier: entry.tier, type: 'allowed', id: stored.id, choice: 'conversation', who: 'helper' });
+        await deps.refresh?.(top);
+        return { ok: true, id: stored.id };
+      } catch (error) {
+        deps.warn?.(`tool access: ${error?.message ?? error}`);
+        return { ok: false, text: 'The permission could not be stored. Try again in a moment.' };
+      }
+    },
+    /**
+     * A parked request of a Mission's helper was denied in the Mission's card: the same refusal time as a Deny in the card.
+     * @param {{sessionId: string, tool: string}} want - the conversation (top) and the tool.
+     */
+    denyParked({ sessionId, tool } = {}) {
+      try {
+        const top = deps.topOf ? deps.topOf(sessionId) : sessionId;
+        const asked = String(tool ?? '').trim().slice(0, 128);
+        // The same refusal time for this tool; not counted as a "no" against the conversation's other requests (the owner
+        // answered a parked request when they chose, so it is not pestering).
+        denied.set(deniedKey(top, asked), { until: now() + DENY_COOLDOWN_MS, kind: 'denied' });
+        clearParked(top, asked);
+        const mode = modeOf(top);
+        store.log({ sessionId: top, modeId: mode.id, tool: asked, tier: classify(asked).tier, type: 'denied', choice: 'deny', who: 'helper' });
+      } catch (error) {
+        deps.warn?.(`tool access: ${error?.message ?? error}`);
       }
     },
 
@@ -387,12 +534,17 @@ export function createToolAccess(deps) {
       await deps.refreshAll?.();
       return true;
     },
-    /** Rows for the advanced view: one per tool, with its state in a mode. */
-    toolsOf(modeId) {
-      const mode = deps.modes().find((one) => one.id === modeId);
-      if (!mode) return [];
+    /**
+     * Rows for the advanced view: one per tool, with its state in a mode. Item 4A, stage 6a: with `space`, the state of
+     * the mode's copy in that space (sealed in Recon, guarded in Devices and Workshop).
+     */
+    toolsOf(modeId, { space } = {}) {
+      const own = deps.modes().find((one) => one.id === modeId);
+      if (!own) return [];
+      const copy = space && deps.copyIn ? deps.copyIn(modeId, space) : undefined;
+      const mode = copy ?? own;
       const names = deps.knownAll();
-      const base = new Set(deps.baseOffered(modeId) ?? []);
+      const base = new Set(deps.baseOffered(copy ?? modeId) ?? []);
       const grid = access();
       return catalogue(names, { addonOn: (addon) => deps.addonOn?.(addon) !== false, extraNames: listedNames() })
         .filter((row) => !HIDDEN_FROM_AI(row.name) && !isOwnTool(row.name))
@@ -403,18 +555,20 @@ export function createToolAccess(deps) {
      * What the AI would be shown at the start of a conversation in a tab (the page's "Show what the AI sees"): the same rows and wording as
      * `catalogueFor`, worked out from the tab's grid because no conversation exists. Never Off tools, never secrets, never the closed tools.
      */
-    catalogueForMode(modeId, { group, search } = {}) {
+    catalogueForMode(modeId, { group, search, space } = {}) {
       const rows = [];
-      for (const row of this.toolsOf(modeId)) {
+      // Item 4A, stage 6a: in a space, the rows of the mode's copy there (Recon's own rows for a guest in Recon).
+      const copy = space && deps.copyIn ? deps.copyIn(modeId, space) : undefined;
+      for (const row of this.toolsOf(modeId, { space })) {
         if (row.state === 'off') continue;
-        if (row.name.startsWith('recon_') && modeId !== 'recon') continue;
+        if (row.name.startsWith('recon_') && !(modeId === 'recon' || space === 'recon')) continue;
         // The same order of rules as `catalogueFor`: a highest-risk tool that is On is "available now" (it is only "switch on yourself" while it is not).
-        const mode = deps.modes().find((one) => one.id === modeId);
+        const mode = copy ?? deps.modes().find((one) => one.id === modeId);
         let status;
         if (row.addonOff) status = 'add-on is off';
         else if (row.state === 'on') status = 'available now';
         else if (row.tier >= SETTINGS_ONLY) status = 'only the user can switch this on';
-        else if (row.state === 'locked') status = askableInLockedTab(mode, row) ? 'can be requested (for this one conversation only; this tab is sealed, so the user sees the highest-risk warning)' : (mode.isolated === true || mode.id === 'recon') && !NO_TOOL_MODES.includes(mode.id) ? 'cannot be requested in Recon (Recon keeps the final say: only tools that stay on this Mac can be asked for)' : 'fixed by this tab';
+        else if (row.state === 'locked') status = askableInLockedTab(mode, row) ? 'can be requested (for this one thread only; this mode is sealed, so the user sees the highest-risk warning)' : (mode.isolated === true || mode.id === 'recon') && !NO_TOOL_MODES.includes(mode.id) ? 'cannot be requested in Recon (Recon keeps the final say: only tools that stay on this Mac can be asked for)' : 'fixed by this mode';
         else status = 'can be requested';
         rows.push({ name: row.name, plain: row.plain, purpose: row.purpose, group: row.group, risk: TIERS[row.tier]?.word, status });
       }
@@ -434,23 +588,24 @@ export function createToolAccess(deps) {
       const top = deps.topOf ? deps.topOf(sessionId) : sessionId;
       const mode = modeOf(top);
       const names = known(top);
-      const base = new Set(deps.baseOffered(mode.id, top) ?? []);
+      // Item 4A, stage 6a (REGRESSION 18): the thread's effective mode (its space's copy).
+      const base = new Set(deps.baseOffered(mode, top) ?? []);
       const offeredNow = new Set(deps.offeredNow?.(top) ?? names);
       const grid = access();
       const fenced = new Set(deps.fencedTools?.(top) ?? []);
       const rows = [];
       for (const row of catalogue(names, { addonOn: (addon) => deps.addonOn?.(addon) !== false, extraNames: listedNames() })) {
         if (HIDDEN_FROM_AI(row.name) || fenced.has(row.name)) continue;
-        if (row.name.startsWith('recon_') && mode.id !== 'recon') continue;
+        if (row.name.startsWith('recon_') && mode.id !== 'recon' && mode.sealedBy !== 'recon') continue;
         const state = stateOf(row.name, { mode, access: grid, offered: base.has(row.name) });
         if (state === 'off') continue;
         let status;
         if (offeredNow.has(row.name) && !row.addonOff) status = 'available now';
         else if (row.addonOff) status = 'add-on is off';
         else if (row.tier >= SETTINGS_ONLY) status = 'only the user can switch this on';
-        else if (state === 'locked') status = askableInLockedTab(mode, row) ? 'can be requested (for this one conversation only; this tab is sealed, so the user sees the highest-risk warning)' : (mode.isolated === true || mode.id === 'recon') && !NO_TOOL_MODES.includes(mode.id) ? 'cannot be requested in Recon (Recon keeps the final say: only tools that stay on this Mac can be asked for)' : 'fixed by this tab';
+        else if (state === 'locked') status = askableInLockedTab(mode, row) ? 'can be requested (for this one thread only; this mode is sealed, so the user sees the highest-risk warning)' : (mode.isolated === true || mode.id === 'recon') && !NO_TOOL_MODES.includes(mode.id) ? 'cannot be requested in Recon (Recon keeps the final say: only tools that stay on this Mac can be asked for)' : 'fixed by this mode';
         else status = 'can be requested';
-        if (status.startsWith('can be requested') && deps.fenceOf?.(top, row.name)?.fenced) status = 'blocked here (Web is off, or this tab keeps to its own tools)';
+        if (status.startsWith('can be requested') && deps.fenceOf?.(top, row.name)?.fenced) status = 'blocked here (Web is off, or this mode keeps to its own tools)';
         rows.push({ name: row.name, plain: row.plain, purpose: row.purpose, group: row.group, risk: TIERS[row.tier]?.word, status });
       }
       let out = rows;
@@ -495,16 +650,16 @@ export function createToolAccess(deps) {
       if (entry.tier > 2 || HIDDEN_FROM_AI(item.tool) || RECON_NEVER.includes(item.tool)) throw new Error(`toolAccess: "${entry.plain}" is too powerful to allow from this list. Change it in Settings → Tool access if you really want it.`);
       if (!item.modeId) throw new Error('toolAccess: That request has no mode to allow it in.');
       const mode = deps.modes().find((one) => one.id === item.modeId);
-      if (!mode || NO_TOOL_MODES.includes(mode.id)) throw new Error('toolAccess: That tab is not there any more, so nothing can be allowed in it.');
+      if (!mode || NO_TOOL_MODES.includes(mode.id)) throw new Error('toolAccess: That mode is not there any more, so nothing can be allowed in it.');
       const recon = mode.isolated === true || mode.id === 'recon';
       if (lockedMode(mode) && !recon) throw new Error(`toolAccess: ${mode.label ?? mode.id} keeps its own tools; nothing can be allowed in it from this list.`);
       if (recon && !reconMayAsk(item.tool, { online: deps.online?.() ?? [] })) throw new Error(`toolAccess: Recon cannot be given "${entry.plain}". Recon keeps the final say over everything that leaves it, so it may only ask for tools that stay on this Mac.`);
-      if (item.sessionId && deps.reconExport?.(item.sessionId) === true && entry.tier >= 2) throw new Error('toolAccess: That conversation holds material from Recon, so only tools that look or read can be allowed for it.');
+      if (item.sessionId && deps.reconExport?.(item.sessionId) === true && entry.tier >= 2) throw new Error('toolAccess: That thread holds material from Recon, so only tools that look or read can be allowed for it.');
       const outsideNow = item.outside || (item.sessionId ? deps.outsideMaterial?.(item.sessionId) : false);
       const longest = longestScope(entry.tier, { outsideMaterial: Boolean(outsideNow), recon });
-      if (longest === 'once') throw new Error(`toolAccess: "${entry.plain}" needs a fresh yes in the conversation itself, because it read outside material first.`);
+      if (longest === 'once') throw new Error(`toolAccess: "${entry.plain}" needs a fresh yes in the thread itself, because it read outside material first.`);
       const scope = SCOPES.indexOf(longest) >= SCOPES.indexOf('mode') ? 'mode' : longest;
-      if (scope !== 'mode' && !item.sessionId) throw new Error('toolAccess: That request has no conversation to allow it in.');
+      if (scope !== 'mode' && !item.sessionId) throw new Error('toolAccess: That request has no thread to allow it in.');
       const stored = store.add({ tool: item.tool, scope, modeId: item.modeId, ...(scope === 'mode' ? {} : { sessionId: item.sessionId }), tier: entry.tier });
       store.log({ type: 'allowed', id: item.id, tool: item.tool, tier: entry.tier, modeId: item.modeId, sessionId: item.sessionId, choice: scope, who: 'waiting list' });
       store.clearWaiting(waitingId);
@@ -554,7 +709,7 @@ export function accessTools(service) {
           const svc = service();
           if (!svc?.enabled()) return out('Tool access is switched off.');
           const id = exec?.agent?.id;
-          if (!id) return out('This call has no conversation.');
+          if (!id) return out('This call has no thread.');
           return out(catalogueText(svc.catalogueFor(id, { group: args?.group, search: args?.search })));
         } catch (error) {
           return out(`The list could not be made: ${String(error?.message ?? error).slice(0, 160)}`);
@@ -578,12 +733,21 @@ export function accessTools(service) {
           const svc = service();
           if (!svc?.enabled()) return out('Tool access is switched off.');
           const id = exec?.agent?.id;
-          if (!id) return out('This call has no conversation.');
+          if (!id) return out('This call has no thread.');
           // A Stop cancels the waiting request: a late Allow then stores nothing.
           const stop = () => svc.cancel?.(id);
           exec?.signal?.addEventListener?.('abort', stop, { once: true });
           try {
             const result = await svc.ask({ sessionId: id, requester: id, tool: args?.tool, reason: cleanReason(args?.reason) });
+            // The Tool ledger (dsh-tool-ledger) records the request and its answer: the tool's name and the answer's code only, never the reason. Optional.
+            try {
+              const code = String(result?.code ?? '');
+              // A Mission helper's request parked in the Mission's card is 'parked'; one the policy allows only once is refused.
+              const outcome = code === 'allowed' ? 'allowed' : code === 'denied' ? 'denied' : ['timeout', 'unavailable', 'unattended', 'parked'].includes(code) ? 'parked' : 'refused';
+              exec?.agent?.ctx?.get?.('toolLedger')?.note?.({ sessionId: id, tool: String(args?.tool ?? '').trim().slice(0, 128), outcome, rule: code || undefined, by: 'tool-access', via: 'access-request' });
+            } catch {
+              // the ledger is optional
+            }
             return out(result.text);
           } finally {
             exec?.signal?.removeEventListener?.('abort', stop);

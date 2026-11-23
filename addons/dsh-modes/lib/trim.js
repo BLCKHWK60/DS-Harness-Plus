@@ -25,12 +25,12 @@ export const FAMILIES = [
   { id: 'pdf', about: 'PDF files: read, search, page pictures, text from scans', prefixes: ['pdf_'], words: /\bpdfs?\b/i },
   { id: 'data', about: 'Data files and analysis: profile, query, charts, Python, saved analyses', prefixes: ['data_'], words: /\b(csv|xlsx?|excel|spreadsheets?|parquet|dataset|pivot|regression|chart|graph|plot)\b/i },
   { id: 'finance', about: 'Company figures and filings, economies, prices, financial news and social mood', prefixes: ['finance_'], words: /\b(stocks?|shares?|ticker|earnings|revenue|market cap|10-k|sec filing|dividend|valuation|gdp|inflation)\b/i },
-  { id: 'visual', about: 'Diagrams and charts drawn in the chat, and presenting a file', names: ['diagram_draw', 'present'], words: /\b(diagram|flow ?chart|mind ?map|draw|visuali[sz]e|present)\b/i },
-  { id: 'schedule', about: 'Scheduled and recurring tasks: create, change, list', names: ['schedule_create', 'schedule_edit', 'schedule_list', 'schedule_view'], prefixes: ['schedule_'], words: /\b(schedule|every (day|morning|evening|week|monday|hour)|daily|weekly|recurring|remind me|automation)\b/i },
+  { id: 'visual', about: 'Diagrams and charts drawn in the thread, and presenting a file', names: ['diagram_draw', 'present'], words: /\b(diagram|flow ?chart|mind ?map|draw|visuali[sz]e|present)\b/i },
+  { id: 'schedule', about: 'Automations (scheduled and recurring): create, change, list', names: ['schedule_create', 'schedule_edit', 'schedule_list', 'schedule_view'], prefixes: ['schedule_'], words: /\b(schedule|every (day|morning|evening|week|monday|hour)|daily|weekly|recurring|remind me|automation)\b/i },
   { id: 'helpers', about: 'Helper agents: start, fork, message and wait for them; swarms, pipelines, review lanes; deep research', names: ['subagent', 'subagent_fork', 'list_agents', 'wait_agent', 'send_message', 'list_subagent_models', 'delegate_role', 'run_swarm', 'run_pipeline', 'review_lanes', 'judge_candidates', 'deep_research'], words: /\b(sub-?agents?|helpers?|in parallel|swarm|delegate|deep research)\b/i },
   { id: 'goals', about: 'Goals: set one, read it, update progress', names: ['create_goal', 'get_goal', 'update_goal'], words: /\bgoals?\b/i },
   { id: 'library', about: 'The Library: search and read your own documents', prefixes: ['library_'], words: /\b(library|my documents|my notes|my files)\b/i },
-  { id: 'memory', about: 'Memory: remember something for later conversations', names: ['remember'], words: /\b(remember|memory|don'?t forget)\b/i },
+  { id: 'memory', about: 'Memory: remember something for later threads', names: ['remember'], words: /\b(remember|memory|don'?t forget)\b/i },
   { id: 'mac', about: 'The Mac: find files anywhere, run Shortcuts', prefixes: ['mac_'], words: /\b(shortcuts?|spotlight|finder|on my mac)\b/i },
   { id: 'code', about: 'The code map: overview of a codebase, find symbols, related files', prefixes: ['code_map_'], words: /\b(codebase|code ?base|repository|repo|refactor|code map)\b/i },
   { id: 'learn', about: 'Learning: plans, lessons, review, progress', prefixes: ['learn_'], words: /\b(teach me|learn|lesson|quiz|course|study)\b/i },
@@ -176,10 +176,33 @@ export function resolveRequest(query, definitions) {
   return [...found].filter((entry) => !CORE.includes(entry));
 }
 
-/** The catalog shown by `tools_find` without arguments, and in its description. */
-export function catalog(known, added = []) {
+/**
+ * Lab re-check fix (6a, problem 3): whether a space closes a family (or a single tool) for this thread. A family is
+ * closed when every tool of it that no other family shares is refused, and at least one is (Office in Devices: its
+ * `office_*` tools and its bundled-Python loader are refused; `present`, which Office shares with the diagrams, does not
+ * keep it open). A family with nothing installed is not closed (it is "not available").
+ * @param {string} entry - a family id or a tool name.
+ * @param {string[]} known - every tool the app knows.
+ * @param {(name: string) => boolean} refused - whether the space refuses a tool for this thread.
+ * @returns {boolean}
+ */
+export function closedHere(entry, known, refused) {
+  if (!byId.has(entry)) return known.includes(entry) && refused(entry);
+  const own = known.filter((name) => inFamily(entry, name) && !FAMILIES.some((other) => other.id !== entry && inFamily(other.id, name)));
+  return own.length > 0 && own.every((name) => refused(name));
+}
+
+/**
+ * The catalog shown by `tools_find` without arguments, and in its description.
+ * @param {string[]} known - the tools to list.
+ * @param {string[]} [added] - families already added.
+ * @param {string[]} [leaveOut] - families not to list (those the thread's space closes).
+ * @returns {string}
+ */
+export function catalog(known, added = [], leaveOut = []) {
   const have = new Set(added);
   const lines = FAMILIES
+    .filter((family) => !leaveOut.includes(family.id))
     .filter((family) => (family.names ?? []).some((name) => known.includes(name)) || known.some((name) => family.prefixes?.some((prefix) => name.startsWith(prefix))))
     .map((family) => `- ${family.id}${have.has(family.id) ? ' (added)' : ''}: ${family.about}`);
   const rest = others(known);

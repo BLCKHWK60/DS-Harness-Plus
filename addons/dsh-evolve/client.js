@@ -165,8 +165,11 @@ window.__ModuleLoader__.load({
     // routes on its own timer, even in a hidden window. This gives all of them ONE shared Settings copy (read once, renewed when
     // Settings changes or after 30 seconds at the most) and one kind of polling loop that stops while the window is hidden.
     // The first copy of this block to run puts the shared state on `window.__dshPoll`; later copies reuse it, so 30 add-ons share one.
+    // A newer copy (higher API) replaces an older shared object instead of reusing it, so an older page file that runs first (an
+    // add-on edited in creator mode, a partly updated install) cannot keep the whole page on an older helper. Raise API with every
+    // change to how the shared state behaves.
     const dshPoll = (() => {
-      const API = 1;
+      const API = 2;
       const root = typeof window !== 'undefined' ? window : globalThis;
       if (root.__dshPoll && root.__dshPoll.api >= API) return root.__dshPoll;
 
@@ -175,7 +178,7 @@ window.__ModuleLoader__.load({
       /** Without the change event (an older app) the copy is only trusted for a moment. */
       const SETTINGS_TTL_NO_EVENTS = 2000;
       const WRITES = ['mutate', 'update', 'replace'];
-      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0 };
+      const stats = { settingsCalls: 0, settingsHits: 0, settingsInvalidations: 0, runs: 0, errors: 0, changes: 0, repeats: 0, watchers: 0 };
       const cache = { value: undefined, at: 0, inflight: null, gen: 0, events: false };
       const changeListeners = new Set();
       const watched = new WeakSet();
@@ -195,38 +198,72 @@ window.__ModuleLoader__.load({
         cache.gen += 1;
       }
 
-      /** Listen once per page connection for "Settings changed" (the app sends it after every write, from any window). */
+      /** Changes already handled, `ns + revision` -> when: the same change reaches the page once per add-on that listens. */
+      const heard = new Map();
+      /** How long a change counts as "the same one" when it arrives again through another add-on's connection. */
+      const HEARD_MS = 2000;
+      /** The app's own marker for a wrapped service: `ctx.remote` hands out a NEW wrapper object at every read. */
+      const ORIGINAL = typeof Symbol === 'function' ? Symbol.for('cordis.original') : '__original';
+      /** Marks our own write wrapper, so it is never wrapped a second time. */
+      const OURS = '__dshPollWrite';
+
+      /**
+       * One "Settings changed" event from the app. Every add-on that listens hears the same event; it is acted on once.
+       * Bug of 21 November 2026 (a new chat made the page read Settings 12-17 times a second, the app ran at 100% and the
+       * tab crashed): `ctx.remote` is a new object at every read, so the old `watched.has(remote)` never matched and every
+       * read added one more listener; one change then woke every listener and each one started its own read.
+       */
+      function changed(ns, revision) {
+        if (typeof revision === 'number' || typeof revision === 'string') {
+          const now = Date.now();
+          for (const [key, at] of heard) if (now - at > HEARD_MS) heard.delete(key);
+          const key = `${String(ns)}\u0000${String(revision)}`;
+          if (heard.has(key)) { stats.repeats += 1; return; }
+          heard.set(key, now);
+        }
+        stats.changes += 1;
+        invalidate();
+        for (const listener of [...changeListeners]) {
+          try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
+        }
+      }
+
+      /** Listen once per add-on for "Settings changed" (the app sends it after every write, from any window). */
       function watch(ctx) {
         const remote = ctx && ctx.remote;
-        if (!remote || watched.has(remote)) return;
-        watched.add(remote);
+        if (!remote) return;
+        // Keyed on the add-on's own context, which stays the same object (its `remote` does not).
+        const key = ctx !== null && (typeof ctx === 'object' || typeof ctx === 'function') ? ctx : (remote[ORIGINAL] || remote);
+        if (watched.has(key)) return;
+        watched.add(key);
         try {
           if (typeof remote.$on === 'function') {
-            remote.$on('settings/document-updated', (ns) => {
-              invalidate();
-              for (const listener of [...changeListeners]) {
-                try { listener(ns); } catch { /* one listener's trouble must not stop the others */ }
-              }
-            });
+            remote.$on('settings/document-updated', changed);
+            stats.watchers += 1;
             cache.events = true;
           }
         } catch { /* no change event here: the short copy time covers it */ }
         try {
-          if (typeof ctx.on === 'function') ctx.on('connection/reset', invalidate);
+          if (typeof ctx.on === 'function') ctx.on('connection/reset', () => { heard.clear(); invalidate(); });
         } catch { /* optional */ }
         // This page's own writes drop the copy before their answer comes back, so a read that follows a write is never behind it.
         const settings = remote.settings;
-        if (settings && !wrapped.has(settings)) {
-          wrapped.add(settings);
+        const target = settings && (settings[ORIGINAL] || settings);
+        if (settings && !wrapped.has(target)) {
+          wrapped.add(target);
           for (const name of WRITES) {
             const original = settings[name];
-            if (typeof original !== 'function') continue;
+            // Already ours (put there through another add-on's wrapper object): wrapping it again would stack wrappers.
+            // An older copy's wrapper (marked `true`) is wrapped once more: it drops only the older copy's own cache.
+            if (typeof original !== 'function' || original[OURS] === API) continue;
             try {
-              settings[name] = function (...args) {
+              const write = function (...args) {
                 invalidate();
                 const done = original.apply(this, args);
                 return done && typeof done.then === 'function' ? done.then((out) => { invalidate(); return out; }, (error) => { invalidate(); throw error; }) : done;
               };
+              write[OURS] = API;
+              settings[name] = write;
             } catch { /* a frozen object keeps the plain call */ }
           }
         }
@@ -378,7 +415,7 @@ window.__ModuleLoader__.load({
     // ---- dsh-poll:end ----
 
     const NS = 'evolve';
-    const DICT = { en: { 'section.title': 'Self-improve' }, zh: { 'section.title': '自我改进' } };
+    const DICT = { en: { 'section.title': 'Self-improve' } };
 
     const GROUPS = [
       { id: 'learn', label: 'Learn', help: 'The reviewer studies what goes wrong on these.' },
@@ -485,7 +522,7 @@ textarea.dsh-ev-field { width: 100%; height: auto; min-height: 72px; padding: 9p
     const count = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     const when = (iso) => {
       const date = new Date(iso);
-      return Number.isFinite(date.getTime()) ? date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+      return Number.isFinite(date.getTime()) ? date.toLocaleString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
     };
 
     async function loadSettings(ctx) {
@@ -689,7 +726,7 @@ textarea.dsh-ev-field { width: 100%; height: auto; min-height: 72px; padding: 9p
               'select',
               { className: 'dsh-ev-field', value: task.kind, onChange: (event) => set({ kind: event.target.value }) },
               h('option', { value: 'answer' }, 'Answer only: the model answers in one go, without tools'),
-              h('option', { value: 'agent' }, 'With tools: a helper agent works in an empty temporary folder inside the open conversation\'s folder (needs an open Cowork or Code conversation)'),
+              h('option', { value: 'agent' }, 'With tools: a helper agent works in an empty temporary folder inside the open thread\'s folder (needs an open Cowork or Code thread)'),
             ),
           ),
         ),
@@ -891,14 +928,14 @@ textarea.dsh-ev-field { width: 100%; height: auto; min-height: 72px; padding: 9p
 
         // ---- setup
         h('div', { className: 'dsh-ev-group' }, h('span', null, 'Setup')),
-        h(Row, { title: 'Use self-improvement', hint: 'Off stops runs and adds nothing to any conversation.' }, h(Switch, { checked: value.enabled !== false, label: 'Use self-improvement', onChange: (next) => setField('enabled', next) })),
+        h(Row, { title: 'Use self-improvement', hint: 'Off stops runs and adds nothing to any thread.' }, h(Switch, { checked: value.enabled !== false, label: 'Use self-improvement', onChange: (next) => setField('enabled', next) })),
         h(
           Row,
           {
             title: 'What to improve',
             hint: now.missingTarget
               ? 'The model version chosen before no longer exists. Pick another.'
-              : 'A saved model version (from Settings → Model Tiers → Model versions) or a plain model. Each has its own tasks, lessons and history, so "Qwen – Coding" and "Qwen – Writing" improve separately.',
+              : 'A saved model version (from Settings → Model tiers → Model versions) or a plain model. Each has its own tasks, lessons and history, so "Qwen – Coding" and "Qwen – Writing" improve separately.',
           },
           h(
             'select',
@@ -908,11 +945,11 @@ textarea.dsh-ev-field { width: 100%; height: auto; min-height: 72px; padding: 9p
           ),
         ),
         now.version
-          ? h(Row, { title: 'Model', hint: `Tests run on this version's model, with its sampling settings${now.version.hasInstructions ? ' and its own instructions' : ''}. Approved lessons are used in conversations that are on this version.` }, h('span', { className: 'dsh-ev-tag', 'data-tone': 'accent' }, now.version.model))
-          : h(Row, { title: 'Model to improve', hint: 'Usually a local model. The test tasks run on it, and approved lessons are used in every conversation.' }, h(ModelSelect, { catalog, provider: value.studentProvider, model: value.studentModel, none: 'Pick a model', label: 'Model to improve', onPick: (provider, model) => setModel('student', provider, model) })),
-        h(Row, { title: 'Reviewer model', hint: 'A stronger model. It sees the Learn tasks, the answers and why they failed, with secrets, addresses and home paths removed. It never sees your conversations.' }, h(ModelSelect, { catalog, provider: value.reviewerProvider, model: value.reviewerModel, none: 'Pick a model', label: 'Reviewer model', onPick: (provider, model) => setModel('reviewer', provider, model) })),
+          ? h(Row, { title: 'Model', hint: `Tests run on this version's model, with its sampling settings${now.version.hasInstructions ? ' and its own instructions' : ''}. Approved lessons are used in threads that are on this version.` }, h('span', { className: 'dsh-ev-tag', 'data-tone': 'accent' }, now.version.model))
+          : h(Row, { title: 'Model to improve', hint: 'Usually a local model. The test tasks run on it, and approved lessons are used in every thread.' }, h(ModelSelect, { catalog, provider: value.studentProvider, model: value.studentModel, none: 'Pick a model', label: 'Model to improve', onPick: (provider, model) => setModel('student', provider, model) })),
+        h(Row, { title: 'Reviewer model', hint: 'A stronger model. It sees the Learn tasks, the answers and why they failed, with secrets, addresses and home paths removed. It never sees your threads.' }, h(ModelSelect, { catalog, provider: value.reviewerProvider, model: value.reviewerModel, none: 'Pick a model', label: 'Reviewer model', onPick: (provider, model) => setModel('reviewer', provider, model) })),
         h(Row, { title: 'Judge model (optional)', hint: 'Only for tasks with a "judge" check. Without it, such a check never counts as passed.' }, h(ModelSelect, { catalog, provider: value.judgeProvider, model: value.judgeModel, none: 'None', label: 'Judge model', onPick: (provider, model) => setModel('judge', provider, model) })),
-        h(Row, { title: 'Use approved instructions in real conversations', hint: 'Off keeps them to test runs only, so you can try the loop without changing how the app behaves.' }, h(Switch, { checked: value.applyLive !== false, label: 'Use approved instructions in real conversations', onChange: (next) => setField('applyLive', next) })),
+        h(Row, { title: 'Use approved instructions in real threads', hint: 'Off keeps them to test runs only, so you can try the loop without changing how the app behaves.' }, h(Switch, { checked: value.applyLive !== false, label: 'Use approved instructions in real threads', onChange: (next) => setField('applyLive', next) })),
         h(Row, { title: 'Runs per task', hint: 'A model does not answer the same way twice. More runs give a steadier score and cost more. 1 to 5.' }, h(NumberField, { value: now.repeats, min: 1, max: 5, label: 'Runs per task', onCommit: (next) => setField('repeats', next) })),
         h(Row, { title: 'Changes tried per cycle', hint: 'Each one is tested on its own, so a gain can be traced to one change. 1 to 5.' }, h(NumberField, { value: now.maxEdits, min: 1, max: 5, label: 'Changes tried per cycle', onCommit: (next) => setField('maxEdits', next) })),
         h(Row, { title: 'Token allowance per run', hint: 'A run stops when it has used this many tokens, and changes nothing. 0 means no limit.' }, h(NumberField, { value: now.tokenBudget, min: 0, max: 50000000, label: 'Token allowance per run', onCommit: (next) => setField('tokenBudget', next) })),
@@ -967,7 +1004,7 @@ textarea.dsh-ev-field { width: 100%; height: auto; min-height: 72px; padding: 9p
         status.active.text
           ? h('pre', { className: 'dsh-ev-pre' }, status.active.text)
           : h('p', { className: 'dsh-ev-desc', style: { marginTop: 0 } }, 'Nothing has been added yet. Approved changes appear here, and are given to the model with its other instructions.'),
-        h('p', { className: 'dsh-ev-desc' }, `${lessons.length} lesson${lessons.length === 1 ? '' : 's'}. In real conversations the model gets the lessons for "all" and "general" work, plus those whose kind of work is named like the conversation's mode (chat, cowork, code).`),
+        h('p', { className: 'dsh-ev-desc' }, `${lessons.length} lesson${lessons.length === 1 ? '' : 's'}. In real threads the model gets the lessons for "all" and "general" work, plus those whose kind of work is named like the thread's mode (chat, cowork, code).`),
         h(
           'div',
           { className: 'dsh-ev-actions', style: { marginTop: 8 } },
@@ -1024,7 +1061,7 @@ textarea.dsh-ev-field { width: 100%; height: auto; min-height: 72px; padding: 9p
           { className: 'dsh-ev-list' },
           h('li', null, h('b', null, 'What it can change: '), 'a short list of lessons and a few sections of standing instructions, one small edit at a time. It cannot change the model, your tasks, the checks, the gates or these settings.'),
           h('li', null, h('b', null, 'What a change must pass: '), 'it must not contain a test answer, it must raise the score on the Check tasks, it must break none of the Guard tasks that pass today, and it must not make answers much longer. Then it waits for you.'),
-          h('li', null, h('b', null, 'What leaves this Mac: '), 'only what the reviewer needs from the Learn tasks. If the reviewer is a cloud model, that text goes to its provider. Conversations, Check tasks and Guard tasks are never sent.'),
+          h('li', null, h('b', null, 'What leaves this Mac: '), 'only what the reviewer needs from the Learn tasks. If the reviewer is a cloud model, that text goes to its provider. Threads, Check tasks and Guard tasks are never sent.'),
           h('li', null, h('b', null, 'What it cannot do: '), 'make a small model reason like a large one on work it has never seen. Gains show on kinds of work you repeat and can check.'),
         ),
 

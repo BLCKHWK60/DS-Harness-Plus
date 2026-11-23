@@ -244,7 +244,7 @@ export function apply(ctx, config) {
    */
   function effective(sessionId) {
     const agent = ctx.get('agents')?.get(sessionId);
-    if (!agent) throw new Error(`sampling-presets: unknown session "${sessionId}"`);
+    if (!agent) throw new Error(`sampling-presets: unknown thread "${sessionId}"`);
     const picked = resolveFor(agent);
     const explicit = ctx.get('modelTiers')?.sessionSampling?.(sessionId) ?? {};
     const state = stateOf(sessionId);
@@ -274,7 +274,7 @@ export function apply(ctx, config) {
      */
     setCategory(sessionId, category) {
       const agent = ctx.get('agents')?.get(sessionId);
-      if (!agent) throw new Error(`sampling-presets: unknown session "${sessionId}"`);
+      if (!agent) throw new Error(`sampling-presets: unknown thread "${sessionId}"`);
       if (category !== null && !(cfg().categories ?? {})[category]) throw new Error(`sampling-presets: unknown category "${category}"`);
       stateOf(sessionId).override = category;
       atTurnBoundary(agent, () => reconcileModel(agent));
@@ -289,7 +289,7 @@ export function apply(ctx, config) {
         () =>
           inner.commands.register({
             name: commandName,
-            description: 'Show or set the sampling category of this session; `auto` returns to the mode or default',
+            description: 'Show or set the sampling category of this thread; `auto` returns to the mode or default',
             input: { hint: '[category|auto]' },
             handler: async ({ agent, rawInput }) => {
               const arg = String(rawInput ?? '').trim();
@@ -310,7 +310,7 @@ export function apply(ctx, config) {
                 text:
                   `Category ${e.category}${e.override ? ' (set by you)' : ''}: preset ${e.preset} (temperature ${v.temperature}, max tokens ${v.maxTokens})` +
                   `${e.alias ? `, model alias ${e.alias}` : ''}; strategy ${e.strategy}.` +
-                  `${Object.keys(e.explicitSessionSampling).length ? ' Your composer sampling for this session takes precedence.' : ''}`,
+                  `${Object.keys(e.explicitSessionSampling).length ? ' Your chat box sampling for this thread takes precedence.' : ''}`,
               };
             },
           }),

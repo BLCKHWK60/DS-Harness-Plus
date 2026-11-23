@@ -133,7 +133,7 @@ export function readable(events, level = 'conversation') {
         const own = !message.source || message.source.kind === 'user';
         if (!own && level !== 'full') break;
         const text = textOf(message.content);
-        if (text !== '') blocks.push({ kind: 'user', label: own ? 'You' : `Added to the conversation (${message.source?.kind ?? 'other'})`, text, ...where });
+        if (text !== '') blocks.push({ kind: 'user', label: own ? 'You' : `Added to the thread (${message.source?.kind ?? 'other'})`, text, ...where });
         break;
       }
       case 'assistant/message': {
@@ -188,7 +188,7 @@ export function readable(events, level = 'conversation') {
         }
     }
   }
-  return { title: title || 'Untitled conversation', header, blocks, models };
+  return { title: title || 'Untitled thread', header, blocks, models };
 }
 
 const fenceOf = (text) => '`'.repeat(Math.max(3, (String(text).match(/`+/g) ?? []).reduce((most, run) => Math.max(most, run.length), 0) + 1));
@@ -203,8 +203,8 @@ const when = (block) => [block.time, block.turn !== undefined ? `turn ${block.tu
 function facts(pieces, level, sessionId) {
   const header = pieces.header ?? {};
   return [
-    ['Conversation', pieces.title],
-    ['Session id', sessionId || header.id || ''],
+    ['Thread', pieces.title],
+    ['Thread id', sessionId || header.id || ''],
     ['Started', stamp(header.createdAt)],
     ['Working folder', header.cwd ?? ''],
     ['Agent preset', header.agentPreset ?? ''],
@@ -221,7 +221,7 @@ function toMarkdown(pieces, level, sessionId, rawLines) {
     for (const item of pieces.models) out.push(`- ${item.time || `seq ${item.seq}`}: \`${JSON.stringify({ ...item.model, seq: undefined, time: undefined })}\``);
     out.push('');
   }
-  out.push('## Conversation', '');
+  out.push('## Thread', '');
   for (const block of pieces.blocks) {
     const note = when(block);
     if (block.kind === 'user') out.push(`### ${block.label}${note ? ` · ${note}` : ''}`, '', quote(block.text), '');
@@ -265,7 +265,7 @@ function toHtml(pieces, level, sessionId, rawLines) {
     for (const item of pieces.models) out.push(escapeHtml(`${item.time || `seq ${item.seq}`}: ${JSON.stringify({ ...item.model, seq: undefined, time: undefined })}`));
     out.push('</pre></section>');
   }
-  out.push('<h2>Conversation</h2>');
+  out.push('<h2>Thread</h2>');
   for (const block of pieces.blocks) {
     const note = when(block);
     const head = `<div class="who">${escapeHtml(block.label)}${block.kind === 'system' && block.repeats > 0 ? ` (same text ${block.repeats} more times)` : ''}<span class="when">${escapeHtml(note)}</span></div>`;

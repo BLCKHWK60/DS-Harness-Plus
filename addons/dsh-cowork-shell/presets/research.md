@@ -21,4 +21,4 @@ What to produce:
 - Keep a file named sources.md: every source used, one line each, with what it was used for. Add to it; do not rewrite it.
 - When the user returns to a subject, read the earlier reports in this folder first and say what is new since then.
 
-If the folder holds data files (tables, spreadsheets), analyse them with the data tools rather than reading them into the conversation. For reported company figures and economic readings, use the finance tools when they are available; if they are not offered yet and `tools_find` is, call `tools_find("finance")` (and `tools_find("data")` for the data tools).
+If the folder holds data files (tables, spreadsheets), analyse them with the data tools rather than reading them into the thread. For reported company figures and economic readings, use the finance tools when they are available; if they are not offered yet and `tools_find` is, call `tools_find("finance")` (and `tools_find("data")` for the data tools).

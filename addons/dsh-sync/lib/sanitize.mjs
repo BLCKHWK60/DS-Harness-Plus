@@ -1,32 +1,32 @@
-// lib/sanitize.mjs — 展示/日志脱敏纯函数（零依赖）。
+// lib/sanitize.mjs — pure functions that remove secrets for display and logs (no dependencies).
 //
-// 规则：任何可能携带凭据的文本（remote URL、git 输出、错误消息）在进入
-// 日志、命令结果或工具结果前都必须过这里的纯函数。函数绝不抛错、绝不
-// 访问 I/O；输入不合法时返回保守的脱敏文本。
+// Rule: any text that may carry a credential (a remote URL, git output, an error message) must go through these
+// pure functions before it reaches a log, a command result or a tool result. The functions never throw and never
+// do I/O; on input that is not valid they return a cautious, cleaned text.
 
-/** URL 中视为凭据的查询键（值一律整体打码）。 */
+/** Query keys in a URL that count as credentials (their values are always masked in full). */
 const CREDENTIAL_QUERY_KEYS = /^(?:access_?token|token|key|secret|password|passwd|auth|credential|code|signature|x-amz-|sig)$/iu
 
 /**
- * 常见令牌形态（前缀 + 足够长的 secret）。
- * `gh[pousr]_` 覆盖 GitHub 的 ghp/gho/ghu/ghs/ghr 全家族；`github_pat_` 单列
- * （fine-grained PAT 是现在的默认形态，曾整体漏网）；其余为各家用得最广的
- * 前缀形态。
+ * Common token shapes (a prefix + a long enough secret).
+ * `gh[pousr]_` covers GitHub's whole ghp/gho/ghu/ghs/ghr family; `github_pat_` has its own entry
+ * (the fine-grained PAT is now the default shape, and once slipped through entirely); the rest are each provider's most
+ * widely used prefix shapes.
  */
 const TOKEN_PATTERN = /\b(?:sk-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{16,}|gldt-[A-Za-z0-9_-]{16,}|npm_[A-Za-z0-9]{30,}|pypi-[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{8,}|AKIA[0-9A-Z]{12,}|AIza[0-9A-Za-z_-]{30,}|ya29\.[A-Za-z0-9_-]{20,}|SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}|dop_v1_[A-Fa-f0-9]{40,}|shpat_[A-Fa-f0-9]{32,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9._~+/=-]{8,}|authorization:\s*[A-Za-z0-9._~+/=-]{8,})/giu
 
-/** key=value 形态的凭据（值整体打码）。 */
+/** Credentials in key=value form (the whole value is masked). */
 const CREDENTIAL_ASSIGNMENT = /\b((?:api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|password|passwd|client[_-]?secret|private[_-]?key)\s*=\s*)([^\s&;,]+)/giu
 
-/** URL userinfo（user:password@）——git stderr 可能回显远端地址。 */
+/** URL userinfo (user:password@) — git stderr may echo the remote address. */
 const URL_USERINFO = /\/\/([^/\s:@]+):([^/\s@]+)@/gu
 
 /**
- * 无密码时，URL 里的用户名本身是否就是凭据。
- * `https://<token>@host/…` 是 PAT 最常见的免交互写法：此时用户名字段装的是
- * 密钥而不是身份，`user:pass@` 的「用户名不是秘密」前提在这里不成立。
- * @param {string} username - URL 的用户名部分。
- * @returns {boolean} 是否按凭据处理。
+ * Whether, with no password, the user name in a URL is itself the credential.
+ * `https://<token>@host/…` is the most common no-prompt way to write a PAT: the user-name field then holds the
+ * secret, not an identity, so the "the user name is not a secret" assumption of `user:pass@` does not hold here.
+ * @param {string} username - the user-name part of the URL.
+ * @returns {boolean} whether to treat it as a credential.
  */
 function usernameIsCredential(username) {
   if (username.length === 0) return false
@@ -40,10 +40,10 @@ function usernameIsCredential(username) {
 }
 
 /**
- * 脱敏 remote URL：用户信息中的密码打码，凭据查询键的值打码。
- * scp 语法（user@host:path）不含密码，原样保留（用户名不是秘密）。
- * @param {string} remote - git remote 地址。
- * @returns {string} 脱敏后的地址。
+ * Clean a remote URL: mask the password in the userinfo and the values of credential query keys.
+ * scp syntax (user@host:path) has no password and stays as it is (the user name is not a secret).
+ * @param {string} remote - the git remote address.
+ * @returns {string} the cleaned address.
  */
 export function sanitizeRemote(remote) {
   if (typeof remote !== 'string' || remote.length === 0) return '<unset>'
@@ -60,17 +60,17 @@ export function sanitizeRemote(remote) {
     }
     return url.toString()
   } catch {
-    // 解析失败（scp 语法、畸形 URL）走通用脱敏。模块契约是「输入不合法时返回
-    // 保守的脱敏文本」：原样回显会让畸形 URL 里的令牌直接落到日志与模型。
+    // Parsing failed (scp syntax, a malformed URL): use the general cleaning. The module contract is "on input that is
+    // not valid, return a cautious cleaned text": echoing it as is would put a token in a malformed URL straight into logs and the model.
     return redactText(trimmed)
   }
 }
 
 /**
- * 文本脱敏：令牌、Bearer/authorization 头与 key=value 凭据打码。
- * 非字符串输入先 String() 强转（绝不抛错——测试锁定此契约）。
- * @param {unknown} text - 任意输出文本（git stderr、错误消息等）。
- * @returns {string} 脱敏文本。
+ * Clean a text: mask tokens, Bearer/authorization headers and key=value credentials.
+ * Input that is not a string is turned into one with String() first (never throws — a test pins this contract).
+ * @param {unknown} text - any output text (git stderr, error messages…).
+ * @returns {string} the cleaned text.
  */
 export function redactText(text) {
   if (typeof text !== 'string') return String(text)
@@ -81,11 +81,11 @@ export function redactText(text) {
 }
 
 /**
- * 展示路径：绝对路径落在 root 内时转为相对路径（仓库内视角），否则给出
- * 中性占位——绝不把根外的路径原样呈现给模型/用户（路径越界防御）。
- * @param {string} absolute - 绝对路径。
- * @param {string} root - 归属根目录（绝对、规范化后）。
- * @returns {string} 相对路径或 '<outside>'。
+ * The path to show: an absolute path inside root becomes a relative path (as seen inside the repository); otherwise a
+ * neutral placeholder — a path outside the root is never shown as it is to the model or the user (path-escape defence).
+ * @param {string} absolute - the absolute path.
+ * @param {string} root - the owning root folder (absolute, normalised).
+ * @returns {string} the relative path, or '<outside>'.
  */
 export function displayPath(absolute, root) {
   if (typeof absolute !== 'string' || absolute.length === 0) return '<missing>'
@@ -95,11 +95,11 @@ export function displayPath(absolute, root) {
 }
 
 /**
- * 计算 absolute 相对 root 的路径；不在 root 内时返回 undefined。
- * 纯路径运算（不访问文件系统），拒绝 `..` 越界。
- * @param {string} absolute - 绝对路径（可为相对形式，按原样计算）。
- * @param {string} root - 根目录。
- * @returns {string|undefined} 相对路径或 undefined。
+ * The path of absolute relative to root; undefined when it is not inside root.
+ * Pure path arithmetic (no file-system access); refuses a `..` escape.
+ * @param {string} absolute - the absolute path (may be relative; it is computed as given).
+ * @param {string} root - the root folder.
+ * @returns {string|undefined} the relative path, or undefined.
  */
 export function relativeWithin(absolute, root) {
   const normalized = normalizeSegments(absolute)
@@ -108,8 +108,8 @@ export function relativeWithin(absolute, root) {
   for (let index = 0; index < rootSegments.length; index += 1) {
     if (normalized[index] !== rootSegments[index]) return undefined
   }
-  // 相对段按栈折叠 `.` 与 `..`：`..` 在空栈上即越出 root → undefined（绝不
-  // 把能经 `..` 逃出 root 的路径呈现出来）。
+  // Fold `.` and `..` in the relative segments with a stack: `..` on an empty stack leaves root → undefined (a path
+  // that could escape root through `..` is never shown).
   const stack = []
   for (const segment of normalized.slice(rootSegments.length)) {
     if (segment === '..') {
@@ -122,7 +122,7 @@ export function relativeWithin(absolute, root) {
   return stack.length === 0 ? '.' : stack.join('/')
 }
 
-/** 把路径切成规范段（跳过空段与 `.`，不做 I/O）。 */
+/** Split a path into normal segments (skips empty segments and `.`, no I/O). */
 function normalizeSegments(path) {
   return String(path)
     .replaceAll('\\', '/')

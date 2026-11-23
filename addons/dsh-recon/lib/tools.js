@@ -12,14 +12,14 @@ import { UNTICKED, untickedRefusal } from './ticks.js';
  */
 const NOT_RUN = [
   'Recon is switched off',
-  'This tool works only in a conversation of the Recon tab',
-  'This Recon conversation runs in a folder of the user',
+  'This tool works only in a thread in the Recon space',
+  'This Recon thread runs in a folder of the user',
   'It did not work:',
-  'This conversation uses ',
-  'The model of this conversation could not be told',
+  'This thread uses ',
+  'The model of this thread could not be told',
   // recon_ultra (Ultra Code's recipe) when it did not run.
   'Ultra Code is off',
-  'This works only in a Recon conversation itself',
+  'This works only in a Recon thread itself',
   'Nothing was read',
   'No draft was written',
   'The action is search or report',
@@ -27,6 +27,14 @@ const NOT_RUN = [
   // A tool whose source is not ticked on the Web button (lib/ticks.js).
   UNTICKED,
   'Your own sources are read in Recon only',
+  // Stage 7 (words only): the same answers as worded before, still found in threads saved earlier, so a restart
+  // rebuilds them exactly as before. Input matching of old saved text; never shown.
+  'This tool works only in a conversation of the Recon tab',
+  'This Recon conversation runs in a folder of the user',
+  'This conversation uses ',
+  'The model of this conversation could not be told',
+  'This works only in a Recon conversation itself',
+  'Not among this conversation\'s Recon sources',
 ];
 
 /** The marker the app's compaction puts around its summary of earlier history. */
@@ -96,8 +104,8 @@ export function buildTools({ enabled, inRecon, inRoom, gate, onion, clearnet, bo
   const guarded = (work, name) => async (args, exec) => {
     try {
       if (!enabled()) return { text: 'Recon is switched off in Settings → Recon.' };
-      if (!inRecon(exec)) return { text: 'This tool works only in a conversation of the Recon tab. It was not run.' };
-      if (!inRoom(exec)) return { text: 'This Recon conversation runs in a folder of the user\'s, so its tools are off: the model would be told that folder\'s path. Nothing was sent. Tell the user to start a new conversation with the New button in the Recon tab; it then runs in Recon\'s own empty folder.' };
+      if (!inRecon(exec)) return { text: 'This tool works only in a thread in the Recon space. It was not run.' };
+      if (!inRoom(exec)) return { text: 'This Recon thread runs in a folder of the user\'s, so its tools are off: the model would be told that folder\'s path. Nothing was sent. Tell the user to start a new thread with the New button in the Recon space; it then runs in Recon\'s own empty folder.' };
       // The Web button's ticks (the one Web selector): a source that is not ticked is not used.
       const unticked = untickedRefusal({ name, args: args ?? {}, ticks: ticks(exec), kinds });
       if (unticked) return { text: unticked };
@@ -127,7 +135,7 @@ export function buildTools({ enabled, inRecon, inRoom, gate, onion, clearnet, bo
     recon_archive_read: ['Read the text of one Internet Archive copy of a web page. Text only. This is the only way to read a page from the normal web here. Long pages come in parts.', { address: text(500, 'The page\'s address on the web.'), timestamp: text(14, 'The copy\'s timestamp, as recon_archive_find lists it.'), part: { type: 'integer', minimum: 1, maximum: 40, description: 'Which part of a long page. Leave out for the first.' } }, ['address', 'timestamp']],
     recon_other_search: ['Search one of the user\'s own sources that they allowed in Recon (a site with their own login, key or private address), through the user\'s WireGuard tunnel only. Give the source\'s name exactly as listed and the search words.', { source: text(60, 'The source\'s name.'), query: text(300, 'The search words.') }, ['source', 'query']],
     recon_other_read: ['Read a page of one of the user\'s own sources that they allowed in Recon, through the user\'s WireGuard tunnel only. Give the source\'s name and, optionally, a link as a search or page of that source gave it. Long pages come in parts.', { source: text(60, 'The source\'s name.'), link: text(2000, 'A link on that source, as given (a path such as /item/12).'), part: { type: 'integer', minimum: 1, maximum: 40, description: 'Which part of a long page. Leave out for the first.' } }, ['source']],
-    recon_cite: ['Give the full citation of something read in this conversation: source, author and date as shown, when it was retrieved, and the fingerprint of its text.', { source: text(600, 'The source\'s number (S3), its .onion address or its Message-ID.') }, ['source']],
+    recon_cite: ['Give the full citation of something read in this thread: source, author and date as shown, when it was retrieved, and the fingerprint of its text.', { source: text(600, 'The source\'s number (S3), its .onion address or its Message-ID.') }, ['source']],
   };
   const work = {
     recon_onion_search: (args, exec) => onion.search(idOf(exec), args.query),
@@ -148,7 +156,7 @@ export function buildTools({ enabled, inRecon, inRoom, gate, onion, clearnet, bo
       const source = sources.find(idOf(exec), args.source);
       if (source) return sources.cite(source);
       const have = sources.list(idOf(exec));
-      return have.length === 0 ? 'Nothing was read in this conversation yet, so there is nothing to cite. Sources read before the app restarted count only while their tool answers are still in the conversation.' : `That source was not read in this conversation. Read so far: ${have.map((one) => `S${one.n} ${one.url}`).join('; ').slice(0, 1500)}`;
+      return have.length === 0 ? 'Nothing was read in this thread yet, so there is nothing to cite. Sources read before the app restarted count only while their tool answers are still in the thread.' : `That source was not read in this thread. Read so far: ${have.map((one) => `S${one.n} ${one.url}`).join('; ').slice(0, 1500)}`;
     },
   };
   return TOOLS.map((name) => {

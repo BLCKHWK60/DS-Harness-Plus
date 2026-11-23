@@ -1,5 +1,5 @@
 /**
- * Browser half of Role prompts: the page for "Instructions for every conversation". It edits the
+ * Browser half of Role prompts: the page for "Instructions for every thread". It edits the
  * saved sections through the settings channel (the `sections` field is volatile in the host half), and
  * shows itself as a tab of the Model Tiers page; without Model Tiers it has its own Settings page.
  */
@@ -218,8 +218,8 @@ window.__ModuleLoader__.load({
 
     const DICT = {
       en: {
-        'section.title': 'Instructions for every conversation',
-        'head.hint': 'Your own instructions, added to the start of every conversation, in the order you choose. Nothing is added until you write something. Changes to the text apply at once; a new instruction, or a changed position, applies from the next conversation.',
+        'section.title': 'Instructions for every thread',
+        'head.hint': 'Your own instructions, added to the start of every thread, in the order you choose. Nothing is added until you write something. Changes to the text apply at once; a new instruction, or a changed position, applies from the next thread.',
         loading: 'Loading…',
         empty: 'No instructions yet. Add one, for example how you want plans or code to be written.',
         add: 'Add instructions',
@@ -235,7 +235,7 @@ window.__ModuleLoader__.load({
         position: 'Position',
         'position.hint': 'Lower comes earlier. Default 60.',
         only: 'Only for these tiers',
-        'only.hint': 'Leave all unticked to use them in every conversation.',
+        'only.hint': 'Leave all unticked to use them in every thread.',
         save: 'Save',
         discard: 'Discard changes',
         saved: 'Saved',

@@ -160,10 +160,10 @@ test('the service and /sampling: list, effective, unknown choices refused, and a
   const service = app.provided.samplingPresets;
   assert.deepEqual(service.list(), { presets: ['precise', 'loose'], categories: ['code', 'chat'] });
   assert.equal(service.effective('s').preset, 'loose');
-  assert.throws(() => service.effective('ghost'), /unknown session/);
+  assert.throws(() => service.effective('ghost'), /unknown thread/);
   assert.throws(() => service.setCategory('s', 'nope'), /unknown category/);
   const run = (rawInput) => app.commands.sampling.handler({ agent, rawInput });
-  assert.match((await run('')).text, /Category chat: preset loose \(temperature 1.2, max tokens 800\); strategy mixed\. Your composer sampling for this session takes precedence\./);
+  assert.match((await run('')).text, /Category chat: preset loose \(temperature 1.2, max tokens 800\); strategy mixed\. Your chat box sampling for this thread takes precedence\./);
   assert.match((await run('code')).text, /Category code \(set by you\): preset precise/);
   const bad = await run('banana');
   assert.equal(bad.kind, 'error');

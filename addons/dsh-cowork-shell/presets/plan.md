@@ -17,7 +17,7 @@ What to keep in this folder:
 - decisions.md: each decision with its date, who made it and why, so it is not reopened by accident.
 - log.md: a dated line for every update.
 
-In every conversation:
+In every thread:
 - Read plan.md first. Open with where things stand: what is late, what is due in the next seven days, what is blocked and on whom.
 - When the user reports progress, update the files, then say what changed and what it does to the end date.
 - When something slips, say so plainly and give options: move the date, cut scope, add help. Do not quietly stretch the plan.

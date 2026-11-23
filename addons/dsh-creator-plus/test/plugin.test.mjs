@@ -37,7 +37,7 @@ function plusFolder(root) {
  * The add-on on a stand-in app.
  * @param {object} [options] - `enabled`, `modeOf`, `longRun`, `sandbox`, `extraModes`, `defaultMode`.
  */
-function plugin({ enabled = true, modeOf = (id) => (String(id).startsWith('cp') ? MODE_ID : 'cowork'), longRun = () => false, sandbox = true, extraModes = '{}', defaultMode = 'cowork', results = {} } = {}) {
+function plugin({ enabled = true, modeOf = (id) => (String(id).startsWith('cp') ? MODE_ID : 'cowork'), longRun = () => false, sandbox = true, extraModes = '{}', defaultMode = 'cowork', results = {}, askYes } = {}) {
   const root = scratch();
   const realHome = join(root, 'dsh');
   const home = join(realHome, 'creator-plus');
@@ -86,7 +86,7 @@ function plugin({ enabled = true, modeOf = (id) => (String(id).startsWith('cp') 
     tools,
     modes: { get: modeOf, isolated: (id) => id === 'recon-1', set: async (...args) => claims.push(args), depthSpoken: () => 'standard' },
     agents: { list: () => [...agents.values()], get: (id) => agents.get(id) },
-    mission: { longRun: longRun },
+    mission: { longRun: longRun, ...(askYes ? { askYes } : {}) },
     loader: { entries: () => entries },
     pluginManager: { installBundle: async (target, options) => { installs.push({ target, options }); return { application: 'activated' }; }, removeBundle: async (name) => removals.push(name) },
   };
@@ -387,7 +387,7 @@ test('the page: start refused with nothing selected, saved runs for the Automati
     await settle();
     const refused = await app.http('POST', { action: 'start', sessionId: 'cp1', state: { run: 'improve' } });
     assert.equal(refused.status, 400);
-    assert.match(refused.body.error, /Pick the plugins/);
+    assert.match(refused.body.error, /Pick the add-ons/);
     await app.http('POST', { action: 'saveRun', name: 'Weekly check', state: { selection: ['@local/dsh-notes'], run: 'update' } });
     assert.deepEqual(app.provided.creatorPlus.savedRuns().map((item) => item.name), ['Weekly check']);
     assert.match(app.provided.creatorPlus.savedRunPrompt('Weekly check'), /^\[Creator Plus saved run: Weekly check\]\nCheck after an update: notes/);
@@ -420,7 +420,7 @@ test('improving from the logs: only a model this Mac runs reads them by default'
     await app.http('POST', { action: 'bar', sessionId: 'cp1', state: { selection: ['@local/dsh-notes'], run: 'improve' } });
     assert.match((await app.call('creator_improve', {}, creator)).text, /outside this Mac/);
     creator.model.current = () => ({ provider: 'mine', model: 'x' });
-    assert.match((await app.call('creator_improve', {}, creator)).text, /conversation history is not available|Read 0 conversations/);
+    assert.match((await app.call('creator_improve', {}, creator)).text, /thread history is not available|Read 0 threads/);
   } finally {
     app.close();
   }
@@ -439,7 +439,7 @@ test('the note in a Creator Plus conversation: the bar\'s sentence and Depth; no
     app.handlers['agent/created']({ agent: withPrompt('cp1') });
     app.handlers['agent/created']({ agent: withPrompt('c1') });
     const mine = sections.find((item) => item.id === 'cp1').entry.text();
-    assert.match(mine, /^The bar: New plugin: a new plugin, with changes prepared in the trial copy and nothing changed in your setup without your yes, at standard\./);
+    assert.match(mine, /^The bar: New add-on: a new add-on, with changes prepared in the trial copy and nothing changed in your setup without your yes, at standard\./);
     assert.match(mine, /Depth: Standard\./);
     assert.equal(sections.find((item) => item.id === 'c1').entry.text(), '');
   } finally {
@@ -571,7 +571,7 @@ test('a new plugin whose checked copy changed, or whose name is taken, is not in
     const fresh = (await app.http('GET')).body.cards.find((item) => item.kind === 'new-plugin' && item.status === 'open' && item.id !== card.id);
     app.entries.push({ options: { id: 'hello-tool-other', name: '@local/dsh-hello-tool' }, fiber: {} });
     const taken = await app.http('POST', { action: 'card', id: fresh.id, act: 'apply' });
-    assert.match(taken.body.error, /already a plugin of your setup/);
+    assert.match(taken.body.error, /already an add-on of your setup/);
     assert.deepEqual(app.installs, []);
     app.entries.pop();
     // A package name already on the map: blocked by the fit check.
@@ -790,6 +790,87 @@ test('a link planted in the build folder never redirects Creator Plus\'s own wri
     assert.deepEqual(readdirSync(elsewhere), [], 'nothing was written through a link');
   } finally {
     rmSync(elsewhere, { recursive: true, force: true });
+    app.close();
+  }
+});
+
+test('Mission stage E: a change a Mission\'s helper prepared waits in the Mission\'s card too; Allow there applies it through the page\'s own checks, once, only for that conversation', async () => {
+  const told = [];
+  let answer = { id: 'a1', text: 'This needs the user\'s yes (Creator Plus): it waits in the Mission\'s card above the chat box, and nothing is done until then. Carry on with the rest.' };
+  // Mission answers only for its own helpers.
+  const app = plugin({ askYes: async (request) => { told.push(request); return request.sessionId === 'h1' ? answer : undefined; } });
+  try {
+    await settle();
+    const creator = app.agent('cp1');
+    const helper = app.agent('h1', { parent: 'cp1' });
+    await app.http('POST', { action: 'bar', sessionId: 'cp1', state: { selection: ['@local/dsh-notes'], run: 'improve' } });
+    const before = readFileSync(join(app.plus, 'dsh-notes', 'index.js'), 'utf8');
+    const said = (await app.call('creator_change', { plugin: 'dsh-notes', why: 'one', files: { 'index.js': `${before}// one\n` } }, helper)).text;
+    assert.match(said, /made in a copy only[\s\S]*Applying it to your real setup needs the user's yes: it waits in the Mission's card above the chat box\.$/);
+    assert.equal(readFileSync(join(app.plus, 'dsh-notes', 'index.js'), 'utf8'), before, 'nothing applied by the helper');
+    const card = (await app.http('GET')).body.cards.find((item) => item.kind === 'change');
+    const asked = told.at(-1);
+    assert.equal(asked.sessionId, 'h1');
+    assert.equal(asked.addon, 'creatorPlus');
+    assert.equal(asked.key, `card:${card.id}`);
+    assert.equal(asked.act, true);
+    assert.equal(asked.needed, false);
+    assert.deepEqual(asked.ref, { card: card.id });
+    assert.equal(asked.what, 'Apply the change to @local/dsh-notes in your real setup');
+    assert.match(asked.reason, /does what Apply on its card in Settings → Creator Plus does/);
+    const allow = app.provided.creatorPlus.missionAllow;
+    assert.match((await allow({ sessionId: 'cp2', ref: { card: card.id } })).text, /another thread/);
+    assert.equal(readFileSync(join(app.plus, 'dsh-notes', 'index.js'), 'utf8'), before);
+    const done = await allow({ sessionId: 'cp1', key: asked.key, ref: { card: card.id } });
+    assert.equal(done.ok, true);
+    assert.match(done.text, /^Applied to @local\/dsh-notes in your real setup/);
+    assert.match(readFileSync(join(app.plus, 'dsh-notes', 'index.js'), 'utf8'), /\/\/ one/);
+    assert.equal((await app.http('GET')).body.cards.find((item) => item.id === card.id).status, 'applied', 'the page shows it applied, with Undo');
+    assert.deepEqual(await allow({ sessionId: 'cp1', ref: { card: card.id } }), { ok: true, text: 'Already applied from Settings → Creator Plus.' });
+    // The same checks as Apply: a prepared copy changed after the review is refused, and nothing changes.
+    await app.call('creator_change', { plugin: 'dsh-notes', why: 'two', files: { 'lib/two.js': '// two\n' } }, helper);
+    const two = (await app.http('GET')).body.cards.find((item) => item.title.includes('two'));
+    writeFileSync(join(two.data.copy, 'lib', 'two.js'), '// something else\n');
+    const refused = await allow({ sessionId: 'cp1', ref: { card: two.id } });
+    assert.equal(refused.ok, false);
+    assert.match(refused.text, /differs from the one on this card/);
+    assert.equal(existsSync(join(app.plus, 'dsh-notes', 'lib', 'two.js')), false);
+    // Full auto: Mission's words, nothing applied.
+    answer = { id: 'a2', said: 'no', unasked: true, text: 'Not asked: this Mission runs on Full auto.' };
+    assert.match((await app.call('creator_change', { plugin: 'dsh-notes', why: 'three', files: { 'lib/three.js': '// three\n' } }, helper)).text, /Not asked: this Mission runs on Full auto\.$/);
+    // The conversation itself: as before (the card on the page only).
+    assert.doesNotMatch((await app.call('creator_change', { plugin: 'dsh-notes', why: 'four', files: { 'lib/four.js': '// four\n' } }, creator)).text, /Mission's card|Full auto/);
+    app.config.enabled = false;
+    assert.match((await allow({ sessionId: 'cp1', ref: { card: two.id } })).text, /switched off/);
+  } finally {
+    app.close();
+  }
+});
+
+test('Mission stage E: a plugin a Mission\'s helper checked waits in the Mission\'s card; Allow there installs exactly the checked copy, as Apply does, once', async () => {
+  const told = [];
+  const app = plugin({ askYes: async (request) => { told.push(request); return request.sessionId === 'h1' ? { id: 'a1', text: 'parked' } : undefined; } });
+  try {
+    await settle();
+    const creator = app.agent('cp1', { said: 'build me a hello tool' });
+    const helper = app.agent('h1', { parent: 'cp1' });
+    await app.call('creator_plan', { title: 'Hello tool', kind: 'tool', purpose: 'Says hello.', tools: ['hello_say'] }, creator);
+    app.say(creator, 'Yes, build it.');
+    await app.call('creator_scaffold', {}, creator);
+    const checked = (await app.call('creator_check', { folder: 'dsh-hello-tool' }, helper)).text;
+    assert.match(checked, /All four checks passed[\s\S]*Installing it in your real setup needs the user's yes: it waits in the Mission's card above the chat box\.$/);
+    assert.equal(app.installs.length, 0, 'nothing installed by the helper');
+    const card = (await app.http('GET')).body.cards.find((item) => item.kind === 'new-plugin');
+    const asked = told.find((request) => request.key === `card:${card.id}`);
+    assert.equal(asked.what, `Install ${card.data?.name ?? '@local/dsh-hello-tool'} in your real setup`);
+    assert.match(asked.reason, /installs exactly the checked copy, with a way back\. Read the code there first \(Show the code\)\.$/);
+    const done = await app.provided.creatorPlus.missionAllow({ sessionId: 'cp1', ref: { card: card.id } });
+    assert.equal(done.ok, true, done.text);
+    assert.match(done.text, /^Installed in your real setup/);
+    assert.equal(app.installs.length, 1);
+    assert.deepEqual(await app.provided.creatorPlus.missionAllow({ sessionId: 'cp1', ref: { card: card.id } }), { ok: true, text: 'Already applied from Settings → Creator Plus.' });
+    assert.equal(app.installs.length, 1, 'once');
+  } finally {
     app.close();
   }
 });
